@@ -26,7 +26,7 @@ export default {
     subscribe_patreon: `在Patreon上訂閱`,
     link: `連結Patreon會員資格`,
     continue: `驗證會員資格`,
-    onboarding: `取得包含每月配額的完整AI存取權限。你的訂閱包含：\n> 1. 文字、圖像、影片與語音生成\n> 2. 更簡單的設定：無需管理API金鑰\n> 3. 充裕的每月個人AI用量\n> 4. 與你贊助的伺服器共享每月配額\n> 5. 支持TomoriBot的開發工作 ❤️`,
+    onboarding: `取得包含每月配額的完整AI存取權限，每月最低只要 $7。訂閱包含：\n> 1. 文字、圖像、影片與語音生成\n> 2. 更簡單的設定：無需管理API金鑰\n> 3. 充裕的每月個人AI用量\n> 4. 與你贊助的伺服器共享每月配額\n> 5. 支持TomoriBot的開發工作 ❤️`,
     onboarding_steps: `訂閱只需三個步驟：`,
     choose_membership: `在下方前往Patreon選擇會員方案`,
     link_discord: `將Patreon連結至Discord`,

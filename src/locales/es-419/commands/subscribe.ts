@@ -1,6 +1,8 @@
 export default {
   subscribe: {
     conversion_nudge: "Para un servicio más confiable, suscríbete a TomoriBot con `/subscribe`, desde solo $7/mes.",
+    conversion_nudge_registration_failed:
+      "Omite la configuración: suscríbete a TomoriBot con `/subscribe` para acceder a la IA sin tu propia clave de API ni endpoint, desde solo $7/mes.",
     request: {
       title: `Acceso por suscripción`,
       allowance_title: `Cuota insuficiente`,
@@ -32,6 +34,7 @@ export default {
       capacity: `{scope} no está disponible temporalmente porque el servicio de suscripción de TomoriBot está al máximo de su capacidad. Tu cuota no se ve afectada. {retry} {fallback}\n\nTambién puedes usar otro proveedor de IA a través de {providers}.`,
       capacity_unavailable: `{scope} no está disponible porque el servicio de suscripción de TomoriBot no tiene capacidad y reintentar no servirá hasta que se restablezca. Tu cuota no se ve afectada. {fallback}\n\nPuedes usar otro proveedor de IA a través de {providers} mientras tanto.`,
       unsupported: `{scope} no puede usar este modelo de {capability}. Elige un modelo compatible u otro proveedor de IA a través de {providers}.`,
+      pricing_unavailable: `TomoriBot no pudo verificar el costo de este modelo de {capability}, por lo que la solicitud no fue enviada. Inténtalo de nuevo más tarde o elige otro modelo en {config}.`,
     },
     tiers: {
       unknown: `Suscripción`,
@@ -58,6 +61,7 @@ export default {
       success: {
         title: `Vinculación con Patreon completa`,
         message: `Tu membresía de Patreon se vinculó. Vuelve a Discord y elige Verificar membresía en tu panel de configuración o suscripción.`,
+        linked_account: `Cuenta de Discord vinculada: {account}`,
       },
       authorization_denied: {
         title: `Vinculación con Patreon cancelada`,
@@ -98,6 +102,10 @@ export default {
       unconfigured_tier: {
         title: `Nivel de Patreon no configurado`,
         message: `Este nivel de Patreon no está configurado para acceso de patrocinador. No se otorgó acceso de patrocinador.`,
+      },
+      discord_mismatch: {
+        title: `Cuenta de Patreon no coincidente`,
+        message: `Esta cuenta de Patreon está conectada a otra cuenta de Discord. Ejecuta /subscribe desde esa cuenta o cambia la conexión en Patreon.`,
       },
       patreon_unavailable: {
         title: `Vinculación con Patreon no disponible`,

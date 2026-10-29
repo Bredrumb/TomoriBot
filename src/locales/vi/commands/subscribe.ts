@@ -1,6 +1,8 @@
 export default {
   subscribe: {
     conversion_nudge: "Để có dịch vụ ổn định hơn, hãy đăng ký TomoriBot bằng `/subscribe`, chỉ từ $7/tháng.",
+    conversion_nudge_registration_failed:
+      "Bỏ qua thiết lập: đăng ký TomoriBot bằng `/subscribe` để truy cập AI mà không cần API key hay endpoint riêng của bạn, chỉ từ $7/tháng.",
     request: {
       title: `Quyền truy cập gói đăng ký`,
       allowance_title: `Hạn mức không đủ`,
@@ -32,6 +34,7 @@ export default {
       capacity: `{scope} tạm thời không khả dụng vì dịch vụ đăng ký của TomoriBot đang quá tải. Hạn mức của bạn không bị ảnh hưởng. {retry} {fallback}\n\nBạn cũng có thể dùng nhà cung cấp AI khác qua {providers}.`,
       capacity_unavailable: `{scope} không khả dụng vì dịch vụ đăng ký của TomoriBot đã hết công suất, việc thử lại sẽ không có tác dụng cho đến khi dịch vụ được phục hồi. Hạn mức của bạn không bị ảnh hưởng. {fallback}\n\nTrong lúc đó, bạn có thể dùng nhà cung cấp AI khác qua {providers}.`,
       unsupported: `{scope} không thể dùng model {capability} này. Hãy chọn một model được hỗ trợ hoặc nhà cung cấp AI khác qua {providers}.`,
+      pricing_unavailable: `TomoriBot không thể kiểm tra chi phí của model {capability} này, vì vậy yêu cầu chưa được gửi. Hãy thử lại sau hoặc chọn model khác trong {config}.`,
     },
     tiers: {
       unknown: `Gói đăng ký`,
@@ -58,6 +61,7 @@ export default {
       success: {
         title: `Liên kết Patreon hoàn tất`,
         message: `Tư cách thành viên Patreon của bạn đã được liên kết. Hãy quay lại Discord và chọn Xác minh tư cách thành viên trong bảng thiết lập hoặc đăng ký.`,
+        linked_account: `Tài khoản Discord đã liên kết: {account}`,
       },
       authorization_denied: {
         title: `Đã hủy liên kết Patreon`,
@@ -98,6 +102,10 @@ export default {
       unconfigured_tier: {
         title: `Gói Patreon chưa được cấu hình`,
         message: `Gói Patreon này chưa được cấu hình cho quyền truy cập người ủng hộ. Chưa được cấp quyền truy cập người ủng hộ.`,
+      },
+      discord_mismatch: {
+        title: `Tài khoản Patreon không khớp`,
+        message: `Tài khoản Patreon này được kết nối với một tài khoản Discord khác. Hãy chạy /subscribe từ tài khoản đó, hoặc thay đổi kết nối trên Patreon.`,
       },
       patreon_unavailable: {
         title: `Liên kết Patreon không khả dụng`,

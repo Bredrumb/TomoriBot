@@ -1,8 +1,8 @@
 export default {
   providers: {
-    subscribe: `Suscribirse a TomoriBot`,
-    subscribe_personal_description: `Suscríbete mediante Patreon para acceder a la IA sin una clave de API`,
-    sponsor_server_description: `Usa tu suscripción de TomoriBot para potenciar este servidor`,
+    subscribe: `★ Suscribirse a TomoriBot`,
+    subscribe_personal_description: `Suscríbete mediante Patreon para acceder a la IA sin una clave de API, desde $7/mes`,
+    sponsor_server_description: `Potencia este servidor con una suscripción de TomoriBot, desde $7/mes`,
     subscription_personal_description: `Usa tu suscripción de TomoriBot para acceso personal a la IA`,
     subscription_owned_description: `Actualmente estás patrocinando este servidor`,
     subscription_server_description: `Este servidor funciona con una suscripción de TomoriBot`,

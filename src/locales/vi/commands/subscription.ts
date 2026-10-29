@@ -26,7 +26,7 @@ export default {
     subscribe_patreon: `Đăng ký trên Patreon`,
     link: `Liên kết tư cách thành viên Patreon`,
     continue: `Xác minh tư cách thành viên`,
-    onboarding: `Nhận toàn quyền truy cập AI với hạn mức hàng tháng. Gói đăng ký của bạn bao gồm:\n> 1. Tạo văn bản, hình ảnh, video và giọng nói\n> 2. Thiết lập dễ dàng hơn: không cần quản lý API key\n> 3. Hạn mức sử dụng AI hàng tháng dồi dào cho bạn\n> 4. Chia sẻ hạn mức hàng tháng đó với các máy chủ bạn tài trợ\n> 5. Hỗ trợ sự phát triển của TomoriBot ❤️`,
+    onboarding: `Nhận toàn quyền truy cập AI với hạn mức hàng tháng, chỉ từ $7/tháng. Gói đăng ký bao gồm:\n> 1. Tạo văn bản, hình ảnh, video và giọng nói\n> 2. Thiết lập dễ dàng hơn: không cần quản lý API key\n> 3. Hạn mức sử dụng AI hàng tháng dồi dào cho bạn\n> 4. Chia sẻ hạn mức hàng tháng đó với các máy chủ bạn tài trợ\n> 5. Hỗ trợ sự phát triển của TomoriBot ❤️`,
     onboarding_steps: `Có ba bước để đăng ký:`,
     choose_membership: `Chọn một gói thành viên trên Patreon bên dưới`,
     link_discord: `Liên kết Patreon với Discord`,

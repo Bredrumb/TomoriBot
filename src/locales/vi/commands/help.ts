@@ -355,7 +355,7 @@ Nhập \`{project_id}::{location}\` bằng {configSetup} hoặc {configApikeySet
       get_api_key: {
         title: `Lấy API key`,
         description:
-          "API key cấp quyền cho mình dùng model của nhà cung cấp. Mọi nội dung mình tạo đều tính vào key đó, hãy giữ nó như bất kỳ mật khẩu nào khác. Để hoàn tất thiết lập, mình cần một key:\n> **1.** Chọn nhà cung cấp bên dưới để mở hướng dẫn.\n> **2.** Sao chép key được cấp. **KHÔNG chia sẻ** với ai, và không dán vào kênh: chỉ dán vào ô mà {setup} mở cho bạn.\n> **3.** Chạy {setup} và dán key khi mình yêu cầu.",
+          "API key cấp quyền cho mình dùng model của nhà cung cấp. Mọi nội dung mình tạo đều tính vào key đó, hãy giữ nó như bất kỳ mật khẩu nào khác. Để hoàn tất thiết lập, mình cần một key:\n> **1.** Chọn nhà cung cấp bên dưới để mở hướng dẫn.\n> **2.** Sao chép key được cấp. **KHÔNG chia sẻ** với ai, và không dán vào kênh: chỉ dán vào ô mà {setup} mở cho bạn.\n> **3.** Chạy {setup} và dán key khi mình yêu cầu.\n\nHoặc bỏ qua key: đăng ký TomoriBot bằng {subscribe} để truy cập AI mà không cần API key của riêng bạn, chỉ từ $7/tháng.",
         picker_footer:
           "-# Nếu endpoint không có ở đây, hãy bỏ qua key và đọc mục **Endpoint tùy chỉnh (nâng cao)** trên trang này.",
       },

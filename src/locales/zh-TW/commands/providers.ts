@@ -1,8 +1,8 @@
 export default {
   providers: {
-    subscribe: `訂閱TomoriBot`,
-    subscribe_personal_description: `透過Patreon訂閱以使用AI功能，無需API金鑰`,
-    sponsor_server_description: `使用你的TomoriBot訂閱為本伺服器提供AI功能`,
+    subscribe: `★ 訂閱TomoriBot`,
+    subscribe_personal_description: `透過Patreon訂閱以使用AI功能，無須API金鑰，每月最低只要 $7`,
+    sponsor_server_description: `使用TomoriBot訂閱為本伺服器提供AI功能，每月最低只要 $7`,
     subscription_personal_description: `使用你的TomoriBot訂閱取得個人AI存取權限`,
     subscription_owned_description: `你目前正在贊助此伺服器`,
     subscription_server_description: `此伺服器由TomoriBot訂閱提供支援`,

@@ -1,6 +1,8 @@
 export default {
   subscribe: {
     conversion_nudge: "如需更穩定的服務，可以使用 `/subscribe` 訂閱TomoriBot，每月最低只要 $7。",
+    conversion_nudge_registration_failed:
+      "略過設定：可以使用 `/subscribe` 訂閱TomoriBot，無須自備API金鑰或端點即可存取AI，每月最低只要 $7。",
     request: {
       title: `訂閱存取`,
       allowance_title: `配額不足`,
@@ -32,6 +34,7 @@ export default {
       capacity: `由於TomoriBot的訂閱服務負載已滿，{scope}暫時無法使用。你的配額未受影響。{retry} {fallback}\n\n你也可以透過{providers}使用其他AI供應商。`,
       capacity_unavailable: `由於TomoriBot的訂閱服務容量耗盡，{scope}無法使用，且在服務恢復前重試無效。你的配額未受影響。{fallback}\n\n在此期間，你可以透過{providers}使用其他AI供應商。`,
       unsupported: `{scope}無法使用此{capability}模型。請選擇受支援的模型，或透過{providers}使用其他AI供應商。`,
+      pricing_unavailable: `TomoriBot無法查詢此{capability}模型的費用，因此未發送請求。請稍後再試，或在{config}中選擇其他模型。`,
     },
     tiers: {
       unknown: `訂閱`,
@@ -58,6 +61,7 @@ export default {
       success: {
         title: `Patreon連結完成`,
         message: `你的Patreon會員資格已連結。請返回Discord並在設定或訂閱面板中選擇「驗證會員資格」。`,
+        linked_account: `已連結的Discord帳號：{account}`,
       },
       authorization_denied: {
         title: `Patreon連結已取消`,
@@ -98,6 +102,10 @@ export default {
       unconfigured_tier: {
         title: `未設定的Patreon方案`,
         message: `此Patreon方案未設定為支援贊助者存取。未授予贊助者存取權限。`,
+      },
+      discord_mismatch: {
+        title: `Patreon帳號不相符`,
+        message: `此Patreon帳號已連結至其他Discord帳號。請從該帳號執行/subscribe，或在Patreon上變更連結。`,
       },
       patreon_unavailable: {
         title: `Patreon連結無法使用`,

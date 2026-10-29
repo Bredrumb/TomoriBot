@@ -26,7 +26,7 @@ export default {
     subscribe_patreon: `Assinar no Patreon`,
     link: `Vincular Assinatura do Patreon`,
     continue: `Verificar Assinatura`,
-    onboarding: `Obtenha acesso completo à IA com uma cota mensal. Sua assinatura inclui:\n> 1. Geração de texto, imagem, vídeo e voz\n> 2. Configuração mais fácil: sem chave de API para gerenciar\n> 3. Bastante uso mensal de IA para você\n> 4. Compartilhe essa cota mensal com os servidores que você patrocina\n> 5. Apoio ao desenvolvimento do TomoriBot ❤️`,
+    onboarding: `Obtenha acesso completo à IA com uma cota mensal, a partir de $7/mês. Uma assinatura inclui:\n> 1. Geração de texto, imagem, vídeo e voz\n> 2. Configuração mais fácil: sem chave de API para gerenciar\n> 3. Bastante uso mensal de IA para você\n> 4. Compartilhe essa cota mensal com os servidores que você patrocina\n> 5. Apoio ao desenvolvimento do TomoriBot ❤️`,
     onboarding_steps: `Há três etapas para assinar:`,
     choose_membership: `Escolha uma assinatura no Patreon abaixo`,
     link_discord: `Vincular Patreon ao Discord`,

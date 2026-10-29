@@ -355,7 +355,7 @@ Enter \`{project_id}::{location}\` using {configSetup} or {configApikeySet}
       get_api_key: {
         title: `Get an API Key`,
         description:
-          "An API key grants me access to an AI provider's model. Whatever I generate is billed to that key, so treat it like any other password. To finish setup I need one:\n> **1.** Pick a provider below to open its guide.\n> **2.** Copy the key it gives you. **Do NOT share it** with anyone, and never paste it into a channel: only into the box {setup} opens for you.\n> **3.** Run {setup} and paste the key when I ask for it.",
+          "An API key grants me access to an AI provider's model. Whatever I generate is billed to that key, so treat it like any other password. To finish setup I need one:\n> **1.** Pick a provider below to open its guide.\n> **2.** Copy the key it gives you. **Do NOT share it** with anyone, and never paste it into a channel: only into the box {setup} opens for you.\n> **3.** Run {setup} and paste the key when I ask for it.\n\nOr skip the key: subscribe to TomoriBot with {subscribe} for AI access without your own API key, starting at $7/month.",
         picker_footer:
           "-# If your endpoint isn't listed, skip the key and read **Custom Endpoints (Advanced)** in this same page.",
       },

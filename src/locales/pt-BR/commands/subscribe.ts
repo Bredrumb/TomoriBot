@@ -1,6 +1,8 @@
 export default {
   subscribe: {
     conversion_nudge: "Para um serviço mais confiável, assine o TomoriBot com `/subscribe`, a partir de apenas $7/mês.",
+    conversion_nudge_registration_failed:
+      "Pule a configuração: assine o TomoriBot com `/subscribe` para ter acesso à IA sem precisar de sua própria chave de API ou endpoint, a partir de apenas $7/mês.",
     request: {
       title: `Acesso por Assinatura`,
       allowance_title: `Cota insuficiente`,
@@ -32,6 +34,7 @@ export default {
       capacity: `{scope} está temporariamente indisponível porque o serviço de assinatura do TomoriBot atingiu a capacidade máxima. Sua cota não foi afetada. {retry} {fallback}\n\nVocê também pode usar outro provedor de IA em {providers}.`,
       capacity_unavailable: `{scope} está indisponível porque o serviço de assinatura do TomoriBot está sem capacidade, e tentar de novo não adiantará até que seja restaurado. Sua cota não foi afetada. {fallback}\n\nVocê pode usar outro provedor de IA em {providers} enquanto isso.`,
       unsupported: `{scope} não pode usar este modelo de {capability}. Escolha um modelo suportado ou outro provedor de IA em {providers}.`,
+      pricing_unavailable: `O TomoriBot não conseguiu verificar o custo deste modelo de {capability}, portanto a solicitação não foi enviada. Tente novamente mais tarde ou escolha outro modelo em {config}.`,
     },
     tiers: {
       unknown: `Assinatura`,
@@ -58,6 +61,7 @@ export default {
       success: {
         title: `Vinculação do Patreon concluída`,
         message: `Sua assinatura do Patreon foi vinculada. Retorne ao Discord e selecione Verificar Assinatura no painel de configuração ou assinatura.`,
+        linked_account: `Conta do Discord vinculada: {account}`,
       },
       authorization_denied: {
         title: `Vinculação do Patreon cancelada`,
@@ -98,6 +102,10 @@ export default {
       unconfigured_tier: {
         title: `Nível do Patreon não configurado`,
         message: `Este nível do Patreon não está configurado para acesso de apoiador. Nenhum acesso de apoiador foi concedido.`,
+      },
+      discord_mismatch: {
+        title: `Conta do Patreon incompatível`,
+        message: `Esta conta do Patreon está conectada a uma conta diferente do Discord. Execute /subscribe a partir dessa conta ou altere a conexão no Patreon.`,
       },
       patreon_unavailable: {
         title: `Vinculação do Patreon indisponível`,

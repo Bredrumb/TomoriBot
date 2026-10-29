@@ -26,7 +26,7 @@ export default {
     subscribe_patreon: `Subscribe on Patreon`,
     link: `Link Patreon Membership`,
     continue: `Verify Membership`,
-    onboarding: `Get full AI access with a monthly allowance. Your subscription includes:\n> 1. Text, image, video, and voice generation\n> 2. Easier setup: no API key to manage\n> 3. Plenty of monthly AI usage for you\n> 4. Share that monthly allowance with servers you sponsor\n> 5. Support for TomoriBot's development ❤️`,
+    onboarding: `Get full AI access with a monthly allowance, starting at $7/month. A subscription includes:\n> 1. Text, image, video, and voice generation\n> 2. Easier setup: no API key to manage\n> 3. Plenty of monthly AI usage for you\n> 4. Share that monthly allowance with servers you sponsor\n> 5. Support for TomoriBot's development ❤️`,
     onboarding_steps: `There are three steps to subscribe:`,
     choose_membership: `Choose a membership on Patreon below`,
     link_discord: `Link Patreon to Discord`,

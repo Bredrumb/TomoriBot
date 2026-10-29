@@ -355,7 +355,7 @@ Digite \`{project_id}::{location}\` usando {configSetup} ou {configApikeySet}
       get_api_key: {
         title: `Obter uma Chave de API`,
         description:
-          "Uma chave de API me concede acesso ao modelo de um provedor de IA. Tudo que eu gerar será cobrado nessa chave, então trate como qualquer outra senha. Para terminar a configuração eu preciso de uma:\n> **1.** Escolha um provedor abaixo para abrir seu guia.\n> **2.** Copie a chave que ele fornece. **NÃO compartilhe-a** com ninguém, e nunca a cole em um canal: apenas na caixa que {setup} abre para você.\n> **3.** Execute {setup} e cole a chave quando eu pedir.",
+          "Uma chave de API me concede acesso ao modelo de um provedor de IA. Tudo que eu gerar será cobrado nessa chave, então trate como qualquer outra senha. Para terminar a configuração eu preciso de uma:\n> **1.** Escolha um provedor abaixo para abrir seu guia.\n> **2.** Copie a chave que ele fornece. **NÃO compartilhe-a** com ninguém, e nunca a cole em um canal: apenas na caixa que {setup} abre para você.\n> **3.** Execute {setup} e cole a chave quando eu pedir.\n\nOu dispense a chave: assine o TomoriBot com {subscribe} para ter acesso à IA sem sua própria chave de API, a partir de apenas $7/mês.",
         picker_footer:
           "-# Se o seu endpoint não estiver listado, pule a chave e leia **Endpoints Personalizados (Avançado)** nesta mesma página.",
       },

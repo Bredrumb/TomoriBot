@@ -1,8 +1,8 @@
 export default {
   providers: {
-    subscribe: `TomoriBotのサブスクリプションを契約`,
-    subscribe_personal_description: `Patreon経由で契約し、APIキーなしでAIを利用できます`,
-    sponsor_server_description: `あなたのTomoriBotサブスクリプションでこのサーバーを支援します`,
+    subscribe: `★ TomoriBotのサブスクリプションを契約`,
+    subscribe_personal_description: `Patreon経由で契約し、APIキーなしでAIを利用できます（月額$7から）`,
+    sponsor_server_description: `TomoriBotサブスクリプションでこのサーバーを支援します（月額$7から）`,
     subscription_personal_description: `TomoriBotサブスクリプションを個人のAI利用に使用します`,
     subscription_owned_description: `あなたが現在このサーバーをスポンサーしています`,
     subscription_server_description: `このサーバーはTomoriBotサブスクリプションで運用されています`,

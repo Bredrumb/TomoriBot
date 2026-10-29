@@ -1,8 +1,8 @@
 export default {
   providers: {
-    subscribe: `Đăng ký TomoriBot`,
-    subscribe_personal_description: `Đăng ký qua Patreon để truy cập AI mà không cần API key`,
-    sponsor_server_description: `Dùng gói đăng ký TomoriBot của bạn để cấp quyền cho máy chủ này`,
+    subscribe: `★ Đăng ký TomoriBot`,
+    subscribe_personal_description: `Đăng ký qua Patreon để truy cập AI mà không cần API key, chỉ từ $7/tháng`,
+    sponsor_server_description: `Cấp quyền cho máy chủ này bằng gói đăng ký TomoriBot, chỉ từ $7/tháng`,
     subscription_personal_description: `Dùng gói đăng ký TomoriBot của bạn để truy cập AI cá nhân`,
     subscription_owned_description: `Bạn hiện đang tài trợ cho máy chủ này`,
     subscription_server_description: `Máy chủ này được hỗ trợ bởi gói đăng ký TomoriBot`,

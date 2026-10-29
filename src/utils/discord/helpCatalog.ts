@@ -127,6 +127,7 @@ const setupPages: readonly HelpPageDefinition[] = [
         providerPickerFooterKey: "commands.help.getting_started.get_api_key.picker_footer",
         variables: () => ({
           setup: mention("setup"),
+          subscribe: mention("subscribe"),
         }),
       },
       {

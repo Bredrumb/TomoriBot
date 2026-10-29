@@ -26,7 +26,7 @@ export default {
     subscribe_patreon: `Patreonでサブスクライブ`,
     link: `Patreonメンバーシップを連携`,
     continue: `メンバーシップを確認`,
-    onboarding: `月間利用枠付きでフルAIアクセスを利用できます。サブスクリプションには以下が含まれます：\n> 1. テキスト・画像・動画・音声の生成\n> 2. 簡単なセットアップ：管理するAPIキーは不要\n> 3. たっぷり使える月間AI利用枠\n> 4. スポンサーするサーバーと月間利用枠を共有\n> 5. TomoriBotの開発支援 ❤️`,
+    onboarding: `月間利用枠付きでフルAIアクセスを利用できます（月額$7から）。サブスクリプションには以下が含まれます：\n> 1. テキスト・画像・動画・音声の生成\n> 2. 簡単なセットアップ：管理するAPIキーは不要\n> 3. たっぷり使える月間AI利用枠\n> 4. スポンサーするサーバーと月間利用枠を共有\n> 5. TomoriBotの開発支援 ❤️`,
     onboarding_steps: `サブスクライブの手順は3ステップです：`,
     choose_membership: `下のボタンからPatreonでメンバーシップを選択`,
     link_discord: `PatreonとDiscordを連携`,
