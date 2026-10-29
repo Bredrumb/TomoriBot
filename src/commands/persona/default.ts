@@ -22,7 +22,7 @@ import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { deletePersonaAvatarFromStorage, deletePersonaSpriteFromStorage } from "../../utils/storage/avatarStorage";
 import { dedupeTriggerWords, normalizeTriggerWord, selectUnclaimedTriggerWords } from "@/utils/text/triggerWords";
 import { orderPersonaPresetChoices } from "@/utils/persona/presetOrdering";
-import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
+import { localizedStatusTitle, statusNote } from "@/utils/discord/ui/statusTitle";
 
 function isUniqueViolation(error: unknown): boolean {
   return (
@@ -626,7 +626,9 @@ export async function applyPresetDefault(
       }),
     ];
     if (hasNoTriggers) {
-      descriptionParts.push(`\n\n${localizer(locale, "commands.persona.import.alter_no_triggers_warning")}`);
+      descriptionParts.push(
+        `\n\n${statusNote("error", localizer(locale, "commands.persona.import.alter_no_triggers_warning"))}`,
+      );
     }
 
     const alterSuccessColor = hasNoTriggers ? ColorCode.WARN : ColorCode.SUCCESS;
@@ -635,7 +637,7 @@ export async function applyPresetDefault(
       .setDescription(descriptionParts.join(""))
       .setColor(alterSuccessColor)
       .setFooter({
-        text: localizer(locale, "commands.persona.import.alter_avatar_warning"),
+        text: statusNote("warning", localizer(locale, "commands.persona.import.alter_avatar_warning")),
       });
 
     const presetAvatarBuffer = await getPresetAvatarBuffer(selectedPreset);

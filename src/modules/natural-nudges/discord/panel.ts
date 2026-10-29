@@ -62,6 +62,7 @@ import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { formatModelSelectionLabel } from "@/utils/discord/ui/modelRoutingControls";
 import { buildStateControlRow, withLinePrefix } from "@/utils/discord/ui/panel";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
+import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { localizer } from "@/utils/text/localizer";
 
 export const NUDGE_ADD_VALUE = "add";
@@ -283,7 +284,14 @@ function buildIdleNudgeSection(
     ],
   });
   if (!canAdd) {
-    tail.push(text(t("commands.config.natural_nudges.idle_limit_note", { max: PERSONA_AUTHORED_IDLE_NUDGE_LIMIT })));
+    tail.push(
+      text(
+        statusNote(
+          "warning",
+          t("commands.config.natural_nudges.idle_limit_note", { max: PERSONA_AUTHORED_IDLE_NUDGE_LIMIT }),
+        ),
+      ),
+    );
   }
   if (config.idle_nudges_inherited) {
     tail.push(text(`-# ${t("commands.config.natural_nudges.idle_inherited_note")}`));
@@ -749,9 +757,9 @@ export function buildNaturalNudgesSettingsBody(
   const hasEligibleChannel = (status?.effectiveChannelIds ?? config.channel_disc_ids).length > 0;
   const hasUsableModel = status ? status.plannerModel.kind === "ready" : config.llm_id !== null;
   const notices = [
-    !view.trackingEnabled ? t("commands.config.natural_nudges.notice_tracking_disabled") : "",
-    byokMode ? t("commands.config.natural_nudges.notice_byok") : "",
-    view.runtime.stopped_at ? t("commands.config.natural_nudges.notice_stopped") : "",
+    !view.trackingEnabled ? statusNote("error", t("commands.config.natural_nudges.notice_tracking_disabled")) : "",
+    byokMode ? statusNote("error", t("commands.config.natural_nudges.notice_byok")) : "",
+    view.runtime.stopped_at ? statusNote("error", t("commands.config.natural_nudges.notice_stopped")) : "",
   ].filter(Boolean);
   const providerOptions = modelProviderOptions(locale, view.plannerModels, "llm");
   const plannerNotice =
@@ -825,7 +833,7 @@ export function buildNaturalNudgesSettingsBody(
     text(
       `## ${t("commands.config.natural_nudges.model_title")}\n${t("commands.config.natural_nudges.model_description")}\n**${t(
         "commands.config.natural_nudges.planner_title",
-      )}**\n${t("commands.config.natural_nudges.planner_description")}${plannerNotice ? `\n-# ${plannerNotice}` : ""}`,
+      )}**\n${t("commands.config.natural_nudges.planner_description")}${plannerNotice ? `\n-# ${statusNote("error", plannerNotice)}` : ""}`,
     ),
   ];
 
@@ -845,7 +853,7 @@ export function buildNaturalNudgesSettingsBody(
 
   components.push(
     text(
-      `**${t("commands.config.natural_nudges.checker_title")}**\n${t("commands.config.natural_nudges.checker_description")}${checkerNotice ? `\n-# ${checkerNotice}` : ""}`,
+      `**${t("commands.config.natural_nudges.checker_title")}**\n${t("commands.config.natural_nudges.checker_description")}${checkerNotice ? `\n-# ${statusNote("error", checkerNotice)}` : ""}`,
     ),
   );
   const checkerSelect = modelSelectRow(

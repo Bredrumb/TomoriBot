@@ -46,8 +46,9 @@ ChatTurnContext & GenerationTurnResult
    persona. It then increments the cadence counter via `incrementStmTurnCounter()`, driving proactive memory
    refresh nudges in future turns.
 6. **Thought log emission**: if a thought-log channel is configured in a guild text channel, `emitThoughtLog()`
-   sends reasoning and duration details via `sendThoughtLogEmbed()`. If personal BYOK was used without reasoning,
-   it sends an attribution embed crediting the user's provider. Like tool notices and image diagnostics, it
+   sends reasoning and duration details via `sendThoughtLogEmbed()`. When personal BYOK or the model randomizer
+   was used, the embed names the user's provider or the model that answered, and a turn without reasoning
+   still gets a standalone attribution embed. Like tool notices and image diagnostics, it
    copies only when `canMirrorToThoughtLog()` confirms the log is in the same guild and everyone there can
    already read the source channel (or a public thread's parent) with no `ViewChannel` deny overwrite.
    The bot cannot list who reads the log, so a private thread, a private-listed channel, or an

@@ -8,6 +8,7 @@ import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { resolveProviderErrorFooter } from "@/utils/discord/stream/errorUi";
 import { hasThoughtLogContent, sendAttributionOnlyEmbed, sendThoughtLogEmbed } from "@/utils/discord/thoughtLog";
 import { ColorCode, log } from "@/utils/misc/logger";
+import { getLlmDisplayName } from "@/utils/provider/modelDisplay";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { incrementTextQuota } from "@/utils/quota/textQuotaManager";
 import { localizer } from "@/utils/text/localizer";
@@ -649,13 +650,24 @@ async function emitThoughtLog(context: ChatTurnContext, result: GenerationTurnRe
     return;
   }
 
-  const attributionLine =
-    context.textCredentialSource === "personal" && context.personalTextProvider
+  const personalProvider = context.textCredentialSource === "personal" ? context.personalTextProvider : undefined;
+  // context.tomoriState is the attempt that answered, so this names the model actually used and reads
+  // the randomizer flag of the route (server or personal) that drew it.
+  const { tomoriState } = context;
+  const attributionLines = [
+    personalProvider
       ? localizer(context.locale, "genai.thought_log.personal_attribution", {
           user_mention: `<@${context.userDiscId}>`,
-          provider: getProviderDisplayName(context.personalTextProvider),
+          provider: getProviderDisplayName(personalProvider),
         })
-      : undefined;
+      : undefined,
+    tomoriState.config.model_randomizer_enabled
+      ? localizer(context.locale, "genai.thought_log.randomizer_attribution", {
+          model: getLlmDisplayName(tomoriState.llm, tomoriState.config.custom_model_name),
+        })
+      : undefined,
+  ].filter((line): line is string => Boolean(line));
+  const attributionLine = attributionLines.length > 0 ? attributionLines.join("\n") : undefined;
 
   if (thoughtLog && hasThoughtLogContent(thoughtLog)) {
     thoughtLog.generationDurationMs = Date.now() - context.message.createdTimestamp;
@@ -679,6 +691,12 @@ async function emitThoughtLog(context: ChatTurnContext, result: GenerationTurnRe
       tomoriState: context.tomoriState,
       sourceChannel: context.channel as Parameters<typeof sendAttributionOnlyEmbed>[0]["sourceChannel"],
       thoughtLogChannelId,
+      title: localizer(
+        context.locale,
+        personalProvider
+          ? "genai.thought_log.personal_attribution_title"
+          : "genai.thought_log.randomizer_attribution_title",
+      ),
       attributionLine,
     });
   }

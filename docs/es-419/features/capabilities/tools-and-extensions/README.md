@@ -105,7 +105,7 @@ El modelo ve una única herramienta `web_search(query, category)` unificada. Det
 
 Brave → SearXNG → DuckDuckGo
 
-- **Brave** se ejecuta primero cuando se configura una clave Brave API (configúrela con `/providers`); Agrega búsqueda de imágenes, videos y noticias. ⚠️ Establece un límite de uso de $5 en el panel de Brave para evitar cargos sorpresa.
+- **Brave** se ejecuta primero cuando se configura una clave Brave API (configúrela con `/providers`); Agrega búsqueda de imágenes, videos y noticias. 🟡 Establece un límite de uso de $5 en el panel de Brave para evitar cargos sorpresa.
 - DuckDuckGo es la opción predeterminada cuando no se ha configurado ninguna clave. Solo cubre búsquedas de texto. Cuando DuckDuckGo aplica un límite de velocidad al bot o muestra una verificación antibot, la búsqueda falla y TomoriBot publica un aviso sugiriendo Brave.
 - SearXNG y Crawl4AI son servidores autohospedados opcionales que agregan más categorías y búsquedas de páginas renderizadas por el navegador; consulte [Autohospedaje](/es-419/self-hosting/).
 

@@ -162,7 +162,7 @@ export default {
     document: {
       reading_title: `📄 Đang đọc nội dung tệp...`,
       reading_description: `Đang đọc văn bản bên trong \`{filename}\``,
-      truncated_title: `⚠️ Tệp đã bị cắt ngắn`,
+      truncated_title: `Tệp đã bị cắt ngắn`,
       truncated_description: `\`{filename}\` quá dài và đã được cắt ngắn còn {limit} ký tự (gốc: {original} ký tự). Phản hồi có thể không đầy đủ, vì vậy hãy cân nhắc chia tệp thành các phần nhỏ hơn và gửi lần lượt.`,
     },
     image: {

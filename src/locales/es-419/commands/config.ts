@@ -311,7 +311,8 @@ export default {
       channels_welcome_not_configured_detail: `No hay canal o prompt de bienvenida configurado.`,
       channels_collection_hidden: `Mostrando {shown} de {total} canales ({hidden} ocultos).`,
       channels_auto_trigger_title: `Canales de activación automática`,
-      channels_auto_trigger_description: "Elige dónde la actividad de mensajes puede activarme automáticamente.",
+      channels_auto_trigger_description: `Donde respondo por mi cuenta una vez que pasan suficientes mensajes, sin que me mencionen. Esto no limita dónde la gente puede llamarme.`,
+      whitelist_location_hint: `Para limitar en qué canales, roles o personas respondo, usa {moderation}.`,
       channels_auto_trigger_enabled_title: `Canales habilitados`,
       channels_auto_trigger_enabled_description: `Los mensajes aquí cuentan para la activación automática.`,
       channels_auto_trigger_none: `No hay canales habilitados.`,
@@ -1090,6 +1091,7 @@ export default {
       capability_tts_clone: `TTS (Clon de voz)`,
       capability_stt: `Voz a texto`,
       capability_notice_title: `Notas`,
+      byok_models_notice: `Este servidor requiere que los miembros usen sus propios proveedores, por lo que las opciones de modelos para todo el servidor no se utilizan. Para usarlas, abre \`/moderation\`, ve a Acceso de miembros y selecciona Modelos del servidor permitidos.`,
       image_generation_disabled_direction:
         "La generación de imágenes está desactivada. Actívala bajo Plugins > Herramientas disponibles.",
       image_generation_missing_model: `No hay un modelo utilizable configurado para generación de imágenes.`,

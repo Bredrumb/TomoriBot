@@ -160,7 +160,7 @@ export default {
     document: {
       reading_title: `📄 正在讀取檔案內容...`,
       reading_description: `正在讀取 \`{filename}\` 裡面的文字`,
-      truncated_title: `⚠️ 檔案已截斷`,
+      truncated_title: `檔案已截斷`,
       truncated_description: `\`{filename}\` 太長，已截斷為 {limit} 個字元（原始為 {original} 個字元）。回覆內容可能不完整，建議把檔案拆成幾個小部分，再分批分享。`,
     },
     image: {

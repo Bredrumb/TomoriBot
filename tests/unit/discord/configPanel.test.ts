@@ -2064,6 +2064,28 @@ describe("config Behavior pages", () => {
       });
     }
   });
+
+  describe("configModelsPanel BYOK notice", () => {
+    const imageView = {
+      positiveTags: [],
+      negativeTags: [],
+      sampler: "Euler",
+      steps: "28",
+      scale: "5.0",
+      noiseSchedule: "native",
+      cfgRescale: "0.0",
+    };
+    const noticeCopy = () => localizedCopy("en-US", "commands.config.panel.byok_models_notice");
+    const textOf = (userByokMode: boolean) =>
+      walk(buildConfigModelsBody({ locale: "en-US", page: "image", readStatus: "fresh", imageView, userByokMode }))
+        .map((c) => (typeof c.content === "string" ? c.content : ""))
+        .join("\n");
+
+    it("points to /moderation on a models page only while the server requires personal providers", () => {
+      expect(textOf(true)).toContain(noticeCopy());
+      expect(textOf(false)).not.toContain(noticeCopy());
+    });
+  });
 });
 
 describe("config preset resync panels", () => {

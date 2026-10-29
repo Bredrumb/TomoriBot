@@ -162,7 +162,7 @@ export default {
     document: {
       reading_title: `📄 Lendo o conteúdo do arquivo...`,
       reading_description: `Lendo o texto dentro de \`{filename}\``,
-      truncated_title: `⚠️ Arquivo truncado`,
+      truncated_title: `Arquivo truncado`,
       truncated_description: `\`{filename}\` era longo demais e foi truncado para {limit} caracteres (original: {original} caracteres). A resposta pode estar incompleta, considere dividir o arquivo em partes menores e enviá-las uma de cada vez.`,
     },
     image: {

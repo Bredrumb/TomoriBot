@@ -4,6 +4,7 @@ import { DiscordAPIError, MessageFlags, PermissionFlagsBits, RESTJSONErrorCodes 
 import { promptWithPaginatedModal, replyInfoEmbed, safeSelectOptionText } from "@/utils/discord/interactionHelper";
 import { sendCooldownDM } from "@/utils/discord/cooldownDM";
 import { ColorCode, log } from "@/utils/misc/logger";
+import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { localizer } from "@/utils/text/localizer";
 import type { LlmRow, UserRow } from "@/types/db/schema";
 import { ASSISTANT_PREFILL_MAX_LENGTH, resolvePrefillBlocker, resolvePrefillMode } from "@/utils/chat/assistantPrefill";
@@ -382,7 +383,7 @@ export async function execute(
     await replyInfoEmbed(replyInteraction, locale, {
       titleKey: "commands.respond.success_title",
       description: prefillBecomesInstruction
-        ? `${successDescription}\n${localizer(locale, "commands.respond.prefill_instruction_notice")}`
+        ? `${successDescription}\n${statusNote("warning", localizer(locale, "commands.respond.prefill_instruction_notice"))}`
         : successDescription,
       color: ColorCode.SUCCESS,
       configHint: !hideEmbed,

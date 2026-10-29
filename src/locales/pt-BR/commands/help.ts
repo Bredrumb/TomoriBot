@@ -235,7 +235,7 @@ Use {helpCustomModels} para o guia completo de comandos, tipos de endpoints e ca
       zai_title: `Configurando a Chave de API do Z.ai`,
       zai_description: `A Z.ai fornece acesso à família GLM através de uma API geral e um endpoint separado para código.
 
-⚠️ **Atualização dos Termos de Serviço:** Os Termos da Z.ai foram atualizados para permitir apenas casos de uso de código/agente. Usar o endpoint geral para chat sem ser código é por sua conta e risco.`,
+🟡 **Atualização dos Termos de Serviço:** Os Termos da Z.ai foram atualizados para permitir apenas casos de uso de código/agente. Usar o endpoint geral para chat sem ser código é por sua conta e risco.`,
       zai_getting_key_title: `Obtendo sua Chave de API:`,
       zai_getting_key_description: `1. Acesse a [Plataforma Z.ai](https://z.ai)
 2. Faça login ou crie uma conta
@@ -245,7 +245,7 @@ Use {helpCustomModels} para o guia completo de comandos, tipos de endpoints e ca
       zai_important_title: `Notas Importantes:`,
       zai_important_description: `- Use o endpoint geral para chat normal, raciocínio e geração nativa de imagens
   - O endpoint de Código dedicado é separado e planejado para fluxos focados em programação
-  - ⚠️ Os Termos restringem o uso para cenários de código/agentes; uso para chat/roleplay geral é por sua conta e risco`,
+  - 🟡 Os Termos restringem o uso para cenários de código/agentes; uso para chat/roleplay geral é por sua conta e risco`,
       zai_footer: `Após configurar este provedor, você pode alterar seu modelo padrão com {configModel}`,
       novelai_title: `Configurando a Chave de API do NovelAI`,
       novelai_description: `O NovelAI é um serviço de assinatura focado em narrativas criativas e roleplay.

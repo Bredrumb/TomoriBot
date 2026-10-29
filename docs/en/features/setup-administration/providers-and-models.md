@@ -30,7 +30,7 @@ Each provider has its own key-generation steps. In `/help`, choose `Setup`, then
 | DeepSeek | Pay-as-you-go reasoning models. | [DeepSeek](https://platform.deepseek.com/api_keys) |
 | NVIDIA NIM | Hosted text, embeddings, and image. | [NVIDIA Build](https://build.nvidia.com/) |
 | Anthropic | Claude models via the API (not Claude Code). | [Anthropic](https://console.anthropic.com/) |
-| Z.ai | GLM family. ⚠️ ToS restricts usage to coding and agent scenarios. | [Z.ai](https://z.ai/) |
+| Z.ai | GLM family. 🟡 ToS restricts usage to coding and agent scenarios. | [Z.ai](https://z.ai/) |
 | Vertex AI | Google Cloud via `gcloud` ADC (best for locally-run or dev setups). | see below |
 | Vertex AI Express | Google Cloud API-key BYOK (Preview, Gemini subset). | [Express Mode](https://console.cloud.google.com/expressmode) |
 | Custom | Any OpenAI-compatible endpoint (Ollama, vLLM, LiteLLM, …). | see [Custom Endpoints](#custom-endpoints) |
@@ -134,7 +134,7 @@ cloud services. Not every feature is available on every provider.
 | NovelAI | ✅ | ✅ | - | - | Only GLM 4.6 can use tools |
 | NVIDIA NIM | ✅ | ✅ | ✅ | ✅ | Free models available |
 | DeepSeek | ✅ | ✅ | - | - | - |
-| Z.ai | ✅ | ✅ | ✅ | - | Free models; ⚠️ ToS = coding and agent use only |
+| Z.ai | ✅ | ✅ | ✅ | - | Free models; 🟡 ToS = coding and agent use only |
 | Z.ai Coding | ✅ | ✅ | - | - | Subscription plan |
 | Google Vertex AI | ✅ | ✅ | ✅ | ✅ | Includes 'free' Express version |
 | Codex CLI (via ChatMock) | ✅ | ✅ | ✅ | - | [Setup](/self-hosting/local-endpoints/setup-chatmock/) |

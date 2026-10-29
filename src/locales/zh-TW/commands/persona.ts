@@ -125,10 +125,10 @@ export default {
 當訊息中出現這些觸發詞時，這個人格就會回覆。`,
       alter_success_confirmation: `已成功匯入 alter 人格 **{nickname}**，共有 {trigger_count} 個不重複的觸發詞！詳細的匯入資訊已發布在頻道中。`,
       alter_avatar_fallback_main: `🟡 這次匯入沒有包含頭像圖片，所以這個 alter 暫時使用 **{nickname}** 目前的主要人格頭像。你可以用 \`/config\` > 人格 > 一般來變更。`,
-      alter_avatar_warning: `⚠️ 請不要刪除上方嵌入的頭像圖片，否則 alter 人格的頭像會遺失。`,
+      alter_avatar_warning: `請不要刪除上方嵌入的頭像圖片，否則 alter 人格的頭像會遺失。`,
       alter_dm_not_allowed_title: `🔴 私訊不允許 alter 人格`,
       alter_dm_not_allowed_description: `alter 人格只能在伺服器匯入，不能在私訊匯入。請在伺服器執行這個指令。`,
-      alter_no_triggers_warning: `⚠️ 這個人格沒有任何觸發詞。在你用 \`/config\` > 人格 > 一般新增觸發詞之前，它不會回覆任何訊息。`,
+      alter_no_triggers_warning: `這個人格沒有任何觸發詞。在你用 \`/config\` > 人格 > 一般新增觸發詞之前，它不會回覆任何訊息。`,
       alter_name_conflict_title: `🔴 人格名稱已存在`,
       alter_name_conflict_description: `這個伺服器已經有人格叫 **{name}**。每個人格的名稱都必須唯一。
 

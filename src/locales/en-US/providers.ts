@@ -52,6 +52,8 @@ export default {
       description: `Source: {source_line}`,
       personal_attribution: `Generated via {user_mention}'s personal {provider} configuration.`,
       personal_attribution_title: `Personal Provider Attribution`,
+      randomizer_attribution: `Model randomizer: answered by {model}.`,
+      randomizer_attribution_title: `Model Randomizer Attribution`,
       summary_field: `Thought Summary`,
       raw_field: `Raw Thoughts`,
       fetched_content_field: `Fetched Content`,

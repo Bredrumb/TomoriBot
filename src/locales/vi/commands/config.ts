@@ -305,7 +305,8 @@ export default {
       channels_welcome_not_configured_detail: `Chưa có kênh hoặc prompt chào mừng nào được cấu hình.`,
       channels_collection_hidden: `Hiển thị {shown}/{total} kênh ({hidden} bị ẩn).`,
       channels_auto_trigger_title: `Kênh tự động kích hoạt`,
-      channels_auto_trigger_description: `Chọn nơi hoạt động tin nhắn có thể tự động kích hoạt mình.`,
+      channels_auto_trigger_description: `Nơi mình tự phản hồi khi có đủ tin nhắn trôi qua mà không cần được nhắc đến. Điều này không giới hạn những nơi mọi người có thể gọi mình.`,
+      whitelist_location_hint: `Để giới hạn các kênh, vai trò hoặc persona mình được phép trả lời, hãy dùng {moderation}.`,
       channels_auto_trigger_enabled_title: `Kênh đã bật`,
       channels_auto_trigger_enabled_description: `Tin nhắn ở đây được tính vào việc tự động kích hoạt.`,
       channels_auto_trigger_none: `Không có kênh nào được bật.`,
@@ -1073,6 +1074,7 @@ export default {
       capability_tts_clone: `TTS (Sao chép giọng đọc)`,
       capability_stt: `Chuyển giọng nói thành văn bản`,
       capability_notice_title: `Lưu ý`,
+      byok_models_notice: `Máy chủ này yêu cầu thành viên tự dùng nhà cung cấp của riêng mình, nên các thiết lập model toàn máy chủ tại đây sẽ không được áp dụng. Để sử dụng, hãy mở \`/moderation\`, vào Quyền thành viên và chọn Cho phép dùng model máy chủ.`,
       image_generation_disabled_direction:
         "Tính năng tạo hình ảnh đã bị tắt. Bật tính năng này trong Plugin > Công cụ khả dụng.",
       image_generation_missing_model: `Chưa có model khả dụng nào được cấu hình cho việc tạo ảnh.`,

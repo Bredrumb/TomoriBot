@@ -24,7 +24,7 @@ import { uploadPersonaAvatarToStorage } from "../../utils/storage/avatarStorage"
 import { setGuildBotAvatar, setGuildBotNickname } from "@/utils/discord/guildIdentity";
 import { importAlterPreset } from "@/utils/persona/importAlterPreset";
 import { readCharxCard, type CharxReadFailureReason } from "@/utils/persona/charxArchive";
-import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
+import { localizedStatusTitle, statusNote } from "@/utils/discord/ui/statusTitle";
 import {
   cleanupMainPersonaSpritesAfterImport,
   snapshotMainPersonaSprites,
@@ -1103,7 +1103,9 @@ export async function importPersona(
         );
       }
       if (alterResult.hasNoTriggers) {
-        alterDescriptionParts.push(`\n\n${localizer(locale, "commands.persona.import.alter_no_triggers_warning")}`);
+        alterDescriptionParts.push(
+          `\n\n${statusNote("error", localizer(locale, "commands.persona.import.alter_no_triggers_warning"))}`,
+        );
       }
       if ((resolvedImport.ignoredAssetCount ?? 0) > 0) {
         alterDescriptionParts.push(
@@ -1133,7 +1135,7 @@ export async function importPersona(
           const avatarFilename = `tomori-preset-${sanitizedNickname}-${timestamp}.png`;
           alterSuccessEmbed.setImage(`attachment://${avatarFilename}`);
           alterSuccessEmbed.setFooter({
-            text: localizer(locale, "commands.persona.import.alter_avatar_warning"),
+            text: statusNote("warning", localizer(locale, "commands.persona.import.alter_avatar_warning")),
           });
           await interaction.channel.send({
             embeds: [alterSuccessEmbed],

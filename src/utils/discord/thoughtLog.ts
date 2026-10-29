@@ -244,9 +244,10 @@ async function resolveThoughtLogOwnerIdentity(
 
 /**
  * Sends a standalone attribution embed to the thought-logs channel when a
- * personal provider was used but the model produced no reasoning/thinking
- * content (so no thought-log embed was emitted). This ensures server admins
- * can always see whose credentials were used, regardless of model type.
+ * personal provider or the model randomizer was used but the model produced no
+ * reasoning/thinking content (so no thought-log embed was emitted). This ensures
+ * server admins can always see whose credentials and which model were used,
+ * regardless of model type.
  */
 export async function sendAttributionOnlyEmbed({
   client,
@@ -254,6 +255,7 @@ export async function sendAttributionOnlyEmbed({
   tomoriState,
   sourceChannel,
   thoughtLogChannelId,
+  title,
   attributionLine,
 }: {
   client: Client;
@@ -261,6 +263,7 @@ export async function sendAttributionOnlyEmbed({
   tomoriState: TomoriState;
   sourceChannel: StreamContext["channel"];
   thoughtLogChannelId: string;
+  title: string;
   attributionLine: string;
 }): Promise<void> {
   const thoughtLogChannel = await client.channels.fetch(thoughtLogChannelId).catch(() => null);
@@ -287,13 +290,13 @@ export async function sendAttributionOnlyEmbed({
     attributionLine.trim(),
   ].filter((line): line is string => Boolean(line.trim()));
   const footerText = localizer(locale, "genai.thought_log.footer", {
-    provider: tomoriState.llm.llm_provider,
+    provider: getProviderDisplayName(tomoriState.llm.llm_provider),
     model: getLlmDisplayName(tomoriState.llm, tomoriState.config.custom_model_name),
   });
 
   const embed = new EmbedBuilder()
     .setColor(ColorCode.INFO)
-    .setTitle(localizer(locale, "genai.thought_log.personal_attribution_title"))
+    .setTitle(title)
     .setDescription(descriptionLines.join("\n").slice(0, EMBED_DESCRIPTION_LIMIT))
     .setTimestamp()
     .setFooter({ text: footerText });

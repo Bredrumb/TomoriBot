@@ -109,6 +109,7 @@ import { SEED_CATEGORY_UPDATE_HINT, SEED_SUMMARY_UPDATE_HINT } from "@/utils/tex
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { formatModelSelectionLabel } from "@/utils/discord/ui/modelRoutingControls";
 import { escapeDiscordMarkdown } from "@/utils/text/discordMarkdown";
+import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { localizer, resolveDescription } from "@/utils/text/localizer";
 import { normalizeTriggerWord } from "@/utils/text/triggerWords";
 import { buildSlugMap } from "@/utils/text/slugifyLabel";
@@ -2286,6 +2287,14 @@ function behaviorHeading(locale: string, titleKey: string, descriptionKey: strin
   };
 }
 
+function whitelistLocationHint(locale: string): ComponentInContainerData {
+  const moderation = `${commandRegistry.getCommandMention("moderation", undefined, undefined, true)} > ${localizer(locale, "commands.moderation.category_whitelist")}`;
+  return {
+    type: ComponentType.TextDisplay,
+    content: withLinePrefix("-# ", localizer(locale, "commands.config.panel.whitelist_location_hint", { moderation })),
+  };
+}
+
 function buildBehaviorGeneralBody(input: ConfigPanelRenderInput): ComponentInContainerData[] {
   const { locale } = input;
   const view = input.behaviorView?.general;
@@ -2518,7 +2527,8 @@ function responsePrefillStatus(locale: string, view: ConfigBehaviorGeneralView):
         : view.prefillBlocker === "tools"
           ? "commands.config.panel.response_prefill_inactive_tools"
           : "commands.config.panel.response_prefill_active";
-  return localizer(locale, key, { model: view.prefillModelName });
+  const text = localizer(locale, key, { model: view.prefillModelName });
+  return view.prefillBlocker ? statusNote("warning", text) : text;
 }
 
 function cooldownLabel(locale: string, value: number): string {
@@ -2646,6 +2656,7 @@ function buildBehaviorTriggerBody(input: ConfigPanelRenderInput): ComponentInCon
     });
     return components;
   }
+  if (input.actor.workspaceKind === "guild") components.push(whitelistLocationHint(locale));
   if (!view) return components;
 
   if (input.randomTriggerRemoveMode) {
@@ -3633,6 +3644,7 @@ ${localizer(locale, "commands.config.panel.channels_auto_trigger_description")}`
     });
     return components;
   }
+  if (actor.workspaceKind === "guild") components.push(whitelistLocationHint(locale));
   if (!view || !input.channelsView) return components;
 
   const actionDisabled = writesDisabled || resolveChannelsAutoTriggerActionState("auto-trigger", actor) !== "enabled";
@@ -3791,6 +3803,7 @@ ${localizer(locale, "commands.config.panel.channels_rules_description")}`,
     });
     return components;
   }
+  if (actor.workspaceKind === "guild") components.push(whitelistLocationHint(locale));
   if (!view || !input.channelsView) return components;
 
   const privateTitle = localizer(locale, "commands.config.panel.channels_rules_private_title");
@@ -3976,6 +3989,7 @@ function buildChannelsOverridesBody(input: ConfigPanelRenderInput): ComponentInC
       content: `### ${localizer(locale, "commands.config.panel.channels_overrides_title")}
 ${localizer(locale, "commands.config.panel.channels_overrides_description")}`,
     },
+    ...(actor.workspaceKind === "guild" && actor.isManager ? [whitelistLocationHint(locale)] : []),
     {
       type: ComponentType.TextDisplay,
       content: localizer(locale, "commands.config.panel.channels_overrides_select_description"),
@@ -4495,6 +4509,7 @@ export function buildConfigPanelPayload(input: ConfigPanelRenderInput): ConfigPa
           fallbacksView: input.modelFallbacksView,
           imageView: input.imageGenerationView,
           voicesView: input.voicesView,
+          userByokMode: input.personas[0]?.config.user_byok_mode === true,
         }),
       );
     }

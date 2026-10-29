@@ -160,7 +160,7 @@ export default {
     document: {
       reading_title: `📄 正在读取文件内容……`,
       reading_description: `正在读取 \`{filename}\` 里的文字`,
-      truncated_title: `⚠️ 文件已截断`,
+      truncated_title: `文件已截断`,
       truncated_description: `\`{filename}\` 太长了，已经被截断到 {limit} 个字符（原有 {original} 个字符）。回复可能不完整，建议把文件拆成更小的几部分，分批分享。`,
     },
     image: {

@@ -125,10 +125,10 @@ Triggers: {triggers}
 This persona will respond when these triggers appear in messages.`,
       alter_success_confirmation: `Successfully imported alter persona **{nickname}** with {trigger_count} unique trigger words! The detailed import information has been posted in the channel.`,
       alter_avatar_fallback_main: `🟡 This import did not include an avatar image, so this alter is using **{nickname}**'s current main persona avatar as a fallback. You can use \`/config\` > Persona > General to change it.`,
-      alter_avatar_warning: `⚠️ Do not delete the avatar image embed above, or the alter persona avatar will be lost.`,
+      alter_avatar_warning: `Do not delete the avatar image embed above, or the alter persona avatar will be lost.`,
       alter_dm_not_allowed_title: `Alter Personas Not Allowed in DMs`,
       alter_dm_not_allowed_description: `Alter personas can only be imported in servers, not in Direct Messages. Please run this command in a server.`,
-      alter_no_triggers_warning: `⚠️ This persona has no trigger words. It won't respond to any messages until you add triggers using \`/config\` > Persona > General.`,
+      alter_no_triggers_warning: `This persona has no trigger words. It won't respond to any messages until you add triggers using \`/config\` > Persona > General.`,
       alter_name_conflict_title: `Persona Name Already Exists`,
       alter_name_conflict_description: `A persona with the name **{name}** already exists on this server. Each persona must have a unique name.
 

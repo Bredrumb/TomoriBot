@@ -56,6 +56,7 @@ import {
 import { escapeDiscordMarkdown } from "@/utils/text/discordMarkdown";
 import { truncateDiscordText } from "@/utils/text/discordTextLimits";
 import { formatUTCOffset } from "@/utils/text/timezoneHelper";
+import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { getLocaleEndonym, localizer } from "@/utils/text/localizer";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 
@@ -1651,7 +1652,7 @@ ${localizer(locale, "commands.personal.config.fallbacks_description")}`,
               : "commands.personal.config.server_fallback_effect_off",
           )}${
             input.serverModelAccess?.userByokMode
-              ? `\n-# ${localizer(locale, "commands.personal.config.server_fallback_byok_notice")}`
+              ? `\n-# ${statusNote("warning", localizer(locale, "commands.personal.config.server_fallback_byok_notice"))}`
               : ""
           }`,
         },

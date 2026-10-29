@@ -421,6 +421,12 @@ function makeExplicitSlotView(
   };
 }
 
+/** Switched-off capabilities note in yellow; enabled ones with nothing usable behind them note in red. */
+function capabilityNoteLine(locale: string, key: string): string {
+  const circle = key.endsWith("_disabled_direction") ? "🟡" : "🔴";
+  return formatPanelProse(withLinePrefix("> ", `- ${circle} ${localizer(locale, key)}`));
+}
+
 function getCapabilityWarningKey(capability: "image" | "video", enabled: boolean): string {
   if (capability === "image") {
     return enabled
@@ -1339,22 +1345,12 @@ describe("Switch Models capability notice budgeting", () => {
                 const expectedWarnings: string[] = [];
                 if (!imageHealthy) {
                   expectedWarnings.push(
-                    formatPanelProse(
-                      withLinePrefix(
-                        "> ",
-                        `- ${localizer(locale, getCapabilityWarningKey("image", flags.imageGenerationEnabled))}`,
-                      ),
-                    ),
+                    capabilityNoteLine(locale, getCapabilityWarningKey("image", flags.imageGenerationEnabled)),
                   );
                 }
                 if (!videoHealthy) {
                   expectedWarnings.push(
-                    formatPanelProse(
-                      withLinePrefix(
-                        "> ",
-                        `- ${localizer(locale, getCapabilityWarningKey("video", flags.videoGenerationEnabled))}`,
-                      ),
-                    ),
+                    capabilityNoteLine(locale, getCapabilityWarningKey("video", flags.videoGenerationEnabled)),
                   );
                 }
 
@@ -1368,9 +1364,7 @@ describe("Switch Models capability notice budgeting", () => {
                       "commands.config.panel.image_generation_missing_model",
                       "commands.config.panel.video_generation_disabled_direction",
                       "commands.config.panel.video_generation_missing_model",
-                    ].some((key) =>
-                      text.includes(formatPanelProse(withLinePrefix("> ", `- ${localizer(locale, key)}`))),
-                    ),
+                    ].some((key) => text.includes(capabilityNoteLine(locale, key))),
                   );
                   expect(capabilityNotice).toBeUndefined();
                 }
@@ -1524,9 +1518,7 @@ describe("Switch Models capability notice budgeting", () => {
         });
         const renderedText = getTextDisplays(payload).join("\n");
         for (const key of speechState.present) {
-          expect(renderedText).toContain(
-            formatPanelProse(withLinePrefix("> ", `- ${localizer(locale, `commands.config.panel.${key}`)}`)),
-          );
+          expect(renderedText).toContain(capabilityNoteLine(locale, `commands.config.panel.${key}`));
         }
         for (const key of speechState.absent) {
           expect(renderedText).not.toContain(localizer(locale, `commands.config.panel.${key}`));

@@ -433,7 +433,7 @@ describe("Natural Nudges settings panel", () => {
     );
     expect(
       walk(pinnedBody).some((component) =>
-        component.content?.includes(`-# ${t("commands.config.natural_nudges.checker_pinned_unavailable")}`),
+        component.content?.includes(`-# 🔴 ${t("commands.config.natural_nudges.checker_pinned_unavailable")}`),
       ),
     ).toBe(true);
   });

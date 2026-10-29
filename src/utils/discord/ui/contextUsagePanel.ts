@@ -14,6 +14,7 @@ import { resolveModelPricing } from "@/utils/provider/modelPricing";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { truncateDiscordText } from "@/utils/text/discordTextLimits";
 import { DISCORD_BUTTON_LABEL_MAX } from "@/utils/discord/ui/componentsV2Limits";
+import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { localizer } from "@/utils/text/localizer";
 import type { PromptInspection } from "@/utils/text/promptInspection/assemble";
 import {
@@ -195,7 +196,12 @@ export function buildContextUsagePayload(
     localizer(locale, "commands.context.not_counted_note"),
   ];
   if (inspection.historyPairsDropped > 0) {
-    footnotes.unshift(localizer(locale, "commands.context.truncated_note", { count: inspection.historyPairsDropped }));
+    footnotes.unshift(
+      statusNote(
+        "warning",
+        localizer(locale, "commands.context.truncated_note", { count: inspection.historyPairsDropped }),
+      ),
+    );
   }
   if (!canViewText) {
     footnotes.push(localizer(locale, "commands.context.text_locked_note"));

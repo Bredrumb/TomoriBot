@@ -235,7 +235,7 @@ export default {
       zai_title: `設定 Z.ai API 金鑰`,
       zai_description: `Z.ai 透過一般 API 與另一個程式開發端點提供 GLM 系列模型。
 
-⚠️ **服務條款更新：** Z.ai 的服務條款已更新，只允許程式開發與代理用途。用一般端點進行非程式開發的聊天需自行承擔風險，且可能違反他們的條款。`,
+🟡 **服務條款更新：** Z.ai 的服務條款已更新，只允許程式開發與代理用途。用一般端點進行非程式開發的聊天需自行承擔風險，且可能違反他們的條款。`,
       zai_getting_key_title: `取得你的 API 金鑰：`,
       zai_getting_key_description: `1. 前往 [Z.ai 平台](https://z.ai)
 2. 登入或建立帳號
@@ -245,7 +245,7 @@ export default {
       zai_important_title: `重要提醒：`,
       zai_important_description: `- 一般端點用於一般聊天、推理與原生圖片生成
   - 專用的程式開發端點是分開的，供程式開發相關流程使用
-  - ⚠️ Z.ai 的服務條款只允許程式開發與代理情境，一般聊天與角色扮演需自行承擔風險`,
+  - 🟡 Z.ai 的服務條款只允許程式開發與代理情境，一般聊天與角色扮演需自行承擔風險`,
       zai_footer: `設定好這個供應商後，你可以用 {configModel} 變更它的預設模型`,
       novelai_title: `設定 NovelAI API 金鑰`,
       novelai_description: `NovelAI 是訂閱制服務，專注於創意故事創作與角色扮演。
