@@ -1,9 +1,11 @@
 import type { IncomingMessage } from "node:http";
+import type { Client } from "discord.js";
 import { initializeOAuthCallbackRoute, registerOAuthCallbackFlow } from "@/utils/oauth/callbackRoute";
 import type { SupporterBillingConfig } from "@/modules/supporter-billing/config";
 import { registerHealthServerRoute } from "@/init/healthServer";
 import { handlePatreonOAuthCallbackUrl } from "@/modules/supporter-billing/patreon/callback";
 import { handlePatreonWebhookRawBody } from "@/modules/supporter-billing/patreon/webhook";
+import { log } from "@/utils/misc/logger";
 import {
   getPatreonWebhookMaxBytes,
   getPatreonOAuthCredentials,
@@ -13,6 +15,7 @@ import {
 export interface PatreonRouteInitializationContext {
   config: SupporterBillingConfig;
   env?: Readonly<Record<string, string | undefined>>;
+  client?: Client;
 }
 
 export type PatreonRouteInitializer = (context: PatreonRouteInitializationContext) => void | Promise<void>;
@@ -33,11 +36,32 @@ async function readRawRequestBody(req: IncomingMessage, maxBytes: number): Promi
   return Buffer.concat(chunks);
 }
 
+function describeDiscordAccount(
+  client: Client | undefined,
+): ((discordUserId: string) => Promise<string | null>) | undefined {
+  if (!client) return undefined;
+  return async (discordUserId) => {
+    const user = await client.users.fetch(discordUserId).catch(() => null);
+    if (!user) {
+      log.warn("Patreon callback could not fetch the linked Discord account", undefined, {
+        metadata: { discordUserId },
+      });
+      return null;
+    }
+    return `@${user.username}`;
+  };
+}
+
 export function initializePatreonRoutes(context: PatreonRouteInitializationContext): void {
   initializeOAuthCallbackRoute();
   registerOAuthCallbackFlow("patreon", {
     signerSecret: getPatreonOAuthCredentials(context.config, context.env).clientSecret,
-    handle: (url) => handlePatreonOAuthCallbackUrl(url, { config: context.config, env: context.env }),
+    handle: (url) =>
+      handlePatreonOAuthCallbackUrl(url, {
+        config: context.config,
+        env: context.env,
+        describeDiscordAccount: describeDiscordAccount(context.client),
+      }),
   });
 
   registerHealthServerRoute({

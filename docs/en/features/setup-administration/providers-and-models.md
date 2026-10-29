@@ -14,6 +14,9 @@ On hosted TomoriBot installations with Subscription enabled, use `/subscribe` to
 membership and view your remaining allowance. A member with Manage Server can choose
 `Sponsor this server` in its overview or `+ Sponsor Current Server` under `Sponsored Servers`.
 `/providers` also offers sponsorship.
+If your Patreon account is connected to a Discord account, that account must be the one running
+`/subscribe`. Otherwise TomoriBot refuses the link: run the command from the connected account or
+change the connection on Patreon. The success page names the Discord account it linked.
 Each server has one active sponsor. `Server already sponsored` is disabled until that sponsorship
 is removed. You can sponsor multiple servers; they share your allowance with your personal usage.
 

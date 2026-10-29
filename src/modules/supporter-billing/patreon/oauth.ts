@@ -138,6 +138,7 @@ export async function fetchPatreonIdentity(
   );
   identityUrl.searchParams.set("fields[tier]", "title");
   identityUrl.searchParams.set("fields[campaign]", "creation_name");
+  identityUrl.searchParams.set("fields[user]", "social_connections");
   const fetchImpl = options.fetchImpl ?? fetch;
   const timeoutMs = options.timeoutMs ?? getPatreonHttpTimeoutMs(options.env);
   const response = await fetchImpl(identityUrl.toString(), {

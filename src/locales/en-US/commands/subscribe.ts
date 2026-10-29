@@ -63,6 +63,7 @@ export default {
       success: {
         title: `Patreon link complete`,
         message: `Your Patreon membership was linked. Return to Discord and choose Verify Membership in your setup or subscription panel.`,
+        linked_account: `Linked Discord account: {account}`,
       },
       authorization_denied: {
         title: `Patreon link cancelled`,
@@ -103,6 +104,10 @@ export default {
       unconfigured_tier: {
         title: `Patreon tier not configured`,
         message: `This Patreon tier is not configured for supporter access. No supporter access was granted.`,
+      },
+      discord_mismatch: {
+        title: `Patreon account mismatch`,
+        message: `This Patreon account is connected to a different Discord account. Run /subscribe from that account, or change the connection on Patreon.`,
       },
       patreon_unavailable: {
         title: `Patreon link unavailable`,

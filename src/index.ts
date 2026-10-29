@@ -62,7 +62,7 @@ const client = createDiscordClient(includePresences);
 
 await initDatabase(environment);
 
-await initSupporterBilling(environment);
+await initSupporterBilling(environment, client);
 // GUILD_CREATE caches presences during login, so restore eligible pairs before connecting.
 if (includePresences) {
   const presencePairs = await statRepository.getPresenceRetentionPairs();
