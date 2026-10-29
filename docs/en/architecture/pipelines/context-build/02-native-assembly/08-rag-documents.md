@@ -20,18 +20,22 @@ The contributor `buildServerDocumentContextItem` in `src/utils/text/context/rag.
    - Checks `serverMemoryRepository.hasDocumentInScope(serverId, personaId)`. If no documents exist for the persona or server, returns `null`.
    - Resolves embedding credentials via `resolveCapabilityCredentials`, supporting server and personal providers, including registered managed options.
    - Loads the configured embedding model via `llmModelRepo.loadEmbeddingModelById`.
-4. **Vector retrieval**:
-   - Calls `ragRepository.retrieveRelevantChunks` with a similarity threshold of `DOCUMENT_MIN_SIMILARITY` (0.5) and a result limit of `DOCUMENT_MAX_RESULTS` (6 chunks).
+4. **Hybrid retrieval**:
+   - Calls `ragRepository.retrieveRelevantChunks` with a similarity threshold of `DOCUMENT_MIN_SIMILARITY` (0.5) and a result limit of `DOCUMENT_MAX_RESULTS` (10 chunks).
+   - Builds candidate lists from vector distance and English full-text rank, each limited to `maxResults * 4` (40), then fuses them by reciprocal rank fusion with k = 60.
+   - Applies the cosine floor inside the SQL before the final limit. A chunk qualifies when its similarity reaches the floor or when the full-text list matched it, so a below-floor row cannot take a slot from a lower-ranked qualifying row.
    - Binds the resolved usage context and supplies `createProviderUsageRecorder` for each embedding response.
-   - When `channel_memory_enabled` is true, retrieval filters by the active channel name.
+   - When `channel_memory_enabled` is true, retrieval scopes documents through `channelScopeCandidates(channelId, parentChannelId)`: the active channel ID and, inside a thread, the parent channel ID. It matches stored `channel_disc_ids` (empty means every channel), never a channel name.
 5. **Formatting and emission**:
    - `ragRepository.formatChunksForPrompt` formats matching chunks into document sections.
    - Emits a `user`-role item tagged `KNOWLEDGE_SERVER_DOCUMENTS`.
+   - Emits exactly one `rag_retrieval` metric per call.
 
 ## Constraints and rationale
 
 - **Memory guard short-circuit**: Under critical host memory pressure, RAG retrieval aborts immediately. This avoids high-memory vector and embedding operations during traffic spikes.
 - **Fail-safe fallback**: Database or embedding API failures log a warning and return `null`, allowing context assembly to finish without document chunks.
+- **Retrieval telemetry**: `rag_retrieval` carries a fixed `outcome` label for every exit (`rag_unavailable`, `memory_critical`, `no_server`, `no_query`, `query_too_short`, `no_documents`, `no_model`, `no_results`, `injected`, `error`). `total_ms` is always present, and `embedding_ms`, `sql_ms`, `result_count`, `injected_chars`, and `injected_tokens` appear when those phases ran. The fields are aggregate only: query text, document text, names, vectors, keys, and server, channel, or user identifiers never reach a log. Like other graphable samples, it goes to both `log.metric` and `metricSampleRepository` so the host JSONL and Grafana each keep a copy.
 - **Preset reassembly**: Tagged as `KNOWLEDGE_SERVER_DOCUMENTS`. Each world info marker pulls its own lore block first and then documents, and the first marker consumes the document block. When neither marker exists, the before lore block, documents, and the after lore block flush before the first dialogue anchor.
 
 ## Source pointers
