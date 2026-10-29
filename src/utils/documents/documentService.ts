@@ -12,6 +12,11 @@ export interface RetrievedDocumentChunk {
   similarity: number;
 }
 
+export interface RetrievalTimings {
+  embeddingMs?: number;
+  sqlMs?: number;
+}
+
 export function normalizeDocumentText(text: string): string {
   return text
     .replaceAll("\u0000", "")
@@ -257,6 +262,8 @@ export async function retrieveRelevantDocumentChunks(params: {
    * channel and, inside a thread, its parent so a thread inherits its channel's scope.
    */
   channelIds?: readonly string[] | null;
+  /** Optional sink filled in place, so callers that only need chunks keep the same return type. */
+  timings?: RetrievalTimings;
 }): Promise<RetrievedDocumentChunk[]> {
   const {
     serverId,
@@ -269,12 +276,14 @@ export async function retrieveRelevantDocumentChunks(params: {
     minSimilarity,
     batchSize,
     channelIds,
+    timings,
   } = params;
 
   if (!query.trim()) {
     return [];
   }
 
+  const embeddingStartedAt = performance.now();
   const queryEmbeddings = await generateEmbeddingsBatched({
     provider: embeddingModel.provider,
     apiKey,
@@ -285,6 +294,7 @@ export async function retrieveRelevantDocumentChunks(params: {
     batchSize,
     onUsage,
   });
+  if (timings) timings.embeddingMs = performance.now() - embeddingStartedAt;
 
   if (queryEmbeddings.length === 0) {
     return [];
@@ -311,6 +321,7 @@ export async function retrieveRelevantDocumentChunks(params: {
   // especially effective for proper-noun-heavy content where embeddings can miss exact name
   // matches. fts_candidates is a no-op when plainto_tsquery returns an empty tsquery (all
   // stop words), so pure vector ranking applies transparently as the fallback.
+  const sqlStartedAt = performance.now();
   const rows = await sql<
     Array<{
       document_id: number;
@@ -318,8 +329,6 @@ export async function retrieveRelevantDocumentChunks(params: {
       chunk_index: number;
       content: string;
       distance: number | string;
-      fts_rank: number | string | null;
-      vector_rank: number | string | null;
     }>
   >`
     WITH fts_q AS (
@@ -366,25 +375,24 @@ export async function retrieveRelevantDocumentChunks(params: {
       GROUP BY document_chunk_id
     )
     SELECT dc.document_id, d.document_name, dc.chunk_index, dc.content,
-           (dc.embedding <=> ${queryVector}::vector) AS distance,
-           r.fts_rank, r.vector_rank
+           (dc.embedding <=> ${queryVector}::vector) AS distance
     FROM rrf_merged r
     JOIN document_chunks dc ON dc.document_chunk_id = r.document_chunk_id
     JOIN documents d ON d.document_id = dc.document_id
+    -- Filter before the limit, or a below-floor row takes a slot from a lower-ranked qualifying one.
+    -- FTS hits bypass the floor: verbose chunks have dilute centroids that under-rate contextual
+    -- queries, so the lexical match is the trusted signal for those rows.
+    WHERE r.fts_rank IS NOT NULL
+       OR (1 - (dc.embedding <=> ${queryVector}::vector)) >= ${minSimilarity}::float8
     ORDER BY r.rrf_score DESC
     LIMIT ${maxResults}
   `;
+  if (timings) timings.sqlMs = performance.now() - sqlStartedAt;
 
   const results: RetrievedDocumentChunk[] = [];
   for (const row of rows) {
     const distance = typeof row.distance === "string" ? Number.parseFloat(row.distance) : Number(row.distance);
     const similarity = Number.isFinite(distance) ? 1 - distance : 0;
-    // FTS hits bypass the cosine floor: verbose chunks have dilute centroids that under-rate
-    // contextual queries, so the lexical match is the trusted signal for those rows.
-    const ftsMatched = row.fts_rank != null;
-    if (similarity < minSimilarity && !ftsMatched) {
-      continue;
-    }
     results.push({
       document_id: row.document_id,
       document_name: row.document_name,
