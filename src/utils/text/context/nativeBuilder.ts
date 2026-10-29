@@ -136,6 +136,19 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     sanitizeEnabled: tomoriConfig.uncensor_sanitize_enabled,
   };
   const tomoriState = snapshot?.tomoriState ?? (await personaRepository.loadState(guildId));
+  // Retrieval makes an embedding round trip plus a database query, so it starts here and is awaited at
+  // its insertion point to overlap the rest of assembly; the catch only stops a rejection becoming an
+  // unhandled rejection if assembly exits before that point.
+  const documentItemPromise = buildServerDocumentContextItem({
+    tomoriState,
+    simplifiedMessageHistory,
+    triggererUserId,
+    channelId,
+    parentChannelId,
+  }).catch((error: unknown) => {
+    log.warn("Failed to add server document context", error);
+    return null;
+  });
   const toolPromptMacroResolver = createToolPromptMacroResolver({
     provider: tomoriState?.llm?.llm_provider,
     capabilities: resolvePromptCapabilityValues(tomoriConfig),
@@ -379,16 +392,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       isUserImpersonation,
     }),
   );
-  await appendOptionalItem(
-    contextItems,
-    buildServerDocumentContextItem({
-      tomoriState,
-      simplifiedMessageHistory,
-      triggererUserId,
-      channelId,
-      parentChannelId,
-    }),
-  );
+  await appendOptionalItem(contextItems, documentItemPromise);
   // Activated lore changes from turn to turn, so it stays after documents and outside the cache-stable prefix.
   contextItems.push(
     ...(await buildLorebookContextItems({
