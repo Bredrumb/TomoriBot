@@ -1,6 +1,7 @@
 ---
 title: "Setup: SearXNG"
 sidebar:
+  label: "SearXNG"
   order: 3
 aiGenerated: true
 ---

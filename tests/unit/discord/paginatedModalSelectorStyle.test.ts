@@ -152,7 +152,7 @@ describe("promptWithPaginatedModal selectorStyle", () => {
         {
           kind: "radioGroup",
           customId: "scope",
-          labelKey: "commands.compact.save_as_doc_scope_label",
+          labelKey: "commands.providers.provider_label",
           options: [
             { value: "serverwide", label: "Server-wide" },
             { value: "persona", label: "Persona" },

@@ -43,7 +43,7 @@ docker run --rm alpine:3.22 sh -c "head -c 24 /dev/urandom | base64"
 Tạo mật khẩu riêng cho `POSTGRES_PASSWORD`. Bạn có thể sao chép cài đặt điều chỉnh tùy chọn từ `.env.optional.example`.
 
 :::note[Database connection is automatic]
-Dịch vụ Compose PostgreSQL chạy ở chế độ phát triển (không có SSL) trên mạng Docker nội bộ. Hình ảnh đi kèm bao gồm `pgvector` và `pg_cron`, do đó bộ nhớ tài liệu, tìm kiếm vectơ và dọn dẹp theo lịch trình sẽ hoạt động ngay lập tức. Không đặt `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER` hoặc `POSTGRES_DB` trong `.env`; Compose tự động cấu hình chúng.
+Không đặt `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER` hoặc `POSTGRES_DB` trong `.env`; Compose tự động cấu hình chúng.
 :::
 
 Trên Linux, tạo các thư mục gắn kết liên kết trên máy chủ và gán quyền sở hữu cho UID 1001 trước khi khởi động vùng chứa. Docker tạo các điểm gắn kết bị thiếu dưới dạng root, điều này ngăn vùng chứa bot lưu các bản sao lưu, nhật ký hoặc tải lên:
@@ -79,4 +79,4 @@ Xem [SearXNG](/vi/self-hosting/local-endpoints/setup-searxng/), [Crawl4AI](/vi/s
 
 ## Bảo trì, cập nhật và sao lưu
 
-Sử dụng `bun run update --docker` để cập nhật bản sao lưu đầu tiên khi triển khai Compose. Để sao lưu hoặc khôi phục cơ sở dữ liệu Compose của bạn, hãy xem [Bảo trì và sao lưu](/vi/self-hosting/maintenance/). Trước khi tải phiên bản mới, hãy xem lại [Di chuyển an toàn](/vi/self-hosting/safe-migration/).
+Sử dụng `bun run update --docker` để cập nhật bản sao lưu đầu tiên khi triển khai Compose. Để sao lưu hoặc khôi phục cơ sở dữ liệu Compose của bạn, hãy xem [Bảo trì và sao lưu](/vi/self-hosting/maintenance/).

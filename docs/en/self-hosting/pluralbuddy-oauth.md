@@ -5,8 +5,7 @@ sidebar:
   order: 8
 ---
 
-This guide is for the host of a self-hosted TomoriBot. The host must authorize a PluralBuddy
-application for the official PluralBuddy service and for each approved custom instance.
+A self-hosted TomoriBot needs an authorized PluralBuddy application for the official service and each approved custom instance.
 
 If you use the [public deployed bot](https://discord.com/oauth2/authorize?client_id=841644102059556915),
 you do not need to complete this host-side setup. Select PluralBuddy with
@@ -28,7 +27,7 @@ you do not need to complete this host-side setup. Select PluralBuddy with
 1. Sign into the [PluralBuddy developer portal](https://pluralbuddy.app/developers/applications)
    and create an OAuth application. Use a separate application for testing. Select `profile` and
    `offline_access`. Register your callback exactly as chosen above. Keep the client ID and secret
-   private. The PluralBuddy bot's Discord invitation does not grant TomoriBot API access.
+   private.
 2. From the TomoriBot repository, run the helper with the official instance ID and the same callback:
 
    ```sh
@@ -42,19 +41,11 @@ you do not need to complete this host-side setup. Select PluralBuddy with
    `/personal message-proxy service:pluralbuddy` on a Discord account that uses PluralBuddy, then
    send a webhook repost to check that TomoriBot recognizes the alter.
 
-The helper reads PostgreSQL settings and `CRYPTO_SECRET` or versioned encryption keys from `.env`
-or a `SECRET_FILE` JSON bundle accessible only to the bot host. Keep the bundle outside the repository. Enter the
-client secret at the prompt; do not place it in a command argument or Discord message. If PluralBuddy
-revokes the connection, repeat these steps with the same instance ID. A failed selection leaves the
-user's current message-proxy choice unchanged.
-
-The helper stores the client ID and encrypted credentials in the database. Keep the encryption key
-with your backups. Do not put the OAuth client secret in `.env`.
+The helper reads database settings and encryption keys from `.env` or a `SECRET_FILE` JSON bundle. Keep the bundle outside the repository and back up the encryption key. Enter the client secret at the prompt, rather than storing it in `.env` or passing it as an argument. If PluralBuddy revokes the connection, repeat authorization with the same instance ID.
 
 ## Add an approved instance
 
-The custom origin must serve a proxy bot and its matching API. An API URL alone cannot make the
-public bot write records there. Use a public HTTPS origin without a path, query, or fragment.
+Use a public HTTPS origin without a path, query, or fragment. The instance must run both a proxy bot and its matching API.
 
 1. On a computer with deployment database access, register a disabled instance:
 
@@ -63,9 +54,7 @@ public bot write records there. Use a public HTTPS origin without a path, query,
    bun scripts/db/register-message-proxy-instance.ts inspect
    ```
 
-   For PluralKit, use `pluralkit` as the service. The bot user ID lets TomoriBot skip the
-   message-proxy wait in servers where that instance's bot is not installed. Registration checks
-   discovery but does not prove that the bot writes lookup records.
+   For PluralKit, use `pluralkit` as the service. The bot user ID avoids unnecessary lookup waits in servers where that bot is absent.
 2. For PluralBuddy, register a separate OAuth application on that instance with the same loopback
    callback pattern as above. Authorize it using the instance ID returned by registration:
 
@@ -73,9 +62,7 @@ public bot write records there. Use a public HTTPS origin without a path, query,
    bun scripts/db/authorize-pluralbuddy-instance.ts <instance-id> <callback-url>
    ```
 
-   Repeat this authorization command to replace credentials or recover from a revoked refresh
-   token. The helper writes the replacement connection only after a successful code exchange.
-   PluralKit's public message lookup does not need this step.
+   Repeat authorization to replace credentials or recover from a revoked refresh token. PluralKit does not require this step.
 3. From a message written by the matching proxy bot, record its Discord repost ID and sender
    account ID. Check that the instance API resolves that repost, then enable it:
 
@@ -83,9 +70,7 @@ public bot write records there. Use a public HTTPS origin without a path, query,
    bun scripts/db/register-message-proxy-instance.ts enable <instance-id> <repost-id> <sender-id>
    ```
 
-   The command requires a lookup result for that exact repost and sender. For a new fork, test its
-   bot, OAuth exchange and refresh (if applicable), and TomoriBot lookup in a disposable deployment
-   before enabling it for users.
+   For a new fork, test the bot, OAuth exchange and refresh, and TomoriBot lookup in a disposable deployment before enabling it for users.
 4. Users select the enabled instance with `/personal message-proxy service:pluralbuddy instance:<name>`.
    Leaving `instance` empty chooses the official instance. Disabling an instance stops new lookups
    without changing stored profiles.
@@ -103,9 +88,6 @@ bun scripts/db/register-message-proxy-instance.ts disable <instance-id>
 bun scripts/db/register-message-proxy-instance.ts remove <instance-id>
 ```
 
-Removal deletes its PluralBuddy OAuth connection and keeps a hidden catalog row so identities,
-memories, and message attribution still resolve. That origin cannot be registered again after
-removal; use `disable` when you may need to resume the same instance. Catalog changes take effect on the next command
-or lookup without restarting TomoriBot. The [Message-Proxy Support page](/features/integrations/message-proxy-support/#pluralbuddy)
-explains what users can expect. See the [message-proxy architecture](/architecture/integrations/message-proxy/)
-for token storage and refresh behavior.
+Removal deletes the OAuth connection and permanently prevents the origin from being registered again. Use `disable` if you may resume the instance. Existing identities and memories remain available, and changes take effect without a restart.
+
+See [Message-Proxy Support](/features/integrations/message-proxy-support/#pluralbuddy) for user setup and the [message-proxy architecture](/architecture/integrations/message-proxy/) for token storage and refresh behavior.

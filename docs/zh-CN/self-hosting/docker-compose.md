@@ -43,7 +43,7 @@ docker run --rm alpine:3.22 sh -c "head -c 24 /dev/urandom | base64"
 为`POSTGRES_PASSWORD`生成单独的密码。你可以从`.env.optional.example`复制可选的调谐设置。
 
 :::note[Database connection is automatic]
-Compose PostgreSQL服务在内部Docker网络上以开发模式（无SSL）运行。捆绑的映像包括`pgvector`和`pg_cron`，因此文档内存、矢量搜索和计划清理可以立即进行。不要在`.env`中设置`POSTGRES_HOST`、`POSTGRES_PORT`、`POSTGRES_USER`或`POSTGRES_DB`； Compose会自动配置它们。
+不要在`.env`中设置`POSTGRES_HOST`、`POSTGRES_PORT`、`POSTGRES_USER`或`POSTGRES_DB`； Compose会自动配置它们。
 :::
 
 在Linux上，在启动容器之前在主机上创建绑定安装目录并将所有权分配给UID 1001。Docker以root身份创建丢失的挂载点，这会阻止bot容器保存备份、日志或上传：
@@ -62,7 +62,7 @@ docker compose up      # bot + database
 
 对于以后的启动，单独`docker compose up`就足够了，除非你更改代码或依赖项。一旦机器人连接到Discord，请在任何服务器通道中运行`/setup`以添加你的AI提供商密钥。有关Discord中的设置选项，请参阅[快速入门](/zh-CN/introduction/quickstart/)。
 
-在其服务定义中组合引脚`RUN_ENV=development`，以便`.env`机密和本地HTTP端点正常工作。容器健康检查报告bot进程是否正在运行； 它不测试Discord网关连接。有关生产模式（`RUN_ENV=production`）差异（秘密管理器、网络限制和指标），请参阅[安全架构](/en/architecture/subsystems/security/)。
+在其服务定义中组合引脚`RUN_ENV=development`，以便`.env`机密和本地HTTP端点正常工作。容器健康检查报告bot进程是否正在运行； 它不测试Discord网关连接。
 
 ## 4. 可选本地服务器（Compose profile）
 
@@ -79,4 +79,4 @@ docker compose --profile searxng --profile fetch-crawl4ai up
 
 ## 维护、更新和备份
 
-使用`bun run update --docker`在Compose部署上进行备份优先更新。要备份或恢复Compose数据库，请参阅[维护和备份](/zh-CN/self-hosting/maintenance/)。在拉取新版本之前，请先查看[安全迁移](/zh-CN/self-hosting/safe-migration/)。
+使用`bun run update --docker`在Compose部署上进行备份优先更新。要备份或恢复Compose数据库，请参阅[维护和备份](/zh-CN/self-hosting/maintenance/)。

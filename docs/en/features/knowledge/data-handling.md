@@ -51,7 +51,7 @@ Exportable data is delivered to your DMs as a JSON file:
 
 Uploaded expression media is stored on the server host and is outside these JSON exports.
 Self-hosters must back up database storage and media assets together; see
-[custom media backups](/self-hosting/safe-migration/#custom-expression-media-backups).
+[custom media backups](/self-hosting/maintenance/#database-backups-and-recovery-keys).
 
 :::tip
 `/export config` is not a complete backup. It leaves out channel overrides, per-channel auto-trigger

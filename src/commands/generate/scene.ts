@@ -21,7 +21,11 @@ import { cooldownRepository } from "@/utils/db/repositories/CooldownRepository";
 import { sendCooldownDM } from "@/utils/discord/cooldownDM";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { safeSelectOptionText } from "@/utils/discord/interactionHelper";
-import { DISCORD_SELECT_OPTIONS_MAX } from "@/utils/discord/ui/componentsV2Limits";
+import {
+  DISCORD_SELECT_OPTION_DESCRIPTION_MAX,
+  DISCORD_SELECT_OPTIONS_MAX,
+} from "@/utils/discord/ui/componentsV2Limits";
+import { resolvePersonaSnippet } from "@/utils/text/personaPrompt";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { tomoriChat } from "@/events/messageCreate/tomoriChat";
@@ -64,12 +68,14 @@ function getPersonaOptions(personas: TomoriState[], locale: string) {
     .map((persona) => ({
       label: safeSelectOptionText(persona.persona_nickname),
       value: String(persona.persona_id),
-      description: localizer(
-        locale,
-        persona.is_alter
-          ? "commands.generate.scene.modal.alter_persona_description"
-          : "commands.generate.scene.modal.main_persona_description",
-      ),
+      description:
+        resolvePersonaSnippet(persona, DISCORD_SELECT_OPTION_DESCRIPTION_MAX) ??
+        localizer(
+          locale,
+          persona.is_alter
+            ? "commands.generate.scene.modal.alter_persona_description"
+            : "commands.generate.scene.modal.main_persona_description",
+        ),
     }))
     .slice(0, DISCORD_SELECT_OPTIONS_MAX);
 }

@@ -54,7 +54,7 @@ aiGenerated: true
 - `/export personal memories`：個人記憶，範圍全域或每個人格。
 - `/persona export`：完整的人格定義。
 
-上傳的表達媒體儲存在伺服器主機上，並且位於這些JSON匯出之外。自架者必須同時備份資料庫儲存和媒體資產；請參閱[自訂媒體備份](/zh-TW/self-hosting/safe-migration/#custom-expression-media-backups)。
+上傳的表達媒體儲存在伺服器主機上，並且位於這些JSON匯出之外。自架者必須同時備份資料庫儲存和媒體資產；請參閱[自訂媒體備份](/self-hosting/maintenance/#database-backups-and-recovery-keys)。
 
 ## 匯入你的資料
 

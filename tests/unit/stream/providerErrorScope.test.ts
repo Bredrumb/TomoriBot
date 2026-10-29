@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, it, mock, spyOn } from "bun:test";
 import type { Client, ModalBuilder, TextChannel } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import type { ProviderError, StreamContext, StreamProvider } from "@/types/stream/interfaces";
+import * as userCache from "@/utils/cache/userCache";
 import { StreamErrorUi } from "@/utils/discord/stream/errorUi";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { localizedCopy } from "../../helpers/localeCases";
@@ -130,9 +131,11 @@ async function renderTips(
   options: { providerName?: string; fallbackChain?: unknown[] } = {},
 ): Promise<string> {
   let modal: ReturnType<ModalBuilder["toJSON"]> | undefined;
+  const pendingClicks: Promise<void>[] = [];
   const tipClick = {
     customId: "error_tip_details",
-    user: { bot: false },
+    locale: "en-US",
+    user: { id: "viewer-1", bot: false },
     showModal: async (builtModal: ModalBuilder) => {
       modal = builtModal.toJSON();
     },
@@ -140,7 +143,7 @@ async function renderTips(
   const makeCollector = (filter: (interaction: typeof tipClick) => boolean) => {
     const collector = {
       on(event: string, listener: (interaction: unknown) => Promise<void>) {
-        if (event === "collect" && filter(tipClick)) void listener(tipClick);
+        if (event === "collect" && filter(tipClick)) pendingClicks.push(listener(tipClick));
         return collector;
       },
     };
@@ -154,13 +157,18 @@ async function renderTips(
     createMessageComponentCollector: (options: { filter: (interaction: typeof tipClick) => boolean }) =>
       makeCollector(options.filter),
   }));
-  await new StreamErrorUi().handleProviderError(
-    error,
-    makeProvider(options.providerName),
-    makeContext(send, textCredentialSource, options.fallbackChain ?? []),
-    "fixture-key",
-  );
-  await Promise.resolve();
+  const userRow = spyOn(userCache, "getCachedUserRow").mockResolvedValue(null);
+  try {
+    await new StreamErrorUi().handleProviderError(
+      error,
+      makeProvider(options.providerName),
+      makeContext(send, textCredentialSource, options.fallbackChain ?? []),
+      "fixture-key",
+    );
+    await Promise.all(pendingClicks);
+  } finally {
+    userRow.mockRestore();
+  }
   const payload = send.mock.calls[0]?.[0] as {
     embeds?: unknown[];
     components?: Array<{ toJSON(): { components: Array<{ label?: string }> } }>;

@@ -41,10 +41,7 @@ Obrigatória:
 - `CRYPTO_SECRET`: uma chave de criptografia de 32 caracteres (usada para criptografar chaves API armazenadas).
 - Conexão PostgreSQL: `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`.
 
-Mantenha uma cópia protegida do seu segredo de criptografia separada dos backups do banco de dados. Novos backups não contêm `.env`. Para rotação, use `CRYPTO_SECRET_V1`, `CRYPTO_SECRET_V2` ou qualquer versão posterior com número inteiro positivo, com a seleção opcional de `CRYPTO_SECRET_CURRENT`. `CRYPTO_SECRET` permanece V1. Os comandos de inicialização e manutenção carregam a mesma fonte: valores de ambiente locais em desenvolvimento, ou JSON montado / AWS Secrets Manager em produção. Consulte [Rotacionando chaves de criptografia](/pt-BR/self-hosting/maintenance/#rotating-encryption-keys) antes de substituir um segredo.
-
-Em fontes de segredos JSON, as chaves mestras devem ser strings. `CRYPTO_SECRET_CURRENT` aceita uma string como `"2"` ou um número inteiro positivo seguro como `2` que indica uma versão disponível.
-
+Mantenha uma cópia protegida do seu segredo de criptografia separada dos backups do banco de dados. Novos backups não contêm `.env`. Para rotação, use `CRYPTO_SECRET_V1`, `CRYPTO_SECRET_V2` ou qualquer versão posterior com número inteiro positivo, com a seleção opcional de `CRYPTO_SECRET_CURRENT`.
 :::note[No native PostgreSQL?]
 Execute apenas o banco de dados em um contêiner e aponte os valores `POSTGRES_*` para ele:
 
@@ -84,7 +81,7 @@ bun run launch --help        # see all flags
 ## Extras opcionais (a "Instalação Completa" manual)
 <!-- anchor: optional-extras-the-manual-full-install -->
 
-O caminho de Instalação Completa do [assistente de configuração](/pt-BR/self-hosting/setup-wizard/) sobrepõe quatro extras leves
+O caminho de Instalação Completa do [assistente de configuração](/pt-BR/self-hosting/setup-wizard/) sobrepõe extras leves
 em cima da instalação base. Nenhum deles é necessário para executar o bot, mas cada um desbloqueia um recurso. Se
 você estiver instalando manualmente, adicione o que quiser:
 
@@ -126,7 +123,7 @@ CREATE EXTENSION vector;
 
 Sem o pgvector, o bot ainda funciona, mas os recursos de RAG ficam completamente indisponíveis. Esta extensão também é
 necessária no banco de dados de destino antes de restaurar um backup; veja
-[Migração Segura](/pt-BR/self-hosting/safe-migration/) para detalhes.
+[Manutenção e backups](/self-hosting/maintenance/) para detalhes.
 
 ### `pg_cron` : tarefas de limpeza programadas
 
@@ -186,4 +183,4 @@ O fallback seguro do `fetch_url` e o fallback do `web_search` do DuckDuckGo são
 Depois de instalado, os scripts do lado do host (`bun run update`, `bun run backup`,
 `bun run restore-backup`, `bun run nuke-db`, `bun run rotate-keys`, ...) e os procedimentos de atualização e
 backup estão todos na página de [Manutenção e Backups](/pt-BR/self-hosting/maintenance/). Se você está prestes a
-obter uma nova versão, comece com a [Migração Segura](/pt-BR/self-hosting/safe-migration/).
+obter uma nova versão, comece com a [Manutenção e backups](/self-hosting/maintenance/).

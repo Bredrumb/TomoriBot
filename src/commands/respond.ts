@@ -6,6 +6,8 @@ import { sendCooldownDM } from "@/utils/discord/cooldownDM";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { localizer } from "@/utils/text/localizer";
+import { resolvePersonaSnippet } from "@/utils/text/personaPrompt";
+import { DISCORD_SELECT_OPTION_DESCRIPTION_MAX } from "@/utils/discord/ui/componentsV2Limits";
 import type { LlmRow, UserRow } from "@/types/db/schema";
 import { ASSISTANT_PREFILL_MAX_LENGTH, resolvePrefillBlocker, resolvePrefillMode } from "@/utils/chat/assistantPrefill";
 import type { ModalComponent, SelectOption } from "@/types/discord/modal";
@@ -257,12 +259,14 @@ export async function execute(
       const personaOptions: SelectOption[] = availablePersonas.map((persona, index) => ({
         label: safeSelectOptionText(persona.persona_nickname),
         value: index.toString(),
-        description: localizer(
-          locale,
-          persona.is_alter
-            ? "commands.shared.persona_select.alter_persona_description"
-            : "commands.shared.persona_select.main_persona_description",
-        ),
+        description:
+          resolvePersonaSnippet(persona, DISCORD_SELECT_OPTION_DESCRIPTION_MAX) ??
+          localizer(
+            locale,
+            persona.is_alter
+              ? "commands.shared.persona_select.alter_persona_description"
+              : "commands.shared.persona_select.main_persona_description",
+          ),
       }));
       modalComponents.push({
         customId: "persona_choice",

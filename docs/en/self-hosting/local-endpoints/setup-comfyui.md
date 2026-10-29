@@ -2,6 +2,7 @@
 title: "Setup: ComfyUI"
 aiGenerated: false
 sidebar:
+  label: "ComfyUI"
   order: 2
 ---
 
@@ -11,8 +12,7 @@ submitting an API-format workflow with your prompt/size substituted in, then pol
 ComfyUI's `/history` endpoint until the output is ready.
 
 This guide covers installing/running ComfyUI and registering it. For authoring or editing
-a TomoriBot-compatible workflow (the `{TOMORI_*}` placeholders), use the in-Discord deep
-dive, open `/help`, choose `Features`, then `Custom Endpoints`, and use the
+a TomoriBot-compatible workflow (the `{TOMORI_*}` placeholders), use the
 [workflow README](https://github.com/Bredrumb/TomoriBot/tree/main/assets/comfyui-workflows)
 on GitHub.
 
@@ -24,8 +24,8 @@ See the [local endpoints hub](/self-hosting/local-endpoints/).
 ## Hardware requirements
 
 Image and video generation is GPU-bound: the heavy cost is VRAM (your graphics card's
-memory, separate from system RAM), set by the model checkpoint your workflow loads, not by
-ComfyUI itself. An NVIDIA GPU is strongly recommended. The two workflows TomoriBot ships are
+memory, separate from system RAM), determined by the model checkpoint your workflow loads.
+An NVIDIA GPU is strongly recommended. The two workflows TomoriBot ships are
 both modern, heavier-than-SDXL models:
 
 | Bundled workflow | Base model | Practical VRAM | Notes |
@@ -39,11 +39,10 @@ impractical (many minutes per image, worse for video) and can exceed TomoriBot's
 so a GPU is effectively required for regular use.
 
 :::tip[Going lower: pick a GGUF quant]
-Quantization stores each model weight in fewer bits to cut VRAM and disk use, at a small
-precision cost. The bundled fp8 files are a mild form of it, and to shrink further, download a
+To shrink further, download a
 GGUF build of the model from Hugging Face: the code in names like `Q4_K_M` / `Q5_K_M` is the
 bits-per-weight, and 4-bit (Q4) or 5-bit (Q5) is the usual sweet spot with most of the quality
-for a fraction of the fp8/fp16 footprint. Below 4-bit shrinks more but degrades quickly. Loading
+for a fraction of the fp8/fp16 footprint. Loading
 GGUF UNETs in ComfyUI needs the [ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF) custom
 node.
 :::
@@ -80,8 +79,9 @@ Download a ready-to-use API-format workflow. Examples can be found in the repo u
 
 These are API format (the JSON ComfyUI exports via *Save (API Format)*), not the regular
 UI-save format. If you author your own, it must contain the `{TOMORI_*}` placeholders
-TomoriBot substitutes (prompt, width/height, seed, reference images, etc.). See the workflow
-README and the `Custom Endpoints` page under `Providers` in `/help`.
+TomoriBot substitutes (prompt, width/height, seed, reference images, etc.). See the
+[workflow README](https://github.com/Bredrumb/TomoriBot/tree/main/assets/comfyui-workflows) and the
+`Custom Endpoints` page under `Providers` in `/help`.
 
 ## 3. Register it in Discord
 
@@ -98,12 +98,6 @@ After saving the connection, select it and choose `+ Add new Image Model` or `+ 
 from the model dropdown. Enter the checkpoint's exact code name and upload the workflow `.json`
 downloaded from Step 2 into `ComfyUI Workflow`. The model capability must match the workflow (image
 workflow → `image`, video workflow → `video`).
-
-An image model also asks for its `Image Capabilities`: text to image, reference image,
-inpainting, and negative prompt. Tick only the modes your workflow actually implements, because
-Tomori offers the tool only the modes you declare. Inpainting appears for ComfyUI connections
-only, since no other API compatibility accepts a mask. Editing the model later reopens the form
-with your current selection, so changing a code name will not clear it.
 
 Adding the model makes it the active `image`/`video` model automatically. Trigger generation by asking Tomori directly in chat. If it isn't active for some reason, run `/config` > Models > Switch Models
 and select your registered ComfyUI endpoint.

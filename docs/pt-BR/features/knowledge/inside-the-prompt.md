@@ -9,7 +9,7 @@ Cada vez que você aciona TomoriBot, o seguinte é montado e enviado ao seu mode
 
 | Bloquear | Opcional? | Comandos | O que é isso |
 |---|---|---|---|
-| [Prompt do sistema](/pt-BR/features/chatting-personality/behavior-tweaking/#system-prompt) |  | `/config` > Motor > Geral | Instruções básicas no topo do contexto. |
+| [Prompt do sistema](/pt-BR/features/chatting-personality/behavior-tweaking/#system-prompt) |  | `/config` > Comportamento > Comportamento Geral | Instruções básicas no topo do contexto. |
 
 > **Texto padrão do prompt do sistema**: usado somente enquanto nenhum prompt do sistema do servidor estiver definido. >
 > *"Você é {bot}. {bot} responde de forma curta e concisa por padrão. {bot} só dá respostas longas se a situação justificar. >
@@ -27,12 +27,13 @@ Cada vez que você aciona TomoriBot, o seguinte é montado e enviado ao seu mode
 | [Emojis de servidor](/pt-BR/features/chatting-personality/behavior-tweaking/#capabilities-what-shes-allowed-to-do) | *(Opcional)* | `/config` > `Plug-ins` > `Adições de Contexto` (`Emojis nas Respostas`) (somente alternância), inicializar com `/expressions initialize` | Os emojis personalizados presentes no servidor. |
 | [Figurinhas do servidor](/pt-BR/features/chatting-personality/behavior-tweaking/#expressions) | *(Opcional)* | `/config` > `Plug-ins` > `Ferramentas Disponíveis` (uso de figurinhas), classificar ativos nativos com `/expressions initialize`, gerenciar com `/expressions manage` | Figurinhas nativos enviáveis e todas as expressões personalizadas elegíveis para a pessoa que responde, com nomes, descrições e emoções. As fontes de mídia e as regras de acesso pessoal ficam fora do prompt. |
 | [Sprites de personalidade](/pt-BR/features/chatting-personality/multiple-personas/#sprites-emotion-avatars) | *(Opcional)* | `/config` > `Persona` > Sprites | Sprites de expressão nomeada configurados para a persona, se houver. |
-| [Participantes da Conversa](/pt-BR/features/knowledge/memory/#personal-vs-server-memories) | *(Opcional)* | `/personal memories` (bloqueado por `/config` > `Permissões` (Personalização)) | As pessoas na conversa, seus apelidos e menções, e as memórias pessoais salvas sobre cada uma delas. Carregado quando a pessoa possui uma mensagem no contexto ou se seu nome/alias for mencionado. Também carrega o canal atual e a hora local como rodapé, usando `/config` > Engine > General. |
+| [Participantes da Conversa](/pt-BR/features/knowledge/memory/#personal-vs-server-memories) | *(Opcional)* | `/personal memories` (bloqueado por `/config` > `Permissões` (Personalização)) | As pessoas na conversa, seus apelidos e menções, e as memórias pessoais salvas sobre cada uma delas. Carregado quando a pessoa possui uma mensagem no contexto ou se seu nome/alias for mencionado. Também carrega o canal atual e a hora local como rodapé, usando `/config` > Comportamento > Comportamento Geral. |
 | [Memória de curto prazo](/pt-BR/features/knowledge/memory/#short-term-memory-stm) |  | `/config` > `Persona` > Memórias; `/memories` para limpar entradas; bloqueado por `/config` > `Permissões` (memória de curto prazo) | Contém resumos e mensagens recentes de diferentes canais |
 | [`Documentos`](/pt-BR/features/knowledge/memory/#document-knowledge-base-rag) | *(Opcional)* | `/memories` | Pedaços relevantes extraídos da base de conhecimento usando RAG. |
 | [Condicionamento](/pt-BR/features/knowledge/memory/#conditioning) | *(Opcional)* | `/reward <feed\|headpat\|hug\|kiss\|tickle>`, `/punish <bite\|bonk\|pinch\|spank\|squeeze>`; gerenciado com `/conditioning remove` | Preferências de comportamento acumuladas para esta persona neste servidor. |
 | [Exemplos de diálogos](/pt-BR/features/chatting-personality/multiple-personas/#sample-dialogues) | *(Opcional)* | `/config` > `Persona` > `Identidade e Personalidade` | Exemplos de como essa persona fala, se houver algum configurado. |
-| [Mensagens recentes](/pt-BR/features/chatting-personality/behavior-tweaking/#generation-tuning) |  | `/config` > Motor > Geral | A conversa real, até esse número de mensagens (padrão 80). Sua nota de contexto e qualquer nota de reunião são injetadas em linha dentro deste bloco, em uma profundidade configurável, em vez de como um bloco separado próprio. |
+| [Mensagens recentes](/pt-BR/features/chatting-personality/behavior-tweaking/#generation-tuning) | | `/config` > Comportamento > Comportamento Geral | A conversa real, até esse número de mensagens (padrão 80). |
+| Nota de contexto | *(Opcional)* | `/config` > Comportamento > Comportamento Geral; Persona > Avançado; ou Canais > Substituições de canal | Uma instrução inserida entre as mensagens recentes em uma profundidade escolhida a partir da mensagem mais recente. |
 
 As linhas marcadas com *(Opcional)* não contribuem com nada (e não custam tokens) quando não há nada a dizer, por exemplo. nenhum documento corresponde ou o servidor não possui emojis personalizados.
 
@@ -63,9 +64,9 @@ Se você deseja que algo sobreviva a todos os itens acima, isso deve se tornar u
 
 ## Dicas e Truques
 
-- `/config` > Engine > General amplia a janela de conversa (20-100 mensagens). Mais
+- `/config` > Comportamento > Comportamento Geral amplia a janela de conversa (20-100 mensagens). Mais
   contexto, mais tokens por resposta.
-- `/config` > Engine > General injeta um lembrete curto em uma profundidade escolhida. Como ele fica
+- `/config` > Comportamento > Comportamento Geral injeta um lembrete curto em uma profundidade escolhida. Como ele fica
   baixo no pacote, próximo às mensagens recentes, ela é mais propensa a agir sobre ele do que sobre
   algo no prompt de sistema. Este é o melhor lugar para incentivá-la a salvar memórias
   com mais frequência.

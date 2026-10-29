@@ -43,7 +43,7 @@ docker run --rm alpine:3.22 sh -c "head -c 24 /dev/urandom | base64"
 Genere una contraseña separada para `POSTGRES_PASSWORD`. Puede copiar configuraciones de sintonización opcionales desde `.env.optional.example`.
 
 :::note[Database connection is automatic]
-El servicio Compose PostgreSQL se ejecuta en modo de desarrollo (sin SSL) en una red interna Docker. La imagen incluida incluye `pgvector` y `pg_cron`, por lo que la memoria de documentos, la búsqueda de vectores y la limpieza programada funcionan de inmediato. No configure `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER` o `POSTGRES_DB` en `.env`; Compose los configura automáticamente.
+No configure `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER` o `POSTGRES_DB` en `.env`; Compose los configura automáticamente.
 :::
 
 En Linux, cree los directorios bind-mount en el host y asigne la propiedad al UID 1001 antes de iniciar los contenedores. Docker crea puntos de montaje faltantes como raíz, lo que impide que el contenedor del bot guarde copias de seguridad, registros o cargas:
@@ -62,7 +62,7 @@ docker compose up      # bot + database
 
 Para inicios posteriores, `docker compose up` por sí solo es suficiente a menos que cambie el código o las dependencias. Una vez que el bot se conecte a Discord, ejecute `/setup` en cualquier canal del servidor para agregar su clave de proveedor de IA. Consulta el [Inicio rápido](/es-419/introduction/quickstart/) para conocer las opciones de configuración en Discord.
 
-Redacte los pines `RUN_ENV=development` en su definición de servicio para que funcionen los secretos de `.env` y los puntos finales HTTP locales. La comprobación del estado del contenedor informa si el proceso del bot se está ejecutando; no prueba la conectividad de la puerta de enlace Discord. Para conocer las diferencias del modo de producción (`RUN_ENV=production`) (administradores de secretos, restricciones de red y métricas), consulte [Arquitectura de seguridad](/en/architecture/subsystems/security/).
+Redacte los pines `RUN_ENV=development` en su definición de servicio para que funcionen los secretos de `.env` y los puntos finales HTTP locales. La comprobación del estado del contenedor informa si el proceso del bot se está ejecutando; no prueba la conectividad de la puerta de enlace Discord. 
 
 ## 4. Servidores locales opcionales (perfiles de Compose)
 
@@ -79,4 +79,4 @@ Consulta [SearXNG](/es-419/self-hosting/local-endpoints/setup-searxng/), [Crawl4
 
 ## Mantenimiento, actualización y copias de seguridad.
 
-Utilice `bun run update --docker` para actualizaciones de respaldo en implementaciones de Compose. Para realizar una copia de seguridad o restaurar su base de datos de Compose, consulte [Mantenimiento y copias de seguridad](/es-419/self-hosting/maintenance/). Antes de descargar una nueva versión, revise [Migración segura](/es-419/self-hosting/safe-migration/).
+Utilice `bun run update --docker` para actualizaciones de respaldo en implementaciones de Compose. Para realizar una copia de seguridad o restaurar su base de datos de Compose, consulte [Mantenimiento y copias de seguridad](/es-419/self-hosting/maintenance/).

@@ -84,7 +84,9 @@ export interface PersonalConfigRouteDependencies {
     locale?: string,
   ): Promise<Array<{ id: number; name: string; description?: string }>>;
   loadActiveSpotlights(serverId: number, userId: number): Promise<PersonalSpotlightStatus[]>;
-  loadGuildPersonas(guildId: string): Promise<Array<{ id: number; name: string; isAlter: boolean }>>;
+  loadGuildPersonas(
+    guildId: string,
+  ): Promise<Array<{ id: number; name: string; isAlter: boolean; snippet?: string | null }>>;
   loadTomoriState(guildId: string): Promise<TomoriState | null>;
   loadServerTriggerBehavior(
     guildId: string,
@@ -190,7 +192,7 @@ export interface PersonalConfigRouteDependencies {
     hours: number,
     blockIdx: number,
     fp: string,
-    personas: Array<{ id: number; name: string; isAlter: boolean }>,
+    personas: Array<{ id: number; name: string; isAlter: boolean; snippet?: string | null }>,
   ): Promise<void>;
   showSpotlightAutoTriggerModal(
     interaction: ButtonInteraction | StringSelectMenuInteraction,
@@ -201,7 +203,7 @@ export interface PersonalConfigRouteDependencies {
     blockIdx: number,
     mask: string,
     fp: string,
-    selectedPersonas: Array<{ id: number; name: string; isAlter: boolean }>,
+    selectedPersonas: Array<{ id: number; name: string; isAlter: boolean; snippet?: string | null }>,
   ): Promise<void>;
   showSpotlightRemoveModal(
     interaction: ButtonInteraction | StringSelectMenuInteraction,
@@ -210,7 +212,7 @@ export interface PersonalConfigRouteDependencies {
     start: number,
     fp: string,
     activeSpotlights: PersonalSpotlightStatus[],
-    personas: Array<{ id: number; name: string; isAlter: boolean }>,
+    personas: Array<{ id: number; name: string; isAlter: boolean; snippet?: string | null }>,
     guildChannels: Map<string, { name: string }> | undefined,
   ): Promise<void>;
 }
@@ -445,7 +447,7 @@ export function buildScopedPersonalConfigPanelPayload(
   return payload;
 }
 
-export type SpotlightPersona = { id: number; name: string; isAlter: boolean };
+export type SpotlightPersona = { id: number; name: string; isAlter: boolean; snippet?: string | null };
 
 /**
  * Resolves a block-relative selection bitmask back to personas. Returns null when the mask cannot

@@ -58,6 +58,8 @@ import { truncateDiscordText } from "@/utils/text/discordTextLimits";
 import { formatUTCOffset } from "@/utils/text/timezoneHelper";
 import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { getLocaleEndonym, localizer } from "@/utils/text/localizer";
+import { resolvePersonaSnippet } from "@/utils/text/personaPrompt";
+import { DISCORD_SELECT_OPTION_DESCRIPTION_MAX } from "@/utils/discord/ui/componentsV2Limits";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 
 /** Discord rejects a String Select carrying more than 25 options. */
@@ -136,7 +138,7 @@ export interface PersonalConfigModelDisplayInfo {
 
 export interface PersonalConfigSpotlightDisplayInfo {
   activeSpotlights: PersonalSpotlightStatus[];
-  personas: Array<{ id: number; name: string; isAlter: boolean }>;
+  personas: Array<{ id: number; name: string; isAlter: boolean; snippet?: string | null }>;
 }
 
 export interface PersonalConfigPanelRenderInput {
@@ -994,12 +996,13 @@ ${localizer(locale, "commands.personal.config.persona_naming_description")}`,
                 ? localizer(locale, "commands.personal.config.persona_shared_lineage_description", {
                     count: sharing.length,
                   })
-                : localizer(
-                    locale,
-                    first?.is_alter
-                      ? "commands.personal.config.persona_alter_description"
-                      : "commands.personal.config.persona_main_description",
-                  ),
+                : ((first ? resolvePersonaSnippet(first, DISCORD_SELECT_OPTION_DESCRIPTION_MAX) : null) ??
+                    localizer(
+                      locale,
+                      first?.is_alter
+                        ? "commands.personal.config.persona_alter_description"
+                        : "commands.personal.config.persona_main_description",
+                    )),
               100,
             ),
             default: lineage === currentLineage,

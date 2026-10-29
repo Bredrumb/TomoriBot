@@ -635,10 +635,7 @@ export async function applyPresetDefault(
     const successEmbed = new EmbedBuilder()
       .setTitle(localizedStatusTitle(locale, "commands.persona.import.alter_success_title", alterSuccessColor))
       .setDescription(descriptionParts.join(""))
-      .setColor(alterSuccessColor)
-      .setFooter({
-        text: statusNote("warning", localizer(locale, "commands.persona.import.alter_avatar_warning")),
-      });
+      .setColor(alterSuccessColor);
 
     const presetAvatarBuffer = await getPresetAvatarBuffer(selectedPreset);
     let avatarAttachment: AttachmentBuilder | null = null;

@@ -31,4 +31,4 @@ Use `/providers` para registro de endpoint e configuração do modelo. Depois, a
 
 ## Usar transcrições
 
-Após o registro, TomoriBot transcreve anexos de áudio em segundo plano e adiciona o texto ao contexto do bate-papo. Use `/config` > Mecanismo > Avisos somente se você também quiser que as transcrições sejam postadas de forma visível no bate-papo.
+Após o registro, TomoriBot transcreve anexos de áudio em segundo plano e adiciona o texto ao contexto do bate-papo. Use `/config` > Comportamento > Comportamento de Avisos somente se você também quiser que as transcrições sejam postadas de forma visível no bate-papo.

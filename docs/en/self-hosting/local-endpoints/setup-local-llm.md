@@ -2,23 +2,20 @@
 title: "Setup: Local LLM"
 aiGenerated: false
 sidebar:
+  label: "Local LLM"
   order: 1
 ---
 
 TomoriBot can use any OpenAI-compatible local LLM server for text generation and embeddings.
-This guide walks through the process using Ollama as an example because it is the easiest to get started with.
-
-Once you've found your footing consider a more flexible server like
-[KoboldCPP](https://github.com/LostRuins/koboldcpp) and use open-source models straight from
-[Hugging Face](https://huggingface.co), as picking and trying out different community-made models
-is half the fun of running your own AI.
 
 :::note[No env vars needed]
 Local models are registered through Discord slash commands and stored encrypted in the
-database. There's no `.env` setting for them. See the [local endpoints hub](/self-hosting/local-endpoints/).
+database. There's no `.env` setting for them.
 :::
 
 ## 1. Run your model server
+
+This guide walks through the process using Ollama as an example because it is the easiest to get started with, you can use anything you want especially if you're a more technical user already!
 
 Install [Ollama](https://ollama.com). The examples below use Google's Gemma 4, but anything in [Ollama's library](https://ollama.com/library) works.
 
@@ -39,13 +36,6 @@ fits your card:
 Downloads are Ollama's default-quantization sizes; see the
 [model page](https://ollama.com/library/gemma4) for exact figures. Not sure how much VRAM you
 have? On Windows: `Task Manager` > `Performance` > `GPU`, read "Dedicated GPU memory."
-
-:::tip[Why 26B can beat its size]
-`gemma4:26b` is a Mixture-of-Experts (MoE) model: it holds many "expert" sub-networks but
-activates only ~4B parameters per token. So even though its ~18 GB of weights don't *quite*
-fit in 16 GB, the small spill to system RAM barely slows it down unlike a dense model of the
-same footprint. That's why it runs happily on many 16 GB cards.
-:::
 
 Pull your chosen size and start the server:
 
@@ -103,12 +93,6 @@ usual cause is a `localhost`/Docker mismatch or a missing/extra `/v1` (see
 Adding the model makes it the active `text` model automatically. Start chatting to try it. If
 it isn't active for some reason, run `/config` > Models > Switch Models and select your newly registered model.
 
-Registering never changes any model other than `text`. If you ticked `Image Understanding`
-so this endpoint can act as the vision helper for an image-blind chat model, select it
-explicitly with `/config` > Models > Switch Models; every text endpoint you registered with that toggle on shows
-up there. Note the vision model is only consulted when the chat model cannot see images, so
-setting one behind a vision-capable chat model has no effect until you switch.
-
 ## 3. (Optional) Local embeddings for RAG
 
 Select the saved endpoint and use its model dropdown to add an Embedding model (e.g.
@@ -135,7 +119,7 @@ shared way to unload a model.
 
 ## Other servers
 
-All of these use the same flow, only the URL and a couple of notes change.
+TomoriBot supports any OpenAI-compatible endpoint, but the servers below are recommended. All of these use the same flow: only the URL and a couple of notes change.
 
 ### KoboldCPP
 

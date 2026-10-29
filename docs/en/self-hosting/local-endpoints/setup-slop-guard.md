@@ -1,6 +1,7 @@
 ---
 title: "Setup: slop-guard"
 sidebar:
+  label: "slop-guard"
   order: 8
 aiGenerated: true
 ---

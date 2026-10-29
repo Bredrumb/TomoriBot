@@ -1158,9 +1158,6 @@ export async function importPersona(
           const timestamp = Date.now();
           const avatarFilename = `tomori-preset-${sanitizedNickname}-${timestamp}.png`;
           alterSuccessEmbed.setImage(`attachment://${avatarFilename}`);
-          alterSuccessEmbed.setFooter({
-            text: statusNote("warning", localizer(locale, "commands.persona.import.alter_avatar_warning")),
-          });
           await interaction.channel.send({
             embeds: [alterSuccessEmbed],
             files: [new AttachmentBuilder(avatarImageBuffer, { name: avatarFilename })],

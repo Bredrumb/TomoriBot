@@ -116,11 +116,13 @@ import { buildSlugMap } from "@/utils/text/slugifyLabel";
 import {
   DISCORD_BUTTON_LABEL_MAX,
   DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX,
+  DISCORD_SELECT_OPTION_DESCRIPTION_MAX,
   DISCORD_SELECT_PLACEHOLDER_MAX,
   getDiscordTextLength,
 } from "@/utils/discord/ui/componentsV2Limits";
 import { measureFormattedPanelTextLength } from "@/utils/discord/ui/panelProse";
 import { neutralizeFenceRuns } from "@/utils/text/discordTextLimits";
+import { resolvePersonaSnippet } from "@/utils/text/personaPrompt";
 import { renderFencedPreview } from "@/utils/text/textPreview";
 import { DEFAULT_SYSTEM_PROMPT } from "@/utils/text/contextBuilder";
 import { formatUTCOffset } from "@/utils/text/timezoneHelper";
@@ -444,11 +446,12 @@ function buildPersonaSelectorRows(input: ConfigPanelRenderInput): ComponentInCon
     label: safeSelectOptionText(persona.persona_nickname, 100),
     value: String(persona.persona_id),
     description: safeSelectOptionText(
-      localizer(
-        locale,
-        persona.is_alter ? "commands.config.panel.persona_alter" : "commands.config.panel.persona_main",
-      ),
-      100,
+      resolvePersonaSnippet(persona, DISCORD_SELECT_OPTION_DESCRIPTION_MAX) ??
+        localizer(
+          locale,
+          persona.is_alter ? "commands.config.panel.persona_alter" : "commands.config.panel.persona_main",
+        ),
+      DISCORD_SELECT_OPTION_DESCRIPTION_MAX,
     ),
     default: persona.persona_id === selectedPersonaId,
   }));

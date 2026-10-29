@@ -333,8 +333,10 @@ export function prepareEmbedModalButtons(
         attachTextDisplayModalCollector({
           message,
           customId: TIP_DETAILS_BUTTON_ID,
-          title: localizer(locale, "genai.tips.title"),
-          content: tipText,
+          render: (viewerLocale) => ({
+            title: localizer(viewerLocale, "genai.tips.title"),
+            content: createTipText(viewerLocale, options.tipKeys ?? [], options.tipVars) ?? tipText,
+          }),
           timeoutMs: TIP_BUTTON_TIMEOUT_MS,
           logLabel: `${logLabel} tips`,
           onExpire: disableButtons,
@@ -345,8 +347,10 @@ export function prepareEmbedModalButtons(
         attachTextDisplayModalCollector({
           message,
           customId: ERROR_DETAIL_BUTTON_ID,
-          title: localizer(locale, "genai.error_detail.title"),
-          content: restrictedDetail.content,
+          render: (viewerLocale) => ({
+            title: localizer(viewerLocale, "genai.error_detail.title"),
+            content: restrictedDetail.content,
+          }),
           timeoutMs: TIP_BUTTON_TIMEOUT_MS,
           logLabel: `${logLabel} detail`,
           access: restrictedDetail.access,

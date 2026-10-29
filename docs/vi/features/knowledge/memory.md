@@ -122,7 +122,7 @@ Nếu không có `reason`, lượt đếm vẫn được ghi lại nhưng không
 
 ## Kiểm soát thời điểm bộ nhớ kích hoạt
 
-Phạm vi sẽ thu hẹp thông tin trước tiên: bộ nhớ máy chủ chỉ xuất hiện trong prompt thuộc máy chủ đó, bộ nhớ cá nhân chỉ xuất hiện khi người dùng đó hiện diện trong cuộc trò chuyện, và cả hai chỉ dành cho persona sở hữu chúng. Trong phạm vi đó, mọi bộ nhớ đều được gửi kèm trong mỗi prompt theo mặc định. Việc gắn thẻ giúp thu hẹp hơn nữa, để bộ nhớ chỉ kích hoạt theo từ khóa hoặc chỉ trong một kênh. Bật tính năng này bằng `/config` > Engine > Memory & STM.
+Phạm vi sẽ thu hẹp thông tin trước tiên: bộ nhớ máy chủ chỉ xuất hiện trong prompt thuộc máy chủ đó, bộ nhớ cá nhân chỉ xuất hiện khi người dùng đó hiện diện trong cuộc trò chuyện, và cả hai chỉ dành cho persona sở hữu chúng. Trong phạm vi đó, mọi bộ nhớ đều được gửi kèm trong mỗi prompt theo mặc định. Việc gắn thẻ giúp thu hẹp hơn nữa, để bộ nhớ chỉ kích hoạt theo từ khóa hoặc chỉ trong một kênh. Bật tính năng này bằng `/config` > Hành vi > Bộ nhớ nâng cao.
 
 ### Thẻ từ khóa
 <!-- anchor: keyword-tags -->
@@ -141,66 +141,31 @@ Phạm vi sẽ thu hẹp thông tin trước tiên: bộ nhớ máy chủ chỉ 
 
 Trong `/help`, chọn `Bộ nhớ`, rồi chọn `Gắn thẻ bộ nhớ`, để xem bản tóm tắt tương tự trong Discord.
 
-## Bộ nhớ ngắn hạn (STM)
+## Bộ nhớ ngắn hạn
 <!-- anchor: short-term-memory-stm -->
 
-TomoriBot có thể dễ dàng đọc các tin nhắn từ kênh hiện tại mà bot đang trò chuyện, nhưng STM cho phép bot thực hiện những điều sau mà không cần lưu thành bộ nhớ dài hạn thực sự:
-1. Củng cố tạm thời kịch bản/tình huống hiện tại của kênh trong ngữ cảnh
-2. Nhớ tạm thời các cuộc trò chuyện từ các kênh/máy chủ khác
+TomoriBot đọc các tin nhắn gần đây trong kênh đang hoạt động. Bộ nhớ ngắn hạn (STM) mở rộng điều này bằng cách giữ ngữ cảnh làm việc tạm thời:
 
-Bot chỉ nhớ các cuộc trò chuyện mà mình đã tham gia. Bot cập nhật bộ nhớ của kênh khi phản hồi và không vào thời điểm nào khác, vì vậy một kênh bận rộn nhưng không ai nói chuyện với bot sẽ không để lại dấu vết nào.
+- **Ngữ cảnh kênh:** Củng cố chủ đề hoặc tình huống đang diễn ra trong kênh hiện tại.
+- **Ngữ cảnh giữa các kênh:** Nhắc lại các cuộc trò chuyện gần đây từ các kênh khác và giữa các máy chủ khi tính năng gợi nhớ giữa các máy chủ được bật.
 
-STM của mỗi kênh sẽ hết hạn sau 24 giờ theo mặc định và nếu bạn đã từ chối tham gia bằng `/personal config`, tin nhắn của bạn cũng sẽ không bao giờ được đưa vào đó.
+Bot chỉ nhớ các cuộc trò chuyện mà bot đã tham gia. Bot chỉ cập nhật bản tóm tắt của kênh khi phản hồi và không vào bất kỳ thời điểm nào khác, vì vậy một kênh bận rộn mà không ai nói chuyện với bot sẽ không để lại bộ nhớ nào. Bộ nhớ ngắn hạn của mỗi kênh sẽ hết hạn sau 24 giờ theo mặc định. Nếu bạn chọn không tham gia trong `/personal config`, tin nhắn của bạn sẽ bị loại trừ khỏi bộ nhớ ngắn hạn.
 
-### Những gì bot có thể và không thể thấy
+### Ví dụ giữa các kênh
 
-| Vị trí | Ý nghĩa |
-|---|---|
-| Trong máy chủ | Một bộ nhớ dùng chung cho mỗi kênh, không phải một bộ nhớ cho mỗi người. Bot không lưu ghi chú riêng về từng cá nhân bạn. |
-| Trong DM | Của riêng bạn. |
-| Kênh khác | Bot có thể nhớ lại các cuộc trò chuyện gần đây của mình từ một vài kênh khác trong cùng máy chủ. |
-| Kênh riêng tư | Bất kỳ nội dung nào được thiết lập bằng `/config` > Channels > Channel Rules sẽ giữ nguyên tại đó và không xuất hiện ở nơi khác. |
-| Máy chủ khác | Không bao giờ, trừ khi bạn bật `/personal config` → `crossserver`. Ngay cả khi đó, chỉ *các cuộc trò chuyện của chính bạn* mới đi theo bạn. |
-| Mỗi persona | Giữ bộ nhớ riêng biệt, vì vậy chuyển đổi persona sẽ chuyển đổi bộ nhớ. |
+- **Kênh công khai:** Bạn thảo luận về gợi ý album với TomoriBot trong `#music`. Vài phút sau trong `#general`, bạn hỏi bot đã gợi ý album nào. Vì bot đã trả lời trong `#music`, bot sẽ nhớ lại ngữ cảnh đó trong `#general`.
+- **Kênh riêng tư:** Nếu cuộc trò chuyện đó diễn ra trong một kênh riêng tư, bot sẽ không nhớ lại nó trong `#general`. Các bản tóm tắt từ các kênh riêng tư vẫn được giữ tách biệt trừ khi quản trị viên bật Bỏ qua quyền riêng tư STM trong `/config` > `Permissions`.
 
-Bộ nhớ của mỗi kênh lưu giữ một vài tin nhắn gần nhất cùng một bản tóm tắt ngắn do bot tự viết và làm mới khi cuộc trò chuyện tiếp diễn. Nó sẽ tự mờ dần sau vài giờ yên tĩnh.
+### Quản lý bộ nhớ ngắn hạn
 
-### Lệnh
+Bạn có thể xem hoặc chỉnh sửa bản tóm tắt của kênh hiện tại trong `/config` > `Persona` > `Memories`.
+Quản trị viên máy chủ có thể điều chỉnh các tham số hoặc tắt bộ nhớ ngắn hạn trong `/config` > `Hành vi` > `Bộ nhớ nâng cao`, đồng thời xem lại hoặc xóa các bản tóm tắt kênh đang hoạt động trong `/memories` > `Ngắn hạn`.
+`/refresh` xóa bộ nhớ của kênh hiện tại.
 
-| Lệnh | Chức năng |
-|---|---|
-| `/config` > Persona > Memories | Xem bản tóm tắt bot đang lưu cho kênh này |
-| `/config` > Persona > Memories | Chỉnh sửa hoặc tự bạn viết bản tóm tắt |
-| `/personal config` / `/personal memories` | Chọn tham gia nhớ lại liên máy chủ, hoặc xóa dữ liệu của chính bạn |
-| `/refresh` | Làm cho bot quên kênh này ngay lập tức |
-| `/config` > Engine > Memory & STM | Tần suất bot cập nhật, và mức độ chi tiết bot lưu giữ |
-| `/config` > Engine > Memory & STM | Hoán đổi bản tóm tắt lấy tối đa 5 trường có nhãn (*Bối cảnh hiện tại*, *Tâm trạng*, …) |
-| `/config` > Engine > Memory & STM | Diễn đạt lại yêu cầu nhắc bot lưu giữ |
-| `/memories` | Xem lại và xóa có chọn lọc các mục máy chủ đang hoạt động từ một bảng quản lý |
-| `/config` > Permissions | Cho phép bộ nhớ kênh riêng tư xuất hiện ở nơi khác |
-| `/config` > Permissions | Bật hoặc tắt tính năng (bộ nhớ đã lưu vẫn được giữ nguyên trong cả hai trường hợp) |
+## Danh tính proxy tin nhắn
 
-Bất kỳ ai cũng có thể chạy `/config` > Persona > Memories, `/personal config` và `/personal memories`. Các lệnh còn lại yêu cầu quyền Quản lý máy chủ.
-
-### Cấu hình STM
-
-Người quản lý máy chủ có thể tinh chỉnh bộ nhớ ngắn hạn từ `/config` → `Hành vi` → Memory & STM. Các cài đặt này áp dụng cho các bản ghi STM đang hoạt động của máy chủ:
-
-- Nhịp làm mới kiểm soát số lượt tương tác của bot trôi qua giữa các lần nhắc làm mới. Phạm vi cho phép là 1-100.
-- Chế độ hiển thị chọn xem các giá trị danh mục có thay thế các lượt gần đây hay xuất hiện dưới dạng tóm tắt thô.
-- Tin nhắn thô kiểm soát số lượng tin nhắn gần đây được giữ lại, từ 1 đến mức tối đa của kênh.
-- Độ sâu lời nhắc đặt vị trí lời nhắc làm mới tính từ cuối ngữ cảnh được tập hợp, từ 0-20.
-- Độ sâu nội dung đặt vị trí nội dung STM tính từ cuối ngữ cảnh được tập hợp, từ −1-20.
-
-Danh mục STM thay thế trường Tóm tắt mặc định bằng tối đa năm trường có nhãn. Nhập từng trường theo định dạng `Nhãn: Mô tả`; để trống mọi trường sẽ khôi phục danh mục Tóm tắt mặc định. Việc lưu danh mục sẽ xóa STM của các kênh máy chủ đang hoạt động không tương thích, và bảng điều khiển sẽ thông báo các kênh bị ảnh hưởng trước khi lưu.
-
-Prompt STM cho phép người quản lý tùy chỉnh ưu tiên mô tả công cụ và lời nhắc cập nhật. Để trống các mục tùy chỉnh sẽ khôi phục các giá trị mặc định hiệu dụng, bao gồm lời nhắc nhận biết danh mục khi các danh mục được bật.
-
-:::tip
-Các lệnh STM này chỉ dành cho người dùng nâng cao, bạn nên giữ nguyên các cài đặt mặc định, trừ khi bạn muốn cho phép bot nhớ bạn qua các máy chủ bằng `/personal config`
-:::
-
----
+Các dịch vụ proxy tin nhắn được hỗ trợ cho phép TomoriBot giữ các bộ nhớ cá nhân riêng biệt cho các danh tính proxy đã được xác minh. Tài khoản Discord máy chủ lưu trữ kiểm soát quyền riêng tư và ủy quyền. Xem [Hỗ trợ proxy tin nhắn](/features/integrations/message-proxy-support/) để biết cách thiết lập và các giới hạn.
 
 ## Quyền riêng tư
-Để biết chính xác những gì bot lưu trữ và cách xuất hoặc xóa dữ liệu đó, hãy xem [Xử lý dữ liệu](/vi/features/knowledge/data-handling/) và `/legal privacy-policy`. Bạn có thể chọn từ chối tham gia bộ nhớ hoàn toàn bằng `/personal config`.
+
+Để biết TomoriBot lưu trữ những gì và cách xuất hoặc xóa dữ liệu đó, hãy xem [Xử lý dữ liệu](/features/knowledge/data-handling/) và `/legal privacy-policy`. Bạn có thể chọn không sử dụng bộ nhớ bằng `/personal config`.

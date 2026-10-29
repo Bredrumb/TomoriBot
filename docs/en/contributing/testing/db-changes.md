@@ -97,7 +97,7 @@ The tests run on a fresh schema. Before a release with many migrations, also run
 of production data, which catches orphaned rows and backfill edge cases:
 
 1. Restore a production snapshot into a scratch database that has `pgvector` (see
-   [Safe Migration](/self-hosting/safe-migration/#prerequisite-the-pgvector-extension)). Restore with
+   [Maintenance & Backups](/self-hosting/maintenance/#database-backups-and-recovery-keys)). Restore with
    `ON_ERROR_STOP=1`.
 2. Run the same initialization the bot runs at boot:
 

@@ -74,7 +74,7 @@
 | system prompt | 系统提示词 | 所有人格共同遵循的指令。 |
 | context note | 上下文提醒 | 插在提示词靠近末尾位置的短提醒。UI 的 Context Reminder 同此译法。不要缩写成「提醒」，那是 reminder（`/scheduled-task`）的译法。 |
 | self-teaching | 自我教导 | bot 自己从服务器对话里学习（`Self-Teaching`，`Learn from server conversations`），与 teach 的「用户教导 bot」方向相反，两个词不要互换。 |
-| warning | 警告 | 这是消息与弹窗里的前缀写法，不是功能名。来源里的 `Warning:` 一律写「警告：」，用于破坏性操作与状态提示（`stm_categories_disclosure_modal: Warning: saving clears active STM in {scope}.`、`alter_avatar_warning`）。一般性提醒写「注意」。不要写成「敏感提示」。 |
+| warning | 警告 | 这是消息与弹窗里的前缀写法，不是功能名。来源里的 `Warning:` 一律写「警告：」，用于破坏性操作与状态提示（`stm_categories_disclosure_modal: Warning: saving clears active STM in {scope}.`）。一般性提醒写「注意」。不要写成「敏感提示」。 |
 | nsfw content | NSFW 内容 | 年龄限制内容的统称（`plugins_nsfw_jailbreaks_title` 与页面选择器 `page_plugins_nsfw_jailbreaks`，两处英文都是 `NSFW Content`）。NSFW 保持英文。需要单独指年龄门槛时写「年龄限制」。 |
 | welcome messages | 欢迎消息 | 新成员入群时的问候（Welcome Messages、Welcome channel、Welcome persona、Welcome prompt），统称用「欢迎消息」，不用「迎新」。 |
 | reminder | 提醒 | 定时发送的消息（`/scheduled-task`）。名词统一用「提醒」，重复执行的写「重复提醒」。与「上下文提醒」不是一回事，见 context note。 |
