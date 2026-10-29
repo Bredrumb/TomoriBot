@@ -106,9 +106,7 @@ class RagRepository implements IRepository<RagExportShape> {
   }
 
   /**
-   * Re-embeds all documents for a server using a new embedding model.
-   * Used after a server changes its embedding provider.
-   *
+   * Re-embeds stored chunks in place and rejects if any document could not be completed.
    */
   async reembedServerDocuments(
     ...args: Parameters<typeof reembedServerDocuments>
