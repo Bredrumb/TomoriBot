@@ -20,6 +20,7 @@ import {
 import { buildPaginationRow } from "@/utils/discord/ui/panel";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { DISCORD_SELECT_OPTIONS_MAX } from "@/utils/discord/ui/componentsV2Limits";
+import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { localizer } from "@/utils/text/localizer";
 import {
   buildTextPreview,
@@ -144,7 +145,7 @@ export function buildConfigVoicesBody(input: {
 
 ${
   view.turboEnabled
-    ? localizer(locale, "commands.config.panel.voices.parameters.turbo_notice")
+    ? statusNote("warning", localizer(locale, "commands.config.panel.voices.parameters.turbo_notice"))
     : localizer(locale, "commands.config.panel.voices.parameters.standard_notice")
 }`,
   });

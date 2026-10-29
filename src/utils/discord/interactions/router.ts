@@ -1,4 +1,5 @@
 import { MessageFlags, type Client, type Interaction } from "discord.js";
+import { compactInteractionRoute } from "@/utils/discord/interactions/compactRoutes";
 import { conditioningInteractionRoute } from "@/utils/discord/interactions/conditioningRoutes";
 import { expressionsInteractionRoute } from "@/utils/discord/interactions/expressionsRoutes";
 import { configInteractionRoute } from "@/utils/discord/interactions/configRoutes";
@@ -30,6 +31,7 @@ import { localizer } from "@/utils/text/localizer";
 
 const registry = new InteractionRouteRegistry([
   expressionsInteractionRoute,
+  compactInteractionRoute,
   conditioningInteractionRoute,
   configInteractionRoute,
   contextInteractionRoute,

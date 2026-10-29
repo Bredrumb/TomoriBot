@@ -100,9 +100,19 @@ function renderTagHeader(tag: ContextItemTag | undefined): string {
  * Each context item gets a `=== Title (/command) ===` header derived from its
  * `metadataTag`. These headers are annotations: they are NOT part of the prompt
  * actually sent to the LLM. The DM body that ships with the file explains this.
+ *
+ * The request config leads the file under its own annotation header, so it reads as
+ * request metadata rather than prompt text.
  */
-export function buildTextSnapshot(contextItems: StructuredContextItem[]): string {
-  const lines: string[] = [];
+export function buildTextSnapshot(
+  contextItems: StructuredContextItem[],
+  requestConfig: Record<string, unknown>,
+): string {
+  const lines: string[] = [
+    "=== Request Config (annotation, NOT part of the prompt) ===",
+    JSON.stringify(requestConfig, null, 2),
+    "",
+  ];
 
   for (const item of contextItems) {
     lines.push(renderTagHeader(item.metadataTag));
@@ -149,7 +159,7 @@ export function buildTextSnapshot(contextItems: StructuredContextItem[]): string
  * it is rendered in the DM body instead, to keep the file focused on payload.
  *
  * When `toolsData` is provided, a top-level `tools` key is appended in the same
- * shape the adapter would send to the provider.
+ * shape the adapter would send to the provider. The request config keys follow `model`.
  */
 export async function buildJsonSnapshot(
   contextItems: StructuredContextItem[],
@@ -305,18 +315,15 @@ export async function buildJsonSnapshot(
   // requestConfig is already provider-shaped: Google/Vertex nest samplers under
   //    `generation_config`, `safety_settings`, and friends, while Anthropic and
   //    OpenAI-compatible providers use root-level keys. Copying at the top level keeps
-  //    that shape and cannot overwrite a key the adapter already set.
-  for (const [key, value] of Object.entries(requestConfig)) {
-    if (!(key in requestData)) requestData[key] = value;
-  }
+  //    that shape and cannot overwrite a key the adapter already set. It is placed right
+  //    after `model` so the short config is the first thing a reader sees, ahead of the
+  //    long message list.
+  const { model, ...payload } = requestData;
+  const config = Object.fromEntries(Object.entries(requestConfig).filter(([key]) => !(key in requestData)));
 
-  // Append provider-formatted tools when requested, including an empty list
-  //    when per-turn filtering deliberately suppresses every tool.
-  if (toolsData) {
-    requestData.tools = toolsData;
-  }
-
-  return requestData;
+  // Provider-formatted tools are included even as an empty list, because per-turn
+  //    filtering can deliberately suppress every tool.
+  return { model, ...config, ...payload, ...(toolsData ? { tools: toolsData } : {}) };
 }
 
 /**
@@ -331,8 +338,8 @@ export async function buildJsonSnapshot(
  *   - openai-compat    : `{temperature?, top_p?, top_k?, frequency_penalty?, presence_penalty?, min_p?, max_tokens?, stop}`
  *
  * Used in two places:
- *   - Baked into the JSON snapshot file at the top level (alongside `messages`/`contents`)
- *   - Rendered as a second ```json code block in the DM body (shown for BOTH text and JSON formats)
+ *   - Baked into the JSON snapshot file at the top level, right after `model`
+ *   - Written at the top of the text snapshot file under an annotation header
  *
  * @param maxOutputTokens - From `resolveRequestMaxOutputTokens()`; undefined omits the key, as the request does.
  */

@@ -81,6 +81,7 @@ export interface ThoughtLogEntry {
 export interface ThoughtLogPayload {
   summary?: string;
   raw?: string;
+  iterations?: Array<{ summary?: string; raw?: string }>;
   /** Formatted text content fetched via the fetch MCP tool, rendered as code blocks in thought-log embeds. */
   fetchedContent?: string;
   firstReplyUrl?: string;
@@ -152,6 +153,7 @@ export interface ProviderInfo {
   displayName: string;
   aliases?: string[]; // Optional aliases for provider name (e.g., ["gemini"] for "google")
   supportedModels: string[];
+  defaultVisionModel?: string;
   requiresApiKey: boolean;
   supportsStreaming: boolean;
   supportsFunctionCalling: boolean;

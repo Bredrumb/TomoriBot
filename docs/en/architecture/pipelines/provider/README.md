@@ -175,6 +175,11 @@ implementation at startup, and the registration returns a disposer like the usag
 
 ## Provider options
 
+`ProviderInfo.defaultVisionModel` supplies the initial vision slot during server setup and new
+server or personal provider configuration. OpenRouter uses `google/gemini-3.1-flash-lite`; providers
+without this field leave the slot empty. Credential updates preserve an existing vision selection,
+including an explicitly empty slot.
+
 `src/utils/provider/providerOptionRegistry.ts` owns the optional extra entries the provider panels,
 setup wizard, and model views can offer beside the built-in providers. Built-in providers keep their
 existing code paths: every surface asks the registry first and falls through unchanged when nothing

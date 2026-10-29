@@ -957,46 +957,44 @@ export class GenerateImageNaiTool extends BaseTool {
 
       const apiKey = creds.apiKey;
 
-      if (!context.suppressProgressNotices) {
-        const baseNoticeDescription = localizer(
-          context.locale,
-          isInpaintMode ? "tools.image.editing_description" : "tools.image.generating_description",
-          isInpaintMode ? { edit_target: editTarget as string } : undefined,
-        );
-        const extraNoticeLines: string[] = [];
-        if (messageId) {
-          const referencedMessageUrl = buildReferencedMessageUrl(context, messageId);
-          extraNoticeLines.push(
-            referencedMessageUrl
-              ? localizer(context.locale, "tools.image.notice_reference_line", {
-                  message_url: referencedMessageUrl,
-                })
-              : localizer(context.locale, "tools.image.notice_reference_count_line", {
-                  count: "1",
-                }),
-          );
-        }
-        extraNoticeLines.push(...buildCharacterNoticeLines(context.locale, characters));
-        extraNoticeLines.push("");
-        extraNoticeLines.push(localizer(context.locale, "tools.image.notice_image_tags_tip_line"));
-        await sendToolProgressNotice(
-          context,
-          isInpaintMode ? "image_editing" : "image_generation",
-          {
-            titleKey: isInpaintMode ? "tools.image.editing_title" : "tools.image.generating_title",
-            description: buildImageToolNoticeDescription(
-              context.locale,
-              baseNoticeDescription,
-              baseModelCodename,
-              prompt,
-              localizer(context.locale, "tools.image.generating_footer"),
-              extraNoticeLines,
-            ),
-            color: ColorCode.INFO,
-          },
-          "GenerateImageNaiTool",
+      const baseNoticeDescription = localizer(
+        context.locale,
+        isInpaintMode ? "tools.image.editing_description" : "tools.image.generating_description",
+        isInpaintMode ? { edit_target: editTarget as string } : undefined,
+      );
+      const extraNoticeLines: string[] = [];
+      if (messageId) {
+        const referencedMessageUrl = buildReferencedMessageUrl(context, messageId);
+        extraNoticeLines.push(
+          referencedMessageUrl
+            ? localizer(context.locale, "tools.image.notice_reference_line", {
+                message_url: referencedMessageUrl,
+              })
+            : localizer(context.locale, "tools.image.notice_reference_count_line", {
+                count: "1",
+              }),
         );
       }
+      extraNoticeLines.push(...buildCharacterNoticeLines(context.locale, characters));
+      extraNoticeLines.push("");
+      extraNoticeLines.push(localizer(context.locale, "tools.image.notice_image_tags_tip_line"));
+      await sendToolProgressNotice(
+        context,
+        isInpaintMode ? "image_editing" : "image_generation",
+        {
+          titleKey: isInpaintMode ? "tools.image.editing_title" : "tools.image.generating_title",
+          description: buildImageToolNoticeDescription(
+            context.locale,
+            baseNoticeDescription,
+            baseModelCodename,
+            prompt,
+            localizer(context.locale, "tools.image.generating_footer"),
+            extraNoticeLines,
+          ),
+          color: ColorCode.INFO,
+        },
+        "GenerateImageNaiTool",
+      );
 
       // Build base scene tag list, so server style tags are trusted and should
       //    bypass suggest-tags normalization. Character tags are handled separately

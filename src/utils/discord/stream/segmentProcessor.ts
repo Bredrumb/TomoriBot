@@ -25,16 +25,19 @@ import type {
   StreamMessageDelivery,
 } from "@/utils/discord/stream/messageDelivery";
 import {
+  type BareSpriteLabelMatch,
   collectRenderModifierSourceNames,
   hasLeadingPlainOwnNameLabel,
   isAllowedRenderModifierSpeakerLabel,
   type LeadingGenericSpeakerLabelMatch,
   matchesRenderModifierName,
+  parseLeadingBareSpriteModifier,
   parseLeadingGenericSpeakerLabel,
   parseLeadingRenderModifier,
 } from "@/utils/discord/renderModifierParser";
 import {
   collectKnownSpeakerNames,
+  type CopiedRenderTarget,
   resolveCopiedRenderModifierTarget,
   resolveSpriteRenderModifierTarget,
   type SpriteRenderModifierResolution,
@@ -119,8 +122,20 @@ export class StreamSegmentProcessor {
     const renderModifierMatch = canUseRenderModifier
       ? parseLeadingRenderModifier(workingSegment, renderModifierSourceNames, renderModifierChainSourceNames)
       : null;
+    const sourceDisplayName = context.tomoriState.persona_nickname || textConfig.botName;
+    const bareSprite =
+      !renderModifierMatch && canUseRenderModifier
+        ? await this.resolveBareSpriteLabel({
+            segment: workingSegment,
+            opensLine,
+            context,
+            state,
+            sourceNames: renderModifierSourceNames,
+            sourceDisplayName,
+          })
+        : null;
     this.logUnparsedRenderModifierLabel({
-      renderModifierMatch: Boolean(renderModifierMatch),
+      renderModifierMatch: Boolean(renderModifierMatch || bareSprite),
       canUseRenderModifier,
       orphanPrefixApplied,
       rawSegment: segment,
@@ -131,8 +146,10 @@ export class StreamSegmentProcessor {
       renderModifierSourceNames,
       renderModifierChainSourceNames,
     });
-    if (renderModifierMatch) {
-      const sourceDisplayName = context.tomoriState.persona_nickname || textConfig.botName;
+    if (bareSprite) {
+      workingSegment = bareSprite.body;
+      deliveryOptions = this.applySpriteRenderTarget(bareSprite.target, context, state);
+    } else if (renderModifierMatch) {
       workingSegment = renderModifierMatch.body;
 
       const spriteResolution = await resolveSpriteRenderModifierTarget(
@@ -146,33 +163,7 @@ export class StreamSegmentProcessor {
           : await resolveCopiedRenderModifierTarget(renderModifierMatch.modifier, context, sourceDisplayName);
 
       if (renderTarget) {
-        // Non-identity sprites all share the clean persona username, and Discord groups
-        // consecutive webhook messages by webhook + username while ignoring the
-        // per-message avatar, so back-to-back sprites would render under the first
-        // sprite's avatar. Identity sprites already use a distinct decorated name, so they
-        // are excluded.
-        const identity =
-          renderTarget.spriteRecord && !renderTarget.isIdentitySprite && !context.holdResponseText
-            ? resolveChannelGroupBreakIdentity(
-                context.channel.id,
-                renderTarget.identity,
-                renderTarget.contextLabel,
-                renderTarget.spriteRecord.spriteName,
-                context.channel.lastMessageId,
-              )
-            : renderTarget.identity;
-        // The accumulated-text prefix keeps the decorated "Name (modifier): "
-        // label so the model sees its own modifier usage, even when the webhook
-        // username is the clean persona name (sprite renders).
-        deliveryOptions = {
-          identityOverride: identity,
-          accumulatedTextPrefix: `${renderTarget.contextLabel}: `,
-          spriteRecord: renderTarget.spriteRecord,
-        };
-        state.activeRenderModifier = {
-          identity,
-          spriteRecord: renderTarget.spriteRecord,
-        };
+        deliveryOptions = this.applySpriteRenderTarget(renderTarget, context, state);
       } else {
         await this.logUnresolvedRenderModifierTarget(renderModifierMatch.modifier, spriteResolution.status, context);
         state.activeRenderModifier = undefined;
@@ -201,12 +192,7 @@ export class StreamSegmentProcessor {
     // exempts the opening line and stripLeakedOwnNameLabels only covers the active persona.
     // Runs regardless of llm_stop_speaker_pattern_enabled: the shapes it fires on are
     // unambiguous leaks, unlike the broader mid-text guard.
-    if (
-      !renderModifierMatch &&
-      canUseRenderModifier &&
-      !(state.accumulatedText || state.pendingResponseText || "").trim() &&
-      !state.pendingAggregatedText.trim()
-    ) {
+    if (!renderModifierMatch && !bareSprite && canUseRenderModifier && !hasStreamedResponseText(state)) {
       const leak = await this.matchLeadingSpeakerLeak(workingSegment, context, renderModifierSourceNames);
       if (leak) {
         const retryCount = context.emptyResponseRetryCount ?? 0;
@@ -393,6 +379,60 @@ export class StreamSegmentProcessor {
     if (shouldStopForSpeakerGuard) {
       this.deps.requestStop(context.channel.id, "speaker_guard");
     }
+  }
+
+  /** Delivery identity and stream state for a sprite the persona just selected. */
+  private applySpriteRenderTarget(
+    renderTarget: CopiedRenderTarget,
+    context: StreamContext,
+    state: StreamState,
+  ): StreamDeliveryOptions {
+    // Back-to-back non-identity sprites share the clean persona username, which Discord groups
+    // under the first avatar, so the group-break alternation is applied to each of them.
+    const identity =
+      renderTarget.spriteRecord && !renderTarget.isIdentitySprite && !context.holdResponseText
+        ? resolveChannelGroupBreakIdentity(
+            context.channel.id,
+            renderTarget.identity,
+            renderTarget.contextLabel,
+            renderTarget.spriteRecord.spriteName,
+            context.channel.lastMessageId,
+          )
+        : renderTarget.identity;
+    state.activeRenderModifier = { identity, spriteRecord: renderTarget.spriteRecord };
+    // Keeps the decorated label in accumulated text so the model sees its own modifier usage.
+    return {
+      identityOverride: identity,
+      accumulatedTextPrefix: `${renderTarget.contextLabel}: `,
+      spriteRecord: renderTarget.spriteRecord,
+    };
+  }
+
+  /**
+   * Resolves the shortened bare label a model writes instead of the decorated form, keeping only a
+   * label that names one of the persona's sprites so ordinary parenthetical prose is left alone.
+   */
+  private async resolveBareSpriteLabel(params: {
+    segment: string;
+    opensLine: boolean;
+    context: StreamContext;
+    state: StreamState;
+    sourceNames: readonly string[];
+    sourceDisplayName: string;
+  }): Promise<(BareSpriteLabelMatch & { target: CopiedRenderTarget }) | null> {
+    if (!params.opensLine) return null;
+    const match = parseLeadingBareSpriteModifier(params.segment, params.sourceNames);
+    if (!match) return null;
+    // Only a response opening or an own-label chain is a turn label; a later bare parenthetical is
+    // prose and must keep the appearance the turn already selected.
+    if (!match.afterOwnLabelChain && hasStreamedResponseText(params.state)) return null;
+    const resolution = await resolveSpriteRenderModifierTarget(
+      match.modifier,
+      params.context,
+      params.sourceDisplayName,
+    );
+    const target = resolution.status === "matched" ? resolution.target : null;
+    return target ? { ...match, target } : null;
   }
 
   /**
@@ -775,6 +815,13 @@ function sliceToUtf8Bytes(text: string, maxBytes: number): string {
 function segmentEndsLine(segment: string, boundary: BufferedDeliveryBoundary | undefined): boolean {
   if (/\n[ \t]*$/u.test(segment)) return true;
   return boundary !== "period" && boundary !== "overflow";
+}
+
+/** True once any of this response's text has reached the delivery pipeline. */
+function hasStreamedResponseText(state: StreamState): boolean {
+  return Boolean(
+    (state.accumulatedText || state.pendingResponseText || "").trim() || state.pendingAggregatedText.trim(),
+  );
 }
 
 function collectRenderModifierChainSourceNames(

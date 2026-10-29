@@ -618,7 +618,7 @@ export function buildPersonaPromptModal(locale: string, personaId: number, nonce
         custom_id: buildConfigModalFieldId(field, nonce),
         style: TextInputStyle.Paragraph,
         placeholder: safeSelectOptionText(
-          localizer(locale, placeholders[index] as string),
+          localizer(locale, index === 0 ? placeholders[0] : "commands.config.panel.continuation_placeholder"),
           MODAL_DESCRIPTION_MAX_LENGTH,
         ),
         max_length: 4000,
@@ -876,6 +876,9 @@ export function buildPersonaAttributeEditModal(
   const textField = (field: string, labelKey: string, placeholderKey: string, value: string | undefined) => ({
     type: 18 as const,
     label: modalLabel(locale, labelKey),
+    description: field.endsWith("_part2")
+      ? modalDescription(locale, "commands.config.panel.continuation_description")
+      : undefined,
     component: {
       type: 4,
       custom_id: buildConfigModalFieldId(field, nonce),
@@ -900,7 +903,7 @@ export function buildPersonaAttributeEditModal(
       textField(
         "attribute_part2",
         "commands.config.panel.attribute_input_part2_label",
-        "commands.config.panel.attribute_input_placeholder",
+        "commands.config.panel.continuation_placeholder",
         parts[1] || undefined,
       ),
       buildPublicCheckboxGroup(
@@ -977,10 +980,12 @@ export function buildPersonaDialogueEditModal(
   const textField = (field: string, labelKey: string, value: string | undefined, required: boolean) => ({
     type: 18 as const,
     label: modalLabel(locale, labelKey),
+    description: !required ? modalDescription(locale, "commands.config.panel.continuation_description") : undefined,
     component: {
       type: 4,
       custom_id: buildConfigModalFieldId(field, nonce),
       style: TextInputStyle.Paragraph,
+      placeholder: !required ? localizer(locale, "commands.config.panel.continuation_placeholder") : undefined,
       max_length: 4000,
       required,
       value,

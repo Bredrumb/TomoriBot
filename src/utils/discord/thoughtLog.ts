@@ -84,8 +84,9 @@ function buildThoughtLogEmbeds(args: {
       })
     : getProviderDisplayName(tomoriState.llm.llm_provider);
   const model = getLlmDisplayName(tomoriState.llm, tomoriState.config.custom_model_name);
-  const hasThinkingContent = Boolean(
-    normalizeThoughtLogText(thoughtLog.summary) || normalizeThoughtLogText(thoughtLog.raw),
+  const reasoning = thoughtLog.iterations ?? [thoughtLog];
+  const hasThinkingContent = reasoning.some(
+    (iteration) => normalizeThoughtLogText(iteration.summary) || normalizeThoughtLogText(iteration.raw),
   );
   const generationTime = hasThinkingContent ? formatGenerationDuration(thoughtLog.generationDurationMs) : undefined;
   const footerText = generationTime
@@ -100,17 +101,18 @@ function buildThoughtLogEmbeds(args: {
       });
 
   const sections = [
-    {
-      label: localizer(locale, "genai.thought_log.summary_field"),
-      content: normalizeThoughtLogText(thoughtLog.summary),
-      /** Whether to wrap the content in a code block */
-      codeBlock: false,
-    },
-    {
-      label: localizer(locale, "genai.thought_log.raw_field"),
-      content: normalizeThoughtLogText(thoughtLog.raw),
-      codeBlock: false,
-    },
+    ...reasoning.flatMap((iteration, index) => [
+      {
+        label: `${localizer(locale, "genai.thought_log.summary_field")}${reasoning.length > 1 ? ` (${index + 1})` : ""}`,
+        content: normalizeThoughtLogText(iteration.summary),
+        codeBlock: false,
+      },
+      {
+        label: `${localizer(locale, "genai.thought_log.raw_field")}${reasoning.length > 1 ? ` (${index + 1})` : ""}`,
+        content: normalizeThoughtLogText(iteration.raw),
+        codeBlock: false,
+      },
+    ]),
     {
       label: localizer(locale, "genai.thought_log.fetched_content_field"),
       content: normalizeThoughtLogText(thoughtLog.fetchedContent),
@@ -191,6 +193,9 @@ export function hasThoughtLogContent(payload?: ThoughtLogPayload | null): boolea
   return Boolean(
     normalizeThoughtLogText(payload?.summary) ||
       normalizeThoughtLogText(payload?.raw) ||
+      payload?.iterations?.some(
+        (iteration) => normalizeThoughtLogText(iteration.summary) || normalizeThoughtLogText(iteration.raw),
+      ) ||
       normalizeThoughtLogText(payload?.fetchedContent),
   );
 }
@@ -238,10 +243,8 @@ async function resolveThoughtLogOwnerIdentity(
 }
 
 /**
- * Sends a standalone attribution embed to the thought-logs channel when a
- * personal provider was used but the model produced no reasoning/thinking
- * content (so no thought-log embed was emitted). This ensures server admins
- * can always see whose credentials were used, regardless of model type.
+ * Posts attribution alone when no thought-log embed was emitted, so admins still see whose
+ * credentials and which model answered.
  */
 export async function sendAttributionOnlyEmbed({
   client,
@@ -249,6 +252,7 @@ export async function sendAttributionOnlyEmbed({
   tomoriState,
   sourceChannel,
   thoughtLogChannelId,
+  title,
   attributionLine,
 }: {
   client: Client;
@@ -256,6 +260,7 @@ export async function sendAttributionOnlyEmbed({
   tomoriState: TomoriState;
   sourceChannel: StreamContext["channel"];
   thoughtLogChannelId: string;
+  title: string;
   attributionLine: string;
 }): Promise<void> {
   const thoughtLogChannel = await client.channels.fetch(thoughtLogChannelId).catch(() => null);
@@ -282,13 +287,13 @@ export async function sendAttributionOnlyEmbed({
     attributionLine.trim(),
   ].filter((line): line is string => Boolean(line.trim()));
   const footerText = localizer(locale, "genai.thought_log.footer", {
-    provider: tomoriState.llm.llm_provider,
+    provider: getProviderDisplayName(tomoriState.llm.llm_provider),
     model: getLlmDisplayName(tomoriState.llm, tomoriState.config.custom_model_name),
   });
 
   const embed = new EmbedBuilder()
     .setColor(ColorCode.INFO)
-    .setTitle(localizer(locale, "genai.thought_log.personal_attribution_title"))
+    .setTitle(title)
     .setDescription(descriptionLines.join("\n").slice(0, EMBED_DESCRIPTION_LIMIT))
     .setTimestamp()
     .setFooter({ text: footerText });

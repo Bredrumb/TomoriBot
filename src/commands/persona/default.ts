@@ -4,6 +4,7 @@ import {
   MessageFlags,
   type ChatInputCommandInteraction,
   type Client,
+  type ModalSubmitInteraction,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { configRepository, personaRepository, personaSpriteRepository } from "@/utils/db/repositories";
@@ -21,7 +22,7 @@ import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { deletePersonaAvatarFromStorage, deletePersonaSpriteFromStorage } from "../../utils/storage/avatarStorage";
 import { dedupeTriggerWords, normalizeTriggerWord, selectUnclaimedTriggerWords } from "@/utils/text/triggerWords";
 import { orderPersonaPresetChoices } from "@/utils/persona/presetOrdering";
-import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
+import { localizedStatusTitle, statusNote } from "@/utils/discord/ui/statusTitle";
 
 function isUniqueViolation(error: unknown): boolean {
   return (
@@ -221,6 +222,7 @@ export async function applyPresetDefault(
     }
   }
 
+  let modalSubmitInteraction: ModalSubmitInteraction | undefined;
   try {
     const serverDiscId = interaction.guild?.id ?? interaction.user.id;
     const tomoriState = await getCachedTomoriState(serverDiscId);
@@ -279,7 +281,7 @@ export async function applyPresetDefault(
     }
 
     // biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
-    const modalSubmitInteraction = modalResult.interaction!;
+    modalSubmitInteraction = modalResult.interaction!;
     // biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
     const selectedPresetName = modalResult.values![PRESET_SELECT_ID];
 
@@ -624,7 +626,9 @@ export async function applyPresetDefault(
       }),
     ];
     if (hasNoTriggers) {
-      descriptionParts.push(`\n\n${localizer(locale, "commands.persona.import.alter_no_triggers_warning")}`);
+      descriptionParts.push(
+        `\n\n${statusNote("error", localizer(locale, "commands.persona.import.alter_no_triggers_warning"))}`,
+      );
     }
 
     const alterSuccessColor = hasNoTriggers ? ColorCode.WARN : ColorCode.SUCCESS;
@@ -633,7 +637,7 @@ export async function applyPresetDefault(
       .setDescription(descriptionParts.join(""))
       .setColor(alterSuccessColor)
       .setFooter({
-        text: localizer(locale, "commands.persona.import.alter_avatar_warning"),
+        text: statusNote("warning", localizer(locale, "commands.persona.import.alter_avatar_warning")),
       });
 
     const presetAvatarBuffer = await getPresetAvatarBuffer(selectedPreset);
@@ -686,7 +690,7 @@ export async function applyPresetDefault(
     });
   } catch (error) {
     if (isUniqueViolation(error)) {
-      await replyInfoEmbed(interaction, locale, {
+      await replyInfoEmbed(modalSubmitInteraction ?? interaction, locale, {
         titleKey: "commands.persona.name_conflict_title",
         descriptionKey: "commands.persona.name_conflict_description",
         descriptionVars: { name: getDefaultBotName(locale) },
@@ -718,16 +722,11 @@ export async function applyPresetDefault(
     };
     await log.error(`Error executing /${commandLabel} for user ${userData.user_disc_id}`, error as Error, context);
 
-    if (!interaction.replied && !interaction.deferred) {
-      await interaction.reply({
-        content: localizer(locale, "general.errors.unknown_error_description"),
-        flags: MessageFlags.Ephemeral,
-      });
-    } else {
-      await interaction.followUp({
-        content: localizer(locale, "general.errors.unknown_error_description"),
-        flags: MessageFlags.Ephemeral,
-      });
-    }
+    await replyInfoEmbed(modalSubmitInteraction ?? interaction, locale, {
+      titleKey: "general.errors.unknown_error_title",
+      descriptionKey: "general.errors.unknown_error_description",
+      color: ColorCode.ERROR,
+      flags: MessageFlags.Ephemeral,
+    });
   }
 }

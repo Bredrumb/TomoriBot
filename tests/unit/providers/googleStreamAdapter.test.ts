@@ -1,6 +1,81 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it, spyOn } from "bun:test";
 import { GoogleStreamAdapter } from "@/providers/google/googleStreamAdapter";
 import type { RawStreamChunk } from "@/types/stream/interfaces";
+import type { StreamConfig, StreamContext } from "@/types/stream/interfaces";
+import { log } from "@/utils/misc/logger";
+import { createLlmRow, createPersona } from "../../helpers/fixtures";
+
+const originalFetch = globalThis.fetch;
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
+
+it("records the final Google request shape on rejection without retaining its content", async () => {
+  const info = spyOn(log, "info").mockImplementation(() => {});
+  const section = spyOn(log, "section").mockImplementation(() => {});
+  try {
+    for (const withToolHistory of [false, true]) {
+      let requestRoles: string[] = [];
+      globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body)) as { contents: Array<{ role: string }> };
+        requestRoles = body.contents.map((content) => content.role);
+        return new Response(JSON.stringify({ error: { code: 400, message: "Rejected", status: "INVALID_ARGUMENT" } }), {
+          status: 400,
+        });
+      }) as typeof fetch;
+      const context = {
+        channel: { id: "channel-1" },
+        client: {},
+        tomoriState: createPersona({
+          llm: createLlmRow({ llm_provider: "google", llm_codename: "gemini-3.5-flash-lite" }),
+        }),
+        contextItems: Array.from({ length: 8 }, (_, index) => ({
+          role: index % 2 === 0 ? "user" : "model",
+          parts: [{ type: "text", text: index === 7 && !withToolHistory ? "PRIVATE_PREFILL" : "PRIVATE_PROMPT" }],
+        })),
+        currentTurnModelParts: [],
+        provider: "google",
+        locale: "en-US",
+        outputPrefill: withToolHistory ? undefined : "PRIVATE_PREFILL",
+        functionInteractionHistory: withToolHistory
+          ? [
+              {
+                functionCall: { name: "fixture_tool", args: { value: "PRIVATE_ARGUMENT" } },
+                functionResponse: { functionResponse: { name: "fixture_tool", response: { value: "PRIVATE_RESULT" } } },
+              },
+            ]
+          : undefined,
+      } as unknown as StreamContext;
+      const adapter = new GoogleStreamAdapter();
+      const chunks: RawStreamChunk[] = [];
+      for await (const chunk of adapter.startStream(
+        { model: "gemini-3.5-flash-lite", apiKey: "PRIVATE_KEY" } as StreamConfig,
+        context,
+      )) {
+        chunks.push(chunk);
+      }
+      expect(adapter.processChunk(chunks.at(-1) as RawStreamChunk).type).toBe("error");
+      expect(context.requestDiagnostics).toMatchObject({
+        model: "gemini-3.5-flash-lite",
+        contextItemCount: 8,
+        contentsCount: requestRoles.length,
+        tailRoles: requestRoles.slice(-5),
+        functionHistoryCount: withToolHistory ? 1 : 0,
+        prefillPresent: !withToolHistory,
+        chunksReceived: 0,
+        lastTurn: { textParts: withToolHistory ? 0 : 1, functionResponseParts: withToolHistory ? 1 : 0 },
+      });
+      const diagnostics = JSON.stringify(context.requestDiagnostics);
+      for (const value of ["PRIVATE_KEY", "PRIVATE_PROMPT", "PRIVATE_PREFILL", "PRIVATE_ARGUMENT", "PRIVATE_RESULT"]) {
+        expect(diagnostics).not.toContain(value);
+      }
+    }
+  } finally {
+    info.mockRestore();
+    section.mockRestore();
+  }
+});
 
 /**
  * Builds a RawStreamChunk wrapping a Google-shaped data object.

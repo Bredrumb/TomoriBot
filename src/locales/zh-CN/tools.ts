@@ -14,6 +14,10 @@ export default {
     execution: {
       unavailable: `在当前设置、模型能力或 bot 权限下，工具 \`{tool}\` 不可用。`,
     },
+    sprite_selection: {
+      unavailable: "当前人格或本轮无法选择立绘。请省略 sprite 参数。",
+      invalid: "从当前可用的立绘中选择一个立绘标签，或使用空字符串表示基础外观。",
+    },
     generate_voice_message: {
       persona_missing: `这个人格已不可用。`,
       stale: `本轮期间，语音模型、凭据或人格声音发生了变化。请先开始新的一轮，再生成语音消息。`,
@@ -156,7 +160,7 @@ export default {
     document: {
       reading_title: `📄 正在读取文件内容……`,
       reading_description: `正在读取 \`{filename}\` 里的文字`,
-      truncated_title: `⚠️ 文件已截断`,
+      truncated_title: `文件已截断`,
       truncated_description: `\`{filename}\` 太长了，已经被截断到 {limit} 个字符（原有 {original} 个字符）。回复可能不完整，建议把文件拆成更小的几部分，分批分享。`,
     },
     image: {

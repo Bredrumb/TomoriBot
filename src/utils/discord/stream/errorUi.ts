@@ -85,33 +85,35 @@ export class StreamErrorUi {
     const rawDetail = denied ? null : getProviderErrorDetail(providerError);
     const providerDetail = rawDetail ? redactProviderDetail(rawDetail, requestApiKey) : null;
     const operatorDetail = boundOperatorDetail(providerDetail);
+    const providerName = provider.getProviderInfo().name;
+    const errorContext = {
+      serverId: context.tomoriState.server_id,
+      userId: context.triggererUserId ?? null,
+      errorType: "ProviderStreamError",
+      metadata: {
+        textCredentialSource: context.textCredentialSource ?? "server",
+        provider: providerName,
+        model: context.requestDiagnostics?.model ?? context.tomoriState.llm.llm_codename,
+        providerErrorType: providerError.type,
+        providerErrorCode: providerError.code ?? "unknown",
+        channelId: context.channel.id,
+        requestDiagnostics: context.requestDiagnostics,
+      },
+    };
     if (!denied && isOperatorActionableProviderError(providerError)) {
-      const providerName = provider.getProviderInfo().name;
       // Not awaited: an unacknowledged initialInteraction is replied to below. The raw provider
       // error is the payload because errorMessage is localized for the guild, not the operator.
       void log.error(
         `Provider stream error (${providerName} ${providerError.type}/${providerError.code ?? "unknown"}): ${operatorDetail}`,
         providerError.originalError ?? providerError,
-        {
-          serverId: context.tomoriState.server_id,
-          userId: context.triggererUserId ?? null,
-          errorType: "ProviderStreamError",
-          metadata: {
-            // A personal route ran on the user's own key and endpoint, not the server's provider.
-            textCredentialSource: context.textCredentialSource ?? "server",
-            provider: providerName,
-            providerErrorType: providerError.type,
-            providerErrorCode: providerError.code ?? "unknown",
-            channelId: context.channel.id,
-          },
-        },
+        errorContext,
         { redactValues: [requestApiKey] },
       );
     } else {
       log.warn(
         `Stream error (${providerError.type}/${providerError.code ?? "unknown"}): ${operatorDetail}`,
         error,
-        undefined,
+        errorContext,
         { retain: true, redactValues: [requestApiKey] },
       );
     }

@@ -22,6 +22,7 @@ import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { withProviderOptionCopy } from "@/utils/provider/providerOptionRegistry";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { isDirectMessageChannel, resolveProviderErrorFooter } from "@/utils/discord/stream/errorUi";
+import { mergeThoughtLogPayloads } from "@/utils/discord/stream/thoughtLog";
 import { routeHiddenToolNotice } from "@/utils/discord/toolProgressNotice";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { providerUsesApiFamily } from "@/utils/provider/providerInfoRegistry";
@@ -280,7 +281,7 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
         recordResponseReviewUsage(review, { kind: "author", model: params.tomoriState.llm.llm_codename, usage });
       if (streamResult.pendingResponse) review.pending.push(streamResult.pendingResponse);
     }
-    thoughtLog = streamResult.thoughtLog ?? thoughtLog;
+    thoughtLog = mergeThoughtLogPayloads(thoughtLog, streamResult.thoughtLog);
 
     switch (streamResult.status) {
       case "completed":
@@ -886,6 +887,7 @@ async function executeToolCall(
     isUserImpersonation: params.context.isUserImpersonation,
     impersonatedUserId: params.context.impersonatedUserId,
     suppressProgressNotices: !params.context.shouldSurfaceUserErrors || undefined,
+    mirrorSuppressedProgressNotices: true,
     contextItems: params.context.contextItems,
     messageIdMap: params.context.messageIdMap,
     showKillHint: iteration >= SOFT_WARN_ITERATION_THRESHOLD,
@@ -1276,13 +1278,8 @@ async function emitFailedToolCallThoughtLog(
   args: Record<string, unknown>,
   toolResult: ToolResult,
 ): Promise<void> {
-  const noticeContext: ToolContext = {
-    ...context,
-    suppressProgressNotices: false,
-  };
-
   await routeHiddenToolNotice(
-    noticeContext,
+    context,
     {
       color: ColorCode.ERROR,
       titleKey: "genai.thought_log.title",

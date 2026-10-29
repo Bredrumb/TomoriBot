@@ -453,9 +453,24 @@ export class StreamOrchestrator implements IStreamOrchestrator {
     if (!context.suppressUserErrors && !deferredDenialNotice && !isUserImpersonationStreamContext(context)) {
       await this.errorUi.handleProviderError(chunk.error, provider, context, config.apiKey);
     } else {
-      log.warn("Stream: Suppressing provider error embed due to retryable failure", chunk.error, undefined, {
-        redactValues: [config.apiKey],
-      });
+      log.warn(
+        "Stream: Suppressing provider error embed due to retryable failure",
+        chunk.error,
+        {
+          errorType: "ProviderStreamError",
+          serverId: context.tomoriState.server_id,
+          userId: context.triggererUserId ?? null,
+          metadata: {
+            provider: context.provider,
+            providerErrorCode: chunk.error?.code,
+            requestDiagnostics: context.requestDiagnostics,
+          },
+        },
+        {
+          retain: true,
+          redactValues: [config.apiKey],
+        },
+      );
     }
     return { status: "error", data: chunk.error, ...this.collectDeliveredOutput(state) };
   }

@@ -36,6 +36,7 @@ import { measureFormattedPanelTextLength } from "@/utils/discord/ui/panelProse";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { getDiscordTextLength, neutralizeFenceRuns } from "@/utils/text/discordTextLimits";
+import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { localizer } from "@/utils/text/localizer";
 import { buildTextPreview, textPreviewFooterKey, textPreviewFooterVars } from "@/utils/text/textPreview";
 import { personaRepresentativeForLineage } from "@/utils/persona/lineage";
@@ -439,7 +440,7 @@ ${localizer(locale, "commands.personal.memories.selector_guidance")}`,
     if (isPrivacyFull) {
       components.push({
         type: ComponentType.TextDisplay,
-        content: `-# ${localizer(locale, "commands.personal.memories.privacy_full_warning")}`,
+        content: `-# ${statusNote("warning", localizer(locale, "commands.personal.memories.privacy_full_warning"))}`,
       });
     }
 
@@ -631,7 +632,7 @@ ${localizer(locale, "commands.personal.memories.persona_description")}`,
       if (isPrivacyFull) {
         components.push({
           type: ComponentType.TextDisplay,
-          content: `-# ${localizer(locale, "commands.personal.memories.privacy_full_warning")}`,
+          content: `-# ${statusNote("warning", localizer(locale, "commands.personal.memories.privacy_full_warning"))}`,
         });
       }
       components.push({
@@ -724,7 +725,7 @@ ${localizer(locale, "commands.personal.memories.persona_description")}`,
       if (isPrivacyFull) {
         components.push({
           type: ComponentType.TextDisplay,
-          content: `-# ${localizer(locale, "commands.personal.memories.privacy_full_warning")}`,
+          content: `-# ${statusNote("warning", localizer(locale, "commands.personal.memories.privacy_full_warning"))}`,
         });
       }
 

@@ -9,6 +9,7 @@ import {
   VisibleDeliveryMode,
 } from "@/types/stream/types";
 import { clearPersonaSpriteCache, setPersonaSpriteCache } from "@/utils/cache/personaSpriteCacheStore";
+import { cache as personaCache } from "@/utils/cache/tomoriStateCacheStore";
 import {
   clearAllChannelDeliveryContinuity,
   recordChannelDeliveredBotMessage,
@@ -20,6 +21,7 @@ import type {
   StreamMessageDelivery,
 } from "@/utils/discord/stream/messageDelivery";
 import { StreamSegmentProcessor } from "@/utils/discord/stream/segmentProcessor";
+import { createPersona } from "../../helpers/fixtures";
 
 const PERSONA_ID = 7;
 const BASE_AVATAR = "https://example.com/locke.png";
@@ -66,8 +68,12 @@ type Sent = { text: string; options?: StreamDeliveryOptions };
  * Discord. Each send is reported to the channel continuity the way recordSuccessfulSend reports it,
  * with a fresh snowflake, so the sprite group alternation sees real adjacency.
  */
-function makeHarness(options: { isAlter: boolean }) {
-  const channel = { id: "1382235263668846612", lastMessageId: null as string | null };
+function makeHarness(options: { isAlter: boolean; guildId?: string; personaMentionMap?: Map<string, string> }) {
+  const channel = {
+    id: "1382235263668846612",
+    lastMessageId: null as string | null,
+    ...(options.guildId ? { guild: { id: options.guildId } } : {}),
+  };
   let snowflake = 1400000000000000000n;
   const context = {
     channel,
@@ -115,14 +121,29 @@ function makeHarness(options: { isAlter: boolean }) {
     },
   } as unknown as StreamMessageDelivery;
 
-  const processor = new StreamSegmentProcessor({ delivery, requestStop: () => false });
+  const stops: string[] = [];
+  const processor = new StreamSegmentProcessor({
+    delivery,
+    requestStop: (_channelId, reason) => {
+      if (reason) stops.push(reason);
+      return false;
+    },
+  });
   const state = createDefaultStreamState();
 
   return {
     sent,
     state,
+    stops,
     send: (segment: string, boundary: BufferedDeliveryBoundary = "newline") =>
-      processor.sendBufferSegment(segment, boundary, textConfig, typingConfig, context, state),
+      processor.sendBufferSegment(
+        segment,
+        boundary,
+        { ...textConfig, personaMentionMap: options.personaMentionMap },
+        typingConfig,
+        context,
+        state,
+      ),
   };
 }
 
@@ -246,5 +267,115 @@ describe("StreamSegmentProcessor plain-label sprite revert", () => {
 
     expect(harness.sent[1]?.options?.identityOverride?.username).toBe(LOCKE_GROUP_BREAK);
     expect(harness.sent[2]?.options).toBeUndefined();
+  });
+});
+
+describe("StreamSegmentProcessor shortened sprite label", () => {
+  beforeEach(() => {
+    clearAllChannelDeliveryContinuity();
+    setPersonaSpriteCache(PERSONA_ID, [sprite("smug"), sprite("mad"), sprite("The Voice", true)]);
+  });
+
+  afterEach(() => {
+    clearPersonaSpriteCache();
+    clearAllChannelDeliveryContinuity();
+  });
+
+  it("renders a bare label that opens the response and removes it from the message", async () => {
+    const harness = makeHarness({ isAlter: false });
+
+    await harness.send("(smug): heh, nice try\n");
+
+    expect(harness.sent[0]?.text).toBe("heh, nice try");
+    expect(harness.sent[0]?.options?.spriteRecord?.spriteName).toBe("smug");
+    expect(harness.state.activeRenderModifier?.spriteRecord?.spriteName).toBe("smug");
+  });
+
+  it("renders a bare label that follows the persona's own plain label", async () => {
+    const harness = makeHarness({ isAlter: false });
+
+    await harness.send("Locke: (mad): grr\n");
+
+    expect(harness.sent[0]?.text).toBe("grr");
+    expect(harness.sent[0]?.options?.spriteRecord?.spriteName).toBe("mad");
+  });
+
+  it("routes a foreign persona label before a bare sprite through the opening speaker guard", async () => {
+    const guildId = "1400000000000000001";
+    const active = createPersona({ persona_id: PERSONA_ID, persona_nickname: "Locke", is_alter: false });
+    const other = createPersona({ persona_id: 8, persona_nickname: "Juno", is_alter: true });
+    personaCache.set(guildId, { personas: [active, other], mainPersona: active, cachedAt: Date.now() });
+    try {
+      const harness = makeHarness({
+        isAlter: false,
+        guildId,
+        personaMentionMap: new Map([["Juno", "Juno"]]),
+      });
+
+      await harness.send("Juno: (smug): hello\n");
+
+      expect(harness.stops).toContain("speaker_guard");
+      expect(harness.sent).toHaveLength(0);
+      expect(harness.state.activeRenderModifier).toBeUndefined();
+    } finally {
+      personaCache.delete(guildId);
+    }
+  });
+
+  it("delivers a bare sprite response that starts by addressing another persona", async () => {
+    const guildId = "1400000000000000001";
+    const active = createPersona({ persona_id: PERSONA_ID, persona_nickname: "Locke", is_alter: false });
+    const other = createPersona({ persona_id: 8, persona_nickname: "Juno", is_alter: true });
+    personaCache.set(guildId, { personas: [active, other], mainPersona: active, cachedAt: Date.now() });
+    try {
+      const harness = makeHarness({ isAlter: false, guildId });
+
+      await harness.send("(smug): Juno: hello\n");
+
+      expect(harness.stops).toHaveLength(0);
+      expect(harness.sent[0]?.text).toBe("Juno: hello");
+      expect(harness.sent[0]?.options?.spriteRecord?.spriteName).toBe("smug");
+    } finally {
+      personaCache.delete(guildId);
+    }
+  });
+
+  it("leaves a parenthetical that is not one of the persona's sprites untouched", async () => {
+    const harness = makeHarness({ isAlter: false });
+
+    await harness.send("(laughs): heh\n");
+
+    expect(harness.sent[0]?.text).toBe("(laughs): heh");
+    expect(harness.sent[0]?.options).toBeUndefined();
+  });
+
+  it("leaves a bare label that appears after the response started untouched", async () => {
+    const harness = makeHarness({ isAlter: false });
+
+    await harness.send("hello there\n");
+    await harness.send("(smug): heh\n");
+
+    expect(harness.sent[1]?.text).toBe("(smug): heh");
+    expect(harness.sent[1]?.options).toBeUndefined();
+  });
+
+  it("does not read a bare label inside an open code block", async () => {
+    const harness = makeHarness({ isAlter: false });
+
+    harness.state.isInsideCodeBlock = true;
+    await harness.send("(smug): hi\n", "overflow");
+
+    expect(harness.sent[0]?.text).toBe("(smug): hi");
+    expect(harness.sent[0]?.options).toBeUndefined();
+  });
+
+  it("switches on a bare label that follows the persona's own label after the response started", async () => {
+    const harness = makeHarness({ isAlter: false });
+
+    await harness.send("Locke (smug): heh\n");
+    await harness.send("Locke: (mad): grr\n");
+
+    expect(harness.sent[1]?.text).toBe("grr");
+    expect(harness.sent[1]?.options?.spriteRecord?.spriteName).toBe("mad");
   });
 });

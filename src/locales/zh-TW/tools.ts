@@ -14,6 +14,10 @@ export default {
     execution: {
       unavailable: `在目前的設定、模型功能或 bot 權限下，工具 \`{tool}\` 無法使用。`,
     },
+    sprite_selection: {
+      unavailable: "目前人格或此輪無法選擇立繪。請省略 sprite 參數。",
+      invalid: "從目前可用的立繪中選擇立繪標籤，或使用空字串表示基礎外觀。",
+    },
     generate_voice_message: {
       persona_missing: `這個人格已無法使用。`,
       stale: `這一輪期間，語音模型、憑證或人格語音已變更。請先開始新的一輪，再生成語音訊息。`,
@@ -156,7 +160,7 @@ export default {
     document: {
       reading_title: `📄 正在讀取檔案內容...`,
       reading_description: `正在讀取 \`{filename}\` 裡面的文字`,
-      truncated_title: `⚠️ 檔案已截斷`,
+      truncated_title: `檔案已截斷`,
       truncated_description: `\`{filename}\` 太長，已截斷為 {limit} 個字元（原始為 {original} 個字元）。回覆內容可能不完整，建議把檔案拆成幾個小部分，再分批分享。`,
     },
     image: {

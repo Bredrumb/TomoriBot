@@ -15,6 +15,11 @@ export default {
     execution: {
       unavailable: `La herramienta \`{tool}\` no está disponible con la configuración actual, las capacidades del modelo o los permisos del bot.`,
     },
+    sprite_selection: {
+      unavailable: "La selección de sprite no está disponible para esta persona o turno. Omite el parámetro sprite.",
+      invalid:
+        "Elige una etiqueta de sprite de tus sprites disponibles actuales o usa una cadena vacía para tu apariencia base.",
+    },
     generate_voice_message: {
       persona_missing: `La persona ya no está disponible.`,
       stale: `El modelo de voz, las credenciales o la voz de la persona cambiaron durante este turno. Inicia un nuevo turno antes de generar un mensaje de voz.`,
@@ -157,7 +162,7 @@ export default {
     document: {
       reading_title: `📄 Leyendo el contenido del archivo...`,
       reading_description: `Leyendo el texto dentro de \`{filename}\``,
-      truncated_title: `⚠️ Archivo truncado`,
+      truncated_title: `Archivo truncado`,
       truncated_description: `\`{filename}\` era demasiado largo y se truncó a {limit} caracteres (original: {original} caracteres). La respuesta puede estar incompleta, así que considera dividir el archivo en partes más pequeñas y compartirlas de una en una.`,
     },
     image: {

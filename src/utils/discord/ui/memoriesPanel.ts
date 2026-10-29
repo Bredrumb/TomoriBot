@@ -42,6 +42,7 @@ import { measureFormattedPanelTextLength, renderPanelContentBlock } from "@/util
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { getDiscordTextLength } from "@/utils/text/discordTextLimits";
+import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { localizer } from "@/utils/text/localizer";
 import { groupPersonasByLineage, personaRepresentativeForLineage } from "@/utils/persona/lineage";
 
@@ -521,7 +522,7 @@ export function buildMemoriesPanelPayload(input: MemoriesPanelRenderInput): Memo
         type: ComponentType.TextDisplay,
         content: withLinePrefix("-# ", localizer(locale, "commands.memories.stale_warning")),
       },
-      buildRetryRow(locale, category, selectedLineageId),
+      buildRetryRow(locale, category, selectedLineageId || undefined),
     );
     return buildPayload(components, receipt);
   }
@@ -535,7 +536,10 @@ export function buildMemoriesPanelPayload(input: MemoriesPanelRenderInput): Memo
   if (hasPendingLegacyScope) {
     components.push({
       type: ComponentType.TextDisplay,
-      content: withLinePrefix("-# ", localizer(locale, "commands.memories.channel_scope_legacy_notice")),
+      content: withLinePrefix(
+        "-# ",
+        statusNote("warning", localizer(locale, "commands.memories.channel_scope_legacy_notice")),
+      ),
     });
   }
 

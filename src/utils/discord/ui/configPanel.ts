@@ -109,6 +109,7 @@ import { SEED_CATEGORY_UPDATE_HINT, SEED_SUMMARY_UPDATE_HINT } from "@/utils/tex
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { formatModelSelectionLabel } from "@/utils/discord/ui/modelRoutingControls";
 import { escapeDiscordMarkdown } from "@/utils/text/discordMarkdown";
+import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { localizer, resolveDescription } from "@/utils/text/localizer";
 import { normalizeTriggerWord } from "@/utils/text/triggerWords";
 import { buildSlugMap } from "@/utils/text/slugifyLabel";
@@ -2279,11 +2280,26 @@ ${localizer(locale, "commands.config.panel.promote_confirm_description", {
   ];
 }
 
-function behaviorHeading(locale: string, titleKey: string, descriptionKey: string): ComponentInContainerData {
+function behaviorHeading(
+  locale: string,
+  titleKey: string,
+  descriptionKey: string,
+  suffix = "",
+): ComponentInContainerData {
   return {
     type: ComponentType.TextDisplay,
-    content: `### ${localizer(locale, titleKey)}\n${localizer(locale, descriptionKey)}`,
+    content: `### ${localizer(locale, titleKey)}\n${localizer(locale, descriptionKey)}${suffix}`,
   };
+}
+
+/**
+ * Rides inside the page heading rather than its own TextDisplay, because one more component pushes a
+ * fully paginated Channels Rules page past Discord's 40-component cap.
+ */
+function whitelistLocationHint(locale: string, actor: ConfigPanelRenderInput["actor"]): string {
+  if (actor.workspaceKind !== "guild" || !actor.isManager) return "";
+  const moderation = `${commandRegistry.getCommandMention("moderation", undefined, undefined, true)} > ${localizer(locale, "commands.moderation.category_whitelist")}`;
+  return `\n${withLinePrefix("-# ", localizer(locale, "commands.config.panel.whitelist_location_hint", { moderation }))}`;
 }
 
 function buildBehaviorGeneralBody(input: ConfigPanelRenderInput): ComponentInContainerData[] {
@@ -2518,7 +2534,8 @@ function responsePrefillStatus(locale: string, view: ConfigBehaviorGeneralView):
         : view.prefillBlocker === "tools"
           ? "commands.config.panel.response_prefill_inactive_tools"
           : "commands.config.panel.response_prefill_active";
-  return localizer(locale, key, { model: view.prefillModelName });
+  const text = localizer(locale, key, { model: view.prefillModelName });
+  return view.prefillBlocker ? statusNote("warning", text) : text;
 }
 
 function cooldownLabel(locale: string, value: number): string {
@@ -2637,6 +2654,7 @@ function buildBehaviorTriggerBody(input: ConfigPanelRenderInput): ComponentInCon
       locale,
       "commands.config.panel.behavior_trigger_title",
       "commands.config.panel.behavior_trigger_description",
+      whitelistLocationHint(locale, input.actor),
     ),
   ];
   if (input.actor.workspaceKind === "guild" && !input.actor.isManager) {
@@ -3622,7 +3640,7 @@ function buildChannelsAutoTriggerBody(input: ConfigPanelRenderInput): ComponentI
     {
       type: ComponentType.TextDisplay,
       content: `### ${localizer(locale, "commands.config.panel.channels_auto_trigger_title")}
-${localizer(locale, "commands.config.panel.channels_auto_trigger_description")}`,
+${localizer(locale, "commands.config.panel.channels_auto_trigger_description")}${whitelistLocationHint(locale, actor)}`,
     },
   ];
 
@@ -3780,7 +3798,7 @@ function buildChannelsRulesBody(input: ConfigPanelRenderInput): ComponentInConta
     {
       type: ComponentType.TextDisplay,
       content: `### ${localizer(locale, "commands.config.panel.channels_rules_title")}
-${localizer(locale, "commands.config.panel.channels_rules_description")}`,
+${localizer(locale, "commands.config.panel.channels_rules_description")}${whitelistLocationHint(locale, actor)}`,
     },
   ];
 
@@ -3974,7 +3992,7 @@ function buildChannelsOverridesBody(input: ConfigPanelRenderInput): ComponentInC
     {
       type: ComponentType.TextDisplay,
       content: `### ${localizer(locale, "commands.config.panel.channels_overrides_title")}
-${localizer(locale, "commands.config.panel.channels_overrides_description")}`,
+${localizer(locale, "commands.config.panel.channels_overrides_description")}${whitelistLocationHint(locale, actor)}`,
     },
     {
       type: ComponentType.TextDisplay,
@@ -4495,6 +4513,7 @@ export function buildConfigPanelPayload(input: ConfigPanelRenderInput): ConfigPa
           fallbacksView: input.modelFallbacksView,
           imageView: input.imageGenerationView,
           voicesView: input.voicesView,
+          userByokMode: input.personas[0]?.config.user_byok_mode === true,
         }),
       );
     }

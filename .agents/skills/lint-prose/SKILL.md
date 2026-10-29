@@ -1,6 +1,6 @@
 ---
 name: lint-prose
-description: Remove AI writing patterns from TomoriBot prose. Use when writing or reviewing Markdown under docs/, contributor guides, code comments, JSDoc, locale strings, commit messages, or pull request bodies.
+description: Remove AI writing patterns and excess information (obvious statements, text that restates a panel) from TomoriBot prose. Use when writing or reviewing Markdown under docs/, contributor guides, code comments, JSDoc, locale strings, commit messages, or pull request bodies.
 ---
 
 # Lint prose
@@ -26,6 +26,8 @@ This skill governs how prose reads. What deserves a comment at all is decided by
    so treat its extra findings as candidates only. The rules below win where they disagree.
 2. Scan for the patterns below.
 3. Rewrite, then ask what still makes the text read as generated, and fix that.
+4. Read it again as the reader with the panel open, and cut every sentence that the panel or the
+   label already tells them (rules 31-34).
 
 ## Scope
 
@@ -126,3 +128,26 @@ Rule numbers are stable IDs that tools and reviews cite. A removed rule leaves a
 30. **Project-internal terms.** A term that only makes sense after reading other pages is not
     self-contained. On first use in a page, define it in plain language or link the page that
     defines it.
+
+### Information budget
+
+Every sentence has to tell the reader something they could not get from the label, the screen, or
+common sense. Test each one: if the reader would act the same way without it, cut it.
+
+31. **Obvious statements.** A sentence a reader already assumes from a name or a label. "Press
+    `Save` to save your changes" and "The `Language` option sets the language" say nothing. Keep a
+    sentence about a control only when it adds a consequence, a prerequisite, or a surprise: "`Save`
+    applies to every channel in the server, including ones Tomori cannot see."
+32. **Restating the panel.** Docs and guides that transcribe what a panel already shows: its title,
+    its description text, each button label, or the options in a select menu. The reader will have
+    the panel open. Name the command or panel that does the job, then document only what the panel
+    cannot show: who may use it, limits, what changes elsewhere after a choice, and choices whose
+    effect is not clear from the label. The same applies inside a panel: a description line that
+    repeats the buttons below it or a field that repeats the title above it is cut.
+33. **Exhaustive walkthroughs.** Step lists and option tables that cover every control, including
+    the self-explanatory ones. List only the steps where a reader could go wrong and the options that
+    need a sentence of explanation. A complete reference belongs in the UI itself, where it stays
+    current.
+34. **Unrequested internals.** Implementation detail on a page whose reader cannot act on it: cache
+    timings, table names, or retry logic on a user-facing feature page. Move it to the architecture
+    page that owns it, or cut it.

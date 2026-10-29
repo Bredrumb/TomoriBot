@@ -11,6 +11,7 @@ import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder
 import { MessageFlags } from "discord.js";
 import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
 import { PrivacyLevel } from "@/types/db/schema";
+import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed, replySummaryEmbed } from "@/utils/discord/ui/embeds";
@@ -1492,7 +1493,7 @@ async function sendLegacyEstimateEmbed(
       ? [
           {
             nameKey: "commands.tool.estimate.cost.fallback_notice_title",
-            value: localizer(locale, "commands.tool.estimate.cost.fallback_notice_value"),
+            value: statusNote("warning", localizer(locale, "commands.tool.estimate.cost.fallback_notice_value")),
             inline: false,
           },
         ]

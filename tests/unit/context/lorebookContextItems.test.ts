@@ -311,7 +311,7 @@ describe("lorebook context items", () => {
     ]);
     expect(usage.inputTokens).toBe(usage.segments.reduce((total, segment) => total + segment.tokens, 0));
 
-    const snapshot = buildTextSnapshot(final);
+    const snapshot = buildTextSnapshot(final, {});
     const beforeHeader = snapshot.indexOf("=== Lorebook (Before) (`/memories`) ===");
     const documentsHeader = snapshot.indexOf("=== Server Documents (`/memories`) ===");
     const afterHeader = snapshot.indexOf("=== Lorebook (After) (`/memories`) ===");

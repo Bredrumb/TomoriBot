@@ -31,6 +31,8 @@ The stage packages accumulated iteration state into a standardized structure:
    - Alter persona (`currentPersona.is_alter: true`): maps to `{ type: "persona", persona: currentPersona }`.
    - Default persona: maps to `{ type: "default" }`.
    If no thought log was produced, `thoughtLogOwner` remains `undefined`.
+   The thought log preserves each request's reasoning in order, with summaries and raw text grouped
+   by request. Its source link points to the first streamed reply.
 
 4. **Direct delivery tracking (`toolResponseDelivered`):**
    The stage records whether a tool delivered output directly to the channel. When an expression was

@@ -42,6 +42,7 @@ import {
 } from "@/utils/stPreset/stPresetOperations";
 import { recordPanelActionStat, type RecordPanelActionInput } from "@/utils/stats/panelActionMetrics";
 import { escapeDiscordMarkdown } from "@/utils/text/discordMarkdown";
+import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { localizer } from "@/utils/text/localizer";
 
 export interface StPresetsScope {
@@ -207,18 +208,24 @@ function buildImportNotes(locale: string, result: Extract<ImportStPresetResult, 
   }
   if (result.disabledByPreset > 0) {
     notes.push(
-      localizer(locale, "commands.st-presets.import_note_disabled_by_preset", { count: result.disabledByPreset }),
+      statusNote(
+        "warning",
+        localizer(locale, "commands.st-presets.import_note_disabled_by_preset", { count: result.disabledByPreset }),
+      ),
     );
   }
   if (result.unsupportedEnabledMacros.length > 0) {
     notes.push(
-      localizer(locale, "commands.st-presets.import_note_unsupported_macros", {
-        macros: formatUnsupportedMacros(locale, result.unsupportedEnabledMacros),
-      }),
+      statusNote(
+        "warning",
+        localizer(locale, "commands.st-presets.import_note_unsupported_macros", {
+          macros: formatUnsupportedMacros(locale, result.unsupportedEnabledMacros),
+        }),
+      ),
     );
   }
   if (result.sourceKind === "legacy_text_completion") {
-    notes.push(localizer(locale, "commands.st-presets.import_note_legacy_text_completion"));
+    notes.push(statusNote("warning", localizer(locale, "commands.st-presets.import_note_legacy_text_completion")));
   }
   return notes;
 }

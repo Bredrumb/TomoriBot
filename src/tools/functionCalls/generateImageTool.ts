@@ -1071,83 +1071,81 @@ export class GenerateImageTool extends BaseTool {
       const usedAvatarReferences = avatarReferences.slice(0, survivingAvatarCount);
       const referencedIdentityNames = usedAvatarReferences.map((avatarReference) => avatarReference.username);
 
-      if (!context.suppressProgressNotices) {
-        const actualUsesReferences = referenceImages.length > 0;
-        const baseNoticeDescription = localizer(
-          context.locale,
-          actualUsesReferences
-            ? "tools.image.generating_with_references_description"
-            : "tools.image.generating_description",
-        );
-        const referencedMessageUrl = messageId ? buildReferencedMessageUrl(context, messageId) : null;
-        const messageReferenceCount = referenceImages.filter((reference) => reference.sourceType === "message").length;
-        const extraNoticeLines: string[] = [];
-        const imageModeKey = outpaint
-          ? "tools.image.mode_outpaint"
-          : inpaint
-            ? "tools.image.mode_inpaint"
-            : actualUsesReferences
-              ? "tools.image.mode_img2img"
-              : "tools.image.mode_txt2img";
-        const modeNoticeLine = localizer(context.locale, "tools.image.notice_mode_line", {
-          mode: localizer(context.locale, imageModeKey),
-        });
-        if (outpaint) {
-          extraNoticeLines.push(
-            localizer(context.locale, "tools.image.notice_outpaint_direction_line", {
-              direction: this.formatOutpaintDirection(extendDirection),
-            }),
-          );
-        }
-        if (inpaint && !outpaint && maskPrompt) {
-          extraNoticeLines.push(`Mask: \`${this.formatNoticeValue(maskPrompt)}\``);
-        }
-        if (messageReferenceCount > 0) {
-          extraNoticeLines.push(
-            referencedMessageUrl
-              ? localizer(context.locale, "tools.image.notice_reference_line", {
-                  message_url: referencedMessageUrl,
-                })
-              : localizer(context.locale, "tools.image.notice_reference_count_line", {
-                  count: messageReferenceCount.toString(),
-                }),
-          );
-        }
-        if (referencedIdentityNames.length > 0) {
-          extraNoticeLines.push(
-            localizer(context.locale, "tools.image.notice_avatar_reference_line", {
-              name: referencedIdentityNames.join(", "),
-            }),
-          );
-        }
-        if (referenceImages.length > 1) {
-          extraNoticeLines.push(
-            localizer(context.locale, "tools.image.notice_reference_count_line", {
-              count: referenceImages.length.toString(),
-            }),
-          );
-        }
-        extraNoticeLines.push("");
-        extraNoticeLines.push(localizer(context.locale, "tools.image.notice_image_tags_tip_line"));
-        await sendToolProgressNotice(
-          context,
-          "image_generation",
-          {
-            titleKey: "tools.image.generating_title",
-            description: buildImageToolNoticeDescription(
-              context.locale,
-              baseNoticeDescription,
-              displayModelName,
-              prompt,
-              localizer(context.locale, "tools.image.generating_footer"),
-              extraNoticeLines,
-              [modeNoticeLine],
-            ),
-            color: ColorCode.INFO,
-          },
-          "GenerateImageTool",
+      const actualUsesReferences = referenceImages.length > 0;
+      const baseNoticeDescription = localizer(
+        context.locale,
+        actualUsesReferences
+          ? "tools.image.generating_with_references_description"
+          : "tools.image.generating_description",
+      );
+      const referencedMessageUrl = messageId ? buildReferencedMessageUrl(context, messageId) : null;
+      const messageReferenceCount = referenceImages.filter((reference) => reference.sourceType === "message").length;
+      const extraNoticeLines: string[] = [];
+      const imageModeKey = outpaint
+        ? "tools.image.mode_outpaint"
+        : inpaint
+          ? "tools.image.mode_inpaint"
+          : actualUsesReferences
+            ? "tools.image.mode_img2img"
+            : "tools.image.mode_txt2img";
+      const modeNoticeLine = localizer(context.locale, "tools.image.notice_mode_line", {
+        mode: localizer(context.locale, imageModeKey),
+      });
+      if (outpaint) {
+        extraNoticeLines.push(
+          localizer(context.locale, "tools.image.notice_outpaint_direction_line", {
+            direction: this.formatOutpaintDirection(extendDirection),
+          }),
         );
       }
+      if (inpaint && !outpaint && maskPrompt) {
+        extraNoticeLines.push(`Mask: \`${this.formatNoticeValue(maskPrompt)}\``);
+      }
+      if (messageReferenceCount > 0) {
+        extraNoticeLines.push(
+          referencedMessageUrl
+            ? localizer(context.locale, "tools.image.notice_reference_line", {
+                message_url: referencedMessageUrl,
+              })
+            : localizer(context.locale, "tools.image.notice_reference_count_line", {
+                count: messageReferenceCount.toString(),
+              }),
+        );
+      }
+      if (referencedIdentityNames.length > 0) {
+        extraNoticeLines.push(
+          localizer(context.locale, "tools.image.notice_avatar_reference_line", {
+            name: referencedIdentityNames.join(", "),
+          }),
+        );
+      }
+      if (referenceImages.length > 1) {
+        extraNoticeLines.push(
+          localizer(context.locale, "tools.image.notice_reference_count_line", {
+            count: referenceImages.length.toString(),
+          }),
+        );
+      }
+      extraNoticeLines.push("");
+      extraNoticeLines.push(localizer(context.locale, "tools.image.notice_image_tags_tip_line"));
+      await sendToolProgressNotice(
+        context,
+        "image_generation",
+        {
+          titleKey: "tools.image.generating_title",
+          description: buildImageToolNoticeDescription(
+            context.locale,
+            baseNoticeDescription,
+            displayModelName,
+            prompt,
+            localizer(context.locale, "tools.image.generating_footer"),
+            extraNoticeLines,
+            [modeNoticeLine],
+          ),
+          color: ColorCode.INFO,
+        },
+        "GenerateImageTool",
+      );
 
       const providerReferenceImages = referenceImages.map(({ mimeType, data }) => ({ mimeType, data }));
 

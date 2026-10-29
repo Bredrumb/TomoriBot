@@ -164,6 +164,45 @@ export function hasLeadingPlainOwnNameLabel(text: string, sourceNames: readonly 
   return new RegExp(`^\\s*(?:${labelForms.join("|")})`, "iu").test(text);
 }
 
+/** Matches the shortened bare label a model writes instead of the decorated `Name (label):` form. */
+const BARE_SPRITE_LABEL_PATTERN_SOURCE = `^\\s*[(（]([^()（）\\n\\r:：]{1,${RENDER_MODIFIER_LIMIT}})[)）]\\s*[:：][ \\t]*`;
+
+export type BareSpriteLabelMatch = {
+  modifier: string;
+  body: string;
+  /** True when the persona's own plain label chain preceded the tag. */
+  afterOwnLabelChain: boolean;
+};
+
+/**
+ * Parses the shortened bare "(label):" a model writes instead of the decorated form, optionally
+ * after its own plain label chain, leaving sprite resolution to the caller so prose stays untouched.
+ */
+export function parseLeadingBareSpriteModifier(
+  text: string,
+  sourceNames: readonly string[],
+): BareSpriteLabelMatch | null {
+  if (!text.trim() || text.trimStart().startsWith("```")) return null;
+
+  let working = text;
+  let afterOwnLabelChain = false;
+  while (true) {
+    const label = parseLeadingGenericSpeakerLabel(working);
+    if (!label || label.modifier || !matchesRenderModifierName(label.sourceName, sourceNames)) break;
+    working = label.body;
+    afterOwnLabelChain = true;
+  }
+
+  const bare = new RegExp(BARE_SPRITE_LABEL_PATTERN_SOURCE, "u").exec(working);
+  const modifier = bare?.[1]?.trim();
+  if (!bare || !modifier) return null;
+  return {
+    modifier,
+    body: working.slice(bare[0].length),
+    afterOwnLabelChain,
+  };
+}
+
 /**
  * Parses a leading sprite modifier for `/impersonate persona`, where the persona is already
  * fixed by the command's autocomplete option: unlike {@link parseLeadingRenderModifier}, the source

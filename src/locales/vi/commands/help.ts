@@ -235,7 +235,7 @@ Dùng {helpCustomModels} để xem hướng dẫn đầy đủ, các loại endp
       zai_title: `Thiết lập API key cho Z.ai`,
       zai_description: `Z.ai cung cấp dòng GLM qua API chung và endpoint lập trình riêng.
 
-⚠️ **Cập nhật điều khoản:** Điều khoản Z.ai chỉ cho phép dùng cho lập trình/agent. Dùng endpoint chung cho chat thông thường có thể vi phạm điều khoản.`,
+🟡 **Cập nhật điều khoản:** Điều khoản Z.ai chỉ cho phép dùng cho lập trình/agent. Dùng endpoint chung cho chat thông thường có thể vi phạm điều khoản.`,
       zai_getting_key_title: `Lấy API key của bạn:`,
       zai_getting_key_description: `1. Mở [nền tảng Z.ai](https://z.ai)
 2. Đăng nhập hoặc tạo một tài khoản
@@ -245,7 +245,7 @@ Dùng {helpCustomModels} để xem hướng dẫn đầy đủ, các loại endp
       zai_important_title: `Lưu ý quan trọng:`,
       zai_important_description: `- Dùng endpoint chung cho chat, suy luận và tạo ảnh gốc
   - Endpoint Coding riêng chỉ dành cho tác vụ lập trình
-  - ⚠️ Z.ai giới hạn sử dụng cho lập trình/agent, tự chịu rủi ro khi dùng để chat/nhập vai`,
+  - 🟡 Z.ai giới hạn sử dụng cho lập trình/agent, tự chịu rủi ro khi dùng để chat/nhập vai`,
       zai_footer: `Sau khi thiết lập, bạn có thể đổi model mặc định bằng {configModel}`,
       novelai_title: `Thiết lập API key cho NovelAI`,
       novelai_description: `NovelAI là dịch vụ trả phí định kỳ cho nhập vai và sáng tác truyện.

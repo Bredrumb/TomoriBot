@@ -22,6 +22,14 @@ const STATUS_CIRCLE_BY_TONE: Record<StatusTone, string> = {
 };
 
 /**
+ * Marks a body line with its own severity. Unlike a title, a note's severity is independent of
+ * the surface color, because one panel lists notes of different severities together.
+ */
+export function statusNote(tone: StatusTone, text: string): string {
+  return `${STATUS_CIRCLE_BY_TONE[tone]} ${text}`;
+}
+
+/**
  * Only the tones a title is allowed to claim.
  *
  * `RATE_LIMIT` and the remaining `ColorCode` entries are deliberately absent: no status title

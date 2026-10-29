@@ -4,11 +4,11 @@ import {
   privateStructuredFailure,
   readStructuredResponse,
 } from "@/providers/utils/structuredReview";
-import type { z } from "zod";
+import { z } from "zod";
 import { toDeepseekApiModelName } from "@/providers/deepseek/deepseekShared";
 import type { ProviderStructuredJsonRequest, StructuredOutputResult } from "@/types/provider/featureInterfaces";
 import { log } from "@/utils/misc/logger";
-import { readProviderErrorBody } from "@/utils/provider/providerErrorMetrics";
+import { readProviderErrorBody, redactProviderDetail } from "@/utils/provider/providerErrorMetrics";
 import { buildDeepSeekThinkingRequest } from "@/utils/provider/thinkingControl";
 import { fetchAndOptimizeImage } from "@/utils/image/imageProcessor";
 
@@ -102,6 +102,7 @@ export async function callDeepseekStructuredJSON<T>(
   responseSchema: Record<string, unknown>,
   zodSchema: z.ZodType<T>,
 ): Promise<StructuredOutputResult<T>> {
+  const startedAt = Date.now();
   try {
     const contentParts: DeepseekContentPart[] = [{ type: "text", text: request.userPrompt }];
 
@@ -142,13 +143,14 @@ export async function callDeepseekStructuredJSON<T>(
     ];
 
     const apiModel = toDeepseekApiModelName(request.model);
+    const maxOutputTokens = request.maxOutputTokens ?? 8192;
     const body: Record<string, unknown> = {
       model: apiModel,
       messages,
       response_format: {
         type: "json_object",
       },
-      max_tokens: request.maxOutputTokens ?? 8192,
+      max_tokens: maxOutputTokens,
       stream: false,
     };
 
@@ -197,8 +199,12 @@ export async function callDeepseekStructuredJSON<T>(
     }
 
     const result = (await readStructuredResponse(request, response)) as {
+      id?: unknown;
       usage?: unknown;
-      choices?: Array<{ message?: { content?: unknown; refusal?: unknown } }>;
+      choices?: Array<{
+        finish_reason?: unknown;
+        message?: { content?: unknown; refusal?: unknown; reasoning_content?: unknown };
+      }>;
     };
     const messageContent = result.choices?.[0]?.message?.content;
     const responseText =
@@ -229,12 +235,56 @@ export async function callDeepseekStructuredJSON<T>(
         Boolean(result.choices?.[0]?.message?.refusal),
       );
     if (!responseText) {
-      log.warn("DeepSeek structured JSON returned empty response", {
-        model: request.model,
-      });
+      const usage = z
+        .object({
+          prompt_tokens: z.number().int().nonnegative().optional().catch(undefined),
+          completion_tokens: z.number().int().nonnegative().optional().catch(undefined),
+          completion_tokens_details: z
+            .object({
+              reasoning_tokens: z.number().int().nonnegative().optional().catch(undefined),
+            })
+            .optional()
+            .catch(undefined),
+        })
+        .safeParse(result.usage);
+      const diagnostics: NonNullable<Extract<StructuredOutputResult<T>, { success: false }>["diagnostics"]> = {
+        finishReason: z
+          .enum(["stop", "length", "content_filter", "tool_calls", "insufficient_system_resource", "unknown"])
+          .catch("unknown")
+          .parse(result.choices?.[0]?.finish_reason),
+        inputTokens: usage.success ? usage.data.prompt_tokens : undefined,
+        outputTokens: usage.success ? usage.data.completion_tokens : undefined,
+        reasoningTokens: usage.success ? usage.data.completion_tokens_details?.reasoning_tokens : undefined,
+        reasoningPresent:
+          typeof result.choices?.[0]?.message?.reasoning_content === "string" &&
+          result.choices[0].message.reasoning_content.length > 0,
+        maxOutputTokens,
+        thinkingMode: thinking?.thinking?.type ?? "provider-default",
+        imageCount: contentParts.length - 1,
+        elapsedMs: Date.now() - startedAt,
+        providerRequestId:
+          typeof result.id === "string" && /^[a-zA-Z0-9_.:-]{1,200}$/.test(result.id)
+            ? redactProviderDetail(result.id, request.apiKey)
+            : undefined,
+      };
+      log.warn(
+        "DeepSeek structured JSON returned empty response",
+        undefined,
+        {
+          errorType: "DeepseekStructuredOutputEmpty",
+          metadata: {
+            model: apiModel,
+            operation: request.schemaName ?? "structured-json",
+            correlation: request.correlationId,
+            ...diagnostics,
+          },
+        },
+        { retain: true, redactValues: [request.apiKey] },
+      );
       return {
         success: false,
         error: "DeepSeek returned an empty structured output response. Retry the request.",
+        diagnostics,
       };
     }
 

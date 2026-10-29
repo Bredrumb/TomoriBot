@@ -1,7 +1,7 @@
 import { REST } from "discord.js";
 import { ProviderRequestDeniedError, type ProviderUsageContext } from "@/utils/provider/providerUsage";
 import { localizer } from "@/utils/text/localizer";
-import { afterEach, beforeAll, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeAll, describe, expect, it, mock, spyOn } from "bun:test";
 import type { Client, CommandInteraction, TextChannel, Webhook } from "discord.js";
 import { HumanizerDegree } from "@/types/db/schema";
 import type {
@@ -20,6 +20,7 @@ import {
 } from "@/utils/discord/stream/channelDeliveryContinuity";
 import { createPersona } from "../../helpers/fixtures";
 import { makeFakeInteraction } from "../../helpers/fakeInteraction";
+import { log } from "@/utils/misc/logger";
 
 const config: StreamConfig = {
   model: "fixture",
@@ -86,6 +87,41 @@ describe("StreamOrchestrator failed-stream delivery", () => {
     StreamOrchestrator.clearStopRequest(CHANNEL_ID);
     clearPersonaAppearances();
     clearAllChannelDeliveryContinuity();
+  });
+
+  it("retains request diagnostics when the public provider error notice is suppressed", async () => {
+    const warning = spyOn(log, "warn").mockImplementation(() => {});
+    try {
+      const { context, provider, send } = fixture([{ type: "error", error: providerError }], true);
+      context.requestDiagnostics = {
+        model: "gemini-3.5-flash-lite",
+        contextItemCount: 2,
+        contentsCount: 2,
+        tailRoles: ["user", "model"],
+        lastTurn: {
+          textParts: 1,
+          inlineDataParts: 0,
+          fileDataParts: 0,
+          functionCallParts: 0,
+          functionResponseParts: 0,
+        },
+        functionHistoryCount: 0,
+        currentTurnModelPartCount: 0,
+        prefillPresent: false,
+        manuallyTriggered: false,
+        toolCount: 0,
+        chunksReceived: 0,
+        elapsedMs: 10,
+      };
+      const result = await new StreamOrchestrator().streamToDiscord(provider, config, context);
+      expect(result.status).toBe("error");
+      expect(send).not.toHaveBeenCalled();
+      const call = warning.mock.calls.find((entry) => entry[2]?.errorType === "ProviderStreamError");
+      expect(call?.[2]?.metadata?.requestDiagnostics).toEqual(context.requestDiagnostics);
+      expect(call?.[3]?.retain).toBe(true);
+    } finally {
+      warning.mockRestore();
+    }
   });
 
   it.each([

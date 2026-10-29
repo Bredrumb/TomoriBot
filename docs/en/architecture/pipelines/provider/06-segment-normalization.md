@@ -23,6 +23,9 @@ processor applies transformations in a strict sequence:
    - Unmatched modifiers fall back to copied identities (impersonating other participants in context).
    - `advanceChannelSpriteGroupParity()` alternates clean and decorated usernames across consecutive
      different sprites so Discord renders each avatar instead of grouping messages under the first.
+   - A shortened bare `(modifier):` opening is accepted too, alone or after the persona's own plain
+     label, but only when the modifier names one of that persona's sprites, so ordinary
+     parenthetical prose stays in the message.
 3. **Opening-label leak guard:** Evaluated at response start before text is sent. It detects foreign
    speaker labels, such as `User:` or `Chris (smug):`. If retry budget remains
    (`emptyResponseRetryCount < MAX_EMPTY_RESPONSE_RETRIES`), it queues a `speaker_guard` stop with

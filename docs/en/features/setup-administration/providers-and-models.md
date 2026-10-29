@@ -25,12 +25,12 @@ Each provider has its own key-generation steps. In `/help`, choose `Setup`, then
 | Provider | Notes | Get a key |
 |---|---|---|
 | Google Gemini | Free tier, runs every feature. Recommended first setup. | [AI Studio](https://aistudio.google.com/apikey) |
-| OpenRouter | One key, many models (some free). | [OpenRouter keys](https://openrouter.ai/settings/keys) |
+| OpenRouter | Paid models through one key. | [OpenRouter keys](https://openrouter.ai/settings/keys) |
 | NovelAI | Subscription; uncensored storytelling and roleplay (text only). | [NovelAI](https://novelai.net/) |
 | DeepSeek | Pay-as-you-go reasoning models. | [DeepSeek](https://platform.deepseek.com/api_keys) |
 | NVIDIA NIM | Hosted text, embeddings, and image. | [NVIDIA Build](https://build.nvidia.com/) |
 | Anthropic | Claude models via the API (not Claude Code). | [Anthropic](https://console.anthropic.com/) |
-| Z.ai | GLM family. ⚠️ ToS restricts usage to coding and agent scenarios. | [Z.ai](https://z.ai/) |
+| Z.ai | GLM family. 🟡 ToS restricts usage to coding and agent scenarios. | [Z.ai](https://z.ai/) |
 | Vertex AI | Google Cloud via `gcloud` ADC (best for locally-run or dev setups). | see below |
 | Vertex AI Express | Google Cloud API-key BYOK (Preview, Gemini subset). | [Express Mode](https://console.cloud.google.com/expressmode) |
 | Custom | Any OpenAI-compatible endpoint (Ollama, vLLM, LiteLLM, …). | see [Custom Endpoints](#custom-endpoints) |
@@ -58,6 +58,10 @@ member of the server uses. Both commands require server management permissions.
 Members can set up their own providers and models with `/personal providers` and `/personal config`.
 Personal settings follow them across servers; see
 [Personalization](/features/knowledge/personalization/#your-own-providers).
+
+New OpenRouter configurations use DeepSeek Flash Latest for chat and Gemini 3.1 Flash Lite for
+the vision fallback. Both use OpenRouter credits. Replacing a key preserves your vision selection,
+including `- No Model`.
 
 In `/config` > Models > Switch Models, you can assign models and endpoints across these capability slots:
 
@@ -125,12 +129,12 @@ cloud services. Not every feature is available on every provider.
 | Provider | Streaming | Tool Calling | Image Input | Embeddings | Notes |
 |---|---|---|---|---|---|
 | Google Gemini | ✅ | ✅ | ✅ | ✅ | Free models available |
-| OpenRouter | ✅ | ✅ | ✅ | ✅ | Free models available |
+| OpenRouter | ✅ | ✅ | ✅ | ✅ | Uses OpenRouter credits |
 | Anthropic (API) | ✅ | ✅ | ✅ | - | Not Claude Code |
 | NovelAI | ✅ | ✅ | - | - | Only GLM 4.6 can use tools |
 | NVIDIA NIM | ✅ | ✅ | ✅ | ✅ | Free models available |
 | DeepSeek | ✅ | ✅ | - | - | - |
-| Z.ai | ✅ | ✅ | ✅ | - | Free models; ⚠️ ToS = coding and agent use only |
+| Z.ai | ✅ | ✅ | ✅ | - | Free models; 🟡 ToS = coding and agent use only |
 | Z.ai Coding | ✅ | ✅ | - | - | Subscription plan |
 | Google Vertex AI | ✅ | ✅ | ✅ | ✅ | Includes 'free' Express version |
 | Codex CLI (via ChatMock) | ✅ | ✅ | ✅ | - | [Setup](/self-hosting/local-endpoints/setup-chatmock/) |

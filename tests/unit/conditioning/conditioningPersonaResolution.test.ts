@@ -334,7 +334,7 @@ describe("conditioning persona resolution", () => {
       });
       const item = chatSpy.mock.calls.at(-1)?.[0].injectedContextItems?.[0];
       const text = item?.parts.map((part) => (part.type === "text" ? part.text : "")).join("") ?? "";
-      expect(item?.role).toBe("system");
+      expect(item?.role).toBe("user");
       expect(text).toContain(interaction.user.id);
       expect(text).toContain(ALTER.persona_nickname);
       expect(item?.messageId).toBe((await interaction.fetchReply()).id);

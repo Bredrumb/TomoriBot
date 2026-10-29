@@ -626,6 +626,44 @@ describe("memories permissions and scoping", () => {
     return { dependencies, calls, memories };
   }
 
+  it("retries an unavailable initial panel after scope recovery", async () => {
+    const { dependencies, calls } = createTestDependencies();
+    const resolveScope = dependencies.resolveScope;
+    let unavailable = true;
+    dependencies.resolveScope = async (...args) => (unavailable ? null : resolveScope(...args));
+    const interaction = {
+      user: { id: "user-42", username: "user42" },
+      guildId: "guild-123",
+      memberPermissions: { has: () => true },
+    } as unknown as ChatInputCommandInteraction;
+    const panel = await buildInitialMemoriesPanel(interaction, "en-US", dependencies);
+    const retryId = collectButtons(panel.components).find((button) => button.customId?.includes(":retry:"))?.customId;
+    expect(retryId).toBeDefined();
+    if (!retryId) throw new Error("Missing retry button");
+    const parsed = requireRoute(retryId);
+    expect(parseMemoriesPanelRoute(parsed)).toMatchObject({ action: "retry", category: "memories" });
+    unavailable = false;
+    let edited: unknown;
+    const button = {
+      ...interaction,
+      customId: retryId,
+      deferred: false,
+      replied: false,
+      isStringSelectMenu: () => false,
+      isModalSubmit: () => false,
+      isButton: () => true,
+      deferUpdate: async function (this: { deferred: boolean }) {
+        this.deferred = true;
+      },
+      editReply: async (payload: unknown) => {
+        edited = payload;
+      },
+    };
+    await createMemoriesInteractionRoute(dependencies).execute({} as Client, button as never, parsed);
+    expect(calls).toContain("loadMemories:1:1770:undefined");
+    expect(edited).toBeDefined();
+  });
+
   it("passes actor userId as owner filter for non-managers and undefined for managers", async () => {
     // Non-manager interaction
     const nonManagerInteraction = {

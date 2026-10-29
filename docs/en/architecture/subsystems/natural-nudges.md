@@ -51,7 +51,8 @@ at the 14-day boundary. A direct turn carries `isDirectChat` through empty-respo
 its usage stats persist, post-turn effects invalidate inactive or loading snapshots again so buffered
 activity cannot leave a newly eligible server stuck in the inactive cache.
 Both runners re-check dormancy before delivery; chat planning also drops queued nudge scene turns
-after the window closes. Nudge generation suppresses public error notices.
+after the window closes. Nudge generation suppresses public error notices, and its tool progress
+cards post only in the thought log, so a nudge never shows a working card in the channel.
 
 Repository reads retry retired database connections through `withTransientDbRetry`. Exhausted metric
 reads fail the evaluation instead of supplying empty activity data that could be cached for later
