@@ -18,8 +18,6 @@ import type {
   ImageQuotaRow,
   ServerwideQuotaRow,
   TextQuotaConfigRow,
-  TextQuotaRow,
-  TextServerwideQuotaRow,
   VideoQuotaConfigRow,
   VideoQuotaRow,
   VideoServerwideQuotaRow,
@@ -29,8 +27,6 @@ import {
   imageQuotaSchema,
   serverwideQuotaSchema,
   textQuotaConfigSchema,
-  textQuotaSchema,
-  textServerwideQuotaSchema,
   videoQuotaConfigSchema,
   videoQuotaSchema,
   videoServerwideQuotaSchema,
@@ -162,71 +158,6 @@ export async function getOrCreateTextConfig(serverId: number): Promise<TextQuota
       enabled: false,
     };
   }
-}
-
-/**
- * Touch (get-or-init) a user's daily text quota record for today.
- * Uses INSERT ON CONFLICT so the row is created on first access each day.
- *
- * @param serverId   - Internal server DB ID
- * @param userDiscId - Discord user snowflake
- * @param today      - Date string in YYYY-MM-DD format
- * @returns Parsed TextQuotaRow
- */
-export async function touchUserTextQuota(serverId: number, userDiscId: string, today: string): Promise<TextQuotaRow> {
-  const [row] = await sql<TextQuotaRow[]>`
-    INSERT INTO text_quotas (server_id, user_disc_id, usage_count, quota_date)
-    VALUES (${serverId}, ${userDiscId}, 0, ${today}::date)
-    ON CONFLICT (server_id, user_disc_id, quota_date)
-    DO UPDATE SET server_id = EXCLUDED.server_id
-    RETURNING *
-  `;
-  return textQuotaSchema.parse(row);
-}
-
-/**
- * Touch (get-or-init) the server-wide text quota record.
- * Creates the row for a new period if it does not yet exist.
- *
- * @param serverId  - Internal server DB ID
- * @param resetDays - Period length in days (from text_quota_configs)
- * @returns Parsed TextServerwideQuotaRow
- */
-export async function touchServerwideTextQuota(serverId: number, resetDays: number): Promise<TextServerwideQuotaRow> {
-  const [row] = await sql<TextServerwideQuotaRow[]>`
-    INSERT INTO text_serverwide_quotas (server_id, usage_count, quota_period_start, quota_period_end)
-    VALUES (
-      ${serverId},
-      0,
-      CURRENT_TIMESTAMP,
-      CURRENT_TIMESTAMP + (${resetDays} || ' days')::interval
-    )
-    ON CONFLICT (server_id)
-    DO UPDATE SET server_id = EXCLUDED.server_id
-    RETURNING *
-  `;
-  return textServerwideQuotaSchema.parse(row);
-}
-
-/**
- * Reset the server-wide text quota period (called when the period has expired,
- * or by an admin force-reset).
- *
- * @param serverId  - Internal server DB ID
- * @param resetDays - New period length in days
- * @returns Parsed TextServerwideQuotaRow after reset
- */
-export async function resetServerwideTextPeriod(serverId: number, resetDays: number): Promise<TextServerwideQuotaRow> {
-  const [row] = await sql<TextServerwideQuotaRow[]>`
-    UPDATE text_serverwide_quotas
-    SET
-      usage_count        = 0,
-      quota_period_start = CURRENT_TIMESTAMP,
-      quota_period_end   = CURRENT_TIMESTAMP + (${resetDays} || ' days')::interval
-    WHERE server_id = ${serverId}
-    RETURNING *
-  `;
-  return textServerwideQuotaSchema.parse(row);
 }
 
 /** Claim one text generation on both counters or neither; database errors propagate so callers refuse. */
