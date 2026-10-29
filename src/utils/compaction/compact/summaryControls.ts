@@ -1,3 +1,4 @@
+import { formatDocumentEmbeddingInput } from "@/utils/documents/documentChunker";
 import type { ButtonInteraction, Message } from "discord.js";
 import {
   ActionRowBuilder,
@@ -18,7 +19,7 @@ import type {
 } from "@/types/discord/modal";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { isRagAvailable } from "@/utils/db/ragAvailability";
-import { llmModelRepo, personaRepository, ragRepository } from "@/utils/db/repositories";
+import { llmModelRepo, personaRepository, ragRepository, serverMemoryRepository } from "@/utils/db/repositories";
 import { resolveUserLocale } from "@/utils/discord/interactionLocale";
 import {
   DISCORD_SELECT_OPTION_DESCRIPTION_MAX,
@@ -416,9 +417,14 @@ async function saveSummaryToDocs(params: {
   try {
     const memLimits = getMemoryLimits();
     const normalized = ragRepository.normalizeText(summaryText);
-    const chunks = ragRepository.chunkText(normalized, memLimits.documentChunkSize, memLimits.documentChunkOverlap);
+    const chunks = ragRepository.chunkText(normalized);
 
-    if (chunks.length === 0) {
+    const existingChunks = await serverMemoryRepository.countChunksScoped(tomoriState.server_id, targetPersonaId);
+    if (
+      chunks.length === 0 ||
+      chunks.length > memLimits.maxDocumentChunks ||
+      existingChunks + chunks.length > memLimits.maxDocumentChunksPerServer
+    ) {
       await replyInfoEmbed(submitInteraction, locale, {
         titleKey: "commands.compact.add_to_docs_error_title",
         descriptionKey: "commands.compact.add_to_docs_error_description",
@@ -433,7 +439,7 @@ async function saveSummaryToDocs(params: {
         apiKey: embeddingCreds.apiKey,
         model: embeddingModel.codename,
         modelId: embeddingModel.embedding_model_id,
-        inputs: chunks,
+        inputs: chunks.map((chunk) => formatDocumentEmbeddingInput(chunk.content, chunk.headingPath)),
         taskType: (await providerSupportsEmbeddingTaskType(embeddingModel.provider)) ? "RETRIEVAL_DOCUMENT" : undefined,
         batchSize: 16,
         onUsage: createProviderUsageRecorder(embeddingCreds.usageContext, embeddingModel.codename),
@@ -449,7 +455,8 @@ async function saveSummaryToDocs(params: {
       mimeType: "text/plain",
       fileSizeBytes: normalized.length,
       textContent: normalized,
-      chunks,
+      chunks: chunks.map((chunk) => chunk.content),
+      headingPaths: chunks.map((chunk) => chunk.headingPath),
       embeddings,
       embeddingModelId: embeddingModel.embedding_model_id,
       embeddingFamily: embeddingModel.model_family,

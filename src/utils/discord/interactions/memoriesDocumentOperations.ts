@@ -1,3 +1,4 @@
+import { formatDocumentEmbeddingInput, type StructuredDocumentChunk } from "@/utils/documents/documentChunker";
 import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 import {
   createProviderUsageRecorder,
@@ -122,7 +123,7 @@ async function resolveEmbedding(serverId: number, userId: number, configuredMode
 }
 
 async function embedChunks(
-  chunks: string[],
+  chunks: StructuredDocumentChunk[],
   resolved: Extract<Awaited<ReturnType<typeof resolveEmbedding>>, { status: "success" }>,
 ): Promise<number[][] | { status: "provider-denied"; denied: ProviderRequestDeniedError }> {
   return withProviderUsageContext(resolved.credentials.usageContext, async () =>
@@ -131,7 +132,7 @@ async function embedChunks(
       apiKey: resolved.credentials.apiKey,
       model: resolved.model.codename,
       modelId: resolved.model.embedding_model_id,
-      inputs: chunks,
+      inputs: chunks.map((chunk) => formatDocumentEmbeddingInput(chunk.content, chunk.headingPath)),
       taskType: (await providerSupportsEmbeddingTaskType(resolved.model.provider)) ? "RETRIEVAL_DOCUMENT" : undefined,
       batchSize: 16,
       onUsage: createProviderUsageRecorder(resolved.credentials.usageContext, resolved.model.codename),
@@ -185,7 +186,7 @@ export const serverDocumentsOperations = {
     if (!normalized) return { status: "empty-content" };
     if (normalized.length > limits.maxDocumentTextLength) return { status: "content-too-long" };
 
-    const chunks = ragRepository.chunkText(normalized, limits.documentChunkSize, limits.documentChunkOverlap);
+    const chunks = ragRepository.chunkText(normalized);
     if (chunks.length === 0) return { status: "empty-content" };
     if (chunks.length > limits.maxDocumentChunks) return { status: "too-many-chunks" };
     const existingChunks = await serverMemoryRepository.countChunksScoped(input.serverId, input.personaId);
@@ -203,7 +204,8 @@ export const serverDocumentsOperations = {
       mimeType: input.attachment.content_type ?? null,
       fileSizeBytes: input.attachment.size,
       textContent: normalized,
-      chunks,
+      chunks: chunks.map((chunk) => chunk.content),
+      headingPaths: chunks.map((chunk) => chunk.headingPath),
       embeddings,
       embeddingModelId: resolved.embeddingModelId,
       embeddingFamily: resolved.model.model_family,
@@ -266,7 +268,7 @@ export const serverDocumentsOperations = {
     if (contentChanged) {
       const resolved = await resolveEmbedding(input.serverId, input.userId, input.configuredEmbeddingModelId);
       if (resolved.status !== "success") return resolved;
-      const embedded = await embedChunks([content], resolved);
+      const embedded = await embedChunks([{ content, headingPath: target.heading_path }], resolved);
       if (!Array.isArray(embedded)) return embedded;
       const [embedding] = embedded;
       if (!embedding) return { status: "write-failed" };
@@ -361,7 +363,7 @@ async function vectorizeLoadedMemory(
     return { status: "document-limit" };
   }
   const normalized = ragRepository.normalizeText(content);
-  const chunks = ragRepository.chunkText(normalized, limits.documentChunkSize, limits.documentChunkOverlap);
+  const chunks = ragRepository.chunkText(normalized);
   if (chunks.length === 0) return { status: "empty-content" };
   if (chunks.length > limits.maxDocumentChunks) return { status: "too-many-chunks" };
   const currentChunkCount = await serverMemoryRepository.countChunksScoped(input.serverId, input.personaId);
@@ -380,7 +382,8 @@ async function vectorizeLoadedMemory(
     mimeType: null,
     fileSizeBytes: null,
     textContent: normalized,
-    chunks,
+    chunks: chunks.map((chunk) => chunk.content),
+    headingPaths: chunks.map((chunk) => chunk.headingPath),
     embeddings,
     embeddingModelId: resolved.embeddingModelId,
     embeddingFamily: resolved.model.model_family,

@@ -1,3 +1,5 @@
+import { backfillDocumentLexicalTextBatch } from "@/utils/documents/documentService";
+import { formatDocumentEmbeddingInput, type DocumentHeadingPath } from "@/utils/documents/documentChunker";
 import path from "node:path";
 import { buildDocumentLexicalText } from "@/utils/documents/lexicalText";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, spyOn, type Mock } from "bun:test";
@@ -47,12 +49,13 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("document re-embedding in place", () => {
         chunk_index: number;
         content: string;
         lex_text: string | null;
+        heading_path: DocumentHeadingPath | null;
         embedding_model_id: number;
         embedding_family: string;
         embedding: string;
       }>
     >`
-      SELECT document_chunk_id, document_id, chunk_index, content, lex_text, embedding_model_id,
+      SELECT document_chunk_id, document_id, chunk_index, content, lex_text, heading_path, embedding_model_id,
         embedding_family, embedding::text AS embedding
       FROM document_chunks WHERE server_id = ${refs.serverId}
       ORDER BY document_id, chunk_index
@@ -120,6 +123,62 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("document re-embedding in place", () => {
     embed.mockClear();
     await reembed();
     expect(embed).not.toHaveBeenCalled();
+  });
+
+  it("stores headings through insert, edit, lexical repair, and in-place re-embedding", async () => {
+    const headingPath = {
+      sections: [
+        { depth: 1, title: "Harbor" },
+        { depth: 4, title: "Lantern keeper" },
+      ],
+    };
+    const documentId = await ragRepository.insertWithChunks({
+      serverId: refs.serverId,
+      personaId: null,
+      uploaderUserId: null,
+      documentName: "_rt_headings",
+      fileName: null,
+      mimeType: null,
+      fileSizeBytes: null,
+      textContent: "Mirri tends the lamp.",
+      chunks: ["Mirri tends the lamp."],
+      headingPaths: [headingPath],
+      embeddings: [[1, 0, 0]],
+      embeddingModelId: oldModel.embedding_model_id,
+      embeddingFamily: oldModel.model_family,
+    });
+    const [before] = await storedChunks();
+    expect(before.heading_path).toEqual(headingPath);
+    expect((await serverMemoryRepository.loadDocumentChunks(documentId, refs.serverId, null))[0].heading_path).toEqual(
+      headingPath,
+    );
+    const content = "Juno tends the lamp.";
+    expect(
+      await serverMemoryRepository.updateChunk({
+        chunkId: before.document_chunk_id,
+        serverId: refs.serverId,
+        personaId: null,
+        content,
+        embeddingVector: OLD_VECTOR,
+        embeddingModelId: oldModel.embedding_model_id,
+        embeddingFamily: oldModel.model_family,
+      }),
+    ).toBe(true);
+    const [edited] = await storedChunks();
+    expect(edited.heading_path).toEqual(headingPath);
+    expect(edited.lex_text).toContain("Lantern keeper");
+    await testSql`UPDATE document_chunks SET lex_text = NULL WHERE document_id = ${documentId}`;
+    await backfillDocumentLexicalTextBatch();
+    expect((await storedChunks())[0].lex_text).toBe(edited.lex_text);
+    await reembed();
+    expect(embed.mock.calls.flatMap(([request]) => request.inputs)).toEqual([
+      formatDocumentEmbeddingInput(content, headingPath),
+    ]);
+    const [after] = await storedChunks();
+    expect(after.heading_path).toEqual(headingPath);
+    expect(after.content).toBe(content);
+    expect(after.document_chunk_id).toBe(before.document_chunk_id);
+    expect(after.lex_text).toBe(edited.lex_text);
   });
 
   it("retries a single edit from fresh content", async () => {

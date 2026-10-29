@@ -32,6 +32,39 @@ The contributor `buildServerDocumentContextItem` in `src/utils/text/context/rag.
    - Emits a `user`-role item tagged `KNOWLEDGE_SERVER_DOCUMENTS`.
    - Emits exactly one `rag_retrieval` metric per call.
 
+## New document chunking
+
+Uploads, memory vectorization, and compaction saves use `documentChunker.ts`. They check the
+per-document and per-scope chunk limits before reserving quota, embedding, or inserting a document;
+an oversized document fails as a whole. Defaults are 150 chunks per document and 1,000 per scope.
+Existing chunks, imported history facts, and edits retain their boundaries. Model switches embed
+stored chunks in place, and editing still accepts up to 4,000 characters.
+
+The chunker starts a new section at each Markdown ATX heading and stores the actual depths,
+including skipped levels. It merges small blocks only within the same section, so sibling labels
+remain distinct. Paragraphs, list items with continuation lines, and `Field: value` blocks precede
+sentence and word boundaries selected with `Intl.Segmenter`. An oversized word, URL, table row,
+or code line finally splits at Unicode code points. Normalization removes NUL bytes and converts CRLF to LF, trims trailing line whitespace,
+collapses blank-line runs, and trims chunk edges; whitespace at a split may change.
+All non-whitespace characters in the normalized source remain in order.
+
+The target is 900 weighted characters, with a hard maximum of 1,400 including embedding heading
+context and repeated table headers or fences. Han, kana, Hangul, and non-whitespace runs of at
+least 64 UTF-16 code units count triple; other code points count once. On the multilingual fixture
+corpus, the largest formatted input uses 464 E5 tokens including its passage prefix and special
+tokens, below the 512-token input limit. Weighted characters estimate density rather than
+guaranteeing a tokenizer-specific limit for arbitrary input.
+
+Tables repeat their header and separator with every row fragment. Fenced code closes and reopens
+with the original fence and language marker. A header too large to accompany any row is preserved
+as plain text; fence delimiters too large to fit beside content are preserved as indented code.
+There is no prose overlap. Only table headers and code fences repeat.
+
+One embedding formatter prepends at most 180 weighted characters of heading context, while the
+stored path and lexical text retain complete titles. It serves new writes, chunk edits, and
+re-embedding. With no heading path it returns the exact stored content, preserving existing
+embedding inputs. See the [schema contract](/architecture/subsystems/database-schema/#document-heading-paths).
+
 ## Lexical text
 
 `src/utils/documents/lexicalText.ts` derives `lex_text` from the document name and chunk

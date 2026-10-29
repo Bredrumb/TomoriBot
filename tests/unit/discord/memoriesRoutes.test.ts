@@ -1,3 +1,12 @@
+import { formatDocumentEmbeddingInput } from "@/utils/documents/documentChunker";
+import { handleSummarySaveClick } from "@/utils/compaction/compact/summaryControls";
+import * as modalUi from "@/utils/discord/ui/modals";
+import * as embedUi from "@/utils/discord/ui/embeds";
+import * as interactionLocale from "@/utils/discord/interactionLocale";
+import { personaRepository } from "@/utils/db/repositories";
+import { createRouteInteraction } from "../../helpers/routeInteraction";
+import { useEnvSandbox } from "../../helpers/env";
+import type { ButtonInteraction, ModalSubmitInteraction as ModalSubmission } from "discord.js";
 import { beforeAll, describe, expect, it, spyOn } from "bun:test";
 import {
   ButtonStyle,
@@ -2543,7 +2552,7 @@ describe("saving an item with an unresolved legacy channel scope", () => {
       channel_scope_pending: true,
     });
     const chunksSpy = spyOn(serverMemoryRepository, "loadDocumentChunks").mockResolvedValue([
-      { document_chunk_id: 8, chunk_index: 0, content: "Stored chunk" },
+      { document_chunk_id: 8, chunk_index: 0, content: "Stored chunk", heading_path: null },
     ]);
     const scopeSpy = spyOn(serverMemoryRepository, "updateDocumentChannelScope").mockResolvedValue(true);
     const invalidateSpy = spyOn(tomoriStateCache, "invalidateTomoriStateCache").mockImplementation(() => {});
@@ -2572,6 +2581,7 @@ describe("saving an item with an unresolved legacy channel scope", () => {
 });
 
 describe("memories document operation ordering", () => {
+  useEnvSandbox(["MAX_DOCUMENT_CHUNKS", "MAX_DOCUMENT_CHUNKS_PER_SERVER"]);
   it("updates document channel filters without regenerating an unchanged chunk embedding", async () => {
     const metaSpy = spyOn(serverMemoryRepository, "loadDocumentMeta").mockResolvedValue({
       document_name: "Guide",
@@ -2579,7 +2589,7 @@ describe("memories document operation ordering", () => {
       channel_scope_pending: false,
     });
     const chunksSpy = spyOn(serverMemoryRepository, "loadDocumentChunks").mockResolvedValue([
-      { document_chunk_id: 8, chunk_index: 0, content: "Stored chunk" },
+      { document_chunk_id: 8, chunk_index: 0, content: "Stored chunk", heading_path: null },
     ]);
     const tagsSpy = spyOn(serverMemoryRepository, "updateDocumentChannelScope").mockResolvedValue(true);
     const embeddingSpy = spyOn(embeddingProvider, "generateEmbeddingsBatched");
@@ -2655,7 +2665,7 @@ describe("memories document operation ordering", () => {
       }),
       extract: spyOn(textExtractor, "extractTextFromBuffer").mockResolvedValue("Document content"),
       normalize: spyOn(ragRepository, "normalizeText").mockImplementation((content) => content),
-      chunk: spyOn(ragRepository, "chunkText").mockReturnValue(["Document content"]),
+      chunk: spyOn(ragRepository, "chunkText").mockReturnValue([{ content: "Document content", headingPath: null }]),
       insert: spyOn(ragRepository, "insertWithChunks").mockResolvedValue(91),
       duplicate: spyOn(serverMemoryRepository, "documentExistsByName").mockResolvedValue(false),
       documentCount: spyOn(serverMemoryRepository, "countDocumentsScoped").mockResolvedValue(0),
@@ -2675,7 +2685,12 @@ describe("memories document operation ordering", () => {
         channel_scope_pending: false,
       }),
       loadChunks: spyOn(serverMemoryRepository, "loadDocumentChunks").mockResolvedValue([
-        { document_chunk_id: 8, chunk_index: 0, content: "Document content" },
+        {
+          document_chunk_id: 8,
+          chunk_index: 0,
+          content: "Document content",
+          heading_path: { sections: [{ depth: 4, title: "Lamp" }] },
+        },
       ]),
       updateChunk: spyOn(serverMemoryRepository, "updateChunk").mockResolvedValue(true),
       deleteChunk: spyOn(serverMemoryRepository, "deleteChunk").mockResolvedValue(true),
@@ -2685,6 +2700,7 @@ describe("memories document operation ordering", () => {
     };
 
     return {
+      spies,
       updateChunkSpy: spies.updateChunk,
       deleteChunkSpy: spies.deleteChunk,
       rebuildSpy: spies.rebuild,
@@ -2694,6 +2710,102 @@ describe("memories document operation ordering", () => {
       },
     };
   }
+
+  it("rejects document and scope chunk caps before embedding or writes on all new-document paths", async () => {
+    for (const cap of ["document", "scope"]) {
+      process.env.MAX_DOCUMENT_CHUNKS = cap === "document" ? "1" : "150";
+      process.env.MAX_DOCUMENT_CHUNKS_PER_SERVER = "1000";
+      const stubs = stubDocumentWriteDependencies();
+      stubs.spies.chunk.mockRestore();
+      if (cap === "scope") stubs.spies.chunkCount.mockResolvedValue(1000);
+      const source = "# One\n\nfirst\n\n# Two\n\nsecond";
+      stubs.spies.extract.mockResolvedValue(source);
+      const memory = spyOn(serverMemoryRepository, "loadServerMemoriesScoped").mockResolvedValue([makeMemory(7)]);
+      const state = createPersona({
+        server_id: 1,
+        persona_id: 10,
+        config: { server_memteaching_enabled: true, embedding_model_id: 5 },
+      });
+      const button = createRouteInteraction();
+      const submit = createRouteInteraction({ kind: "modal" });
+      const message = {
+        id: "summary-cap",
+        embeds: [{ description: source }],
+        components: [{ components: [{ customId: "compact:v1:save:en-US" }] }],
+        edit: async () => {},
+      };
+      const interaction = {
+        ...button,
+        message: { ...message, fetch: async () => message },
+      } as unknown as ButtonInteraction;
+      const extras = [
+        spyOn(interactionLocale, "resolveUserLocale").mockResolvedValue("en-US"),
+        spyOn(personaRepository, "loadAllForServer").mockResolvedValue([state]),
+        spyOn(personaRepository, "loadState").mockResolvedValue(state),
+        spyOn(modalUi, "promptWithPaginatedModal").mockResolvedValue({
+          outcome: "submit",
+          interaction: submit as unknown as ModalSubmission,
+          values: { compact_doc_name: "Guide" },
+        }),
+        spyOn(embedUi, "replyInfoEmbed").mockResolvedValue(undefined),
+      ];
+      try {
+        const common = {
+          serverId: 1,
+          personaId: 10,
+          userId: 42,
+          userDiscId: "user-42",
+          workspaceId: "guild-123",
+          configuredEmbeddingModelId: 5,
+          isBlacklisted: false,
+          canManage: true,
+          memteachingEnabled: true,
+          documentName: "Guide",
+          channelDiscIds: [],
+        };
+        const expected = cap === "document" ? "too-many-chunks" : "chunk-limit";
+        expect(
+          (
+            await serverDocumentsOperations.add({
+              ...common,
+              attachment: {
+                id: "attachment-1",
+                filename: "guide.md",
+                size: source.length,
+                url: "https://cdn.example.invalid/guide.md",
+                proxy_url: "https://proxy.example.invalid/guide.md",
+                content_type: "text/markdown",
+              },
+            })
+          ).status,
+        ).toBe(expected);
+        expect(
+          (
+            await serverDocumentsOperations.vectorize({
+              ...common,
+              personaLineageId: 1770,
+              memoryId: 7,
+              content: source,
+            })
+          ).status,
+        ).toBe(expected);
+        await handleSummarySaveClick(interaction, { locale: "en-US", refresh: false, editDeadline: 0 });
+        expect(extras.at(-1)).toHaveBeenCalledWith(
+          expect.anything(),
+          "en-US",
+          expect.objectContaining({ descriptionKey: "commands.compact.add_to_docs_error_description" }),
+        );
+        expect(stubs.spies.chunkCount).toHaveBeenCalledWith(1, null);
+        expect(stubs.spies.embedding).not.toHaveBeenCalled();
+        expect(stubs.spies.insert).not.toHaveBeenCalled();
+        expect(stubs.spies.quota).not.toHaveBeenCalled();
+      } finally {
+        memory.mockRestore();
+        for (const spy of extras) spy.mockRestore();
+        stubs.restore();
+      }
+    }
+  });
 
   it("invalidates authoritative state after a successful document add", async () => {
     const stubs = stubDocumentWriteDependencies();
@@ -2750,6 +2862,9 @@ describe("memories document operation ordering", () => {
           })
         ).status,
       ).toBe("success");
+      expect(stubs.spies.embedding.mock.calls[0][0].inputs).toEqual([
+        formatDocumentEmbeddingInput("Updated content", { sections: [{ depth: 4, title: "Lamp" }] }),
+      ]);
       expect(stubs.updateChunkSpy).toHaveBeenCalled();
       expect(stubs.rebuildSpy).toHaveBeenCalledWith(91);
       expect(stubs.invalidateSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
@@ -2836,7 +2951,9 @@ describe("memories document operation ordering", () => {
     const taskSpy = spyOn(embeddingProvider, "providerSupportsEmbeddingTaskType").mockResolvedValue(false);
     const embeddingSpy = spyOn(embeddingProvider, "generateEmbeddingsBatched").mockResolvedValue([[0.1, 0.2]]);
     const normalizeSpy = spyOn(ragRepository, "normalizeText").mockImplementation((content) => content);
-    const chunkSpy = spyOn(ragRepository, "chunkText").mockReturnValue(["Vectorized content"]);
+    const chunkSpy = spyOn(ragRepository, "chunkText").mockReturnValue([
+      { content: "Vectorized content", headingPath: null },
+    ]);
     const insertSpy = spyOn(ragRepository, "insertWithChunks").mockImplementation(async () => {
       order.push("insert");
       return 91;

@@ -88,12 +88,15 @@ CREATE TABLE IF NOT EXISTS document_chunks (
   embedding_family TEXT NOT NULL,
   chunk_index INT NOT NULL,
   content TEXT NOT NULL,
+  heading_path JSONB,
   embedding VECTOR,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (document_id) REFERENCES documents(document_id) ON DELETE CASCADE,
   FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE CASCADE,
   FOREIGN KEY (embedding_model_id) REFERENCES embedding_models(embedding_model_id) ON DELETE RESTRICT
 );
+
+SELECT add_column_if_not_exists('document_chunks', 'heading_path', 'JSONB');
 
 -- Create indexes for document chunks
 CREATE INDEX IF NOT EXISTS idx_document_chunks_document_id ON document_chunks(document_id);
