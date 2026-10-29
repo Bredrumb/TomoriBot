@@ -7,7 +7,7 @@ The RAG document contributor injects relevant text chunks from server-uploaded d
 
 ## Flow and ownership
 
-The contributor `buildServerDocumentContextItem` in `src/utils/text/context/rag.ts` retrieves document chunks for the user's latest query:
+The contributor `buildServerDocumentContextItem` in `src/utils/text/context/rag.ts` retrieves document chunks for the user's latest query. Native assembly starts it right after the persona state resolves and awaits it at its insertion point, so its embedding round trip and database query overlap the rest of assembly while prompt order stays unchanged.
 
 1. **Preconditions**:
    - `isRagAvailable()` must return true (pgvector support enabled).
@@ -27,13 +27,15 @@ The contributor `buildServerDocumentContextItem` in `src/utils/text/context/rag.
    - Binds the resolved usage context and supplies `createProviderUsageRecorder` for each embedding response.
    - When `channel_memory_enabled` is true, retrieval scopes documents through `channelScopeCandidates(channelId, parentChannelId)`: the active channel ID and, inside a thread, the parent channel ID. It matches stored `channel_disc_ids` (empty means every channel), never a channel name.
 5. **Formatting and emission**:
+   - Sorts the selected chunks by `(document_id, chunk_index)` before formatting: retrieval selects by score, while rendering follows document and chunk order.
    - `ragRepository.formatChunksForPrompt` formats matching chunks into document sections.
    - Emits a `user`-role item tagged `KNOWLEDGE_SERVER_DOCUMENTS`.
    - Emits exactly one `rag_retrieval` metric per call.
 
 ## Constraints and rationale
 
-- **Memory guard short-circuit**: Under critical host memory pressure, RAG retrieval aborts immediately. This avoids high-memory vector and embedding operations during traffic spikes.
+- **Memory guard short-circuit**: Under critical host memory pressure, RAG retrieval aborts immediately. This avoids high-memory vector and embedding operations during traffic spikes. Because retrieval starts early, the check samples host memory before the remaining contributors finish.
+- **Stable document block**: Chunks render in `(document_id, chunk_index)` order rather than RRF score order, so two retrievals that select the same chunks produce byte-identical text and a rank-only change cannot break the provider's prompt-prefix cache. `formatRetrievedChunksForPrompt` itself is unchanged, so channel-history extraction keeps its own order.
 - **Fail-safe fallback**: Database or embedding API failures log a warning and return `null`, allowing context assembly to finish without document chunks.
 - **Retrieval telemetry**: `rag_retrieval` carries a fixed `outcome` label for every exit (`rag_unavailable`, `memory_critical`, `no_server`, `no_query`, `query_too_short`, `no_documents`, `no_model`, `no_results`, `injected`, `error`). `total_ms` is always present, and `embedding_ms`, `sql_ms`, `result_count`, `injected_chars`, and `injected_tokens` appear when those phases ran. The fields are aggregate only: query text, document text, names, vectors, keys, and server, channel, or user identifiers never reach a log. Like other graphable samples, it goes to both `log.metric` and `metricSampleRepository` so the host JSONL and Grafana each keep a copy.
 - **Preset reassembly**: Tagged as `KNOWLEDGE_SERVER_DOCUMENTS`. Each world info marker pulls its own lore block first and then documents, and the first marker consumes the document block. When neither marker exists, the before lore block, documents, and the after lore block flush before the first dialogue anchor.

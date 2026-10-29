@@ -136,7 +136,9 @@ export async function buildServerDocumentContextItem(params: {
       }),
     );
 
-    const documentContext = ragRepository.formatChunksForPrompt(chunks);
+    // Selection stays score-ordered; document and chunk order makes the rendered bytes independent of rank changes.
+    const selectedChunks = [...chunks].sort((a, b) => a.document_id - b.document_id || a.chunk_index - b.chunk_index);
+    const documentContext = ragRepository.formatChunksForPrompt(selectedChunks);
     if (!documentContext) return skipRetrieval("no_results", startedAt, timings, chunks.length);
 
     recordRetrievalMetric({
