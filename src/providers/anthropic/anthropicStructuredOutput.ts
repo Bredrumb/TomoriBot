@@ -7,14 +7,21 @@ import type { z } from "zod";
 import type {
   ProviderStructuredJsonRequest,
   StructuredOutputResult,
-  ProviderImageInput,
+  StructuredImageFailureDiagnostics,
 } from "@/types/provider/featureInterfaces";
 import { log } from "@/utils/misc/logger";
 import { buildAnthropicThinkingRequest } from "@/utils/provider/thinkingControl";
-import { readProviderErrorBody } from "@/utils/provider/providerErrorMetrics";
+import {
+  readProviderErrorBody,
+  redactProviderDetail,
+  reportProviderFailure,
+} from "@/utils/provider/providerErrorMetrics";
+import { fetchAndOptimizeImage } from "@/utils/image/imageProcessor";
+import sharp from "sharp";
 
 const ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_API_VERSION = "2023-06-01";
+const ANTHROPIC_MAX_BASE64_IMAGE_BYTES = 10_000_000;
 
 // The output format grammar rejects these keywords with a 400. Dropping them only loosens decoding:
 // the caller's Zod schema still enforces every one of them on the parsed reply.
@@ -29,41 +36,52 @@ const UNSUPPORTED_OUTPUT_SCHEMA_KEYWORDS = new Set([
   "maxItems",
 ]);
 
-/**
- * Build Anthropic messages from the request's system and user prompts.
- * Handles image inputs by converting them to Anthropic's base64 content block format.
- */
-function buildAnthropicMessages(
-  systemPrompt: string,
-  userPrompt: string,
-  images?: ProviderImageInput[],
-): { system: string; messages: Array<Record<string, unknown>> } {
+class AnthropicImagePreparationError extends Error {
+  constructor(readonly diagnostics: StructuredImageFailureDiagnostics) {
+    super("An image could not be prepared for Anthropic.");
+  }
+}
+
+async function buildAnthropicMessages(
+  request: ProviderStructuredJsonRequest,
+): Promise<{ system: string; messages: Array<Record<string, unknown>> }> {
+  const { systemPrompt, userPrompt, images } = request;
   const messages: Array<Record<string, unknown>> = [];
 
   if (images && images.length > 0) {
     const contentBlocks: Array<Record<string, unknown>> = [{ type: "text", text: userPrompt }];
 
-    for (const image of images) {
-      if (image.url.startsWith("data:")) {
-        const dataUriMatch = image.url.match(/^data:([^;]+);base64,(.+)$/);
-        if (dataUriMatch) {
-          contentBlocks.push({
-            type: "image",
-            source: {
-              type: "base64",
-              media_type: dataUriMatch[1],
-              data: dataUriMatch[2],
-            },
-          });
+    for (const [imageIndex, image] of images.entries()) {
+      request.abortSignal?.throwIfAborted();
+      let failureStage: StructuredImageFailureDiagnostics["failureStage"] = "image-download";
+      try {
+        const optimized = await fetchAndOptimizeImage(image.url, image.mimeType);
+        request.abortSignal?.throwIfAborted();
+        failureStage = "image-decode";
+        const metadata = await sharp(Buffer.from(optimized.data, "base64")).metadata();
+        failureStage = "image-format";
+        if (!metadata.format || !["jpeg", "png", "gif", "webp"].includes(metadata.format)) {
+          throw new Error("Unsupported image format");
         }
-      } else {
-        // HTTP URL: Anthropic supports URL-based images too
+        failureStage = "image-size";
+        if (optimized.data.length > ANTHROPIC_MAX_BASE64_IMAGE_BYTES)
+          throw new Error("Image exceeds base64 size limit");
         contentBlocks.push({
           type: "image",
           source: {
-            type: "url",
-            url: image.url,
+            type: "base64",
+            media_type: `image/${metadata.format}`,
+            data: optimized.data,
           },
+        });
+      } catch (error) {
+        const status = error instanceof Error ? /\bHTTP ([1-5]\d{2})\b/.exec(error.message)?.[1] : undefined;
+        throw new AnthropicImagePreparationError({
+          failureStage,
+          imageIndex,
+          imageName: image.name ? redactProviderDetail(image.name, request.apiKey) : undefined,
+          imageCount: images.length,
+          httpStatus: status ? Number(status) : undefined,
         });
       }
     }
@@ -150,7 +168,7 @@ export async function callAnthropicStructuredJSON<T>(
   zodSchema: z.ZodType<T>,
 ): Promise<StructuredOutputResult<T>> {
   try {
-    const { system, messages } = buildAnthropicMessages(request.systemPrompt, request.userPrompt, request.images);
+    const { system, messages } = await buildAnthropicMessages(request);
     const thinking =
       request.thinkingLevel === undefined
         ? undefined
@@ -214,6 +232,25 @@ export async function callAnthropicStructuredJSON<T>(
       data: validationResult.data,
     };
   } catch (error) {
+    if (request.abortSignal?.aborted) return privateStructuredFailure(request);
+    if (error instanceof AnthropicImagePreparationError) {
+      const diagnostics = error.diagnostics;
+      await reportProviderFailure({
+        summary: "Anthropic image preparation failed",
+        error,
+        errorType: "AnthropicStructuredImageError",
+        expected: true,
+        dimensions: { provider: "anthropic", operation: "structured-image", category: diagnostics.failureStage },
+        metadata: { model: request.model, correlation: request.correlationId, ...diagnostics },
+      });
+      return {
+        success: false,
+        error: error.message,
+        failure: "transport",
+        httpStatus: diagnostics.httpStatus,
+        diagnostics,
+      };
+    }
     if (request.privateOutput)
       return privateStructuredFailure(
         request,
