@@ -36,6 +36,7 @@ import type { MinimalNoticeRef } from "@/types/db/schema";
 import type { StandardEmbedOptions } from "@/types/discord/embed";
 import type { ToolContext } from "@/types/tool/interfaces";
 import { createStandardEmbed, type WebhookEmbedContext } from "@/utils/discord/embedHelper";
+import { resolveUserLocale } from "@/utils/discord/interactionLocale";
 import { recordMinimalNoticeRef } from "@/utils/discord/minimalNoticeBodies";
 import type { SendableChannel } from "@/utils/discord/resolveSendableChannel";
 import {
@@ -274,15 +275,6 @@ async function sendEmbedWithExpand(
     return noticeMessage;
   }
 
-  // Build the ephemeral "full content" embed once: reused for every click.
-  //    Wrap the content in a fenced code block so newlines and any markdown
-  //    inside the content are preserved without being interpreted.
-  const fullEmbed = createStandardEmbed(locale, {
-    color: embedOptions.color ?? ColorCode.INFO,
-    titleKey: config.expandTitleKey,
-    description: `\`\`\`\n${fenceSafeContent}\n\`\`\``,
-  });
-
   // Wire the button collector. Any non-bot user may click, so the full content
   //    is already shown to everyone in the channel (truncated), so ephemeral
   //    expansion is not a privacy escalation.
@@ -294,6 +286,12 @@ async function sendEmbedWithExpand(
 
   collector.on("collect", async (interaction) => {
     try {
+      // Fenced so markdown inside stored content renders literally instead of formatting the reply.
+      const fullEmbed = createStandardEmbed(await resolveUserLocale(interaction), {
+        color: embedOptions.color ?? ColorCode.INFO,
+        titleKey: config.expandTitleKey,
+        description: `\`\`\`\n${fenceSafeContent}\n\`\`\``,
+      });
       await interaction.reply({
         embeds: [fullEmbed],
         flags: MessageFlags.Ephemeral,

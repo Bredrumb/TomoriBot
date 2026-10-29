@@ -7,7 +7,7 @@ aiGenerated: true
 
 Manage your self-hosted TomoriBot instance using CLI maintenance scripts to update code, back up or restore data, rotate encryption keys, and inspect environment variables. Run these commands from your host terminal or Docker environment. For in-Discord data exports and deletions, see [Data Handling](/features/knowledge/data-handling/).
 
-If you are updating with `git pull`, review [Safe Migration](/self-hosting/safe-migration/) first to create a backup before the on-boot migration runner applies schema changes.
+TomoriBot applies pending database migrations on startup. Some can remove data and do not roll back automatically, so back up before updating or switching branches.
 
 ## Maintenance scripts
 
@@ -25,8 +25,7 @@ If you are updating with `git pull`, review [Safe Migration](/self-hosting/safe-
 
 Host `bun run backup` needs `pg_dump`, and host `bun run restore-backup` needs `psql` in your PATH. `bun run update` needs `pg_dump` for its backup. The `--docker` update path runs the backup in the container, so it needs host Bun, Git, and Docker but no host PostgreSQL tools.
 
-For local avatars, keep TomoriBot's managed webhooks: deleting them prevents the bot from editing
-older webhook messages. See [Safe Migration](/self-hosting/safe-migration/) for media backups.
+For local avatars, keep TomoriBot's managed webhooks: deleting them prevents the bot from editing older webhook messages.
 
 ## Database backups and recovery keys
 
@@ -44,6 +43,10 @@ To restore a trusted backup:
 4. Run `bun run audit-keys` and `bun run rotate-keys --dry-run` before restarting. If credentials need
    migration, run `bun run rotate-keys --bot-stopped` and audit again. If restore fails, keep the bot
    stopped: earlier SQL statements may already have changed the database.
+
+Back up the local `data/` directory separately, including avatars, voice samples, and `data/custom-expressions/`. Restore files to the same paths. For GCS or S3 expressions, back up `custom-expressions/` objects and restore their keys to the same configured bucket. Linked expressions depend on their external hosts.
+
+In non-production environments, startup creates a database backup when the bot version changes or the latest backup is at least `TOMORI_AUTO_BACKUP_INTERVAL_HOURS` old (24 hours by default). It retains `TOMORI_AUTO_BACKUP_MAX` backups (5 by default); set `TOMORI_AUTO_BACKUP_ENABLED=false` to disable this. These backups do not include media or encryption keys.
 
 Older bundles can contain secrets in `config.env`. Restore does not load it; review it privately and
 supply the required keys through your normal secret source.
@@ -78,6 +81,8 @@ bun run update
 The updater backs up the database, pulls the code, and installs dependencies. Use `--build` if you
 run from `dist/`. For Compose, see [Docker Compose](/self-hosting/docker-compose/#maintenance-updating-and-backups).
 Back up media and encryption keys separately.
+
+Use a separate database to test branches: switching back does not undo migrations. If a migration fails, keep the bot stopped, check the logs, and follow the recovery steps above before returning to the previous version. Record the current commit with `git rev-parse HEAD` before updating to help recovery.
 
 ### Environment changes
 

@@ -3,15 +3,15 @@ title: "IrodoriTTS"
 aiGenerated: true
 ---
 
-Genere un habla japonesa natural con clonación de voz, VoiceDesign basado en subtítulos y marcado de emoji expresivo usando [Irodori-TTS v4.1](https://github.com/Aratako/Irodori-TTS).
+Genera voz japonesa natural con clonación de voz, VoiceDesign basado en subtítulos y marcado expresivo con emojis mediante [Irodori-TTS v4.1](https://github.com/Aratako/Irodori-TTS).
 
-Irodori-TTS v4.1 es un modelo de conversión de texto a voz centrado en japonés que admite tanto la clonación de voz como el VoiceDesign descrito en texto dentro de un único punto de control. TomoriBot se conecta a Irodori a través del contenedor FastAPI local en `servers/tts/irodoritts/`, de forma predeterminada es `Aratako/Irodori-TTS-v4.1-Small`.
+Irodori-TTS v4.1 es un modelo de texto a voz enfocado en japonés que admite tanto clonación de voz como VoiceDesign descrito por texto en un solo checkpoint. TomoriBot se conecta a Irodori a través del contenedor local con FastAPI en `servers/tts/irodoritts/`, utilizando por defecto `Aratako/Irodori-TTS-v4.1-Small`.
 
-Se pueden seleccionar puntos de control de Hugging Face compatibles con `IRODORI_TTS_MODEL_ID`, incluidos ajustes comunitarios como `phasefield-audio/Irodori-TTS-v4.1-Anime`.
+Se pueden seleccionar checkpoints compatibles de Hugging Face mediante `IRODORI_TTS_MODEL_ID`, incluidos ajustes finos de la comunidad como `phasefield-audio/Irodori-TTS-v4.1-Anime`.
 
 ## Configuración
 
-Irodori utiliza `uv` para la gestión de dependencias y backend de PyTorch. El servidor mantiene su propio `pyproject.toml` con dependencias fijadas de Irodori y `dacvae` para instalaciones reproducibles. Primero instale `uv`, luego ejecute el script de instalación desde la raíz del repositorio TomoriBot:
+Irodori utiliza `uv` para la gestión de dependencias y del backend de PyTorch. El servidor mantiene su propio `pyproject.toml` con dependencias fijadas de Irodori y `dacvae` para instalaciones reproducibles. Instala `uv` primero y luego ejecuta el script de instalación desde la raíz del repositorio de TomoriBot:
 
 ### Windows PowerShell (NVIDIA)
 
@@ -29,30 +29,43 @@ servers/tts/irodoritts/.venv/bin/python servers/tts/irodoritts/server.py
 
 Los scripts de instalación crean `servers/tts/irodoritts/.venv`, por lo que `bun run launch --irodoritts` continúa funcionando después de la instalación.
 
-Servidores disponibles:
+Backends disponibles:
 
 - `cu128`: NVIDIA CUDA 12.8 en Windows y Linux
-- `cpu`: solo CPU o CPU/MPS macOS a través de PyPI
+- `cpu`: solo CPU, o CPU/MPS en macOS mediante PyPI
 - `rocm`: AMD ROCm en Linux/WSL
 - `xpu`: Intel XPU en Windows y Linux
 
-La URL del punto final predeterminado es `http://127.0.0.1:8013`.
+La URL del punto de conexión predeterminado es `http://127.0.0.1:8013`.
 
-## Usando un punto de control diferente
+## Usar un checkpoint diferente
 
-El modelo predeterminado es `Aratako/Irodori-TTS-v4.1-Small`. Los repositorios compatibles de Hugging Face, los ajustes comunitarios (como `phasefield-audio/Irodori-TTS-v4.1-Anime`) o los archivos de puntos de control locales se pueden configurar mediante variables de entorno.
+El modelo predeterminado es `Aratako/Irodori-TTS-v4.1-Small`. Puedes seleccionar otros checkpoints oficiales (incluido el modelo Large de 3.29B parámetros y sus variantes cuantizadas), ajustes finos de la comunidad o archivos de checkpoint locales mediante variables de entorno.
 
-Cuando inicia el servidor (directamente con Python o mediante `bun run launch --irodoritts`), lee automáticamente la raíz del repositorio `.env` (o un `.env` local en `servers/tts/irodoritts/`) y registra la ID del modelo activo al inicio.
+### Checkpoints y variantes
+
+| Modelo / `IRODORI_TTS_MODEL_ID` | Parámetros | Tamaño del checkpoint | VRAM recomendada | Notas |
+|---|---|---|---|---|
+| `Aratako/Irodori-TTS-v4.1-Small` | 766M | 1.5 GB | 4-6 GB | Modelo predeterminado: inferencia rápida y bajo consumo de memoria. |
+| `Aratako/Irodori-TTS-v4-Large` | 3.29B | 12.25 GB | 10-14 GB | Modelo Large completo sin cuantizar con base de texto T5Gemma 2. |
+| `Aratako/Irodori-TTS-v4-Large-Quantized/float8-weight-only` | 3.29B | 3.58 GB | 6-8 GB | Pesos FP8 con activaciones en BF16: recomendado para NVIDIA Ada (serie RTX 40) y superiores. |
+| `Aratako/Irodori-TTS-v4-Large-Quantized/int8-weight-only` | 3.29B | 3.58 GB | 6-8 GB | Pesos INT8 de uso general con cómputo BF16 en NVIDIA CUDA. |
+| `Aratako/Irodori-TTS-v4-Large-Quantized/int4-weight-only` | 3.29B | 2.75 GB | 5-6 GB | La variante de Large más compacta: requiere NVIDIA Ampere (serie RTX 30) o superior. |
+| `phasefield-audio/Irodori-TTS-v4.1-Anime` | 766M | 1.5 GB | 4-6 GB | Ajuste fino de la comunidad para entonación al estilo anime. |
+
+Para la clonación de voz, Small ofrece una calidad similar con inferencia más veloz. Large cuenta con un codificador de texto más potente y sigue las descripciones de VoiceDesign con mayor apego.
+
+El servidor lee el archivo `.env` en la raíz del repositorio o un `.env` local en `servers/tts/irodoritts/.env`.
 
 ### Vía `.env` (persistente)
 
-Agrega a su `.env` en la raíz TomoriBot:
+Añade a tu archivo `.env` en la raíz de TomoriBot:
 
 ```dotenv
 IRODORI_TTS_MODEL_ID="phasefield-audio/Irodori-TTS-v4.1-Anime"
 ```
 
-### A través de variable de entorno por sesión
+### Vía variable de entorno por sesión
 
 En Windows PowerShell:
 
@@ -68,130 +81,70 @@ IRODORI_TTS_MODEL_ID=phasefield-audio/Irodori-TTS-v4.1-Anime \
   servers/tts/irodoritts/.venv/bin/python servers/tts/irodoritts/server.py
 ```
 
-### Usando un archivo de punto de control local
+### Usar un archivo de checkpoint local
 
-Si ha descargado un archivo de punto de control (`.pt` o `.safetensors`) localmente, configure `IRODORI_TTS_CHECKPOINT` en su ruta:
+Si descargaste un archivo de checkpoint (`.pt` o `.safetensors`) localmente, define `IRODORI_TTS_CHECKPOINT` con su ruta:
 
 ```dotenv
-IRODORI_TTS_CHECKPOINT="/path/to/custom_checkpoint.pt"
+IRODORI_TTS_CHECKPOINT="/ruta/a/checkpoint_personalizado.pt"
 ```
 
-Irodori actual descarga el punto de control junto con los activos del tokenizador incluidos en el repositorio de Hugging Face. Las variantes de la subcarpeta Hugging Face también son compatibles con `IRODORI_TTS_MODEL_ID` cuando el repositorio del modelo las proporciona.
+La versión actual de Irodori descarga el checkpoint junto con los recursos del tokenizador incluidos en el repositorio de Hugging Face. Las variantes en subcarpetas de Hugging Face también son compatibles con `IRODORI_TTS_MODEL_ID` cuando el repositorio del modelo las proporciona.
 
-## Regístrate en TomoriBot
+## Registro en TomoriBot
 
-Ejecuta `/providers`, elija `Add New Custom Endpoint` y use la compatibilidad de voz API:
+Ejecuta `/providers`, elige `+ Agregar nuevo punto de conexión personalizado` y usa la compatibilidad de API de voz:
 
-- Compatibilidad API: `tts-clone`
+- Compatibilidad de API: `tts-clone`
 - `endpoint_url`: `http://127.0.0.1:8013`
 
-Después de guardar la conexión, selecciónela y use su menú desplegable de modelo para agregar un modelo de voz. Para v4.1, las configuraciones recomendadas son:
+Tras guardar la conexión, selecciónala y usa su menú desplegable de modelos para agregar un modelo de voz. Para v4.1, la configuración recomendada es:
 
 - `Modo de fuente de voz`: `Automático`
-- `Estilo de marcado del guion`: `Emoji`
+- `Estilo de marcado de script`: `Emoji`
 
-`Automático` permite que el mismo terminal Irodori admita ambos modos de voz TomoriBot, por lo que las señales emocionales sobreviven al envío:
+`Automático` permite que el mismo punto de conexión de Irodori admita ambos modos de voz de TomoriBot, conservando las indicaciones emocionales al enviar:
 
-- Las personas con una muestra de voz asignada en Persona > `Voz` envían un clip de referencia almacenado para la clonación de voz.
-- Las personas con un mensaje de VoiceDesign configurado en Persona > `Voz` envían el mensaje guardado en lenguaje natural como acondicionamiento de subtítulos de Irodori.
+- Las personas con una muestra de voz asignada en Persona > Voz envían el clip de referencia almacenado para clonación de voz.
+- Las personas con un prompt de VoiceDesign configurado en Persona > Voz envían la indicación guardada en lenguaje natural como acondicionamiento por subtítulo (caption) de Irodori.
 
-Aún puede elegir `Clon de voz` como modo de fuente de voz si solo desea clonar voz de audio de referencia.
+Puedes seguir utilizando `Clon de voz` como modo de fuente de voz si únicamente deseas clonación mediante audio de referencia.
 
-Utilice `/providers` para el registro de terminales y la configuración del modelo. Luego abra `/config` > `Modelos` > Switch Models para seleccionar y activar el punto final registrado.
+Usa `/providers` para el registro del punto de conexión y la configuración del modelo. Luego abre `/config` > Modelos > Cambiar modelos para seleccionar y activar el punto de conexión registrado.
 
-## Configurar voces personales
+## Configurar voces de persona
 
 ### Clonación de voz
 
-1. Prepare un clip de voz japonés limpio con un altavoz y sin música de fondo. Alrededor de 30 segundos ya es suficiente: más allá de ese punto, el audio adicional compra poca fidelidad de timbre y cuesta tamaño de carga y tiempo de inferencia.
-2. Abre `/config` en Modelos > `Parámetros y voces TTS` y cargue el clip.
-3. Abre `/config` en Persona > `Voz`, luego elija la persona y la muestra de voz.
+1. Prepara un clip de voz limpio en japonés con un solo hablante y sin música de fondo. Alrededor de 30 segundos es suficiente: más allá de ese punto, el audio adicional aporta poca fidelidad de timbre y aumenta el tamaño de subida y el tiempo de inferencia.
+2. Abre `/config` en Modelos > Parámetros y voces TTS y sube el clip.
+3. Abre `/config` en Persona > Voz, y elige la persona y la muestra de voz.
 
-Irodori v4.1 admite un acondicionamiento de referencia más prolongado que los modelos anteriores, pero el audio de fuente limpia sigue siendo más importante que la duración sin formato.
+Irodori aplica por defecto un límite de referencia de 120 segundos y recorta los clips más largos. Define `IRODORI_MAX_REF_SECONDS` para modificar este límite.
 
-El tiempo de ejecución v4.1 limita el clip de referencia en el punto de control predeterminado, que el punto de control v4.1 establece en 120 segundos. Cualquier cosa más larga se recorta a ese límite en lugar de rechazarse, y `IRODORI_MAX_REF_SECONDS` lo anula. Por lo tanto, un clip en el techo de carga de 130 segundos de TomoriBot todavía funciona: condiciones de Irodori en los primeros 120 segundos.
+### VoiceDesign
 
-Los clips más largos no mejoran la calidad de la voz. Upstream informa que aproximadamente 30 segundos de discurso de referencia limpio ya capturan la mayor parte de la ganancia medible de similitud del hablante, y que varios clips más cortos del mismo hablante superan a una grabación larga. Los pasos latentes de referencia adicionales que vienen con un clip más largo también alargan cada solicitud de síntesis. Llegue a más de 30 segundos solo cuando el timbre de un hablante se desvíe a lo largo de la grabación.
-
-### Diseño de voz
-
-1. Abre `/config` en Persona > `Voz`.
+1. Abre `/config` en Persona > Voz.
 2. Elige la persona.
-3. Ingresa una descripción en lenguaje natural de la voz y la entrega deseadas.
+3. Ingresa una descripción en lenguaje natural de la voz y entonación deseadas.
 
-TomoriBot envía este mensaje como `instruct`; el contenedor Irodori lo asigna a la condición v4.1 `caption`. Las solicitudes de VoiceDesign no requieren un clip de referencia almacenado.
+TomoriBot envía este texto como `instruct`; el contenedor de Irodori lo asigna a la condición `caption` de v4.1. Las solicitudes de VoiceDesign no requieren un clip de referencia guardado.
 
-TomoriBot elimina la sintaxis de emoji personalizada de Discord antes de enviar texto a TTS. Con `script_markup: emoji`, los emojis Unicode se conservan para el condicionamiento del texto de Irodori.
+TomoriBot elimina la sintaxis de emojis personalizados de Discord antes de enviar texto a TTS. Con `script_markup: emoji`, los emojis Unicode se conservan para el acondicionamiento textual de Irodori.
 
-### Controles de estilo emoji
+### Controles de estilo con emojis
 
-IrodoriTTS admite anotaciones emoji en el texto de entrada para influir en los efectos de sonido, los estilos de habla y las expresiones emocionales. Con `Estilo de marcado del guion` de TomoriBot configurado en `Emoji`, estos emojis Unicode se conservan y se envían a Irodori.
+IrodoriTTS admite anotaciones con emojis en el texto de entrada para modular efectos de sonido, estilos de habla y expresiones emocionales. Al configurar el `Estilo de marcado de script` de TomoriBot en `Emoji`, estos emojis Unicode se conservan y se transmiten a Irodori.
 
-| emojis | Significado/emoción/estilo |
-| --- | --- |
-| 👂 | Susurro, sonidos cerca del oído. |
-| 😮‍💨 | Respiración, suspiro, respiración dormida. |
-| ⏸️ | Pausa, silencio |
-| 🤭 | Risa, risa tonta, risa reprimida |
-| 🥵 | Jadeando, gemido, gemido |
-| 📢 | eco, reverberación |
-| 😏 | Bromeando, juguetonamente dulce / persuasivo |
-| 🥺 | Voz temblorosa, tímido/inseguro. |
-| 🌬️ | Dificultad para respirar, respiración pesada. |
-| 😮 | Jadear |
-| 👅 | Sonido de lamido, sonido de masticación, sonido húmedo. |
-| 💋 | Lamer los labios/ruido de los labios |
-| 🫶 | Suavemente, tiernamente |
-| 😭 | Sollozando, llorando, con pena/tristeza |
-| 😱 | Gritar, gritar, chillar |
-| 😪 | Somnoliento, perezoso/lánguido |
-| 😴 | Hablar dormido, roncar |
-| ⏩ | Habla rápido, dispara rápido, apresuradamente. |
-| 📞 | Por teléfono, a través de un altavoz |
-| 🐢 | Despacio |
-| 🥤 | Trago, sonido de deglución. |
-| 🤧 | Toser, sollozar, estornudar, aclararse la garganta. |
-| 😒 | Tutting, chasqueando la lengua |
-| 😰 | Pánico, agitada, nerviosa, tartamudeando |
-| 😆 | Con alegría, felizmente |
-| 💥 | Con fuerza/impulso, con fuerza |
-| 😠 | Enojado, disgustado, de mal humor |
-| 😲 | Sorpresa, asombro/exclamación |
-| 🥱 | Bostezo |
-| 😖 | Dolorosamente, agonizantemente |
-| 😟 | Ansiosamente, preocupado |
-| 🫣 | Tímidamente, tímidamente |
-| 🙄 | Exasperada, ojos rodantes |
-| 😊 | alegremente, con mucho gusto |
-| 😎 | Con confianza, orgullo |
-| 👌 | Backchanneling, sonido de acuerdo |
-| 🙏 | suplicando, rogando |
-| 🥴 | Borracha |
-| 🎵 | Zumbadora |
-| 🤐 | Amortiguado (boca tapada) |
-| 😌 | Aliviado, contento |
-| 🤔 | Voz interrogante, preguntándose |
-| 💪 | Con esfuerzo, fuertemente |
-| 👃 | Sonido de olfateo/olor |
-| 📖 | Narración, monólogo |
+Para conocer los emojis compatibles y sus significados, consulta las [anotaciones de emoji en origen](https://huggingface.co/Aratako/Irodori-TTS-v4.1-Small/blob/main/EMOJI_ANNOTATIONS.md). Los emojis actúan como sugerencias de estilo y los resultados pueden variar.
 
-Repetir el mismo emoji puede potenciar su efecto. El control de emojis no es perfectamente consistente, así que trátelos como señales de estilo en lugar de resultados garantizados. Consulta las [anotaciones emoji oficiales de IrodoriTTS](https://huggingface.co/Aratako/Irodori-TTS-v4.1-Small/blob/main/EMOJI_ANNOTATIONS.md) para ver la lista ascendente y futuras actualizaciones.
+## Mensajes de voz largos
 
-## mensajes de voz largos
+Los textos extensos se dividen en fragmentos y se devuelven como un solo mensaje de voz. Las solicitudes largas pueden exceder el tiempo de espera predeterminado de 240 segundos; ajusta `TTS_SYNTHESIZE_TIMEOUT_MS` si es necesario. Define `IRODORI_CHUNKING_ENABLED=false` para desactivar la división o `IRODORI_CHUNK_MIN_CHARS` para modificar el umbral de corte.
 
-Irodori v4.1 predice la longitud de salida con su predictor de duración en lugar de generar un clip de longitud fija, por lo que el servidor no impone un límite propio de duración por expresión. TomoriBot todavía fragmenta el texto largo antes de la síntesis y concatena el audio generado en una respuesta WAV, por lo que Discord recibe un mensaje de voz; la fragmentación mantiene breve cada paso de inferencia, que es lo que limita la latencia.
+## Inferencia más rápida con muestreo sway
 
-La implementación comienza con el enfoque de fragmentación utilizado por el [servidor oficial compatible con Irodori OpenAI](https://github.com/Aratako/Irodori-TTS-Server/blob/main/src/irodori_openai_tts/app.py), cuyos valores predeterminados permiten la fragmentación en 80 caracteres que no son espacios en blanco. TomoriBot agrega un manejo de límites más estricto para que las comillas y corchetes de cierre permanezcan con la puntuación que cierran, las ejecuciones de puntuación como `！？` y `...` permanezcan juntas, los puntos decimales junto a los dígitos no se divida y las colas finales muy cortas se fusionen nuevamente en el fragmento anterior.
-
-La fragmentación prefiere terminaciones de oración fuertes, como `。`, `！`, `？`, `.`, `!`, `?`, elipses y saltos de línea una vez que se alcanza la longitud mínima configurada. Las comas solo se utilizan como límites alternativos después de que el fragmento crece hasta aproximadamente 1,5 veces ese umbral. Con el `IRODORI_CHUNK_MIN_CHARS=80` predeterminado, los límites estrictos se vuelven elegibles a partir de 80 caracteres que no sean espacios en blanco y las comas a aproximadamente 120. Si un pasaje largo no contiene puntuación elegible, aún puede seguir siendo una única solicitud de síntesis.
-
-Para VoiceDesign solo con subtítulos, la semilla de Irodori generada por el primer fragmento se reutiliza para los fragmentos restantes para reducir la variación aleatoria entre las uniones. Reutilizar una semilla no garantiza un timbre idéntico en fragmentos sintetizados de forma independiente. El modo de audio de referencia continúa aplicando el mismo clip de referencia a cada fragmento.
-
-Las entradas largas requieren múltiples pases de inferencia secuenciales y pueden tardar mucho más en hardware más lento. El tiempo de espera predeterminado del cliente TTS de TomoriBot es de 240 segundos. Puede desactivar la fragmentación con `IRODORI_CHUNKING_ENABLED=false` o ajustar el umbral de división aproximado con `IRODORI_CHUNK_MIN_CHARS`.
-
-## Inferencia más rápida con muestreo de influencia
-
-El valor predeterminado sigue siendo el muestreo lineal de 40 pasos de mayor calidad de Irodori. Para una latencia más baja, pruebe Sway Sampling con menos pasos:
+El valor predeterminado sigue siendo el muestreo lineal de 40 pasos de alta calidad de Irodori. Para reducir la latencia, prueba el muestreo Sway con menos pasos:
 
 ```powershell
 $env:IRODORI_NUM_STEPS = "6"
@@ -199,28 +152,28 @@ $env:IRODORI_T_SCHEDULE_MODE = "sway"
 $env:IRODORI_SWAY_COEFF = "-1.0"
 ```
 
-Esta es una compensación entre la calidad y la velocidad de la inferencia, así que pruébela con el punto de control y las voces que haya elegido antes de convertirla en permanente.
+Este ajuste intercambia calidad de inferencia por velocidad, por lo que conviene probarlo con tu checkpoint y voces elegidos antes de adoptarlo permanentemente.
 
-## Variables ambientales
+## Variables de entorno
 
-| Variable | Por defecto | Objetivo |
+| Variable | Predeterminado | Propósito |
 |---|---|---|
-| `IRODORI_TTS_MODEL_ID` | `Aratako/Irodori-TTS-v4.1-Small` | Repositorio del modelo Hugging Face o fuente de repositorio/subcarpeta compatible |
-| `IRODORI_TTS_CHECKPOINT` | desarmada | Punto de control local opcional `.pt` o `.safetensors`; anula el modelo de cara abrazada |
-| `TOMORI_TTS_HOST` | `127.0.0.1` | Dirección de enlace del servidor; consulte [Acceso a la red](/es-419/self-hosting/local-endpoints/text-to-speech/#network-access) |
+| `IRODORI_TTS_MODEL_ID` | `Aratako/Irodori-TTS-v4.1-Small` | Repositorio del modelo en Hugging Face o fuente compatible de repositorio/subcarpeta |
+| `IRODORI_TTS_CHECKPOINT` | no definida | Checkpoint local opcional `.pt` o `.safetensors`; tiene prioridad sobre el modelo de Hugging Face |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | Dirección de escucha del servidor; consulta [Acceso a la red](/self-hosting/local-endpoints/text-to-speech/#network-access) |
 | `IRODORI_TTS_PORT` | `8013` | Puerto del servidor |
-| `IRODORI_MODEL_DEVICE` | `auto` | Modelo de dispositivo (`auto`, `cuda`, `cpu`, `mps`, `xpu`) |
-| `IRODORI_CODEC_DEVICE` | `auto` | Dispositivo códec |
+| `IRODORI_MODEL_DEVICE` | `auto` | Dispositivo para el modelo (`auto`, `cuda`, `cpu`, `mps`, `xpu`) |
+| `IRODORI_CODEC_DEVICE` | `auto` | Dispositivo para el códec |
 | `IRODORI_MODEL_PRECISION` | `bf16` en CUDA, de lo contrario `fp32` | Precisión del modelo |
 | `IRODORI_CODEC_PRECISION` | `fp32` | Precisión del códec |
 | `IRODORI_COMPILE_MODEL` | `false` | Habilita `torch.compile` para el modelo Irodori |
-| `IRODORI_COMPILE_DYNAMIC` | `false` | Habilitar formas dinámicas al compilar |
+| `IRODORI_COMPILE_DYNAMIC` | `false` | Habilita formas dinámicas al compilar |
 | `IRODORI_NUM_STEPS` | `40` | Pasos de muestreo de Euler |
-| `IRODORI_T_SCHEDULE_MODE` | `linear` | Programa de muestreo (`linear` o `sway`) |
-| `IRODORI_SWAY_COEFF` | `-1.0` | Coeficiente de oscilación cuando se utiliza el programa `sway` |
+| `IRODORI_T_SCHEDULE_MODE` | `linear` | Esquema de muestreo (`linear` o `sway`) |
+| `IRODORI_SWAY_COEFF` | `-1.0` | Coeficiente sway al usar el esquema `sway` |
 | `IRODORI_CFG_SCALE_TEXT` | `3.0` | Escala de guía de texto |
-| `IRODORI_CFG_SCALE_CAPTION` | `3.0` | Escala de guía de subtítulos/VoiceDesign |
-| `IRODORI_CFG_SCALE_SPEAKER` | `5.0` | Escala de orientación del hablante de referencia |
-| `IRODORI_MAX_REF_SECONDS` | punto de control predeterminado | Límite opcional en la duración del audio de referencia |
-| `IRODORI_CHUNKING_ENABLED` | `true` | Divida el texto largo en límites de puntuación elegibles y concatene los fragmentos generados |
-| `IRODORI_CHUNK_MIN_CHARS` | `80` | Mínimo de caracteres que no sean espacios en blanco antes de dividir los límites fuertes de la oración; las comas son límites alternativos en aproximadamente 1,5 veces este valor |
+| `IRODORI_CFG_SCALE_CAPTION` | `3.0` | Escala de guía para subtítulos / VoiceDesign |
+| `IRODORI_CFG_SCALE_SPEAKER` | `5.0` | Escala de guía para el hablante de referencia |
+| `IRODORI_MAX_REF_SECONDS` | valor predeterminado del checkpoint | Límite opcional para la duración del audio de referencia |
+| `IRODORI_CHUNKING_ENABLED` | `true` | Divide el texto largo en límites válidos de puntuación y concatena los fragmentos generados |
+| `IRODORI_CHUNK_MIN_CHARS` | `80` | Mínimo de caracteres sin espacios en blanco antes de cortar en límites oracionales fuertes; las comas sirven de límites secundarios a aproximadamente 1.5 veces este valor |

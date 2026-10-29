@@ -54,7 +54,7 @@ Discordスラッシュコマンドを使用して、設定、メモリ、ペル�
 - `/export personal memories`: グローバルまたは個人ごとの個人的な思い出。
 - `/persona export`: 完全なペルソナ定義。
 
-アップロードされた式メディアはサーバー ホストに保存され、これらのJSONエクスポートの外部にあります。セルフホスティング者は、データベースストレージとメディア資産を一緒にバックアップする必要があります。[カスタムメディアバックアップ](/ja/self-hosting/safe-migration/#custom-expression-media-backups) を参照してください。
+アップロードされた式メディアはサーバー ホストに保存され、これらのJSONエクスポートの外部にあります。セルフホスティング者は、データベースストレージとメディア資産を一緒にバックアップする必要があります。[カスタムメディアバックアップ](/self-hosting/maintenance/#database-backups-and-recovery-keys) を参照してください。
 
 ## データのインポート
 

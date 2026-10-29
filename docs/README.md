@@ -73,7 +73,6 @@ source open to follow these.
   - [`local-endpoints/speech-to-text/`](./en/self-hosting/local-endpoints/speech-to-text/README.mdx): local STT engines
 - [`self-hosting/maintenance.md`](./en/self-hosting/maintenance.md): maintenance scripts, updating, backups/restore
 - [`self-hosting/pluralbuddy-oauth.md`](./en/self-hosting/pluralbuddy-oauth.md): authorize the official PluralBuddy message lookup
-- [`self-hosting/safe-migration.md`](./en/self-hosting/safe-migration.md)
 - [`self-hosting/local-monitoring.md`](./en/self-hosting/local-monitoring.md)
 
 ## Contributing (order 4)

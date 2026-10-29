@@ -38,7 +38,7 @@ docker run --rm alpine:3.22 sh -c "head -c 24 /dev/urandom | base64"
 Generate a separate password for `POSTGRES_PASSWORD`. You can copy optional tuning settings from `.env.optional.example`.
 
 :::note[Database connection is automatic]
-The Compose PostgreSQL service runs in development mode (without SSL) on an internal Docker network. The bundled image includes `pgvector` and `pg_cron`, so document memory, vector search, and scheduled cleanup work immediately. Do not set `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, or `POSTGRES_DB` in `.env`; Compose configures them automatically.
+ Do not set `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, or `POSTGRES_DB` in `.env`; Compose configures them automatically.
 :::
 
 On Linux, the bot container runs as UID 1001 and needs write access to the host's `backups/`,
@@ -62,7 +62,7 @@ docker compose up      # bot + database
 
 For later starts, `docker compose up` alone is enough unless you change code or dependencies. Once the bot connects to Discord, run `/setup` in any server channel to add your AI provider key. See the [Quickstart](/introduction/quickstart/) for setup options in Discord.
 
-Compose pins `RUN_ENV=development` in its service definition so `.env` secrets and local HTTP endpoints work. The container healthcheck reports whether the bot process is running; it does not test Discord gateway connectivity. For production mode (`RUN_ENV=production`) differences (secret managers, network restrictions, and metrics), see [Security Architecture](/architecture/subsystems/security/).
+Compose pins `RUN_ENV=development` in its service definition so `.env` secrets and local HTTP endpoints work. The container healthcheck reports whether the bot process is running; it does not test Discord gateway connectivity.
 
 ## 4. Optional local servers (Compose profiles)
 
@@ -80,7 +80,7 @@ See [SearXNG](/self-hosting/local-endpoints/setup-searxng/), [Crawl4AI](/self-ho
 ## Maintenance, updating, and backups
 
 Before updating, stop the bot and back up your database and media; see
-[Maintenance & Backups](/self-hosting/maintenance/) and [Safe Migration](/self-hosting/safe-migration/).
+[Maintenance & Backups](/self-hosting/maintenance/).
 Then pull the new code and rebuild the container:
 
 ```sh

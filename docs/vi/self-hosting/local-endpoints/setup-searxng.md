@@ -1,6 +1,7 @@
 ---
 title: "Thiết lập: SearXNG"
 sidebar:
+  label: "SearXNG"
   order: 3
 aiGenerated: true
 ---

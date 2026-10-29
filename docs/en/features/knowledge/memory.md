@@ -83,8 +83,8 @@ managers can disable the tool under `/config` > `Plugins` > `Available Tools`.
 ## Controlling when memories activate
 
 By default, memories are included whenever their owner and scope match the conversation. Keyword tags
-and channel restrictions can narrow when they appear. Enable tagging under `/config` > `Engine` >
-`Memory & STM`.
+and channel restrictions can narrow when they appear. Enable tagging under `/config` > `Behavior` >
+`Advanced Memory`.
 
 ### Keyword tags
 <!-- anchor: keyword-tags -->
@@ -104,17 +104,32 @@ so you can choose new channels.
 ## Short-term memory
 <!-- anchor: short-term-memory-stm -->
 
-Short-term memory helps TomoriBot recall recent conversations, including conversations in other
-channels. Each persona keeps a separate summary for each channel she participates in. She updates it
-when she replies, and it expires after 24 hours by default.
+TomoriBot reads recent messages in the active channel. Short-term memory (STM) extends this by keeping
+temporary working context:
 
-Server channel memories are shared within that channel. Private-channel memories stay private by
-default. Conversations do not follow you between servers unless you enable cross-server recall in
-`/personal config`; only your own conversations follow you. If you opt out of memory there, your
+- **Channel context:** Reinforces the ongoing topic or situation in the current channel.
+- **Cross-channel context:** Recalls recent conversations from other channels, and across servers when
+  cross-server recall is enabled.
+
+She only remembers conversations she took part in. She updates a channel's summary when she replies,
+and at no other time, so a busy channel where nobody talks to her leaves no memory. Each channel's
+short-term memory expires after 24 hours by default. If you opt out under `/personal config`, your
 messages are excluded from short-term memory.
 
+### Cross-channel example
+
+- **Public channels:** You discuss an album recommendation with TomoriBot in `#music`. A few minutes
+  later in `#general`, you ask what album she suggested. Because she replied in `#music`, she recalls
+  that context in `#general`.
+- **Private channels:** If that conversation happened in a private channel, she will not recall it in
+  `#general`. Summaries from private channels stay isolated unless an administrator enables STM Privacy
+  Bypass under `/config` > `Permissions`.
+
+### Managing short-term memory
+
 You can view or correct the current channel's summary under `/config` > `Persona` > `Memories`.
-Server managers can adjust or disable short-term memory under `/config` > `Engine` > `Memory & STM`.
+Server managers can adjust parameters or disable short-term memory under `/config` > `Behavior` >
+`Advanced Memory`, and review or clear active channel summaries under `/memories` > `Short-Term`.
 `/refresh` clears the current channel's memory.
 
 ## Message-proxy identities

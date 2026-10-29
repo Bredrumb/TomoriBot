@@ -1,6 +1,7 @@
 ---
 title: "Configuração: Modelo de Decisão Local"
 sidebar:
+  label: "Modelo de Decisão Local"
   order: 7
 aiGenerated: true
 ---

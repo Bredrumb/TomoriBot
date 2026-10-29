@@ -43,7 +43,7 @@ docker run --rm alpine:3.22 sh -c "head -c 24 /dev/urandom | base64"
 `POSTGRES_PASSWORD`用に別のパスワードを生成します。`.env.optional.example`からオプションのチューニング設定をコピーできます。
 
 :::note[Database connection is automatic]
-Compose PostgreSQLサービスは、内部Dockerネットワーク上で開発モード (SSLなし) で実行されます。バンドルされたイメージには`pgvector`と`pg_cron`が含まれているため、ドキュメントメモリ、ベクトル検索、スケジュールされたクリーンアップがすぐに機能します。`.env`には`POSTGRES_HOST`、`POSTGRES_PORT`、`POSTGRES_USER`、または`POSTGRES_DB`を設定しないでください。Composeはそれらを自動的に構成します。
+`.env`には`POSTGRES_HOST`、`POSTGRES_PORT`、`POSTGRES_USER`、または`POSTGRES_DB`を設定しないでください。Composeはそれらを自動的に構成します。
 :::
 
 Linuxでは、コンテナーを起動する前に、ホスト上にバインドマウントディレクトリを作成し、所有権をUID 1001に割り当てます。Dockerは、不足しているマウントポイントをrootとして作成します。これにより、ボットコンテナーはバックアップ、ログ、またはアップロードを保存できなくなります。
@@ -79,4 +79,4 @@ SearXNGを有効にする場合は、`.env`に`SEARXNG_BASE_URL=http://searxng:8
 
 ## メンテナンス、アップデート、バックアップ
 
-Composeデプロイメントでのバックアップ優先更新には、`bun run update --docker`を使用します。Composeデータベースをバックアップまたは復元するには、[メンテナンスとバックアップ](/ja/self-hosting/maintenance/) を参照してください。新しいバージョンをプルする前に、[安全な移行](/ja/self-hosting/safe-migration/) を確認してください。
+Composeデプロイメントでのバックアップ優先更新には、`bun run update --docker`を使用します。Composeデータベースをバックアップまたは復元するには、[メンテナンスとバックアップ](/ja/self-hosting/maintenance/) を参照してください。

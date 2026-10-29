@@ -29,21 +29,24 @@ import {
  */
 type TagLabel = {
   title: string;
-  hint: string; // Slash-command reference like `/config system-prompt`, or the literal "system-managed"
+  hint: string; // Slash-command reference like `/memories`, or the literal "system-managed"
   subsections?: Array<{ title: string; hint: string }>;
 };
 
 const TAG_LABELS: Readonly<Record<ContextItemTag, TagLabel>> = {
   [ContextItemTag.SYSTEM_INSTRUCTION_BLOCK]: { title: "System Instruction Block", hint: "system-managed" },
-  [ContextItemTag.SYSTEM_PERSONALITY]: { title: "Persona Attributes", hint: "/persona attribute" },
-  [ContextItemTag.SYSTEM_HUMANIZER_RULES]: { title: "System Prompt", hint: "/config system-prompt" },
-  [ContextItemTag.SYSTEM_CHANNEL_PROMPT]: { title: "Channel Prompt", hint: "/server channel-prompt" },
-  [ContextItemTag.SYSTEM_PERSONA_PROMPT]: { title: "Persona Prompt", hint: "/persona prompt" },
+  [ContextItemTag.SYSTEM_PERSONALITY]: {
+    title: "Persona Attributes",
+    hint: "/config > Persona > Identity & Personality",
+  },
+  [ContextItemTag.SYSTEM_HUMANIZER_RULES]: { title: "System Prompt", hint: "/config > Behavior > General Behavior" },
+  [ContextItemTag.SYSTEM_CHANNEL_PROMPT]: { title: "Channel Prompt", hint: "/config > Channels > Channel Overrides" },
+  [ContextItemTag.SYSTEM_PERSONA_PROMPT]: { title: "Persona Prompt", hint: "/config > Persona > Advanced" },
   [ContextItemTag.SYSTEM_FUNCTION_GUIDE]: { title: "Function Guide", hint: "system-managed" },
   [ContextItemTag.KNOWLEDGE_SERVER_INFO]: { title: "Discord Server Info", hint: "system-managed" },
   [ContextItemTag.KNOWLEDGE_SERVER_EMOJIS]: { title: "Server Emojis", hint: "system-managed" },
   [ContextItemTag.KNOWLEDGE_SERVER_STICKERS]: { title: "Server Stickers", hint: "system-managed" },
-  [ContextItemTag.KNOWLEDGE_PERSONA_SPRITES]: { title: "Persona Sprites", hint: "/persona sprites" },
+  [ContextItemTag.KNOWLEDGE_PERSONA_SPRITES]: { title: "Persona Sprites", hint: "/config > Persona > Sprites" },
   [ContextItemTag.KNOWLEDGE_SERVER_MEMORIES]: { title: "Server Memories", hint: "/memories" },
   [ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS]: { title: "Server Documents", hint: "/memories" },
   [ContextItemTag.KNOWLEDGE_SERVER_CONDITIONING]: { title: "Conditioning Log", hint: "/conditioning" },
@@ -58,13 +61,16 @@ const TAG_LABELS: Readonly<Record<ContextItemTag, TagLabel>> = {
     subsections: [
       { title: "Personal/Server Memories", hint: "/memories, /personal memories" },
       { title: "Discord Presence/Role/Channel", hint: "system-managed" },
-      { title: "Other Personas' Public Attributes", hint: "/persona attribute" },
+      { title: "Other Personas' Public Attributes", hint: "/config > Persona > Identity & Personality" },
     ],
   },
   [ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY]: { title: "Short-Term Memory", hint: "/memories" },
-  [ContextItemTag.DIALOGUE_SAMPLE]: { title: "Sample Dialogue", hint: "/persona sample-dialogue" },
+  [ContextItemTag.DIALOGUE_SAMPLE]: { title: "Sample Dialogue", hint: "/config > Persona > Identity & Personality" },
   [ContextItemTag.DIALOGUE_HISTORY]: { title: "Conversation History", hint: "system-managed" },
-  [ContextItemTag.CONTEXT_NOTE_INJECTION]: { title: "Context Note", hint: "/config context-note" },
+  [ContextItemTag.CONTEXT_NOTE_INJECTION]: {
+    title: "Context Note",
+    hint: "/config > Behavior > General Behavior, /config > Channels > Channel Overrides",
+  },
 };
 
 function renderTagHeader(tag: ContextItemTag | undefined): string {

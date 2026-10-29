@@ -4,75 +4,59 @@ sidebar:
   label: "總覽"
   groupLabel: "文字轉語音"
   order: 7
-aiGenerated: true
 ---
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
 
-直接在你的電腦上產生自然的語音訊息和字元語音，無需支付每個字元的費用或將音訊串流傳輸到第三方語音API。
+直接在你的電腦上產生自然的語音訊息與角色語音，無需支付按字元計費的費用，也不必將音訊串流傳輸至第三方語音 API。
 
-TomoriBot將語音視為自訂端點功能。本地引擎作為HTTP伺服器在機器人外部運行並實現`POST /synthesize`；克隆引擎接收文字以及配置的參考音訊樣本，而支援VoiceDesign的引擎還可以接收自然語言指令。
+TomoriBot 將語音視為自訂端點功能。本機引擎作為 HTTP 伺服器在 bot 外部執行並實作 `POST /synthesize`；聲音複製引擎接收文字以及設定的參考音訊樣本，而具備 VoiceDesign 功能的引擎亦可接收自然語言指示。
 
-## 可用發動機
+## 可用引擎
 
 <CardGrid>
-  <LinkCard title="Chatterbox TTS" href="/zh-TW/self-hosting/local-endpoints/text-to-speech/chatterbox/"
-    description="帶有事件標籤的英語語音克隆。Turbo是預設值；奈米和標準是可選變體。" />
-  <LinkCard title="Qwen3-TTS" href="/zh-TW/self-hosting/local-endpoints/text-to-speech/qwen3tts/"
-    description="具有克隆和VoiceDesign模式的多語言本地TTS。" />
-  <LinkCard title="MOSS-TTS" href="/zh-TW/self-hosting/local-endpoints/text-to-speech/moss/"
-    description="試試自動端點：4B多語言語音複製或文字描述的英文/中文語音設計。" />
-  <LinkCard title="彩色TTS" href="/zh-TW/self-hosting/local-endpoints/text-to-speech/irodoritts/"
-    description="專注於日語的語音克隆和帶有Unicode表情符號標記的VoiceDesign，用於情緒控制。" />
-  <LinkCard title="魚音頻S2 Pro" href="/zh-TW/self-hosting/local-endpoints/text-to-speech/fishs2/"
-    description="具有細粒度括號表達控制的高品質多語言語音克隆。預設為官方BF16權重，並為較小的GPU提供可選的INT8檢查點。" />
-  <LinkCard title="VoxCPM2" href="/zh-TW/self-hosting/local-endpoints/text-to-speech/voxcpm2/"
-    description="30種語言的TTS，具有語音設計、參考音訊克隆、轉錄輔助終極克隆和自然語言交付控制。" />
-  <LinkCard title="CosyVoice 3" href="/zh-TW/self-hosting/local-endpoints/text-to-speech/cosyvoice3/"
-    description="0.5B多語言零樣本和跨語言克隆，帶有自然語言傳遞指令。" />
-  <LinkCard title="TTS引擎比較" href="/zh-TW/self-hosting/local-endpoints/text-to-speech/comparison/"
-    description="所有7個引擎的經驗合成計時、音訊樣本播放器和速度比較。" />
+  <LinkCard title="Chatterbox TTS" href="/self-hosting/local-endpoints/text-to-speech/chatterbox/"
+    description="支援事件標籤的英語聲音複製。預設為 Turbo；Nano 與 Standard 為選用變體。" />
+  <LinkCard title="Qwen3-TTS" href="/self-hosting/local-endpoints/text-to-speech/qwen3tts/"
+    description="具備聲音複製與 VoiceDesign 模式的多語言本機 TTS。" />
+  <LinkCard title="MOSS-TTS" href="/self-hosting/local-endpoints/text-to-speech/moss/"
+    description="試用版自動端點：4B 多語言聲音複製，或以文字描述的英中語音設計。" />
+  <LinkCard title="IrodoriTTS" href="/self-hosting/local-endpoints/text-to-speech/irodoritts/"
+    description="專注日語的聲音複製與 VoiceDesign，支援使用 Unicode 表情符號標記進行情緒控制。" />
+  <LinkCard title="Fish Audio S2 Pro" href="/self-hosting/local-endpoints/text-to-speech/fishs2/"
+    description="高品質多語言聲音複製，支援精細的括號表情控制。預設為官方 BF16 權重，並為較小 GPU 提供選用的 INT8 檢查點。" />
+  <LinkCard title="VoxCPM2" href="/self-hosting/local-endpoints/text-to-speech/voxcpm2/"
+    description="支援 30 種語言的 TTS，具備語音設計、參考音訊複製、文字稿輔助的終極複製以及自然語言發音風格控制。" />
+  <LinkCard title="CosyVoice 3" href="/self-hosting/local-endpoints/text-to-speech/cosyvoice3/"
+    description="0.5B 多語言零樣本與跨語言聲音複製，支援自然語言語氣指示。" />
+  <LinkCard title="TTS 引擎比較" href="/self-hosting/local-endpoints/text-to-speech/comparison/"
+    description="所有 7 種引擎的實測合成耗時、音訊範例播放器與速度比較。" />
 </CardGrid>
 
 ## 設定流程
 
-1. 從上面的卡片中選擇一個引擎並從`servers/tts/`設定其包裝器。
-2. 在`/providers`中，選擇`Add New Custom Endpoint`並使用API相容性`tts-clone`。
-3. 選擇已儲存的端點並使用其模型下拉清單新增其語音模型、語音來源模式和腳本標記。
-4. 開啟`/config` > `模型` > Switch Models，選擇註冊的Speech模型。
+1. 從上方卡片中選擇一個引擎，並從 `servers/tts/` 設定其包裝器。
+2. 在 `/providers` 中，選擇 `+ 新增自訂端點`，API 相容性選擇 `tts-clone`。
+3. 選取已儲存的端點，並使用其模型下拉選單新增其 Speech 模型、語音來源模式與腳本標記。
+4. 開啟 `/config` > 模型 > 切換模型，並在 `TTS（Voice Design）` 或 `TTS（Voice Clone）` 底下選取該端點。自動端點會同時啟用這兩個選項；清除其中一個會保留另一個。
+
+關於託管語音供應商與個人選擇，請參閱[語音：TTS 與 STT](/features/capabilities/media-generation/tts-and-stt/)。
 
 ## 網路存取
 {/* anchor: network-access */}
 
-所有TTS本機伺服器預設都綁定到`127.0.0.1`，所以只有同一台機器上的bot能連到它們。當TomoriBot在Docker或另一台機器上執行時，請為伺服器設定`TOMORI_TTS_HOST=0.0.0.0`，並用主機的位址註冊端點，例如`http://host.docker.internal:8015`。
+每個 TTS 本機伺服器預設繫結到 `127.0.0.1`，因此只有同一台機器上的 bot 才能連線。當 TomoriBot 執行在 Docker 中或另一台機器上時，請為伺服器設定 `TOMORI_TTS_HOST=0.0.0.0`，並使用主機位址註冊端點，例如 `http://host.docker.internal:8015`。
 
-這些伺服器沒有驗證機制：任何能連到該連接埠的人都能用你的GPU執行合成。只在可信任的網路中綁定到回送以外的位址；若要把伺服器公開到該網路之外，請在前方放一個具備驗證的反向代理。
+每個伺服器讀取自己的連接埠變數（`CHATTERBOX_PORT`、`QWEN3TTS_PORT`、`IRODORI_TTS_PORT`、`FISH_S2_PORT`、`VOXCPM2_PORT`、`COSYVOICE3_PORT`、`MOSS_TTS_PORT`），因此可以從同一個 `.env` 同時執行多個伺服器。`bun run launch` 會將 `.env` 傳遞給其啟動的伺服器；手動啟動的伺服器僅會讀取其 shell 環境。
 
-每個伺服器都讀取自己的連接埠變數（`CHATTERBOX_PORT`、`QWEN3TTS_PORT`、`IRODORI_TTS_PORT`、`FISH_S2_PORT`、`VOXCPM2_PORT`、`COSYVOICE3_PORT`、`MOSS_TTS_PORT`），因此可以用同一個`.env`同時執行多個伺服器。`bun run launch`會把`.env`傳給它啟動的伺服器；手動啟動的伺服器只讀取其shell環境。
+這些伺服器沒有身分驗證機制：任何能連線到該連接埠的人都可以在你的 GPU 上執行語音合成。請僅在受信任的網路中解除 loopback 繫結；若要公開至該網路之外，請在任何公開伺服器前方設置具備驗證功能的反向代理。
 
-## 人格語音流程
+## 人格語音
 
-對於克隆引擎，為每個人格添加並分配一個語音樣本：
+對於聲音複製，請在 `/config` > 模型 > TTS 參數與語音 底下上傳乾淨的單一講者樣本，接著在 人格 > 語音 底下指派它。請查看引擎指南以了解建議的音訊長度與文字稿要求。
 
-1. 準備一個乾淨的剪輯，只有一個揚聲器，沒有背景音樂。每個引擎都有自己的最佳長度，根據型號從3到30秒不等；下面的每個引擎指南都帶有編號。
-2. 在模型 > `TTS參數與語音`下開啟`/config`並上傳範例。接受任何音訊格式； TomoriBot將其轉換為單聲道WAV，最長130秒。
-3. 當引擎從中受益時提供匹配的記錄。Fish S2 Pro將儲存的參考轉錄本轉發到克隆請求中，VoxCPM2將其用於更高保真度的終極克隆。
-4. 在人格 > `語音`下開啟`/config`，然後選擇人格和語音樣本。
+TomoriBot 接受最長 130 秒的樣本，並將其轉換為單聲道 WAV。預設上傳大小限制為 10 MB；可透過 `SPEECH_SAMPLE_MAX_MB` 調整。FLAC 等壓縮格式有助於容納較長的片段。
 
-130秒上傳上限由TomoriBot強制執行。發送剪輯時，每個引擎都會套用自己的參考音訊限制，而這些限制差異很大，以至於適合一個引擎的剪輯可能會被另一個引擎拒絕或部分忽略。上傳長剪輯之前請檢查引擎指南。
+對於支援語音設計的引擎，請在 人格 > 語音 底下儲存語音描述。一個人格可以同時擁有描述與樣本；語音來源優先順序會決定先嘗試哪一個可用來源。支援的模式與腳本標記請參閱各引擎指南。
 
-上傳大小限制和時長上限是獨立的，並且首先執行大小檢查。未压缩的WAV立体声44.1 kHz的成本约为每分钟10 MB，因此130秒的DAW导出可能约为22 MB，并且会因太大而被拒绝，而同一剪辑的压缩导出则很容易适应。`SPEECH_SAMPLE_MAX_MB`提高了該大小限制（預設為10 MB）。对于较长的参考剪辑，请将其导出为FLAC、MP3或OGG，而不是WAV：TomoriBot在存储之前将任何可接受的格式转换为22.05 kHz的单声道WAV，因此压缩上传不会影响质量。
-
-對於Qwen3-TTS、MOSS-VoiceGenerator、IrodoriTTS或VoxCPM2 VoiceDesign，請跳過音訊範例並使用`/config`中的人格 > `語音`儲存人格的自然語言語音描述。CosyVoice 3使用克隆模式和參考樣本，並透過`voice_instructions`接受一次性交付指示。
-
-ElevenLabs使用者應在`/providers`中選擇`新增供應商`和`ElevenLabs`；它將語音和轉錄端點註冊在一起。
-
-TomoriBot在合成之前從生成的語音腳本中剝離Discord自訂表情符號語法，例如`:pepega:`或`<:pepega:123456789012345678>`。除非語音端點使用IrodoriTTS的表情符號標記，否則Unicode表情符號也會被刪除。當Chatterbox Turbo和Fish S2 Pro等端點的腳本標記設定為`方括號標籤`時，會保留括號標記。
-
-VoxCPM2使用`純文字`腳本標記。其語音設計和說話風格控制穿過TomoriBot的`instruct`字段，VoxCPM2包裝器將它們轉換為模型的原生帶括號的自然語言控制語法。
-
-CosyVoice 3也使用`純文字`腳本標記。它將轉錄本支援的引用映射到零次克隆，將無轉錄本引用映射到跨語言克隆，並將`voice_instructions`映射到其指令條件路徑。內嵌括號標籤被刪除，因為CosyVoice指令適用於整個話語。
-
-## 引擎比較
-
-有關並排經驗延遲基準、音訊樣本播放以及比較所有支援引擎的詳細功能矩陣，請參閱[TTS引擎比較](/zh-TW/self-hosting/local-endpoints/text-to-speech/comparison/)。
+在 `/config` > 權限 底下啟用語音訊息，接著請人格發送一則語音訊息，或使用 `/generate voice-message` 進行測試。

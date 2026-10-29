@@ -942,7 +942,7 @@ export function buildSpotlightSetModal(
   hours: number,
   blockIdx: number,
   fp: string,
-  personas: Array<{ id: number; name: string; isAlter: boolean }>,
+  personas: Array<{ id: number; name: string; isAlter: boolean; snippet?: string | null }>,
 ): { custom_id: string; title: string; components: RawDiscordComponent[] } {
   const components: RawDiscordComponent[] = [];
 
@@ -970,12 +970,13 @@ export function buildSpotlightSetModal(
           label: safeSelectOptionText(p.name, 100),
           value: String(p.id),
           description: safeSelectOptionText(
-            localizer(
-              locale,
-              p.isAlter
-                ? "commands.shared.persona_select.alter_persona_description"
-                : "commands.shared.persona_select.main_persona_description",
-            ),
+            p.snippet ??
+              localizer(
+                locale,
+                p.isAlter
+                  ? "commands.shared.persona_select.alter_persona_description"
+                  : "commands.shared.persona_select.main_persona_description",
+              ),
             100,
           ),
           default: false,
@@ -1007,7 +1008,7 @@ export function buildSpotlightAutoTriggerModal(
   blockIdx: number,
   mask: string,
   fp: string,
-  selectedPersonas: Array<{ id: number; name: string; isAlter: boolean }>,
+  selectedPersonas: Array<{ id: number; name: string; isAlter: boolean; snippet?: string | null }>,
 ): { custom_id: string; title: string; components: RawDiscordComponent[] } {
   const options = [
     {
@@ -1019,12 +1020,13 @@ export function buildSpotlightAutoTriggerModal(
       value: String(p.id),
       label: safeSelectOptionText(p.name, 100),
       description: safeSelectOptionText(
-        localizer(
-          locale,
-          p.isAlter
-            ? "commands.shared.persona_select.alter_persona_description"
-            : "commands.shared.persona_select.main_persona_description",
-        ),
+        p.snippet ??
+          localizer(
+            locale,
+            p.isAlter
+              ? "commands.shared.persona_select.alter_persona_description"
+              : "commands.shared.persona_select.main_persona_description",
+          ),
         100,
       ),
     })),
@@ -1066,7 +1068,7 @@ export function buildSpotlightRemoveModal(
   start: number,
   fp: string,
   activeSpotlights: PersonalSpotlightStatus[],
-  personas: Array<{ id: number; name: string; isAlter: boolean }>,
+  personas: Array<{ id: number; name: string; isAlter: boolean; snippet?: string | null }>,
   guildChannels: Map<string, { name: string }> | undefined,
 ): { custom_id: string; title: string; components: RawDiscordComponent[] } {
   const personaMap = new Map(personas.map((p) => [p.id, p.name]));

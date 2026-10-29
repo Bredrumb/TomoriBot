@@ -10,6 +10,7 @@ import {
   type Message,
 } from "discord.js";
 import type { TextDisplayModalAccess } from "@/types/discord/embed";
+import { resolveUserLocale } from "@/utils/discord/interactionLocale";
 import { log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
@@ -23,8 +24,11 @@ interface TextDisplayModalOptions {
   content: string;
 }
 
-interface TextDisplayModalCollectorOptions extends TextDisplayModalOptions {
+interface TextDisplayModalCollectorOptions {
   message: Message;
+  customId: string;
+  /** Anyone in the channel may press, so the modal is rendered per click in the presser's language. */
+  render: (locale: string) => Pick<TextDisplayModalOptions, "title" | "content">;
   timeoutMs: number;
   onExpire?: () => Promise<void>;
   logLabel: string;
@@ -80,8 +84,7 @@ export function buildTextDisplayModalRow(
 export function attachTextDisplayModalCollector({
   message,
   customId,
-  title,
-  content,
+  render,
   timeoutMs,
   onExpire,
   logLabel,
@@ -95,14 +98,15 @@ export function attachTextDisplayModalCollector({
 
   collector.on("collect", async (interaction: ButtonInteraction) => {
     try {
+      const locale = await resolveUserLocale(interaction);
       if (access && !access.canOpen(interaction)) {
         await interaction.reply({
-          content: localizer(interaction.locale, access.deniedKey),
+          content: localizer(locale, access.deniedKey),
           flags: MessageFlags.Ephemeral,
         });
         return;
       }
-      await interaction.showModal(buildTextDisplayModal({ customId: `${customId}_modal`, title, content }));
+      await interaction.showModal(buildTextDisplayModal({ customId: `${customId}_modal`, ...render(locale) }));
     } catch (error) {
       log.warn(`${logLabel} modal failed`, error as Error);
     }

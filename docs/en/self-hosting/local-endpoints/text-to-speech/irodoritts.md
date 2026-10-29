@@ -53,12 +53,9 @@ The default model is `Aratako/Irodori-TTS-v4.1-Small`. You can select other offi
 | `Aratako/Irodori-TTS-v4-Large-Quantized/int4-weight-only` | 3.29B | 2.75 GB | 5-6 GB | Smallest Large variant: requires NVIDIA Ampere (RTX 30-series) or newer. |
 | `phasefield-audio/Irodori-TTS-v4.1-Anime` | 766M | 1.5 GB | 4-6 GB | Community fine-tune for anime-style speech delivery. |
 
-### Choosing between Small and Large
+For voice cloning, Small offers similar quality with faster inference. Large has a stronger text encoder and follows VoiceDesign descriptions more closely.
 
-- **Reference voice cloning (recommended: `v4.1-Small`):** For clean reference clips (15-30 seconds), `v4.1-Small` renders faster (~0.23x RTF on modern GPUs) and produces sharper, higher-contrast vocal harmonics with punchy Japanese prosody. Pure reference voice cloning does not benefit from the heavier model.
-- **VoiceDesign and long reference audio (recommended: `v4-Large`):** The 3.29B Large model integrates a 1B T5Gemma 2 text backbone, giving it superior adherence to natural-language VoiceDesign caption prompts (describing delivery, timbre, and mood) and supporting up to 120 seconds of combined reference audio. On pure reference clips without descriptive captions, Large produces a softer, breathier texture at roughly 0.75x RTF.
-
-When you start the server (directly with Python or via `bun run launch --irodoritts`), it automatically reads the repository root `.env` (or a local `.env` in `servers/tts/irodoritts/`) and logs the active model ID on startup.
+The server reads the repository root `.env` or a local `servers/tts/irodoritts/.env`.
 
 ### Via `.env` (persistent)
 
@@ -123,11 +120,7 @@ Use `/providers` for endpoint registration and model setup. Then open `/config` 
 2. Open `/config` under Models > TTS Parameters & Voices and upload the clip.
 3. Open `/config` under Persona > Voice, then choose the persona and the voice sample.
 
-Irodori v4.1 supports longer reference conditioning than earlier models, but clean source audio remains more important than raw duration.
-
-The v4.1 runtime caps the reference clip at the checkpoint default, which the v4.1 checkpoint sets to 120 seconds. Anything longer is trimmed to that cap rather than refused, and `IRODORI_MAX_REF_SECONDS` overrides it. A clip at TomoriBot's 130-second upload ceiling therefore still works: Irodori conditions on the first 120 seconds of it.
-
-Longer clips do not improve voice quality. Upstream reports that approximately 30 seconds of clean reference speech already captures most of the measurable speaker-similarity gain, and that multiple shorter clips from the same speaker beat one long recording. The extra reference latent steps that come with a longer clip also lengthen every synthesis request. Reach past 30 seconds only when a speaker's timbre drifts across the recording.
+Irodori defaults to a 120-second reference limit and trims longer clips. Set `IRODORI_MAX_REF_SECONDS` to change the limit.
 
 ### VoiceDesign
 
@@ -143,67 +136,11 @@ TomoriBot strips Discord custom emoji syntax before sending text to TTS. With `s
 
 IrodoriTTS supports emoji annotations in input text to influence sound effects, speaking styles, and emotional expressions. With TomoriBot's `Script Markup Style` set to `Emoji`, these Unicode emojis are preserved and sent to Irodori.
 
-| Emoji | Meaning / emotion / style |
-| --- | --- |
-| 👂 | Whisper, sounds close to the ear |
-| 😮‍💨 | Breath, sigh, sleeping breath |
-| ⏸️ | Pause, silence |
-| 🤭 | Chuckle, giggle, suppressed laugh |
-| 🥵 | Panting, moan, groan |
-| 📢 | Echo, reverb |
-| 😏 | Teasing, playfully sweet / coaxing |
-| 🥺 | Trembling voice, timidly / uncertainly |
-| 🌬️ | Shortness of breath, heavy breathing |
-| 😮 | Gasp |
-| 👅 | Licking sound, chewing sound, wet sound |
-| 💋 | Lip smack / lip noise |
-| 🫶 | Gently, tenderly |
-| 😭 | Sobbing, crying, sorrowfully / sadly |
-| 😱 | Scream, shout, shriek |
-| 😪 | Sleepily, sluggishly / languidly |
-| 😴 | Sleep talking, snoring |
-| ⏩ | Fast-speaking, rapid-fire, hurriedly |
-| 📞 | Over the phone, through a speaker |
-| 🐢 | Slowly |
-| 🥤 | Gulp, swallowing sound |
-| 🤧 | Coughing, sniffling, sneeze, clearing throat |
-| 😒 | Tutting, clicking tongue |
-| 😰 | Panicked, agitated, nervous, stuttering |
-| 😆 | Joyfully, happily |
-| 💥 | With force / momentum, forcefully |
-| 😠 | Angry, displeased, sulking |
-| 😲 | Surprise, awe / exclamation |
-| 🥱 | Yawn |
-| 😖 | Painfully, agonizingly |
-| 😟 | Anxiously, worriedly |
-| 🫣 | Shyly, bashfully |
-| 🙄 | Exasperatedly, rolling eyes |
-| 😊 | Cheerfully, gladly |
-| 😎 | Confidently, proudly |
-| 👌 | Backchanneling, sound of agreement |
-| 🙏 | Pleadingly, begging |
-| 🥴 | Drunkenly |
-| 🎵 | Humming |
-| 🤐 | Muffled (mouth covered) |
-| 😌 | Relieved, contentedly |
-| 🤔 | Questioning voice, wondering |
-| 💪 | With effort, strongly |
-| 👃 | Sniffing / smelling sound |
-| 📖 | Narration, monologue |
-
-Repeating the same emoji can strengthen its effect. Emoji control is not perfectly consistent, so treat these as style cues rather than guaranteed output. See the [official IrodoriTTS emoji annotations](https://huggingface.co/Aratako/Irodori-TTS-v4.1-Small/blob/main/EMOJI_ANNOTATIONS.md) for the upstream list and future updates.
+For supported emoji and their meanings, see the [upstream emoji annotations](https://huggingface.co/Aratako/Irodori-TTS-v4.1-Small/blob/main/EMOJI_ANNOTATIONS.md). Emoji are style cues and results can vary.
 
 ## Long voice messages
 
-Irodori v4.1 predicts output length with its duration predictor rather than generating a fixed-length clip, so the server does not impose a per-utterance duration cap of its own. TomoriBot still chunks long text before synthesis and concatenates the generated audio into one WAV response, so Discord receives one voice message; the chunking keeps each inference pass short, which is what bounds latency.
-
-The implementation starts from the chunking approach used by the [official Irodori OpenAI-compatible server](https://github.com/Aratako/Irodori-TTS-Server/blob/main/src/irodori_openai_tts/app.py), whose defaults enable chunking at 80 non-whitespace characters. TomoriBot adds stricter boundary handling so closing quotes and brackets stay with the punctuation they close, punctuation runs such as `！？` and `...` stay together, decimal points next to digits do not split, and very short final tails are merged back into the previous chunk.
-
-Chunking prefers strong sentence endings such as `。`, `！`, `？`, `.`, `!`, `?`, ellipses, and line breaks once the configured minimum length is reached. Commas are only used as fallback boundaries after the chunk grows to about 1.5 times that threshold. With the default `IRODORI_CHUNK_MIN_CHARS=80`, strong boundaries become eligible at 80 non-whitespace characters and commas at about 120. If a long passage contains no eligible punctuation, it can still remain a single synthesis request.
-
-For caption-only VoiceDesign, the first chunk's generated Irodori seed is reused for the remaining chunks to reduce random variation between seams. Reusing a seed does not guarantee identical timbre across independently synthesized chunks. Reference-audio mode continues to apply the same reference clip to each chunk.
-
-Long inputs require multiple sequential inference passes and can take substantially longer on slower hardware. TomoriBot's default TTS client timeout is 240 seconds. You can disable chunking with `IRODORI_CHUNKING_ENABLED=false` or tune the approximate split threshold with `IRODORI_CHUNK_MIN_CHARS`.
+Long text is split into chunks and returned as one voice message. Long requests can exceed the default 240-second timeout; adjust `TTS_SYNTHESIZE_TIMEOUT_MS` if needed. Set `IRODORI_CHUNKING_ENABLED=false` to disable chunking or `IRODORI_CHUNK_MIN_CHARS` to adjust the split threshold.
 
 ## Faster inference with sway sampling
 

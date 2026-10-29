@@ -90,7 +90,8 @@ User hints are stored as atomic, single-sentence bullet keys under `genai.tips.*
 User language preferences are stored in `users.language_pref`:
 
 - User registration records the observed interaction locale or guild preferred locale into `language_pref`.
-- Command handlers pass `userData.language_pref` (falling back to interaction locale) into replies and panels.
+- Command handlers pass `userData.language_pref` (falling back to the guild locale) into replies and panels.
+- Button and modal replies that only the presser sees resolve the presser's preference through `resolveUserLocale()` in `src/utils/discord/interactionLocale.ts`, falling back to their Discord locale. Shared messages keep the locale of whoever caused them, so a button any member can press builds its private reply on click instead of at send time.
 - Unsupported stored preferences remain intact in storage. If an authored locale for that language is added later, the localizer resolves it automatically without requiring a database migration.
 
 ## Source pointers and recipes

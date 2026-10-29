@@ -347,7 +347,6 @@ export const DOCS_ROUTES = {
   LOCAL_TTS_SETUP: "/self-hosting/local-endpoints/text-to-speech/",
   LOCAL_STT_SETUP: "/self-hosting/local-endpoints/speech-to-text/",
   MAINTENANCE: "/self-hosting/maintenance/",
-  SAFE_MIGRATION: "/self-hosting/safe-migration/",
   LOCAL_MONITORING: "/self-hosting/local-monitoring/",
   THREAT_MODELS: "/wiki/threat-models/",
 } as const satisfies DocsRouteMap;

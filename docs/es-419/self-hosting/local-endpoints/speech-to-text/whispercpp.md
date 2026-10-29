@@ -34,4 +34,4 @@ Usa `/providers` para registrar el endpoint y configurar el modelo. Luego abre `
 
 ## Usar transcripciones
 
-Después del registro, TomoriBot transcribe los archivos adjuntos de audio en segundo plano y agrega el texto al contexto del chat. Utilice `/config` > Motor > Avisos solo si también desea que las transcripciones se publiquen de manera visible en el chat.
+Después del registro, TomoriBot transcribe los archivos adjuntos de audio en segundo plano y agrega el texto al contexto del chat. Utilice `/config` > Comportamiento > Comportamiento de avisos solo si también desea que las transcripciones se publiquen de manera visible en el chat.

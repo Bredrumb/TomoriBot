@@ -2,77 +2,61 @@
 title: "Text-to-Speech（ローカルエンジン）"
 sidebar:
   label: "概要"
-  groupLabel: "TTS"
+  groupLabel: "Text-to-Speech"
   order: 7
-aiGenerated: true
 ---
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
 
-キャラクターごとの料金を支払ったり、サードパーティの音声APIにオーディオをストリーミングしたりすることなく、自然な音声メッセージとキャラクターのスピーチをマシン上で直接生成します。
+キャラクターごとの料金を支払ったり、サードパーティの音声APIに音声をストリーミングしたりすることなく、マシン上で自然な音声メッセージやキャラクターの音声を直接生成します。
 
-TomoriBotは音声をカスタムエンドポイント機能として扱います。ローカルエンジンはボットの外部でHTTPサーバーとして実行され、`POST /synthesize`を実装します。クローンエンジンはテキストと設定されたリファレンスオーディオサンプルを受け取りますが、VoiceDesign対応エンジンは自然言語の命令も受け取ることができます。
+TomoriBotは音声をカスタムエンドポイント機能として扱います。ローカルエンジンはボットの外部でHTTPサーバーとして動作し、`POST /synthesize` を実装します。クローンエンジンはテキストと設定された参照音声サンプルを受け取り、VoiceDesign対応エンジンは自然言語の指示も受け取ることができます。
 
 ## 利用可能なエンジン
 
 <CardGrid>
-  <LinkCard title="Chatterbox TTS" href="/ja/self-hosting/local-endpoints/text-to-speech/chatterbox/"
-    description="イベントタグを使用した英語音声のクローン作成。ターボがデフォルトです。NanoとStandardはオプションのバリエーションです。" />
-  <LinkCard title="Qwen3-TTS" href="/ja/self-hosting/local-endpoints/text-to-speech/qwen3tts/"
-    description="クローンおよびVoiceDesignモードを備えた多言語ローカルTTS。" />
-  <LinkCard title="MOSS-TTS" href="/ja/self-hosting/local-endpoints/text-to-speech/moss/"
-    description="トライアル自動エンドポイント: 4B多言語音声クローンまたはテキスト記述された英語/中国語音声デザイン。" />
-  <LinkCard title="いろどりTTS" href="/ja/self-hosting/local-endpoints/text-to-speech/irodoritts/"
-    description="日本語に焦点を当てた音声クローンと、感情制御のためのUnicode絵文字マークアップを使用したVoiceDesign。" />
-  <LinkCard title="フィッシュオーディオS2プロ" href="/ja/self-hosting/local-endpoints/text-to-speech/fishs2/"
-    description="きめ細かい括弧表現制御を備えた高品質の多言語音声クローン作成。デフォルトは公式のBF16重みで、小型GPUの場合はオプションのINT8チェックポイントが使用されます。" />
-  <LinkCard title="VoxCPM2" href="/ja/self-hosting/local-endpoints/text-to-speech/voxcpm2/"
-    description="Voice Designを備えた30言語のTTS、リファレンスオーディオクローン作成、文字起こし支援のUltimate Cloning、および自然言語配信制御。" />
-  <LinkCard title="CosyVoice 3" href="/ja/self-hosting/local-endpoints/text-to-speech/cosyvoice3/"
-    description="自然言語による配信指示による0.5億の多言語ゼロショットおよびクロスリンガルクローン作成。" />
-  <LinkCard title="TTSエンジン比較" href="/ja/self-hosting/local-endpoints/text-to-speech/comparison/"
-    description="経験的な合成タイミング、オーディオサンプルプレーヤー、および7つのエンジンすべての速度比較。" />
+  <LinkCard title="Chatterbox TTS" href="/self-hosting/local-endpoints/text-to-speech/chatterbox/"
+    description="イベントタグを使用した英語の音声クローン。Turboがデフォルトです。NanoとStandardはオプションのバリエーションです。" />
+  <LinkCard title="Qwen3-TTS" href="/self-hosting/local-endpoints/text-to-speech/qwen3tts/"
+    description="クローンモードとVoiceDesignモードを備えた多言語ローカルTTS。" />
+  <LinkCard title="MOSS-TTS" href="/self-hosting/local-endpoints/text-to-speech/moss/"
+    description="トライアル自動エンドポイント：4B多言語音声クローンまたはテキストで指定された英語/中国語の音声デザイン。" />
+  <LinkCard title="IrodoriTTS" href="/self-hosting/local-endpoints/text-to-speech/irodoritts/"
+    description="感情制御のためのUnicode絵文字マークアップを備えた、日本語に特化した音声クローンおよびVoiceDesign。" />
+  <LinkCard title="Fish Audio S2 Pro" href="/self-hosting/local-endpoints/text-to-speech/fishs2/"
+    description="きめ細やかなブラケット表現制御を備えた高品質の多言語音声クローン。公式のBF16ウェイトがデフォルトで、小規模GPU向けのオプションのINT8チェックポイントもあります。" />
+  <LinkCard title="VoxCPM2" href="/self-hosting/local-endpoints/text-to-speech/voxcpm2/"
+    description="Voice Design、参照音声クローン、文字起こし支援のUltimate Cloning、自然言語での配信制御を備えた30言語対応TTS。" />
+  <LinkCard title="CosyVoice 3" href="/self-hosting/local-endpoints/text-to-speech/cosyvoice3/"
+    description="自然言語での配信指示を備えた、0.5Bの多言語ゼロショットおよび異言語クローン。" />
+  <LinkCard title="TTSエンジンの比較" href="/self-hosting/local-endpoints/text-to-speech/comparison/"
+    description="7つすべてのエンジンの実測合成時間、音声サンプルプレーヤー、および速度比較。" />
 </CardGrid>
 
 ## セットアップの流れ
 
-1. 上記のカードからエンジンを1つ選択し、そのラッパーを`servers/tts/`からセットアップします。
-2. `/providers`では、`Add New Custom Endpoint`を選択し、API互換性`tts-clone`を使用します。
-3. 保存したエンドポイントを選択し、そのモデルドロップダウンを使用して、音声モデル、音声ソースモード、およびスクリプトマークアップを追加します。
-4. `/config` > `モデル` > `モデルの切り替え` を開き、登録されている音声モデルを選択します。
+1. 上記のカードからエンジンを1つ選択し、`servers/tts/` からそのラッパーをセットアップします。
+2. `/providers` で `+ 新しいカスタムエンドポイントを追加` を選択し、API互換性 `tts-clone` を使用します。
+3. 保存したエンドポイントを選択し、そのモデルドロップダウンを使用して音声モデル、音声ソースモード、およびスクリプトマークアップを追加します。
+4. `/config` > モデル > モデルの切り替え を開き、`TTS (Voice Design)` または `TTS (Voice Clone)` でエンドポイントを選択します。自動エンドポイントは両方の選択をアクティブにします。一方を解除しても他方は保持されます。
+
+ホスト型の音声プロバイダーや個人設定については、[音声：TTS & STT](/features/capabilities/media-generation/tts-and-stt/) を参照してください。
 
 ## ネットワークアクセス
 {/* anchor: network-access */}
 
-TTSローカルサーバーはすべて既定で`127.0.0.1`にバインドするため、同じマシン上のボットからしか接続できません。TomoriBotをDockerや別のマシンで実行する場合は、サーバー側で`TOMORI_TTS_HOST=0.0.0.0`を設定し、ホストのアドレス（例：`http://host.docker.internal:8015`）でエンドポイントを登録してください。
+TTSローカルサーバーはすべてデフォルトで `127.0.0.1` にバインドするため、同じマシン上のボットからしか接続できません。TomoriBotをDockerや別のマシンで実行する場合は、サーバー側で `TOMORI_TTS_HOST=0.0.0.0` を設定し、ホストのアドレス（例：`http://host.docker.internal:8015`）でエンドポイントを登録してください。
 
-サーバーには認証がありません。ポートに到達できる人は誰でも、あなたのGPUで合成を実行できます。ループバック以外へのバインドは信頼できるネットワーク内に限り、それより外へ公開するサーバーには認証付きのリバースプロキシを前段に置いてください。
+各サーバーは独自のポート変数（`CHATTERBOX_PORT`、`QWEN3TTS_PORT`、`IRODORI_TTS_PORT`、`FISH_S2_PORT`、`VOXCPM2_PORT`、`COSYVOICE3_PORT`、`MOSS_TTS_PORT`）を読み込むため、1つの `.env` で複数のサーバーを同時に実行できます。`bun run launch` は起動するサーバーに `.env` を渡しますが、手動で起動したサーバーはシェルの環境変数のみを読み込みます。
 
-各サーバーは専用のポート変数（`CHATTERBOX_PORT`、`QWEN3TTS_PORT`、`IRODORI_TTS_PORT`、`FISH_S2_PORT`、`VOXCPM2_PORT`、`COSYVOICE3_PORT`、`MOSS_TTS_PORT`）を読み込むため、1つの`.env`で複数のサーバーを同時に実行できます。`bun run launch`は起動するサーバーに`.env`を渡しますが、手動で起動したサーバーはシェルの環境変数だけを読み込みます。
+サーバーには認証がありません。ポートに到達できる人は誰でもGPUで合成を実行できます。ループバック以外へのバインドは信頼できるネットワーク内に限定し、それより外へ公開するサーバーには認証付きリバースプロキシを前段に配置してください。
 
-## ペルソナボイスの流れ
+## ペルソナボイス
 
-クローンエンジンの場合、ペルソナごとに1つの音声サンプルを追加して割り当てます。
+音声クローンの場合、`/config` > モデル > TTSパラメーターと音声 でクリーンな単一話者のサンプルをアップロードし、ペルソナ > 音声 で割り当てます。推奨されるクリップの長さや文字起こしの要件については、エンジンのガイドを確認してください。
 
-1. スピーカーが1つあり、BGMのないクリーンなクリップを準備します。各エンジンには、モデルに応じて3 ～ 30秒の最適な長さが記録されています。以下のエンジンごとのガイドに番号が記載されています。
-2. [モデル] > `TTSパラメーターと音声` で`/config`を開き、サンプルをアップロードします。あらゆるオーディオ形式が受け入れられます。TomoriBotは最大130秒のモノラルWAVに変換します。
-3. エンジンにメリットがある場合は、一致するトランスクリプトを提供します。Fish S2 Proは、保存された参照トランスクリプトをクローン作成リクエストに転送し、VoxCPM2はそれをより忠実度の高い究極のクローン作成に使用します。
-4. [ペルソナ] > `音声` で`/config`を開き、ペルソナと音声サンプルを選択します。
+TomoriBotは最大130秒までのサンプルを受け入れ、モノラルWAVに変換します。アップロードのサイズ制限はデフォルトで10 MBです。`SPEECH_SAMPLE_MAX_MB` で変更できます。FLACなどの圧縮形式を使用すると、長いクリップをサイズ内に収めやすくなります。
 
-130秒のアップロード上限は、TomoriBotによって強制されます。各エンジンはクリップの送信時に独自の基準オーディオ制限を適用しますが、それらの制限は十分に異なるため、あるエンジンに適したクリップが別のエンジンで拒否されたり、部分的に無視されたりする可能性があります。長いクリップをアップロードする前に、エンジンのガイドを確認してください。
+音声デザインをサポートするエンジンの場合、ペルソナ > 音声 で音声の説明を保存します。ペルソナは説明とサンプルの両方を持つことができます。音声ソースの優先度によって、どちらの使用可能なソースを最初に試すかが選択されます。サポートされているモードとスクリプトマークアップについては、各エンジンのガイドを参照してください。
 
-アップロードサイズの制限と期間の上限は独立しており、サイズチェックが最初に実行されます。非圧縮WAVはステレオ44.1 kHzとして1分あたり約10 MBのコストがかかるため、130秒のDAWエクスポートは約22 MBになり、同じクリップの圧縮エクスポートは簡単に収まるのに大きすぎるとして拒否される可能性があります。`SPEECH_SAMPLE_MAX_MB`は、そのサイズ制限を引き上げます (デフォルトでは10 MB)。長いリファレンスクリップの場合は、WAVではなくFLAC、MP3、またはOGGとしてエクスポートします。TomoriBotは、保存する前に、受け入れられた形式を22.05 kHzのモノラルWAVに変換します。そのため、圧縮アップロードの品質にコストはかかりません。
-
-Qwen3-TTS、MOSS-VoiceGenerator、IrodriTTS、またはVoxCPM2 VoiceDesignの場合は、オーディオサンプルをスキップし、`/config`の [ペルソナ] > `音声` を使用して、ペルソナの自然言語音声説明を保存します。CosyVoice 3は、参照サンプルでクローンモードを使用し、`voice_instructions`を介した1回限りの配信指示を受け入れます。
-
-ElevenLabsユーザーは、`/providers`で`新しいプロバイダーを追加`および`ElevenLabs`を選択する必要があります。音声と文字起こしのエンドポイントを一緒に登録します。
-
-TomoriBotは、合成前に、生成された音声スクリプトから`:pepega:`や`<:pepega:123456789012345678>`などのDiscordカスタム絵文字構文を削除します。Unicode絵文字も、音声エンドポイントがIrodriTTS用の絵文字マークアップを使用しない限り、削除されます。ブラケットタグは、スクリプトマークアップが`ブラケットタグ`に設定されている場合、Chatterbox TurboやFish S2 Proなどのエンドポイントに対して保持されます。
-
-VoxCPM2は`プレーン`スクリプトマークアップを使用します。その音声デザインと話し方のコントロールは、TomoriBotの`instruct`フィールドを通過し、VoxCPM2ラッパーはそれらをモデルのネイティブの括弧で囲まれた自然言語コントロール構文に変換します。
-
-CosyVoice 3も`プレーン`スクリプトマークアップを使用します。トランスクリプトに裏付けられた参照はゼロショットクローニングに、トランスクリプトなしの参照はクロスリンガルクローニングに、`voice_instructions`は命令条件付きパスにマッピングされます。CosyVoice命令が発話全体に適用されるため、インライン括弧タグは削除されます。
-
-## エンジン比較
-
-並べて実験的なレイテンシー ベンチマーク、オーディオサンプルの再生、サポートされているすべてのエンジンを比較する詳細な機能マトリックスについては、[TTSエンジンの比較](/ja/self-hosting/local-endpoints/text-to-speech/comparison/) を参照してください。
+`/config` > 権限 で音声メッセージを有効にし、ペルソナに送信を依頼するか、`/generate voice-message` を使用して試してみてください。

@@ -12,14 +12,18 @@ import type { TomoriState } from "@/types/db/schema";
 import type {
   ModalChannelSelectField,
   ModalInputField,
-  ModalRadioGroupField,
   ModalResult,
   ModalSelectField,
+  SelectOption,
 } from "@/types/discord/modal";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { isRagAvailable } from "@/utils/db/ragAvailability";
 import { llmModelRepo, personaRepository, ragRepository } from "@/utils/db/repositories";
-import { DISCORD_SELECT_VALUES_MAX } from "@/utils/discord/ui/componentsV2Limits";
+import { resolveUserLocale } from "@/utils/discord/interactionLocale";
+import {
+  DISCORD_SELECT_OPTION_DESCRIPTION_MAX,
+  DISCORD_SELECT_VALUES_MAX,
+} from "@/utils/discord/ui/componentsV2Limits";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { generateEmbeddingsBatched, providerSupportsEmbeddingTaskType } from "@/utils/embeddings/embeddingProvider";
@@ -34,6 +38,7 @@ import {
   withProviderUsageContext,
 } from "@/utils/provider/providerUsage";
 import { localizer } from "@/utils/text/localizer";
+import { resolvePersonaSnippet } from "@/utils/text/personaPrompt";
 import {
   COMPACT_EDIT_WINDOW_MS,
   COMPACT_ROUTE_NAMESPACE,
@@ -110,7 +115,7 @@ async function replyAlreadySaved(interaction: Parameters<typeof replyInfoEmbed>[
  * may save the summary while this modal is open.
  */
 export async function handleSummaryEditClick(interaction: ButtonInteraction, controls: SummaryControls): Promise<void> {
-  const locale = interaction.locale ?? controls.locale;
+  const locale = await resolveUserLocale(interaction);
   const summaryEmbed = interaction.message.embeds[0];
   if (!summaryEmbed) throw new Error("Compact summary message has no embed");
 
@@ -167,7 +172,7 @@ export async function handleSummaryEditClick(interaction: ButtonInteraction, con
  * claims the message and later submits are told it was already saved.
  */
 export async function handleSummarySaveClick(interaction: ButtonInteraction, controls: SummaryControls): Promise<void> {
-  const locale = interaction.locale ?? controls.locale;
+  const locale = await resolveUserLocale(interaction);
   const serverDiscId = interaction.guild?.id ?? interaction.user.id;
   const messageId = interaction.message.id;
 
@@ -214,8 +219,8 @@ export async function handleSummarySaveClick(interaction: ButtonInteraction, con
 }
 
 const DOC_NAME_FIELD_ID = "compact_doc_name";
-const DOC_SCOPE_FIELD_ID = "compact_doc_scope";
 const DOC_PERSONA_FIELD_ID = "compact_doc_persona";
+const ALL_PERSONAS_VALUE = "all";
 const DOC_CHANNELS_FIELD_ID = "compact_doc_channels";
 
 interface SaveAsDocPrompt {
@@ -234,16 +239,30 @@ async function promptSaveAsDocModal(
   const today = new Date().toISOString().slice(0, 10);
   const autoName = localizer(locale, "commands.compact.add_to_docs_doc_name", { date: today });
 
-  const personaOptions = allPersonas
-    .filter((p) => p.persona_id !== undefined)
-    .map((p) => ({
-      label: safeSelectOptionText(p.persona_nickname),
-      value: p.persona_id?.toString() ?? "",
-      description: p.is_alter
-        ? localizer(locale, "commands.teach.document.alter_persona_description")
-        : localizer(locale, "commands.teach.document.main_persona_description"),
-    }))
-    .filter((o) => o.value !== "");
+  const personaOptions: SelectOption[] = [
+    {
+      label: localizer(locale, "commands.compact.save_as_doc_persona_all"),
+      value: ALL_PERSONAS_VALUE,
+      description: localizer(locale, "commands.compact.save_as_doc_persona_all_description"),
+      emoji: { name: "🌍" },
+      default: true,
+    },
+    ...allPersonas
+      .filter((p) => p.persona_id !== undefined)
+      .map((p) => ({
+        label: safeSelectOptionText(p.persona_nickname),
+        value: p.persona_id?.toString() ?? "",
+        description:
+          resolvePersonaSnippet(p, DISCORD_SELECT_OPTION_DESCRIPTION_MAX) ??
+          localizer(
+            locale,
+            p.is_alter
+              ? "commands.teach.document.alter_persona_description"
+              : "commands.teach.document.main_persona_description",
+          ),
+      }))
+      .filter((o) => o.value !== ""),
+  ];
 
   const modalResult = await promptWithPaginatedModal(buttonInteraction, locale, {
     modalCustomId: "compact_save_as_doc_modal",
@@ -261,34 +280,14 @@ async function promptSaveAsDocModal(
         required: true,
       } as ModalInputField,
       {
-        kind: "radioGroup",
-        customId: DOC_SCOPE_FIELD_ID,
-        labelKey: "commands.compact.save_as_doc_scope_label",
-        options: [
-          {
-            value: "serverwide",
-            label: localizer(locale, "commands.compact.save_as_doc_scope_serverwide"),
-            default: true,
-          },
-          {
-            value: "persona",
-            label: localizer(locale, "commands.compact.save_as_doc_scope_persona"),
-          },
-        ],
-        required: true,
-      } as ModalRadioGroupField,
-      ...(personaOptions.length > 0
-        ? [
-            {
-              customId: DOC_PERSONA_FIELD_ID,
-              labelKey: "commands.compact.save_as_doc_persona_label",
-              descriptionKey: "commands.compact.save_as_doc_persona_description",
-              placeholder: "commands.compact.save_as_doc_persona_placeholder",
-              options: personaOptions,
-              required: false,
-            } as ModalSelectField,
-          ]
-        : []),
+        customId: DOC_PERSONA_FIELD_ID,
+        labelKey: "commands.compact.save_as_doc_persona_label",
+        descriptionKey: "commands.compact.save_as_doc_persona_description",
+        placeholder: "commands.compact.save_as_doc_persona_all",
+        options: personaOptions,
+        // Optional so a member paging past the first 25 personas can still keep All Personas by leaving it empty.
+        required: false,
+      } as ModalSelectField,
       {
         kind: "channelSelect",
         customId: DOC_CHANNELS_FIELD_ID,
@@ -321,7 +320,6 @@ async function saveSummaryToDocs(params: {
   const { modalResult, allPersonas, autoName } = params.prompt;
 
   const docName = (modalResult.values?.[DOC_NAME_FIELD_ID] ?? autoName).trim().slice(0, 64) || autoName;
-  const scope = modalResult.values?.[DOC_SCOPE_FIELD_ID] === "persona" ? "persona" : "serverwide";
   const selectedPersonaIdStr = modalResult.values?.[DOC_PERSONA_FIELD_ID];
   const channelDiscIds = [
     ...new Set(
@@ -330,12 +328,12 @@ async function saveSummaryToDocs(params: {
   ];
 
   let targetPersonaId: number | null = null;
-  if (scope === "persona") {
+  if (selectedPersonaIdStr && selectedPersonaIdStr !== ALL_PERSONAS_VALUE) {
     const selectedPersona = allPersonas.find((p) => p.persona_id?.toString() === selectedPersonaIdStr);
     if (!selectedPersona?.persona_id) {
       await replyInfoEmbed(submitInteraction, locale, {
-        titleKey: "commands.compact.add_to_docs_no_persona_title",
-        descriptionKey: "commands.compact.add_to_docs_no_persona_description",
+        titleKey: "commands.compact.add_to_docs_persona_not_found_title",
+        descriptionKey: "commands.compact.add_to_docs_persona_not_found_description",
         color: ColorCode.ERROR,
       });
       return null;
