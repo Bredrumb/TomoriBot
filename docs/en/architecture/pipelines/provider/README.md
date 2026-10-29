@@ -108,6 +108,12 @@ Decision execution owns its usage recorder and forwards validated usage to consu
 RAG query retrieval and config model re-embedding supply the same recorder under their resolved
 credential context. A model-switch denial retains that context through the result and localized
 panel receipt; the successful selection write and cache invalidation still precede re-embedding.
+An embedding family switch re-embeds stored chunks in place, preserving their IDs, content, order,
+and boundaries, including history facts and edited chunks. Vector generation runs outside the write
+transaction; each document commits only if its stored chunk set still matches the embedded snapshot.
+A conflict gets one fresh attempt. An incomplete re-embed processes the remaining documents, then
+raises a failure instead of reporting a successful model switch; a retry skips chunks already on the
+target model.
 
 Stream usage is normalized by `normalizeProviderUsage` in `src/utils/text/tokenEstimate.ts`.
 `inputTokens` is total input processed, including cache reads and writes; optional `cacheReadTokens`
