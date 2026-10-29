@@ -1,3 +1,4 @@
+import { documentHeadingText, type DocumentHeadingPath } from "@/utils/documents/documentChunker";
 import { buildDocumentLexicalText } from "@/utils/documents/lexicalText";
 import { lorebookRepository } from "@/modules/lorebooks/db/repositories";
 /**
@@ -643,10 +644,19 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     documentId: number,
     serverId: number,
     personaId: number | null,
-  ): Promise<Array<{ document_chunk_id: number; chunk_index: number; content: string }>> {
+  ): Promise<
+    Array<{ document_chunk_id: number; chunk_index: number; content: string; heading_path: DocumentHeadingPath | null }>
+  > {
     return personaId === null
-      ? await sql<Array<{ document_chunk_id: number; chunk_index: number; content: string }>>`
-          SELECT dc.document_chunk_id, dc.chunk_index, dc.content
+      ? await sql<
+          Array<{
+            document_chunk_id: number;
+            chunk_index: number;
+            content: string;
+            heading_path: DocumentHeadingPath | null;
+          }>
+        >`
+          SELECT dc.document_chunk_id, dc.chunk_index, dc.content, dc.heading_path
           FROM document_chunks dc
           JOIN documents d ON d.document_id = dc.document_id
           WHERE dc.document_id = ${documentId}
@@ -654,8 +664,15 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
             AND d.persona_id IS NULL
           ORDER BY dc.chunk_index ASC
         `
-      : await sql<Array<{ document_chunk_id: number; chunk_index: number; content: string }>>`
-          SELECT dc.document_chunk_id, dc.chunk_index, dc.content
+      : await sql<
+          Array<{
+            document_chunk_id: number;
+            chunk_index: number;
+            content: string;
+            heading_path: DocumentHeadingPath | null;
+          }>
+        >`
+          SELECT dc.document_chunk_id, dc.chunk_index, dc.content, dc.heading_path
           FROM document_chunks dc
           JOIN documents d ON d.document_id = dc.document_id
           WHERE dc.document_id = ${documentId}
@@ -681,14 +698,18 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
   }): Promise<boolean> {
     const { chunkId, serverId, personaId, content, embeddingVector, embeddingModelId, embeddingFamily } = params;
     try {
-      const [document] = await sql<Array<{ document_name: string }>>`
-        SELECT d.document_name
+      const [document] = await sql<Array<{ document_name: string; heading_path: DocumentHeadingPath | null }>>`
+        SELECT d.document_name, dc.heading_path
         FROM document_chunks dc JOIN documents d ON d.document_id = dc.document_id
         WHERE dc.document_chunk_id = ${chunkId} AND dc.server_id = ${serverId}
           AND d.persona_id IS NOT DISTINCT FROM ${personaId}::integer
       `;
       if (!document) return false;
-      const lexicalText = buildDocumentLexicalText(document.document_name, content);
+      const lexicalText = buildDocumentLexicalText(
+        document.document_name,
+        content,
+        documentHeadingText(document.heading_path),
+      );
       const [updated] =
         personaId === null
           ? await sql`

@@ -5,8 +5,6 @@ const MAX_ATTRIBUTES = 10;
 const MAX_SAMPLE_DIALOGUE_LENGTH = 2000;
 const MAX_SAMPLE_DIALOGUES = 15;
 const MAX_TRIGGER_WORDS = 10;
-const DOCUMENT_CHUNK_SIZE = 1000;
-const DOCUMENT_CHUNK_OVERLAP = 200;
 
 /**
  * Memory limit configuration loaded from environment variables with defaults
@@ -23,8 +21,6 @@ export interface MemoryLimits {
   maxPersonasPerServer: number;
   maxDocumentSizeMB: number;
   maxDocumentTextLength: number;
-  documentChunkSize: number;
-  documentChunkOverlap: number;
   maxDocumentChunks: number;
   maxDocumentsPerServer: number;
   maxDocumentChunksPerServer: number;
@@ -75,8 +71,6 @@ export function getMemoryLimits(): MemoryLimits {
     maxPersonasPerServer,
     maxDocumentSizeMB,
     maxDocumentTextLength,
-    documentChunkSize: DOCUMENT_CHUNK_SIZE,
-    documentChunkOverlap: DOCUMENT_CHUNK_OVERLAP,
     maxDocumentChunks,
     maxDocumentsPerServer,
     maxDocumentChunksPerServer,

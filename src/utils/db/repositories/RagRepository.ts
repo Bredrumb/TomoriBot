@@ -1,3 +1,4 @@
+import { chunkStructuredDocument } from "@/utils/documents/documentChunker";
 /**
  * RagRepository: manages documents, chunks, and vector embeddings.
  *
@@ -13,7 +14,6 @@ import {
   retrieveRelevantDocumentChunks,
   reembedServerDocuments,
   normalizeDocumentText,
-  chunkDocumentText,
   formatVector,
   formatRetrievedChunksForPrompt,
   type RetrievedDocumentChunk,
@@ -57,14 +57,8 @@ class RagRepository implements IRepository<RagExportShape> {
     return normalizeDocumentText(text);
   }
 
-  /**
-   * Splits text into overlapping chunks for embedding.
-   *
-   * @param chunkSize - Characters per chunk
-   * @param overlap   - Overlap characters between adjacent chunks
-   */
-  chunkText(text: string, chunkSize: number, overlap: number): string[] {
-    return chunkDocumentText(text, chunkSize, overlap);
+  chunkText(text: string): ReturnType<typeof chunkStructuredDocument> {
+    return chunkStructuredDocument(text);
   }
 
   /**
