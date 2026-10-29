@@ -101,14 +101,18 @@ function renderTagHeader(tag: ContextItemTag | undefined): string {
  * `metadataTag`. These headers are annotations: they are NOT part of the prompt
  * actually sent to the LLM. The DM body that ships with the file explains this.
  *
- * The request config leads the file under its own annotation header, so it reads as
- * request metadata rather than prompt text.
+ * The snapshot info and request config lead the file under their own annotation headers,
+ * so they read as request metadata rather than prompt text.
  */
 export function buildTextSnapshot(
   contextItems: StructuredContextItem[],
   requestConfig: Record<string, unknown>,
+  snapshotInfo: string[],
 ): string {
   const lines: string[] = [
+    "=== Snapshot Info (annotation, NOT part of the prompt) ===",
+    ...snapshotInfo,
+    "",
     "=== Request Config (annotation, NOT part of the prompt) ===",
     JSON.stringify(requestConfig, null, 2),
     "",
@@ -156,7 +160,7 @@ export function buildTextSnapshot(
  * OpenAI-vision array-content form; text-only messages use plain strings.
  *
  * Metadata (server/channel/persona/provider/preset) is NOT embedded in the file:
- * it is rendered in the DM body instead, to keep the file focused on payload.
+ * the payload must stay shaped like the provider request.
  *
  * When `toolsData` is provided, a top-level `tools` key is appended in the same
  * shape the adapter would send to the provider. The request config keys follow `model`.

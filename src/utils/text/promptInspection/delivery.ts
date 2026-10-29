@@ -70,7 +70,16 @@ export async function deliverPromptSnapshot(delivery: PromptSnapshotDelivery): P
     fileContent = JSON.stringify(snapshotData, null, 2);
     fileName = `${fileStem}.json`;
   } else {
-    fileContent = buildTextSnapshot(inspection.contextItems, requestConfig);
+    const infoLines = [
+      `server_id: ${delivery.guildId}`,
+      `channel: #${inspection.channelName}`,
+      `persona: ${selectedPersona.persona_nickname}`,
+      `provider: ${providerName}`,
+      `model: ${modelName}`,
+      `preset: ${inspection.presetName ?? "(native)"}`,
+      `captured: ${inspection.capturedAt}`,
+    ];
+    fileContent = buildTextSnapshot(inspection.contextItems, requestConfig, infoLines);
     fileName = `${fileStem}.txt`;
   }
 
@@ -83,19 +92,6 @@ export async function deliverPromptSnapshot(delivery: PromptSnapshotDelivery): P
       persona_name: selectedPersona.persona_nickname,
       format: formatLabel,
     }),
-  );
-  descriptionParts.push(
-    [
-      "```yaml",
-      `server_id: ${delivery.guildId}`,
-      `channel: #${inspection.channelName}`,
-      `persona: ${selectedPersona.persona_nickname}`,
-      `provider: ${providerName}`,
-      `model: ${modelName}`,
-      `preset: ${inspection.presetName ?? "(native)"}`,
-      `captured: ${inspection.capturedAt}`,
-      "```",
-    ].join("\n"),
   );
   if (format === "text") {
     descriptionParts.push(localizer(locale, "commands.tool.prompt.snapshot.dm_txt_headers_note"));
