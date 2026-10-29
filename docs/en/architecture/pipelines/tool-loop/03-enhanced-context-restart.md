@@ -35,8 +35,11 @@ Tools deliver enrichment payloads through one of two transports:
 Mutations depend on the restart type suffix:
 
 - **Message metadata reveal (`message_metadata`):**
-  The stage calls `annotateRecentMessageMetadataInContext` to enrich recent dialogue messages with
-  author identity, timestamps, and message reference IDs. It appends a tail directive message via
+  The stage fetches reactor names for the history messages that carry reactions
+  (`fetchReactionUserSummaries`), then calls `annotateRecentMessageMetadataInContext` to enrich recent
+  dialogue messages with author identity, timestamps, message reference IDs, and those reactors.
+  Ordinary turns show reaction counts only, because each reactor lookup is a sequential Discord REST
+  call. It appends a tail directive message via
   `buildTailDirectiveMessage` instructing the model not to call `reveal_message_metadata` again during
   this turn. It then sets `streamingContext.disableMessageMetadataContext = true`.
 - **Media enrichment (`youtube`, `image`, `gif`):**

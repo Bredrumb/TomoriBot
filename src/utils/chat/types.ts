@@ -307,6 +307,8 @@ export interface ChatTurnContext {
   /** Shared by every attempt of this persona turn; see {@link ExpressionDeliveryState}. */
   expressionDelivery: ExpressionDeliveryState;
   simplifiedMessages: SimplifiedMessageForContext[];
+  /** History messages carrying reaction counts, whose reactors `reveal_message_metadata` fetches on demand. */
+  reactedMessages: Message[];
   streamingContext: StreamingContext;
   messageIdMap: MessageIdMap;
   emojiStrings: string[];

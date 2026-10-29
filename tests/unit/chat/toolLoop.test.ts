@@ -218,6 +218,7 @@ function makeContext(): ChatTurnContext {
     message: { id: "msg_1", channel },
     contextItems: [],
     simplifiedMessages: [],
+    reactedMessages: [],
     messageIdMap: new Map(),
     emojiStrings: [],
     loadedEmojis: null,
@@ -254,6 +255,8 @@ function makeContext(): ChatTurnContext {
     expressionDelivery: createExpressionDeliveryState(),
     responseTarget: undefined,
     turn: {
+      mainPersona: null,
+      persona: tomoriState,
       lockedTurn: {
         channelId: "ch_test",
         admission: { incoming: { retryCount: 0 } },
