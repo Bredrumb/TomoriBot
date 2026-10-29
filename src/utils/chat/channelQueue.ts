@@ -26,7 +26,7 @@ import { getMessageProxyMessageRecord } from "@/utils/messageProxy/proxyExpectat
 
 export const CHANNEL_LOCK_TIMEOUT_MS = parseIntegerEnvFlag(process.env.CHANNEL_LOCK_TIMEOUT_MS, 180000, 10000);
 const DISCORD_TYPING_KEEPALIVE_INTERVAL_MS = 8000;
-export const MAX_FOLLOW_UP_INTERRUPTS = Number.parseInt(process.env.MAX_FOLLOW_UP_INTERRUPTS || "3", 10);
+const MAX_FOLLOW_UP_INTERRUPTS = Number.parseInt(process.env.MAX_FOLLOW_UP_INTERRUPTS || "3", 10);
 const SELF_REPLY_SUPPRESSION_TTL_MS = 5000;
 
 export type QueuedMessage = {
@@ -711,7 +711,7 @@ export function suppressNextSelfReply(channelId: string, ttlMs = SELF_REPLY_SUPP
   selfReplySuppressionUntil.set(channelId, Date.now() + ttlMs);
 }
 
-export async function refreshDiscordTypingIndicator(channel: Message["channel"], reason: string): Promise<void> {
+async function refreshDiscordTypingIndicator(channel: Message["channel"], reason: string): Promise<void> {
   if (!("sendTyping" in channel) || typeof channel.sendTyping !== "function") {
     return;
   }
@@ -815,11 +815,7 @@ export function clearChannelProcessingQueue(channelId: string): number {
   return clearedCount;
 }
 
-export function enqueueLatestFollowUp(
-  lockEntry: ChannelLockEntry,
-  userDiscId: string,
-  followUp: QueuedMessage,
-): number {
+function enqueueLatestFollowUp(lockEntry: ChannelLockEntry, userDiscId: string, followUp: QueuedMessage): number {
   const previousLength = lockEntry.messageQueue.length;
   const removedMessages: QueuedMessage[] = [];
   lockEntry.messageQueue = lockEntry.messageQueue.filter((queuedMessage) => {
@@ -871,7 +867,7 @@ export function excludeMessagesAwaitingOwnTurn(
   return messages.filter((message) => !pendingMessageIds.has(message.id) || isSelfTriggerMessage(message, allPersonas));
 }
 
-export function clearQueuedSelfReplyWork(
+function clearQueuedSelfReplyWork(
   channelId: string,
   allPersonas: TomoriState[],
 ): { clearedPersonaJobCount: number; clearedSelfTriggerCount: number } {

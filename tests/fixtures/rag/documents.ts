@@ -35,6 +35,4 @@ export const RAG_DOCUMENTS = [
   veyraSignage,
 ] as const satisfies readonly RagDocument[];
 
-export type RagDocumentKey = (typeof RAG_DOCUMENTS)[number]["key"];
-
 export type RagPassageKey = (typeof RAG_DOCUMENTS)[number]["passages"][number]["key"];

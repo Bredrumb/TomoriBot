@@ -15,7 +15,7 @@ export interface StructuredDocumentChunk {
 }
 
 // These measured budgets keep the fixture peak at 464 E5 tokens because CJK and dense runs count triple.
-export const DOCUMENT_CHUNK_TARGET = 900;
+const DOCUMENT_CHUNK_TARGET = 900;
 export const DOCUMENT_CHUNK_MAX = 1400;
 // Bound repeated heading context because an authored title can exceed the entire embedding budget.
 const HEADING_INPUT_MAX = 180;

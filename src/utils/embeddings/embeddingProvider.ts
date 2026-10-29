@@ -2,12 +2,6 @@ import type { EmbeddingRequest } from "@/types/provider/featureInterfaces";
 import { log } from "@/utils/misc/logger";
 import { resolveEmbeddingsCapability } from "@/utils/provider/providerCapabilityResolver";
 
-export type EmbeddingProviderName = string;
-export type {
-  EmbeddingTaskType,
-  EmbeddingRequest,
-} from "@/types/provider/featureInterfaces";
-
 export async function providerSupportsEmbeddingTaskType(providerName: string): Promise<boolean> {
   const capability = await resolveEmbeddingsCapability(providerName);
   return capability?.supportsEmbeddingTaskType() ?? false;
@@ -87,7 +81,7 @@ export async function embedWithBatchFallback(
   throw new Error(`Embedding count mismatch: expected ${inputs.length}, got ${embeddings.length}`);
 }
 
-export async function generateEmbeddings(request: EmbeddingRequest): Promise<number[][]> {
+async function generateEmbeddings(request: EmbeddingRequest): Promise<number[][]> {
   try {
     return await embedWithBatchFallback(
       request.inputs,

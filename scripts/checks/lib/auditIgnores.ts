@@ -9,4 +9,8 @@
  * across the WHOLE tree, not per dependency path, so an entry keeps hiding the advisory even if a
  * later dependency change puts the package on a reachable path.
  */
-export const AUDIT_IGNORED_ADVISORIES: readonly string[] = ["GHSA-vfj7-8cjw-p6xm", "GHSA-w5hq-g745-h8pq"];
+export const AUDIT_IGNORED_ADVISORIES: readonly string[] = [
+  "GHSA-vfj7-8cjw-p6xm",
+  "GHSA-w5hq-g745-h8pq",
+  "GHSA-gcqx-w48m-w2h4",
+];

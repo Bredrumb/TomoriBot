@@ -1,7 +1,7 @@
 import type { RagPassageKey } from "./documents";
 import type { RagLanguage, RagQueryCategory, RagQuerySplit } from "./types";
 
-export interface RagQuery {
+interface RagQuery {
   key: string;
   language: RagLanguage;
   text: string;

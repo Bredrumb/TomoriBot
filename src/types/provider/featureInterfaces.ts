@@ -5,7 +5,7 @@ import type { CompactRoleplaySummary } from "@/types/misc/compact";
 import type { PresetExportData } from "@/types/preset/presetExport";
 import type { ToolContext } from "@/types/tool/interfaces";
 
-export type EmbeddingTaskType =
+type EmbeddingTaskType =
   | "SEMANTIC_SIMILARITY"
   | "CLASSIFICATION"
   | "CLUSTERING"
