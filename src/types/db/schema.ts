@@ -1635,33 +1635,6 @@ export const textQuotaConfigSchema = z.object({
 export type TextQuotaConfigRow = z.infer<typeof textQuotaConfigSchema>;
 
 /**
- * Schema for per-user daily text quota tracking
- * Resets daily at midnight (server timezone)
- */
-export const textQuotaSchema = z.object({
-  quota_id: z.number().optional(), // Primary key, auto-generated
-  server_id: z.number(), // Foreign key to servers table
-  user_disc_id: z.string(), // User's Discord ID
-  usage_count: z.number().int().min(0).default(0), // Text generations triggered today
-  quota_date: z.date(), // Date this quota is for (YYYY-MM-DD)
-  last_reset: z.date().optional(), // Handled by DB default
-});
-export type TextQuotaRow = z.infer<typeof textQuotaSchema>;
-
-/**
- * Schema for server-wide text quota tracking
- * Resets based on serverwide_quota_resets_in configuration
- */
-export const textServerwideQuotaSchema = z.object({
-  server_id: z.number(), // Primary key, foreign key to servers table
-  usage_count: z.number().int().min(0).default(0), // Total text generations this period
-  quota_period_start: z.date(), // When this quota period started
-  quota_period_end: z.date(), // When this quota period ends (calculated from config)
-  updated_at: z.date().optional(), // Handled by DB default
-});
-export type TextServerwideQuotaRow = z.infer<typeof textServerwideQuotaSchema>;
-
-/**
  * Schema for video quota configuration (per-server settings)
  * Controls daily user quotas and server-wide quota pools for video generation
  */
