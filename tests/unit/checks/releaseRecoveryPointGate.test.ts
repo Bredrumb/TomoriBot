@@ -23,8 +23,14 @@ function recoveryPointStep(workflow: string): string {
 }
 
 const gitPath = Bun.which("git");
+// Git for Windows puts git.exe in cmd\ or mingw64\bin\; a PATH lookup could find WSL's bash, which rejects /c/ paths.
 const bash =
-  process.platform === "win32" && gitPath ? path.resolve(path.dirname(gitPath), "..", "bin", "bash.exe") : "bash";
+  process.platform === "win32" && gitPath
+    ? ([
+        path.resolve(path.dirname(gitPath), "..", "bin", "bash.exe"),
+        path.resolve(path.dirname(gitPath), "..", "..", "bin", "bash.exe"),
+      ].find((candidate) => existsSync(candidate)) ?? "bash.exe")
+    : "bash";
 const bashFile = (filePath: string) =>
   process.platform === "win32"
     ? filePath.replace(/^([A-Za-z]):/, (_, drive: string) => `/${drive.toLowerCase()}`).replaceAll("\\", "/")
