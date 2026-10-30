@@ -14,7 +14,7 @@ import {
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
-import { deliverTransferExport } from "@/utils/discord/transferExportDelivery";
+import { deliverTransferExport, transferExportReplyReceipts } from "@/utils/discord/transferExportDelivery";
 
 export type ConfigExportScope = TransferExportScope;
 
@@ -101,13 +101,15 @@ export async function runConfigExport(
     });
 
     await deliverTransferExport({
-      interaction,
+      userId: interaction.user.id,
       locale,
-      typeLabel,
-      dmDescriptionKey: "commands.data.export.dm_description",
+      dmDescription: localizer(locale, "commands.data.export.dm_description", { type: typeLabel }),
       attachment,
       operationLabel: "config",
-      dependencies,
+      sendDirectMessage: (payload) => dependencies.deliverDirectMessage(interaction, payload),
+      receipts: transferExportReplyReceipts(typeLabel, (options) =>
+        dependencies.replyInfoEmbed(interaction, locale, options),
+      ),
     });
   } catch (error) {
     log.error(`Error executing the ${scope} config export:`, error, {

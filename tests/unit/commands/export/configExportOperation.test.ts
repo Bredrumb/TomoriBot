@@ -284,7 +284,7 @@ describe("config export operation", () => {
     });
   });
 
-  it("reports the closed-DM failure even though the export itself succeeded", async () => {
+  it("attaches the export to the private reply when the DM is closed", async () => {
     const interaction = makeWorkspaceInteraction({ inGuild: true, canManageGuild: true });
     const { deps, calls } = makeDependencies({ deliveryFails: true });
 
@@ -294,8 +294,11 @@ describe("config export operation", () => {
     expect(calls.replies).toHaveLength(1);
     expect(calls.replies[0]).toMatchObject({
       titleKey: "commands.data.export.dm_failed_title",
-      descriptionKey: "commands.data.export.dm_failed_description",
+      descriptionKey: "commands.data.export.dm_failed_attached_description",
     });
+    expect(calls.replies[0]?.files?.map((file) => file.name)).toEqual(
+      calls.deliveries[0]?.files.map((file) => file.name),
+    );
   });
 
   it("reports a failed export with the repository's own error key and delivers nothing", async () => {

@@ -10,7 +10,6 @@ export default {
       dm_title: `Exportação de Dados`,
       dm_description: `Aqui estão os dados de {type} que você me solicitou!`,
       dm_failed_title: `🔴 Não Foi Possível Enviar DM`,
-      dm_failed_description: `Não consegui te enviar uma DM. Por favor, certifique-se de que você tem DMs ativadas de membros do servidor e tente novamente.`,
       no_permission_title: `🔴 Permissão Negada`,
       no_permission_description: `Você precisa da permissão **Gerenciar Servidor** para exportar os dados do servidor.`,
       error_no_user_data: `Nenhum dado de usuário encontrado. Você pode precisar interagir com o bot primeiro.`,

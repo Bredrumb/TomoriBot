@@ -10,7 +10,7 @@ export default {
       dm_title: `Data Export`,
       dm_description: `Here's the {type} data that you requested from me!`,
       dm_failed_title: `Could Not Send DM`,
-      dm_failed_description: `I couldn't send you a DM. Please make sure you have DMs enabled from server members, then try again.`,
+      dm_failed_attached_description: `I couldn't send you a DM, so your {type} export is attached here instead. Save it now, because this message disappears. Enable DMs from server members to keep future exports in your DMs.`,
       no_permission_title: `Permission Denied`,
       no_permission_description: `You need the **Manage Server** permission to export server data.`,
       error_no_user_data: `No user data found. You may need to interact with the bot first.`,

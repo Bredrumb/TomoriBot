@@ -10,7 +10,6 @@ export default {
       dm_title: `Xuất dữ liệu`,
       dm_description: `Đây là dữ liệu {type} bạn đã yêu cầu từ mình!`,
       dm_failed_title: `🔴 Không thể gửi tin nhắn trực tiếp`,
-      dm_failed_description: `Mình không thể gửi tin nhắn trực tiếp cho bạn. Hãy chắc chắn bạn đã bật nhận tin nhắn trực tiếp từ thành viên máy chủ rồi thử lại.`,
       no_permission_title: `🔴 Không có quyền`,
       no_permission_description: `Bạn cần có quyền **Quản lý máy chủ** để xuất dữ liệu máy chủ.`,
       error_no_user_data: `Không tìm thấy dữ liệu người dùng. Bạn có thể cần tương tác với bot trước.`,

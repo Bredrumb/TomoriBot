@@ -10,7 +10,6 @@ export default {
       dm_title: `資料匯出`,
       dm_description: `這是你向我要求的{type}資料！`,
       dm_failed_title: `🔴 無法傳送私訊`,
-      dm_failed_description: `我無法傳私訊給你。請確認你已開放接收伺服器成員的私訊，然後再試一次。`,
       no_permission_title: `🔴 權限不足`,
       no_permission_description: `匯出伺服器資料需要 **管理伺服器** 權限。`,
       error_no_user_data: `找不到使用者資料。你可能需要先和我互動過。`,
