@@ -40,6 +40,7 @@ import {
   recordChatProviderContext,
   runWithChatDiagnosticStage,
 } from "@/utils/chat/diagnosticTimeline";
+import { recordChatTurnFlags } from "@/utils/chat/turnLatency";
 import { applyAssistantPrefill } from "@/utils/chat/assistantPrefill";
 import type { ChatResponseSink, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import {
@@ -123,6 +124,7 @@ async function runGenerationAttempts(
     context.streamingContext.deliveryState ??= { unconfirmed: false };
     context.responseReview = createResponseReviewState(context);
     context.streamingContext.holdResponseText = Boolean(context.responseReview);
+    recordChatTurnFlags({ drafting: context.streamingContext.holdResponseText });
     const plan = await buildGenerationPlan(context);
     const attempts = plan.attempts;
     const failures: FallbackNoticeAttempt[] = [];

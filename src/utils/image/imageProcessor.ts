@@ -7,6 +7,7 @@
 // sharp v0.35 moved to ESM-style types, so `Metadata` is a named type export
 //    rather than a member of a merged `sharp` namespace.
 import sharp from "sharp";
+import { recordChatTurnFetch } from "@/utils/chat/turnLatency";
 import { log } from "../misc/logger";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
@@ -85,10 +86,14 @@ function normalizeMimeType(mimeType: string | undefined): string | undefined {
  * @throws Error if the fetch itself fails
  */
 export async function fetchAndOptimizeImage(url: string, sourceMimeType?: string): Promise<OptimizedImage> {
+  const downloadStartedAt = performance.now();
   const downloadResult = await safeDownload(url, {
     maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,
     timeoutMs: IMAGE_FETCH_TIMEOUT_MS,
   });
+  if (!url.startsWith("data:") && downloadResult.error !== "blocked_by_policy") {
+    recordChatTurnFetch("image", performance.now() - downloadStartedAt);
+  }
   if (!downloadResult.success || !downloadResult.buffer) {
     throw new Error(`Image fetch failed: ${downloadResult.details ?? downloadResult.error ?? "unknown error"}`);
   }

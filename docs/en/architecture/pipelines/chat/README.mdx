@@ -87,9 +87,65 @@ turns, context message counts, attempt model labels, tool iterations, and Discor
 raw message content, prompts, user IDs, and raw channel IDs. The in-memory trace store retains at most 5,000
 traces for one hour.
 
+The timeline also records `typing_started` after the initial typing request completes,
+`context_built` after context assembly (history REST duration, reply fetch count, participant
+preparation duration, and native build duration), and `provider_first_chunk` on the first stream
+progress callback for each provider call. The progress callback runs when a chunk reaches the
+stream consumer, before chunk processing, and also refreshes the existing stream watchdog.
+
+## Turn latency metric
+
+`log.metric("chat_turn_latency", fields)` emits once when each started persona turn ends, including
+failed turns and bot or webhook triggers without a diagnostic owner. Admission refusals and plans
+with no persona turns emit no sample. A queued replay or persona job is a separate invocation;
+personas in one invocation share its start, admission duration, and planning duration. The async
+scope isolates concurrent channels and stops accepting updates when its turn ends.
+
+All durations use `performance.now()` except `gateway_ms`, which compares wall clocks. Every sample
+has the same fields. An unstarted duration or an unreached milestone is `-1`; counts and summed
+image time start at zero. A failed stage that started still records its elapsed time. Durations
+overlap and must not be added to reconstruct total latency.
+
+| Number | Meaning |
+|---|---|
+| `gateway_ms` | Invocation entry wall time minus Discord's trigger `createdTimestamp`; includes upstream delay and clock skew and can be negative. |
+| `admission_ms` | Time in `evaluateChatAdmission`. |
+| `plan_ms` | Time in `planChatTurns`. |
+| `context_ms` | This persona's full context build, including intent preflight. |
+| `dispatch_ms` | Invocation entry to the first `streamToDiscord` adapter entry in this turn. Later personas include time spent on earlier personas. |
+| `provider_ttfb_ms` | First adapter entry to its first stream progress callback; `-1` if that call produces no progress, even if a fallback later succeeds. |
+| `first_message_ms` | Invocation entry to the first confirmed send recorded by `recordChatMessageSent`, including held response delivery. |
+| `history_fetch_ms` | Sum of channel history `messages.fetch` durations. |
+| `native_ms` | Sum of `buildContext` durations, including native assembly, participant hydration, RAG, and any preset reassembly. |
+| `reaction_fetches` | Calls to `reaction.users.fetch` during metadata reveal; ordinary turns use cached reaction counts and record zero. |
+| `reply_fetches` | Reply target REST calls in `withReplyContext`, after history-window and message-cache misses, including failed calls. |
+| `image_fetches` | Network download attempts at the `safeDownload` seam in `fetchAndOptimizeImage`, including failed downloads but excluding data URIs and policy-blocked results. |
+| `image_ms` | Sum of those download durations, through body download and excluding image optimization; overlapping downloads each contribute their wall time. |
+
+The dispatch boundary precedes adapter-side image preparation and the provider HTTP request. Image
+download time therefore falls after `dispatch_ms` and inside `provider_ttfb_ms` when the first call
+downloads images. The download counter lives immediately around `safeDownload` in `imageProcessor.ts`,
+so a cache returning before that seam skips both the counter and download timing. It counts download
+operations, rather than individual redirect requests. No URLs, message text, model names, or endpoint
+identifiers enter this metric.
+
+| Dimension | Fixed values and meaning |
+|---|---|
+| `provider` | `anthropic`, `custom`, `deepseek`, `google`, `novelai`, `nvidia`, `openrouter`, `vertex`, `vertexexpress`, `zai`, `zaicoding`, or `unknown`; the first dispatched provider, otherwise the context's planned provider when known. Custom endpoint IDs collapse to `custom`. |
+| `humanizer` | `none`, `light`, `medium`, `heavy`, or `unknown` before context configuration is available. |
+| `source` | `message`, `queue`, `persona_job`, `retry`, `manual`, or `stop`, using the diagnostic timeline's source precedence. |
+| `rag` | `yes` when built context contains server document retrieval content, otherwise `no`; it does not claim every retrieval attempt injected content. |
+| `history` | `rest`. |
+| `drafting` | `yes` when response review enabled holding response text during this turn, otherwise `no`. |
+
+For example, compare `dispatch_ms` for the same provider and source before inspecting the history,
+native, and download fields for the source of a change. `context_built.participantMs` measures the
+participant preparation call; hydration inside `buildContext` belongs to `native_ms`.
+
 ## Source pointers
 
 - `src/events/messageCreate/tomoriChat.ts`: main chat entry point and stage coordinator.
 - `src/utils/chat/channelQueue.ts`: channel locking, queue storage, and re-entry helpers.
 - `src/utils/chat/diagnosticTimeline.ts`: per-turn event recording and diagnostic trace store.
+- `src/utils/chat/turnLatency.ts`: independent per-turn latency accumulator and fixed metric shape.
 - `src/commands/troubleshoot/chat.ts`: troubleshooting diagnostic command implementation.
