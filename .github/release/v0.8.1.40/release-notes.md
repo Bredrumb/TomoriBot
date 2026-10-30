@@ -82,6 +82,7 @@ TomoriBot should now feel more snappy and less costly thanks to the following ch
 
 ## Content Additions
 - Default personas now have tentative character reference images each, helping with character-referenced image generation
+- Added a new ready-to-import MOSS-image workflow for TomoriBot, in `/assets/`
 - Anima workflows for TomoriBot in `/assets/` has been updated and split into two types:
   - Anima Turbo: Uses the v1.1 turbo model of Anima, 3x faster at generating
   - Anima (detailed): Uses the Aesthetic model of Anima with extra face detailer and hand detailer nodes, slower at generating but prettier generations
