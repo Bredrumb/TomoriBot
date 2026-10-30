@@ -87,6 +87,75 @@ afterEach(() => {
 });
 
 describe("Discord typing keepalive", () => {
+  it("ignores a previous lease's typing completion when the next persona uses the same trigger", async () => {
+    const entry = heldLock();
+    const acquire = () =>
+      acquireChannelLockForTurn(entry, {
+        messageId: MESSAGE_ID,
+        userDiscId: "fixture-user",
+        isPersonaJob: true,
+        isCommandTriggered: false,
+      });
+    const pending = Promise.withResolvers<void>();
+    let requests = 0;
+    const channel = {
+      id: CHANNEL_ID,
+      sendTyping: () => (++requests === 1 ? pending.promise : Promise.resolve()),
+    } as unknown as Message["channel"];
+    const interval = spyOn(globalThis, "setInterval");
+    spies.push(interval);
+    acquire();
+    const previousStart = startDiscordTypingKeepalive(channel, entry, MESSAGE_ID);
+    entry.isLocked = false;
+    entry.activeTurnAbortController?.abort();
+    acquire();
+    await startDiscordTypingKeepalive(channel, entry, MESSAGE_ID);
+    const currentTimer = entry.typingKeepaliveTimer;
+    pending.resolve();
+    await previousStart;
+    try {
+      expect(interval).toHaveBeenCalledTimes(1);
+      expect(entry.typingKeepaliveTimer).toBe(currentTimer);
+      stopDiscordTypingKeepalive(CHANNEL_ID, entry, "test_release");
+      expect(entry.typingKeepaliveTimer).toBeNull();
+    } finally {
+      for (const result of interval.mock.results) {
+        if (result.type === "return") clearInterval(result.value);
+      }
+    }
+  });
+
+  it("does not let a queued tick from the previous lease send typing or clear the next timer", async () => {
+    const entry = heldLock();
+    const acquire = () =>
+      acquireChannelLockForTurn(entry, {
+        messageId: MESSAGE_ID,
+        userDiscId: "fixture-user",
+        isPersonaJob: true,
+        isCommandTriggered: false,
+      });
+    let requests = 0;
+    const channel = {
+      id: CHANNEL_ID,
+      sendTyping: async () => {
+        requests++;
+      },
+    } as unknown as Message["channel"];
+    const interval = spyOn(globalThis, "setInterval");
+    spies.push(interval);
+    acquire();
+    await startDiscordTypingKeepalive(channel, entry, MESSAGE_ID);
+    const previousTick = interval.mock.calls[0][0];
+    stopDiscordTypingKeepalive(CHANNEL_ID, entry, "test_handoff");
+    acquire();
+    await startDiscordTypingKeepalive(channel, entry, MESSAGE_ID);
+    const currentTimer = entry.typingKeepaliveTimer;
+    if (typeof previousTick !== "function") throw new Error("Missing keepalive callback");
+    previousTick();
+    expect(requests).toBe(2);
+    expect(entry.typingKeepaliveTimer).toBe(currentTimer);
+  });
+
   it.each([
     "resolve",
     "reject",

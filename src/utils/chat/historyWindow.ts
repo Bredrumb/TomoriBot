@@ -92,9 +92,7 @@ export async function readChannelHistory(
   const gap =
     window?.newestAtBuild &&
     cache instanceof LimitedCollection &&
-    cache.size >= cache.maxSize &&
-    cacheOldest &&
-    compareIds(cacheOldest, window.newestAtBuild) > 0;
+    (!cacheOldest || compareIds(cacheOldest, window.newestAtBuild) > 0);
   const merged = window ? mergeWindow(window, cache.values(), fetchLimit) : [];
   const uncachedChange =
     window &&

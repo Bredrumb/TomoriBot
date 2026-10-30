@@ -757,19 +757,27 @@ export async function startDiscordTypingKeepalive(
   messageId: string,
 ): Promise<void> {
   stopDiscordTypingKeepalive(channel.id, lockEntry, "restart");
+  const controller = lockEntry.activeTurnAbortController;
+  const ownsTurn = () =>
+    lockEntry.isLocked &&
+    lockEntry.currentMessageId === messageId &&
+    lockEntry.activeTurnAbortController === controller &&
+    !controller?.signal.aborted;
   await refreshDiscordTypingIndicator(channel, "lock_scope_start");
-  if (!lockEntry.isLocked || lockEntry.currentMessageId !== messageId) {
+  if (!ownsTurn()) {
     return;
   }
-  lockEntry.typingKeepaliveTimer = setInterval(() => {
+  const timer = setInterval(() => {
     // Not gated on stop requests: internal and follow-up stops are cleared while the turn keeps the lock.
-    if (!lockEntry.isLocked || lockEntry.currentMessageId !== messageId) {
-      stopDiscordTypingKeepalive(channel.id, lockEntry, "lock_scope_end");
+    if (!ownsTurn()) {
+      clearInterval(timer);
+      if (lockEntry.typingKeepaliveTimer === timer) lockEntry.typingKeepaliveTimer = null;
       return;
     }
 
     void refreshDiscordTypingIndicator(channel, "lock_scope_keepalive");
   }, DISCORD_TYPING_KEEPALIVE_INTERVAL_MS);
+  lockEntry.typingKeepaliveTimer = timer;
 
   log.info(
     `Discord typing keepalive started for channel ${channel.id} (message ${messageId}, interval ${DISCORD_TYPING_KEEPALIVE_INTERVAL_MS}ms).`,

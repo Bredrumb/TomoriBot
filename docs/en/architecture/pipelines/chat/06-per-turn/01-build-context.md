@@ -47,11 +47,13 @@ buildContext() (context-build pipeline)        ──► assembles StructuredCon
   Delivery recording retains webhook messages before their gateway echoes arrive.
   A delivery without a full message object drops the window so the next turn reads it from Discord.
 - **History freshness**: update, delete, bulk-delete, and raw reaction events record changed IDs on
-  the lock entry. Changes to uncached window messages, an increased limit, a full cache with a gap,
+  the lock entry. Changes to uncached window messages, an increased limit, a cache with a gap,
   or a deletion requiring older history take the REST path. A change arriving during a REST read
   forces another read because discord.js can overwrite a cached edit with the response. Signal
-  overflow drops the window. Shard disconnects and reconnects drop all windows; disconnected shards
-  disable reuse. DM turns use REST unless the client subscribes to DM reaction events. The idle channel
+  overflow drops the window. A cleared cache or one whose oldest entry is newer than the previous
+  window's newest message requires REST even below capacity, because deletion or sweeping can
+  shrink a cache after earlier messages were evicted. Shard disconnects and reconnects drop all
+  windows; disconnected shards disable reuse. DM turns use REST unless the client subscribes to DM reaction events. The idle channel
   keeps no window because the message sweeper can evict cache entries.
 - **History auxiliary reads**: proxy identities use the unfiltered history; sprite records, minimal
   notice bodies, and agendas use visible messages after blacklist and block filtering. These reads

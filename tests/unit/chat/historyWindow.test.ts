@@ -42,7 +42,7 @@ function createHistoryFixture(count = 80, channelType: ChannelType.GuildText | C
       if (cached) {
         Object.assign(cached, message);
         result.set(id, cached);
-      }
+      } else cache.set(id, message);
     }
     return result;
   });
@@ -140,6 +140,34 @@ describe("busy channel history window", () => {
     expect(result[0]?.id).toBe("10");
   });
 
+  it.each(["delete", "sweep", "clear"])("refetches a gap after cache overflow followed by %s", async (removal) => {
+    const fixture = createHistoryFixture();
+    fixture.fetch.mockImplementation(async ({ limit }) => {
+      const result = new Collection(
+        [...fixture.rest].sort(([left], [right]) => Number(right) - Number(left)).slice(0, limit),
+      );
+      for (const [id, message] of result) fixture.cache.set(id, message);
+      return result;
+    });
+    await readChannelHistory(fixture.channel, 80, false);
+    for (let id = 81; id <= 140; id++) {
+      const message = fixture.message(id);
+      fixture.rest.set(message.id, message);
+      fixture.cache.set(message.id, message);
+    }
+    if (removal === "clear") fixture.cache.clear();
+    else {
+      fixture.cache.delete("140");
+      if (removal === "delete") {
+        fixture.rest.delete("140");
+        recordHistoryWindowChange(CHANNEL_ID, "140", "deleted");
+      }
+    }
+    const result = await readChannelHistory(fixture.channel, 80, true);
+    expect(fixture.fetch).toHaveBeenCalledTimes(2);
+    expect(result).toEqual(await readChannelHistory(fixture.channel, 80, false));
+  });
+
   it.each(["edit", "reaction"])("refetches an uncached %s but reuses a cached change", async () => {
     const fixture = createHistoryFixture();
     await readChannelHistory(fixture.channel, 80, false);
@@ -148,10 +176,12 @@ describe("busy channel history window", () => {
     recordHistoryWindowChange(CHANNEL_ID, cached.id, "changed");
     expect((await readChannelHistory(fixture.channel, 80, true)).at(-1)).toBe(cached);
     expect(fixture.fetch).toHaveBeenCalledTimes(1);
-    const uncached = fixture.message(1, "changed outside the cache");
+    const uncached = fixture.message(60, "changed outside the cache");
     fixture.rest.set(uncached.id, uncached);
     recordHistoryWindowChange(CHANNEL_ID, uncached.id, "changed");
-    expect((await readChannelHistory(fixture.channel, 80, true))[0]).toBe(uncached);
+    expect((await readChannelHistory(fixture.channel, 80, true)).find((message) => message.id === uncached.id)).toBe(
+      uncached,
+    );
     expect(fixture.fetch).toHaveBeenCalledTimes(2);
   });
 

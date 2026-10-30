@@ -33,8 +33,9 @@ try {
 
 The first turn starts typing alongside context building and waits for both before generation, so
 the initial typing indicator cannot arrive after the reply. `typing_started` records completion of
-the initial request. After that request settles, the keepalive starts only if the same message still
-holds the lock; context failure can release it while the request is in flight.
+the initial request. After that request settles, the keepalive starts only if the same abort
+controller still owns the lock; queued personas can share a trigger message ID across different
+lock acquisitions. A late interval callback clears only its own timer.
 
 The lock entry also owns a bounded history window for the busy stretch: the active turn and its
 queued replays. Later personas and queued user or persona turns can reuse it. Release preserves the
