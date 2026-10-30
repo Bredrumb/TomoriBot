@@ -991,6 +991,10 @@ jobs:
             echo "status=failed" >> "$GITHUB_OUTPUT"
             exit 1
           fi
+          if [[ "$response_message" =~ TOMORIBOT_POST_START_ERRORS=([0-9]+)/([0-9]+) ]] &&
+            (( BASH_REMATCH[1] > 0 || BASH_REMATCH[2] > 0 )); then
+            echo "::warning title=Post-start errors::${BASH_REMATCH[1]} error_logs row(s) and ${BASH_REMATCH[2]} container error log(s) in the first minute; below the storm threshold, so the deploy continued."
+          fi
           echo "status=success" >> "$GITHUB_OUTPUT"
 
       - name: Lock down VM host after verified deployment

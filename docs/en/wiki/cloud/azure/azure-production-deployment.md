@@ -288,9 +288,12 @@ only these responsibilities:
   FQDN, root-owned configuration modes, and `http://localhost:8081/healthz`;
 - read one user through `UserRepository` and custom endpoint connections through
   `LlmProviderRepository`, using the new image's code; and
-- wait until 45 seconds after the container's exact start time, then fail on a restart, lost health,
-  any new `error_logs` row, or an error record in the new container's JSON logs. If Compose reuses
-  an unchanged container, the error window starts when this deploy verifies it.
+- wait until 60 seconds after the container's exact start time, then fail on a restart, lost health,
+  or an error storm: 1,000 or more new `error_logs` rows, or error records in the new container's
+  JSON logs, within that minute. Fewer errors pass, because user activity (expired interactions,
+  provider outages) logs errors on any healthy start; the workflow reports their count as a warning
+  annotation instead. If Compose reuses an unchanged container, the error window starts when this
+  deploy verifies it.
 
 The runtime container sets `DATABASE_SCHEMA_MANAGEMENT_ENABLED=false`, so startup verifies database
 connectivity but cannot execute migrations or `pg_cron` administration. Migrations are applied
