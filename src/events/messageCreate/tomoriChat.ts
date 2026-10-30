@@ -13,7 +13,9 @@ import {
   recordChatDiagnostic,
   runWithChatDiagnostic,
   runWithChatDiagnosticStage,
+  sourceOf,
 } from "@/utils/chat/diagnosticTimeline";
+import { createChatLatencyInvocation, measureChatTurnStage, runWithChatTurnLatency } from "@/utils/chat/turnLatency";
 import { runGenerationTurn } from "@/utils/chat/generationTurn";
 import type { ChatAdmissionDisposition, ChatIncoming, TomoriChatInput } from "@/utils/chat/types";
 import { installUserImpersonationCompletion } from "@/utils/chat/userImpersonationCompletion";
@@ -40,7 +42,15 @@ export {
  * handlers by the shallow event dispatcher.
  */
 export async function tomoriChat(input: TomoriChatInput): Promise<ChatAdmissionDisposition> {
+  const startedAt = performance.now();
+  const receivedAt = Date.now();
   const incoming = normalizeChatInvocation(input);
+  const latencyInvocation = createChatLatencyInvocation(
+    incoming.message.createdTimestamp,
+    sourceOf(incoming).source,
+    startedAt,
+    receivedAt,
+  );
   const userImpersonationCompletion = installUserImpersonationCompletion(incoming);
 
   const disposition = await runWithErrorContext(
@@ -50,7 +60,7 @@ export async function tomoriChat(input: TomoriChatInput): Promise<ChatAdmissionD
       serverDiscId: incoming.message.guildId,
       channelDiscId: incoming.message.channelId,
     },
-    () => runWithChatDiagnostic(incoming, () => runAdmittedChatTurn(incoming)),
+    () => runWithChatDiagnostic(incoming, () => runAdmittedChatTurn(incoming, latencyInvocation)),
   );
 
   // User impersonation owns its user-facing error UI at the slash interaction. Waiting here keeps
@@ -63,8 +73,13 @@ export async function tomoriChat(input: TomoriChatInput): Promise<ChatAdmissionD
   return disposition;
 }
 
-async function runAdmittedChatTurn(incoming: ChatIncoming): Promise<ChatAdmissionDisposition> {
+async function runAdmittedChatTurn(
+  incoming: ChatIncoming,
+  latencyInvocation: ReturnType<typeof createChatLatencyInvocation>,
+): Promise<ChatAdmissionDisposition> {
+  const admissionStartedAt = performance.now();
   const admission = await evaluateChatAdmission(incoming);
+  const admissionMs = performance.now() - admissionStartedAt;
   recordChatDiagnostic({ kind: "admission", disposition: admission.disposition });
 
   const isNudgeTurn = Boolean(incoming.naturalNudge);
@@ -94,37 +109,46 @@ async function runAdmittedChatTurn(incoming: ChatIncoming): Promise<ChatAdmissio
   await runWithChannelLock(
     admission,
     async (lockedTurn, startTyping) => {
+      const planStartedAt = performance.now();
       const turnPlan = await planChatTurns(lockedTurn);
+      const planMs = performance.now() - planStartedAt;
       recordChatDiagnostic({ kind: "turns_planned", count: turnPlan.turns.length });
       let generationResultCount = 0;
       let nudgeContinues = false;
 
       if (turnPlan.turns.length > 0) {
         try {
-          await startTyping();
-
           for (const turn of turnPlan.turns) {
-            recordChatDiagnostic({ kind: "turn_started", ordinal: turn.personaIndex + 1, total: turn.totalPersonas });
-            const context = await buildChatTurnContext(turn);
-            const responseSink = createChatResponseSink(context);
-            const result = await runWithChatDiagnosticStage({ turn: turn.personaIndex + 1 }, () =>
-              runGenerationTurn(context, responseSink),
-            );
-            recordChatDiagnostic({
-              kind: "turn_finished",
-              status: result.status,
-              responseCount: result.personaResponses.length,
+            await runWithChatTurnLatency(latencyInvocation, admissionMs, planMs, async () => {
+              if (turn === turnPlan.turns[0]) {
+                await startTyping();
+                recordChatDiagnostic({ kind: "typing_started" });
+              }
+              recordChatDiagnostic({ kind: "turn_started", ordinal: turn.personaIndex + 1, total: turn.totalPersonas });
+              const context = await measureChatTurnStage("context_ms", () => buildChatTurnContext(turn));
+              const responseSink = createChatResponseSink(context);
+              const result = await runWithChatDiagnosticStage({ turn: turn.personaIndex + 1 }, () =>
+                runGenerationTurn(context, responseSink),
+              );
+              recordChatDiagnostic({
+                kind: "turn_finished",
+                status: result.status,
+                responseCount: result.personaResponses.length,
+              });
+              const willRetryEmptyResponse = shouldRetryEmptyResponse(
+                context.turn.lockedTurn.admission.incoming,
+                result,
+              );
+
+              await runPostTurnEffects(context, result);
+              generationResultCount++;
+              // A pending retry decides for itself, because clearing here would drop nudge turns the retry could still save.
+              nudgeContinues ||= willRetryEmptyResponse || isDeliveredTurnResult(result);
+
+              if (!willRetryEmptyResponse) {
+                await incoming.onGenerationResult?.(result);
+              }
             });
-            const willRetryEmptyResponse = shouldRetryEmptyResponse(context.turn.lockedTurn.admission.incoming, result);
-
-            await runPostTurnEffects(context, result);
-            generationResultCount++;
-            // A pending retry decides for itself, because clearing here would drop nudge turns the retry could still save.
-            nudgeContinues ||= willRetryEmptyResponse || isDeliveredTurnResult(result);
-
-            if (!willRetryEmptyResponse) {
-              await incoming.onGenerationResult?.(result);
-            }
           }
         } catch (error) {
           // A throw between planning and settlement must not leave a reserved text unit held.

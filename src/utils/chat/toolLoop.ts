@@ -49,6 +49,7 @@ import { takeEnhancedContextItem } from "@/utils/chat/pendingEnhancedContext";
 import { foldPrefillIntoToolHistory, insertBeforeNativePrefill } from "@/utils/chat/assistantPrefill";
 import { buildExpressionToolResult, deliverExpression } from "@/utils/chat/expressionDelivery";
 import { recordChatDiagnostic, runWithChatDiagnosticStage } from "@/utils/chat/diagnosticTimeline";
+import { recordChatProviderDispatch } from "@/utils/chat/turnLatency";
 import { parseIntegerEnvFlag } from "@/utils/misc/envFlags";
 import type { ChatTurnContext, GenerationTurnResult, ToolHistoryEntry } from "@/utils/chat/types";
 import { DISCORD_STREAMING_CONSTANTS } from "@/types/stream/types";
@@ -648,7 +649,12 @@ async function streamOnce(
     touchChannelLock(channelId);
   };
   let sawStreamProgress = false;
+  let recordFirstChunk: (() => void) | undefined;
   params.context.streamingContext.onStreamProgress = () => {
+    if (!sawStreamProgress) {
+      recordFirstChunk?.();
+      recordChatDiagnostic({ kind: "provider_first_chunk" });
+    }
     sawStreamProgress = true;
     armTimeout(STREAM_SDK_CALL_TIMEOUT_MS);
   };
@@ -696,6 +702,7 @@ async function streamOnce(
     request.contextItems,
     params.tomoriState.persona_id,
   );
+  recordFirstChunk = recordChatProviderDispatch(params.tomoriState.llm.llm_provider);
   const streamPromise = params.provider.streamToDiscord(
     params.context.channel as Parameters<LLMProvider["streamToDiscord"]>[0],
     params.context.client,

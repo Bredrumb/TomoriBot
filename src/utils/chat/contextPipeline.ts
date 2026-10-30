@@ -52,7 +52,7 @@ import {
   normalizeTailDirective,
 } from "@/utils/chat/contextDirectives";
 import { excludeMessagesAwaitingOwnTurn } from "@/utils/chat/channelQueue";
-import { recordChatContextHistory } from "@/utils/chat/diagnosticTimeline";
+import { recordChatContextHistory, recordChatDiagnostic } from "@/utils/chat/diagnosticTimeline";
 import { getSupersededMessageProxyOriginalMessageIds } from "@/utils/messageProxy/proxyExpectation";
 import {
   ensureMessageProxyMessageIdentity,
@@ -112,6 +112,14 @@ import { resolveEffectiveUserNaming } from "@/utils/text/userNaming";
 import { createExpressionDeliveryState } from "@/utils/chat/expressionDelivery";
 import { CONDITIONING_INTERACTION_RESPONSE_TEMPLATE } from "@/utils/conditioning/conditioningInteractionContext";
 import { createToolPromptMacroResolverForState } from "@/utils/tools/toolPromptMacros";
+
+import {
+  chatTurnContextTimings,
+  measureChatTurnStage,
+  recordChatTurnConfiguration,
+  recordChatTurnFetch,
+  recordChatTurnFlags,
+} from "@/utils/chat/turnLatency";
 
 const participantRequestScopes = new WeakMap<LockedChatTurn, ParticipantRequestScope>();
 
@@ -257,6 +265,7 @@ export function resolveTurnDeliberateToolMode(turn: ChatTurn): boolean {
 }
 
 export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnContext> {
+  recordChatTurnConfiguration(turn.persona.llm.llm_provider, turn.persona.config.humanizer_degree);
   const incoming = turn.lockedTurn.admission.incoming;
   const { client, message } = incoming;
   const channel = message.channel;
@@ -479,6 +488,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     participantRequestScope = createParticipantRequestScope();
     participantRequestScopes.set(turn.lockedTurn, participantRequestScope);
   }
+  const participantStartedAt = performance.now();
   const preparedParticipantContext = await prepareParticipantContext({
     client,
     guildId: turn.serverDiscId,
@@ -492,6 +502,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     responderPersonaIds: new Set(turn.triggeredPersonaIds),
     requestScope: participantRequestScope,
   });
+  const participantMs = performance.now() - participantStartedAt;
   const historyNaming = await buildHistoryNamingProjection({
     messages: history.simplifiedMessages,
     receivingPersona: effectivePersona,
@@ -536,47 +547,49 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
         proxiedIdentityUserDiscId: proxiedIdentity.userDiscId,
       });
 
-  const contextBuild = await buildContext({
-    guildId: turn.serverDiscId,
-    serverName: turn.serverName,
-    serverDescription: turn.serverDescription,
-    simplifiedMessageHistory: history.simplifiedMessages,
-    preparedParticipantContext,
-    personaUserBlocks: history.activeUserBlocks,
-    channelDesc: turn.channelDescription,
-    channelName: turn.channelName,
-    channelId: channel.id,
-    parentChannelId: channel.isThread() ? channel.parentId : null,
-    client,
-    triggererName: turn.triggererName,
-    triggererFormattedName: turn.triggererFormattedName,
-    triggererAddressTerm: turn.triggererAddressTerm,
-    historyUserLabels: historyNaming.userLabels,
-    historyPersonaMentionLabels: historyNaming.personaMentionLabels,
-    triggererUserId: turn.userRow.user_id,
-    emojiStrings: assets.emojiStrings,
-    tomoriNickname: effectivePersona.persona_nickname,
-    tomoriAttributes: effectivePersona.attribute_list,
-    tomoriConfig: effectivePersona.config,
-    channelPromptOverride,
-    channelContextNote,
-    reunionNote,
-    personaPrompt: effectivePersona.persona_prompt ?? null,
-    personaLineageId: effectivePersona.persona_lineage_id,
-    isDMChannel: turn.isDMChannel,
-    snapshot: { ...turn.requestSnapshot, tomoriState: effectivePersona },
-    preloadedEmojis: assets.loadedEmojis,
-    preloadedStickers: assets.loadedStickers,
-    preloadedCustomExpressions: assets.loadedCustomExpressions,
-    isUserImpersonation: incoming.isUserImpersonation,
-    impersonatedUserId: incoming.impersonatedUserId,
-    shortTermMemoryUserId: incoming.naturalNudge?.targetUserDiscId,
-    impersonatedUserNickname,
-    impersonatedUserPrompt,
-    explicitLongTermMemoryIntent: streamingContext.explicitLongTermMemoryIntent,
-    deliberateToolAllowedNames: streamingContext.deliberateToolAllowedNames,
-    messageIdMap,
-  });
+  const contextBuild = await measureChatTurnStage("native_ms", () =>
+    buildContext({
+      guildId: turn.serverDiscId,
+      serverName: turn.serverName,
+      serverDescription: turn.serverDescription,
+      simplifiedMessageHistory: history.simplifiedMessages,
+      preparedParticipantContext,
+      personaUserBlocks: history.activeUserBlocks,
+      channelDesc: turn.channelDescription,
+      channelName: turn.channelName,
+      channelId: channel.id,
+      parentChannelId: channel.isThread() ? channel.parentId : null,
+      client,
+      triggererName: turn.triggererName,
+      triggererFormattedName: turn.triggererFormattedName,
+      triggererAddressTerm: turn.triggererAddressTerm,
+      historyUserLabels: historyNaming.userLabels,
+      historyPersonaMentionLabels: historyNaming.personaMentionLabels,
+      triggererUserId: turn.userRow.user_id,
+      emojiStrings: assets.emojiStrings,
+      tomoriNickname: effectivePersona.persona_nickname,
+      tomoriAttributes: effectivePersona.attribute_list,
+      tomoriConfig: effectivePersona.config,
+      channelPromptOverride,
+      channelContextNote,
+      reunionNote,
+      personaPrompt: effectivePersona.persona_prompt ?? null,
+      personaLineageId: effectivePersona.persona_lineage_id,
+      isDMChannel: turn.isDMChannel,
+      snapshot: { ...turn.requestSnapshot, tomoriState: effectivePersona },
+      preloadedEmojis: assets.loadedEmojis,
+      preloadedStickers: assets.loadedStickers,
+      preloadedCustomExpressions: assets.loadedCustomExpressions,
+      isUserImpersonation: incoming.isUserImpersonation,
+      impersonatedUserId: incoming.impersonatedUserId,
+      shortTermMemoryUserId: incoming.naturalNudge?.targetUserDiscId,
+      impersonatedUserNickname,
+      impersonatedUserPrompt,
+      explicitLongTermMemoryIntent: streamingContext.explicitLongTermMemoryIntent,
+      deliberateToolAllowedNames: streamingContext.deliberateToolAllowedNames,
+      messageIdMap,
+    }),
+  );
 
   // Mirror buildPersonaSpriteContextItem's own gating so the queued-reply directive only
   // offers the "Persona (sprite):" opening on turns where the sprite prompt was actually
@@ -645,6 +658,11 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   const expressionDelivery =
     carried && carried.personaId === effectivePersona.persona_id ? carried.state : createExpressionDeliveryState();
 
+  recordChatTurnConfiguration(effectivePersona.llm.llm_provider, effectivePersona.config.humanizer_degree);
+  recordChatTurnFlags({
+    rag: contextItems.some((item) => item.metadataTag === ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS),
+  });
+  recordChatDiagnostic({ kind: "context_built", ...chatTurnContextTimings(), participantMs });
   return {
     turn,
     client,
@@ -768,7 +786,11 @@ async function buildSimplifiedHistory(
   const fetchLimit = normalizeMessageFetchLimit(turn.persona.config.message_fetch_limit);
   let messages =
     "messages" in channel
-      ? Array.from((await channel.messages.fetch({ limit: fetchLimit })).values()).reverse()
+      ? Array.from(
+          (
+            await measureChatTurnStage("history_fetch_ms", () => channel.messages.fetch({ limit: fetchLimit }))
+          ).values(),
+        ).reverse()
       : [turn.lockedTurn.admission.message];
   // A borrowed trigger is only an anchor and a seeded placeholder is never history, so only a queued
   // turn's own real message is added back when the fetch missed it.
@@ -1409,12 +1431,13 @@ async function withReplyContext(
       return { content };
     }
     // The fetched window comes first because the capped message cache evicts the newest messages of a large history fetch.
-    const referenced =
-      fetchedMessagesById.get(referenceMessageId) ??
-      msg.channel.messages.cache.get(referenceMessageId) ??
-      (await (msg.reference?.channelId && msg.reference.channelId !== msg.channel.id
+    let referenced = fetchedMessagesById.get(referenceMessageId) ?? msg.channel.messages.cache.get(referenceMessageId);
+    if (!referenced) {
+      recordChatTurnFetch("reply");
+      referenced = await (msg.reference?.channelId && msg.reference.channelId !== msg.channel.id
         ? msg.fetchReference()
-        : msg.channel.messages.fetch(referenceMessageId)));
+        : msg.channel.messages.fetch(referenceMessageId));
+    }
     // A reference can sit outside the fetched history window, so resolve its verified proxy
     // attribution through the same bounded index read the history loop used. This is what lets
     // the annotation name a proxied member instead of the webhook veneer, and it also brings an

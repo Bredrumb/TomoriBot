@@ -1,3 +1,4 @@
+import { recordChatTurnFetch } from "@/utils/chat/turnLatency";
 import { getCachedImpersonatedUserIdForWebhook, verifyMessageWebhook } from "@/utils/chat/webhookIdentity";
 import type { Embed, Message, MessageReaction } from "discord.js";
 import { MessageType } from "discord.js";
@@ -480,6 +481,7 @@ export async function fetchReactionUserSummaries(
       callsUsed += 1;
       const emojiLabel = normalizeReactionEmojiLabel(reaction);
       try {
+        recordChatTurnFetch("reaction");
         const users = await reaction.users.fetch({ limit: REACTION_CONTEXT_MAX_USERS_PER_REACTION });
         const userLabels = Array.from(users.values())
           .map((user) => formatReactionUserLabel(user, options))
