@@ -94,3 +94,13 @@ describe("half-hour reminder parsing", () => {
     expect(parseTimeWithOffset("2026-10-20_09:00", 5.5)?.toISOString()).toBe("2026-10-20T03:30:00.000Z");
   });
 });
+
+describe("reminder calendar dates", () => {
+  it.each(["2026-02-31_09:00", "2026-04-31_09:00", "2026-02-29_09:00"])("rejects %s", (input) => {
+    expect(parseTimeWithOffset(input, 5.5)).toBeNull();
+  });
+
+  it("accepts a leap day before applying the offset", () => {
+    expect(parseTimeWithOffset("2028-02-29_00:00", 5.5)?.toISOString()).toBe("2028-02-28T18:30:00.000Z");
+  });
+});

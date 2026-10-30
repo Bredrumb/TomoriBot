@@ -9,13 +9,15 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { PrivacyLevel } from "@/types/db/schema";
 import { userRepository } from "@/utils/db/repositories";
-import { FIXTURE_IDS, cleanupFixtures, insertFixtures } from "./setup/fixtures";
+import { FIXTURE_IDS, cleanupFixtures, insertFixtures, type FixtureRefs } from "./setup/fixtures";
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
 
 describe.skipIf(!DB_TESTS_AVAILABLE)("User — regression", () => {
+  let refs: FixtureRefs;
+
   beforeAll(async () => {
     await setupTestDb();
-    await insertFixtures(testSql);
+    refs = await insertFixtures(testSql);
   });
 
   afterAll(async () => {
@@ -159,6 +161,56 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("User — regression", () => {
 
     it("returns null for a user that does not exist", async () => {
       expect(await userRepository.nukeUser(-1)).toBeNull();
+    });
+  });
+
+  describe("mergeWebhookUsersIntoBot", () => {
+    const BOT_DISC_ID = "_rt_user_cleanup_bot";
+    const WEBHOOK_DISC_IDS = ["_rt_user_cleanup_hook_a", "_rt_user_cleanup_hook_b"];
+
+    afterAll(async () => {
+      await testSql`DROP TABLE IF EXISTS webhook_user_cleanup`;
+      await testSql`DELETE FROM users WHERE user_disc_id IN ${testSql([BOT_DISC_ID, ...WEBHOOK_DISC_IDS])}`;
+    });
+
+    it("moves queued webhook spend onto the bot and keeps the emptied queue table", async () => {
+      const bot = await userRepository.register(BOT_DISC_ID, "_rt_cleanup_bot", "en");
+      const hooks = await Promise.all(WEBHOOK_DISC_IDS.map((id) => userRepository.register(id, "_rt_hook", "en")));
+      const botUserId = bot?.user_id;
+      const hookUserIds = hooks.map((hook) => hook?.user_id);
+      if (botUserId === undefined || hookUserIds.includes(undefined)) throw new Error("Expected registered users");
+
+      for (const [userId, count] of [
+        [botUserId, 1],
+        [hookUserIds[0], 2],
+        [hookUserIds[1], 4],
+      ] as const) {
+        await testSql`
+          INSERT INTO stat_counters (server_id, user_id, persona_lineage_id, metric, metric_key, bucket, count)
+          VALUES (${refs.serverId}, ${userId}, ${refs.personaLineageId}, 'message_sent', '', CURRENT_DATE, ${count})
+        `;
+      }
+      await testSql`CREATE TABLE IF NOT EXISTS webhook_user_cleanup (user_id INT PRIMARY KEY)`;
+      await testSql`INSERT INTO webhook_user_cleanup ${testSql(hookUserIds.map((user_id) => ({ user_id })))}`;
+
+      expect(await userRepository.hasPendingWebhookUserCleanup()).toBe(true);
+      const deleted = await userRepository.mergeWebhookUsersIntoBot(botUserId);
+      expect(deleted?.toSorted()).toEqual(WEBHOOK_DISC_IDS);
+
+      const [counter] = await testSql<Array<{ count: string }>>`
+        SELECT count FROM stat_counters
+        WHERE server_id = ${refs.serverId} AND user_id = ${botUserId} AND metric = 'message_sent'
+      `;
+      expect(Number(counter?.count)).toBe(7);
+      expect(await testSql`SELECT 1 FROM users WHERE user_disc_id IN ${testSql(WEBHOOK_DISC_IDS)}`).toHaveLength(0);
+
+      // The production runtime role cannot drop the table, so a drained queue must read as no pending work.
+      const [table] = await testSql<Array<{ present: boolean }>>`
+        SELECT to_regclass('public.webhook_user_cleanup') IS NOT NULL AS present
+      `;
+      expect(table?.present).toBe(true);
+      expect(await userRepository.hasPendingWebhookUserCleanup()).toBe(false);
+      expect(await userRepository.mergeWebhookUsersIntoBot(botUserId)).toBeNull();
     });
   });
 
