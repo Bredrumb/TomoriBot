@@ -42,7 +42,7 @@ interface ChatTurnLatencyFields {
   humanizer: "none" | "light" | "medium" | "heavy" | "unknown";
   source: ChatInvocationSource;
   rag: YesNo;
-  history: "rest";
+  history: "rest" | "reused";
   drafting: YesNo;
 }
 
@@ -149,6 +149,11 @@ export function recordChatTurnFetch(kind: "reaction" | "reply" | "image", durati
   if (!active) return;
   active.fields[`${kind}_fetches`]++;
   if (kind === "image") active.fields.image_ms += durationMs;
+}
+
+export function recordChatTurnHistory(history: "rest" | "reused"): void {
+  const active = current();
+  if (active) active.fields.history = history;
 }
 
 export function chatTurnContextTimings(): { historyFetchMs: number; replyFetches: number; nativeMs: number } {

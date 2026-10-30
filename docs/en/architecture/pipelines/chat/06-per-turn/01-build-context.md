@@ -26,7 +26,7 @@ ChatTurn
   ▼
 contextPipeline.buildChatTurnContext()
   │
-  ├─► channel.messages.fetch()                 ──► fetches recent Discord messages
+  ├─► readChannelHistory()                     ──► fetches or reuses the busy channel's history window
   ├─► buildSimplifiedHistory()                 ──► builds MessageIdMap, collapses same-author runs,
   │                                                extracts embed/CV2 notices, filters privacy
   ├─► prepareParticipantContext()              ──► resolves visible authors, aliases, personas
@@ -40,7 +40,18 @@ buildContext() (context-build pipeline)        ──► assembles StructuredCon
 
 ### History fetching and simplification
 
-- **Message retrieval**: fetches up to `message_fetch_limit` messages from Discord.
+- **Message retrieval**: the first turn fetches up to `message_fetch_limit` messages from Discord.
+  Within the same busy stretch, later personas and queued replays merge the previous window with
+  cached messages newer than its oldest entry and confirmed deliveries. Cached instances take
+  precedence; deleted IDs are removed, then messages sort by snowflake and trim to the turn's limit.
+  Delivery recording retains webhook messages before their gateway echoes arrive.
+  A delivery without a full message object drops the window so the next turn reads it from Discord.
+- **History freshness**: update, delete, bulk-delete, and raw reaction events record changed IDs on
+  the lock entry. Changes to uncached window messages, an increased limit, a full cache with a gap,
+  or a deletion requiring older history take the REST path. A change arriving during a REST read
+  forces another read because discord.js can overwrite a cached edit with the response. Signal
+  overflow drops the window. Shard disconnects and reconnects drop all windows; disconnected shards
+  disable reuse. The idle channel keeps no window because the message sweeper can evict cache entries.
 - **History auxiliary reads**: proxy identities use the unfiltered history; sprite records, minimal
   notice bodies, and agendas use visible messages after blacklist and block filtering. These reads
   run concurrently before simplification.
@@ -121,5 +132,6 @@ The stage initializes per-turn flags on `StreamingContext`:
 
 - `src/utils/chat/contextPipelineIntent.ts`: autonomous STM intent preflight.
 - `src/utils/chat/contextPipeline.ts`: `buildChatTurnContext()` implementation.
+- `src/utils/chat/historyWindow.ts`: bounded history reuse and gateway change signals.
 - `src/utils/text/contextBuilder.ts`: `buildContext()` entry point to the context-build pipeline.
 - `src/utils/text/messageIdMap.ts`: Discord snowflake to compact ID translation.

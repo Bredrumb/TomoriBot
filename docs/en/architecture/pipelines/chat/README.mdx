@@ -135,7 +135,7 @@ identifiers enter this metric.
 | `humanizer` | `none`, `light`, `medium`, `heavy`, or `unknown` before context configuration is available. |
 | `source` | `message`, `queue`, `persona_job`, `retry`, `manual`, or `stop`, using the diagnostic timeline's source precedence. |
 | `rag` | `yes` when built context contains server document retrieval content, otherwise `no`; it does not claim every retrieval attempt injected content. |
-| `history` | `rest`. |
+| `history` | `reused` for a busy-stretch window, otherwise `rest`. |
 | `drafting` | `yes` when response review enabled holding response text during this turn, otherwise `no`. |
 
 For example, compare `dispatch_ms` for the same provider and source before inspecting the history,

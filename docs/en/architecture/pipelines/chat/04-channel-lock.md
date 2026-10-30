@@ -36,6 +36,12 @@ the initial typing indicator cannot arrive after the reply. `typing_started` rec
 the initial request. After that request settles, the keepalive starts only if the same message still
 holds the lock; context failure can release it while the request is in flight.
 
+The lock entry also owns a bounded history window for the busy stretch: the active turn and its
+queued replays. Later personas and queued user or persona turns can reuse it. Release preserves the
+window only while handing off to a queued replay; a replay that returns before acquiring the lock
+drops it. Empty-queue release, stale recovery, queue clearing, and `/kill` free the window and its
+gateway change signals. A new trigger from an idle channel always starts with a REST read.
+
 ### Mutex acquisition and re-entrancy
 
 When an admitted turn arrives:

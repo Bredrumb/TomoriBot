@@ -1,4 +1,5 @@
 import { mapWithConcurrency } from "@/utils/async/bounded";
+import { isHistoryWindowMessageDeleted, readChannelHistory } from "@/utils/chat/historyWindow";
 import { verifyMessageWebhook, isManagedWebhookMessage } from "@/utils/chat/webhookIdentity";
 import type { Message } from "discord.js";
 import { MessageReferenceType, MessageType } from "discord.js";
@@ -790,11 +791,11 @@ async function buildSimplifiedHistory(
   const fetchLimit = normalizeMessageFetchLimit(turn.persona.config.message_fetch_limit);
   let messages =
     "messages" in channel
-      ? Array.from(
-          (
-            await measureChatTurnStage("history_fetch_ms", () => channel.messages.fetch({ limit: fetchLimit }))
-          ).values(),
-        ).reverse()
+      ? await readChannelHistory(
+          channel,
+          fetchLimit,
+          turn.personaIndex > 0 || turn.lockedTurn.admission.incoming.isFromQueue,
+        )
       : [turn.lockedTurn.admission.message];
   // A borrowed trigger is only an anchor and a seeded placeholder is never history, so only a queued
   // turn's own real message is added back when the fetch missed it.
@@ -802,6 +803,7 @@ async function buildSimplifiedHistory(
     turn.lockedTurn.admission.incoming.isFromQueue &&
     !turn.lockedTurn.admission.incoming.borrowsTriggerMessage &&
     !isSeededTurnAnchor(turn.lockedTurn.admission.message) &&
+    !isHistoryWindowMessageDeleted(channel.id, turn.lockedTurn.admission.message.id) &&
     !messages.some((message) => message.id === turn.lockedTurn.admission.message.id)
   ) {
     messages.push(turn.lockedTurn.admission.message);
