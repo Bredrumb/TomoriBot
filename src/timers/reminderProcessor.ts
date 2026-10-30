@@ -24,6 +24,12 @@ import { runWithErrorContext } from "@/utils/misc/errorContextStore";
 import { neutralizeFenceRuns } from "@/utils/text/discordTextLimits";
 import { localizer } from "@/utils/text/localizer";
 import { isCredentialRejection } from "@/utils/provider/providerErrorClassification";
+import {
+  getNextReminderOccurrence,
+  getReminderRepetition,
+  type ReminderOccurrence,
+  type ReminderRepetition,
+} from "@/utils/text/processors/reminderRepetition";
 
 const REMINDER_DELIVERY_RETRY_DELAY_MS = 60_000;
 
@@ -45,23 +51,29 @@ const REMINDER_DEGRADED_AFTER_FAILED_OCCURRENCES = 3;
 /** Shortest failure streak that can remove a reminder, so a brief outage cannot delete an hourly one. */
 const REMINDER_REMOVAL_MIN_STREAK_HOURS = 24;
 
+/** The shortest month, which is all the removal streak needs from a monthly interval. */
+const HOURS_PER_SHORTEST_MONTH = 28 * 24;
+
 /** A recurring reminder is dead once its failures have outlasted both thresholds and reached nobody. */
-function isDeadRecurringReminder(failedOccurrences: number, repetitionIntervalHours: number): boolean {
+function isDeadRecurringReminder(failedOccurrences: number, repetition: NonNullable<ReminderRepetition>): boolean {
+  const intervalHours =
+    repetition.unit === "months" ? repetition.interval * HOURS_PER_SHORTEST_MONTH : repetition.interval;
   return (
     failedOccurrences >= REMINDER_DEGRADED_AFTER_FAILED_OCCURRENCES &&
-    failedOccurrences * repetitionIntervalHours >= REMINDER_REMOVAL_MIN_STREAK_HOURS
+    failedOccurrences * intervalHours >= REMINDER_REMOVAL_MIN_STREAK_HOURS
   );
 }
 
-function getNextRecurringReminderTime(
-  reminderTime: Date,
-  repetitionIntervalHours: number,
-  referenceTimeMs = Date.now(),
-): Date {
-  const intervalMs = repetitionIntervalHours * 60 * 60 * 1000;
-  const scheduledTimeMs = reminderTime.getTime();
-  const intervalsElapsed = Math.max(1, Math.floor((referenceTimeMs - scheduledTimeMs) / intervalMs) + 1);
-  return new Date(scheduledTimeMs + intervalsElapsed * intervalMs);
+function getNextRecurringOccurrence(
+  reminder: ReminderRow,
+  repetition: NonNullable<ReminderRepetition>,
+): ReminderOccurrence {
+  return getNextReminderOccurrence(
+    reminder.reminder_time,
+    repetition,
+    reminder.repetition_anchor_day,
+    reminder.server_timezone_offset ?? 0,
+  );
 }
 
 function isReminderDeliverySuccessful(result: GenerationTurnResult): boolean {
@@ -323,19 +335,19 @@ export class ReminderProcessor {
       await this.ensureReminderRecipientMention(channel, reminder, afterMessageId, reminderStartTime);
     }
 
-    const repetitionIntervalHours =
-      typeof reminder.repetition_interval_hours === "number" ? reminder.repetition_interval_hours : null;
-    const isRecurring = repetitionIntervalHours !== null && repetitionIntervalHours >= 1;
+    const repetition = getReminderRepetition(reminder);
 
-    if (isRecurring && reminder.reminder_id) {
-      const nextTriggerTime = getNextRecurringReminderTime(reminder.reminder_time, repetitionIntervalHours);
-      const rescheduled = await serverScheduleRepository.rescheduleReminder(reminder.reminder_id, nextTriggerTime);
+    if (repetition && reminder.reminder_id) {
+      const nextOccurrence = getNextRecurringOccurrence(reminder, repetition);
+      const rescheduled = await serverScheduleRepository.rescheduleReminder(reminder.reminder_id, nextOccurrence);
 
       if (rescheduled) {
         reminder.delivery_retry_count = 0;
         reminder.failed_occurrence_count = 0;
         reminder.next_attempt_at = null;
-        log.success(`Reminder ${reminder.reminder_id} executed and rescheduled for ${nextTriggerTime.toISOString()}`);
+        log.success(
+          `Reminder ${reminder.reminder_id} executed and rescheduled for ${nextOccurrence.time.toISOString()}`,
+        );
       } else {
         log.error(`Failed to reschedule recurring reminder ${reminder.reminder_id}; deleting to prevent duplicates`);
         await serverScheduleRepository.deleteReminderById(reminder.reminder_id);
@@ -447,9 +459,8 @@ export class ReminderProcessor {
 
   private async handleReminderExecutionFailure(reminder: ReminderRow, errorReason: string): Promise<void> {
     try {
-      const repetitionIntervalHours =
-        typeof reminder.repetition_interval_hours === "number" ? reminder.repetition_interval_hours : null;
-      const isRecurring = repetitionIntervalHours !== null && repetitionIntervalHours >= 1;
+      const repetition = getReminderRepetition(reminder);
+      const isRecurring = repetition !== null;
       const retainsSchedule = isRecurring && Boolean(reminder.reminder_id);
       const failedOccurrences = (reminder.failed_occurrence_count ?? 0) + 1;
       let recurringScheduleRetained = false;
@@ -467,26 +478,26 @@ export class ReminderProcessor {
       if (reminder.reminder_id) {
         if (
           retainsSchedule &&
-          repetitionIntervalHours !== null &&
+          repetition !== null &&
           !fallbackDelivered &&
-          isDeadRecurringReminder(failedOccurrences, repetitionIntervalHours)
+          isDeadRecurringReminder(failedOccurrences, repetition)
         ) {
           await serverScheduleRepository.deleteReminderById(reminder.reminder_id);
           log.warn(
             `Reminder ${reminder.reminder_id} removed after ${failedOccurrences} consecutive occurrences reached nobody`,
           );
           await this.notifyDeadReminderRemoved(reminder, failedOccurrences);
-        } else if (retainsSchedule && repetitionIntervalHours !== null) {
-          const nextTriggerTime = getNextRecurringReminderTime(reminder.reminder_time, repetitionIntervalHours);
+        } else if (retainsSchedule && repetition !== null) {
+          const nextOccurrence = getNextRecurringOccurrence(reminder, repetition);
           recurringScheduleRetained = Boolean(
-            await serverScheduleRepository.rescheduleReminder(reminder.reminder_id, nextTriggerTime, failedOccurrences),
+            await serverScheduleRepository.rescheduleReminder(reminder.reminder_id, nextOccurrence, failedOccurrences),
           );
           if (recurringScheduleRetained) {
             reminder.delivery_retry_count = 0;
             reminder.failed_occurrence_count = failedOccurrences;
             reminder.next_attempt_at = null;
             log.success(
-              `Reminder ${reminder.reminder_id} retry budget exhausted and recurring cadence retained at ${nextTriggerTime.toISOString()}`,
+              `Reminder ${reminder.reminder_id} retry budget exhausted and recurring cadence retained at ${nextOccurrence.time.toISOString()}`,
             );
           } else {
             log.error(`Failed to retain recurring reminder ${reminder.reminder_id}; deleting to prevent retry loops`);

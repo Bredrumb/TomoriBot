@@ -5,6 +5,7 @@ import type {
   EnabledIdleNudgeServer,
   NaturalNudgeFireRow,
   PersonaNaturalNudgeConfig,
+  ServerNaturalNudgeConfig,
 } from "@/modules/natural-nudges/db/types";
 import { drawPingUserTarget, type PingUserTarget } from "@/modules/natural-nudges/runtime/targets";
 import { drawScenePartners, hasScenePartner, type PartnerCandidate } from "@/modules/natural-nudges/runtime/partners";
@@ -43,6 +44,7 @@ import {
   CATEGORY_REST_MS,
   DAY_MS,
   IDLE_NUDGE_DAILY_CAPS,
+  IDLE_NUDGE_DAILY_PLANNER_CAPS,
   IDLE_NUDGE_REST_MS,
   FIRE_RETENTION_MS,
   HOUR_MS,
@@ -53,11 +55,16 @@ import {
   PERSONA_REST_MS,
   PING_USER_REPEAT_REST_MS,
   PLANNER_HISTORY_MESSAGES,
+  PLANNER_RECENT_TOPICS,
+  PLAY_SCENE_LONG_CHANCE,
+  PLAY_SCENE_LONG_TURNS,
+  PLAY_SCENE_SHORT_TURNS,
   TALKATIVENESS_TICKETS,
   UNANSWERED_STOP_STREAK,
   WAKING_HOURS_WINDOW_DAYS,
 } from "@/modules/natural-nudges/runtime/tuning";
 import { isFailureStopped } from "@/modules/natural-nudges/runtime/failureStop";
+import { NudgeRequestBudget } from "@/modules/natural-nudges/runtime/requestBudget";
 import { readNaturalNudgeGate } from "@/modules/natural-nudges/runtime/configCache";
 import { claimNudgeServer, isNudgeServerBusy, releaseNudgeServer } from "@/modules/natural-nudges/runtime/inFlight";
 import { type NudgeModelRef, resolvePlannerModel } from "@/modules/natural-nudges/runtime/model";
@@ -109,11 +116,11 @@ function lastFireBy(fires: readonly NaturalNudgeFireRow[], key: (fire: NaturalNu
 
 export class NaturalNudgeProcessor {
   private readonly client: Client;
-  /** After an abort the idle nudge waits a fresh lull before trying again, so it cannot loop every cycle. */
-  private readonly retryNotBefore = new Map<number, number>();
+  private readonly notBefore = new Map<number, number>();
   private readonly lullHours = new Map<number, number>();
   private readonly verdictCheckedAt = new Map<number, number>();
   private readonly meters = new Map<number, ServerMeters>();
+  private readonly plannerBudget = new NudgeRequestBudget();
   private lastPruneAt = 0;
 
   constructor(client: Client) {
@@ -177,7 +184,7 @@ export class NaturalNudgeProcessor {
   private deferRetry(serverId: number, now: Date): void {
     const hours = rollLullHours();
     this.lullHours.set(serverId, hours);
-    this.retryNotBefore.set(serverId, now.getTime() + hours * HOUR_MS);
+    this.notBefore.set(serverId, now.getTime() + hours * HOUR_MS);
   }
 
   private abortInPhaseA(server: EnabledIdleNudgeServer, now: Date, reason: string, heat: number): void {
@@ -202,10 +209,15 @@ export class NaturalNudgeProcessor {
   private async evaluateServer(server: EnabledIdleNudgeServer): Promise<void> {
     const now = new Date();
     const serverId = server.server_id;
-    const { config } = server;
     const gate = await readNaturalNudgeGate(server.server_disc_id);
-    if (!gate) return;
-    if ((this.retryNotBefore.get(serverId) ?? 0) > now.getTime()) return;
+    if (!gate?.config.idle_nudges_enabled) return;
+    const { config } = gate;
+    if ((this.notBefore.get(serverId) ?? 0) > now.getTime()) return;
+
+    const timezoneOffset = server.timezone_offset ?? 0;
+    const dayStart = serverDayStart(now, timezoneOffset);
+    if (!this.plannerBudget.hasRoom(serverId, dayStart, IDLE_NUDGE_DAILY_PLANNER_CAPS[config.idle_nudge_frequency]))
+      return;
 
     const history = await naturalNudgeRepository.loadFireHistory(
       serverId,
@@ -221,7 +233,6 @@ export class NaturalNudgeProcessor {
     const runtime = await naturalNudgeRepository.loadRuntimeState(serverId);
     if (await isFailureStopped(serverId, runtime.stopped_at)) return;
 
-    const timezoneOffset = server.timezone_offset ?? 0;
     const meters = await this.loadMeters(serverId, timezoneOffset, now, gate.heat);
     const streak = countUnansweredStreak(history.latestIdleNudges, meters.lastMessageSentAt);
     if (streak >= UNANSWERED_STOP_STREAK) return;
@@ -232,8 +243,14 @@ export class NaturalNudgeProcessor {
       jitter: runtime.idle_nudge_jitter,
       unansweredStreak: streak,
     });
-    if (!dueAt || now < dueAt) return;
-    const dayStart = serverDayStart(now, timezoneOffset);
+    if (!dueAt || now < dueAt) {
+      // Heat and verdicts can advance the due time, so trust it for at most one meter cache interval.
+      this.notBefore.set(
+        serverId,
+        Math.min(dueAt?.getTime() ?? Number.POSITIVE_INFINITY, now.getTime() + METER_CACHE_TTL_MS),
+      );
+      return;
+    }
     const firedToday = history.recent.filter((fire) => fire.mode === "idle" && fire.fired_at >= dayStart).length;
     if (firedToday >= IDLE_NUDGE_DAILY_CAPS[config.idle_nudge_frequency]) return;
     if (!isWithinWakingHours(meters.awake, now, serverId)) return;
@@ -264,6 +281,7 @@ export class NaturalNudgeProcessor {
 
     const attempt = await this.drawAttempt(
       server,
+      config,
       personas,
       quiet,
       history.recent,
@@ -282,7 +300,7 @@ export class NaturalNudgeProcessor {
       .then((result) => {
         if (result === "fired") {
           this.lullHours.delete(serverId);
-          this.retryNotBefore.delete(serverId);
+          this.notBefore.delete(serverId);
           return naturalNudgeRepository.setIdleNudgeJitter(serverId, rollIdleNudgeJitter());
         }
         this.deferRetry(serverId, new Date());
@@ -297,6 +315,7 @@ export class NaturalNudgeProcessor {
   /** The persona raffle runs before the shortlist, so identity never depends on the planner's preferred activity. */
   private async drawAttempt(
     server: EnabledIdleNudgeServer,
+    config: ServerNaturalNudgeConfig,
     personas: NudgePersona[],
     quiet: NudgeChannel[],
     recentFires: readonly NaturalNudgeFireRow[],
@@ -330,6 +349,11 @@ export class NaturalNudgeProcessor {
       })),
     );
     if (!persona) return "no_eligible_persona";
+    const recentTopics = await naturalNudgeRepository.loadRecentIdleNudgeTopics(
+      server.server_id,
+      persona.persona_id,
+      PLANNER_RECENT_TOPICS,
+    );
     const personaConfig = personaConfigs.get(persona.persona_id) as PersonaNaturalNudgeConfig;
 
     const personaChannels = channelsFor(persona.persona_id);
@@ -361,7 +385,7 @@ export class NaturalNudgeProcessor {
     ]);
     const runnable = listPersonaRunnableIdleNudges({
       personaId: persona.persona_id,
-      disabledBuiltIns: server.config.disabled_builtin_idle_nudges,
+      disabledBuiltIns: config.disabled_builtin_idle_nudges,
       customIdleNudges: customs,
       scopes,
       personaConfig,
@@ -380,8 +404,7 @@ export class NaturalNudgeProcessor {
       .sort((left, right) => right.fired_at.getTime() - left.fired_at.getTime());
     const eligibleCategories = NATURAL_NUDGE_CATEGORIES.filter(
       (category) =>
-        server.config.category_weights[category] > 0 &&
-        channelEligible.some((idleNudge) => idleNudge.category === category),
+        config.category_weights[category] > 0 && channelEligible.some((idleNudge) => idleNudge.category === category),
     );
     const otherCategories = eligibleCategories.filter((category) => category !== idleFires[0]?.category);
     const categories = otherCategories.length > 0 ? otherCategories : eligibleCategories;
@@ -389,8 +412,7 @@ export class NaturalNudgeProcessor {
     const category = drawRaffle(
       categories.map((category) => ({
         item: category,
-        tickets:
-          server.config.category_weights[category] * restedShare(categoryFiredAt.get(category), now, CATEGORY_REST_MS),
+        tickets: config.category_weights[category] * restedShare(categoryFiredAt.get(category), now, CATEGORY_REST_MS),
       })),
     );
     if (!category) return "no_eligible_idle_nudge";
@@ -466,6 +488,7 @@ export class NaturalNudgeProcessor {
     const lastCategoryNudgeKey = idleFires.find((fire) => fire.category === category)?.idle_nudge_key;
     const otherIdleNudges = idleNudges.filter((candidate) => candidate.idleNudge.key !== lastCategoryNudgeKey);
     const remaining = otherIdleNudges.length > 0 ? otherIdleNudges : [...idleNudges];
+    const sceneTurns = Math.random() < PLAY_SCENE_LONG_CHANCE ? PLAY_SCENE_LONG_TURNS : PLAY_SCENE_SHORT_TURNS;
     const candidates: PlannerCandidate[] = [];
     while (candidates.length < MAX_PLANNER_NUDGES && remaining.length > 0) {
       const picked = drawRaffle(
@@ -485,6 +508,7 @@ export class NaturalNudgeProcessor {
         idleNudge: picked.idleNudge,
         channelIndices: picked.channelIndices,
         partners,
+        sceneTurns,
       });
     }
     if (candidates.length === 0) return "no_eligible_idle_nudge";
@@ -498,9 +522,16 @@ export class NaturalNudgeProcessor {
       awake: meters.awake,
       persona,
       interests: personaConfig.interests,
+      recentTopics,
       candidates,
       plannerModel,
       availableTools,
+      admitRequest: () =>
+        this.plannerBudget.take(
+          server.server_id,
+          serverDayStart(new Date(), server.timezone_offset ?? 0),
+          IDLE_NUDGE_DAILY_PLANNER_CAPS[config.idle_nudge_frequency],
+        ),
       plannerChannels,
       target: candidates.some((candidate) => idleNudgeNeedsTarget(candidate.idleNudge)) ? target : null,
     };

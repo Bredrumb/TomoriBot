@@ -126,7 +126,6 @@ export async function execute(
       inspection,
       format,
       guildId: guild.id,
-      user: interaction.user,
       locale,
       includeRerunHints: true,
       editReply: (options) => interaction.editReply(options),

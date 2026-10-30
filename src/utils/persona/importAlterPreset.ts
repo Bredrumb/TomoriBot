@@ -199,7 +199,7 @@ export async function importAlterPreset(params: ImportAlterPresetParams): Promis
           sampleDialoguesOut: presetData.sample_dialogues_out,
           personaLineageId: identityMode === "preserve" ? importedLineageId : null,
           physicalAppearanceTags: presetData.physical_appearance_tags ?? [],
-          naiCharRefUrl: presetData.nai_char_ref_url ?? null,
+          charRefUrl: presetData.char_ref_url ?? null,
           naiAttgAuthor: presetData.nai_attg_author ?? null,
           naiAttgTitle: presetData.nai_attg_title ?? null,
           naiAttgTags: presetData.nai_attg_tags ?? null,

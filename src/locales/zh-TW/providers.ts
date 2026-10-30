@@ -73,6 +73,8 @@ export default {
     text_quota_resets_in_hours: `額度將在 {hours} 小時後重置。`,
     text_quota_resets_in_days: `額度將在 {days} 天後重置。`,
     text_quota_exceeded_footer: `這個額度由這個伺服器的管理員透過 \`/moderation\` 設定。`,
+    text_quota_unavailable_title: `無法查詢文字額度`,
+    text_quota_unavailable_description: `我目前無法檢查這個伺服器的文字生成額度，請稍後再試。`,
     stream: {
       response_stopped_title: `回覆中斷`,
       response_stopped_description: `回覆因下列原因中斷：{reason}。請確認送出的內容沒有超過 AI 供應商能處理的大小。執行 \`/refresh\` 可清除對話內容。`,

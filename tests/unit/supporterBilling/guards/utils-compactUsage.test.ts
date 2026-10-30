@@ -138,7 +138,7 @@ function createHarness(
     } as never),
     spyOn(llmModelRepo, "loadEmbeddingModelById").mockResolvedValue(embeddingModel),
     spyOn(ragRepository, "normalizeText").mockReturnValue("fixture summary"),
-    spyOn(ragRepository, "chunkText").mockReturnValue(["fixture summary"]),
+    spyOn(ragRepository, "chunkText").mockReturnValue([{ content: "fixture summary", headingPath: null }]),
     spyOn(ragRepository, "insertWithChunks").mockResolvedValue(9),
     spyOn(tomoriStateCache, "invalidateTomoriStateCache").mockImplementation(() => undefined),
     spyOn(ragAvailability, "isRagAvailable").mockReturnValue(true),

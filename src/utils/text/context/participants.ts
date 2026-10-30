@@ -8,6 +8,7 @@ import { serializeParticipantKey, type ParticipantSeed } from "@/utils/text/part
 import { hydrateParticipantProfiles } from "@/utils/text/participants/hydration";
 import { renderParticipantPrompt } from "@/utils/text/participants/renderer";
 import type { ParticipantProfileEnricherRegistry } from "@/utils/text/participants/profileEnrichers";
+import type { ParticipantRequestScope } from "@/utils/text/participants/preparation";
 
 export { formatPendingReminderForContext } from "@/utils/text/participants/hydration";
 
@@ -37,6 +38,7 @@ export async function buildParticipantContextItem(params: {
   snapshot?: import("@/types/misc/context").RequestSnapshot;
   convertMentions: MentionConverter;
   profileEnricherRegistry?: ParticipantProfileEnricherRegistry;
+  requestScope?: ParticipantRequestScope;
 }): Promise<StructuredContextItem | null> {
   const typedKeys = new Set<string>();
   for (const seed of params.participantSeeds) {
@@ -81,6 +83,7 @@ export async function buildParticipantContextItem(params: {
     convertMentions: params.convertMentions,
     botName: params.botName,
     profileEnricherRegistry: params.profileEnricherRegistry,
+    requestScope: params.requestScope,
   });
   const timezoneOffset = params.tomoriConfig.timezone_offset ?? 0;
   const rendered = renderParticipantPrompt({

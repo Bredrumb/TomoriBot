@@ -177,6 +177,7 @@ async function rebuildDashboard(
       timeframe: route.timeframe as Timeframe,
       from,
       subtitle: `${selected.persona_nickname} • ${subtitle}`,
+      botUserDiscId: interaction.client.user.id,
     });
     ({ iconUrl, iconFile } = await resolvePersonaIcon(guild, selected));
   } else {
@@ -188,6 +189,7 @@ async function rebuildDashboard(
       timeframe: route.timeframe as Timeframe,
       from,
       subtitle: `${guild?.name ?? guildId} • ${buildSubtitle(route.locale, route.timeframe as Timeframe)}`,
+      botUserDiscId: interaction.client.user.id,
     });
     iconUrl = guild?.iconURL({ extension: "png", size: 256 }) ?? undefined;
   }

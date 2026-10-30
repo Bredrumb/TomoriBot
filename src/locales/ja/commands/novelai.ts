@@ -1,20 +1,6 @@
 export default {
   novelai: {
     description: `このサーバーのNovelAIテキスト・画像生成を設定します。`,
-    "character-reference": {
-      invalid_image_title: `無効な画像`,
-      invalid_image_description: `キャラクター参照画像には画像添付ファイルを指定してください。`,
-      download_failed_title: `ダウンロードに失敗しました`,
-      download_failed_description: `選択した画像添付のダウンロードに失敗しました。もう一度お試しください。`,
-      conversion_failed_title: `画像変換に失敗しました`,
-      conversion_failed_description: `保存用にその画像をPNGへ変換できませんでした。別の画像をお試しください。`,
-      success_title: `キャラクター参照画像を更新しました`,
-      success_me_description: `あなたのNovelAIキャラクター参照画像を更新しました。`,
-      success_persona_description: `**{persona_name}**のNovelAIキャラクター参照画像を更新しました。`,
-      cleared_title: `キャラクター参照画像をクリアしました`,
-      cleared_me_description: `あなたのNovelAIキャラクター参照画像をクリアしました。`,
-      cleared_persona_description: `**{persona_name}**のNovelAIキャラクター参照画像をクリアしました。`,
-    },
     usage: {
       description: `このサーバーのNovelAI Opus生成利用状況メーターを表示します（サーバー管理権限が必要です）。`,
       title: `NovelAI Opus生成利用状況`,

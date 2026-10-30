@@ -67,9 +67,17 @@ export interface GuildMCPConnection {
  * Result from GuildMcpManager.testConnection() : used by MCP registration surfaces
  * to validate a remote MCP server before persisting the registration.
  */
+/** The `WWW-Authenticate` parameters of a 401 that MCP sign-in discovery starts from. */
+export interface McpAuthorizationChallenge {
+  resourceMetadataUrl?: string;
+  scope?: string;
+}
+
 export interface GuildMCPTestResult {
   success: boolean;
   toolCount: number;
   functionNames: string[];
   error?: string;
+  /** Present when the server answered 401, which may be a request to sign in. */
+  unauthorized?: McpAuthorizationChallenge;
 }

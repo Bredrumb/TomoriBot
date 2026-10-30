@@ -93,8 +93,8 @@ export default {
         short_term_memory_description: `Minha nota de trabalho desta conversa`,
         rewards_punishments: `Recompensas e Punições`,
         rewards_punishments_description: `Gestos que percebo e lembro`,
-        memory_tagging: `Marcação de Memória (Avançado)`,
-        memory_tagging_description: `Desperte uma memória apenas quando for relevante`,
+        memory_tagging: `Marcação de Memória Pessoal (Avançado)`,
+        memory_tagging_description: `Desperte uma memória pessoal apenas quando for relevante`,
         blacklisting: `Lista Negra`,
         blacklisting_description: "Faça-me ignorar um membro completamente",
       },
@@ -517,9 +517,9 @@ Digite \`{project_id}::{location}\` usando {configSetup} ou {configApikeySet}
         footer: `Escolha qual persona você quis dizer se houver várias ativas.`,
       },
       memory_tagging: {
-        title: `Marcação de Memória (Avançado)`,
+        title: `Marcação de Memória Pessoal (Avançado)`,
         description:
-          "Por padrão, toda memória no escopo é enviada com toda mensagem. A marcação restringe isso.\n> **Tags de palavras-chave**: uma memória marcada só desperta quando a palavra-chave aparece na conversa. Uma memória sem tag está sempre ativa.\n> **Canais**: uma memória do servidor pode ser limitada aos canais escolhidos no formulário (suas threads incluídas), e uma memória pessoal a uma tag `#canal`. Ambas combinam com tags de palavras-chave.\n\nAtive ambas em {configAdvancedMemory}, depois use {toolPromptSnapshot} para ver exatamente quais memórias estão ativas no momento.",
+          "Memórias pessoais podem ter tags de palavras-chave ou `#canal`, e a marcação decide se essas tags restringem quando elas aparecem.\n> **Tags de palavras-chave**: uma memória pessoal marcada só desperta quando sua palavra-chave aparece na conversa. Uma memória pessoal sem tag está sempre ativa.\n> **Canais**: uma memória pessoal pode ser limitada a um canal com uma tag `#canal`. As memórias do servidor e documentos usam seleções de canais em `/memories` em vez disso.\n\nAtive a marcação em {configAdvancedMemory}, depois use {toolPromptSnapshot} para ver exatamente quais memórias estão ativas no momento.\n> O cânone do mundo é separado: as entradas do lorebook em `/memories` usam suas próprias palavras-chave e a configuração Sempre ativa.",
         footer: "Documentos enviados e histórico extraído também podem ser limitados a canais.",
       },
     },

@@ -18,6 +18,7 @@ import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { logitBiasEntrySchema } from "@/types/provider/logitBias";
 import { PrivacyLevel, deliberateToolTriggerEntrySchema } from "@/types/db/schema";
 import { addressingStyleSchema } from "@/types/personaNaming";
+import { renameLegacyCharRefKey } from "@/types/preset/presetExport";
 
 /**
  * Version identifier for export/import format
@@ -103,14 +104,14 @@ export type PersonalExportData = z.infer<ReturnType<typeof getPersonalExportData
 
 /**
  * Personal settings-only export schema.
- * Includes user-specific physical appearance image tags and NovelAI reference image URL.
+ * Includes user-specific physical appearance image tags and character reference image URL.
  */
 export const personalSettingsExportDataSchema = z.object({
   user_nickname: z.string().min(1).max(100).nullable(),
   language_pref: z.string().min(2).max(10),
   impersonation_prompt: z.string().nullable().optional(),
   physical_appearance_tags: z.array(z.string()).default([]),
-  nai_char_ref_url: z.string().nullable().optional(),
+  char_ref_url: z.string().nullable().optional(),
   privacy_level: z.nativeEnum(PrivacyLevel).optional(),
   personal_dtm: z.enum(["off", "follow", "on"]).optional(),
   personal_deliberate_tool_mode: z.enum(["off", "follow", "on"]).optional(),
@@ -562,7 +563,7 @@ export const V1_CONFIG_FIELD_SECTION_OVERRIDES = {
     language_pref: "profile",
     impersonation_prompt: "response_modes",
     physical_appearance_tags: "appearance",
-    nai_char_ref_url: null,
+    char_ref_url: null,
     privacy_level: "privacy",
     personal_dtm: "response_modes",
     personal_deliberate_tool_mode: "response_modes",
@@ -592,7 +593,7 @@ export const V2_CONFIG_EXCLUSIONS = {
     sourceTable: "serverNovelaiImagegen",
     reason: "An active preset pointer may not exist at the destination.",
   },
-  nai_char_ref_url: {
+  char_ref_url: {
     sourceTable: "personalSettings",
     reason: "A reference URL depends on the source deployment.",
   },
@@ -869,7 +870,7 @@ export function adaptV1WorkspaceConfig(input: unknown): V2AdapterResult<Workspac
 
 export function adaptV1PersonalConfig(input: unknown): V2AdapterResult<PersonalConfigExportData> {
   return adaptV1ConfigData(
-    input,
+    renameLegacyCharRefKey(input),
     personalSettingsExportDataSchema,
     personalConfigExportDataSchema,
     PERSONAL_CONFIG_TABLE_NAMES,
@@ -1178,7 +1179,7 @@ export const personalSettingsExportSchema = z.object({
   version: z.literal(EXPORT_VERSION),
   type: z.literal(DATA_EXPORT_TYPES.personal_settings),
   exported_at: z.string(),
-  data: personalSettingsExportDataSchema,
+  data: z.preprocess(renameLegacyCharRefKey, personalSettingsExportDataSchema),
 });
 
 export type PersonalSettingsExport = z.infer<typeof personalSettingsExportSchema>;

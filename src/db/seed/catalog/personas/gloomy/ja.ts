@@ -73,6 +73,7 @@ export const persona: PersonaInput = {
   ],
   language: "ja",
   avatarPath: "src/db/seed/catalog/personas/gloomy",
+  characterReference: "character-reference/front.png",
   triggerWords: ["ともり", "アフェル", "トモリ", "あふぇる"],
   lineageId: 1770,
   namingConfig: { prefixes: {}, suffixes: {}, addressTerms: {} },

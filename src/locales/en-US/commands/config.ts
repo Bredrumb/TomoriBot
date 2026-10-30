@@ -710,9 +710,9 @@ export default {
       image_tags_title: `Image Tags`,
       image_tags_description: `Helps me with image generating this persona`,
       edit_image_tags_button: `Edit Image Tags`,
-      character_reference_title: `NovelAI Character Reference`,
-      character_reference_modal_title: `NovelAI Character Reference`,
-      character_reference_description: `Helps NovelAI generate this persona more accurately`,
+      character_reference_title: `Character Reference`,
+      character_reference_modal_title: `Character Reference`,
+      character_reference_description: `Used in place of this persona's avatar when I generate images of them`,
       character_reference_image_label: `Image`,
       character_reference_uploaded: `Uploaded and Saved`,
       character_reference_upload_description: `Upload a character sheet I can use as reference`,
@@ -721,7 +721,7 @@ export default {
       upload_reference_button: `Upload Reference`,
       clear_reference_button: `Clear Reference`,
       character_reference_clear_title: `Clear Character Reference?`,
-      character_reference_clear_description: "This clears the NovelAI character reference for {persona}.",
+      character_reference_clear_description: "This clears the character reference for {persona}.",
       persona_prompt_title: `Persona Prompt`,
       persona_prompt_description:
         "Appended directly after the system prompt, acts as a legacy alternative to Attributes",
@@ -948,6 +948,8 @@ export default {
       avatar_cleared_detail: `Removed the avatar for {name}.`,
       avatar_preset_sprites_removed_detail:
         "Removed {count} default sprite(s) that would not match. Run `/persona default` to restore them.",
+      avatar_preset_character_reference_removed_detail:
+        "Removed the default character reference so generated images follow the new look. Upload your own or run `/persona default` to restore it.",
       avatar_busy_heading: `Busy Right Now`,
       avatar_busy_detail: `Memory is constrained. Please try again shortly.`,
       avatar_quota_heading: `Avatar Limit Reached`,

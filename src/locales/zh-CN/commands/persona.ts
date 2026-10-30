@@ -118,6 +118,7 @@ export default {
       avatar_update_rate_limited: `🟡 服务器头像因为 Discord 速率限制没有更新。请手动修改。`,
       avatar_update_failed: `🟡 服务器头像没能更新，多半是碰到了 Discord 速率限制。请手动修改。`,
       alter_success_title: `🟢 副人格导入成功`,
+      lorebook_count: "导入的世界书条目数：{count}",
       alter_success_description: `已成功导入副人格 **{nickname}**！
 专属触发词：{trigger_count}
 触发词：{triggers}

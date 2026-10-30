@@ -20,6 +20,11 @@ import {
 import { sql, withTransientDbRetry } from "@/utils/db/client";
 import { emitScheduledWorkNudge } from "@/timers/scheduledWorkSignals";
 import { log } from "@/utils/misc/logger";
+import {
+  type ReminderOccurrence,
+  type ReminderRepetition,
+  toRepetitionColumns,
+} from "@/utils/text/processors/reminderRepetition";
 import type { IRepository } from "./IRepository";
 
 /** Row shape for server_trigger_behavior_configs (Phase 6). */
@@ -61,6 +66,7 @@ export type ReminderSelectionRow = {
   reminder_purpose: string;
   reminder_time: Date;
   repetition_interval_hours: number | null;
+  repetition_interval_months: number | null;
   self_reminder: boolean | null;
   channel_disc_id: string;
   created_by_user_id: number | null;
@@ -74,6 +80,8 @@ type ReminderMutationActor = {
   requester_user_id?: number;
   requester_discord_id?: string;
   requester_bridge_user_id?: string;
+  /** Only honored by deletes: a server manager may remove any reminder in their server. */
+  requester_can_manage_server?: boolean;
 };
 
 type ReminderScopedMutationResult =
@@ -84,6 +92,19 @@ type ReminderScopedMutationResult =
   | {
       status: "not_found" | "unauthorized" | "invalid_row" | "db_error";
     };
+
+/**
+ * Keeps the monthly anchor while the occurrence stays on the same server-calendar day (SET reads the
+ * pre-update row), because only a new date, not a new time or wording, starts a new monthly series.
+ */
+function keepAnchorDayOnSameLocalDate(newReminderTime: Date) {
+  const serverOffset = sql`(COALESCE((SELECT timezone_offset FROM server_chat_configs WHERE server_id = reminders.server_id), 0) * INTERVAL '1 hour')`;
+  return sql`CASE
+    WHEN ((reminder_time AT TIME ZONE 'UTC') + ${serverOffset})::date
+      = ((${newReminderTime}::timestamptz AT TIME ZONE 'UTC') + ${serverOffset})::date
+    THEN repetition_anchor_day
+  END`;
+}
 
 /** Data shape for creating or updating a random trigger. */
 interface RandomTriggerData {
@@ -166,7 +187,7 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     user_nickname: string;
     reminder_purpose: string;
     reminder_time: Date;
-    repetition_interval_hours?: number | null;
+    repetition?: ReminderRepetition;
     self_reminder?: boolean | null;
     created_by_user_id: number | null;
     persona_id?: number | null;
@@ -175,17 +196,16 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
   }
 
   /**
-   * Reschedules an existing reminder to a new time.
+   * Moves a recurring reminder to its next occurrence.
    *
-   * @param nextReminderTime - New fire time
    * @param failedOccurrenceCount - Consecutive failed occurrences to carry forward; 0 after a delivered one
    */
   async rescheduleReminder(
     reminderId: number,
-    nextReminderTime: Date,
+    nextOccurrence: ReminderOccurrence,
     failedOccurrenceCount = 0,
   ): Promise<ReminderRow | null> {
-    return this.sqlRescheduleReminder(reminderId, nextReminderTime, failedOccurrenceCount);
+    return this.sqlRescheduleReminder(reminderId, nextOccurrence, failedOccurrenceCount);
   }
 
   /** Defers delivery without changing the reminder's canonical occurrence time. */
@@ -205,7 +225,7 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     reminder_id: number;
     reminder_purpose: string;
     reminder_time: Date;
-    repetition_interval_hours: number | null;
+    repetition: ReminderRepetition;
     self_reminder: boolean;
     user_discord_id: string;
     user_nickname: string;
@@ -223,7 +243,7 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     server_id: number;
     reminder_purpose: string;
     reminder_time: Date;
-    repetition_interval_hours: number | null;
+    repetition: ReminderRepetition;
     actor: ReminderMutationActor;
   }): Promise<ReminderScopedMutationResult> {
     return this.sqlUpdateReminderCoreForRequester(reminderData);
@@ -317,9 +337,11 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
           SELECT
             r.*,
             s.server_disc_id,
-            s.is_dm_channel AS server_is_dm_channel
+            s.is_dm_channel AS server_is_dm_channel,
+            COALESCE(scc.timezone_offset, 0)::float8 AS server_timezone_offset
           FROM reminders r
           JOIN servers s ON s.server_id = r.server_id
+          LEFT JOIN server_chat_configs scc ON scc.server_id = r.server_id
           WHERE COALESCE(r.next_attempt_at, r.reminder_time) <= CURRENT_TIMESTAMP
           ORDER BY COALESCE(r.next_attempt_at, r.reminder_time) ASC
         `;
@@ -550,6 +572,7 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
             r.reminder_purpose,
             r.reminder_time,
             r.repetition_interval_hours,
+            r.repetition_interval_months,
             r.self_reminder,
             r.channel_disc_id,
             r.created_by_user_id,
@@ -573,6 +596,7 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
           r.reminder_purpose,
           r.reminder_time,
           r.repetition_interval_hours,
+          r.repetition_interval_months,
           r.self_reminder,
           r.channel_disc_id,
           r.created_by_user_id,
@@ -600,11 +624,12 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     user_nickname: string;
     reminder_purpose: string;
     reminder_time: Date;
-    repetition_interval_hours?: number | null;
+    repetition?: ReminderRepetition;
     self_reminder?: boolean | null;
     created_by_user_id: number | null;
     persona_id?: number | null;
   }): Promise<ReminderRow | null> {
+    const repetitionColumns = toRepetitionColumns(reminderData.repetition ?? null);
     try {
       log.info(
         `Creating reminder for user ${reminderData.user_nickname} (${reminderData.user_discord_id}) ` +
@@ -627,6 +652,7 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
             reminder_purpose,
             reminder_time,
             repetition_interval_hours,
+            repetition_interval_months,
             self_reminder,
             created_by_user_id,
             persona_id
@@ -637,7 +663,8 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
             ${reminderData.user_nickname},
             ${reminderData.reminder_purpose},
             ${reminderData.reminder_time},
-            ${reminderData.repetition_interval_hours ?? null},
+            ${repetitionColumns.repetition_interval_hours},
+            ${repetitionColumns.repetition_interval_months},
             ${reminderData.self_reminder ?? false},
             ${reminderData.created_by_user_id},
             ${reminderData.persona_id ?? null}
@@ -699,13 +726,15 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
 
   private async sqlRescheduleReminder(
     reminderId: number,
-    nextReminderTime: Date,
+    nextOccurrence: ReminderOccurrence,
     failedOccurrenceCount: number,
   ): Promise<ReminderRow | null> {
+    const nextReminderTime = nextOccurrence.time;
     try {
       const [updatedReminder] = await sql`
         UPDATE reminders
         SET reminder_time = ${nextReminderTime},
+            repetition_anchor_day = ${nextOccurrence.anchorDay},
             next_attempt_at = NULL,
             delivery_retry_count = 0,
             failed_occurrence_count = ${failedOccurrenceCount},
@@ -811,13 +840,14 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     reminder_id: number;
     reminder_purpose: string;
     reminder_time: Date;
-    repetition_interval_hours: number | null;
+    repetition: ReminderRepetition;
     self_reminder: boolean;
     user_discord_id: string;
     user_nickname: string;
     server_id: number;
     owner_user_id?: number;
   }): Promise<ReminderRow | null> {
+    const repetitionColumns = toRepetitionColumns(reminderData.repetition);
     try {
       const baseUpdate = sql`
         UPDATE reminders
@@ -827,7 +857,9 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
           next_attempt_at = NULL,
           delivery_retry_count = 0,
           failed_occurrence_count = 0,
-          repetition_interval_hours = ${reminderData.repetition_interval_hours},
+          repetition_interval_hours = ${repetitionColumns.repetition_interval_hours},
+          repetition_interval_months = ${repetitionColumns.repetition_interval_months},
+          repetition_anchor_day = ${keepAnchorDayOnSameLocalDate(reminderData.reminder_time)},
           self_reminder = ${reminderData.self_reminder},
           user_discord_id = ${reminderData.user_discord_id},
           user_nickname = ${reminderData.user_nickname},
@@ -902,12 +934,13 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     server_id: number;
     reminder_purpose: string;
     reminder_time: Date;
-    repetition_interval_hours: number | null;
+    repetition: ReminderRepetition;
     actor: ReminderMutationActor;
   }): Promise<ReminderScopedMutationResult> {
     const requesterUserId = reminderData.actor.requester_user_id ?? -1;
     const requesterDiscordId = reminderData.actor.requester_discord_id ?? "";
     const requesterBridgeUserId = reminderData.actor.requester_bridge_user_id ?? "";
+    const repetitionColumns = toRepetitionColumns(reminderData.repetition);
 
     try {
       const [updatedReminder] = await sql`
@@ -918,7 +951,9 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
           next_attempt_at = NULL,
           delivery_retry_count = 0,
           failed_occurrence_count = 0,
-          repetition_interval_hours = ${reminderData.repetition_interval_hours},
+          repetition_interval_hours = ${repetitionColumns.repetition_interval_hours},
+          repetition_interval_months = ${repetitionColumns.repetition_interval_months},
+          repetition_anchor_day = ${keepAnchorDayOnSameLocalDate(reminderData.reminder_time)},
           updated_at = CURRENT_TIMESTAMP
         WHERE reminder_id = ${reminderData.reminder_id}
           AND server_id = ${reminderData.server_id}
@@ -989,6 +1024,7 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     const requesterUserId = reminderData.actor.requester_user_id ?? -1;
     const requesterDiscordId = reminderData.actor.requester_discord_id ?? "";
     const requesterBridgeUserId = reminderData.actor.requester_bridge_user_id ?? "";
+    const requesterCanManageServer = reminderData.actor.requester_can_manage_server === true;
 
     try {
       const [deletedReminder] = await sql`
@@ -996,7 +1032,8 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
         WHERE reminder_id = ${reminderData.reminder_id}
           AND server_id = ${reminderData.server_id}
           AND (
-            created_by_user_id = ${requesterUserId}
+            ${requesterCanManageServer}::boolean
+            OR created_by_user_id = ${requesterUserId}
             OR (
               COALESCE(self_reminder, false) = false
               AND user_discord_id = ${requesterDiscordId}

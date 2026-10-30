@@ -11,13 +11,14 @@ export default {
       select_type_task: `tarefa`,
       select_type_reminder: `lembrete para {user_nickname}`,
       select_repeat_text: ` | repete a cada {hours}h`,
+      select_repeat_months_text: ` | repete a cada {months} mês(es)`,
       select_manager_created_by_text: ` | criado por {creator_name}`,
       no_entries_title: `Nenhuma Tarefa Agendada`,
       no_entries: `Não há tarefas agendadas ou lembretes para editar. Defina um me pedindo para lembrá-lo ou agendando uma tarefa.`,
       confirm_title: `Editar Esta Tarefa Agendada?`,
-      confirm_description: `**Conteúdo:** {reminder_purpose}
-**Próximo Gatilho:** {reminder_time}
-**Intervalo em Horas:** {repetition_interval_hours}
+      confirm_details: `**Conteúdo:** {reminder_purpose}
+**Próximo Horário de Gatilho:** {reminder_time}
+**Repetição:** {repeat_text}
 **Tipo:** {reminder_type}
 **Usuário Alvo:** {target_user}
 **Canal:** {target_channel}`,
@@ -28,9 +29,12 @@ export default {
       time_input_label: `Próximo Horário de Gatilho`,
       time_input_description: `Use o formato de 24 horas, como 14:30 ou 1430.`,
       time_input_placeholder: `14:30`,
-      interval_input_label: `Intervalo em Horas`,
-      interval_input_description: `Defina 0 para desativar a recorrência.`,
+      interval_input_label: `Intervalo de Repetição`,
+      interval_input_description: `Quantas horas ou meses entre execuções. Defina 0 para desativar a recorrência.`,
       interval_input_placeholder: `0`,
+      interval_unit_label: `Unidade do Intervalo`,
+      interval_unit_hours_option: `Horas`,
+      interval_unit_months_option: `Meses (mesmo dia a cada mês)`,
       reminder_checkbox_label: `É um lembrete para mim`,
       reminder_checkbox_description: `Irá pingar você a cada gatilho.`,
       type_reminder: `Lembrete`,
@@ -41,13 +45,13 @@ export default {
       invalid_time_title: `Horário de Gatilho Inválido`,
       invalid_time_description: `Insira um horário de 24 horas como \`14:30\`, \`1430\`, \`00:00\` ou \`2400\`.`,
       invalid_interval_title: `Intervalo Inválido`,
-      invalid_interval_description: `O intervalo deve ser um número inteiro de horas. Use \`0\` para desativar a recorrência.`,
+      invalid_interval_description: `O intervalo deve ser um número inteiro. Use \`0\` para desativar a recorrência.`,
       no_changes_title: `Sem Alterações`,
       no_changes_description: `A tarefa agendada não foi alterada.`,
       success_title: `Tarefa Agendada Atualizada`,
-      success_description: `**Conteúdo:** {reminder_purpose}
-**Próximo Gatilho:** {reminder_time}
-**Intervalo em Horas:** {repetition_interval_hours}
+      success_details: `**Conteúdo:** {reminder_purpose}
+**Próximo Horário de Gatilho:** {reminder_time}
+**Repetição:** {repeat_text}
 **Tipo:** {reminder_type}
 **Usuário Alvo:** {target_user}
 **Canal:** {target_channel}`,
@@ -60,6 +64,7 @@ export default {
       select_placeholder: `Selecione uma tarefa agendada...`,
       select_option_description: `[{persona_name}] {reminder_time} ({timezone}) #{target_channel}{repeat_text}{manager_created_by_text}`,
       select_repeat_text: ` | repete a cada {hours}h`,
+      select_repeat_months_text: ` | repete a cada {months} mês(es)`,
       select_manager_created_by_text: ` | criado por {creator_name}`,
       no_entries_title: `Nenhuma Tarefa Agendada`,
       no_entries: `Não há tarefas agendadas ou lembretes para remover. Defina um me pedindo para lembrá-lo ou agendando uma tarefa.`,

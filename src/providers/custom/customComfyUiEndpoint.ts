@@ -2757,7 +2757,7 @@ async function generateWithComfyUi(
     throw new Error(
       [
         "This ComfyUI workflow does not have active outpainting support.",
-        "Update the stored endpoint workflow to the latest tomoribot-anima3-comfyui.json.",
+        "Update the stored endpoint workflow to the latest bundled Anima workflow (tomoribot-anima-image-turbo.json or tomoribot-anima-image-detailed.json).",
         "The active workflow must expose InpaintCropImproved extend_for_outpainting with the TOMORI_OUTPAINT placeholders, or use TOMORI_OUTPAINT_FULL_CANVAS for full-canvas outpainting.",
       ].join(" "),
     );

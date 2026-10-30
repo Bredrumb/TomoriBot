@@ -18,10 +18,15 @@ Tell her what to schedule in chat:
 ```text
 remind me to submit the report at 14:30
 every Friday at 8pm, post a reminder that game night is starting
+on the 31st of every month, remind me to pay rent
 ```
 
 She parses the requested time and recurrence. Reminders ping the target user when they
 fire. Tasks are silent self-actions the persona carries out when the time comes.
+
+A schedule can repeat every few hours or every few months. A monthly one keeps the same day
+and time. In a month without that day, it runs on the month's last day (April 30 for the
+31st) and goes back to the 31st the month after.
 
 ## Timezones
 
@@ -39,8 +44,9 @@ mislabeled, fix it with a follow-up message or `/scheduled-task edit`.
 
 Two slash commands let you review and adjust existing schedules:
 
-- `/scheduled-task edit`: change a task's content, next trigger time, recurrence interval,
-  or reminder target. Set the interval to `0` to make a recurring task one-time.
+- `/scheduled-task edit`: change a task's content, next trigger time, repeat interval (in
+  hours or months), or reminder target. Set the interval to `0` to make a recurring task
+  one-time.
 - `/scheduled-task remove`: delete a reminder or task.
 
 Both commands open a picker listing your existing schedules by persona, time, channel,
@@ -49,6 +55,9 @@ and recurrence.
 :::tip
 Members with `Manage Server` see every schedule in the server, with other members' entries
 naming their creator. Everyone else sees only their own.
+
+Asking TomoriBot in chat to delete a schedule follows the same rule: you can delete ones you
+created or ones that remind you, and members with `Manage Server` can delete any.
 :::
 
 A server can hold up to 100 pending reminders and tasks at once. When it is full, TomoriBot

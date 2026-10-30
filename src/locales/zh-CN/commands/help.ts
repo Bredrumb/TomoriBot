@@ -93,8 +93,8 @@ export default {
         short_term_memory_description: `我对这段对话的工作记录`,
         rewards_punishments: `奖励与惩罚`,
         rewards_punishments_description: `我会注意并记住的动作`,
-        memory_tagging: `记忆标签（高级）`,
-        memory_tagging_description: `只在相关时唤醒某条记忆`,
+        memory_tagging: `个人记忆标签（高级）`,
+        memory_tagging_description: `只在相关时唤醒某条个人记忆`,
         blacklisting: `屏蔽名单`,
         blacklisting_description: "让我完全忽略某位成员",
       },
@@ -409,9 +409,9 @@ export default {
         footer: `同时有几个人格时，请指明你针对的是哪一个。`,
       },
       memory_tagging: {
-        title: `记忆标签（高级）`,
+        title: `个人记忆标签（高级）`,
         description:
-          "默认情况下，范围内的每条记忆都会随每条消息一起发送。标签可以缩小这个范围。\n> **关键词标签**：带标签的记忆只在其关键词出现在对话里时才会唤醒。没有标签的记忆始终有效。\n> **频道**：服务器记忆可以限制在表单中选取的频道（包含其子区），个人记忆则可通过 `#channel` 标签限制。两者均可与关键词标签叠加。\n\n在 {configAdvancedMemory} 里把两者打开，然后用 {toolPromptSnapshot} 查看当前究竟有哪些记忆处于有效状态。",
+          "个人记忆可以携带关键词或 `#channel` 标签，而记忆标签决定是否由这些标签来限制它们何时出现。\n> **关键词标签**：带标签的个人记忆只在其关键词出现在对话中时才会唤醒。没有标签的个人记忆始终处于有效状态。\n> **频道**：个人记忆可通过 `#channel` 标签限制在特定频道。服务器记忆和文档则改用 `/memories` 中的频道选择。\n\n在 {configAdvancedMemory} 中开启标签功能，然后使用 {toolPromptSnapshot} 查看当前究竟有哪些记忆处于有效状态。\n> 世界设定是独立的：`/memories` 中的世界书条目使用它们自己的关键词和始终有效设置。",
         footer: "上传的文档和提取出的历史记录也可以限制频道。",
       },
     },

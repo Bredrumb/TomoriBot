@@ -12,6 +12,7 @@
  * - SSE uses named events: content_block_start, content_block_delta, etc.
  */
 
+import { mapWithConcurrency } from "@/utils/async/bounded";
 import type { FunctionCall, FunctionResponseImageMetadata, ThoughtLogEntry } from "../../types/provider/interfaces";
 import type { StructuredContextItem } from "../../types/misc/context";
 import { log } from "../../utils/misc/logger";
@@ -137,8 +138,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
   private thinkingAccumulator = "";
   private currentContentBlockIndex = -1;
   private stopReason: string | null = null;
-  private inputTokens = 0;
-  private outputTokens = 0;
+  private usage: Record<string, unknown> = {};
 
   constructor() {
     super({
@@ -156,8 +156,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
     this.thinkingAccumulator = "";
     this.currentContentBlockIndex = -1;
     this.stopReason = null;
-    this.inputTokens = 0;
-    this.outputTokens = 0;
+    this.usage = {};
 
     const anthropicConfig = config as AnthropicStreamConfig;
 
@@ -388,14 +387,11 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
 
     switch (eventType) {
       case "message_start": {
-        const msgData = data as { message?: { usage?: { input_tokens?: number; output_tokens?: number } } };
+        const msgData = data as { message?: { usage?: Record<string, unknown> } };
         if (msgData.message?.usage) {
-          this.inputTokens = msgData.message.usage.input_tokens ?? 0;
-          this.outputTokens = msgData.message.usage.output_tokens ?? 0;
-          metadata.inputTokens = this.inputTokens;
-          // Surface normalized usage so the orchestrator can record real tokens.
-          // message_delta later overrides this with the final output_tokens.
-          metadata.usage = { inputTokens: this.inputTokens, outputTokens: this.outputTokens };
+          this.usage = { ...msgData.message.usage };
+          metadata.inputTokens = this.usage.input_tokens;
+          metadata.usage = { ...this.usage };
         }
         return { type: "text", content: "", thoughts: [], metadata };
       }
@@ -502,7 +498,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       case "message_delta": {
         const msgDelta = data as {
           delta?: { stop_reason?: string; stop_sequence?: string };
-          usage?: { output_tokens?: number };
+          usage?: Record<string, unknown>;
         };
 
         if (msgDelta.delta?.stop_reason) {
@@ -510,13 +506,11 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
           metadata.stopReason = this.stopReason;
         }
 
-        if (msgDelta.usage?.output_tokens) {
-          this.outputTokens = msgDelta.usage.output_tokens;
-          metadata.outputTokens = this.outputTokens;
-          // Final usage for the turn: input from message_start + final output here.
-          // Emitted on this `done`-bearing event so it survives the message_stop
-          // event (which otherwise clobbers terminal metadata).
-          metadata.usage = { inputTokens: this.inputTokens, outputTokens: this.outputTokens };
+        if (msgDelta.usage) {
+          // Preserve start counts because delta usage is cumulative and may omit input or cache fields.
+          this.usage = { ...this.usage, ...msgDelta.usage };
+          metadata.outputTokens = this.usage.output_tokens;
+          metadata.usage = { ...this.usage };
         }
 
         if (this.stopReason === "tool_use") {
@@ -718,10 +712,9 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
         }
       } else if (item.role === "user" || item.role === "model") {
         const role = item.role === "user" ? ("user" as const) : ("assistant" as const);
-        const contentBlocks: AnthropicContentBlock[] = [];
-        const pendingBotImageBlocks: AnthropicImageBlock[] = [];
-
-        for (const part of item.parts) {
+        const partsByInput = await mapWithConcurrency(item.parts, 4, async (part) => {
+          const contentBlocks: AnthropicContentBlock[] = [];
+          const pendingBotImageBlocks: AnthropicImageBlock[] = [];
           if (part.type === "text") {
             contentBlocks.push({
               type: "text",
@@ -733,7 +726,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
 
             if (!seesImages) {
               log.info(`AnthropicStreamAdapter: Skipping image (model doesn't support images)`);
-              continue;
+              return { contentBlocks, pendingBotImageBlocks };
             }
 
             if ("inlineData" in part && part.inlineData) {
@@ -748,7 +741,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
                   },
                 });
               }
-              continue;
+              return { contentBlocks, pendingBotImageBlocks };
             }
 
             if (part.uri && part.mimeType) {
@@ -762,7 +755,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
                     finalMimeType = dataUriMatch[1];
                     base64Data = dataUriMatch[2];
                   } else {
-                    continue;
+                    return { contentBlocks, pendingBotImageBlocks };
                   }
                 } else {
                   const optimized = await fetchAndOptimizeImage(part.uri, part.mimeType);
@@ -781,14 +774,17 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
 
                 log.info(`AnthropicStreamAdapter: Added image to ${role} message`);
               } catch (imgErr) {
-                log.warn(`AnthropicStreamAdapter: Failed to process image: ${part.uri}`, {
+                log.warn(`AnthropicStreamAdapter: Failed to process image`, {
                   error: imgErr instanceof Error ? imgErr.message : String(imgErr),
                 });
               }
             }
           }
           // Note: video not supported by Anthropic, skip silently
-        }
+          return { contentBlocks, pendingBotImageBlocks };
+        });
+        const contentBlocks = partsByInput.flatMap((parts) => parts.contentBlocks);
+        const pendingBotImageBlocks = partsByInput.flatMap((parts) => parts.pendingBotImageBlocks);
 
         if (contentBlocks.length > 0 || pendingBotImageBlocks.length > 0) {
           if (role === "assistant") {

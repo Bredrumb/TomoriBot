@@ -12,7 +12,7 @@ aiGenerated: true
 
 - `src/index.ts`: Startup coordinator. Resolves environment, executes initialization steps in order, and connects to Discord.
 - `src/init/backup.ts`: Non-production automatic data backup gate before database schema initialization.
-- `src/init/healthServer.ts`: Lightweight HTTP health server for production liveness and readiness probes.
+- `src/init/healthServer.ts`: Lightweight HTTP health server for production liveness and readiness probes, which also serves OAuth callbacks.
 - `src/init/secrets.ts`: Secret resolution and initialization of `keyManager` encryption helpers.
 - `src/init/heapSnapshot.ts`: Process-level diagnostic signal handler for on-demand V8 heap snapshots.
 - `src/init/media.ts`: Process-global concurrency and memory limits for Sharp and libvips image processing.
@@ -23,12 +23,17 @@ aiGenerated: true
 - `src/init/timers.ts`: Background periodic tasks, memory monitoring, catalog refreshers, and post-ready hooks.
 - `src/types/config.ts`: Configuration interfaces and environment resolution (`resolveEnvironment()`).
 
-The HTTP health server binds only in production mode. Container healthcheck configuration belongs
-to the deployment guides; gateway login errors are reported in process logs.
+The HTTP health server binds in production mode, and in any mode when `TOMORI_PUBLIC_BASE_URL` is
+set, because that variable means the instance receives OAuth callbacks. Container healthcheck
+configuration belongs to the deployment guides; gateway login errors are reported in process logs.
 Optional modules can call `registerHealthServerRoute()` during startup to register a method and path
-on the same server. The base installation has no extra routes. Built-in health probes take precedence,
-and registered handlers receive the parsed request URL. Invalid URLs return 400, and failed handlers
-return 500 or close the response if headers have already been sent.
+on the same server. Without `TOMORI_PUBLIC_BASE_URL` the base installation has no extra routes; with
+it, `GET /oauth/callback`, `GET /oauth/mcp/start`, and `POST /oauth/mcp/confirm` are registered,
+plus `GET /oauth/client.json` unless the base URL is a loopback origin. If the port cannot be bound
+while routes are registered, a warning lists them. Built-in health probes take precedence,
+and registered handlers receive the parsed request URL. Every registered route answers with
+`Content-Security-Policy: frame-ancestors 'none'`, so a sign-in page cannot be framed. Invalid URLs
+return 400, and failed handlers return 500 or close the response if headers have already been sent.
 
 ## Startup sequence
 
@@ -37,7 +42,9 @@ return 500 or close the response if headers have already been sent.
 2. **Health server binding**: In production mode, binds the HTTP health server immediately to `$PORT`
    (default 8080). It serves `503 Service Unavailable` until the Discord gateway reports ready.
 3. **Secret loading**: Calls `loadSecrets(environment)` to decrypt application credentials and populate
-   `process.env`. Initializes `keyManager` for runtime PGP symmetric operations.
+   `process.env`. Initializes `keyManager` for runtime PGP symmetric operations. Then, when
+   `TOMORI_PUBLIC_BASE_URL` is set, registers the OAuth callback and MCP sign-in routes and, outside
+   production, binds the health server. A loopback base URL whose port differs from `$PORT` logs a warning.
 4. **Automatic backup gate**: In non-production environments, runs `initStartupBackup(environment)`.
    Creates a backup archive when the existing archive originates from another version or is older
    than `TOMORI_AUTO_BACKUP_INTERVAL_HOURS` (default 24). Automatic bundles are capped at

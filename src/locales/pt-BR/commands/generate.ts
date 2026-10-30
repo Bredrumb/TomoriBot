@@ -61,6 +61,7 @@ export default {
       quota_resets_in_hours: `A cota reinicia em {hours} hora(s).`,
       quota_resets_in_days: `A cota reinicia em {days} dia(s).`,
       quota_exceeded_footer: `Esta cota é configurada pelos administradores deste servidor via \`/moderation\`.`,
+      quota_unavailable_description: `Não foi possível verificar a cota de geração de imagens deste servidor no momento. Tente novamente em instantes.`,
     },
     video: {
       nsfw_description: `Adiciona spoiler do Discord apenas ao vídeo; não altera a geração nem os filtros de conteúdo`,
@@ -116,6 +117,7 @@ export default {
       quota_resets_in_hours: `A cota reinicia em {hours} hora(s).`,
       quota_resets_in_days: `A cota reinicia em {days} dia(s).`,
       quota_exceeded_footer: `Esta cota é configurada pelos administradores deste servidor via \`/moderation\`.`,
+      quota_unavailable_description: `Não foi possível verificar a cota de geração de vídeos deste servidor no momento. Tente novamente em instantes.`,
     },
 
     scene: {

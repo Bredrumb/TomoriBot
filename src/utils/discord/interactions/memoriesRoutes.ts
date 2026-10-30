@@ -45,6 +45,7 @@ import {
 } from "@/modules/lorebooks/discord/panelSection";
 import { IMPORT_LIMITS } from "@/utils/security/rateLimiter";
 import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
+import { deliverTransferExport } from "@/utils/discord/transferExportDelivery";
 import { safeDownload } from "@/utils/security/safeDownload";
 import type { GlobalInteractionRoute, GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
 import {
@@ -707,6 +708,10 @@ const RECEIPT_LOCALE_KEYS = {
   lorebook_export_empty: {
     heading: "commands.memories.lorebook_export_empty_heading",
     detail: "commands.memories.lorebook_export_empty_detail",
+  },
+  lorebook_export_sent: {
+    heading: "commands.memories.lorebook_export_sent_heading",
+    detail: "commands.memories.lorebook_export_sent_detail",
   },
   lorebook_added: {
     heading: "commands.memories.lorebook_added_heading",
@@ -2431,14 +2436,39 @@ export function createMemoriesInteractionRoute(
             personaRepresentativeForLineage(scope.personas, guard.lineageId ?? 0)?.persona_nickname ??
             "Lorebook";
           const file = exportWorldInfo(entries, name);
-          await interaction.followUp({
-            content: localizer(route.locale, "commands.memories.lorebook_export_detail", { count: entries.length }),
-            files: [
-              new AttachmentBuilder(Buffer.from(JSON.stringify(file, null, 2)), {
-                name: `${sanitizeAttachmentFilenamePart(name, { fallback: "lorebook" })}.json`,
-              }),
-            ],
-            flags: MessageFlags.Ephemeral,
+          const exportDetail = localizer(route.locale, "commands.memories.lorebook_export_detail", {
+            count: entries.length,
+          });
+          await deliverTransferExport({
+            userId: interaction.user.id,
+            locale: route.locale,
+            dmDescription: exportDetail,
+            attachment: new AttachmentBuilder(Buffer.from(JSON.stringify(file, null, 2)), {
+              name: `${sanitizeAttachmentFilenamePart(name, { fallback: "lorebook" })}.json`,
+            }),
+            operationLabel: "lorebook",
+            sendDirectMessage: (payload) => interaction.user.send(payload),
+            receipts: {
+              delivered: () =>
+                repaint(
+                  interaction,
+                  route.locale,
+                  scope,
+                  "lorebooks",
+                  route.scopeLineageId,
+                  [],
+                  { kind: "lorebooks", bookId: route.bookId },
+                  receipt(route.locale, "lorebook_export_sent", { name }),
+                  dependencies,
+                ),
+              attachedInstead: async (attachment) => {
+                await interaction.followUp({
+                  content: `${localizer(route.locale, "commands.memories.lorebook_export_dm_failed")}\n\n${exportDetail}`,
+                  files: [attachment],
+                  flags: MessageFlags.Ephemeral,
+                });
+              },
+            },
           });
           return;
         }

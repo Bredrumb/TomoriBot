@@ -31,6 +31,7 @@ export default {
       quota_resets_in_hours: `La cuota se restablece en {hours} hora(s).`,
       quota_resets_in_days: `La cuota se restablece en {days} día(s).`,
       quota_remaining: `Te quedan {remaining} imagen(es) para hoy.`,
+      quota_unavailable: `No pude verificar la cuota de generación de imágenes de este servidor en este momento. Por favor, inténtalo de nuevo en un momento.`,
     },
     generate_video: {
       disabled: `La generación de videos está desactivada para este servidor.`,
@@ -40,6 +41,7 @@ export default {
       quota_resets_in_hours: `La cuota se restablece en {hours} hora(s).`,
       quota_resets_in_days: `La cuota se restablece en {days} día(s).`,
       quota_remaining: `Te quedan {remaining} video(s) para hoy.`,
+      quota_unavailable: `No pude verificar la cuota de generación de videos de este servidor en este momento. Por favor, inténtalo de nuevo en un momento.`,
       file_too_large: `El video generado ({size_mb} MB) supera el límite de 25 MB por archivo de Discord.`,
       reference_unsupported: `El modelo de OpenRouter seleccionado \`{model}\` no puede usar una imagen como primer cuadro exacto. Quita la imagen de referencia o elige un modelo de video compatible.`,
       loop_unsupported: `El modelo de OpenRouter seleccionado \`{model}\` no puede usar un último cuadro para repetir el video. Desactiva la repetición o elige un modelo de video compatible.`,
@@ -179,6 +181,7 @@ export default {
       notice_character_prompt_line: `**Personaje {index}:** {prompt}`,
       notice_image_tags_tip_line: `Consejo: usa los comandos \`image-tags\` para obtener personajes más consistentes.`,
       notice_avatar_reference_line: `Referencia de avatar: {name}.`,
+      notice_character_reference_line: `Referencia de personaje: {name}.`,
       notice_reference_count_line: `Usando {count} imagen(es) de referencia.`,
       generated_after_seconds_line: `Generada después de {seconds} segundos`,
       referenced_identities_line: `Referencias: {names}`,

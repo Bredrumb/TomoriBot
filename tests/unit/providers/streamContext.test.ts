@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, spyOn } from "bun:test";
 import type { Client, TextChannel, Webhook } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import type { StreamingContext } from "@/types/tool/interfaces";
@@ -6,6 +6,12 @@ import type { MessageIdMap } from "@/utils/text/messageIdMap";
 import { type BuildStreamContextParams, buildStreamContext } from "@/utils/provider/streamContext";
 import { isUserImpersonationStreamContext } from "@/utils/discord/stream/uiUpdater";
 import { createPersona } from "../../helpers/fixtures";
+import {
+  createChatLatencyInvocation,
+  recordChatProviderDispatch,
+  runWithChatTurnLatency,
+} from "@/utils/chat/turnLatency";
+import { log } from "@/utils/misc/logger";
 
 // Minimal Discord/Tomori stand-ins: the helper only shuttles references, never invokes them.
 const CHANNEL = { id: "channel_1" } as unknown as TextChannel;
@@ -28,6 +34,27 @@ function makeParams(overrides: Partial<BuildStreamContextParams> = {}): BuildStr
 }
 
 describe("buildStreamContext", () => {
+  it("delivers provider progress to the turn latency timer", async () => {
+    const metric = spyOn(log, "metric").mockImplementation(() => {});
+    try {
+      await runWithChatTurnLatency(createChatLatencyInvocation(Date.now(), "message"), 0, 0, async () => {
+        const context = buildStreamContext(
+          makeParams({
+            provider: "deepseek",
+            streamingContext: {
+              disableYouTubeProcessing: false,
+              onStreamProgress: recordChatProviderDispatch("deepseek"),
+            },
+          }),
+        );
+        context.onStreamProgress?.();
+      });
+      expect(metric.mock.calls.at(-1)?.[1].provider_ttfb_ms).toBeGreaterThanOrEqual(0);
+    } finally {
+      metric.mockRestore();
+    }
+  });
+
   it("uses explicit delivery mode for main and alter personas regardless of webhook identity", () => {
     for (const isAlter of [false, true]) {
       for (const deliveryMode of ["persona", "user_impersonation"] as const) {

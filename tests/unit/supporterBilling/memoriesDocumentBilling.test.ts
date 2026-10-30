@@ -291,7 +291,9 @@ describe("funded document writes", () => {
     const taskSpy = spyOn(embeddingProvider, "providerSupportsEmbeddingTaskType").mockResolvedValue(false);
     const embeddingSpy = spyOn(embeddingProvider, "generateEmbeddingsBatched").mockResolvedValue([[0.1, 0.2]]);
     const normalizeSpy = spyOn(ragRepository, "normalizeText").mockImplementation((content) => content);
-    const chunkSpy = spyOn(ragRepository, "chunkText").mockReturnValue(["Vectorized content"]);
+    const chunkSpy = spyOn(ragRepository, "chunkText").mockReturnValue([
+      { content: "Vectorized content", headingPath: null },
+    ]);
     const insertSpy = spyOn(ragRepository, "insertWithChunks").mockImplementation(async () => {
       order.push("insert");
       return 91;

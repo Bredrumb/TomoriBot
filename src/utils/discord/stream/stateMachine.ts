@@ -43,6 +43,7 @@ import { createStreamTextProcessingConfig } from "@/utils/discord/stream/textCon
 import { normalizeProviderUsage } from "@/utils/text/tokenEstimate";
 import { appendChunkThoughts, buildThoughtLogPayload, wasEmptyStreamResponse } from "@/utils/discord/stream/thoughtLog";
 import { log } from "@/utils/misc/logger";
+import { reportStreamProviderFailure } from "@/utils/provider/providerErrorMetrics";
 
 /**
  * Coordinates provider streaming as a state machine while delegating buffer, stop, UI, and error responsibilities.
@@ -448,29 +449,20 @@ export class StreamOrchestrator implements IStreamOrchestrator {
       }
     }
 
-    const deferredDenialNotice =
-      findProviderRequestDeniedError(chunk.error, context.usageContext)?.deferNotice ?? false;
-    if (!context.suppressUserErrors && !deferredDenialNotice && !isUserImpersonationStreamContext(context)) {
+    const denied = findProviderRequestDeniedError(chunk.error, context.usageContext);
+    const surfaced = !context.suppressUserErrors && !denied?.deferNotice && !isUserImpersonationStreamContext(context);
+    // Not awaited: an incident record persists to the database, and an unacknowledged
+    // initialInteraction must still be replied to within Discord's window.
+    void reportStreamProviderFailure({
+      providerError: chunk.error,
+      providerName: provider.getProviderInfo().name,
+      context,
+      requestApiKey: config.apiKey,
+      denied: denied !== null,
+      surfaced,
+    });
+    if (surfaced) {
       await this.errorUi.handleProviderError(chunk.error, provider, context, config.apiKey);
-    } else {
-      log.warn(
-        "Stream: Suppressing provider error embed due to retryable failure",
-        chunk.error,
-        {
-          errorType: "ProviderStreamError",
-          serverId: context.tomoriState.server_id,
-          userId: context.triggererUserId ?? null,
-          metadata: {
-            provider: context.provider,
-            providerErrorCode: chunk.error?.code,
-            requestDiagnostics: context.requestDiagnostics,
-          },
-        },
-        {
-          retain: true,
-          redactValues: [config.apiKey],
-        },
-      );
     }
     return { status: "error", data: chunk.error, ...this.collectDeliveredOutput(state) };
   }

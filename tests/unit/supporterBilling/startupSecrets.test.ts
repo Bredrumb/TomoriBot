@@ -29,6 +29,7 @@ const CONFIG = {
 };
 
 const VALID_ENV: Record<string, string> = {
+  TOMORI_PUBLIC_BASE_URL: "https://fixtures.example",
   TOMORI_SUPPORTER_BILLING_ENABLED: "true",
   TOMORI_SUPPORTER_CONFIG_JSON: JSON.stringify(CONFIG),
   TOMORI_SUPPORTER_OPENROUTER_MANAGEMENT_KEY: "fixture-management-key",
@@ -118,11 +119,6 @@ const BASE_SECRETS = {
   CRYPTO_SECRET: "fixture-crypto-secret",
 };
 
-const BILLING_SECRETS = {
-  ...VALID_ENV,
-  TOMORI_PUBLIC_BASE_URL: "https://fixtures.example",
-};
-
 const LOAD_SCRIPT = `import { loadSecrets } from "./src/init/secrets";
 await loadSecrets("production");
 console.log(JSON.stringify({
@@ -137,7 +133,7 @@ describe("supporter billing secret registration", () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), "tomoribot-billing-secrets-"));
     temporaryDirectories.push(directory);
     const secretFile = path.join(directory, "secrets.json");
-    await writeFile(secretFile, JSON.stringify({ ...BASE_SECRETS, ...BILLING_SECRETS }));
+    await writeFile(secretFile, JSON.stringify({ ...BASE_SECRETS, ...VALID_ENV }));
 
     const result = await runSecretScenario(LOAD_SCRIPT, {
       RUN_ENV: "production",
@@ -150,7 +146,7 @@ describe("supporter billing secret registration", () => {
   });
 
   it("loads every registered billing name from AWS Secrets Manager", async () => {
-    const secretString = JSON.stringify({ ...BASE_SECRETS, ...BILLING_SECRETS });
+    const secretString = JSON.stringify({ ...BASE_SECRETS, ...VALID_ENV });
     const result = await runSecretScenario(
       `import { mock } from "bun:test";
        mock.module("@aws-sdk/client-secrets-manager", () => ({

@@ -118,6 +118,7 @@ export default {
       avatar_update_rate_limited: `🟡 因為 Discord 的頻率限制，伺服器頭像沒有更新。請改為手動變更。`,
       avatar_update_failed: `🟡 無法更新伺服器頭像，可能是遇到 Discord 的頻率限制。請改為手動變更。`,
       alter_success_title: `🟢 alter 人格匯入成功`,
+      lorebook_count: "匯入的世界書條目數：{count}",
       alter_success_description: `已成功匯入 alter 人格 **{nickname}**！
 不重複的觸發詞：{trigger_count}
 觸發詞：{triggers}

@@ -397,6 +397,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("subscription capability ownership", () => 
         message,
         channel,
         simplifiedMessages: [],
+        contextItems: [],
         streamingContext: {},
         reunionPresence: null,
         isStopResponse: false,

@@ -72,6 +72,7 @@ interface InteractionOptions {
   fields?: Record<string, string>;
   manage?: boolean;
   kind?: "button" | "select" | "modal";
+  dmClosed?: boolean;
 }
 
 function makeInteraction(customId: string, options: InteractionOptions = {}) {
@@ -80,6 +81,7 @@ function makeInteraction(customId: string, options: InteractionOptions = {}) {
     replied: false,
     payload: null as unknown,
     followUps: [] as Array<{ content?: string; files?: AttachmentBuilder[] }>,
+    directMessages: [] as Array<{ files?: AttachmentBuilder[] }>,
   };
   const kind = options.kind ?? "button";
   const manage = options.manage ?? true;
@@ -95,7 +97,14 @@ function makeInteraction(customId: string, options: InteractionOptions = {}) {
   const interaction = {
     id: `int-${customId}`,
     customId,
-    user: { id: "user-42", username: "user42" },
+    user: {
+      id: "user-42",
+      username: "user42",
+      send: async (payload: { files?: AttachmentBuilder[] }) => {
+        if (options.dmClosed) throw new Error("Cannot send messages to this user");
+        state.directMessages.push(payload);
+      },
+    },
     guildId: WORKSPACE_ID,
     guild,
     memberPermissions: { has: (permission: string) => manage && permission === "ManageGuild" },
@@ -110,6 +119,9 @@ function makeInteraction(customId: string, options: InteractionOptions = {}) {
     },
     get followUps() {
       return state.followUps;
+    },
+    get directMessages() {
+      return state.directMessages;
     },
     followUp: async (payload: { content?: string; files?: AttachmentBuilder[] }) => {
       expect(state.deferred).toBe(true);
@@ -379,7 +391,7 @@ describe("lorebook panel routes", () => {
     }
   });
 
-  it("exports only the selected collection after acknowledgement and guards empty or unauthorized scopes", async () => {
+  it("DMs only the selected collection after acknowledgement and guards empty or unauthorized scopes", async () => {
     const entry = makeEntry(1, { persona_lineage_id: null, lorebook_name: "General" });
     const { dependencies } = createDependencies({}, [
       entry,
@@ -390,15 +402,19 @@ describe("lorebook panel routes", () => {
       values: ["action:export-lorebook"],
     });
     await runRoute(dependencies, interaction);
-    const attachment = interaction.followUps[0]?.files?.[0];
+    expect(interaction.deferred).toBe(true);
+    expect(interaction.followUps).toHaveLength(0);
+    const attachment = interaction.directMessages[0]?.files?.[0];
     expect(attachment).toBeInstanceOf(AttachmentBuilder);
     if (!attachment || !Buffer.isBuffer(attachment.attachment)) throw new Error("Missing export buffer");
     const exported = JSON.parse(attachment.attachment.toString());
     expect(Object.values(exported.entries)).toHaveLength(1);
     expect(exported.entries["0"].content).toBe(entry.content);
-    expect(interaction.followUps[0]?.content).toBe(
-      localizedCopy("en-US", "commands.memories.lorebook_export_detail", { count: 1 }),
-    );
+    expect(
+      payloadText(interaction).some((text) =>
+        text.includes(localizedCopy("en-US", "commands.memories.lorebook_export_sent_heading")),
+      ),
+    ).toBe(true);
     for (const [scope, manage, entries, key] of [
       [1770, false, [makeEntry(1)], "manager_only_heading"],
       [9999, true, [makeEntry(1)], "lorebook_changed_state_heading"],
@@ -412,10 +428,29 @@ describe("lorebook panel routes", () => {
       });
       await runRoute(blocked.dependencies, target);
       expect(target.followUps).toHaveLength(0);
+      expect(target.directMessages).toHaveLength(0);
       expect(
         payloadText(target).some((text) => text.includes(localizedCopy("en-US", `commands.memories.${key}`))),
       ).toBe(true);
     }
+  });
+
+  it("attaches the lorebook export privately when the DM is closed", async () => {
+    const { dependencies } = createDependencies({}, [
+      makeEntry(1, { persona_lineage_id: null, lorebook_name: "General" }),
+    ]);
+    const interaction = makeInteraction("memories:v1:lore-select:en-US:0:0:1", {
+      kind: "select",
+      values: ["action:export-lorebook"],
+      dmClosed: true,
+    });
+    await runRoute(dependencies, interaction);
+    expect(interaction.directMessages).toHaveLength(0);
+    expect(interaction.followUps).toHaveLength(1);
+    expect(interaction.followUps[0]?.files?.[0]).toBeInstanceOf(AttachmentBuilder);
+    expect(interaction.followUps[0]?.content).toContain(
+      localizedCopy("en-US", "commands.memories.lorebook_export_dm_failed"),
+    );
   });
 
   it("keeps Serverwide and Persona reads distinct and falls back for an unknown lineage", async () => {

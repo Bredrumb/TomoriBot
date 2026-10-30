@@ -1,5 +1,8 @@
 import type {
   Client,
+  Collection,
+  GatewayDispatchPayload,
+  GuildTextBasedChannel,
   Guild,
   GuildMember,
   Interaction,
@@ -18,6 +21,10 @@ export type EventFunction = (
 ) => Promise<void>;
 
 export type EventArg =
+  | Collection<string, Message | PartialMessage>
+  | GatewayDispatchPayload
+  | GuildTextBasedChannel
+  | number
   | VoiceState
   | Presence
   | Client

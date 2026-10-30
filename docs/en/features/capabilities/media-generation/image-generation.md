@@ -15,8 +15,9 @@ even when the chat model cannot use tools.
 ## Editing and references
 
 TomoriBot can use attachments, stickers, emojis, and user or persona avatars as references. Mention a
-user or persona to use their avatar. Depending on your image provider, she can also restyle an image,
-redraw part of it (inpainting), or extend it beyond its edges (outpainting).
+user or persona to use their avatar, or their saved character reference image when they have one.
+Depending on your image provider, she can also restyle an image, redraw part of it (inpainting), or
+extend it beyond its edges (outpainting).
 
 :::tip
 To edit an existing picture, reply to the message containing it and describe the change. This makes
@@ -35,8 +36,11 @@ Appearance and default tags can guide image generation. For example, if you ask 
 of me hugging you," TomoriBot can use your saved appearance and the persona's appearance to describe
 both of you in the image.
 
-- `/config` > `Persona` > `Image Generation Details`: the persona's appearance.
-- `/personal config`: your appearance when an image references you. See
+- `/config` > `Persona` > `Image Generation Details`: the persona's appearance tags and character
+  reference image. Default Tomori characters come with one. Giving the persona a new avatar
+  removes it, so upload your own reference for the new look.
+- `/personal config`: your appearance tags and character reference image. TomoriBot skips your
+  reference image when your privacy level is Full. See
   [Personalization](/features/knowledge/personalization/).
 - `/config` > `Models` > `Image Generation Defaults`: server-wide positive and negative tags.
   Negative tags depend on provider support.

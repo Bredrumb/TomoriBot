@@ -94,6 +94,7 @@ import type { StPresetsPanelRenderInput } from "@/utils/discord/ui/stPresetsPane
 import { HUMANIZER_DEFAULT } from "@/utils/discord/humanizerOptions";
 import { DEFAULT_MESSAGE_FETCH_LIMIT } from "@/utils/discord/messageFetchLimit";
 import type { McpConfigOperations } from "@/utils/mcp/mcpConfigOperations";
+import type { McpSignInRequest, McpSignInStart } from "@/utils/mcp/oauth/signIn";
 import type {
   NaturalNudgePanelDependencies,
   NaturalNudgesPanelState,
@@ -336,7 +337,8 @@ export interface ConfigRouteDependencies {
     selectedChannelId?: string,
   ): Promise<ConfigChannelsView>;
   loadMcpRead(serverId: number, forceRefresh?: boolean): Promise<GuildMcpConfigReadResult>;
-  mcpOperations: Pick<McpConfigOperations, "add" | "setEnabled" | "remove">;
+  mcpOperations: Pick<McpConfigOperations, "add" | "prepareReconnect" | "setEnabled" | "remove">;
+  startMcpSignIn(request: McpSignInRequest): Promise<McpSignInStart>;
   loadModelChoices(
     state: TomoriState,
     capability: ConfigCatalogModelCapability,
@@ -564,10 +566,10 @@ export async function repaint(
         !options.view &&
         resolvePersonaAdvancedActionState("character-reference", scope.actor) !== "omitted" &&
         persona.persona_id !== undefined &&
-        persona.nai_char_ref_url
+        persona.char_ref_url
       ) {
         characterReference = await dependencies.getPersonaCharacterReferenceData(
-          persona.nai_char_ref_url,
+          persona.char_ref_url,
           persona.persona_id,
           `persona_char_ref_${persona.persona_id}.png`,
         );

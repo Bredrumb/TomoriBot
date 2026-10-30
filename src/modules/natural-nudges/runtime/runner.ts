@@ -54,8 +54,10 @@ export interface IdleNudgeAttempt {
   awake: readonly boolean[];
   persona: TomoriState;
   interests: readonly NaturalNudgeInterest[];
+  recentTopics: readonly string[];
   candidates: readonly PlannerCandidate[];
   plannerModel: NudgeModelRef;
+  admitRequest: () => boolean;
   availableTools: ReadonlySet<string>;
   plannerChannels: Array<NudgeChannel & { transcript: string }>;
   target: PingUserTarget | null;
@@ -216,6 +218,14 @@ function toolSentence(name: string, tools: readonly string[]): string {
   return tools.length > 0 ? `If it fits, ${name} may use: ${tools.join(", ")}.` : "";
 }
 
+/** A goal stated outright reads as an interview, so every private goal travels with the instruction to work it in sideways. */
+const GOAL_PURSUIT_NOTE =
+  "Work toward the goal through natural conversation. Do not announce it, and do not simply ask it outright.";
+
+/** Rides on every scene turn: the script can run 8 turns, and unbounded turns turn it into a monologue exchange. */
+const SCENE_TURN_BREVITY_NOTE =
+  "This is a quick back-and-forth: keep this message to one or two short sentences and leave the rest for later turns.";
+
 function buildOpenerContextItem(
   attempt: SelectedIdleNudgeAttempt,
   plan: IdleNudgePlan,
@@ -229,6 +239,8 @@ function buildOpenerContextItem(
     targetSentence(attempt.target, plan.scene !== null),
     plan.openerDirection,
     `${name}'s private goal, which nobody else can see: ${plan.agenda}`,
+    GOAL_PURSUIT_NOTE,
+    "Keep the opener short and leave room for a reply. Do not add a question just to invite one or stack questions asking for the same response.",
     toolSentence(name, tools),
   ]);
 }
@@ -244,6 +256,7 @@ function buildPartnerContextItem(
     `${attempt.persona.persona_nickname} just opened a short scene with ${name}.`,
     targetSentence(attempt.target, true),
     `${name}'s private goal, which nobody else can see: ${agenda}`,
+    GOAL_PURSUIT_NOTE,
     toolSentence(name, tools),
   ]);
 }
@@ -270,6 +283,7 @@ function buildNudgeScene(
     sequence,
     turnIndex: 0,
     totalTurns: sequence.length,
+    additionalInstructions: SCENE_TURN_BREVITY_NOTE,
     turnContextItems: script.map((speaker, index) =>
       speaker > 1 && script.indexOf(speaker) === index
         ? [buildPartnerContextItem(attempt, speakers[speaker - 1], partnerAgendas[speaker - 2], tools)]
@@ -338,6 +352,7 @@ export async function runIdleNudgeAttempt(input: IdleNudgeAttempt): Promise<Atte
   const planned = await planIdleNudge({
     persona: input.persona,
     interests: input.interests,
+    recentTopics: input.recentTopics,
     candidates: input.candidates,
     channels: input.plannerChannels.map((channel) => ({
       name: channel.channel.name,
@@ -345,6 +360,7 @@ export async function runIdleNudgeAttempt(input: IdleNudgeAttempt): Promise<Atte
       transcript: channel.transcript,
     })),
     plannerModel: input.plannerModel,
+    admitRequest: input.admitRequest,
     target: input.target,
   });
   const usage =
@@ -409,6 +425,7 @@ export async function runIdleNudgeAttempt(input: IdleNudgeAttempt): Promise<Atte
         personaId,
         category: attempt.idleNudge.category,
         idleNudgeKey: attempt.idleNudge.key,
+        topic: planned.plan.topic,
         targetUserId: attempt.target?.userId ?? null,
         openerMessageDiscId: openerId ?? anchor.id,
       },

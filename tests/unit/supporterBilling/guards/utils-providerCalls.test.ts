@@ -188,6 +188,7 @@ describe("vision caption usage recording", () => {
 
 function preparedParticipantContext(): Awaited<ReturnType<typeof participants.prepareParticipantContext>> {
   return {
+    requestScope: participants.createParticipantRequestScope(),
     discoveryPlan: {
       seeds: [],
       evidence: [],

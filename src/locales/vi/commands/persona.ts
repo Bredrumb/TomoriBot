@@ -118,6 +118,7 @@ Từ kích hoạt: {trigger_word_count}`,
       avatar_update_rate_limited: `🟡 Avatar máy chủ không được cập nhật do giới hạn tốc độ của Discord. Vui lòng đổi thủ công.`,
       avatar_update_failed: `🟡 Không thể cập nhật avatar máy chủ, có thể do giới hạn tốc độ của Discord. Vui lòng đổi thủ công.`,
       alter_success_title: `🟢 Nhập persona alter thành công`,
+      lorebook_count: `Số mục lorebook đã nhập: {count}`,
       alter_success_description: `Đã nhập thành công persona alter **{nickname}**!
 Từ kích hoạt duy nhất: {trigger_count}
 Từ kích hoạt: {triggers}

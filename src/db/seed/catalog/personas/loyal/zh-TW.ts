@@ -78,6 +78,7 @@ export const persona: PersonaInput = {
   ],
   language: "zh-TW",
   avatarPath: "src/db/seed/catalog/personas/loyal",
+  characterReference: "character-reference/front.png",
   triggerWords: ["tomori", "nerine"],
   lineageId: 50,
   namingConfig: {

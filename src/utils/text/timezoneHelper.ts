@@ -28,6 +28,8 @@ const MONTH_NAMES = [
 
 const MILLISECONDS_PER_HOUR = 3_600_000;
 const MILLISECONDS_PER_DAY = 86_400_000;
+/** A fraction of a month has no calendar length, so only that remainder uses the Gregorian average. */
+const AVERAGE_MONTH_MS = 30.44 * MILLISECONDS_PER_DAY;
 
 /**
  * Validates that a value is a usable UTC offset in hours
@@ -167,6 +169,29 @@ export function getCalendarDayWithOffset(epochMs: number, offsetHours: number): 
   return Math.floor(
     Date.UTC(offsetDate.getUTCFullYear(), offsetDate.getUTCMonth(), offsetDate.getUTCDate()) / MILLISECONDS_PER_DAY,
   );
+}
+
+/**
+ * Steps whole calendar months in a fixed UTC offset, keeping the wall-clock time and clamping
+ * to the target month's last day (Jan 31 plus one month is Feb 28). A fractional remainder
+ * falls back to the average month length.
+ * @param dayOfMonth - Day to aim for before clamping, so a monthly series clamped to Feb 28 can
+ *   return to the 31st; defaults to `from`'s own day.
+ */
+export function addMonthsWithOffset(from: Date, months: number, offsetHours: number, dayOfMonth?: number): Date {
+  const wholeMonths = Math.trunc(months);
+  const offsetMs = offsetHours * MILLISECONDS_PER_HOUR;
+  const local = new Date(from.getTime() + offsetMs);
+  const targetDay = dayOfMonth ?? local.getUTCDate();
+  const targetMonth = local.getUTCMonth() + wholeMonths;
+  const lastDayOfTargetMonth = new Date(Date.UTC(local.getUTCFullYear(), targetMonth + 1, 0)).getUTCDate();
+  local.setUTCFullYear(local.getUTCFullYear(), targetMonth, Math.min(targetDay, lastDayOfTargetMonth));
+  return new Date(local.getTime() - offsetMs + (months - wholeMonths) * AVERAGE_MONTH_MS);
+}
+
+/** Day of the month an instant falls on after a fixed UTC offset is applied. */
+export function getDayOfMonthWithOffset(date: Date, offsetHours: number): number {
+  return new Date(date.getTime() + offsetHours * MILLISECONDS_PER_HOUR).getUTCDate();
 }
 
 /** Formats an instant as an English absolute date after a fixed UTC offset. */

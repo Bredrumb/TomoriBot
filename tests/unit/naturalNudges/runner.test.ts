@@ -16,6 +16,7 @@ import {
   type IdleNudgeDefinition,
 } from "@/modules/natural-nudges/runtime/idleNudges";
 import * as planner from "@/modules/natural-nudges/runtime/planner";
+import { PLAY_SCENE_SHORT_TURNS } from "@/modules/natural-nudges/runtime/tuning";
 import * as configCache from "@/modules/natural-nudges/runtime/configCache";
 import * as plannerModel from "@/modules/natural-nudges/runtime/model";
 import * as toolsModule from "@/modules/natural-nudges/runtime/tools";
@@ -182,14 +183,17 @@ function attemptWithHistory(latest: () => Promise<Message[]>): {
     awake: Array.from({ length: 24 }, () => true),
     persona: createPersona({ persona_id: PERSONA_ID, server_id: SERVER_ID }),
     interests: [],
+    recentTopics: ["model kits"],
     candidates: [
       {
         idleNudge: BUILTIN_IDLE_NUDGES.find((candidate) => candidate.category === "start_topic") as IdleNudgeDefinition,
         channelIndices: [0],
         partners: [],
+        sceneTurns: PLAY_SCENE_SHORT_TURNS,
       },
     ],
     plannerModel: { llmId: 1, slot: "nudge-planner" },
+    admitRequest: () => true,
     availableTools: new Set(),
     plannerChannels: [{ channel, quietSinceMs: 0, transcript: "" }],
     target: null,
@@ -259,6 +263,29 @@ function attemptWithOwnerNudge(config = ownerConfig()): { attempt: IdleNudgeAtte
 }
 
 describe("idle nudge channel context", () => {
+  it.each([
+    false,
+    true,
+  ])("counts a malformed planner failure but not a budget abort (malformed: %s)", async (malformed) => {
+    const { attempt, sent } = attemptWithHistory(async () => []);
+    const failure = spyOn(naturalNudgeRepository, "recordFailure").mockResolvedValue(null);
+    spies.push(failure);
+    plannerSpy.mockResolvedValue(
+      malformed
+        ? { status: "failed", reason: "malformed", model: "fixture-planner", usage: null }
+        : { status: "unavailable", reason: "budget" },
+    );
+    expect(await runIdleNudgeAttempt(attempt)).toBe(malformed ? "failed" : "aborted");
+    expect(failure).toHaveBeenCalledTimes(malformed ? 1 : 0);
+    expect(samples.at(-1)).toMatchObject({
+      outcome: malformed ? "failed" : "aborted",
+      phase: "b",
+      reason: malformed ? "planner_malformed" : "budget",
+    });
+    expect(chatInputs).toHaveLength(0);
+    expect(sent).toHaveLength(0);
+  });
+
   it("makes no planner call or Discord post while dormant", async () => {
     const { attempt, sent } = attemptWithHistory(async () => []);
     spyOn(configCache, "readNaturalNudgeGate").mockResolvedValue(null);
@@ -312,7 +339,10 @@ describe("idle nudge channel context", () => {
         prerequisites: ["relationship_user"],
       }),
     );
-    attempt.candidates = [...attempt.candidates, { idleNudge: targetedNudge, channelIndices: [0], partners: [] }];
+    attempt.candidates = [
+      ...attempt.candidates,
+      { idleNudge: targetedNudge, channelIndices: [0], partners: [], sceneTurns: PLAY_SCENE_SHORT_TURNS },
+    ];
     attempt.target = {
       userId: 9,
       userDiscId: "1300000000000000009",
@@ -345,8 +375,9 @@ describe("idle nudge channel context", () => {
         ),
         channelIndices: [0],
         partners: [],
+        sceneTurns: PLAY_SCENE_SHORT_TURNS,
       },
-      { idleNudge: imageNudge, channelIndices: [0], partners: [] },
+      { idleNudge: imageNudge, channelIndices: [0], partners: [], sceneTurns: PLAY_SCENE_SHORT_TURNS },
     ];
     attempt.target = {
       userId: 9,
@@ -409,6 +440,7 @@ describe("idle nudge channel context", () => {
     expect(refresh).toHaveBeenCalled();
     expect(recordFire.mock.calls[0][0]).toMatchObject({
       idleNudgeKey: imageNudge.key,
+      topic: "a drawing",
       category: imageNudge.category,
       targetUserId: null,
     });
@@ -514,6 +546,8 @@ describe("idle nudge anchor", () => {
     expect(chatInputs.map((input) => input.message)).toEqual([latest]);
     expect(chatInputs[0].borrowsTriggerMessage).toBe(true);
     expect(recordFire.mock.calls[0][0].openerMessageDiscId).toBe(PLACEHOLDER_ID);
+    expect(recordFire.mock.calls[0][0].topic).toBe("trains");
+    expect(plannerSpy.mock.calls[0][0].recentTopics).toEqual(attempt.recentTopics);
     expect(sent).toEqual([]);
   });
 

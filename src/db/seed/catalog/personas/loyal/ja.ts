@@ -78,6 +78,7 @@ export const persona: PersonaInput = {
   ],
   language: "ja",
   avatarPath: "src/db/seed/catalog/personas/loyal",
+  characterReference: "character-reference/front.png",
   triggerWords: ["ともり", "ネリネ", "トモリ", "ねりね"],
   lineageId: 50,
   namingConfig: { prefixes: {}, suffixes: { neutral: "様" }, addressTerms: {} },

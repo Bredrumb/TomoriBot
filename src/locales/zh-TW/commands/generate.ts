@@ -61,6 +61,7 @@ export default {
       quota_resets_in_hours: `額度將在 {hours} 小時後重置。`,
       quota_resets_in_days: `額度將在 {days} 天後重置。`,
       quota_exceeded_footer: `這個額度由這個伺服器的管理員用 \`/moderation\` 設定。`,
+      quota_unavailable_description: `我目前無法檢查這個伺服器的圖片額度，請稍後再試。`,
     },
     video: {
       nsfw_description: `僅為影片加上 Discord 防雷標記；不會改變生成內容或內容篩選器`,
@@ -116,6 +117,7 @@ export default {
       quota_resets_in_hours: `額度將在 {hours} 小時後重置。`,
       quota_resets_in_days: `額度將在 {days} 天後重置。`,
       quota_exceeded_footer: `這個額度由這個伺服器的管理員用 \`/moderation\` 設定。`,
+      quota_unavailable_description: `我目前無法檢查這個伺服器的影片額度，請稍後再試。`,
     },
 
     scene: {

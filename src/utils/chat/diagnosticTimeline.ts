@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { recordChatTurnMessageSent } from "@/utils/chat/turnLatency";
 import type { ChatAdmissionDisposition, ChatIncoming, GenerationTurnResult } from "@/utils/chat/types";
 
 const RETENTION_MS = 60 * 60 * 1000;
@@ -22,7 +23,7 @@ type ChatSendOrigin =
   | "model_fallback"
   | "key_retry"
   | "tool_continuation";
-type ChatInvocationSource = "message" | "queue" | "persona_job" | "retry" | "manual" | "stop";
+export type ChatInvocationSource = "message" | "queue" | "persona_job" | "retry" | "manual" | "stop";
 
 type DiagnosticEvent =
   | {
@@ -32,6 +33,9 @@ type DiagnosticEvent =
     }
   | { kind: "admission"; disposition: ChatAdmissionDisposition }
   | { kind: "turns_planned"; count: number }
+  | { kind: "context_built"; historyFetchMs: number; replyFetches: number; participantMs: number; nativeMs: number }
+  | { kind: "typing_started" }
+  | { kind: "provider_first_chunk" }
   | { kind: "persona_jobs_queued"; count: number }
   | { kind: "turn_started"; ordinal: number; total: number }
   | { kind: "turn_finished"; status: GenerationTurnResult["status"]; responseCount: number }
@@ -140,7 +144,7 @@ function prune(now: number): void {
   }
 }
 
-function sourceOf(incoming: ChatIncoming): DiagnosticEvent & { kind: "invocation_started" } {
+export function sourceOf(incoming: ChatIncoming): DiagnosticEvent & { kind: "invocation_started" } {
   const source =
     incoming.retryCount > 0
       ? "retry"
@@ -240,6 +244,7 @@ export function recordChatMessageSent(
   streamMessage = 1,
   route: ChatSendRoute = "normal",
 ): void {
+  recordChatTurnMessageSent();
   const active = scope.getStore();
   if (!active) return;
   if (

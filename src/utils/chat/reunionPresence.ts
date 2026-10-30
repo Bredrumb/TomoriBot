@@ -100,6 +100,8 @@ export async function resolveReunionNote(
     turn: ChatTurn;
     effectivePersona: TomoriState;
     isUserImpersonation: boolean;
+    /** The turn answers another persona (a self-reply chain or a later scene turn), so no person is returning. */
+    isPersonaSpeaker: boolean;
     proxiedIdentityName?: string | null;
     /** Set only for a verified stable proxied speaker; absent for ordinary host messages. */
     proxiedIdentityUserDiscId?: string | null;
@@ -118,6 +120,7 @@ export async function resolveReunionNote(
   if (
     effectivePersona.config.time_awareness_enabled === false ||
     args.isUserImpersonation ||
+    args.isPersonaSpeaker ||
     !presenceStore.isTrackingEnabled ||
     typeof lineageId !== "number" ||
     !Number.isInteger(lineageId) ||

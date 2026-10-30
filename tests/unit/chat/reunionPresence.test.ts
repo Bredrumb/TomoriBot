@@ -47,6 +47,7 @@ function makeResolveArgs(userId: number, userDiscId = HOST_DISC_ID) {
       config: { time_awareness_enabled: true, timezone_offset: 0 },
     } as TomoriState,
     isUserImpersonation: false,
+    isPersonaSpeaker: false,
   };
 }
 
@@ -214,6 +215,19 @@ describe("ReunionClaimRegistry", () => {
     expect(retry.note).toContain("Alice hasn't interacted with you specifically since");
     expect(retry.presence?.mode).toBe("claimed");
     await recordReunionPresence(retry.presence, emptyResult, store);
+  });
+
+  it("neither greets nor clocks the originator when the turn answers another persona", async () => {
+    const read = mock(async () => ({
+      lastPreviousDayAt: new Date("2026-07-01T00:00:00Z"),
+      seenToday: false,
+    }));
+    const { store } = makePresenceStore({ getUserPersonaReunionInfo: read });
+
+    const resolved = await resolveReunionNote({ ...makeResolveArgs(34), isPersonaSpeaker: true }, store);
+
+    expect(resolved).toEqual({ note: null, presence: null });
+    expect(read).not.toHaveBeenCalled();
   });
 });
 

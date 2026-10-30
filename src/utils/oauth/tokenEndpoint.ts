@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { fetchOAuthJson, type OAuthFetch } from "@/utils/oauth/oauthFetch";
 
+const expiresInSchema = z
+  .number()
+  .finite()
+  .positive()
+  .refine((seconds) => Number.isFinite(new Date(Date.now() + seconds * 1000).getTime()));
+
 const oauthTokenSchema = z.object({
   access_token: z.string().trim().min(1),
   refresh_token: z.string().trim().min(1).optional(),
@@ -8,15 +14,14 @@ const oauthTokenSchema = z.object({
     .string()
     .transform((value) => value.toLowerCase())
     .pipe(z.literal("bearer")),
-  expires_in: z
-    .number()
-    .finite()
-    .positive()
-    .refine((seconds) => Number.isFinite(new Date(Date.now() + seconds * 1000).getTime())),
+  expires_in: expiresInSchema,
   scope: z.string().optional(),
 });
 
+const oauthTokenOptionalExpirySchema = oauthTokenSchema.extend({ expires_in: expiresInSchema.optional() });
+
 export type OAuthToken = z.infer<typeof oauthTokenSchema>;
+export type OAuthTokenWithOptionalExpiry = z.infer<typeof oauthTokenOptionalExpirySchema>;
 export type OAuthClientAuthentication =
   | { method: "basic" | "body"; clientId: string; clientSecret: string }
   | { method: "none"; clientId: string };
@@ -48,7 +53,7 @@ function formEncode(value: string): string {
   return new URLSearchParams({ v: value }).toString().slice(2);
 }
 
-export async function requestOAuthToken(options: {
+interface OAuthTokenRequestOptions {
   endpoint: string;
   allowedOrigins: readonly string[];
   authentication: OAuthClientAuthentication;
@@ -57,7 +62,18 @@ export async function requestOAuthToken(options: {
   timeoutMs?: number;
   userAgent?: string;
   fetchImpl?: OAuthFetch;
-}): Promise<OAuthToken> {
+}
+
+/** `optionalExpiresIn` admits a response without `expires_in`, which RFC 6749 allows and MCP servers may send. */
+export async function requestOAuthToken(
+  options: OAuthTokenRequestOptions & { optionalExpiresIn?: false },
+): Promise<OAuthToken>;
+export async function requestOAuthToken(
+  options: OAuthTokenRequestOptions & { optionalExpiresIn: true },
+): Promise<OAuthTokenWithOptionalExpiry>;
+export async function requestOAuthToken(
+  options: OAuthTokenRequestOptions & { optionalExpiresIn?: boolean },
+): Promise<OAuthTokenWithOptionalExpiry> {
   const body = new URLSearchParams(options.parameters);
   const headers = new Headers({ "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" });
   if (options.userAgent) headers.set("User-Agent", options.userAgent);
@@ -84,7 +100,7 @@ export async function requestOAuthToken(options: {
         ["invalid_grant", "invalid_client", "unauthorized_client", "invalid_target"].includes(error.data.error));
     throw new OAuthTokenError(blocked ? "blocked" : "retry", "provider", response.status, retryAt(response));
   }
-  const parsed = oauthTokenSchema.safeParse(data);
+  const parsed = (options.optionalExpiresIn ? oauthTokenOptionalExpirySchema : oauthTokenSchema).safeParse(data);
   if (!parsed.success || (options.requireRefreshToken && !parsed.data.refresh_token)) {
     throw new OAuthTokenError("retry", "invalid_response", response.status);
   }

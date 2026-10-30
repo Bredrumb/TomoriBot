@@ -36,6 +36,39 @@ Startup schema execution is coordinated by `src/utils/db/initializeDatabase.ts`:
 - Versions 900 and above are reserved for deployment-specific migrations. A clean installation executes that band after the base schema instead of recording it as applied, so `schema.sql` stays free of deployment-specific DDL.
 - A deployment-band migration can replace a stored function created by a baseline migration. Because an applied band migration is never replayed, a later baseline migration that redefines that function needs a new band migration that restores the deployment body.
 
+## Document heading paths
+
+`document_chunks.heading_path` is nullable JSONB shaped as
+`{ "sections": [{ "depth": 1, "title": "Harbor" }, { "depth": 4, "title": "Lamp" }] }`.
+The ordered entries retain actual heading depths. The object binds directly through Bun SQL and
+decodes as an object, avoiding PostgreSQL array decoding. Readers validate the stored JSON before
+formatting it. Null means the chunk has no heading metadata.
+
+Migration 127 guards the optional RAG table and adds the column without rewriting existing rows.
+Its rollback drops only heading metadata; it does not change content or boundaries. The idempotent
+`schema_rag.sql` column addition also covers installations that enable pgvector later.
+
+New document writers derive lexical text from the complete path and use bounded heading context
+for embeddings. Edits preserve the stored path, and in-place re-embedding compares it with the
+locked snapshot before updating vectors. Lexical backfill also validates the path against its
+snapshot before writing. Existing documents and imported history facts keep null paths.
+
+## Document lexical index
+
+`document_chunks.lex_text` is nullable derived text containing the document name and chunk
+content and any heading path, tokenized by `src/utils/documents/lexicalText.ts`. Authored `content` stays unchanged.
+The `document_chunks_tsv_update` trigger builds `tsv` with the shared `russian` text-search
+configuration from `COALESCE(lex_text, content)`. A content change that retains the previous
+`lex_text` clears it, so the index cannot keep stale terms.
+
+Migration 126 and `schema_rag.sql` install the same column and trigger; the migration skips
+databases without the optional RAG tables. Pending rows have null `lex_text` and remain
+searchable through raw content. After login, `06_backfillDocumentLexicalText.ts` schedules
+50-row batches without blocking startup. It tokenizes before opening write transactions,
+locks each document name for validation, and writes only still-pending chunks whose content
+and document name match the snapshot. Skipped edits retry on the next batch; failures retry
+on a timer. Chunk reads bypass caches, so these writes require no cache invalidation.
+
 ## Data access boundary
 
 Domain query owners live under `src/utils/db/repositories/`. Some modules, including working-memory
@@ -188,7 +221,7 @@ matching credential revision, including after the persona is removed.
 ### User identity, privacy, and personalization
 
 - **`users`**: stores account snowflakes (`user_disc_id`), language preferences, registration locales, and `privacy_level` (0 = minimal, 1 = partial, 2 = full).
-- **`user_personalization_configs`**: stores personal nicknames, numeric timezone offsets, deliberate tool modes, cross-server short-term memory opt-ins, physical appearance tags, NovelAI character reference URLs, impersonation prompts, personal fallback routing toggles, the Pings from Personas opt-out (`natural_nudge_opt_out`), and the personal text fallback chain (`fallback_model_refs`) with its `model_randomizer_enabled` flag. The chain is one per user and may mix providers; sampler parameters stay per provider on `user_saved_provider_configs`.
+- **`user_personalization_configs`**: stores personal nicknames, numeric timezone offsets, deliberate tool modes, cross-server short-term memory opt-ins, physical appearance tags, character reference URLs, impersonation prompts, personal fallback routing toggles, the Pings from Personas opt-out (`natural_nudge_opt_out`), and the personal text fallback chain (`fallback_model_refs`) with its `model_randomizer_enabled` flag. The chain is one per user and may mix providers; sampler parameters stay per provider on `user_saved_provider_configs`.
 - **`user_persona_naming_preferences`**: stores nullable nickname, prefix, and suffix overrides per `(user_id, persona_lineage_id)`. Survives persona deletion and re-import because it has no foreign key to local persona IDs.
 - **`personalization_blacklist`**: server-scoped table keyed by `(server_id, user_disc_id)`. Excludes the user from personalization enrichments in that guild without deleting their account.
 - **`persona_user_blocks`**: stores persona-scoped moderation records keyed by `(server_id, persona_id, user_disc_id)`. Supports `mute` (stops triggering persona) and `block` (also hides user messages from dialogue history).
@@ -242,7 +275,7 @@ the schema.
 ### Operational state, counters, and admission limits
 
 - **`cooldowns`**: unlogged PostgreSQL table storing command category and message trigger cooldowns.
-- **`reminders`**: scheduled reminders and recurring jobs. Uses `next_attempt_at` leases and `delivery_retry_count` budgets to handle transient delivery failures without shifting recurring cadences; `failed_occurrence_count` tracks consecutive failed occurrences so a persistently failing recurring reminder skips retries and is removed once it reaches nobody.
+- **`reminders`**: scheduled reminders and recurring jobs. A series repeats by hours or by calendar months in the server's timezone, never both; `repetition_anchor_day` keeps a monthly series' target day after a short month clamps it (NULL means the day of `reminder_time`). Uses `next_attempt_at` leases and `delivery_retry_count` budgets to handle transient delivery failures without shifting recurring cadences; `failed_occurrence_count` tracks consecutive failed occurrences so a persistently failing recurring reminder skips retries and is removed once it reaches nobody.
 - **`stat_counters`**: pre-aggregated counter table storing usage telemetry across `(server_id, user_id, persona_lineage_id, metric, metric_key, bucket)`. `StatRepository` accumulates counts in memory and flushes them as multi-row additive upserts on interval or shutdown. Excluded from export.
 - **`command_catalog`**: dimension table recording all registered slash commands. Synced at boot by `StatRepository.syncCommandCatalog()`, enabling telemetry joins to identify unused commands.
 - **`api_key_rotation` and `api_key_rotation_runtime_state`**: provider key rotation pool and error cooldown tracking per server. Excluded from export.
@@ -275,8 +308,9 @@ Natural Nudges stores events and derives its meters on read
   Excluded from export; a missing timestamp keeps the server dormant. The dormancy migration seeds
   it once from recent channel activity only for existing servers that already pass the heat and
   channel gates, preserving the original event time and any live direct-chat timestamp.
-- **`natural_nudge_fires`**: the fire log every meter reads, with `target_user_id` for a Ping User. Active Nudge
-  rows (`mode = 'active'`) have no category or verdict and set `detour` when another persona took the
+- **`natural_nudge_fires`**: the fire log every meter reads, with `target_user_id` for a Ping User and nullable
+  `topic` for the idle planner's 1-200 character subject. Active Nudge
+  rows (`mode = 'active'`) have no topic, category, or verdict and set `detour` when another persona took the
   turn. Pruned after 30 days.
 - **`natural_nudge_agendas`**: hidden agendas keyed by `(message_disc_id, persona_id)`. Pruned after
   90 days; `target_user_id` cascades so erasing a user removes agendas built from their data.
@@ -312,6 +346,7 @@ Sensitive provider credentials are encrypted using PostgreSQL `pgcrypto` (`pgp_s
 - `saved_provider_configs.api_key`
 - `user_saved_provider_configs.api_key`
 - `guild_mcp_servers.auth_token`
+- `guild_mcp_oauth.access_token` and `refresh_token` (each has its own version tag)
 - `discord_managed_webhooks.webhook_token`
 - `pluralbuddy_oauth_connections.client_secret`, `refresh_token`, and `access_token` (each has its own version tag)
 

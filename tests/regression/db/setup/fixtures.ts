@@ -128,7 +128,7 @@ export async function insertFixtures(db: SQL): Promise<FixtureRefs> {
       user_nickname,
       shortterm_cache_crossserver_opt_in,
       physical_appearance_tags,
-      nai_char_ref_url,
+      char_ref_url,
       impersonation_prompt,
       personal_dtm,
       natural_nudge_opt_out
@@ -147,7 +147,7 @@ export async function insertFixtures(db: SQL): Promise<FixtureRefs> {
       user_nickname = EXCLUDED.user_nickname,
       shortterm_cache_crossserver_opt_in = EXCLUDED.shortterm_cache_crossserver_opt_in,
       physical_appearance_tags = EXCLUDED.physical_appearance_tags,
-      nai_char_ref_url = EXCLUDED.nai_char_ref_url,
+      char_ref_url = EXCLUDED.char_ref_url,
       impersonation_prompt = EXCLUDED.impersonation_prompt,
       personal_dtm = EXCLUDED.personal_dtm,
       natural_nudge_opt_out = EXCLUDED.natural_nudge_opt_out,

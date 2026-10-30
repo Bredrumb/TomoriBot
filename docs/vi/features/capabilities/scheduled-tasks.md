@@ -2,7 +2,6 @@
 title: "Tác vụ theo lịch"
 sidebar:
   order: 2
-aiGenerated: true
 ---
 
 Đặt lời nhắc cho chính bạn hoặc lên lịch thông báo định kỳ mà không cần rời khỏi cuộc trò chuyện. Hãy hỏi trực tiếp bot và cô ấy sẽ tạo lịch trình cho bạn. Nhiệm vụ theo lịch trình thuộc về persona tích cực.
@@ -16,9 +15,12 @@ Nói với cô ấy những gì cần lên lịch trong cuộc trò chuyện:
 ```text
 remind me to submit the report at 14:30
 every Friday at 8pm, post a reminder that game night is starting
+on the 31st of every month, remind me to pay rent
 ```
 
 Cô phân tích thời gian được yêu cầu và sự lặp lại. Lời nhắc ping người dùng mục tiêu khi họ kích hoạt. Nhiệm vụ là những hành động thầm lặng mà cá nhân thực hiện khi thời điểm đến.
+
+Lịch trình có thể lặp lại sau mỗi vài giờ hoặc sau mỗi vài tháng. Lịch lặp lại hàng tháng sẽ giữ nguyên ngày và giờ. Vào tháng không có ngày đó, tác vụ sẽ chạy vào ngày cuối cùng của tháng (ngày 30 tháng 4 đối với ngày 31) và quay trở lại ngày 31 vào tháng sau.
 
 ## Múi giờ
 
@@ -30,10 +32,16 @@ Khi lời nhắc nhắm mục tiêu đến người dùng có múi giờ cá nh�
 
 Hai lệnh gạch chéo cho phép bạn xem lại và điều chỉnh lịch trình hiện có:
 
-- `/scheduled-task edit`: thay đổi nội dung của nhiệm vụ, thời gian kích hoạt tiếp theo, khoảng thời gian lặp lại hoặc mục tiêu nhắc nhở. Đặt khoảng thời gian thành `0` để thực hiện tác vụ định kỳ một lần.
-- `/scheduled-task remove`: xóa lời nhắc hoặc nhiệm vụ.
+- `/scheduled-task edit`: thay đổi nội dung của tác vụ, thời gian kích hoạt tiếp theo, khoảng cách lặp lại (theo giờ hoặc theo tháng) hoặc người nhận lời nhắc. Đặt khoảng thời gian thành `0` để chuyển tác vụ định kỳ thành một lần.
+- `/scheduled-task remove`: xóa lời nhắc hoặc tác vụ.
 
-Cả hai lệnh đều mở một bộ chọn liệt kê các lịch trình hiện có của bạn theo cá nhân, thời gian, kênh và tần suất lặp lại.
+Cả hai lệnh đều mở một bộ chọn liệt kê các lịch trình hiện có của bạn theo persona, thời gian, kênh và tần suất lặp lại.
+
+:::tip
+Thành viên có quyền `Quản lý máy chủ` có thể xem mọi lịch trình trong máy chủ, trong đó các mục của thành viên khác sẽ hiển thị tên người tạo. Những người khác chỉ thấy lịch trình của riêng mình.
+
+Yêu cầu TomoriBot xóa lịch trình trong cuộc trò chuyện cũng tuân theo quy tắc này: bạn có thể xóa các lịch do mình tạo hoặc nhắc nhở bạn, và thành viên có quyền `Quản lý máy chủ` có thể xóa bất kỳ lịch nào.
+:::
 
 Một máy chủ có thể lưu tối đa 100 lời nhắc và tác vụ đang chờ xử lý cùng một lúc. Khi đạt giới hạn, TomoriBot sẽ thông báo cho bạn thay vì thêm mới; hãy xóa các mục cũ bằng `/scheduled-task remove` để có thêm chỗ trống.
 
@@ -45,4 +53,4 @@ Nếu quá trình phân phối không thành công liên tục và đạt đến
 
 ---
 
-Để biết thêm các tính năng, hãy xem [Công cụ & tiện ích mở rộng](/vi/features/capabilities/tools-and-extensions/).
+Để biết thêm các tính năng, hãy xem [Công cụ & tiện ích mở rộng](/features/capabilities/tools-and-extensions/built-in-tools/).

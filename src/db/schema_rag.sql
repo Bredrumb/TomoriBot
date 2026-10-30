@@ -88,12 +88,15 @@ CREATE TABLE IF NOT EXISTS document_chunks (
   embedding_family TEXT NOT NULL,
   chunk_index INT NOT NULL,
   content TEXT NOT NULL,
+  heading_path JSONB,
   embedding VECTOR,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (document_id) REFERENCES documents(document_id) ON DELETE CASCADE,
   FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE CASCADE,
   FOREIGN KEY (embedding_model_id) REFERENCES embedding_models(embedding_model_id) ON DELETE RESTRICT
 );
+
+SELECT add_column_if_not_exists('document_chunks', 'heading_path', 'JSONB');
 
 -- Create indexes for document chunks
 CREATE INDEX IF NOT EXISTS idx_document_chunks_document_id ON document_chunks(document_id);
@@ -103,22 +106,28 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_document_chunks_unique_idx ON document_chu
 -- Full-text search support for hybrid document retrieval. This lives in the
 -- optional RAG schema as well as its migration so a database that enables
 -- pgvector after migration 037 was skipped still receives the complete schema.
+SELECT add_column_if_not_exists('document_chunks', 'lex_text', 'TEXT');
 SELECT add_column_if_not_exists('document_chunks', 'tsv', 'TSVECTOR');
 UPDATE document_chunks
-SET tsv = to_tsvector('english', content)
+SET tsv = to_tsvector('russian', COALESCE(lex_text, content))
 WHERE tsv IS NULL;
 CREATE INDEX IF NOT EXISTS idx_document_chunks_tsv ON document_chunks USING GIN(tsv);
 
 CREATE OR REPLACE FUNCTION document_chunks_tsv_update()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER AS $document_chunks_tsv$
 BEGIN
-  NEW.tsv := to_tsvector('english', NEW.content);
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.content IS DISTINCT FROM OLD.content AND NEW.lex_text IS NOT DISTINCT FROM OLD.lex_text THEN
+      NEW.lex_text := NULL;
+    END IF;
+  END IF;
+  NEW.tsv := to_tsvector('russian', COALESCE(NEW.lex_text, NEW.content));
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$document_chunks_tsv$ LANGUAGE plpgsql;
 
 DROP TRIGGER IF EXISTS trg_document_chunks_tsv ON document_chunks;
 CREATE TRIGGER trg_document_chunks_tsv
-BEFORE INSERT OR UPDATE OF content
+BEFORE INSERT OR UPDATE OF content, lex_text
 ON document_chunks
 FOR EACH ROW EXECUTE FUNCTION document_chunks_tsv_update();

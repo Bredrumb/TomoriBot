@@ -10,6 +10,7 @@ import {
 } from "@/modules/natural-nudges/runtime/channels";
 import { isNaturalNudgeServerActive, readNaturalNudgeGate } from "@/modules/natural-nudges/runtime/configCache";
 import { isFailureStopped } from "@/modules/natural-nudges/runtime/failureStop";
+import { NudgeRequestBudget } from "@/modules/natural-nudges/runtime/requestBudget";
 import { claimNudgeServer, releaseNudgeServer } from "@/modules/natural-nudges/runtime/inFlight";
 import {
   matchActiveNudge,
@@ -124,24 +125,8 @@ class ActiveNudgeCounter {
   }
 }
 
-/**
- * Checker calls per server per server-day, and quota pauses. Kept in memory like the counter, so a
- * restart forgets the day's count; raise to a stored count if restarts ever become frequent enough to
- * matter for a key's daily quota.
- */
-export class ActiveNudgeCheckBudget {
-  private readonly days = new Map<number, { dayStart: number; used: number }>();
+export class ActiveNudgeCheckBudget extends NudgeRequestBudget {
   private readonly pausedUntil = new Map<number, number>();
-
-  /** Spends one checker call, or returns false when the server already spent its cap today. */
-  take(serverId: number, dayStart: Date, cap: number): boolean {
-    const start = dayStart.getTime();
-    const day = this.days.get(serverId);
-    const used = day?.dayStart === start ? day.used : 0;
-    if (used >= cap) return false;
-    this.days.set(serverId, { dayStart: start, used: used + 1 });
-    return true;
-  }
 
   pause(serverId: number, now: number): void {
     this.pausedUntil.set(serverId, now + ACTIVE_NUDGE_QUOTA_PAUSE_MS);

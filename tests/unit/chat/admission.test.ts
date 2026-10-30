@@ -485,6 +485,30 @@ describe("evaluateChatAdmission Natural Nudges scene interrupt", () => {
       channelLocks.delete(channelId);
     }
   });
+
+  it("ignores a persona message when no person started the chain", async () => {
+    const channelId = "orphan-persona-chain";
+    const disposition = await evaluateChatAdmission({
+      client: { user: { id: "tomori" } },
+      message: {
+        id: "persona-message",
+        content: "ことね、聞いて",
+        mentions: { users: new Map(), roles: new Map(), everyone: false },
+        embeds: [],
+        attachments: new Map(),
+        webhookId: null,
+        interaction: null,
+        reference: null,
+        author: { id: "tomori", bot: true, username: "Tomori" },
+        guild: { id: "300000000000000036" },
+        channel: { id: channelId, type: ChannelType.GuildText },
+      },
+      isManuallyTriggered: false,
+      isFromQueue: false,
+    } as unknown as ChatIncoming);
+
+    expect(disposition).toMatchObject({ disposition: "ignore", reason: "persona_chain_without_origin" });
+  });
 });
 
 describe("evaluateMessageProxyOriginalSpeedbump guild presence", () => {

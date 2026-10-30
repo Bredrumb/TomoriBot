@@ -14,6 +14,7 @@ The canonical preset catalog stores character definitions keyed by `(preset_line
 - `preset_lineage_id`: Identifies the official character family across localized variants. Display names (`persona_preset_name`) can change in the catalog without altering lineage or requiring schema migrations.
 - `preset_attribute_public_flags`: Boolean array indicating which attributes are shared publicly in conversation participant profiles. Official presets mark their appearance attributes public; other seeded attributes stay private.
 - `preset_avatar_shared_url` and `preset_avatar_hash`: Object storage reference and content hash for the bundled character avatar.
+- `preset_char_ref_shared_url`: Object storage reference for the bundled character reference image, used by reference-based image generation.
 - `preset_naming_config`: Defines gendered and neutral address terms for the character.
 
 ### Pointer personas
@@ -33,6 +34,7 @@ Preset media is stored once and shared across servers:
 Seeder / Sweep Lock (PostgreSQL Advisory Lock)
   ├── Seed Pass ──> Uploads immutable assets to presets/{lineage}/...
   │                 ├── preset_avatar_shared_url (avatars)
+  │                 ├── preset_char_ref_shared_url (character references)
   │                 └── preset_sprites (expressions)
   └── Fan-out
       ├── Alters  ──> Live-resolve shared URL per webhook send (no local copy)
@@ -42,6 +44,10 @@ Seeder / Sweep Lock (PostgreSQL Advisory Lock)
 ### Alter avatars
 
 Alter personas send messages via webhooks that accept an image URL per delivery. Pointer alters store `NULL` in `personas.webhook_avatar_url` and live-resolve `preset_avatar_shared_url` at load time (`PersonaRepository.resolvePointerAlterAvatarUrl`). Assets are stored under immutable paths (`presets/{lineage}/avatar-{hash}.png`), eliminating per-server storage costs.
+
+### Character references
+
+A pointer persona with no character reference of its own live-resolves `preset_char_ref_shared_url` at load time, so `char_ref_url` in its state names the shared `presets/{lineage}/character-reference-{hash}.png` image. The character reference loaders in `charrefStorage.ts` accept these shared paths for any persona, while panel display accepts a remote one only from this deployment's avatar storage.
 
 ### Main avatar reconciler
 
@@ -67,9 +73,9 @@ The first local edit to prompt text, attributes, sprites, or naming forks the po
 - `is_pointer` transitions to `false`.
 - The live preset state is copied into per-persona database tables (`personas`, `persona_attributes`, `persona_configs`, `persona_sprites`).
 - `persona_lineage_id` is preserved so existing memories and conditioning history remain intact.
-- **Reference preservation**: Sprites and alter avatars copy shared `presets/` URLs by reference, avoiding byte duplication while retaining protection under storage deletion guards.
-- **Avatar customization exception**: Editing an avatar forks the persona and removes preset sprites referencing shared assets (`removePresetSpritesAfterAvatarChange`), preventing expressions from the previous character from persisting alongside the new face.
-- **Pointer restoration**: A server manager can use `Resync with Preset` in `/config` > Persona > Identity & Personality for a forked main or alter persona. It restores the live preset's prompt, attributes, sample dialogues, avatar, and sprites while preserving `persona_lineage_id`, name, trigger words, naming habits, and other persona settings. Memories, conditioning, and stats keep their existing lineage. Custom avatars and own sprite rows are removed; shared preset images remain protected. Main personas apply the guild avatar immediately; a failed PATCH leaves the avatar hash unset so the boot reconciler retries. `/persona default type: default` also restores a pointer, but only for the main persona and with the selected preset's lineage; `type: alter` creates another persona.
+- **Reference preservation**: Sprites, alter avatars, and the character reference copy shared `presets/` URLs by reference, avoiding byte duplication while retaining protection under storage deletion guards.
+- **Avatar customization exception**: Editing an avatar forks the persona and removes preset sprites referencing shared assets (`removePresetSpritesAfterAvatarChange`), preventing expressions from the previous character from persisting alongside the new face. It also clears a character reference that is still the preset image (`clearPresetCharacterReferenceAfterAvatarChange`), so generated images stop drawing the previous character; an uploaded reference stays.
+- **Pointer restoration**: A server manager can use `Resync with Preset` in `/config` > Persona > Identity & Personality for a forked main or alter persona. It restores the live preset's prompt, attributes, sample dialogues, avatar, and sprites while preserving `persona_lineage_id`, name, trigger words, naming habits, and other persona settings. Memories, conditioning, and stats keep their existing lineage. Custom avatars, own sprite rows, and the persona's character reference are removed; shared preset images remain protected. Main personas apply the guild avatar immediately; a failed PATCH leaves the avatar hash unset so the boot reconciler retries. `/persona default type: default` also restores a pointer, but only for the main persona and with the selected preset's lineage; `type: alter` creates another persona.
 
 ## Cards, imports, and vision generation
 

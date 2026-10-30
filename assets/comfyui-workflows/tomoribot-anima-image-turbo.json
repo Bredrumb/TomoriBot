@@ -28,12 +28,12 @@
   },
   "10001:16": {
     "inputs": {
-      "unet_name": "anima-base-v1.0.safetensors",
+      "unet_name": "anima-turbo-v1.1.safetensors",
       "weight_dtype": "default"
     },
     "class_type": "UNETLoader",
     "_meta": {
-      "title": "Model: Anima UNet"
+      "title": "Model: Anima Turbo UNet"
     }
   },
   "10001:17": {
@@ -108,7 +108,7 @@
   },
   "10002:177": {
     "inputs": {
-      "image": "163845_329810352562401_00118.png",
+      "image": "#DATA",
       "link_id": 0,
       "save_to_workflow": true,
       "image_data": "{TOMORI_REFERENCE_IMAGE_1_DATA_URL}",
@@ -116,7 +116,7 @@
     },
     "class_type": "ImageReceiver",
     "_meta": {
-      "title": "Input: Source/reference image"
+      "title": "Input: Reference image 1 (source/character)"
     }
   },
   "10002:178": {
@@ -187,8 +187,8 @@
   "10003:186": {
     "inputs": {
       "seed": "{TOMORI_SEED}",
-      "steps": 28,
-      "cfg": 5,
+      "steps": 10,
+      "cfg": 1,
       "sampler_name": "euler",
       "scheduler": "simple",
       "denoise": 1,
@@ -202,52 +202,247 @@
       "title": "Txt2Img sampler"
     }
   },
-  "10003:187": {
+  "10011:ref2": {
     "inputs": {
-      "samples": ["10003:186", 0],
+      "image": "#DATA",
+      "link_id": 0,
+      "save_to_workflow": true,
+      "image_data": "{TOMORI_REFERENCE_IMAGE_2_DATA_URL}",
+      "trigger_always": false
+    },
+    "class_type": "ImageReceiver",
+    "_meta": {
+      "title": "Input: Reference image 2 (character)"
+    }
+  },
+  "10011:ref3": {
+    "inputs": {
+      "image": "#DATA",
+      "link_id": 0,
+      "save_to_workflow": true,
+      "image_data": "{TOMORI_REFERENCE_IMAGE_3_DATA_URL}",
+      "trigger_always": false
+    },
+    "class_type": "ImageReceiver",
+    "_meta": {
+      "title": "Input: Reference image 3 (character)"
+    }
+  },
+  "10011:has_ref2": {
+    "inputs": {
+      "cmp": "a > b",
+      "a": "{TOMORI_REFERENCE_IMAGE_COUNT}",
+      "b": 1
+    },
+    "class_type": "ImpactCompare",
+    "_meta": {
+      "title": "Branch: more than 1 reference image?"
+    }
+  },
+  "10011:has_ref3": {
+    "inputs": {
+      "cmp": "a > b",
+      "a": "{TOMORI_REFERENCE_IMAGE_COUNT}",
+      "b": 2
+    },
+    "class_type": "ImpactCompare",
+    "_meta": {
+      "title": "Branch: more than 2 reference images?"
+    }
+  },
+  "10011:stitch2": {
+    "inputs": {
+      "image1": ["10002:177", 0],
+      "direction": "right",
+      "match_image_size": true,
+      "spacing_width": 0,
+      "spacing_color": "white",
+      "image2": ["10011:ref2", 0]
+    },
+    "class_type": "ImageStitch",
+    "_meta": {
+      "title": "Character reference: stitch reference 2 to the right"
+    }
+  },
+  "10011:refs2": {
+    "inputs": {
+      "cond": ["10011:has_ref2", 0],
+      "tt_value": ["10011:stitch2", 0],
+      "ff_value": ["10002:177", 0]
+    },
+    "class_type": "ImpactConditionalBranch",
+    "_meta": {
+      "title": "Branch: one or two character references"
+    }
+  },
+  "10011:stitch3": {
+    "inputs": {
+      "image1": ["10011:refs2", 0],
+      "direction": "right",
+      "match_image_size": true,
+      "spacing_width": 0,
+      "spacing_color": "white",
+      "image2": ["10011:ref3", 0]
+    },
+    "class_type": "ImageStitch",
+    "_meta": {
+      "title": "Character reference: stitch reference 3 to the right"
+    }
+  },
+  "10011:refs3": {
+    "inputs": {
+      "cond": ["10011:has_ref3", 0],
+      "tt_value": ["10011:stitch3", 0],
+      "ff_value": ["10011:refs2", 0]
+    },
+    "class_type": "ImpactConditionalBranch",
+    "_meta": {
+      "title": "Branch: up to three character references"
+    }
+  },
+  "10011:adapter": {
+    "inputs": {
+      "model": ["10001:16", 0],
+      "vae": ["10001:17", 0],
+      "image": ["10011:refs3", 0],
+      "lora_name": "anima_ref_adapter_v2_r64.safetensors",
+      "ref_guidance": 1,
+      "correction": "apg",
+      "strength": 1,
+      "ref_end": 1,
+      "ref_megapixels": 1
+    },
+    "class_type": "AnimaRefAdapter",
+    "_meta": {
+      "title": "Character reference: Anima Ref Adapter"
+    }
+  },
+  "10011:positive": {
+    "inputs": {
+      "text": "masterpiece, best quality, newest, (score_9, score_8, score_7:0.25), {TOMORI_PROMPT}",
+      "clip": ["10001:18", 0]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Character reference prompt: scene text"
+    }
+  },
+  "10011:sampler": {
+    "inputs": {
+      "seed": "{TOMORI_SEED}",
+      "steps": 10,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": ["10011:adapter", 0],
+      "positive": ["10011:positive", 0],
+      "negative": ["10001:7", 0],
+      "latent_image": ["10003:144", 0]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "Character reference sampler"
+    }
+  },
+  "10012:latent": {
+    "inputs": {
+      "cond": ["10002:190", 0],
+      "tt_value": ["10011:sampler", 0],
+      "ff_value": ["10003:186", 0]
+    },
+    "class_type": "ImpactConditionalBranch",
+    "_meta": {
+      "title": "Branch: character reference or txt2img latent"
+    }
+  },
+  "10012:model": {
+    "inputs": {
+      "cond": ["10002:190", 0],
+      "tt_value": ["10011:adapter", 0],
+      "ff_value": ["10001:16", 0]
+    },
+    "class_type": "ImpactConditionalBranch",
+    "_meta": {
+      "title": "Branch: refine with adapter model when referenced"
+    }
+  },
+  "10012:decode": {
+    "inputs": {
+      "samples": ["10012:latent", 0],
       "vae": ["10001:17", 0]
     },
     "class_type": "VAEDecode",
     "_meta": {
-      "title": "Txt2Img decode"
+      "title": "Upscale: decode base image"
     }
   },
-  "10004:179": {
+  "10012:upscale_model": {
     "inputs": {
-      "pixels": ["10002:178", 0],
+      "model_name": "RealESRGAN_x4plus_anime_6B.pth"
+    },
+    "class_type": "UpscaleModelLoader",
+    "_meta": {
+      "title": "Model: anime upscaler"
+    }
+  },
+  "10012:upscale4x": {
+    "inputs": {
+      "upscale_model": ["10012:upscale_model", 0],
+      "image": ["10012:decode", 0]
+    },
+    "class_type": "ImageUpscaleWithModel",
+    "_meta": {
+      "title": "Upscale: 4x model upscale"
+    }
+  },
+  "10012:upscale2x": {
+    "inputs": {
+      "upscale_method": "lanczos",
+      "scale_by": 0.5,
+      "image": ["10012:upscale4x", 0]
+    },
+    "class_type": "ImageScaleBy",
+    "_meta": {
+      "title": "Upscale: scale to 2x"
+    }
+  },
+  "10012:hires_encode": {
+    "inputs": {
+      "pixels": ["10012:upscale2x", 0],
       "vae": ["10001:17", 0]
     },
     "class_type": "VAEEncode",
     "_meta": {
-      "title": "Img2Img source VAE encode"
+      "title": "Upscale: hires encode"
     }
   },
-  "10004:176": {
+  "10012:hires_sampler": {
     "inputs": {
       "seed": "{TOMORI_SEED}",
-      "steps": 28,
-      "cfg": 5,
+      "steps": 8,
+      "cfg": 1,
       "sampler_name": "euler",
       "scheduler": "simple",
-      "denoise": "{TOMORI_IMG2IMG_DENOISE}",
-      "model": ["10001:16", 0],
-      "positive": ["10001:6", 0],
+      "denoise": 0.15,
+      "model": ["10012:model", 0],
+      "positive": ["10011:positive", 0],
       "negative": ["10001:7", 0],
-      "latent_image": ["10004:179", 0]
+      "latent_image": ["10012:hires_encode", 0]
     },
     "class_type": "KSampler",
     "_meta": {
-      "title": "Img2Img sampler"
+      "title": "Upscale: hires sampler"
     }
   },
-  "10004:8": {
+  "10012:hires_decode": {
     "inputs": {
-      "samples": ["10004:176", 0],
+      "samples": ["10012:hires_sampler", 0],
       "vae": ["10001:17", 0]
     },
     "class_type": "VAEDecode",
     "_meta": {
-      "title": "Img2Img decode"
+      "title": "Upscale: hires decode"
     }
   },
   "10005:212": {
@@ -999,18 +1194,18 @@
     "inputs": {
       "cond": ["10000:198", 3],
       "tt_value": ["10009:229", 0],
-      "ff_value": ["10004:8", 0]
+      "ff_value": ["10012:hires_decode", 0]
     },
     "class_type": "ImpactConditionalBranch",
     "_meta": {
-      "title": "Branch: inpaint/img2img when referenced"
+      "title": "Branch: inpaint or character reference when referenced"
     }
   },
   "10009:199": {
     "inputs": {
       "cond": ["10002:190", 0],
       "tt_value": ["10009:191", 0],
-      "ff_value": ["10003:187", 0]
+      "ff_value": ["10012:hires_decode", 0]
     },
     "class_type": "ImpactConditionalBranch",
     "_meta": {
@@ -1055,7 +1250,7 @@
   },
   "10009:40": {
     "inputs": {
-      "filename_prefix": "TomoriBot_Anima3",
+      "filename_prefix": "TomoriBot_Anima_Turbo",
       "images": ["10009:199", 0]
     },
     "class_type": "SaveImage",

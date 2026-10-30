@@ -239,14 +239,14 @@ describe("tool schema assembly", () => {
 
     const tool = buildGenerateImageToolVariant(new GenerateImageTool(), capabilities);
 
-    expect(getPropertyNames(tool as Tool)).toContain("media_id");
-    expect(getPropertyNames(tool as Tool)).toContain("target_identity");
+    expect(getPropertyNames(tool as Tool)).toContain("references");
+    expect(getPropertyNames(tool as Tool)).not.toContain("media_id");
     expect(getPropertyNames(tool as Tool)).not.toContain("mask_prompt");
     expect(getPropertyNames(tool as Tool)).not.toContain("outpaint");
-    // media_id/denoise/prompt guidance should mention img2img only; no inpaint/outpaint
+    // denoise/prompt guidance should mention img2img only; no inpaint/outpaint
     const properties = (tool as Tool).parameters.properties;
-    expect(properties.media_id.description).toBe("Reference media ID such as media_1. Use for img2img.");
     expect(properties.denoise.description).toBe("Img2img strength from 0 to 1. Lower preserves more.");
+    expect(properties.prompt.description).toContain("references");
     expect(properties.prompt.description).not.toContain("inpaint");
     expect(properties.prompt.description).not.toContain("outpaint");
   });
@@ -272,9 +272,7 @@ describe("tool schema assembly", () => {
     const properties = (tool as Tool).parameters.properties;
     expect(properties.prompt.description).toContain("For inpaint");
     expect(properties.prompt.description).toContain("For outpaint");
-    expect(properties.media_id.description).toBe(
-      "Reference media ID such as media_1. Use for img2img, inpaint, or outpaint.",
-    );
+    expect(properties.media_id.description).toContain("inpaint or outpaint");
     expect(properties.denoise.description).toBe("Img2img/inpaint strength from 0 to 1. Lower preserves more.");
   });
 

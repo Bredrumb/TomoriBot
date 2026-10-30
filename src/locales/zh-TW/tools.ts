@@ -29,6 +29,7 @@ export default {
       quota_resets_in_hours: `額度將在 {hours} 小時後重置。`,
       quota_resets_in_days: `額度將在 {days} 天後重置。`,
       quota_remaining: `你今天還可以生成 {remaining} 張圖片。`,
+      quota_unavailable: `我目前無法檢查這個伺服器的圖片額度，請稍後再試。`,
     },
     generate_video: {
       disabled: `這個伺服器已停用影片生成。`,
@@ -38,6 +39,7 @@ export default {
       quota_resets_in_hours: `額度將在 {hours} 小時後重置。`,
       quota_resets_in_days: `額度將在 {days} 天後重置。`,
       quota_remaining: `你今天還可以生成 {remaining} 支影片。`,
+      quota_unavailable: `我目前無法檢查這個伺服器的影片額度，請稍後再試。`,
       file_too_large: `生成的影片（{size_mb} MB）超過 Discord 的 25 MB 檔案大小上限。`,
       reference_unsupported: `選擇的 OpenRouter 模型 \`{model}\` 無法把圖片當作精確的第一格畫面。請移除參考圖片，或改用支援的影片模型。`,
       loop_unsupported: `選擇的 OpenRouter 模型 \`{model}\` 無法使用最後一格畫面製作循環影片。請關閉循環，或改用支援的影片模型。`,
@@ -177,6 +179,7 @@ export default {
       notice_character_prompt_line: `**角色 {index}：** {prompt}`,
       notice_image_tags_tip_line: `提示：使用 \`image-tags\` 指令可以讓角色更一致。`,
       notice_avatar_reference_line: `頭像參考：{name}。`,
+      notice_character_reference_line: `角色參考：{name}。`,
       notice_reference_count_line: `使用 {count} 張參考圖片。`,
       generated_after_seconds_line: `已於 {seconds} 秒後生成`,
       referenced_identities_line: `參考對象：{names}`,

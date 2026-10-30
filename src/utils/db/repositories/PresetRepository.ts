@@ -441,7 +441,7 @@ class PresetRepository {
     if (
       (data.lorebook_entries?.length ?? 0) > 0 ||
       (data.physical_appearance_tags?.length ?? 0) > 0 ||
-      data.nai_char_ref_url ||
+      data.char_ref_url ||
       data.nai_attg_author ||
       data.nai_attg_title ||
       data.nai_attg_tags ||
@@ -889,7 +889,7 @@ class PresetRepository {
                 p.attribute_list, p.sample_dialogues_in, p.sample_dialogues_out,
                 p.is_alter, p.is_pointer, p.preset_lineage_id, p.preset_language, p.is_nsfw,
                 pvc.speech_voice_design_prompt, pvc.voice_source_priority,
-                pic.physical_appearance_tags, pic.nai_char_ref_url,
+                pic.physical_appearance_tags, pic.char_ref_url,
                 ptc.nai_attg_author, ptc.nai_attg_title, ptc.nai_attg_tags, ptc.nai_attg_genre, ptc.nai_attg_stars
               FROM personas p
               LEFT JOIN persona_voice_configs pvc ON pvc.persona_id = p.persona_id
@@ -905,7 +905,7 @@ class PresetRepository {
                 p.attribute_list, p.sample_dialogues_in, p.sample_dialogues_out,
                 p.is_alter, p.is_pointer, p.preset_lineage_id, p.preset_language, p.is_nsfw,
                 pvc.speech_voice_design_prompt, pvc.voice_source_priority,
-                pic.physical_appearance_tags, pic.nai_char_ref_url,
+                pic.physical_appearance_tags, pic.char_ref_url,
                 ptc.nai_attg_author, ptc.nai_attg_title, ptc.nai_attg_tags, ptc.nai_attg_genre, ptc.nai_attg_stars
               FROM personas p
               LEFT JOIN persona_voice_configs pvc ON pvc.persona_id = p.persona_id
@@ -1025,7 +1025,7 @@ class PresetRepository {
           persona_lineage_id: lineageId,
           ...(exportedPresetLineageId !== null ? { preset_lineage_id: exportedPresetLineageId } : {}),
           physical_appearance_tags: presetData.physical_appearance_tags || [],
-          nai_char_ref_url: presetData.nai_char_ref_url ?? null,
+          char_ref_url: presetData.char_ref_url ?? null,
           nai_attg_author: presetData.nai_attg_author ?? null,
           nai_attg_title: presetData.nai_attg_title ?? null,
           nai_attg_tags: presetData.nai_attg_tags ?? null,
@@ -1242,10 +1242,7 @@ class PresetRepository {
         mainTomoriId,
         validatedImportData.physical_appearance_tags ?? [],
       );
-      const charRefUpdated = await personaRepository.setNaiCharRef(
-        mainTomoriId,
-        validatedImportData.nai_char_ref_url ?? null,
-      );
+      const charRefUpdated = await personaRepository.setCharRef(mainTomoriId, validatedImportData.char_ref_url ?? null);
       const attgUpdated = await personaRepository.setNaiAttg(mainTomoriId, {
         nai_attg_author: validatedImportData.nai_attg_author ?? null,
         nai_attg_title: validatedImportData.nai_attg_title ?? null,

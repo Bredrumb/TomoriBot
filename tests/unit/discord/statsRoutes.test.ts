@@ -47,6 +47,7 @@ function interactionFor(
   const publicEdits: unknown[] = [];
   const interaction: Record<string, unknown> = {
     customId,
+    client: { user: { id: "bot" } },
     guildId: "guild-9",
     guild: null,
     user: {

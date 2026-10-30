@@ -118,6 +118,7 @@ export default {
       avatar_update_rate_limited: `🟡 Discordのレート制限によりサーバーアバターは更新されませんでした。手動で変更してください。`,
       avatar_update_failed: `🟡 サーバーアバターを更新できませんでした。Discordのレート制限が原因である可能性があります。手動で変更してください。`,
       alter_success_title: `🟢 オルタペルソナのインポートに成功しました`,
+      lorebook_count: `インポートされたロアブックエントリ: {count}`,
       alter_success_description: `オルタペルソナ **{nickname}** が正常にインポートされました！
 固有トリガーワード: {trigger_count}
 トリガー: {triggers}

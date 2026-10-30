@@ -124,6 +124,56 @@ describe("StreamOrchestrator failed-stream delivery", () => {
     }
   });
 
+  it("reports each failed attempt once and shows only an unsuppressed one", async () => {
+    const errors = spyOn(log, "error").mockResolvedValue(undefined);
+    const warnings = spyOn(log, "warn").mockImplementation(() => {});
+    const metrics = spyOn(log, "metric").mockImplementation(() => {});
+    const malformed: ProviderError = { type: "api_error", message: "Invalid field", code: "400", retryable: false };
+    const refused: ProviderError = {
+      type: "content_blocked",
+      message: "Blocked",
+      code: "PROHIBITED_CONTENT",
+      retryable: false,
+    };
+    const reports = (calls: ReadonlyArray<ReadonlyArray<unknown>>) =>
+      calls.filter((call) => (call[2] as { errorType?: string } | undefined)?.errorType === "ProviderStreamError");
+    try {
+      for (const finalAttempt of ["success", "failure"] as const) {
+        errors.mockClear();
+        warnings.mockClear();
+        const retried = fixture([{ type: "error", error: malformed }], true);
+        expect((await new StreamOrchestrator().streamToDiscord(retried.provider, config, retried.context)).status).toBe(
+          "error",
+        );
+        expect(retried.send).not.toHaveBeenCalled();
+
+        const final = fixture(
+          finalAttempt === "success" ? [{ type: "text", content: POSTED_LINE }] : [{ type: "error", error: refused }],
+          false,
+        );
+        const result = await new StreamOrchestrator().streamToDiscord(final.provider, config, final.context);
+        expect(result.status).toBe(finalAttempt === "success" ? "completed" : "error");
+        expect(final.send).toHaveBeenCalledTimes(1);
+
+        const incidents = reports(errors.mock.calls);
+        const retained = reports(warnings.mock.calls);
+        expect(incidents).toHaveLength(1);
+        expect(incidents[0]?.[2]).toMatchObject({ metadata: { surfaced: false, providerErrorCode: "400" } });
+        expect(retained).toHaveLength(finalAttempt === "failure" ? 1 : 0);
+        if (finalAttempt === "failure") {
+          expect(retained[0]?.[2]).toMatchObject({
+            metadata: { surfaced: true, providerErrorCode: "PROHIBITED_CONTENT" },
+          });
+          expect(retained[0]?.[3]).toMatchObject({ retain: true });
+        }
+      }
+    } finally {
+      errors.mockRestore();
+      warnings.mockRestore();
+      metrics.mockRestore();
+    }
+  });
+
   it.each([
     "bot",
     "webhook",

@@ -58,4 +58,32 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("pending reminder limit", () => {
 
     expect(await serverScheduleRepository.addReminder(reminder(otherServer, "independent"))).not.toBeNull();
   });
+
+  it("lets a server manager delete a stranger's reminder, but only inside their own server", async () => {
+    const created = await serverScheduleRepository.addReminder(reminder(refs.serverId, "someone else's"));
+    const reminderId = created?.reminder_id as number;
+    const stranger = { requester_user_id: -1, requester_discord_id: "200000000000000099" };
+
+    expect(
+      await serverScheduleRepository.deleteReminderForRequester({
+        reminder_id: reminderId,
+        server_id: refs.serverId,
+        actor: stranger,
+      }),
+    ).toMatchObject({ status: "unauthorized" });
+    expect(
+      await serverScheduleRepository.deleteReminderForRequester({
+        reminder_id: reminderId,
+        server_id: otherServer,
+        actor: { ...stranger, requester_can_manage_server: true },
+      }),
+    ).toMatchObject({ status: "not_found" });
+    expect(
+      await serverScheduleRepository.deleteReminderForRequester({
+        reminder_id: reminderId,
+        server_id: refs.serverId,
+        actor: { ...stranger, requester_can_manage_server: true },
+      }),
+    ).toMatchObject({ status: "deleted" });
+  });
 });

@@ -15,6 +15,7 @@ import {
 } from "@/modules/supporter-billing/db";
 import { planIdleNudge } from "@/modules/natural-nudges/runtime/planner";
 import { BUILTIN_IDLE_NUDGES } from "@/modules/natural-nudges/runtime/idleNudges";
+import { PLAY_SCENE_SHORT_TURNS } from "@/modules/natural-nudges/runtime/tuning";
 import { generatePersonaInterests } from "@/modules/natural-nudges/runtime/interests";
 import { matchActiveNudge, resolveMatcherBackend } from "@/modules/natural-nudges/runtime/matcher";
 import * as nudgeModel from "@/modules/natural-nudges/runtime/model";
@@ -187,9 +188,13 @@ describe("Subscription structured-call payer ownership", () => {
       await planIdleNudge({
         persona: state,
         interests: [],
-        candidates: [{ idleNudge: BUILTIN_IDLE_NUDGES[0], channelIndices: [0], partners: [] }],
+        candidates: [
+          { idleNudge: BUILTIN_IDLE_NUDGES[0], channelIndices: [0], partners: [], sceneTurns: PLAY_SCENE_SHORT_TURNS },
+        ],
         channels: [{ name: "studio", description: null, transcript: "" }],
+        recentTopics: [],
         plannerModel: { llmId: 51, slot: "nudge-planner" },
+        admitRequest: () => true,
         target: null,
       }),
     ).toMatchObject({ status: "declined" });

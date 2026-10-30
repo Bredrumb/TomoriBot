@@ -77,8 +77,12 @@ modal, which reaches only the viewer and never enters channel history. Only some
 the failing key may open it: a `Manage Server` member (or the DM's user) for server credentials, and
 only the triggering user for a personal key. Error
 codes appear only when `formatProviderErrorCodeForDisplay()` recognizes an HTTP status or single-case
-enum word; anything else shows as `unknown`. The chat logger caps the diagnostic snippet from
-`getProviderErrorDetail()` at 2,000 characters after removing the exact request key. Log messages,
+enum word; anything else shows as `unknown`. The orchestrator reports each failed stream attempt
+once through `reportStreamProviderFailure()`, before deciding whether to show it, so normal chat,
+suppressed retries, and hidden image planning share one record shape and severity: a failure that
+needs the operator creates an error even when its notice is suppressed. The report caps the
+diagnostic snippet from `getProviderErrorDetail()` at 2,000 characters after removing the exact
+key that attempt sent, which may be a personal or rotated key rather than the server's. Log messages,
 attached errors and metadata also remove that key before credential-pattern redaction and optional
 truncation. This is best-effort redaction; encoded or transformed secrets can survive. Attached errors
 and stack traces can be longer; log string truncation is opt-in. Expected provider failures retain warning diagnostics in JSON logs at every log level,
@@ -87,7 +91,7 @@ without creating an `error_logs` row.
 Google streaming failures attach a bounded `requestDiagnostics` summary: the actual request model,
 last five dialogue roles, final-turn part counts, prefill and tool-history presence, received chunk
 count, and elapsed time. The summary contains no prompt text, tool arguments, media URLs, or media
-bytes. Suppressed error notices retain the summary in warning logs too.
+bytes. Suppressed error notices carry the summary in the same report.
 
 Empty non-private DeepSeek structured replies retain the finish reason, validated token counts,
 reasoning presence, output limit, and provider request ID. Missing or invalid token counts stay
@@ -120,5 +124,6 @@ The resolved credential source of the turn (`StreamContext.textCredentialSource`
 - `src/providers/utils/toolCallArguments.ts`: `parseAccumulatedToolArguments` and truncation flags.
 - `src/utils/text/jsonRepair.ts`: `tryRepairIncompleteJson`.
 - `src/utils/provider/providerErrorClassification.ts`: error classification helpers.
+- `src/utils/provider/providerErrorMetrics.ts`: `reportStreamProviderFailure` and `reportProviderFailure`.
 - `src/utils/discord/stream/errorUi.ts`: error embed presentation, credential-scoped tips, and the footer naming whether the provider or TomoriBot failed.
 - `src/providers/custom/customStreamAdapter.ts`: verbatim tool parsing integration.

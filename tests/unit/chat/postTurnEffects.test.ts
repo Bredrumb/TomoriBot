@@ -86,6 +86,7 @@ function makeContext(options: {
       },
       currentPersona: tomoriState,
       tomoriState,
+      contextItems: [],
       shouldSurfaceUserErrors: options.shouldSurfaceUserErrors,
       isUserImpersonation: options.isUserImpersonation ?? false,
       textCredentialSource: options.textCredentialSource ?? "server",
@@ -364,6 +365,7 @@ describe("reunion presence post-turn phase", () => {
       config: { time_awareness_enabled: true, timezone_offset: 0 },
     } as TomoriState,
     isUserImpersonation: false,
+    isPersonaSpeaker: false,
   };
 
   it("releases the context-build claim when the turn ends without a response", async () => {

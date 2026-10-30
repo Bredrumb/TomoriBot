@@ -168,7 +168,8 @@ SELECT add_column_if_not_exists('personas', 'is_nsfw', 'BOOLEAN', 'false', 'NOT 
 -- dropped by migration 010_complete_speech_voice_migration.sql (Phase 6 Step #14.2).
 -- physical_appearance_tags and nai_char_ref_url were added here and later
 -- moved to persona_imagegen_configs; personas mirrors were dropped by
--- migration 046_drop_persona_mirror_columns.sql.
+-- migration 046_drop_persona_mirror_columns.sql, and migration 125 renamed
+-- nai_char_ref_url to char_ref_url.
 
 CREATE TABLE IF NOT EXISTS persona_attributes (
   attribute_id SERIAL PRIMARY KEY,
@@ -776,6 +777,9 @@ SELECT add_column_if_not_exists('persona_presets', 'preset_attribute_public_flag
 -- avatar and a content-hash version token, populated by the avatar seed step.
 SELECT add_column_if_not_exists('persona_presets', 'preset_avatar_shared_url', 'TEXT');
 SELECT add_column_if_not_exists('persona_presets', 'preset_avatar_hash', 'TEXT');
+-- Shared storage URL of the official character reference image, seeded like the avatar and
+-- live-resolved by pointer personas for reference-based image generation.
+SELECT add_column_if_not_exists('persona_presets', 'preset_char_ref_shared_url', 'TEXT');
 SELECT add_column_if_not_exists('persona_presets', 'preset_naming_config', 'JSONB', '''{"prefixes":{},"suffixes":{},"addressTerms":{}}''::JSONB', 'NOT NULL');
 -- is_nsfw (migration 094): hides the preset from `/persona default`; only `/nsfw persona default` lists it.
 SELECT add_column_if_not_exists('persona_presets', 'is_nsfw', 'BOOLEAN', 'false', 'NOT NULL');
@@ -962,7 +966,7 @@ SELECT add_column_if_not_exists('users', 'registration_locale', 'TEXT');
 -- 044_drop_user_personalization_mirror_columns.sql. The live fields are:
 --   user_personalization_configs.shortterm_cache_crossserver_opt_in
 --   user_personalization_configs.physical_appearance_tags
---   user_personalization_configs.nai_char_ref_url
+--   user_personalization_configs.char_ref_url
 --   user_personalization_configs.impersonation_prompt
 --   user_personalization_configs.personal_dtm
 
@@ -1740,7 +1744,9 @@ CREATE TABLE IF NOT EXISTS reminders (
   reminder_purpose TEXT NOT NULL,                      -- What the reminder is for
   reminder_time TIMESTAMP WITH TIME ZONE NOT NULL,     -- When to trigger the reminder
   repetition_interval_hours INTEGER,                   -- Optional: repeat interval in hours for recurring reminders
-  self_reminder BOOLEAN DEFAULT false,                 -- Optional: reminder targets the bot itself
+  repetition_interval_months INTEGER,                  -- Optional: repeat interval in calendar months; exclusive with hours
+  repetition_anchor_day SMALLINT,                      -- Day a monthly series returns to after a short month; NULL = reminder_time's day
+  self_reminder BOOLEAN DEFAULT false,               -- Optional: reminder targets the bot itself
   created_by_user_id INT,                              -- User who created this reminder (nullable - set to NULL if user deleted)
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1752,6 +1758,8 @@ CREATE TABLE IF NOT EXISTS reminders (
 SELECT add_column_if_not_exists('reminders', 'persona_id', 'INTEGER');
 -- Recurring reminders: optional repeat interval in hours (January 2026)
 SELECT add_column_if_not_exists('reminders', 'repetition_interval_hours', 'INTEGER');
+SELECT add_column_if_not_exists('reminders', 'repetition_interval_months', 'INTEGER');
+SELECT add_column_if_not_exists('reminders', 'repetition_anchor_day', 'SMALLINT');
 -- Self reminders (January 2026)
 SELECT add_column_if_not_exists('reminders', 'self_reminder', 'BOOLEAN', 'false');
 -- Delivery retries must not replace reminder_time because recurring schedules use it as their cadence anchor.
@@ -2369,6 +2377,43 @@ DROP TRIGGER IF EXISTS update_guild_mcp_servers_timestamp ON guild_mcp_servers;
 CREATE TRIGGER update_guild_mcp_servers_timestamp
   BEFORE UPDATE ON guild_mcp_servers
   FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+-- OAuth grant for a guild MCP registration that signed in instead of storing a bearer token.
+-- Scopes are space-delimited OAuth scope strings; NULL means none were requested or reported.
+CREATE TABLE IF NOT EXISTS guild_mcp_oauth (
+  guild_mcp_id INT PRIMARY KEY REFERENCES guild_mcp_servers(guild_mcp_id) ON DELETE CASCADE,
+  issuer TEXT NOT NULL,
+  token_endpoint TEXT NOT NULL,
+  resource TEXT NOT NULL,
+  client_id TEXT NOT NULL,
+  granted_scopes TEXT,
+  requested_scopes TEXT,
+  access_token BYTEA NOT NULL,
+  access_token_key_version INT NOT NULL,
+  refresh_token BYTEA,
+  refresh_token_key_version INT,
+  expires_at TIMESTAMPTZ,
+  needs_reauthorization BOOLEAN NOT NULL DEFAULT false,
+  retry_at TIMESTAMPTZ,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT guild_mcp_oauth_refresh_token_complete CHECK ((refresh_token IS NULL) = (refresh_token_key_version IS NULL))
+);
+
+DROP TRIGGER IF EXISTS update_guild_mcp_oauth_timestamp ON guild_mcp_oauth;
+CREATE TRIGGER update_guild_mcp_oauth_timestamp
+  BEFORE UPDATE ON guild_mcp_oauth
+  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+-- Dynamic Client Registration results, shared by every guild that signs in through the same issuer.
+-- Keyed by redirect URI too, so a changed public base URL registers a new client.
+CREATE TABLE IF NOT EXISTS mcp_oauth_clients (
+  issuer TEXT NOT NULL,
+  redirect_uri TEXT NOT NULL,
+  client_id TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (issuer, redirect_uri)
+);
 
 -- ============================================================
 -- Saved Provider Configs (per-server provider config snapshots)
@@ -3252,7 +3297,7 @@ CREATE TRIGGER update_persona_voice_configs_timestamp
 CREATE TABLE IF NOT EXISTS persona_imagegen_configs (
   persona_id      INT    PRIMARY KEY REFERENCES personas(persona_id) ON DELETE CASCADE,
   physical_appearance_tags        TEXT[] NOT NULL DEFAULT '{}',
-  nai_char_ref_url TEXT,
+  char_ref_url TEXT,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -3288,7 +3333,7 @@ CREATE TABLE IF NOT EXISTS user_personalization_configs (
   user_nickname                      TEXT,
   shortterm_cache_crossserver_opt_in BOOLEAN NOT NULL DEFAULT false,
   physical_appearance_tags                      TEXT[]  NOT NULL DEFAULT '{}',
-  nai_char_ref_url                   TEXT,
+  char_ref_url                       TEXT,
   impersonation_prompt               TEXT,
   personal_dtm                       TEXT    NOT NULL DEFAULT 'follow',
   personal_deliberate_tool_mode      TEXT    NOT NULL DEFAULT 'follow',
@@ -3629,11 +3674,17 @@ CREATE TABLE IF NOT EXISTS natural_nudge_fires (
   mode                   TEXT NOT NULL CHECK (mode IN ('active', 'idle')),
   category               TEXT CHECK (category IN ('ping_user', 'revive_topic', 'start_topic', 'play_scene')),
   idle_nudge_key            TEXT,
+  topic                  TEXT CHECK (topic IS NULL OR char_length(btrim(topic)) BETWEEN 1 AND 200),
   target_user_id         INT  REFERENCES users(user_id) ON DELETE CASCADE,
   opener_message_disc_id TEXT NOT NULL,
   answered               BOOLEAN,
   detour                 BOOLEAN NOT NULL DEFAULT false,
   fired_at               TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+SELECT add_column_if_not_exists(
+  'natural_nudge_fires', 'topic', 'TEXT', NULL,
+  'CHECK (topic IS NULL OR char_length(btrim(topic)) BETWEEN 1 AND 200)'
 );
 
 CREATE INDEX IF NOT EXISTS idx_natural_nudge_fires_server_time ON natural_nudge_fires(server_id, fired_at);
@@ -3854,6 +3905,18 @@ CREATE TABLE IF NOT EXISTS command_catalog (
   first_seen_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   last_synced_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS oauth_states (
+  oauth_state_id SERIAL PRIMARY KEY,
+  nonce_hash TEXT NOT NULL UNIQUE,
+  flow TEXT NOT NULL CHECK (flow ~ '^[a-z][a-z0-9_-]{0,63}$'),
+  subject TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  consumed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (expires_at > created_at)
+);
+CREATE INDEX IF NOT EXISTS idx_oauth_states_expires ON oauth_states(expires_at);
 
 CREATE OR REPLACE FUNCTION validate_speech_endpoint_selections() RETURNS TRIGGER AS $$
 BEGIN

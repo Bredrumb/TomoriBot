@@ -1630,6 +1630,9 @@ describe("config models capability writes", () => {
     expect(await withProviderUsageContext(otherContext, () => configModelOperations.setCapabilityModel(input))).toEqual(
       { status: "provider-denied", denied },
     );
+    const incomplete = new Error("Document re-embedding incomplete");
+    reembed.mockRejectedValue(incomplete);
+    await expect(configModelOperations.setCapabilityModel(input)).rejects.toBe(incomplete);
     const foreign = new ProviderRequestDeniedError(otherContext, denied.render);
     reembed.mockRejectedValue(new Error("wrapped", { cause: foreign }));
     await expect(configModelOperations.setCapabilityModel(input)).rejects.toMatchObject({ cause: foreign });

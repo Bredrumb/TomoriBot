@@ -1,8 +1,23 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it, setSystemTime } from "bun:test";
 import { canReminderActorModifyReminder, parseUpdateTaskArguments } from "@/tools/functionCalls/updateTaskTool";
 import { formatPendingReminderForContext } from "@/utils/text/context/participants";
 
+afterEach(() => {
+  setSystemTime();
+});
+
 describe("update_task helpers", () => {
+  it("reschedules by calendar months before adding fixed-length parts", () => {
+    setSystemTime(new Date("2026-01-31T09:00:00Z"));
+    const result = parseUpdateTaskArguments(
+      { reminder_id: 3, reminder_purpose: "Renew the domain.", months_from_now: 1, days_from_now: 2 },
+      0,
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.newReminderTime?.toISOString()).toBe("2026-03-02T09:00:00.000Z");
+  });
   it("parses blank reminder_purpose as delete and ignores scheduling fields", () => {
     const result = parseUpdateTaskArguments(
       {
@@ -19,7 +34,7 @@ describe("update_task helpers", () => {
       reminderId: 42,
       newPurpose: "",
       isDeleteRequested: true,
-      hasRepetitionIntervalUpdate: false,
+      hasRepetitionUpdate: false,
     });
   });
 
@@ -38,7 +53,7 @@ describe("update_task helpers", () => {
     expect(result.newPurpose).toBe("Bring up the deployment checklist.");
     expect(result.isDeleteRequested).toBe(false);
     expect(result.newReminderTime).toBeUndefined();
-    expect(result.hasRepetitionIntervalUpdate).toBe(false);
+    expect(result.hasRepetitionUpdate).toBe(false);
   });
 
   it("parses relative reschedules and clears recurrence with interval 0", () => {
@@ -58,8 +73,23 @@ describe("update_task helpers", () => {
     if (!result.ok) return;
     expect(result.newReminderTime?.getTime()).toBeGreaterThanOrEqual(before + 2 * 60 * 60 * 1000);
     expect(result.newReminderTime?.getTime()).toBeLessThanOrEqual(after + 2 * 60 * 60 * 1000 + 10);
-    expect(result.hasRepetitionIntervalUpdate).toBe(true);
-    expect(result.repetitionIntervalHours).toBeNull();
+    expect(result.hasRepetitionUpdate).toBe(true);
+    expect(result.repetition).toBeNull();
+  });
+
+  it("parses a monthly repeat and rejects a positive interval in both units", () => {
+    const monthly = parseUpdateTaskArguments(
+      { reminder_id: 4, reminder_purpose: "Pay rent.", repetition_interval_hours: 0, repetition_interval_months: 1 },
+      0,
+    );
+    expect(monthly).toMatchObject({ ok: true, hasRepetitionUpdate: true, repetition: { unit: "months", interval: 1 } });
+
+    expect(
+      parseUpdateTaskArguments(
+        { reminder_id: 4, reminder_purpose: "Pay rent.", repetition_interval_hours: 24, repetition_interval_months: 1 },
+        0,
+      ),
+    ).toMatchObject({ ok: false, status: "task_update_failed_invalid_args" });
   });
 
   it("rejects invalid IDs, intervals, and past absolute times", () => {

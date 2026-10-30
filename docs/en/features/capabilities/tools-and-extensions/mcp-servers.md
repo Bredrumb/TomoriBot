@@ -14,25 +14,32 @@ Use a provider's direct HTTPS endpoint supporting MCP Streamable HTTP or SSE:
 Add the endpoint and any required authentication under `/config` > `Plugins` > `MCP Servers`.
 Choose `Prose Linter` for a Response Drafting rule checker; its tools are not called during chat.
 
-### Adding a Smithery Server
-
-Servers hosted on Smithery have addresses ending in `.run.tools`. Paste that address into `URL`
-and your Smithery API key into `Auth Token`. TomoriBot sends the key only to Smithery's API at
-`api.smithery.ai`, never to the server address itself. Smithery then passes each tool call to the
-server, so Smithery sees every tool request and result. Registrations saved before this support
-returned work again without changes.
-
-Some servers ask you to sign in with the service they wrap. Adding one fails with a message that
-authorization is needed, and TomoriBot never shows the sign-in link in Discord. Open your Smithery
-dashboard, finish the sign-in for the connection whose name starts with `tomoribot-`, then add the
-server again. Connecting and listing tools must finish within 15 seconds.
-
 Authentication tokens are encrypted at rest. Disabling a server used for search or URL reading
 restores the built-in tool. A saved tool list reflects the last successful discovery and does not
 guarantee the server is currently reachable.
 
 Tool responses are limited to 8 MiB, including the entire stream for SSE connections. Ask the
 provider for pagination or smaller results if a tool exceeds the limit.
+
+### Adding an MCP that needs sign-in
+
+Some services, such as Linear and Notion, ask you to sign in to your account instead of giving you
+a token. Add the MCP with `Auth Token` left blank. When the server asks for a sign-in, the panel
+shows a `Sign In` button:
+
+1. Choose `Sign In` and sign in to the service within 10 minutes.
+2. The confirmation page names your Discord server and the MCP's address. Choose `Connect` only if
+   both are right and you started this sign-in yourself.
+3. The panel updates in Discord once the MCP is added.
+
+Every member who uses the MCP's tools acts as the account that signed in, so use an account whose
+data the whole server may see.
+
+When a sign-in expires or the service asks for more access, that MCP's tools pause and its row
+shows `Reconnect`. Choose it and sign in again; the MCP keeps its name, type, and slot.
+
+Sign-in works only when adding an MCP in a server, not in a DM. On a self-hosted bot, the host sets
+it up first; see [MCP Sign-In Setup](/self-hosting/mcp-sign-in/).
 
 ### Local MCP Servers
 

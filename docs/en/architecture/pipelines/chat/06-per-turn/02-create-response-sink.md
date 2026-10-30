@@ -55,8 +55,8 @@ stops the turn before another provider attempt or recovery notice; held drafts a
 ### Error emission and suppression
 
 - `emitStreamResult()`: handles completed streams ending in error status. If `result.data` is an
-  identified `ProviderError`, the sink skips sending an embed because `StreamErrorUi.handleProviderError()`
-  already rendered the provider-specific notice. Unhandled non-provider errors emit a generic generation
+  identified `ProviderError`, the sink neither logs nor sends an embed: the orchestrator already
+  reported the failure, and `StreamErrorUi.handleProviderError()` already rendered the provider-specific notice. Unhandled non-provider errors emit a generic generation
   error embed when `context.shouldSurfaceUserErrors` is true.
 - `emitError()`: handles unexpected exceptions. Under user impersonation, it rethrows the exception
   so the initiating slash command handles the failure directly, preventing error embeds from appearing

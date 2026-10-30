@@ -8,6 +8,7 @@ import { StreamErrorUi } from "@/utils/discord/stream/errorUi";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { localizedCopy } from "../../helpers/localeCases";
 import { log } from "@/utils/misc/logger";
+import { reportStreamProviderFailure } from "@/utils/provider/providerErrorMetrics";
 
 type SendMock = ReturnType<typeof mock>;
 
@@ -43,17 +44,14 @@ it("keeps request diagnostics on both error and retained warning records", async
         chunksReceived: 0,
         elapsedMs: 10,
       };
-      await new StreamErrorUi().handleProviderError(
-        {
-          type: "api_error",
-          message: "Rejected",
-          code: retryable ? "503" : "400",
-          retryable,
-        },
-        makeProvider("google"),
+      await reportStreamProviderFailure({
+        providerError: { type: "api_error", message: "Rejected", code: retryable ? "503" : "400", retryable },
+        providerName: "google",
         context,
-        "PRIVATE_KEY",
-      );
+        requestApiKey: "PRIVATE_KEY",
+        denied: false,
+        surfaced: true,
+      });
       const call = (retryable ? warnings.mock.calls : errors.mock.calls).find(
         (entry) => entry[2]?.errorType === "ProviderStreamError",
       );

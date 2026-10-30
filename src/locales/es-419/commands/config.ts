@@ -563,14 +563,15 @@ export default {
       speech_provider_direction: "Los endpoints de voz y transcripción se encuentran en Proveedores.",
       behavior_memory_title: `Memoria avanzada`,
       behavior_memory_description:
-        "Ajusta cómo se etiquetan y resumen las memorias del servidor. Solo para usuarios avanzados.",
+        "Ajusta el etiquetado de memoria, la memoria de canales y la memoria a corto plazo. Solo para usuarios avanzados.",
       memory_direction: `Usa /memories en su lugar para ver lo que realmente recuerdo.`,
-      memory_tagging_title: `Etiquetado de memoria`,
-      memory_tagging_description: "Controla si las etiquetas de memoria limitan cuándo las memorias se activan.",
-      memory_tagging_label: `Etiquetado de memoria`,
-      edit_memory_tagging_button: `Editar etiquetado de memoria`,
-      memory_tagging_on: `Filtro las memorias por sus etiquetas.`,
-      memory_tagging_off: `Todas las memorias permanecen activas.`,
+      memory_tagging_title: `Etiquetado de memoria personal`,
+      memory_tagging_description:
+        "Controla si las etiquetas de memoria personal limitan cuándo esas memorias se activan.",
+      memory_tagging_label: `Etiquetado de memoria personal`,
+      edit_memory_tagging_button: `Editar etiquetado de memoria personal`,
+      memory_tagging_on: `Filtro las memorias personales por sus etiquetas.`,
+      memory_tagging_off: `Todas las memorias personales permanecen activas.`,
       channel_memory_title: `Memoria de canal`,
       channel_memory_description: `Controla si las memorias pueden asociarse con el canal actual.`,
       channel_memory_label: `Memoria de canal`,
@@ -992,6 +993,8 @@ export default {
       avatar_cleared_detail: `Se eliminó el avatar de {name}.`,
       avatar_preset_sprites_removed_detail:
         "Se eliminaron {count} sprite(s) predeterminado(s) incompatibles. Ejecuta `/persona default` para restaurarlos.",
+      avatar_preset_character_reference_removed_detail:
+        "Se eliminó la referencia de personaje predeterminada para que las imágenes generadas sigan la nueva apariencia. Sube una propia o ejecuta `/persona default` para restaurarla.",
       avatar_busy_heading: `Ocupada En Este Momento`,
       avatar_busy_detail: `La memoria está limitada. Por favor, intenta de nuevo pronto.`,
       avatar_quota_heading: `Límite de Avatar Alcanzado`,

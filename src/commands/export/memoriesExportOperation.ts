@@ -23,7 +23,7 @@ import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { safeSelectOptionText } from "@/utils/discord/ui/interactionCore";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
-import { deliverTransferExport } from "@/utils/discord/transferExportDelivery";
+import { deliverTransferExport, transferExportReplyReceipts } from "@/utils/discord/transferExportDelivery";
 
 export type MemoryExportScope = TransferExportScope;
 
@@ -230,13 +230,15 @@ export async function runMemoryExport(
     });
 
     await deliverTransferExport({
-      interaction,
+      userId: interaction.user.id,
       locale,
-      typeLabel,
-      dmDescriptionKey: "commands.transfer.memory_export_dm_description",
+      dmDescription: localizer(locale, "commands.transfer.memory_export_dm_description", { type: typeLabel }),
       attachment,
       operationLabel: "memory",
-      dependencies,
+      sendDirectMessage: (payload) => dependencies.deliverDirectMessage(interaction, payload),
+      receipts: transferExportReplyReceipts(typeLabel, (options) =>
+        dependencies.replyInfoEmbed(interaction, locale, options),
+      ),
     });
   } catch (error) {
     log.error(`Error executing the ${scope} memory export:`, error, {

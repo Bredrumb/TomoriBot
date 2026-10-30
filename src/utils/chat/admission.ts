@@ -262,13 +262,23 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
 
   const chainOriginUserDiscId =
     !incoming.isManuallyTriggered && isLikelySelfMessage ? getSelfReplyChainOriginUser(channel.id) : null;
+  if (!incoming.isManuallyTriggered && isLikelySelfMessage && !chainOriginUserDiscId) {
+    // No person is behind this chain to credit, and late gateway echoes of nudge output also land here.
+    return ignored("persona_chain_without_origin");
+  }
   // System-initiated turns (reminders, boomerangs) pass whatever message was last in the
   // channel as their trigger, which in a DM is frequently one of Tomori's own. Falling back
   // to the author there would resolve the DM owner (and thus the DM's server key) to the
   // bot itself, so prefer the channel's recipient whenever the author is the client user.
   const dmOwnerDiscId = channel instanceof DMChannel ? (channel.recipientId ?? null) : null;
+  // A webhook's author ID is never a person (persona webhooks are even pooled per channel), so a system turn
+  // anchored on one is credited to the bot account; Matrix relays keep their bridge webhook identity.
   const authorFallbackDiscId =
-    dmOwnerDiscId && message.author.id === client.user?.id ? dmOwnerDiscId : message.author.id;
+    dmOwnerDiscId && message.author.id === client.user?.id
+      ? dmOwnerDiscId
+      : isWebhookMessage && !isMatrixRelay
+        ? (client.user?.id ?? message.author.id)
+        : message.author.id;
   // A system turn borrows an arbitrary channel message as its trigger, so its declared
   // identity outranks a proxy sender that only happens to own that message.
   const userDiscId =

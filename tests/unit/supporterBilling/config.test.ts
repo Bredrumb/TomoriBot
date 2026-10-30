@@ -219,6 +219,23 @@ describe("supporter billing config and feature gate", () => {
     expect(schemaHookCalled).toBe(false);
   });
 
+  it("requires a public base URL when billing is enabled", async () => {
+    let schemaHookCalled = false;
+
+    await expect(
+      initializeSupporterBilling({
+        environment: "production",
+        env: createEnabledEnv({ TOMORI_PUBLIC_BASE_URL: undefined }),
+        initializeBillingSchema: async () => {
+          schemaHookCalled = true;
+          return { initializedTables: [] };
+        },
+      }),
+    ).rejects.toThrow(SupporterBillingConfigError);
+
+    expect(schemaHookCalled).toBe(false);
+  });
+
   it("runs gated schema and Patreon hooks after enabled config validation", async () => {
     const callOrder: string[] = [];
     let routeHookCalled = false;

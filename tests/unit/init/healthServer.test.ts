@@ -60,6 +60,7 @@ describe("health server route dispatch", () => {
       const base = `http://127.0.0.1:${address.port}`;
       const response = await fetch(`${base}/fixture-route?value=fixture`, { method: "POST" });
       expect(response.status).toBe(201);
+      expect(response.headers.get("content-security-policy")).toBe("frame-ancestors 'none'");
       expect(await response.text()).toBe("fixture");
       for (const path of ["/fixture-route", "/missing"]) {
         const missing = await fetch(`${base}${path}`);

@@ -1,7 +1,11 @@
 import type { GuildMcpServerRow } from "@/types/db/schema";
+import type { McpAuthorizationChallenge } from "@/types/tool/mcpTypes";
 import { getGuildMcpConfigReadResult, type GuildMcpConfigReadResult } from "@/utils/cache/guildMcpConfigCache";
+import { type GuildMcpOAuthGrant, guildMcpOAuthRepository } from "@/utils/db/repositories/GuildMcpOAuthRepository";
 import { toolRepository } from "@/utils/db/repositories/ToolRepository";
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
+import { unionMcpScopes } from "@/utils/mcp/oauth/discovery";
+import { isMcpSignInAvailable } from "@/utils/mcp/oauth/signIn";
 import { normalizeMcpToolNameSnapshot } from "@/utils/mcp/mcpToolSnapshot";
 import { type RemoteUrlValidationResult, validateRemoteUrl } from "@/utils/security/remoteUrlSecurity";
 
@@ -16,6 +20,18 @@ interface McpConnectionTestResult {
   toolCount: number;
   functionNames: string[];
   error?: string;
+  unauthorized?: McpAuthorizationChallenge;
+}
+
+/** A validated registration waiting on sign-in; nothing about it is stored until the grant arrives. */
+export interface McpSignInDraft {
+  serverId: number;
+  serverDiscId: string;
+  name: string;
+  url: string;
+  serverType: McpServerType;
+  /** Set by Reconnect, whose grant replaces this registration's instead of adding one. */
+  guildMcpId?: number;
 }
 
 export interface McpConfigOperationDependencies {
@@ -28,6 +44,16 @@ export interface McpConfigOperationDependencies {
     url: string,
     authToken: string | undefined,
     serverType: string | null,
+    lastDiscoveredToolNames: readonly string[],
+    serverDiscId: string,
+    oauthGrant?: GuildMcpOAuthGrant,
+  ): Promise<GuildMcpServerRow | null>;
+  signInAvailable(): boolean;
+  requestedScopes(guildMcpId: number): Promise<string | null>;
+  replaceGrant(
+    serverId: number,
+    guildMcpId: number,
+    grant: GuildMcpOAuthGrant,
     lastDiscoveredToolNames: readonly string[],
     serverDiscId: string,
   ): Promise<GuildMcpServerRow | null>;
@@ -45,8 +71,20 @@ export type AddMcpResult =
   | { status: "invalid-url"; validation: RemoteUrlValidationResult }
   | { status: "unavailable" }
   | { status: "limit-reached"; max: number }
-  | { status: "connection-failed"; error: string }
+  | { status: "connection-failed"; error: string; signInHint?: McpSignInHint }
+  | { status: "sign-in-required"; draft: McpSignInDraft; challenge: McpAuthorizationChallenge }
   | { status: "duplicate-or-write-failed"; name: string };
+
+/** Why a 401 on add did not become a sign-in: the bot has no callback address, or the workspace is a DM. */
+export type McpSignInHint = "unconfigured" | "dm";
+
+export type CompleteMcpSignInResult = Exclude<AddMcpResult, { status: "sign-in-required" }>;
+
+export type ReconnectMcpResult =
+  | Extract<AddMcpResult, { status: "sign-in-required" | "connection-failed" }>
+  | { status: "not-found" }
+  | { status: "unavailable" }
+  | { status: "sign-in-unavailable" };
 
 export type McpMutationResult =
   | { status: "success"; row: GuildMcpServerRow }
@@ -112,6 +150,8 @@ export class McpConfigOperations {
     url: string;
     authToken?: string;
     serverType?: string | null;
+    /** Guild workspaces only, because a sign-in acts as one external account for every member. */
+    allowSignIn?: boolean;
   }): Promise<AddMcpResult> {
     const name = normalizeMcpName(input.name);
     const url = input.url.trim();
@@ -122,26 +162,29 @@ export class McpConfigOperations {
     const serverType = parseMcpServerType(input.serverType);
     if (!serverType) return { status: "invalid-type" };
 
-    const current = await this.dependencies.read(input.serverId, { forceRefresh: true });
-    if (current.status !== "fresh") return { status: "unavailable" };
-    if (
-      (serverType === "web_search" || serverType === "url_fetcher") &&
-      current.configs.some((row) => row.is_enabled && row.server_type === serverType)
-    ) {
-      return { status: "family-in-use" };
-    }
-    if (current.configs.length >= MAX_MCP_SERVERS_PER_WORKSPACE) {
-      return { status: "limit-reached", max: MAX_MCP_SERVERS_PER_WORKSPACE };
-    }
+    const refusal = await this.admit(input.serverId, serverType);
+    if (refusal) return refusal;
 
     const validation = await this.dependencies.validateUrl(url);
     if (!validation.valid) return { status: "invalid-url", validation };
 
     const test = await this.dependencies.testConnection(url, authToken);
     if (!test.success) {
+      let signInHint: McpSignInHint | undefined;
+      if (!authToken && test.unauthorized) {
+        if (input.allowSignIn && this.dependencies.signInAvailable()) {
+          return {
+            status: "sign-in-required",
+            draft: { serverId: input.serverId, serverDiscId: input.serverDiscId, name, url, serverType },
+            challenge: test.unauthorized,
+          };
+        }
+        signInHint = input.allowSignIn ? "unconfigured" : "dm";
+      }
       return {
         status: "connection-failed",
         error: sanitizeMcpConnectionError(test.error ?? "Unknown error", url, authToken),
+        ...(signInHint ? { signInHint } : {}),
       };
     }
 
@@ -155,6 +198,102 @@ export class McpConfigOperations {
       input.serverDiscId,
     );
     return row ? { status: "success", row, test } : { status: "duplicate-or-write-failed", name };
+  }
+
+  public async prepareReconnect(input: {
+    serverId: number;
+    serverDiscId: string;
+    guildMcpId: number;
+  }): Promise<ReconnectMcpResult> {
+    const current = await this.resolveCurrentRow(input.serverId, input.guildMcpId);
+    if (current.status !== "success") return current;
+    const { row } = current;
+    if (!row.oauth_status) return { status: "not-found" };
+    const serverType = parseMcpServerType(row.server_type) ?? "general";
+    let requestedScopes: string | null;
+    try {
+      requestedScopes = await this.dependencies.requestedScopes(input.guildMcpId);
+    } catch {
+      return { status: "unavailable" };
+    }
+    const test = await this.dependencies.testConnection(row.url);
+    if (!test.unauthorized || !this.dependencies.signInAvailable()) {
+      return test.success
+        ? { status: "sign-in-unavailable" }
+        : { status: "connection-failed", error: sanitizeMcpConnectionError(test.error ?? "Unknown error", row.url) };
+    }
+    return {
+      status: "sign-in-required",
+      draft: {
+        serverId: input.serverId,
+        serverDiscId: input.serverDiscId,
+        name: row.name,
+        url: row.url,
+        serverType,
+        guildMcpId: input.guildMcpId,
+      },
+      challenge: {
+        ...test.unauthorized,
+        scope: unionMcpScopes(requestedScopes, test.unauthorized.scope),
+      },
+    };
+  }
+
+  /** Admission runs again because other changes may have landed while the admin was signing in. */
+  public async completeSignIn(draft: McpSignInDraft, grant: GuildMcpOAuthGrant): Promise<CompleteMcpSignInResult> {
+    if (draft.guildMcpId === undefined) {
+      const refusal = await this.admit(draft.serverId, draft.serverType);
+      if (refusal) return refusal;
+    }
+    const test = await this.dependencies.testConnection(draft.url, grant.accessToken);
+    if (!test.success) {
+      return {
+        status: "connection-failed",
+        error: sanitizeMcpConnectionError(test.error ?? "Unknown error", draft.url, grant.accessToken),
+      };
+    }
+    if (draft.guildMcpId !== undefined) {
+      const row = await this.dependencies.replaceGrant(
+        draft.serverId,
+        draft.guildMcpId,
+        grant,
+        normalizeMcpToolNameSnapshot(test.functionNames),
+        draft.serverDiscId,
+      );
+      if (!row) return { status: "duplicate-or-write-failed", name: draft.name };
+      // Lifts the connect quarantine and drops a pooled connection that was still sending the old grant.
+      await this.dependencies.disconnect(draft.serverId, row.name);
+      return { status: "success", row, test };
+    }
+    const row = await this.dependencies.insert(
+      draft.serverId,
+      draft.name,
+      draft.url,
+      undefined,
+      toStoredMcpServerType(draft.serverType),
+      normalizeMcpToolNameSnapshot(test.functionNames),
+      draft.serverDiscId,
+      grant,
+    );
+    return row ? { status: "success", row, test } : { status: "duplicate-or-write-failed", name: draft.name };
+  }
+
+  private async admit(
+    serverId: number,
+    serverType: McpServerType,
+  ): Promise<Extract<AddMcpResult, { status: "unavailable" | "family-in-use" | "limit-reached" }> | null> {
+    const current = await this.dependencies.read(serverId, { forceRefresh: true });
+    if (current.status !== "fresh") return { status: "unavailable" };
+    if (
+      (serverType === "web_search" || serverType === "url_fetcher") &&
+      current.configs.some((row) => row.is_enabled && row.server_type === serverType)
+    ) {
+      return { status: "family-in-use" };
+    }
+    if (current.configs.length >= MAX_MCP_SERVERS_PER_WORKSPACE) {
+      return { status: "limit-reached", max: MAX_MCP_SERVERS_PER_WORKSPACE };
+    }
+    return null;
   }
 
   public async setEnabled(input: {
@@ -223,8 +362,21 @@ export const mcpConfigOperations = new McpConfigOperations({
   read: getGuildMcpConfigReadResult,
   validateUrl: validateRemoteUrl,
   testConnection: (url, authToken) => getGuildMcpManager().testConnection(url, authToken),
-  insert: (serverId, name, url, authToken, serverType, lastDiscoveredToolNames, serverDiscId) =>
-    toolRepository.insertMcpServer(serverId, name, url, authToken, serverType, lastDiscoveredToolNames, serverDiscId),
+  insert: (serverId, name, url, authToken, serverType, lastDiscoveredToolNames, serverDiscId, oauthGrant) =>
+    toolRepository.insertMcpServer(
+      serverId,
+      name,
+      url,
+      authToken,
+      serverType,
+      lastDiscoveredToolNames,
+      serverDiscId,
+      oauthGrant,
+    ),
+  signInAvailable: isMcpSignInAvailable,
+  requestedScopes: (guildMcpId) => guildMcpOAuthRepository.loadRequestedScopes(guildMcpId),
+  replaceGrant: (serverId, guildMcpId, grant, lastDiscoveredToolNames, serverDiscId) =>
+    toolRepository.replaceMcpOAuthGrant(serverId, guildMcpId, grant, lastDiscoveredToolNames, serverDiscId),
   updateEnabled: (serverId, guildMcpId, enabled, serverDiscId) =>
     toolRepository.updateMcpServerEnabledById(serverId, guildMcpId, enabled, serverDiscId),
   remove: (serverId, guildMcpId, serverDiscId) =>

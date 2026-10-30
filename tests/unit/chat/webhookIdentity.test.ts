@@ -160,6 +160,37 @@ describe("verified managed webhook identity", () => {
     }
   });
 
+  it("credits a system turn anchored on any webhook post to the bot account, not the webhook", async () => {
+    const read = spyOn(stateCache, "getCachedAllPersonas").mockResolvedValue(personas);
+    const privacy = spyOn(userCache, "getCachedPrivacyLevel").mockResolvedValue(PrivacyLevel.MINIMAL);
+    const blacklist = spyOn(userCache, "getCachedBlacklistStatus").mockResolvedValue(false);
+    try {
+      for (const message of [webhookMessage("Mirri"), webhookMessage("Mudae", "foreign-hook")]) {
+        Object.assign(message, {
+          channel: { ...message.channel, type: ChannelType.PublicThread },
+          guild: { id: message.guildId, members: { me: null } },
+        });
+        const incoming = normalizeChatInvocation({
+          client: message.client,
+          message,
+          skipLock: true,
+          isFromQueue: false,
+          isManuallyTriggered: true,
+        });
+        const admission = await evaluateChatAdmission(incoming);
+        if (admission.disposition !== "run") throw new Error(`Expected admission for ${message.author.username}`);
+        expect({ author: message.author.username, userDiscId: admission.userDiscId }).toEqual({
+          author: message.author.username,
+          userDiscId: "fixture-bot",
+        });
+      }
+    } finally {
+      read.mockRestore();
+      privacy.mockRestore();
+      blacklist.mockRestore();
+    }
+  });
+
   it("does not resolve a foreign context author through the persona roster", async () => {
     const read = spyOn(stateCache, "getCachedAllPersonas").mockResolvedValue(personas);
     try {
@@ -186,7 +217,7 @@ describe("verified managed webhook identity", () => {
     const channel = {
       id: "fixture-channel",
       isThread: () => false,
-      messages: { fetch: async () => new Map(messages.map((message) => [message.id, message])) },
+      messages: { cache: new Map(), fetch: async () => new Map(messages.map((message) => [message.id, message])) },
     };
     const client = {
       user: { id: "fixture-bot", username: "Tomori" },

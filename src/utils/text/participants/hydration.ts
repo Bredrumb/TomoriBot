@@ -8,6 +8,9 @@ import {
   type UserRow,
 } from "@/types/db/schema";
 import type { RequestSnapshot } from "@/types/misc/context";
+import { mapWithConcurrency } from "@/utils/async/bounded";
+import { getCachedUserRow, getCachedBlacklistStatus, getCachedPrivacyLevel } from "@/utils/cache/userCache";
+import { fetchParticipantMember, type ParticipantRequestScope } from "@/utils/text/participants/preparation";
 import { personalMemoryRepository, serverScheduleRepository, userRepository } from "@/utils/db/repositories";
 import type { MessageProxyIdentityContext, ProxyServicePresentation } from "@/utils/messageProxy/types";
 import { isMessageProxyIdentityUserId } from "@/utils/messageProxy/identityUserId";
@@ -19,6 +22,7 @@ import { formatMemoryWithId } from "@/utils/memory/memoryId";
 import { getUserPresenceDetails } from "@/utils/text/context/history";
 import type { MentionConverter } from "@/utils/text/context/templates";
 import type { MessageProxyConversationUser, PublicPersonaProfile } from "@/utils/text/context/types";
+import { getReminderRepetition } from "@/utils/text/processors/reminderRepetition";
 import {
   buildBridgeUserAliases,
   buildDiscordUserAliases,
@@ -160,9 +164,20 @@ export interface ParticipantHydrationDependencies {
     personaId?: number,
     includeUnassignedForMainPersona?: boolean,
   ): Promise<ReminderRow[]>;
-  loadMember(client: Client, guildId: string, discordId: string): Promise<GuildMember | null>;
+  loadMember(
+    client: Client,
+    guildId: string,
+    discordId: string,
+    requestScope?: ParticipantRequestScope,
+  ): Promise<GuildMember | null>;
   loadFallbackUser(client: Client, discordId: string): Promise<User | null>;
-  loadPresence(client: Client, discordId: string, guildId: string, preloadedMember?: GuildMember): Promise<string>;
+  loadPresence(
+    client: Client,
+    discordId: string,
+    guildId: string,
+    preloadedMember?: GuildMember,
+    requestScope?: ParticipantRequestScope,
+  ): Promise<string>;
   loadMessageProxyIdentityContext(userDiscId: string): Promise<MessageProxyIdentityContext | null>;
   loadNamingPreferences(pairs: UserPersonaNamingPair[]): Promise<Map<string, UserPersonaNamingPreference>>;
 }
@@ -189,15 +204,19 @@ export interface ParticipantHydrationParams {
   snapshot?: RequestSnapshot;
   convertMentions: MentionConverter;
   profileEnricherRegistry?: ParticipantProfileEnricherRegistry;
+  requestScope?: ParticipantRequestScope;
 }
+
+// Limit each turn to four seeds because concurrent turns share a ten-connection Postgres pool.
+const PARTICIPANT_HYDRATION_CONCURRENCY = 4;
 
 const DEFAULT_HYDRATION_DEPENDENCIES: ParticipantHydrationDependencies = {
   isMessageProxyIdentity: isMessageProxyIdentityUserId,
   getMessageProxyPresentation: getProxyServicePresentation,
-  loadUserRow: (discordId) => userRepository.loadByDiscordId(discordId),
+  loadUserRow: (discordId) => getCachedUserRow(discordId),
   registerUser: (discordId, displayName, language) => userRepository.register(discordId, displayName, language),
-  isBlacklisted: (guildId, discordId) => userRepository.isBlacklisted(guildId, discordId),
-  getPrivacyLevel: (discordId) => userRepository.getPrivacyLevel(discordId),
+  isBlacklisted: (guildId, discordId) => getCachedBlacklistStatus(guildId, discordId),
+  getPrivacyLevel: (discordId) => getCachedPrivacyLevel(discordId),
   loadPersonalMemories: (userId, lineageId) => personalMemoryRepository.loadForUserLineage(userId, lineageId, true),
   loadReminders: async (discordId, guildId, personaId, includeUnassignedForMainPersona) =>
     (await serverScheduleRepository.getPendingRemindersForUser(
@@ -206,13 +225,13 @@ const DEFAULT_HYDRATION_DEPENDENCIES: ParticipantHydrationDependencies = {
       personaId,
       includeUnassignedForMainPersona,
     )) ?? [],
-  loadMember: async (client, guildId, discordId) => {
+  loadMember: async (client, guildId, discordId, requestScope) => {
     const guild = client.guilds.cache.get(guildId);
-    return guild ? await guild.members.fetch(discordId).catch(() => null) : null;
+    return guild ? await fetchParticipantMember(guild, discordId, requestScope) : null;
   },
   loadFallbackUser: (client, discordId) => client.users.fetch(discordId).catch(() => null),
-  loadPresence: (client, discordId, guildId, preloadedMember) =>
-    getUserPresenceDetails(client, discordId, guildId, preloadedMember),
+  loadPresence: (client, discordId, guildId, preloadedMember, requestScope) =>
+    getUserPresenceDetails(client, discordId, guildId, preloadedMember, requestScope),
   loadMessageProxyIdentityContext: (userDiscId) => messageProxyRepository.getIdentityContextByUserDiscId(userDiscId),
   loadNamingPreferences: (pairs) => userNamingRepository.loadPreferences(pairs),
 };
@@ -250,7 +269,10 @@ export function canMentionParticipant(seed: ParticipantSeed): boolean {
 }
 
 export function formatPendingReminderForContext(
-  reminder: Pick<ReminderRow, "reminder_id" | "reminder_purpose" | "reminder_time" | "repetition_interval_hours">,
+  reminder: Pick<
+    ReminderRow,
+    "reminder_id" | "reminder_purpose" | "reminder_time" | "repetition_interval_hours" | "repetition_interval_months"
+  >,
   timezoneOffset: number,
 ): string {
   const formattedTime = `${formatTimeWithOffset(new Date(reminder.reminder_time), timezoneOffset, {
@@ -262,10 +284,10 @@ export function formatPendingReminderForContext(
     minute: "2-digit",
   })} (${formatUTCOffset(timezoneOffset)})`;
   const reminderIdPrefix = typeof reminder.reminder_id === "number" ? `ID:${reminder.reminder_id} ` : "";
-  const repeatText =
-    typeof reminder.repetition_interval_hours === "number" && reminder.repetition_interval_hours >= 1
-      ? `, repeats every ${reminder.repetition_interval_hours} hour(s)`
-      : "";
+  const repetition = getReminderRepetition(reminder);
+  const repeatText = repetition
+    ? `, repeats every ${repetition.interval} ${repetition.unit === "months" ? "month(s)" : "hour(s)"}`
+    : "";
 
   return `${reminderIdPrefix}"${reminder.reminder_purpose}" (scheduled for ${formattedTime}${repeatText})`;
 }
@@ -1050,7 +1072,7 @@ export async function hydrateParticipantProfiles(
     },
     loadMember: async (client, guildId, discordId) => {
       externalCalls.memberReads += 1;
-      return baseDependencies.loadMember(client, guildId, discordId);
+      return baseDependencies.loadMember(client, guildId, discordId, params.requestScope);
     },
     loadFallbackUser: async (client, discordId) => {
       externalCalls.fallbackUserReads += 1;
@@ -1058,7 +1080,7 @@ export async function hydrateParticipantProfiles(
     },
     loadPresence: async (client, discordId, guildId, preloadedMember) => {
       externalCalls.presenceReads += 1;
-      return baseDependencies.loadPresence(client, discordId, guildId, preloadedMember);
+      return baseDependencies.loadPresence(client, discordId, guildId, preloadedMember, params.requestScope);
     },
     loadMessageProxyIdentityContext: async (userDiscId) => {
       externalCalls.messageProxyContextReads += 1;
@@ -1066,11 +1088,12 @@ export async function hydrateParticipantProfiles(
     },
     loadNamingPreferences: (pairs) => baseDependencies.loadNamingPreferences(pairs),
   };
+  const bases = await mapWithConcurrency(params.participantSeeds, PARTICIPANT_HYDRATION_CONCURRENCY, (seed) =>
+    hydrateDiscordUserBase(seed, params, dependencies),
+  );
   const discordBases = new Map<string, HydratedDiscordUserBase>();
-  for (const seed of params.participantSeeds) {
-    if (seed.key.kind !== "discord_user") continue;
-    const base = await hydrateDiscordUserBase(seed, params, dependencies);
-    if (base) discordBases.set(serializeParticipantKey(seed.key), base);
+  for (const [index, base] of bases.entries()) {
+    if (base) discordBases.set(serializeParticipantKey(params.participantSeeds[index].key), base);
   }
   const personaLineageId = params.activePersonaScope.lineageId ?? params.snapshot?.tomoriState?.persona_lineage_id ?? 0;
   const namingPreferences = await dependencies.loadNamingPreferences(
@@ -1078,51 +1101,50 @@ export async function hydrateParticipantProfiles(
       base.userRow.user_id ? [{ userId: base.userRow.user_id, personaLineageId }] : [],
     ),
   );
+  const hydratedSeeds = await mapWithConcurrency(
+    params.participantSeeds,
+    PARTICIPANT_HYDRATION_CONCURRENCY,
+    async (seed) => {
+      if (seed.key.kind === "bot" || (seed.key.kind === "persona" && seed.reasons.has("active_identity"))) {
+        return { profile: hydrateBot(seed, params), namespaceNoteSeed: null };
+      }
+      if (seed.key.kind === "discord_user") {
+        const base = discordBases.get(serializeParticipantKey(seed.key));
+        if (!base) return null;
+        const preference = base.userRow.user_id
+          ? namingPreferences.get(userPersonaNamingPairKey(base.userRow.user_id, personaLineageId))
+          : undefined;
+        return hydrateDiscordUser(applyPersonaRelativeNaming(base, params, preference), params, dependencies);
+      }
+      const profile = hydrateSyntheticBase(seed, params);
+      return profile ? { profile, namespaceNoteSeed: null } : null;
+    },
+  );
   const profiles: HydratedParticipantProfile[] = [];
   const messageProxyNamespaces = new Map<string, MessageProxyNamespaceNote>();
   let botAdded = false;
-  for (const seed of params.participantSeeds) {
+  for (const [index, hydrated] of hydratedSeeds.entries()) {
+    if (!hydrated) continue;
+    const seed = params.participantSeeds[index];
     if (seed.key.kind === "bot" || (seed.key.kind === "persona" && seed.reasons.has("active_identity"))) {
-      if (!botAdded) {
-        profiles.push(hydrateBot(seed, params));
-        botAdded = true;
-      }
-      continue;
+      if (botAdded) continue;
+      botAdded = true;
     }
-    if (seed.key.kind === "discord_user") {
-      const base = discordBases.get(serializeParticipantKey(seed.key));
-      if (!base) continue;
-      const preference = base.userRow.user_id
-        ? namingPreferences.get(userPersonaNamingPairKey(base.userRow.user_id, personaLineageId))
-        : undefined;
-      const hydrated = await hydrateDiscordUser(
-        applyPersonaRelativeNaming(base, params, preference),
-        params,
-        dependencies,
+    profiles.push(hydrated.profile);
+    const noteSeed = hydrated.namespaceNoteSeed;
+    const namespaceMapKey = noteSeed ? `${noteSeed.context.serviceId}\u0000${noteSeed.context.namespaceKey}` : null;
+    if (noteSeed && namespaceMapKey && !messageProxyNamespaces.has(namespaceMapKey)) {
+      const accountLabels = await Promise.all(
+        noteSeed.accountDiscIds.map((accountDiscId) => resolveDiscordAccountLabel(accountDiscId, params, dependencies)),
       );
-      if (hydrated) {
-        profiles.push(hydrated.profile);
-        const noteSeed = hydrated.namespaceNoteSeed;
-        const namespaceMapKey = noteSeed ? `${noteSeed.context.serviceId}\u0000${noteSeed.context.namespaceKey}` : null;
-        if (noteSeed && namespaceMapKey && !messageProxyNamespaces.has(namespaceMapKey)) {
-          const accountLabels = await Promise.all(
-            noteSeed.accountDiscIds.map((accountDiscId) =>
-              resolveDiscordAccountLabel(accountDiscId, params, dependencies),
-            ),
-          );
-          const namespace = noteSeed.presentation.namespacePresentation(noteSeed.context, accountLabels);
-          messageProxyNamespaces.set(namespaceMapKey, {
-            serviceId: noteSeed.context.serviceId,
-            namespaceKey: noteSeed.context.namespaceKey,
-            sectionHeading: namespace.sectionHeading,
-            entry: namespace.entry,
-          });
-        }
-      }
-      continue;
+      const namespace = noteSeed.presentation.namespacePresentation(noteSeed.context, accountLabels);
+      messageProxyNamespaces.set(namespaceMapKey, {
+        serviceId: noteSeed.context.serviceId,
+        namespaceKey: noteSeed.context.namespaceKey,
+        sectionHeading: namespace.sectionHeading,
+        entry: namespace.entry,
+      });
     }
-    const syntheticProfile = hydrateSyntheticBase(seed, params);
-    if (syntheticProfile) profiles.push(syntheticProfile);
   }
   await applyPublicPersonaProfiles(profiles, params);
   const enriched = await applyParticipantProfileEnrichers({

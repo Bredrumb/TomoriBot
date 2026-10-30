@@ -11,13 +11,14 @@ export default {
       select_type_task: `tarea`,
       select_type_reminder: `recordatorio para {user_nickname}`,
       select_repeat_text: ` | se repite cada {hours}h`,
+      select_repeat_months_text: ` | se repite cada {months} meses`,
       select_manager_created_by_text: ` | creado por {creator_name}`,
       no_entries_title: `No hay tareas programadas`,
       no_entries: `No hay tareas programadas ni recordatorios para editar. Configura uno pidiéndome que te recuerde algo o que programe una tarea.`,
       confirm_title: `¿Editar esta tarea programada?`,
-      confirm_description: `**Contenido:** {reminder_purpose}
+      confirm_details: `**Contenido:** {reminder_purpose}
 **Próxima activación:** {reminder_time}
-**Intervalo en horas:** {repetition_interval_hours}
+**Repetir:** {repeat_text}
 **Tipo:** {reminder_type}
 **Usuario objetivo:** {target_user}
 **Canal:** {target_channel}`,
@@ -28,9 +29,12 @@ export default {
       time_input_label: `Próxima hora de activación`,
       time_input_description: `Usa formato de 24 horas, como 14:30 o 1430.`,
       time_input_placeholder: `14:30`,
-      interval_input_label: `Intervalo en horas`,
-      interval_input_description: `Configura 0 para desactivar la recurrencia.`,
+      interval_input_label: `Intervalo de repetición`,
+      interval_input_description: `Cuántas horas o meses entre cada ejecución. Configura 0 para desactivar la recurrencia.`,
       interval_input_placeholder: `0`,
+      interval_unit_label: `Unidad del intervalo`,
+      interval_unit_hours_option: `Horas`,
+      interval_unit_months_option: `Meses (el mismo día de cada mes)`,
       reminder_checkbox_label: `Es un recordatorio para mí`,
       reminder_checkbox_description: `Te mencionará en cada activación.`,
       type_reminder: `Recordatorio`,
@@ -41,13 +45,13 @@ export default {
       invalid_time_title: `Hora de activación no válida`,
       invalid_time_description: `Ingresa una hora en formato de 24 horas como \`14:30\`, \`1430\`, \`00:00\` o \`2400\`.`,
       invalid_interval_title: `Intervalo no válido`,
-      invalid_interval_description: `El intervalo debe ser un número entero de horas. Usa \`0\` para desactivar la recurrencia.`,
+      invalid_interval_description: `El intervalo debe ser un número entero. Usa \`0\` para desactivar la recurrencia.`,
       no_changes_title: `Sin cambios`,
       no_changes_description: `La tarea programada no fue modificada.`,
       success_title: `Tarea programada actualizada`,
-      success_description: `**Contenido:** {reminder_purpose}
+      success_details: `**Contenido:** {reminder_purpose}
 **Próxima activación:** {reminder_time}
-**Intervalo en horas:** {repetition_interval_hours}
+**Repetir:** {repeat_text}
 **Tipo:** {reminder_type}
 **Usuario objetivo:** {target_user}
 **Canal:** {target_channel}`,
@@ -60,6 +64,7 @@ export default {
       select_placeholder: `Selecciona una tarea programada...`,
       select_option_description: `[{persona_name}] {reminder_time} ({timezone}) #{target_channel}{repeat_text}{manager_created_by_text}`,
       select_repeat_text: ` | se repite cada {hours}h`,
+      select_repeat_months_text: ` | se repite cada {months} meses`,
       select_manager_created_by_text: ` | creado por {creator_name}`,
       no_entries_title: `No hay tareas programadas`,
       no_entries: `No hay tareas programadas ni recordatorios para eliminar. Configura uno pidiéndome que te recuerde algo o que programe una tarea.`,

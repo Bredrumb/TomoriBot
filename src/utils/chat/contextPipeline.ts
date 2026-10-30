@@ -1,3 +1,5 @@
+import { mapWithConcurrency } from "@/utils/async/bounded";
+import { isHistoryWindowMessageDeleted, readChannelHistory } from "@/utils/chat/historyWindow";
 import { verifyMessageWebhook, isManagedWebhookMessage } from "@/utils/chat/webhookIdentity";
 import type { Message } from "discord.js";
 import { MessageReferenceType, MessageType } from "discord.js";
@@ -52,7 +54,7 @@ import {
   normalizeTailDirective,
 } from "@/utils/chat/contextDirectives";
 import { excludeMessagesAwaitingOwnTurn } from "@/utils/chat/channelQueue";
-import { recordChatContextHistory } from "@/utils/chat/diagnosticTimeline";
+import { recordChatContextHistory, recordChatDiagnostic } from "@/utils/chat/diagnosticTimeline";
 import { getSupersededMessageProxyOriginalMessageIds } from "@/utils/messageProxy/proxyExpectation";
 import {
   ensureMessageProxyMessageIdentity,
@@ -63,15 +65,14 @@ import {
 import {
   buildCombinedTailDirectiveMessage,
   buildReactionContextAnnotation,
+  hasContextReactions,
   buildReplyReferenceContextAnnotation,
-  createReactionContextBudgetState,
   findReplyContextTargetInMessage,
   insertAtDialogueDepth,
   insertBeforeLatestDialoguePair,
   appendInjectedContextItems,
   mergeForcedMentions,
   stripAtPersonaTriggers,
-  type ReactionContextBudgetState,
 } from "@/utils/chat/contextAnnotations";
 import {
   appendDirectMediaFromMessage,
@@ -104,6 +105,7 @@ import { resolveReunionNote } from "@/utils/chat/reunionPresence";
 import { getCalendarDayWithOffset } from "@/utils/text/timezoneHelper";
 import {
   createParticipantRequestScope,
+  fetchParticipantMember,
   prepareParticipantContext,
   type ParticipantRequestScope,
 } from "@/utils/text/participants/preparation";
@@ -114,6 +116,14 @@ import { createExpressionDeliveryState } from "@/utils/chat/expressionDelivery";
 import { CONDITIONING_INTERACTION_RESPONSE_TEMPLATE } from "@/utils/conditioning/conditioningInteractionContext";
 import { createToolPromptMacroResolverForState } from "@/utils/tools/toolPromptMacros";
 
+import {
+  chatTurnContextTimings,
+  measureChatTurnStage,
+  recordChatTurnConfiguration,
+  recordChatTurnFetch,
+  recordChatTurnFlags,
+} from "@/utils/chat/turnLatency";
+
 const participantRequestScopes = new WeakMap<LockedChatTurn, ParticipantRequestScope>();
 
 async function buildHistoryNamingProjection(params: {
@@ -123,6 +133,7 @@ async function buildHistoryNamingProjection(params: {
   guild: Message["guild"];
   personalizationEnabled: boolean;
   extraUserIds?: string[];
+  requestScope: ParticipantRequestScope;
 }): Promise<{ userLabels: Map<string, string>; personaMentionLabels: Map<string, string> }> {
   const userLabels = new Map<string, string>();
   const personaMentionLabels = new Map<string, string>();
@@ -148,7 +159,7 @@ async function buildHistoryNamingProjection(params: {
     [...targetIds].map(async (targetId) => {
       const [row, member] = await Promise.all([
         getCachedUserRow(targetId),
-        params.guild?.members.fetch(targetId).catch(() => null) ?? Promise.resolve(null),
+        params.guild ? fetchParticipantMember(params.guild, targetId, params.requestScope) : Promise.resolve(null),
       ]);
       if (row?.user_id) targetRows.set(targetId, row);
       if (member) {
@@ -258,6 +269,7 @@ export function resolveTurnDeliberateToolMode(turn: ChatTurn): boolean {
 }
 
 export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnContext> {
+  recordChatTurnConfiguration(turn.persona.llm.llm_provider, turn.persona.config.humanizer_degree);
   const incoming = turn.lockedTurn.admission.incoming;
   const { client, message } = incoming;
   const channel = message.channel;
@@ -480,6 +492,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     participantRequestScope = createParticipantRequestScope();
     participantRequestScopes.set(turn.lockedTurn, participantRequestScope);
   }
+  const participantStartedAt = performance.now();
   const preparedParticipantContext = await prepareParticipantContext({
     client,
     guildId: turn.serverDiscId,
@@ -493,6 +506,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     responderPersonaIds: new Set(turn.triggeredPersonaIds),
     requestScope: participantRequestScope,
   });
+  const participantMs = performance.now() - participantStartedAt;
   const historyNaming = await buildHistoryNamingProjection({
     messages: history.simplifiedMessages,
     receivingPersona: effectivePersona,
@@ -500,6 +514,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     guild: message.guild,
     personalizationEnabled: effectivePersona.config.personal_memories_enabled !== false,
     extraUserIds: incoming.impersonatedUserId ? [incoming.impersonatedUserId] : [],
+    requestScope: participantRequestScope,
   });
   if (incoming.impersonatedUserId) {
     impersonatedUserNickname = historyNaming.userLabels.get(incoming.impersonatedUserId) ?? impersonatedUserNickname;
@@ -533,51 +548,55 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
         turn,
         effectivePersona,
         isUserImpersonation: incoming.isUserImpersonation,
+        // A chain turn carries the originator's clock but answers a persona, so it must not greet or clock them.
+        isPersonaSpeaker: turn.isSelfMessage || (incoming.sceneTurn?.turnIndex ?? 0) > 0,
         proxiedIdentityName: proxiedIdentity.name,
         proxiedIdentityUserDiscId: proxiedIdentity.userDiscId,
       });
 
-  const contextBuild = await buildContext({
-    guildId: turn.serverDiscId,
-    serverName: turn.serverName,
-    serverDescription: turn.serverDescription,
-    simplifiedMessageHistory: history.simplifiedMessages,
-    preparedParticipantContext,
-    personaUserBlocks: history.activeUserBlocks,
-    channelDesc: turn.channelDescription,
-    channelName: turn.channelName,
-    channelId: channel.id,
-    parentChannelId: channel.isThread() ? channel.parentId : null,
-    client,
-    triggererName: turn.triggererName,
-    triggererFormattedName: turn.triggererFormattedName,
-    triggererAddressTerm: turn.triggererAddressTerm,
-    historyUserLabels: historyNaming.userLabels,
-    historyPersonaMentionLabels: historyNaming.personaMentionLabels,
-    triggererUserId: turn.userRow.user_id,
-    emojiStrings: assets.emojiStrings,
-    tomoriNickname: effectivePersona.persona_nickname,
-    tomoriAttributes: effectivePersona.attribute_list,
-    tomoriConfig: effectivePersona.config,
-    channelPromptOverride,
-    channelContextNote,
-    reunionNote,
-    personaPrompt: effectivePersona.persona_prompt ?? null,
-    personaLineageId: effectivePersona.persona_lineage_id,
-    isDMChannel: turn.isDMChannel,
-    snapshot: { ...turn.requestSnapshot, tomoriState: effectivePersona },
-    preloadedEmojis: assets.loadedEmojis,
-    preloadedStickers: assets.loadedStickers,
-    preloadedCustomExpressions: assets.loadedCustomExpressions,
-    isUserImpersonation: incoming.isUserImpersonation,
-    impersonatedUserId: incoming.impersonatedUserId,
-    shortTermMemoryUserId: incoming.naturalNudge?.targetUserDiscId,
-    impersonatedUserNickname,
-    impersonatedUserPrompt,
-    explicitLongTermMemoryIntent: streamingContext.explicitLongTermMemoryIntent,
-    deliberateToolAllowedNames: streamingContext.deliberateToolAllowedNames,
-    messageIdMap,
-  });
+  const contextBuild = await measureChatTurnStage("native_ms", () =>
+    buildContext({
+      guildId: turn.serverDiscId,
+      serverName: turn.serverName,
+      serverDescription: turn.serverDescription,
+      simplifiedMessageHistory: history.simplifiedMessages,
+      preparedParticipantContext,
+      personaUserBlocks: history.activeUserBlocks,
+      channelDesc: turn.channelDescription,
+      channelName: turn.channelName,
+      channelId: channel.id,
+      parentChannelId: channel.isThread() ? channel.parentId : null,
+      client,
+      triggererName: turn.triggererName,
+      triggererFormattedName: turn.triggererFormattedName,
+      triggererAddressTerm: turn.triggererAddressTerm,
+      historyUserLabels: historyNaming.userLabels,
+      historyPersonaMentionLabels: historyNaming.personaMentionLabels,
+      triggererUserId: turn.userRow.user_id,
+      emojiStrings: assets.emojiStrings,
+      tomoriNickname: effectivePersona.persona_nickname,
+      tomoriAttributes: effectivePersona.attribute_list,
+      tomoriConfig: effectivePersona.config,
+      channelPromptOverride,
+      channelContextNote,
+      reunionNote,
+      personaPrompt: effectivePersona.persona_prompt ?? null,
+      personaLineageId: effectivePersona.persona_lineage_id,
+      isDMChannel: turn.isDMChannel,
+      snapshot: { ...turn.requestSnapshot, tomoriState: effectivePersona },
+      preloadedEmojis: assets.loadedEmojis,
+      preloadedStickers: assets.loadedStickers,
+      preloadedCustomExpressions: assets.loadedCustomExpressions,
+      isUserImpersonation: incoming.isUserImpersonation,
+      impersonatedUserId: incoming.impersonatedUserId,
+      shortTermMemoryUserId: incoming.naturalNudge?.targetUserDiscId,
+      impersonatedUserNickname,
+      impersonatedUserPrompt,
+      explicitLongTermMemoryIntent: streamingContext.explicitLongTermMemoryIntent,
+      deliberateToolAllowedNames: streamingContext.deliberateToolAllowedNames,
+      messageIdMap,
+    }),
+  );
 
   // Mirror buildPersonaSpriteContextItem's own gating so the queued-reply directive only
   // offers the "Persona (sprite):" opening on turns where the sprite prompt was actually
@@ -646,6 +665,11 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   const expressionDelivery =
     carried && carried.personaId === effectivePersona.persona_id ? carried.state : createExpressionDeliveryState();
 
+  recordChatTurnConfiguration(effectivePersona.llm.llm_provider, effectivePersona.config.humanizer_degree);
+  recordChatTurnFlags({
+    rag: contextItems.some((item) => item.metadataTag === ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS),
+  });
+  recordChatDiagnostic({ kind: "context_built", ...chatTurnContextTimings(), participantMs });
   return {
     turn,
     client,
@@ -672,6 +696,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     assistantPrefill,
     expressionDelivery,
     simplifiedMessages: history.simplifiedMessages,
+    reactedMessages: history.reactedMessages,
     streamingContext,
     messageIdMap,
     emojiStrings: assets.emojiStrings,
@@ -762,13 +787,18 @@ async function buildSimplifiedHistory(
   syntheticUsers: Map<string, { displayName: string; type: "persona" | "webhook" }>;
   messageProxyUsers: Map<string, MessageProxyConversationUser>;
   rawMessages: Message[];
+  reactedMessages: Message[];
   activeUserBlocks: PersonaUserBlockRow[];
 }> {
   const channel = turn.lockedTurn.admission.channel;
   const fetchLimit = normalizeMessageFetchLimit(turn.persona.config.message_fetch_limit);
   let messages =
     "messages" in channel
-      ? Array.from((await channel.messages.fetch({ limit: fetchLimit })).values()).reverse()
+      ? await readChannelHistory(
+          channel,
+          fetchLimit,
+          turn.personaIndex > 0 || turn.lockedTurn.admission.incoming.isFromQueue,
+        )
       : [turn.lockedTurn.admission.message];
   // A borrowed trigger is only an anchor and a seeded placeholder is never history, so only a queued
   // turn's own real message is added back when the fetch missed it.
@@ -776,12 +806,13 @@ async function buildSimplifiedHistory(
     turn.lockedTurn.admission.incoming.isFromQueue &&
     !turn.lockedTurn.admission.incoming.borrowsTriggerMessage &&
     !isSeededTurnAnchor(turn.lockedTurn.admission.message) &&
+    !isHistoryWindowMessageDeleted(channel.id, turn.lockedTurn.admission.message.id) &&
     !messages.some((message) => message.id === turn.lockedTurn.admission.message.id)
   ) {
     messages.push(turn.lockedTurn.admission.message);
   }
   const fetchedMessages = messages;
-  const fetchedMessagesById = new Map(fetchedMessages.map((message) => [message.id, message]));
+  const fetchedMessagesById = new Map<string, Message | null>(fetchedMessages.map((message) => [message.id, message]));
   await Promise.all(messages.map(verifyMessageWebhook));
   messages = excludeMessagesAwaitingOwnTurn(
     messages,
@@ -818,7 +849,6 @@ async function buildSimplifiedHistory(
     messages = messages.slice(startIndex);
   }
 
-  const messageProxyIdentitiesByMessageId = await resolveMessageProxyMessageIdentitiesForHistory(messages);
   const activeUserBlocks = await loadActivePersonaUserBlocks(turn);
   // Map each 'block'-type target to its row so the simplify loop can render a
   // notice that includes the remaining block duration (from expires_at). 'mute'
@@ -868,12 +898,40 @@ async function buildSimplifiedHistory(
 
   // Prime the sprite message cache with one batched query so per-message
   // "Name (sprite):" label lookups inside simplifyMessage() are cache hits.
-  await primePersonaSpriteMessageRecords(visibleRawMessages.filter((msg) => msg.webhookId).map((msg) => msg.id));
-  const minimalNoticeBodies = await resolveMinimalNoticeBodies(visibleRawMessages);
-  const agendasByMessageId = await loadPersonaAgendas(
-    turn.persona.persona_id,
-    visibleRawMessages.map((msg) => msg.id),
-  );
+  const [messageProxyIdentitiesByMessageId, , minimalNoticeBodies, agendasByMessageId] = await Promise.all([
+    resolveMessageProxyMessageIdentitiesForHistory(messages),
+    primePersonaSpriteMessageRecords(visibleRawMessages.filter((msg) => msg.webhookId).map((msg) => msg.id)),
+    resolveMinimalNoticeBodies(visibleRawMessages),
+    loadPersonaAgendas(
+      turn.persona.persona_id,
+      visibleRawMessages.map((msg) => msg.id),
+    ),
+  ]);
+
+  const missingReplyTargets = new Map<string, Message>();
+  for (const msg of visibleRawMessages) {
+    const referenceMessageId = getReplyContextReferenceMessageId(msg);
+    if (
+      !referenceMessageId ||
+      (msg.reference?.channelId && msg.reference.channelId !== msg.channel.id) ||
+      fetchedMessagesById.has(referenceMessageId) ||
+      (await getCachedPrivacyLevel(messageProxyIdentitiesByMessageId.get(msg.id)?.senderDiscId ?? msg.author.id)) ===
+        PrivacyLevel.FULL
+    )
+      continue;
+    const cached = msg.channel.messages.cache.get(referenceMessageId);
+    if (cached) fetchedMessagesById.set(referenceMessageId, cached);
+    else missingReplyTargets.set(referenceMessageId, msg);
+  }
+  await mapWithConcurrency([...missingReplyTargets], REPLY_TARGET_FETCH_CONCURRENCY, async ([id, msg]) => {
+    try {
+      recordChatTurnFetch("reply");
+      fetchedMessagesById.set(id, await msg.channel.messages.fetch(id));
+    } catch (error) {
+      fetchedMessagesById.set(id, null);
+      log.warn(`Could not fetch referenced message ${id} for context`, error);
+    }
+  });
 
   const simplifiedMessages: SimplifiedMessageForContext[] = [];
   const userIds = new Set<string>();
@@ -883,7 +941,7 @@ async function buildSimplifiedHistory(
   const personaByName = new Map(
     turn.allPersonas.map((persona) => [normalizeRenderModifierName(persona.persona_nickname), persona]),
   );
-  const reactionBudgetState = createReactionContextBudgetState();
+  const reactedMessages: Message[] = [];
 
   // Tracks whether the most recently pushed entry came from a "$:" debug message.
   // A debug message and a normal message from the same user share an authorId, so
@@ -943,12 +1001,12 @@ async function buildSimplifiedHistory(
       matrixUsers,
       messageProxyIdentitiesByMessageId,
       messageProxyUsers,
-      reactionBudgetState,
       hiddenAuthorIds,
       minimalNoticeBodies,
       fetchedMessagesById,
     );
     if (!result) continue;
+    if (hasContextReactions(msg)) reactedMessages.push(msg);
     const { message: simplified, isDebug } = result;
     previousBlockNoticeAuthorId = null;
     userIds.add(simplified.authorId);
@@ -1101,6 +1159,7 @@ async function buildSimplifiedHistory(
     syntheticUsers,
     messageProxyUsers,
     rawMessages: visibleRawMessages,
+    reactedMessages,
     activeUserBlocks,
   };
 }
@@ -1114,10 +1173,9 @@ async function simplifyMessage(
   matrixUsers: Map<string, string>,
   messageProxyIdentitiesByMessageId: Map<string, MessageProxyHistoryIdentity>,
   messageProxyUsers: Map<string, MessageProxyConversationUser>,
-  reactionBudgetState: ReactionContextBudgetState,
   blockedContextUserIds: Set<string>,
   minimalNoticeBodies: ReadonlyMap<string, string>,
-  fetchedMessagesById: ReadonlyMap<string, Message>,
+  fetchedMessagesById: ReadonlyMap<string, Message | null>,
 ): Promise<{ message: SimplifiedMessageForContext; isDebug: boolean } | null> {
   const isJoin = msg.type === MessageType.UserJoin;
   const isWebhook = Boolean(msg.webhookId);
@@ -1142,7 +1200,7 @@ async function simplifyMessage(
     fetchedMessagesById,
   );
   content = replyContext.content;
-  content = await withReactionContext(turn, msg, content, reactionBudgetState);
+  content = withReactionContext(msg, content);
 
   const imageAttachments: SimplifiedMessageForContext["imageAttachments"] = [];
   const videoAttachments: SimplifiedMessageForContext["videoAttachments"] = [];
@@ -1386,6 +1444,17 @@ function tagNewMediaWithSource(
   }
 }
 
+const REPLY_TARGET_FETCH_CONCURRENCY = 4;
+
+function getReplyContextReferenceMessageId(msg: Message): string | undefined {
+  if (msg.reference?.type === MessageReferenceType.Forward || !msg.channel || !("messages" in msg.channel)) {
+    return undefined;
+  }
+  const embedTarget = !msg.reference?.messageId ? findReplyContextTargetInMessage(msg) : null;
+  if (embedTarget && embedTarget.channelId !== msg.channel.id) return undefined;
+  return msg.reference?.messageId ?? embedTarget?.messageId;
+}
+
 async function withReplyContext(
   turn: ChatTurn,
   msg: Message,
@@ -1394,27 +1463,19 @@ async function withReplyContext(
   personaByNickname: Map<string, ChatTurn["persona"]>,
   blockedContextUserIds: Set<string>,
   messageProxyIdentitiesByMessageId: Map<string, MessageProxyHistoryIdentity>,
-  fetchedMessagesById: ReadonlyMap<string, Message>,
+  fetchedMessagesById: ReadonlyMap<string, Message | null>,
 ): Promise<{ content: string; referencedMessage?: Message }> {
-  if (msg.reference?.type === MessageReferenceType.Forward || !msg.channel || !("messages" in msg.channel)) {
-    return { content };
-  }
-
-  let referenceMessageIdForLog = msg.reference?.messageId;
+  const referenceMessageId = getReplyContextReferenceMessageId(msg);
+  if (!referenceMessageId || fetchedMessagesById.get(referenceMessageId) === null) return { content };
   try {
-    const replyContextEmbedTarget = !msg.reference?.messageId ? findReplyContextTargetInMessage(msg) : null;
-    const referenceMessageId = msg.reference?.messageId ?? replyContextEmbedTarget?.messageId;
-    referenceMessageIdForLog = referenceMessageId;
-    if (!referenceMessageId || (replyContextEmbedTarget && replyContextEmbedTarget.channelId !== msg.channel.id)) {
-      return { content };
-    }
     // The fetched window comes first because the capped message cache evicts the newest messages of a large history fetch.
-    const referenced =
-      fetchedMessagesById.get(referenceMessageId) ??
-      msg.channel.messages.cache.get(referenceMessageId) ??
-      (await (msg.reference?.channelId && msg.reference.channelId !== msg.channel.id
+    let referenced = fetchedMessagesById.get(referenceMessageId) ?? msg.channel.messages.cache.get(referenceMessageId);
+    if (!referenced) {
+      recordChatTurnFetch("reply");
+      referenced = await (msg.reference?.channelId && msg.reference.channelId !== msg.channel.id
         ? msg.fetchReference()
-        : msg.channel.messages.fetch(referenceMessageId)));
+        : msg.channel.messages.fetch(referenceMessageId));
+    }
     // A reference can sit outside the fetched history window, so resolve its verified proxy
     // attribution through the same bounded index read the history loop used. This is what lets
     // the annotation name a proxied member instead of the webhook veneer, and it also brings an
@@ -1437,7 +1498,7 @@ async function withReplyContext(
     });
     return { content: content ? `${annotation}\n${content}` : annotation, referencedMessage: referenced };
   } catch (error) {
-    log.warn(`Could not fetch referenced message ${referenceMessageIdForLog ?? "unknown"} for context`, error);
+    log.warn(`Could not fetch referenced message ${referenceMessageId} for context`, error);
     return { content };
   }
 }
@@ -1497,16 +1558,8 @@ async function resolveBlockedAuthorLabel(msg: Message, comparableId: string): Pr
   return `<@${comparableId}>`;
 }
 
-async function withReactionContext(
-  turn: ChatTurn,
-  msg: Message,
-  content: string,
-  reactionBudgetState: ReactionContextBudgetState,
-): Promise<string> {
-  const annotation = await buildReactionContextAnnotation(msg, reactionBudgetState, {
-    clientUserId: turn.lockedTurn.admission.client.user?.id,
-    mainPersonaNickname: turn.mainPersona?.persona_nickname ?? turn.persona.persona_nickname,
-  });
+function withReactionContext(msg: Message, content: string): string {
+  const annotation = buildReactionContextAnnotation(msg);
   if (!annotation) return content;
   return content ? `${content}\n${annotation}` : annotation;
 }

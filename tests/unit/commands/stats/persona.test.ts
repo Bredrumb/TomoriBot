@@ -145,6 +145,7 @@ describe("/stats persona autocomplete handler", () => {
 
 describe("/stats persona execute handler", () => {
   type MockChatInputInteraction = {
+    client: Client;
     guild: { id: string; members: { me: { displayAvatarURL: () => string } | null } } | null;
     user: { id: string };
     id: string;
@@ -171,6 +172,7 @@ describe("/stats persona execute handler", () => {
     const followUpCalls: unknown[] = [];
 
     const interaction: MockChatInputInteraction = {
+      client,
       guild: {
         id: "guild_test",
         members: {

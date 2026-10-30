@@ -370,6 +370,7 @@ export interface NewFireRow {
   personaId: number;
   category: NaturalNudgeCategory;
   idleNudgeKey: string;
+  topic: string;
   targetUserId: number | null;
   openerMessageDiscId: string;
 }
@@ -398,6 +399,5 @@ export const enabledIdleNudgeServerSchema = z.object({
   server_id: z.number().int(),
   server_disc_id: z.string(),
   timezone_offset: z.number().nullable(),
-  config: serverNaturalNudgeConfigSchema,
 });
 export type EnabledIdleNudgeServer = z.infer<typeof enabledIdleNudgeServerSchema>;

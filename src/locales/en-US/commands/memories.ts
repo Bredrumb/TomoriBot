@@ -205,6 +205,10 @@ export default {
       "Exported {count} entries. Channel restrictions, pending channel names, and collection state are not included.",
     lorebook_export_empty_heading: "No entries to export",
     lorebook_export_empty_detail: "This book has no entries.",
+    lorebook_export_sent_heading: "Lorebook Sent",
+    lorebook_export_sent_detail: "**{name}** has been sent to your DMs as SillyTavern world info JSON.",
+    lorebook_export_dm_failed:
+      "I couldn't send you a DM, so the lorebook is attached here instead. Save it now, because this message disappears.",
     lorebook_import_no_book_heading: "No Character Book found",
     lorebook_import_no_book_detail: "This character card has no embedded Character Book.",
     lorebook_conversion_note: `Skipped entries: {skipped}. Unsupported keywords: {keys}. Entries with ignored settings: {ignored}. Collapsed placements: {placements}.`,

@@ -108,6 +108,30 @@ Decision execution owns its usage recorder and forwards validated usage to consu
 RAG query retrieval and config model re-embedding supply the same recorder under their resolved
 credential context. A model-switch denial retains that context through the result and localized
 panel receipt; the successful selection write and cache invalidation still precede re-embedding.
+An embedding family switch re-embeds stored chunks in place, preserving their IDs, content, order,
+and boundaries, including history facts and edited chunks. Vector generation runs outside the write
+transaction; each document commits only if its stored chunk set still matches the embedded snapshot.
+A conflict gets one fresh attempt. An incomplete re-embed processes the remaining documents, then
+raises a failure instead of reporting a successful model switch; a retry skips chunks already on the
+target model.
+
+Stream usage is normalized by `normalizeProviderUsage` in `src/utils/text/tokenEstimate.ts`.
+`inputTokens` is total input processed, including cache reads and writes; optional `cacheReadTokens`
+and `cacheWriteTokens` are subsets of that total, clamped to it. Anthropic's separate uncached,
+cache-read, and cache-creation counts are added to form the total. OpenAI-compatible prompt totals
+and Gemini prompt counts already include cached input, so their cache counts are not added again.
+An absent cache field means unknown; a reported zero stays zero. `sumTurnUsage` sums request
+segments, retaining a cache field or cost only when every segment with usage reported that field.
+`ProviderUsageReport` preserves these subsets through the same recorder as input, output, and cost.
+
+`recordUsageStats` emits one `turn_usage` sample to both the logger and `metricSampleRepository`.
+It labels the turn's provider and model, marks usage as measured or estimated, and includes input,
+output, cache subsets (`unknown` when absent), and reported cost when known across requests.
+Response-review ledgers supply accounting when present; otherwise stream segments supply it.
+Ledger entries retain their measurement source, and a turn containing an estimated entry is labeled
+estimated even when other requests reported native usage.
+The sample has no conversation or account identifiers. Guild token counters keep total input in
+`tokens_in` and record reported subsets as `cache_read_tokens` and `cache_write_tokens`, keyed by model.
 
 `ProviderRequestDeniedError` carries its context and a locale-dependent renderer. The renderer returns
 a title locale key and localized description, and accepts a flag for fallback notices. A registered

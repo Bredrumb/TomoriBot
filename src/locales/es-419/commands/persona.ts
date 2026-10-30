@@ -118,6 +118,7 @@ Palabras de activación: {trigger_word_count}`,
       avatar_update_rate_limited: `🟡 El avatar del servidor no se actualizó debido a los límites de tasa de Discord. Cámbialo manualmente.`,
       avatar_update_failed: `🟡 No se pudo actualizar el avatar del servidor, probablemente por los límites de tasa de Discord. Cámbialo manualmente.`,
       alter_success_title: `🟢 Alter importado con éxito`,
+      lorebook_count: `Entradas de lorebook importadas: {count}`,
       alter_success_description: `¡Alter **{nickname}** importado con éxito!
 Palabras de activación únicas: {trigger_count}
 Activaciones: {triggers}

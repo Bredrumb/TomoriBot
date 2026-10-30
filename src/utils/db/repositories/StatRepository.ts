@@ -1207,7 +1207,14 @@ class StatRepository implements IRepository<null> {
    * @param args - serverId (required), optional lineageId / metric / limit, and window.
    */
   async getTopUsers(
-    args: { serverId: number; lineageId?: number; metric?: StatMetric; limit?: number } & StatWindow,
+    args: {
+      serverId: number;
+      lineageId?: number;
+      metric?: StatMetric;
+      limit?: number;
+      /** The bot's own Discord ID: system turns triggered from persona messages are credited to it. */
+      botUserDiscId: string;
+    } & StatWindow,
   ): Promise<TopUserEntry[]> {
     try {
       const from = windowFloor(args.from);
@@ -1219,6 +1226,7 @@ class StatRepository implements IRepository<null> {
         JOIN users u ON u.user_id = sc.user_id
         WHERE sc.metric = ${metric}
           AND sc.server_id = ${args.serverId}
+          AND u.user_disc_id <> ${args.botUserDiscId}
           AND (${args.lineageId ?? null}::bigint IS NULL OR sc.persona_lineage_id = ${args.lineageId ?? null})
           AND sc.bucket >= ${from}::date
         GROUP BY sc.user_id, u.user_disc_id

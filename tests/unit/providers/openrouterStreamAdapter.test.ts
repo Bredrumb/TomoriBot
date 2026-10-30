@@ -198,7 +198,7 @@ describe("OpenrouterStreamAdapter.processChunk", () => {
       expect(result.status).toBe("completed");
       expect(result.pendingResponse?.text).toBe("Hi");
       expect(result.usage).toEqual({ inputTokens: 321, outputTokens: 18, costUsd: 0.0012 });
-      expect(sumTurnUsage([result])).toEqual({ inputTokens: 321, outputTokens: 18 });
+      expect(sumTurnUsage([result])).toEqual({ inputTokens: 321, outputTokens: 18, costUsd: 0.0012 });
     } finally {
       fetchStub.mockRestore();
     }

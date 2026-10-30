@@ -2,16 +2,13 @@ import { resolveRequestMaxOutputTokens } from "@/utils/provider/modelLimits";
 import {
   AttachmentBuilder,
   ComponentType,
-  EmbedBuilder,
   MessageFlags,
   type InteractionEditReplyOptions,
   type TopLevelComponentData,
-  type User,
 } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import { buildPanelContainer, type PanelAccentTone } from "@/utils/discord/ui/panel";
-import { localizedStatusTitle, statusNote } from "@/utils/discord/ui/statusTitle";
-import { ColorCode, log } from "@/utils/misc/logger";
+import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { localizer } from "@/utils/text/localizer";
 import type { PromptInspection } from "@/utils/text/promptInspection/assemble";
 import { buildJsonSnapshot, buildRequestConfig, buildTextSnapshot } from "@/utils/text/promptInspection/serialize";
@@ -33,7 +30,6 @@ export interface PromptSnapshotDelivery {
   inspection: PromptInspection;
   format: PromptSnapshotFormat;
   guildId: string;
-  user: User;
   locale: string;
   /** `/tool prompt snapshot` points users at its own options; `/context` has buttons instead. */
   includeRerunHints: boolean;
@@ -41,7 +37,8 @@ export interface PromptSnapshotDelivery {
 }
 
 /**
- * Sends the snapshot file to the user's DMs, falling back to the private reply when DMs are closed.
+ * Answers on the deferred ephemeral reply rather than by DM: a snapshot is a one-time debugging
+ * view, not a backup worth keeping, and the reply is already private to the requester.
  */
 export async function deliverPromptSnapshot(delivery: PromptSnapshotDelivery): Promise<void> {
   const { inspection, format, locale } = delivery;
@@ -88,23 +85,23 @@ export async function deliverPromptSnapshot(delivery: PromptSnapshotDelivery): P
 
   const descriptionParts: string[] = [];
   descriptionParts.push(
-    localizer(locale, "commands.tool.prompt.snapshot.dm_description", {
+    localizer(locale, "commands.tool.prompt.snapshot.file_description", {
       persona_name: selectedPersona.persona_nickname,
       format: formatLabel,
     }),
   );
   if (format === "text") {
-    descriptionParts.push(localizer(locale, "commands.tool.prompt.snapshot.dm_txt_headers_note"));
+    descriptionParts.push(localizer(locale, "commands.tool.prompt.snapshot.file_txt_headers_note"));
     if (delivery.includeRerunHints) {
-      descriptionParts.push(localizer(locale, "commands.tool.prompt.snapshot.dm_hint_try_json"));
+      descriptionParts.push(localizer(locale, "commands.tool.prompt.snapshot.file_hint_try_json"));
     }
   } else {
     if (delivery.includeRerunHints) {
-      descriptionParts.push(localizer(locale, "commands.tool.prompt.snapshot.dm_hint_try_text"));
+      descriptionParts.push(localizer(locale, "commands.tool.prompt.snapshot.file_hint_try_text"));
     }
     if (toolsData) {
       descriptionParts.push(
-        statusNote("warning", localizer(locale, "commands.tool.prompt.snapshot.dm_tools_filtering_note")),
+        statusNote("warning", localizer(locale, "commands.tool.prompt.snapshot.file_tools_filtering_note")),
       );
     }
   }
@@ -112,46 +109,24 @@ export async function deliverPromptSnapshot(delivery: PromptSnapshotDelivery): P
     descriptionParts.push(
       statusNote(
         "warning",
-        localizer(locale, "commands.tool.prompt.snapshot.dm_truncated_note", { count: inspection.historyPairsDropped }),
+        localizer(locale, "commands.tool.prompt.snapshot.file_truncated_note", {
+          count: inspection.historyPairsDropped,
+        }),
       ),
     );
   }
-  descriptionParts.push(statusNote("error", localizer(locale, "commands.tool.prompt.snapshot.dm_privacy_warning")));
-  const dmDescription = descriptionParts.join("\n\n");
+  descriptionParts.push(statusNote("error", localizer(locale, "commands.tool.prompt.snapshot.file_privacy_warning")));
 
-  try {
-    await delivery.user.send({
-      components: buildSnapshotCard(
-        localizer(locale, "commands.tool.prompt.snapshot.dm_title"),
-        dmDescription,
-        fileName,
-        "info",
-      ),
-      flags: MessageFlags.IsComponentsV2,
-      files: [attachment],
-    });
-
-    await delivery.editReply({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle(localizedStatusTitle(locale, "commands.tool.prompt.snapshot.success_title", ColorCode.SUCCESS))
-          .setDescription(localizer(locale, "commands.tool.prompt.snapshot.success_description"))
-          .setColor(ColorCode.SUCCESS),
-      ],
-    });
-  } catch (dmError) {
-    log.warn(`Failed to DM prompt snapshot to user ${delivery.user.id}:`, dmError as Error);
-    await delivery.editReply({
-      components: buildSnapshotCard(
-        localizedStatusTitle(locale, "commands.tool.prompt.snapshot.dm_failed_title", ColorCode.WARN),
-        `${localizer(locale, "commands.tool.prompt.snapshot.dm_failed_description")}\n\n${dmDescription}`,
-        fileName,
-        "warning",
-      ),
-      flags: MessageFlags.IsComponentsV2,
-      files: [attachment],
-    });
-  }
+  await delivery.editReply({
+    components: buildSnapshotCard(
+      localizer(locale, "commands.tool.prompt.snapshot.file_title"),
+      descriptionParts.join("\n\n"),
+      fileName,
+      "info",
+    ),
+    flags: MessageFlags.IsComponentsV2,
+    files: [attachment],
+  });
 }
 
 /**

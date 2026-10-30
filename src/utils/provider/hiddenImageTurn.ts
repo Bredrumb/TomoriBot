@@ -18,7 +18,7 @@ import { reportProviderUsage, withProviderUsageContext } from "@/utils/provider/
  */
 
 import type { Client, Guild, Webhook } from "discord.js";
-import { log, sanitizeLogPayload } from "@/utils/misc/logger";
+import { log } from "@/utils/misc/logger";
 import { buildContext } from "@/utils/text/contextBuilder";
 import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
 import { getCachedChannelPrompt } from "@/utils/cache/channelPromptCache";
@@ -35,13 +35,7 @@ import { stripBridgePrefix } from "@/utils/bridges";
 import { resolveMediaForModel } from "@/utils/text/context/mediaResolver";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { prepareParticipantContext } from "@/utils/text/participants/preparation";
-import type { ProviderError } from "@/types/stream/interfaces";
-import {
-  formatProviderErrorCodeForDisplay,
-  getProviderErrorDetail,
-  isOperatorActionableProviderError,
-} from "@/utils/provider/providerErrorClassification";
-import { redactProviderDetail, reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
+import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 import { createProviderToolFailure } from "@/utils/provider/providerToolFailure";
 
 /** Number of recent messages to fetch from the channel for context. */
@@ -374,6 +368,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     // loop terminates cleanly even if the model calls the non-preferred backend.
     endTurnAfterTools: ["generate_image", "generate_image_nai"],
     messageIdMap,
+    triggererUserId: internalUserId ?? undefined,
   };
 
   let provider: Awaited<ReturnType<typeof getProviderForTomori>>;
@@ -403,49 +398,14 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     };
   }
 
-  const streamFailure = async (error: unknown, iteration: number) => {
-    const providerError: ProviderError =
-      typeof error === "object" && error !== null && "type" in error && "retryable" in error
-        ? (error as ProviderError)
-        : { type: "unknown", message: error instanceof Error ? error.message : String(error), retryable: false };
-    const original = providerError.originalError;
-    const originalDetail = original instanceof Error ? { message: original.message, stack: original.stack } : original;
-    const detail = redactProviderDetail(
-      [
-        getProviderErrorDetail(providerError) ?? "Unknown streaming error",
-        originalDetail ? JSON.stringify(sanitizeLogPayload(originalDetail)) : undefined,
-      ]
-        .filter(Boolean)
-        .join("\n"),
-      credentials.apiKey,
-    );
-    await reportProviderFailure({
-      summary: "Hidden image planning failed",
-      errorType: "HiddenImageAgentStreamError",
-      error: {
-        message: detail,
-        stack: error instanceof Error ? redactProviderDetail(error.stack ?? "", credentials.apiKey) : undefined,
-      },
-      detail,
-      expected: !isOperatorActionableProviderError(providerError),
-      serverId: tomoriState.server_id,
-      userId: internalUserId,
-      dimensions: {
-        operation: "image-planning",
-        provider: tomoriState.llm.llm_provider,
-        code: formatProviderErrorCodeForDisplay(providerError.code),
-      },
-      metadata: { channelId: channel.id, model: providerConfig.model, iteration, credentialSource: credentials.source },
-    });
-    return {
-      success: false,
-      error: createProviderToolFailure(providerError, {
-        locale,
-        provider: tomoriState.llm.llm_provider,
-        credentialScope: credentials.source,
-      }).error,
-    };
-  };
+  const planningFailure = (error: unknown) => ({
+    success: false,
+    error: createProviderToolFailure(error, {
+      locale,
+      provider: tomoriState.llm.llm_provider,
+      credentialScope: credentials.source,
+    }).error,
+  });
 
   // Run the simplified tool loop.
   //    We mimic the structure of tomoriChat's streaming loop but stripped down to
@@ -507,7 +467,24 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
         ),
       );
     } catch (error) {
-      return streamFailure(error, i + 1);
+      // Providers report what they catch, so only an exception that escaped one is unreported here.
+      await reportProviderFailure({
+        summary: "Hidden image planning failed",
+        errorType: "HiddenImageAgentStreamError",
+        error,
+        expected: false,
+        serverId: tomoriState.server_id,
+        userId: internalUserId,
+        dimensions: { operation: "image-planning", provider: tomoriState.llm.llm_provider },
+        metadata: {
+          channelId: channel.id,
+          model: providerConfig.model,
+          iteration: i + 1,
+          credentialSource: credentials.source,
+        },
+        redactValues: [credentials.apiKey],
+      });
+      return planningFailure(error);
     }
 
     reportProviderUsage(usageContext, {
@@ -569,7 +546,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     }
 
     if (streamResult.status === "error") {
-      return streamFailure(streamResult.data, i + 1);
+      return planningFailure(streamResult.data);
     }
 
     log.warn(`[Hidden Image Agent] Stream completed without calling ${targetToolName} on iteration ${i + 1}.`);

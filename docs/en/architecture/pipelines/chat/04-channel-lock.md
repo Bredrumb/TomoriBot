@@ -31,6 +31,18 @@ try {
 }
 ```
 
+The first turn starts typing alongside context building and waits for both before generation, so
+the initial typing indicator cannot arrive after the reply. `typing_started` records completion of
+the initial request. After that request settles, the keepalive starts only if the same abort
+controller still owns the lock; queued personas can share a trigger message ID across different
+lock acquisitions. A late interval callback clears only its own timer.
+
+The lock entry also owns a bounded history window for the busy stretch: the active turn and its
+queued replays. Later personas and queued user or persona turns can reuse it. Release preserves the
+window only while handing off to a queued replay; a replay that returns before acquiring the lock
+drops it. Empty-queue release, stale recovery, queue clearing, and `/kill` free the window and its
+gateway change signals. A new trigger from an idle channel always starts with a REST read.
+
 ### Mutex acquisition and re-entrancy
 
 When an admitted turn arrives:

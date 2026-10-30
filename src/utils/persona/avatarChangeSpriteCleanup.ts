@@ -1,4 +1,5 @@
-import { personaSpriteRepository } from "@/utils/db/repositories";
+import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
+import { personaRepository, personaSpriteRepository } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 import { isSharedPresetAssetReference } from "@/utils/storage/avatarStorage";
 
@@ -27,5 +28,28 @@ export async function removePresetSpritesAfterAvatarChange(personaId: number, se
       metadata: { personaId, serverDiscId },
     });
     return 0;
+  }
+}
+
+/**
+ * Clears the preset character reference a persona inherited once its avatar stops showing the preset
+ * character, for the same reason as the sprites above. A reference the user uploaded stays.
+ *
+ * @returns Whether the preset reference was cleared
+ */
+export async function clearPresetCharacterReferenceAfterAvatarChange(
+  personaId: number,
+  serverDiscId: string,
+): Promise<boolean> {
+  try {
+    const cleared = await personaRepository.clearPresetCharRef(personaId);
+    if (cleared) invalidateTomoriStateCache(serverDiscId);
+    return cleared;
+  } catch (error) {
+    await log.error(`Failed to clear preset character reference after avatar change for persona ${personaId}:`, error, {
+      errorType: "PersonaAvatarPresetCharacterReferenceCleanupError",
+      metadata: { personaId, serverDiscId },
+    });
+    return false;
   }
 }

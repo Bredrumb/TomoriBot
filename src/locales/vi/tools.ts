@@ -31,6 +31,7 @@ export default {
       quota_resets_in_hours: `Hạn mức sẽ đặt lại sau {hours} giờ.`,
       quota_resets_in_days: `Hạn mức sẽ đặt lại sau {days} ngày.`,
       quota_remaining: `Bạn còn {remaining} ảnh cho hôm nay.`,
+      quota_unavailable: `Mình không thể kiểm tra hạn ngạch tạo hình ảnh của máy chủ này lúc này. Vui lòng thử lại sau giây lát.`,
     },
     generate_video: {
       disabled: `Tính năng tạo video bị tắt trên máy chủ này.`,
@@ -40,6 +41,7 @@ export default {
       quota_resets_in_hours: `Hạn mức sẽ đặt lại sau {hours} giờ.`,
       quota_resets_in_days: `Hạn mức sẽ đặt lại sau {days} ngày.`,
       quota_remaining: `Bạn còn {remaining} video cho hôm nay.`,
+      quota_unavailable: `Mình không thể kiểm tra hạn ngạch tạo video của máy chủ này lúc này. Vui lòng thử lại sau giây lát.`,
       file_too_large: `Video được tạo ({size_mb} MB) vượt quá giới hạn kích thước tệp 25 MB của Discord.`,
       reference_unsupported: `Model OpenRouter đã chọn \`{model}\` không thể dùng ảnh làm khung hình đầu tiên chính xác. Hãy xóa ảnh tham chiếu hoặc chọn model video tương thích.`,
       loop_unsupported: `Model OpenRouter đã chọn \`{model}\` không thể dùng khung hình cuối để lặp video. Hãy tắt lặp lại hoặc chọn model video tương thích.`,
@@ -179,6 +181,7 @@ export default {
       notice_character_prompt_line: `**Nhân vật {index}:** {prompt}`,
       notice_image_tags_tip_line: `Mẹo: Dùng lệnh \`image-tags\` để nhân vật nhất quán hơn.`,
       notice_avatar_reference_line: `Tham chiếu avatar: {name}.`,
+      notice_character_reference_line: `Ảnh tham chiếu nhân vật: {name}.`,
       notice_reference_count_line: `Sử dụng {count} ảnh tham chiếu.`,
       generated_after_seconds_line: `Được tạo sau {seconds} giây`,
       referenced_identities_line: `Đã tham chiếu: {names}`,

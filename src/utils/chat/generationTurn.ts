@@ -60,6 +60,7 @@ import {
   recordChatProviderContext,
   runWithChatDiagnosticStage,
 } from "@/utils/chat/diagnosticTimeline";
+import { recordChatTurnFlags } from "@/utils/chat/turnLatency";
 import { applyAssistantPrefill } from "@/utils/chat/assistantPrefill";
 import { getChannelTurnAbortSignal } from "@/utils/chat/channelQueue";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -152,6 +153,7 @@ async function runGenerationAttempts(
     context.streamingContext.deliveryState ??= { unconfirmed: false };
     context.responseReview = createResponseReviewState(context);
     context.streamingContext.holdResponseText = Boolean(context.responseReview);
+    recordChatTurnFlags({ drafting: context.streamingContext.holdResponseText });
     const plan = await buildGenerationPlan(context);
     const attempts = plan.attempts;
     const exhaustedIdentities = new Set<number>();

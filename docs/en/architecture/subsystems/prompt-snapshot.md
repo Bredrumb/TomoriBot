@@ -66,7 +66,7 @@ Exports include provider sampling parameters constructed by `buildRequestConfig(
 
 ### Delivery
 
-`deliverPromptSnapshot()` sends the file by DM as a Components V2 card: Discord draws plain attachments above embeds, so the file is a File component placed after the text, which keeps it at the bottom. The card ends with a warning not to share the file, since it can contain memories and chat text. If the DM fails, the same card goes in the private reply.
+`deliverPromptSnapshot()` answers on the deferred ephemeral reply rather than by DM, because a snapshot is a one-time debugging view and not a backup. It sends a Components V2 card: Discord draws plain attachments above embeds, so the file is a File component placed after the text, which keeps it at the bottom. The card ends with a warning not to share the file, since it can contain memories and chat text.
 
 ## Context usage panel (`/context`)
 

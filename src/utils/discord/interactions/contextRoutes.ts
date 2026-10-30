@@ -93,7 +93,6 @@ export const contextInteractionRoute: GlobalInteractionRoute = {
       inspection,
       format,
       guildId: guild.id,
-      user: interaction.user,
       locale,
       includeRerunHints: false,
       editReply: (options) => interaction.editReply(options),

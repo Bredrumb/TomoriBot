@@ -47,7 +47,7 @@ import { groupPersonasByLineage, personaRepresentativeForLineage } from "@/utils
 
 /** Three fixed add, import, and export options leave 22 entry slots under Discord's 25-option select cap. */
 export const LOREBOOK_ENTRY_PAGE_SIZE = 22;
-export const LOREBOOK_COLLECTION_PAGE_SIZE = 23;
+const LOREBOOK_COLLECTION_PAGE_SIZE = 23;
 
 export type LorebookPanelPage =
   | {

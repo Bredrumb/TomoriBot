@@ -6,8 +6,10 @@
 import { log } from "../../utils/misc/logger";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
 import { validateFutureTime } from "@/utils/text/processors/timeUtils";
+import { parseRepetitionArgs, toRepetitionColumns } from "@/utils/text/processors/reminderRepetition";
 import { formatLocalizedDuration, formatTimeRemaining } from "@/utils/text/processors/formatters";
 import {
+  addMonthsWithOffset,
   parseTimeWithOffset,
   formatUTCOffset,
   formatTimeWithOffset,
@@ -70,12 +72,17 @@ export class ReminderTool extends BaseTool {
       months_from_now: {
         type: "number",
         description:
-          "OPTIONAL: Months from the current time to schedule the task. Can be combined with other 'from now' parameters. Uses calendar months (30.44 days average).",
+          "OPTIONAL: Months from the current time to schedule the task. Can be combined with other 'from now' parameters. Counts calendar months in the server timezone and keeps the time of day; a date past the end of the target month lands on its last day.",
       },
       repetition_interval_hours: {
         type: "number",
         description:
-          "REQUIRED: Set to 0 for one-time tasks. Set to 1 or higher to make the task recurring (repeats every X hours after the first trigger). Example: 24 for daily tasks, 168 for weekly tasks.",
+          "REQUIRED: Set to 0 for one-time tasks. Set to 1 or higher to make the task recurring (repeats every X hours after the first trigger). Example: 24 for daily tasks, 168 for weekly tasks. For monthly or yearly tasks, set this to 0 and use 'repetition_interval_months' instead.",
+      },
+      repetition_interval_months: {
+        type: "number",
+        description:
+          "OPTIONAL: Set to 1 or higher to repeat every X calendar months on the same day and time of day (1 for monthly, 12 for yearly). In months without that day it runs on the last day, then returns to the original day. Requires 'repetition_interval_hours' to be 0.",
       },
       self_reminder: {
         type: "boolean",
@@ -257,25 +264,18 @@ export class ReminderTool extends BaseTool {
       };
     }
 
-    let repetitionIntervalHours: number | null = null;
-    if (typeof repetitionIntervalHoursArg === "number") {
-      if (
-        !Number.isFinite(repetitionIntervalHoursArg) ||
-        !Number.isInteger(repetitionIntervalHoursArg) ||
-        repetitionIntervalHoursArg < 0
-      ) {
-        return {
-          success: false,
-          error: "The 'repetition_interval_hours' must be 0 (for one-time) or an integer >= 1 (for recurring)",
-          data: {
-            status: "reminder_creation_failed_invalid_repeat_interval",
-            reason: "The 'repetition_interval_hours' must be 0 or an integer >= 1.",
-          },
-        };
-      }
-      // Only set repetitionIntervalHours if it's > 0 (recurring)
-      repetitionIntervalHours = repetitionIntervalHoursArg > 0 ? repetitionIntervalHoursArg : null;
+    const repetitionArgs = parseRepetitionArgs(repetitionIntervalHoursArg, args.repetition_interval_months);
+    if (!repetitionArgs.ok) {
+      return {
+        success: false,
+        error: repetitionArgs.reason,
+        data: {
+          status: "reminder_creation_failed_invalid_repeat_interval",
+          reason: repetitionArgs.reason,
+        },
+      };
     }
+    const repetition = repetitionArgs.provided ? repetitionArgs.repetition : null;
 
     let resolvedChannelId = channelId;
     let resolvedChannelLabel = "Current channel";
@@ -382,6 +382,10 @@ export class ReminderTool extends BaseTool {
 
       timeCalculationMethod = "relative";
       const currentTime = new Date();
+      const monthShiftedTime =
+        typeof monthsFromNowArg === "number" && monthsFromNowArg > 0
+          ? addMonthsWithOffset(currentTime, monthsFromNowArg, timezoneOffset)
+          : currentTime;
       let totalMilliseconds = 0;
 
       if (typeof effectiveMinutesFromNow === "number" && effectiveMinutesFromNow > 0) {
@@ -393,12 +397,8 @@ export class ReminderTool extends BaseTool {
       if (typeof daysFromNowArg === "number" && daysFromNowArg > 0) {
         totalMilliseconds += daysFromNowArg * 24 * 60 * 60 * 1000;
       }
-      if (typeof monthsFromNowArg === "number" && monthsFromNowArg > 0) {
-        // Use average month length (30.44 days) for consistency
-        totalMilliseconds += monthsFromNowArg * 30.44 * 24 * 60 * 60 * 1000;
-      }
 
-      finalReminderTime = new Date(currentTime.getTime() + totalMilliseconds);
+      finalReminderTime = new Date(monthShiftedTime.getTime() + totalMilliseconds);
     }
 
     const reminderPurpose = reminderPurposeArg.trim();
@@ -507,7 +507,7 @@ export class ReminderTool extends BaseTool {
         user_nickname: actualNicknameInDB, // Use the verified nickname from DB
         reminder_purpose: reminderPurpose,
         reminder_time: finalReminderTime,
-        repetition_interval_hours: repetitionIntervalHours,
+        repetition,
         self_reminder: isSelfReminder,
         created_by_user_id: requestingUserRow?.user_id ?? null,
         persona_id: context.tomoriState.persona_id ?? null,
@@ -538,8 +538,15 @@ export class ReminderTool extends BaseTool {
           context.locale,
         );
 
-        const useRecurringTaskEmbed = isSelfReminder && repetitionIntervalHours !== null;
-        const useOneTimeTaskEmbed = isSelfReminder && repetitionIntervalHours === null;
+        const useRecurringTaskEmbed = isSelfReminder && repetition !== null;
+        const useOneTimeTaskEmbed = isSelfReminder && repetition === null;
+        const isMonthly = repetition?.unit === "months";
+        const repetitionVars: Record<string, number> =
+          repetition === null
+            ? {}
+            : isMonthly
+              ? { repetition_interval_months: repetition.interval }
+              : { repetition_interval_hours: repetition.interval };
         const reminderPurposeText =
           reminderPurpose.length > 200 ? `${reminderPurpose.substring(0, 197)}...` : reminderPurpose;
         // Show both clocks when the target has a personal timezone differing from
@@ -565,10 +572,7 @@ export class ReminderTool extends BaseTool {
           reminder_time: reminderTimeText,
         };
         const descriptionVars = useRecurringTaskEmbed
-          ? {
-              ...baseDescriptionVars,
-              repetition_interval_hours: repetitionIntervalHours as number,
-            }
+          ? { ...baseDescriptionVars, ...repetitionVars }
           : baseDescriptionVars;
 
         // Long purposes receive an expansion button so the full text remains
@@ -586,26 +590,23 @@ export class ReminderTool extends BaseTool {
               persona_nickname: personaNickname,
             },
             descriptionKey: useRecurringTaskEmbed
-              ? "reminders.recurring_task_set_description"
+              ? isMonthly
+                ? "reminders.recurring_task_set_description_months"
+                : "reminders.recurring_task_set_description"
               : useOneTimeTaskEmbed
                 ? "reminders.task_set_description"
                 : "reminders.reminder_set_description",
             descriptionVars,
             footerKey: useRecurringTaskEmbed
               ? "reminders.recurring_task_set_footer"
-              : repetitionIntervalHours
-                ? "reminders.reminder_set_footer_recurring"
+              : repetition
+                ? isMonthly
+                  ? "reminders.reminder_set_footer_recurring_months"
+                  : "reminders.reminder_set_footer_recurring"
                 : useOneTimeTaskEmbed
                   ? "reminders.task_set_footer"
                   : "reminders.reminder_set_footer",
-            footerVars: repetitionIntervalHours
-              ? {
-                  time_remaining: localizedTimeRemaining,
-                  repetition_interval_hours: repetitionIntervalHours,
-                }
-              : {
-                  time_remaining: localizedTimeRemaining,
-                },
+            footerVars: { time_remaining: localizedTimeRemaining, ...repetitionVars },
           },
           reminderPurpose,
           dbResult.reminder_id === undefined ? undefined : { kind: "task", id: dbResult.reminder_id },
@@ -620,7 +621,7 @@ export class ReminderTool extends BaseTool {
             target_user: resolvedTargetUserLabel,
             reminder_purpose: reminderPurpose,
             reminder_time: finalReminderTime.toISOString(),
-            repetition_interval_hours: repetitionIntervalHours,
+            ...toRepetitionColumns(repetition),
             target_channel: resolvedChannelLabel,
             self_reminder: isSelfReminder,
             time_remaining_ms: timeRemainingMs,

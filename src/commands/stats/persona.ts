@@ -136,6 +136,7 @@ export async function execute(
       timeframe,
       from,
       subtitle: `${selected.persona_nickname} • ${subtitle}`,
+      botUserDiscId: interaction.client.user.id,
     });
 
     let personaIconUrl: string | undefined;

@@ -92,6 +92,8 @@ export function startHealthServer(port: number): void {
     }
     const registeredRoute = registeredRoutes.get(routeKey(req.method ?? "GET", requestUrl.pathname));
     if (registeredRoute) {
+      // Set for every registered route because a framed sign-in confirmation page could be clickjacked.
+      res.setHeader("Content-Security-Policy", "frame-ancestors 'none'");
       void Promise.resolve()
         .then(() => registeredRoute.handler(req, res, { requestUrl }))
         .catch((error) => {
@@ -116,5 +118,12 @@ export function startHealthServer(port: number): void {
 
   server.on("error", (error) => {
     log.error("Health check server error", error);
+    if (!server.listening && registeredRoutes.size > 0) {
+      log.warn(
+        `Registered HTTP routes are unreachable because port ${port} could not be bound; set PORT to a free port`,
+        undefined,
+        { metadata: { routes: [...registeredRoutes.keys()] } },
+      );
+    }
   });
 }

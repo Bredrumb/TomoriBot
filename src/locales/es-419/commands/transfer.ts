@@ -75,6 +75,11 @@ export default {
     memory_export_persona_invalid_title: "Persona No Disponible",
     memory_export_persona_invalid_description: "Esa persona no existe en este servidor, así que no se exportó nada.",
     memory_preview_title: "Revisar Importación de Memoria",
+    memory_preview_lore_count: "{count} entradas de lorebook (reemplazan este alcance)",
+    memory_preview_serverwide_lore:
+      "Lore de todo el servidor: {count} entradas (reemplazan todos los libros de todo el servidor).",
+    workspace_memory_preview_description:
+      "Esta importación de espacio de trabajo incluye memorias y cualquier lorebook en el archivo. Un lorebook incluido reemplaza el libro completo de ese alcance, incluidas las entradas agregadas aquí, incluso con Combinar. El lore de todo el servidor reemplaza el libro de todo el servidor.",
     memory_preview_description: "Esta importación de {ownership} contiene solo memorias.",
     memory_preview_exclusions: "Los documentos y personas están excluidos.",
     memory_preview_groups_heading: "Grupos de memoria detectados",

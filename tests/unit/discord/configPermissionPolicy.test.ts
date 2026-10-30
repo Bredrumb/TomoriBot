@@ -713,6 +713,7 @@ describe("isConfigRouteAuthorized", () => {
       { action: "mcp-add-open", locale: "en-US" },
       { action: "mcp-add-submit", locale: "en-US", nonce: "nonce1234567" },
       { action: "mcp-set-enabled", locale: "en-US", entityId: 1, enabled: true },
+      { action: "mcp-reconnect", locale: "en-US", entityId: 1 },
       { action: "mcp-remove-prompt", locale: "en-US", entityId: 1 },
       { action: "mcp-remove-cancel", locale: "en-US", entityId: 1 },
       { action: "mcp-remove-confirm", locale: "en-US", entityId: 1 },

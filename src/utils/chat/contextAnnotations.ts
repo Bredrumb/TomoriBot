@@ -1,3 +1,4 @@
+import { recordChatTurnFetch } from "@/utils/chat/turnLatency";
 import { getCachedImpersonatedUserIdForWebhook, verifyMessageWebhook } from "@/utils/chat/webhookIdentity";
 import type { Embed, Message, MessageReaction } from "discord.js";
 import { MessageType } from "discord.js";
@@ -38,21 +39,10 @@ const SUPPORTED_VIDEO_MIME_TYPES = [
 ];
 const DISCORD_MESSAGE_LINK_PATTERN = /discord(?:app)?\.com\/channels\/(?:@me|\d+)\/(\d+)\/(\d+)/;
 
-export type ReactionContextBudgetState = {
-  callsUsed: number;
-  budgetExhaustedLogged: boolean;
-  messagesWithReactions: number;
-  fallbackCount: number;
+type ReactionUserLabelOptions = {
+  clientUserId?: string;
+  mainPersonaNickname?: string | null;
 };
-
-export function createReactionContextBudgetState(): ReactionContextBudgetState {
-  return {
-    callsUsed: 0,
-    budgetExhaustedLogged: false,
-    messagesWithReactions: 0,
-    fallbackCount: 0,
-  };
-}
 
 export function mergeForcedMentions(...mentionLists: Array<ForcedMention[] | undefined>): ForcedMention[] {
   const seen = new Set<string>();
@@ -89,7 +79,7 @@ export function stripAtPersonaTriggers(content: string, allPersonas: TomoriState
 export function buildRevealedMessageMetadataTailDirective(): string {
   return (
     "Recent message metadata has been revealed in the visible conversation turns. " +
-    "Each annotated message now includes a `ref_N` handle and sent timestamp. " +
+    "Each annotated message now includes a `ref_N` handle, sent timestamp, and who reacted to it when it has reactions. " +
     // The system prompt still documents `reveal_message_metadata` (macros expand
     // once at context-build time, before the reveal), so without this line the
     // model re-requests a reveal it has already been given.
@@ -291,6 +281,7 @@ export function annotateRecentMessageMetadataInContext(params: {
   simplifiedMessages: SimplifiedMessageForContext[];
   contextSegments: StructuredContextItem[];
   messageIdMap: MessageIdMap;
+  reactionUsersByMessageId: ReadonlyMap<string, string>;
 }): { annotatedCount: number; patchedReplyReferenceCount: number } {
   const metadataByMessageId = new Map<string, { inline: string; annotation: string }>();
   // Maps a dialogue turn's representative message ID (the entry's own `id`, which is
@@ -316,7 +307,11 @@ export function annotateRecentMessageMetadataInContext(params: {
       const messageRef = params.messageIdMap.register(ids[i], "ref");
       metadataByMessageId.set(ids[i], {
         inline: buildRecentMessageMetadataInline(createdAt),
-        annotation: buildRecentMessageMetadataAnnotation(messageRef, createdAt),
+        annotation: buildRecentMessageMetadataAnnotation(
+          messageRef,
+          createdAt,
+          params.reactionUsersByMessageId.get(ids[i]),
+        ),
       });
       registeredIds.push(ids[i]);
     }
@@ -426,77 +421,84 @@ export async function buildReplyReferenceContextAnnotation(params: {
   return `[System: This message (ID: ${replyRef}) by ${replyAuthorName} is referring to a previous message (ID: ${referencedRef}) by ${referencedAuthorName} saying: ${referencedSummary}]`;
 }
 
-export async function buildReactionContextAnnotation(
-  message: Message,
-  budgetState: ReactionContextBudgetState,
-  options?: {
-    clientUserId?: string;
-    mainPersonaNickname?: string | null;
-  },
-): Promise<string | null> {
-  if (!REACTION_CONTEXT_ENABLED || REACTION_CONTEXT_MAX_REACTIONS_PER_MESSAGE < 1) {
-    return null;
+function selectContextReactions(message: Message): { selected: MessageReaction[]; hiddenTypeCount: number } {
+  if (!REACTION_CONTEXT_ENABLED) {
+    return { selected: [], hiddenTypeCount: 0 };
   }
-
-  const availableReactions = Array.from(message.reactions.cache.values())
+  const available = Array.from(message.reactions.cache.values())
     .filter((reaction) => (reaction.count ?? 0) > 0)
     .sort((a, b) => (b.count ?? 0) - (a.count ?? 0));
-  if (availableReactions.length === 0) {
+  const selected = available.slice(0, REACTION_CONTEXT_MAX_REACTIONS_PER_MESSAGE);
+  return { selected, hiddenTypeCount: available.length - selected.length };
+}
+
+export function hasContextReactions(message: Message): boolean {
+  return selectContextReactions(message).selected.length > 0;
+}
+
+/**
+ * Counts come from the gateway payload, so this never calls Discord; reactor names wait for
+ * {@link fetchReactionUserSummaries} during a `reveal_message_metadata` restart.
+ */
+export function buildReactionContextAnnotation(message: Message): string | null {
+  const { selected, hiddenTypeCount } = selectContextReactions(message);
+  if (selected.length === 0) {
     return null;
   }
 
-  budgetState.messagesWithReactions += 1;
-  const selectedReactions = availableReactions.slice(0, REACTION_CONTEXT_MAX_REACTIONS_PER_MESSAGE);
-  const reactionSegments: string[] = [];
+  const reactionSegments = selected.map(
+    (reaction) => `${normalizeReactionEmojiLabel(reaction)} x${reaction.count ?? 0}`,
+  );
+  if (hiddenTypeCount > 0) {
+    reactionSegments.push(`+${hiddenTypeCount} more reaction type${hiddenTypeCount === 1 ? "" : "s"}`);
+  }
+  return `[System: Reactions on this message: ${reactionSegments.join("; ")}]`;
+}
 
-  for (const reaction of selectedReactions) {
-    const count = reaction.count ?? 0;
-    const emojiLabel = normalizeReactionEmojiLabel(reaction);
-    let segment = `${emojiLabel} x${count}`;
+/**
+ * Fetches who reacted to each message, newest message first so the per-reveal call budget
+ * covers the messages the model is most likely asking about.
+ *
+ * @returns Reactor summaries keyed by message ID; a message whose lookups all failed or fell
+ * outside the budget is absent, leaving its counts-only history line as the only reaction context.
+ */
+export async function fetchReactionUserSummaries(
+  messages: readonly Message[],
+  options: ReactionUserLabelOptions,
+): Promise<Map<string, string>> {
+  const summaries = new Map<string, string>();
+  let callsUsed = 0;
 
-    if (count > 0 && REACTION_CONTEXT_MAX_USERS_PER_REACTION > 0) {
-      if (budgetState.callsUsed < REACTION_CONTEXT_MAX_API_CALLS_PER_TURN) {
-        try {
-          budgetState.callsUsed += 1;
-          const users = await reaction.users.fetch({ limit: REACTION_CONTEXT_MAX_USERS_PER_REACTION });
-          const userLabels = Array.from(users.values())
-            .map((user) => formatReactionUserLabel(user, options))
-            .filter((label): label is string => label.length > 0);
-
-          if (userLabels.length > 0) {
-            segment += ` by ${userLabels.join(", ")}`;
-            const remaining = Math.max(0, count - userLabels.length);
-            if (remaining > 0) {
-              segment += ` (+${remaining} more)`;
-            }
-          }
-        } catch (error) {
-          budgetState.fallbackCount += 1;
-          log.warn(
-            `Reaction context: Failed to fetch users for ${emojiLabel} on message ${message.id}. Using counts only.`,
-            error,
-          );
-        }
-      } else {
-        budgetState.fallbackCount += 1;
-        if (!budgetState.budgetExhaustedLogged) {
-          budgetState.budgetExhaustedLogged = true;
-          log.info(
-            `Reaction context: User fetch budget exhausted (${budgetState.callsUsed}/${REACTION_CONTEXT_MAX_API_CALLS_PER_TURN}). Falling back to counts-only reactions.`,
-          );
-        }
+  for (const message of [...messages].reverse()) {
+    const segments: string[] = [];
+    for (const reaction of selectContextReactions(message).selected) {
+      if (callsUsed >= REACTION_CONTEXT_MAX_API_CALLS_PER_TURN) {
+        log.info(
+          `Reaction context: User fetch budget exhausted (${callsUsed}/${REACTION_CONTEXT_MAX_API_CALLS_PER_TURN}). Older messages keep counts only.`,
+        );
+        return summaries;
+      }
+      callsUsed += 1;
+      const emojiLabel = normalizeReactionEmojiLabel(reaction);
+      try {
+        recordChatTurnFetch("reaction");
+        const users = await reaction.users.fetch({ limit: REACTION_CONTEXT_MAX_USERS_PER_REACTION });
+        const userLabels = Array.from(users.values())
+          .map((user) => formatReactionUserLabel(user, options))
+          .filter((label) => label.length > 0);
+        if (userLabels.length === 0) continue;
+        const remaining = Math.max(0, (reaction.count ?? 0) - userLabels.length);
+        segments.push(`${emojiLabel} by ${userLabels.join(", ")}${remaining > 0 ? ` (+${remaining} more)` : ""}`);
+      } catch (error) {
+        log.warn(`Reaction context: Failed to fetch users for ${emojiLabel} on message ${message.id}.`, error);
       }
     }
-
-    reactionSegments.push(segment);
+    if (segments.length > 0) {
+      summaries.set(message.id, segments.join("; "));
+    }
   }
 
-  const remainingReactionTypes = availableReactions.length - selectedReactions.length;
-  if (remainingReactionTypes > 0) {
-    reactionSegments.push(`+${remainingReactionTypes} more reaction type${remainingReactionTypes === 1 ? "" : "s"}`);
-  }
-
-  return reactionSegments.length > 0 ? `[System: Reactions on this message: ${reactionSegments.join("; ")}]` : null;
+  return summaries;
 }
 
 function parseBooleanEnvFlag(value: string | undefined, defaultValue: boolean): boolean {
@@ -516,8 +518,13 @@ function buildRecentMessageMetadataInline(createdAt: number): string {
   return `sent ${formatTimestampInline(createdAt)}`;
 }
 
-function buildRecentMessageMetadataAnnotation(messageRef: string, createdAt: number): string {
-  return `[System: Message metadata: ref=${messageRef} | ${buildRecentMessageMetadataInline(createdAt)}]`;
+function buildRecentMessageMetadataAnnotation(
+  messageRef: string,
+  createdAt: number,
+  reactionUsers: string | undefined,
+): string {
+  const reactionSuffix = reactionUsers ? ` | reacted: ${reactionUsers}` : "";
+  return `[System: Message metadata: ref=${messageRef} | ${buildRecentMessageMetadataInline(createdAt)}${reactionSuffix}]`;
 }
 
 function buildReplyReferenceAttachmentInfo(message: Message): string {
@@ -614,12 +621,9 @@ function normalizeReactionEmojiLabel(reaction: MessageReaction): string {
 
 function formatReactionUserLabel(
   user: { id: string; globalName: string | null; username: string },
-  options?: {
-    clientUserId?: string;
-    mainPersonaNickname?: string | null;
-  },
+  options: ReactionUserLabelOptions,
 ): string {
-  if (options?.clientUserId && user.id === options.clientUserId && options.mainPersonaNickname?.trim()) {
+  if (options.clientUserId && user.id === options.clientUserId && options.mainPersonaNickname?.trim()) {
     return options.mainPersonaNickname.trim();
   }
   return user.globalName || user.username;

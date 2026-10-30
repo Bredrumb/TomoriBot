@@ -51,7 +51,7 @@ Notes are injected at calculated depths measured from the end of history (`total
 
 - **Persona and channel notes**: Persona notes and channel notes are additive; both inject when configured. The global server context note is a fallback used only when neither persona nor channel configures a note.
 - **Verbatim tool-calling nudge**: When `shouldInjectVerbatimToolCallingNudge(tomoriState)` is true, injects `VERBATIM_TOOL_CALLING_NUDGE` at depth 3 to guide custom endpoint models on verbatim tool syntax.
-- **Reunion note**: Injects a precomputed reunion note at `TIME_AWARENESS_NOTE_DEPTH` (3) when a returning triggerer has an eligible absence gap.
+- **Reunion note**: Injects a precomputed reunion note at `TIME_AWARENESS_NOTE_DEPTH` (3) when a returning triggerer has an eligible absence gap. A turn answering another persona (a self-reply chain or a later scene turn) skips it and records no presence, because the person who started the chain did not address that persona.
 - **Date spacers**: Injects an absolute-date `[System: ...]` separator before any message whose server-calendar day differs from the preceding timestamped turn. The pointer to `reveal_message_metadata` sits inside `{{if tool:reveal_message_metadata}}`.
 
 Verified proxy history uses the persisted message index to recover the stable member identity and attested host. Superseded originals are excluded. Reply references outside the history window use the same attribution lookup. Host blocks filter these messages, while names and memories belong to the member. See [message-proxy integration](/architecture/integrations/message-proxy/).

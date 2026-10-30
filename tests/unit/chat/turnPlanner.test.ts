@@ -9,6 +9,7 @@ import * as userCache from "@/utils/cache/userCache";
 import * as triggers from "@/utils/chat/triggerProcessor";
 import * as replyDecision from "@/utils/chat/replyDecision";
 import * as nudgeCache from "@/modules/natural-nudges/runtime/configCache";
+import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
 import { defaultServerNaturalNudgeConfig } from "@/modules/natural-nudges/db/types";
 import * as textModels from "@/utils/provider/textModelSelection";
 import { userNamingRepository } from "@/utils/db/repositories/UserNamingRepository";
@@ -20,6 +21,7 @@ import { createPersona, createUserRow } from "../../helpers/fixtures";
 import { createScopedModuleMocker, stubLogMembers } from "../../helpers/mockSurface";
 
 let resolutions: Array<credentials.ResolvedCredentials | Error> = [];
+const recordDirectChat = nudgeCache.recordNaturalNudgeDirectChat;
 const send = mock(async () => undefined);
 const resolve = mock(async () => {
   const result = resolutions.shift();
@@ -236,6 +238,114 @@ describe("text credential admission", () => {
 });
 
 describe("per-persona planning", () => {
+  it.each(["resolve", "reject"])("plans without waiting for the direct-chat activity write (%s)", async (outcome) => {
+    const write = Promise.withResolvers<Date>();
+    let activity: Promise<void> | undefined;
+    const record = spyOn(naturalNudgeRepository, "recordDirectChat").mockReturnValue(write.promise);
+    restores.push(
+      record,
+      spyOn(nudgeCache, "recordNaturalNudgeDirectChat").mockImplementation((serverId) => {
+        activity = recordDirectChat(serverId);
+        return activity;
+      }),
+    );
+    const turn = lockedTurn();
+    resolutions.push(resolved("server"), resolved("server"));
+    try {
+      const plan = await planChatTurns(turn);
+      expect(plan.turns.length).toBeGreaterThan(0);
+      expect(turn.admission.incoming.isDirectChat).toBe(true);
+      expect(record).toHaveBeenCalledWith(personas[0].server_id);
+    } finally {
+      if (outcome === "reject") write.reject(new Error("fixture activity write failure"));
+      else write.resolve(new Date());
+      await activity;
+    }
+  });
+
+  it.each([
+    [0, 0],
+    [1, 1],
+    [2, 2],
+    [3, 3],
+    [10, 3],
+  ])("caps nudge mention replies at %i configured replies or scene length", async (cascadeLimit, replyLimit) => {
+    const turn = lockedTurn();
+    turn.admission.tomoriState = createPersona({ config: { cascade_limit: cascadeLimit } });
+    Object.assign(turn.admission.incoming, {
+      isManuallyTriggered: true,
+      isPersonaJob: true,
+      borrowsTriggerMessage: true,
+      selectedPersonaId: personas[1].persona_id,
+      naturalNudge: { toolNames: [] },
+      textQuotaSource: "system",
+    });
+    const chain = getSelfReplyChainState(turn.channelId);
+    try {
+      if (replyLimit > 0) {
+        chain.triggerCount = replyLimit;
+        resolutions.push(resolved("server"));
+        expect((await planChatTurns(turn)).turns).toHaveLength(1);
+      }
+
+      chain.triggerCount = replyLimit + 1;
+      resolutions.push(resolved("server"));
+      expect((await planChatTurns(turn)).turns).toHaveLength(0);
+    } finally {
+      chain.triggerCount = 0;
+    }
+  });
+
+  it("admits the tenth ordinary persona reply at cascade limit ten", async () => {
+    const turn = lockedTurn();
+    turn.admission.tomoriState = createPersona({ config: { cascade_limit: 10 } });
+    Object.assign(turn.admission.incoming, {
+      isManuallyTriggered: true,
+      isPersonaJob: true,
+      selectedPersonaId: personas[1].persona_id,
+    });
+    const chain = getSelfReplyChainState(turn.channelId);
+    try {
+      chain.triggerCount = 10;
+      resolutions.push(resolved("server"));
+      expect((await planChatTurns(turn)).turns).toHaveLength(1);
+
+      chain.triggerCount = 11;
+      resolutions.push(resolved("server"));
+      expect((await planChatTurns(turn)).turns).toHaveLength(0);
+    } finally {
+      chain.triggerCount = 0;
+    }
+  });
+
+  it("preserves the scene cascade budget when a nudge scene borrows a persona message", async () => {
+    const turn = lockedTurn();
+    turn.admission.tomoriState = createPersona({ config: { cascade_limit: 10 } });
+    Object.assign(turn.admission.incoming, {
+      isManuallyTriggered: true,
+      isPersonaJob: true,
+      borrowsTriggerMessage: true,
+      selectedPersonaId: personas[1].persona_id,
+      naturalNudge: { toolNames: [] },
+      textQuotaSource: "system",
+      sceneTurn: {
+        commandId: "fixture-scene",
+        sequence: personas.map((persona) => ({ personaId: persona.persona_id, personaName: persona.persona_nickname })),
+        turnIndex: 1,
+        totalTurns: 2,
+      },
+    });
+    restores.push(spyOn(triggers, "isSelfTriggerMessage").mockReturnValue(true));
+    const chain = getSelfReplyChainState(turn.channelId);
+    try {
+      chain.triggerCount = 4;
+      resolutions.push(resolved("server"));
+      expect((await planChatTurns(turn)).turns).toHaveLength(1);
+    } finally {
+      chain.triggerCount = 0;
+    }
+  });
+
   it("keeps nudge handoffs on server credentials and stops at the cascade limit", async () => {
     const turn = lockedTurn();
     const incoming = turn.admission.incoming;

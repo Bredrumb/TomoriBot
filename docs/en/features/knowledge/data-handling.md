@@ -40,14 +40,20 @@ privacy policy. Avoid sharing sensitive personal credentials or confidential dat
 
 ## Export Your Data
 
-Exportable data is delivered to your DMs as a JSON file:
+Exportable data is delivered to your DMs as a JSON file, so your DMs keep a copy you can restore
+later. If TomoriBot can't DM you, the file is attached to a private reply instead; save it before
+the reply disappears.
 
 - `/export config`: server configuration values (excludes API keys and credentials).
 - `/export personal config`: personal profile settings (privacy, appearance tags, naming).
 - `/export memories`: server memories and persona lorebooks, scoped to the main persona, one persona,
   or all personas, plus Serverwide lore. Channel limits are included.
 - `/export personal memories`: personal memories, scoped globally or per persona.
-- `/persona export`: full persona definitions, including the persona's lorebook.
+- **Export Lorebook** in the `/memories` lorebook panel: one book as SillyTavern world info. Channel
+  limits and collection settings are left out.
+
+`/persona export` is meant for sharing, so it posts the full persona definition, including the
+persona's lorebook, in the channel instead of your DMs.
 
 Uploaded expression media is stored on the server host and is outside these JSON exports.
 Self-hosters must back up database storage and media assets together; see

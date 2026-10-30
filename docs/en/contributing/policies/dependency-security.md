@@ -71,6 +71,11 @@ override floor) or `starlight-llms-txt` drops `micromatch`.
 breaks the `@google-cloud/storage` import (`bun run check-runtime-imports` guards this). The flaw needs
 `v3`, `v5`, or `v6` called with a caller-supplied `buf`; those libraries only call `v4` without one.
 Remove the entry when `gaxios` and `@google-cloud/storage` declare `uuid` 11 or newer.
+- **`GHSA-gcqx-w48m-w2h4`, deepmerge (`bun audit` only, low)**: `deepmerge` 4.3.1 is both the latest and
+affected release, reached only through `matrix-appservice-bridge > @vector-im/matrix-bot-sdk >
+html-to-text`, which merges its own static formatter options. The flaw needs attacker-controlled
+objects passed to `mergeObject()`; none reach it. Remove the entry when `deepmerge` publishes a fix
+(then add an override floor) or `html-to-text` drops it.
 
 ### Optional Irodori server
 

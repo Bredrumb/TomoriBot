@@ -51,7 +51,7 @@ export default {
     added_receipt_detail: `Importou e ativou **{name}** com {nodes} nós ({enabled} ativados).`,
     import_note_comment_only: `{count} nó(s) apenas de comentário aparecem na lista, mas nunca são enviados ao modelo.`,
     import_note_disabled_by_preset: `{count} nó(s) começam desativados neste preset. Use **Alternar Nós** para ativá-los.`,
-    import_note_unsupported_macros: `Há nós ativados que usam macros de preset que o TomoriBot não suporta: {macros}. Essas partes podem ser enviadas literalmente ou se comportar de forma diferente do SillyTavern.`,
+    import_note_unsupported_macros: `Os nós ativados contêm macros não suportadas ou condicionais malformadas: {macros}. Macros não suportadas podem aparecer literalmente; blocos malformados podem ser omitidos. Revise esses nós antes de usar a predefinição.`,
     import_note_more_macros: `+{count} a mais`,
     import_note_legacy_text_completion: `Este preset antigo de text-completions foi convertido da melhor forma possível a partir dos campos legados \`story_string\`. Blocos exclusivos do SillyTavern, como \`persona\`, \`scenario\`, âncoras, stop strings e configurações de backend, são ignorados.`,
     deleted_receipt: `Predefinição excluída`,

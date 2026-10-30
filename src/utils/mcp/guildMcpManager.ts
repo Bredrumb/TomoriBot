@@ -5,12 +5,13 @@
  * MCP servers registered by guild admins. Each connection is keyed by
  * "${serverId}:${name}" and auto-evicted after a configurable idle TTL.
  *
- * Streamable HTTP, SSE, and Smithery Connect share pinned URL validation and response-byte limits.
+ * Streamable HTTP and SSE share pinned URL validation and response-byte limits.
  */
 
 import { Client as MCPClient } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport, StreamableHTTPError } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { SSEClientTransport, SseError } from "@modelcontextprotocol/sdk/client/sse.js";
+import { extractWWWAuthenticateParams } from "@modelcontextprotocol/sdk/client/auth.js";
 import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js";
 import { type CallableTool, mcpToTool } from "@google/genai";
 import { log } from "@/utils/misc/logger";
@@ -32,8 +33,8 @@ import { ToolRegistry } from "@/tools/toolRegistry";
 import { refreshToolExecutionContext } from "@/tools/availability";
 import { configToFeatureFlags } from "@/utils/tools/featureFlagMapper";
 import { validateFetchUrlTarget } from "@/tools/fetchUrl/urlSafety";
-import { createGuildMcpFetch } from "@/utils/mcp/guildMcpFetch";
-import { connectSmithery, isSmitheryUrl } from "@/utils/mcp/smitheryConnection";
+import { createGuildMcpFetch, type GuildMcpFetchAuthorization } from "@/utils/mcp/guildMcpFetch";
+import { createMcpFetchAuthorization, type McpFetchAuthorization } from "@/utils/mcp/oauth/accessToken";
 
 interface GuildMcpRoute {
   config: GuildMcpServerRow;
@@ -199,7 +200,7 @@ class GuildMcpManager {
 
   /** Reads the exact connected registration; a same-name replacement cannot inherit its binding. */
   async getRegisteredTool(config: GuildMcpServerRow, privateFailure = false): Promise<CallableTool | null> {
-    if (!config.is_enabled) return null;
+    if (!config.is_enabled || config.oauth_status === "needs_reauthorization") return null;
     const connection =
       this.pool.get(this.poolKey(config.server_id, config.name)) ?? (await this.connectServer(config, privateFailure));
     return connection && connection.guildMcpId === config.guild_mcp_id
@@ -486,10 +487,25 @@ class GuildMcpManager {
    */
   async testConnection(url: string, authToken?: string): Promise<GuildMCPTestResult> {
     let client: MCPClient | null = null;
+    let unauthorized: GuildMCPTestResult["unauthorized"];
+    const recordChallenge = (response: Response) => {
+      const { resourceMetadataUrl, scope } = extractWWWAuthenticateParams(response);
+      unauthorized ??= {
+        ...(resourceMetadataUrl ? { resourceMetadataUrl: resourceMetadataUrl.href } : {}),
+        ...(scope ? { scope } : {}),
+      };
+    };
     try {
       // Connection testing uses the same guarded transports as runtime discovery.
       // Returns the fresh client from whichever transport succeeded.
-      const discovered = await this.connectAndDiscover("tomoribot-test", url, authToken, "test");
+      const discovered = await this.connectAndDiscover(
+        "tomoribot-test",
+        url,
+        authToken,
+        "test",
+        false,
+        recordChallenge,
+      );
       client = discovered.client;
       const { functionNames } = discovered;
 
@@ -510,6 +526,7 @@ class GuildMcpManager {
         toolCount: 0,
         functionNames: [],
         error: error instanceof Error ? error.message : String(error),
+        ...(unauthorized ? { unauthorized } : {}),
       };
     }
   }
@@ -607,6 +624,8 @@ class GuildMcpManager {
 
     const existing = this.pool.get(key);
     if (existing) return existing;
+    // An expired grant needs a human rather than a disable, so it never enters the failure streak.
+    if (config.oauth_status === "needs_reauthorization") return null;
 
     // Circuit breaker: skip servers that recently failed to connect until their
     // cooldown elapses. Without this, one unreachable server re-pays the full
@@ -622,13 +641,17 @@ class GuildMcpManager {
 
     this.connectingKeys.add(key);
 
+    let authorization: McpFetchAuthorization | undefined;
     try {
-      const authToken = await toolRepository.decryptMcpAuthToken(config, privateFailure);
+      if (config.oauth_status) {
+        authorization = await createMcpFetchAuthorization(config.guild_mcp_id ?? 0, config.server_id);
+      }
+      const credential = authorization ?? (await toolRepository.decryptMcpAuthToken(config, privateFailure));
 
       const { client, functionNames } = await this.connectAndDiscover(
         `tomoribot-guild-${config.server_id}-${config.name}`,
         config.url,
-        authToken ?? undefined,
+        credential ?? undefined,
         config.name,
         privateFailure,
       );
@@ -700,6 +723,12 @@ class GuildMcpManager {
 
       return conn;
     } catch (error) {
+      if (authorization?.reauthorizationRequired) {
+        log.info(
+          `[GuildMcpManager] Guild MCP server "${config.name}" (server: ${config.server_id}) needs sign-in again`,
+        );
+        return null;
+      }
       await this.recordConnectFailure(config, key, error, privateFailure);
       return null;
     } finally {
@@ -753,14 +782,19 @@ class GuildMcpManager {
   private async connectAndDiscover(
     clientName: string,
     url: string,
-    authToken?: string,
+    credential?: string | GuildMcpFetchAuthorization,
     serverLabel?: string,
     privateFailure = false,
+    onUnauthorized?: (response: Response) => void,
   ): Promise<{ client: MCPClient; functionNames: string[] }> {
-    if (isSmitheryUrl(url) && authToken) {
-      return await connectSmithery(clientName, url, authToken, AbortSignal.timeout(CONNECT_TIMEOUT_MS));
-    }
-    const client = await this.connectWithFallback(clientName, url, authToken, serverLabel, privateFailure);
+    const client = await this.connectWithFallback(
+      clientName,
+      url,
+      credential,
+      serverLabel,
+      privateFailure,
+      onUnauthorized,
+    );
     try {
       const toolResult = await client.listTools();
       return { client, functionNames: toolResult.tools.map((tool) => tool.name) };
@@ -772,20 +806,17 @@ class GuildMcpManager {
 
   /**
    * SSE-only servers reject the Streamable HTTP handshake, so both attempts need
-   * fresh clients and the same guarded fetcher. A Smithery account key must never
-   * become a bearer token for the upstream server, even after a Smithery failure.
+   * fresh clients and the same guarded fetcher.
    */
   private async connectWithFallback(
     clientName: string,
     url: string,
-    authToken?: string,
+    credential?: string | GuildMcpFetchAuthorization,
     serverLabel?: string,
     privateFailure = false,
+    onUnauthorized?: (response: Response) => void,
   ): Promise<MCPClient> {
     const label = serverLabel ?? url;
-    if (isSmitheryUrl(url) && authToken) {
-      throw new Error("Smithery account keys are sent only to Smithery Connect");
-    }
     const urlValidation = await validateRemoteUrl(url);
     if (!urlValidation.valid) {
       throw new Error(urlValidation.details ?? `Guild MCP URL failed runtime validation for '${label}'.`);
@@ -797,11 +828,15 @@ class GuildMcpManager {
     const errors: string[] = [];
     let authRejected = false;
 
-    const guardedFetch = createGuildMcpFetch(url);
+    const guardedFetch = createGuildMcpFetch(
+      url,
+      onUnauthorized,
+      typeof credential === "object" ? credential : undefined,
+    );
 
     const headers: Record<string, string> = {};
-    if (authToken) {
-      headers.Authorization = `Bearer ${authToken}`;
+    if (typeof credential === "string" && credential) {
+      headers.Authorization = `Bearer ${credential}`;
     }
 
     const parsedUrl = new URL(url);

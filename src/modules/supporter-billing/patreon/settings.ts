@@ -70,6 +70,9 @@ export function getPatreonWebhookSecret(config: SupporterBillingConfig, env: Env
   return webhookSecret;
 }
 
-export function buildPatreonOAuthCallbackUrl(env?: EnvRecord): string {
-  return new URL(OAUTH_CALLBACK_PATH, getOAuthPublicBaseUrl(env)).toString();
+export function buildPatreonOAuthCallbackUrl(env: EnvRecord = process.env): string {
+  // Coalesce because an undefined argument triggers the default parameter, which reads process.env instead of `env`.
+  const baseUrl = getOAuthPublicBaseUrl(env.TOMORI_PUBLIC_BASE_URL ?? "");
+  if (!baseUrl) throw new Error("TOMORI_PUBLIC_BASE_URL is required for Patreon sign-in");
+  return new URL(OAUTH_CALLBACK_PATH, baseUrl).toString();
 }

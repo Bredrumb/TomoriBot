@@ -4,11 +4,12 @@ export type OAuthFetch = (input: RequestInfo | URL, init?: RequestInit) => Promi
 
 const MAX_RESPONSE_BYTES = 128 * 1024;
 
-export async function fetchOAuthJson(
+/** Reads a bounded UTF-8 body under one deadline; `body` is null when the response has none. */
+export async function fetchOAuthText(
   endpoint: string,
   init: RequestInit,
   options: { allowedOrigins: readonly string[]; timeoutMs?: number; fetchImpl?: OAuthFetch },
-): Promise<{ response: Response; data: unknown }> {
+): Promise<{ response: Response; body: string | null }> {
   const url = new URL(endpoint);
   if (url.protocol !== "https:" || url.username || url.password || !options.allowedOrigins.includes(url.origin)) {
     throw new Error("OAuth endpoint is outside the approved origins.");
@@ -32,7 +33,7 @@ export async function fetchOAuthJson(
     aborted,
   ]);
   const reader = response.body?.getReader();
-  if (!reader) return { response, data: null };
+  if (!reader) return { response, body: null };
   let bytes = 0;
   let body = "";
   const decoder = new TextDecoder("utf-8", { fatal: true });
@@ -46,12 +47,22 @@ export async function fetchOAuthJson(
       body += decoder.decode(value, { stream: true });
     }
     body += decoder.decode();
-    try {
-      return { response, data: JSON.parse(body) };
-    } catch {
-      return { response, data: null };
-    }
+    return { response, body };
   } finally {
     void reader.cancel().catch(() => {});
+  }
+}
+
+export async function fetchOAuthJson(
+  endpoint: string,
+  init: RequestInit,
+  options: { allowedOrigins: readonly string[]; timeoutMs?: number; fetchImpl?: OAuthFetch },
+): Promise<{ response: Response; data: unknown }> {
+  const { response, body } = await fetchOAuthText(endpoint, init, options);
+  if (body === null) return { response, data: null };
+  try {
+    return { response, data: JSON.parse(body) };
+  } catch {
+    return { response, data: null };
   }
 }

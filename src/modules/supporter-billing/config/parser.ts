@@ -153,7 +153,9 @@ export function parseSupporterBillingConfigJson(
   }
 
   if (options.validateReferencedSecrets) {
-    getOAuthPublicBaseUrl(options.env);
+    if (!getOAuthPublicBaseUrl((options.env ?? process.env).TOMORI_PUBLIC_BASE_URL ?? "")) {
+      throw new SupporterBillingConfigError("TOMORI_PUBLIC_BASE_URL is required for supporter billing");
+    }
     validateReferencedSecretValues(schemaResult.data, options.env ?? process.env);
   }
 

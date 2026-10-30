@@ -12,10 +12,12 @@ import { createSignedOAuthState, validateSignedOAuthState } from "@/utils/oauth/
 import { getOAuthPublicBaseUrl } from "@/utils/oauth/settings";
 import { OAuthTokenError, requestOAuthToken } from "@/utils/oauth/tokenEndpoint";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { useEnvSandbox } from "../../helpers/env";
 import { localizedCopy } from "../../helpers/localeCases";
 
 beforeAll(initializeLocalizer);
 afterEach(clearOAuthCallbackFlowsForTests);
+useEnvSandbox(["TOMORI_PUBLIC_BASE_URL"]);
 
 const token = { access_token: "access-one", refresh_token: "refresh-two", token_type: "Bearer", expires_in: 3600 };
 const requestOptions = {
@@ -162,16 +164,24 @@ describe("shared OAuth boundaries", () => {
     }
   });
 
-  it("accepts only HTTPS public origins", () => {
-    expect(getOAuthPublicBaseUrl({})).toBe("https://api.tomoribot.app");
-    expect(getOAuthPublicBaseUrl({ TOMORI_PUBLIC_BASE_URL: "https://bot.example/" })).toBe("https://bot.example");
+  it("accepts only HTTPS public origins or loopback HTTP origins with a port", () => {
+    delete process.env.TOMORI_PUBLIC_BASE_URL;
+    expect(getOAuthPublicBaseUrl()).toBeUndefined();
+    expect(getOAuthPublicBaseUrl(" ")).toBeUndefined();
+    expect(getOAuthPublicBaseUrl("https://bot.example/")).toBe("https://bot.example");
+    expect(getOAuthPublicBaseUrl("http://127.0.0.1:8080")).toBe("http://127.0.0.1:8080");
+    expect(getOAuthPublicBaseUrl("http://localhost:3000/")).toBe("http://localhost:3000");
     for (const url of [
       "http://bot.example",
+      "http://bot.example:8080",
+      "http://localhost",
+      "http://localhost:3000/path",
       "https://user:pass@bot.example",
       "https://bot.example/path",
       "https://bot.example/?q=1",
+      "not a url",
     ]) {
-      expect(() => getOAuthPublicBaseUrl({ TOMORI_PUBLIC_BASE_URL: url })).toThrow();
+      expect(() => getOAuthPublicBaseUrl(url)).toThrow();
     }
   });
 
@@ -203,6 +213,15 @@ describe("shared OAuth boundaries", () => {
     });
     expect(result.expires_in).toBe(expiresIn);
     expect(result.refresh_token).toBe(token.refresh_token);
+  });
+
+  it("accepts a token without expires_in only for a caller that opts in", async () => {
+    const { expires_in: _omitted, ...withoutLifetime } = token;
+    const fetchImpl = async () => Response.json(withoutLifetime);
+    await expect(requestOAuthToken({ ...requestOptions, fetchImpl })).rejects.toBeInstanceOf(OAuthTokenError);
+    const result = await requestOAuthToken({ ...requestOptions, fetchImpl, optionalExpiresIn: true });
+    expect(result.expires_in).toBeUndefined();
+    expect(result.access_token).toBe(token.access_token);
   });
 
   it("validates token shape, refuses redirects, and never includes upstream secrets in failures", async () => {

@@ -8,6 +8,7 @@ export type McpsPanelRouteInput =
   | { action: "add-open"; locale: string }
   | { action: "add-submit"; locale: string; nonce: string }
   | { action: "set-enabled"; locale: string; entityId: number; enabled: boolean }
+  | { action: "reconnect"; locale: string; entityId: number }
   | { action: "remove-prompt" | "remove-cancel" | "remove-confirm"; locale: string; entityId: number };
 
 export interface McpsPanelRouteAdapter {

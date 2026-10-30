@@ -19,6 +19,8 @@ import { automaticChannelWindowStart } from "@/modules/natural-nudges/runtime/me
 import { HANGING_MAX_AGE_MS, HANGING_MIN_HUMAN_MESSAGES } from "@/modules/natural-nudges/runtime/tuning";
 
 const TRANSCRIPT_MESSAGE_MAX_CHARS = 300;
+const PLANNER_TRANSCRIPT_MAX_CHARS = 1_500;
+const PLANNER_TRANSCRIPT_MIN_FRAGMENT_CHARS = 50;
 
 export interface NudgeChannel {
   channel: GuildTextBasedChannel;
@@ -119,6 +121,24 @@ export function escapeDataText(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+export function clipAtBoundary(text: string, limit: number): string {
+  if (text.length <= limit) return text;
+  if (limit <= 0) return "";
+  let end = Math.floor(limit);
+  const last = text.charCodeAt(end - 1);
+  if (last >= 0xd800 && last <= 0xdbff) end--;
+  const prefix = text.slice(0, end);
+  let sentenceEnd = 0;
+  for (const match of text.matchAll(/[.!?](?= )|[。！？]|\n/g)) {
+    const boundary = match.index + match[0].length;
+    if (boundary > end) break;
+    if (boundary > limit / 2) sentenceEnd = boundary;
+  }
+  if (sentenceEnd > 0) return prefix.slice(0, sentenceEnd).trimEnd();
+  const space = prefix.lastIndexOf(" ");
+  return (space > limit / 2 ? prefix.slice(0, space) : prefix).trimEnd();
+}
+
 function relativeAge(createdTimestamp: number, now: Date): string {
   const minutes = Math.max(0, Math.round((now.getTime() - createdTimestamp) / 60_000));
   if (minutes < 60) return `${minutes}m ago`;
@@ -157,9 +177,34 @@ export async function buildPlannerTranscript(
   guildId: string,
   now: Date,
 ): Promise<string> {
-  return (await readableEntries(messages, guildId))
-    .map((entry) => `[${relativeAge(entry.message.createdTimestamp, now)}] ${entry.author}: ${entry.text}`)
-    .join("\n");
+  const entries = await readableEntries(messages, guildId);
+  const lines: string[] = [];
+  let remaining = PLANNER_TRANSCRIPT_MAX_CHARS;
+  for (const entry of entries.toReversed()) {
+    const prefix = `[${relativeAge(entry.message.createdTimestamp, now)}] ${escapeDataText(entry.author)}: `;
+    const available = remaining - prefix.length - (lines.length > 0 ? 1 : 0);
+    let text = escapeDataText(entry.text);
+    const partial = text.length > available;
+    if (partial) {
+      if (available < PLANNER_TRANSCRIPT_MIN_FRAGMENT_CHARS) break;
+      let rawLimit = 0;
+      let escapedLength = 0;
+      // Budget raw code points by their escaped length so clipping cannot split an entity.
+      for (const character of entry.text) {
+        escapedLength += escapeDataText(character).length;
+        if (escapedLength > available) break;
+        rawLimit += character.length;
+      }
+      const fragment = clipAtBoundary(entry.text, rawLimit);
+      if (fragment.length < PLANNER_TRANSCRIPT_MIN_FRAGMENT_CHARS) break;
+      text = escapeDataText(fragment);
+    }
+    const line = `${prefix}${text}`;
+    remaining -= line.length + (lines.length > 0 ? 1 : 0);
+    lines.push(line);
+    if (partial) break;
+  }
+  return lines.reverse().join("\n");
 }
 
 /** `Name: text` lines, the shape the Active Nudge matcher was evaluated on. */

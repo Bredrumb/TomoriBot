@@ -26,6 +26,9 @@ export const IDLE_NUDGE_HEAT_DIVISORS: Record<IdleNudgeFrequencyLevel, number> =
 /** Daily idle nudge ceilings are shared across all personas and channels in a server. */
 export const IDLE_NUDGE_DAILY_CAPS: Record<IdleNudgeFrequencyLevel, number> = { 0: 1, 1: 2, 2: 3, 3: 6 };
 
+/** Three planner requests per allowed idle nudge cover a plan, its format retry, and one decline. */
+export const IDLE_NUDGE_DAILY_PLANNER_CAPS: Record<IdleNudgeFrequencyLevel, number> = { 0: 3, 1: 6, 2: 9, 3: 18 };
+
 /**
  * Automatic channel eligibility follows heat's horizon: 14 quiet days decay a server's heat to about
  * 4%, so a channel with no turn in that span could not be what keeps the server nudging. A Ping User nudge
@@ -79,6 +82,7 @@ export const TALKATIVENESS_TICKETS = [0, 5, 10, 15, 20] as const;
 
 /** Messages per channel read for hanging detection and handed to the planner. */
 export const PLANNER_HISTORY_MESSAGES = 15;
+export const PLANNER_RECENT_TOPICS = 5;
 /** Lull channels read for hanging detection; the planner then sees at most three of them. */
 export const MAX_SCANNED_CHANNELS = 6;
 export const MAX_PLANNER_CHANNELS = 3;
@@ -155,6 +159,14 @@ export const ACTIVE_NUDGE_UNDERDOG_MAX_BOOST = 4;
 
 /** A Play Scene draws one partner, and a second this often when one is available. */
 export const PLAY_SCENE_SECOND_PARTNER_CHANCE = 0.3;
-/** Scene length, opener included: long enough for an exchange, short enough to stay a moment. */
-export const PLAY_SCENE_MIN_TURNS = 2;
-export const PLAY_SCENE_MAX_TURNS = 4;
+export interface SceneTurnRange {
+  min: number;
+  max: number;
+}
+/** Scene length in turns, opener included, for the quick exchange most scenes are. */
+export const PLAY_SCENE_SHORT_TURNS: SceneTurnRange = { min: 2, max: 4 };
+/** A long scene is a real back-and-forth of one-line turns, and costs a persona generation each. */
+export const PLAY_SCENE_LONG_TURNS: SceneTurnRange = { min: 5, max: 8 };
+export const PLAY_SCENE_LONG_CHANCE = 0.2;
+/** Mention replies an unscripted nudge opener may start, independent of scene length because a scene is scripted up front and a mention chain is open-ended. */
+export const NUDGE_MENTION_CASCADE_LIMIT = 3;

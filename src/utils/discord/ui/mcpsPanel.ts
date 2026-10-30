@@ -47,7 +47,43 @@ function renderMcpName(locale: string, value: string): string {
 
 export type McpsPanelPage =
   | { kind: "collection"; selectedId?: number; rangeIndex?: number; removedIndex?: number }
-  | { kind: "remove"; entityId: number };
+  | { kind: "remove"; entityId: number }
+  | { kind: "sign-in"; signInUrl: string; host: string };
+
+function buildSignInPage(
+  locale: string,
+  page: Extract<McpsPanelPage, { kind: "sign-in" }>,
+  routes: McpsPanelRouteAdapter,
+): ComponentInContainerData[] {
+  return [
+    {
+      type: ComponentType.TextDisplay,
+      content: `### ${localizer(locale, "commands.mcps.sign_in_title")}\n${localizer(
+        locale,
+        "commands.mcps.sign_in_description",
+        { host: escapeDiscordMarkdown(page.host) },
+      )}`,
+    },
+    {
+      type: ComponentType.ActionRow,
+      components: [
+        {
+          type: ComponentType.Button,
+          style: ButtonStyle.Link,
+          url: page.signInUrl,
+          emoji: { name: "🔑" },
+          label: localizer(locale, "commands.mcps.sign_in_button"),
+        },
+        {
+          type: ComponentType.Button,
+          style: ButtonStyle.Secondary,
+          customId: routes.buildRouteId({ action: "retry", locale, selectedId: "none" }),
+          label: localizer(locale, "commands.mcps.back"),
+        },
+      ],
+    },
+  ];
+}
 
 export interface McpsPanelRenderInput {
   locale: string;
@@ -194,6 +230,11 @@ export function buildMcpsPanelComponents(input: McpsPanelRenderInput): Component
     })}${input.readStatus === "stale" ? `\n-# ${localizer(input.locale, "commands.mcps.stale_warning")}` : ""}`,
   });
 
+  if (input.page.kind === "sign-in") {
+    components.push(...buildSignInPage(input.locale, input.page, routes));
+    return components;
+  }
+
   if (configs.length === 0) {
     components.push(...buildEmptyState(input.locale, input.scope, configs, writesDisabled, routes));
     return components;
@@ -261,6 +302,40 @@ export function buildMcpsPanelComponents(input: McpsPanelRenderInput): Component
           ? localizer(input.locale, "commands.mcps.tools_known", { tools: formattedToolNames })
           : localizer(input.locale, "commands.mcps.tools_empty");
     const healthLine = connectionHealthLine(input.locale, row);
+    const signInLine = row.oauth_status
+      ? localizer(
+          input.locale,
+          row.oauth_status === "needs_reauthorization"
+            ? "commands.mcps.oauth_reauthorization_needed"
+            : "commands.mcps.oauth_signed_in",
+        )
+      : null;
+    const statusLines = [signInLine, healthLine].filter((line) => line !== null);
+    // A paused sign-in swaps its toggle for Reconnect, because a full stale page already sits near Discord's 40-component cap.
+    const stateButton: ButtonComponentData =
+      row.oauth_status === "needs_reauthorization"
+        ? {
+            type: ComponentType.Button,
+            style: ButtonStyle.Secondary,
+            customId: routes.buildRouteId({ action: "reconnect", locale: input.locale, entityId: rowId(row) }),
+            label: localizer(input.locale, "commands.mcps.reconnect"),
+            disabled: writesDisabled,
+          }
+        : {
+            type: ComponentType.Button,
+            style: ButtonStyle.Secondary,
+            customId: routes.buildRouteId({
+              action: "set-enabled",
+              locale: input.locale,
+              entityId: rowId(row),
+              enabled: !row.is_enabled,
+            }),
+            label: safeSelectOptionText(
+              localizer(input.locale, row.is_enabled ? "commands.mcps.disable" : "commands.mcps.enable"),
+              DISCORD_BUTTON_LABEL_MAX,
+            ),
+            disabled: writesDisabled,
+          };
     components.push(
       {
         type: ComponentType.TextDisplay,
@@ -271,7 +346,7 @@ export function buildMcpsPanelComponents(input: McpsPanelRenderInput): Component
             status: localizer(input.locale, row.is_enabled ? "commands.mcps.enabled" : "commands.mcps.disabled"),
             type: localizer(input.locale, typeLabelKey(row.server_type)),
           },
-        )}\n> ${toolSnapshot}${healthLine ? `\n> ${healthLine}` : ""}${
+        )}\n> ${toolSnapshot}${statusLines.map((line) => `\n> ${line}`).join("")}${
           namePreview.truncated || endpointPreview.truncated
             ? `\n-# ${localizer(
                 input.locale,
@@ -286,21 +361,7 @@ export function buildMcpsPanelComponents(input: McpsPanelRenderInput): Component
       {
         type: ComponentType.ActionRow,
         components: [
-          {
-            type: ComponentType.Button,
-            style: ButtonStyle.Secondary,
-            customId: routes.buildRouteId({
-              action: "set-enabled",
-              locale: input.locale,
-              entityId: rowId(row),
-              enabled: !row.is_enabled,
-            }),
-            label: safeSelectOptionText(
-              localizer(input.locale, row.is_enabled ? "commands.mcps.disable" : "commands.mcps.enable"),
-              DISCORD_BUTTON_LABEL_MAX,
-            ),
-            disabled: writesDisabled,
-          },
+          stateButton,
           {
             type: ComponentType.Button,
             style: ButtonStyle.Danger,
