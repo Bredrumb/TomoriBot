@@ -51,7 +51,8 @@ You can now connect to MCPs through OAuth browser flows provided by your chosen 
 - TomoriBot can now delete within-server reminders/tasks of other people when she is asked by a server manager to do so
 - Idle Nudges, random triggers, and reminders now no longer attribute stats to fake user rows, instead it attributes it to itself
 - `/tool prompt snapshot` is now an ephemeral reply that attaches its file inside the embed instead of a DM
-- Asking TomoriBot to set a reminder/task monthly now prevents drift (instead of setting it to recur a flat 30.44 days everytime, you can now). Issue #115
+- Asking TomoriBot to set a reminder/task monthly now prevents drift (instead of setting it to recur a flat 30.44 days everytime, you can now). See Issue #115
+- Fixed a bug where TomoriBot can save invalid reminder dates, such as February 31 which were silently moved into the following month. See Issue #114.
 - You can now set month intervals through `/scheduled-task edit` more reliably
 - Fixed bug wherein Idle Nudge planner doesn't take into account channels and channel descriptions
 - Fixed bug wherein Blacklist cache check errors show a user-facing error saying you are blacklisted
