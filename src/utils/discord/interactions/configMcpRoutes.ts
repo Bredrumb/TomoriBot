@@ -19,7 +19,9 @@ import {
 import type { GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
 import { buildAddMcpModal, buildMcpsAddModalFieldId, type McpsPanelPage } from "@/utils/discord/ui/mcpsPanel";
 import { buildConfigPanelPayload } from "@/utils/discord/ui/configPanel";
+import type { AddMcpResult } from "@/utils/mcp/mcpConfigOperations";
 import { formatMcpToolNamesForDiscord } from "@/utils/mcp/mcpToolSnapshot";
+import type { McpSignInOutcome } from "@/utils/mcp/oauth/signIn";
 import { localizer } from "@/utils/text/localizer";
 
 const MCP_ACTIONS = new Set<ConfigPanelRoute["action"]>([
@@ -72,6 +74,7 @@ function addFailureReceipt(locale: string, status: string, detail?: string): Pan
     unavailable: "commands.mcps.read_unavailable",
     "limit-reached": "commands.mcps.limit_reached",
     "connection-failed": "commands.mcps.connection_failed",
+    "sign-in-required": "commands.mcps.sign_in_unavailable",
     "duplicate-or-write-failed": "commands.mcps.write_failed",
   };
   return {
@@ -79,6 +82,32 @@ function addFailureReceipt(locale: string, status: string, detail?: string): Pan
     heading: localizer(locale, "commands.mcps.add_failed"),
     detail: detail ?? localizer(locale, keyByStatus[status] ?? "commands.mcps.write_failed"),
   };
+}
+
+function addedReceipt(locale: string, result: Extract<AddMcpResult, { status: "success" }>): PanelReceipt {
+  const toolNames = formatMcpToolNamesForDiscord(result.test.functionNames);
+  return receipt(locale, "commands.mcps.added", {
+    detail: localizer(locale, toolNames ? "commands.mcps.added_detail_with_tools" : "commands.mcps.added_detail", {
+      name: result.row.name,
+      count: result.test.toolCount,
+      tools: toolNames ?? "",
+    }),
+  });
+}
+
+const SIGN_IN_FAILURE_KEYS: Record<Exclude<McpSignInOutcome["status"], "completed">, string> = {
+  declined: "commands.mcps.sign_in_declined",
+  cancelled: "commands.mcps.sign_in_cancelled",
+  failed: "commands.mcps.sign_in_failed",
+};
+
+function signInOutcomeReceipt(locale: string, outcome: McpSignInOutcome): PanelReceipt {
+  if (outcome.status !== "completed") {
+    return addFailureReceipt(locale, outcome.status, localizer(locale, SIGN_IN_FAILURE_KEYS[outcome.status]));
+  }
+  const { result } = outcome;
+  if (result.status === "success") return addedReceipt(locale, result);
+  return addFailureReceipt(locale, result.status, result.status === "connection-failed" ? result.error : undefined);
 }
 
 function changedStateReceipt(locale: string): PanelReceipt {
@@ -139,6 +168,34 @@ async function repaintMcp(
     mcpPage: page,
     dependencies,
   });
+}
+
+async function reportMcpSignIn(
+  interaction: GlobalRoutableInteraction,
+  route: ConfigPanelRoute & { locale: string },
+  scope: ConfigScope,
+  dependencies: ConfigRouteDependencies,
+  outcome: McpSignInOutcome,
+): Promise<void> {
+  const refreshed = (await dependencies.resolveScope(interaction, true)) ?? scope;
+  const read = await loadMcpRead(refreshed, dependencies, true);
+  const added = outcome.status === "completed" && outcome.result.status === "success" ? outcome.result : null;
+  if (added) {
+    dependencies.recordAction({
+      action: "mcps.workspace.server.add",
+      serverId: refreshed.personas[0]?.server_id ?? 0,
+      userDiscId: interaction.user?.id ?? "",
+    });
+  }
+  await repaintMcp(
+    interaction,
+    route,
+    refreshed,
+    dependencies,
+    { kind: "collection", selectedId: added?.row.guild_mcp_id },
+    signInOutcomeReceipt(route.locale, outcome),
+    read,
+  );
 }
 
 export async function handleConfigMcpModalOpen(
@@ -233,6 +290,7 @@ export async function handleConfigMcpRoutes(
           url: modal.fields.getTextInputValue(fieldId("url")),
           authToken: modal.fields.getTextInputValue(fieldId("auth-token")),
           serverType,
+          allowSignIn: scope.guildId !== null,
         }),
       () => dependencies.resolveScope(interaction, true),
     );
@@ -244,20 +302,34 @@ export async function handleConfigMcpRoutes(
         serverId: refreshed.personas[0]?.server_id ?? 0,
         userDiscId: interaction.user?.id ?? "",
       });
-      const toolNames = formatMcpToolNamesForDiscord(action.result.test.functionNames);
       await repaintMcp(
         interaction,
         route,
         refreshed,
         dependencies,
         { kind: "collection", selectedId: action.result.row.guild_mcp_id },
-        receipt(route.locale, "commands.mcps.added", {
-          detail: localizer(
-            route.locale,
-            toolNames ? "commands.mcps.added_detail_with_tools" : "commands.mcps.added_detail",
-            { name: action.result.row.name, count: action.result.test.toolCount, tools: toolNames ?? "" },
-          ),
-        }),
+        addedReceipt(route.locale, action.result),
+        read,
+      );
+      return true;
+    }
+    if (action.result.status === "sign-in-required") {
+      const started = await dependencies.startMcpSignIn({
+        draft: { ...action.result.draft, guildName: interaction.guild?.name ?? scope.serverDiscId },
+        challenge: action.result.challenge,
+        locale: route.locale,
+        // This modal submit's token lasts 15 minutes, so it can still edit the panel when the 10-minute sign-in ends.
+        report: (outcome) => reportMcpSignIn(interaction, route, refreshed, dependencies, outcome),
+      });
+      await repaintMcp(
+        interaction,
+        route,
+        refreshed,
+        dependencies,
+        started.status === "started"
+          ? { kind: "sign-in", authorizationUrl: started.authorizationUrl, host: started.host }
+          : { kind: "collection" },
+        started.status === "started" ? undefined : addFailureReceipt(route.locale, action.result.status),
         read,
       );
       return true;

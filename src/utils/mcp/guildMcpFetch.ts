@@ -3,8 +3,15 @@ import { ResponseSizeError } from "@/utils/security/boundedResponse";
 
 const MAX_MCP_RESPONSE_BYTES = 8 * 1024 * 1024;
 
-/** The SDK parses JSON and SSE after this byte counter, including discovery and internal checks. */
-export function createGuildMcpFetch(endpoint: string): typeof fetchUserRemoteUrl {
+/**
+ * The SDK parses JSON and SSE after this byte counter, including discovery and internal checks.
+ *
+ * @param onUnauthorized - Sees each 401 before the SDK turns it into an error that drops its headers
+ */
+export function createGuildMcpFetch(
+  endpoint: string,
+  onUnauthorized?: (response: Response) => void,
+): typeof fetchUserRemoteUrl {
   const origin = new URL(endpoint).origin;
   return async (input, init) => {
     const url = new URL(input instanceof Request ? input.url : input.toString());
@@ -12,6 +19,7 @@ export function createGuildMcpFetch(endpoint: string): typeof fetchUserRemoteUrl
       throw new Error("MCP transport requests must stay on the registered origin without URL credentials");
     }
     const response = await fetchUserRemoteUrl(input, { ...init, redirect: "error" });
+    if (response.status === 401) onUnauthorized?.(response);
     const declared = Number(response.headers.get("content-length"));
     if (declared > MAX_MCP_RESPONSE_BYTES) {
       await response.body?.cancel();

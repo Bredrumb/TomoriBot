@@ -9,6 +9,12 @@ export const ENCRYPTED_COLUMNS = [
   { table: "api_key_rotation", id: "rotation_key_id", column: "api_key" },
   { table: "opt_api_keys", id: "opt_api_key_id", column: "api_key" },
   { table: "guild_mcp_servers", id: "guild_mcp_id", column: "auth_token" },
+  ...(["access_token", "refresh_token"] as const).map((column) => ({
+    table: "guild_mcp_oauth" as const,
+    id: "guild_mcp_id" as const,
+    column,
+    keyVersion: `${column}_key_version`,
+  })),
   { table: "discord_managed_webhooks", id: "managed_webhook_id", column: "webhook_token" },
   { table: "server_model_configs", id: "server_id", column: "api_key" },
   ...(["client_secret", "refresh_token", "access_token"] as const).map((column) => ({

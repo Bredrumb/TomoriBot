@@ -244,6 +244,37 @@ describe("guild MCP connect failures", () => {
       validation.mockRestore();
     }
   });
+
+  it("returns the 401 challenge that sign-in discovery starts from", async () => {
+    const validation = spyOn(remotePolicy, "validateRemoteUrl").mockResolvedValue({
+      valid: true,
+      hostname: "mcp.example.org",
+      resolvedAddresses: ["203.0.113.10"],
+    });
+    const info = spyOn(log, "info").mockImplementation(async () => {});
+    const fetchSpy = stubGlobalFetch(
+      () =>
+        new Response(null, {
+          status: 401,
+          headers: {
+            "WWW-Authenticate":
+              'Bearer realm="OAuth", resource_metadata="https://mcp.example.org/.well-known/oauth-protected-resource/mcp", scope="read write"',
+          },
+        }),
+    );
+    try {
+      const result = await getGuildMcpManager().testConnection("https://mcp.example.org/mcp");
+      expect(result.success).toBe(false);
+      expect(result.unauthorized).toEqual({
+        resourceMetadataUrl: "https://mcp.example.org/.well-known/oauth-protected-resource/mcp",
+        scope: "read write",
+      });
+    } finally {
+      fetchSpy.mockRestore();
+      info.mockRestore();
+      validation.mockRestore();
+    }
+  });
 });
 
 function config(id: number, name: string): GuildMcpServerRow {

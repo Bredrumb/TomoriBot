@@ -212,6 +212,15 @@ describe("shared OAuth boundaries", () => {
     expect(result.refresh_token).toBe(token.refresh_token);
   });
 
+  it("accepts a token without expires_in only for a caller that opts in", async () => {
+    const { expires_in: _omitted, ...withoutLifetime } = token;
+    const fetchImpl = async () => Response.json(withoutLifetime);
+    await expect(requestOAuthToken({ ...requestOptions, fetchImpl })).rejects.toBeInstanceOf(OAuthTokenError);
+    const result = await requestOAuthToken({ ...requestOptions, fetchImpl, optionalExpiresIn: true });
+    expect(result.expires_in).toBeUndefined();
+    expect(result.access_token).toBe(token.access_token);
+  });
+
   it("validates token shape, refuses redirects, and never includes upstream secrets in failures", async () => {
     for (const body of [
       { access_token: "secret" },

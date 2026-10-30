@@ -28,10 +28,12 @@ set, because that variable means the instance receives OAuth callbacks. Containe
 configuration belongs to the deployment guides; gateway login errors are reported in process logs.
 Optional modules can call `registerHealthServerRoute()` during startup to register a method and path
 on the same server. Without `TOMORI_PUBLIC_BASE_URL` the base installation has no extra routes; with
-it, `GET /oauth/callback` is registered. If the port cannot be bound while routes are registered, a
+it, `GET /oauth/callback` and `POST /oauth/mcp/confirm` are registered, plus `GET /oauth/client.json`
+unless the base URL is a loopback origin. If the port cannot be bound while routes are registered, a
 warning lists them. Built-in health probes take precedence,
-and registered handlers receive the parsed request URL. Invalid URLs return 400, and failed handlers
-return 500 or close the response if headers have already been sent.
+and registered handlers receive the parsed request URL. Every registered route answers with
+`Content-Security-Policy: frame-ancestors 'none'`, so a sign-in page cannot be framed. Invalid URLs
+return 400, and failed handlers return 500 or close the response if headers have already been sent.
 
 ## Startup sequence
 
@@ -41,8 +43,8 @@ return 500 or close the response if headers have already been sent.
    (default 8080). It serves `503 Service Unavailable` until the Discord gateway reports ready.
 3. **Secret loading**: Calls `loadSecrets(environment)` to decrypt application credentials and populate
    `process.env`. Initializes `keyManager` for runtime PGP symmetric operations. Then, when
-   `TOMORI_PUBLIC_BASE_URL` is set, registers the OAuth callback route and, outside production, binds
-   the health server. A loopback base URL whose port differs from `$PORT` logs a warning.
+   `TOMORI_PUBLIC_BASE_URL` is set, registers the OAuth callback and MCP sign-in routes and, outside
+   production, binds the health server. A loopback base URL whose port differs from `$PORT` logs a warning.
 4. **Automatic backup gate**: In non-production environments, runs `initStartupBackup(environment)`.
    Creates a backup archive when the existing archive originates from another version or is older
    than `TOMORI_AUTO_BACKUP_INTERVAL_HOURS` (default 24). Automatic bundles are capped at

@@ -29,6 +29,7 @@ function dependencies(overrides: Partial<McpConfigOperationDependencies> = {}): 
     validateUrl: async () => ({ valid: true }),
     testConnection: async () => ({ success: true, toolCount: 0, functionNames: [] }),
     insert: async (serverId, name, url) => ({ ...existingRow(2), server_id: serverId, name, url }),
+    signInAvailable: () => false,
     updateEnabled: async () => true,
     remove: async () => true,
     disconnect: async () => {},
@@ -363,6 +364,90 @@ describe("canonical MCP config operations", () => {
     ).toBe("success");
     // Enabling only lifts the connect quarantine; it never dials, so the server still connects on demand.
     expect(calls).toEqual(["read-11", "read-10", "read-10", "write", "disconnect"]);
+  });
+
+  it("asks for sign-in only after a 401 to a blank token in a guild with sign-in configured", async () => {
+    const unauthorized = { resourceMetadataUrl: "https://mcp.example/.well-known/oauth-protected-resource/mcp" };
+    const rejected = async () => ({ success: false, toolCount: 0, functionNames: [], error: "HTTP 401", unauthorized });
+    const input = {
+      serverId: 10,
+      serverDiscId: "100",
+      name: "issues",
+      url: "https://mcp.example/mcp",
+      allowSignIn: true,
+    };
+    const configured = new McpConfigOperations(dependencies({ testConnection: rejected, signInAvailable: () => true }));
+    expect(await configured.add(input)).toEqual({
+      status: "sign-in-required",
+      draft: {
+        serverId: 10,
+        serverDiscId: "100",
+        name: "issues",
+        url: "https://mcp.example/mcp",
+        serverType: "general",
+      },
+      challenge: unauthorized,
+    });
+    const unconfigured = new McpConfigOperations(dependencies({ testConnection: rejected }));
+    const offline = new McpConfigOperations(
+      dependencies({
+        testConnection: async () => ({ success: false, toolCount: 0, functionNames: [], error: "offline" }),
+        signInAvailable: () => true,
+      }),
+    );
+    for (const [operations, attempt] of [
+      [configured, { ...input, authToken: "bearer-value" }],
+      [configured, { ...input, allowSignIn: false }],
+      [unconfigured, input],
+      [offline, input],
+    ] as const) {
+      expect((await operations.add(attempt)).status).toBe("connection-failed");
+    }
+  });
+
+  it("rechecks admission after sign-in and stores the grant with the new registration", async () => {
+    const draft = {
+      serverId: 10,
+      serverDiscId: "100",
+      name: "issues",
+      url: "https://mcp.example/mcp",
+      serverType: "general" as const,
+    };
+    const grant = {
+      issuer: "https://auth.example",
+      tokenEndpoint: "https://auth.example/token",
+      resource: "https://mcp.example/mcp",
+      clientId: "client-one",
+      requestedScopes: "read",
+      grantedScopes: null,
+      accessToken: "synthetic-access",
+      refreshToken: null,
+      expiresAt: null,
+    };
+    const testedWith: Array<string | undefined> = [];
+    const storedGrants: unknown[] = [];
+    const operations = new McpConfigOperations(
+      dependencies({
+        testConnection: async (_url, authToken) => {
+          testedWith.push(authToken);
+          return { success: true, toolCount: 1, functionNames: ["search_issues"] };
+        },
+        insert: async (serverId, name, url, authToken, _type, _tools, _discId, oauthGrant) => {
+          expect(authToken).toBeUndefined();
+          storedGrants.push(oauthGrant);
+          return { ...existingRow(3), server_id: serverId, name, url };
+        },
+      }),
+    );
+    expect((await operations.completeSignIn(draft, grant)).status).toBe("success");
+    expect(testedWith).toEqual(["synthetic-access"]);
+    expect(storedGrants).toEqual([grant]);
+
+    const full = Array.from({ length: MAX_MCP_SERVERS_PER_WORKSPACE }, (_, index) => existingRow(index + 1));
+    const limited = new McpConfigOperations(
+      dependencies({ read: async () => ({ status: "fresh", configs: full }), insert: async () => existingRow(99) }),
+    );
+    expect((await limited.completeSignIn(draft, grant)).status).toBe("limit-reached");
   });
 
   it("redacts submitted credentials from connection errors", () => {

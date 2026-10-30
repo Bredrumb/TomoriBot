@@ -11,6 +11,7 @@
 import { Client as MCPClient } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport, StreamableHTTPError } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { SSEClientTransport, SseError } from "@modelcontextprotocol/sdk/client/sse.js";
+import { extractWWWAuthenticateParams } from "@modelcontextprotocol/sdk/client/auth.js";
 import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js";
 import { type CallableTool, mcpToTool } from "@google/genai";
 import { log } from "@/utils/misc/logger";
@@ -485,10 +486,25 @@ class GuildMcpManager {
    */
   async testConnection(url: string, authToken?: string): Promise<GuildMCPTestResult> {
     let client: MCPClient | null = null;
+    let unauthorized: GuildMCPTestResult["unauthorized"];
+    const recordChallenge = (response: Response) => {
+      const { resourceMetadataUrl, scope } = extractWWWAuthenticateParams(response);
+      unauthorized ??= {
+        ...(resourceMetadataUrl ? { resourceMetadataUrl: resourceMetadataUrl.href } : {}),
+        ...(scope ? { scope } : {}),
+      };
+    };
     try {
       // Connection testing uses the same guarded transports as runtime discovery.
       // Returns the fresh client from whichever transport succeeded.
-      const discovered = await this.connectAndDiscover("tomoribot-test", url, authToken, "test");
+      const discovered = await this.connectAndDiscover(
+        "tomoribot-test",
+        url,
+        authToken,
+        "test",
+        false,
+        recordChallenge,
+      );
       client = discovered.client;
       const { functionNames } = discovered;
 
@@ -509,6 +525,7 @@ class GuildMcpManager {
         toolCount: 0,
         functionNames: [],
         error: error instanceof Error ? error.message : String(error),
+        ...(unauthorized ? { unauthorized } : {}),
       };
     }
   }
@@ -755,8 +772,16 @@ class GuildMcpManager {
     authToken?: string,
     serverLabel?: string,
     privateFailure = false,
+    onUnauthorized?: (response: Response) => void,
   ): Promise<{ client: MCPClient; functionNames: string[] }> {
-    const client = await this.connectWithFallback(clientName, url, authToken, serverLabel, privateFailure);
+    const client = await this.connectWithFallback(
+      clientName,
+      url,
+      authToken,
+      serverLabel,
+      privateFailure,
+      onUnauthorized,
+    );
     try {
       const toolResult = await client.listTools();
       return { client, functionNames: toolResult.tools.map((tool) => tool.name) };
@@ -776,6 +801,7 @@ class GuildMcpManager {
     authToken?: string,
     serverLabel?: string,
     privateFailure = false,
+    onUnauthorized?: (response: Response) => void,
   ): Promise<MCPClient> {
     const label = serverLabel ?? url;
     const urlValidation = await validateRemoteUrl(url);
@@ -789,7 +815,7 @@ class GuildMcpManager {
     const errors: string[] = [];
     let authRejected = false;
 
-    const guardedFetch = createGuildMcpFetch(url);
+    const guardedFetch = createGuildMcpFetch(url, onUnauthorized);
 
     const headers: Record<string, string> = {};
     if (authToken) {

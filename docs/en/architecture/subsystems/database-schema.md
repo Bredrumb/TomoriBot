@@ -296,6 +296,7 @@ Sensitive provider credentials are encrypted using PostgreSQL `pgcrypto` (`pgp_s
 - `saved_provider_configs.api_key`
 - `user_saved_provider_configs.api_key`
 - `guild_mcp_servers.auth_token`
+- `guild_mcp_oauth.access_token` and `refresh_token` (each has its own version tag)
 - `discord_managed_webhooks.webhook_token`
 - `pluralbuddy_oauth_connections.client_secret`, `refresh_token`, and `access_token` (each has its own version tag)
 

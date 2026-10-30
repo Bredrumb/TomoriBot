@@ -47,7 +47,43 @@ function renderMcpName(locale: string, value: string): string {
 
 export type McpsPanelPage =
   | { kind: "collection"; selectedId?: number; rangeIndex?: number; removedIndex?: number }
-  | { kind: "remove"; entityId: number };
+  | { kind: "remove"; entityId: number }
+  | { kind: "sign-in"; authorizationUrl: string; host: string };
+
+/**
+ * An authorization URL routinely exceeds a link button's 512-character limit, so the page links it
+ * inline; encoded parentheses keep a crafted endpoint path from closing the markdown link early.
+ */
+function buildSignInPage(
+  locale: string,
+  page: Extract<McpsPanelPage, { kind: "sign-in" }>,
+  routes: McpsPanelRouteAdapter,
+): ComponentInContainerData[] {
+  return [
+    {
+      type: ComponentType.TextDisplay,
+      content: `### ${localizer(locale, "commands.mcps.sign_in_title")}\n${localizer(
+        locale,
+        "commands.mcps.sign_in_description",
+        {
+          host: escapeDiscordMarkdown(page.host),
+          url: page.authorizationUrl.replaceAll("(", "%28").replaceAll(")", "%29"),
+        },
+      )}`,
+    },
+    {
+      type: ComponentType.ActionRow,
+      components: [
+        {
+          type: ComponentType.Button,
+          style: ButtonStyle.Secondary,
+          customId: routes.buildRouteId({ action: "retry", locale, selectedId: "none" }),
+          label: localizer(locale, "commands.mcps.back"),
+        },
+      ],
+    },
+  ];
+}
 
 export interface McpsPanelRenderInput {
   locale: string;
@@ -193,6 +229,11 @@ export function buildMcpsPanelComponents(input: McpsPanelRenderInput): Component
       max: MAX_MCP_SERVERS_PER_WORKSPACE,
     })}${input.readStatus === "stale" ? `\n-# ${localizer(input.locale, "commands.mcps.stale_warning")}` : ""}`,
   });
+
+  if (input.page.kind === "sign-in") {
+    components.push(...buildSignInPage(input.locale, input.page, routes));
+    return components;
+  }
 
   if (configs.length === 0) {
     components.push(...buildEmptyState(input.locale, input.scope, configs, writesDisabled, routes));

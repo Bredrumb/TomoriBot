@@ -84,6 +84,8 @@ export function startHealthServer(port: number): void {
     }
     const registeredRoute = registeredRoutes.get(routeKey(req.method ?? "GET", requestUrl.pathname));
     if (registeredRoute) {
+      // Set for every registered route because a framed sign-in confirmation page could be clickjacked.
+      res.setHeader("Content-Security-Policy", "frame-ancestors 'none'");
       void Promise.resolve()
         .then(() => registeredRoute.handler(req, res, { requestUrl }))
         .catch((error) => {

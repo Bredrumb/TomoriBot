@@ -94,6 +94,7 @@ import type { StPresetsPanelRenderInput } from "@/utils/discord/ui/stPresetsPane
 import { HUMANIZER_DEFAULT } from "@/utils/discord/humanizerOptions";
 import { DEFAULT_MESSAGE_FETCH_LIMIT } from "@/utils/discord/messageFetchLimit";
 import type { McpConfigOperations } from "@/utils/mcp/mcpConfigOperations";
+import type { McpSignInRequest, McpSignInStart } from "@/utils/mcp/oauth/signIn";
 import type {
   NaturalNudgePanelDependencies,
   NaturalNudgesPanelState,
@@ -337,6 +338,7 @@ export interface ConfigRouteDependencies {
   ): Promise<ConfigChannelsView>;
   loadMcpRead(serverId: number, forceRefresh?: boolean): Promise<GuildMcpConfigReadResult>;
   mcpOperations: Pick<McpConfigOperations, "add" | "setEnabled" | "remove">;
+  startMcpSignIn(request: McpSignInRequest): Promise<McpSignInStart>;
   loadModelChoices(
     state: TomoriState,
     capability: ConfigCatalogModelCapability,

@@ -268,6 +268,7 @@ import { buildInitialPersonalMemoriesPanel } from "@/utils/discord/interactions/
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
 import { resolveDeliberateToolContextTurns } from "@/utils/tools/deliberateToolMode";
 import { mcpConfigOperations } from "@/utils/mcp/mcpConfigOperations";
+import { startMcpSignIn } from "@/utils/mcp/oauth/signIn";
 import { handleConfigMcpModalOpen, handleConfigMcpRoutes } from "@/utils/discord/interactions/configMcpRoutes";
 import { handleConfigStPresetsRoute } from "@/utils/discord/interactions/configStPresetsRoutes";
 
@@ -656,6 +657,7 @@ const defaultDependencies: ConfigRouteDependencies = {
   loadPermissionsView: loadConfigPermissionsView,
   loadMcpRead: (serverId, forceRefresh = false) => getGuildMcpConfigReadResult(serverId, { forceRefresh }),
   mcpOperations: mcpConfigOperations,
+  startMcpSignIn,
   loadChannelsView: async (interaction, selectedChannelId): Promise<ConfigChannelsView> => {
     const availableTextChannels = interaction.guild ? loadCachedGuildTextChecklistChannels(interaction.guild) : [];
     const availableBlocklistChannels = interaction.guild ? loadCachedGuildBlocklistChannels(interaction.guild) : [];

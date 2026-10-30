@@ -16,6 +16,7 @@ import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore"
 import { invalidateGuildMcpConfigCache } from "@/utils/cache/guildMcpConfigCache";
 import type { IRepository } from "./IRepository";
 import { normalizeMcpToolNameSnapshot } from "@/utils/mcp/mcpToolSnapshot";
+import { type GuildMcpOAuthGrant, guildMcpOAuthRepository } from "@/utils/db/repositories/GuildMcpOAuthRepository";
 
 /** Portable tool config export shape (expanded in Phase 6 #16.7). */
 type ToolExportShape = {
@@ -91,6 +92,7 @@ class ToolRepository implements IRepository<ToolExportShape> {
    * @param authToken   - Optional auth token (stored encrypted)
    * @param serverType  - MCP server type for tool deduplication
    * @param serverDiscId - Discord server snowflake (required for cache invalidation)
+   * @param oauthGrant - Sign-in grant stored in the same transaction, for a registration without a bearer token
    * @returns Inserted GuildMcpServerRow or null on failure
    */
   async insertMcpServer(
@@ -101,6 +103,7 @@ class ToolRepository implements IRepository<ToolExportShape> {
     serverType: string | null | undefined,
     lastDiscoveredToolNames: readonly string[],
     serverDiscId: string,
+    oauthGrant?: GuildMcpOAuthGrant,
   ): Promise<GuildMcpServerRow | null> {
     const row = await this.sqlInsertGuildMcpServer(
       serverId,
@@ -109,6 +112,7 @@ class ToolRepository implements IRepository<ToolExportShape> {
       authToken,
       serverType,
       normalizeMcpToolNameSnapshot(lastDiscoveredToolNames),
+      oauthGrant,
     );
     if (row) {
       invalidateGuildMcpConfigCache(serverId);
@@ -261,6 +265,7 @@ class ToolRepository implements IRepository<ToolExportShape> {
     rawAuthToken?: string,
     serverType?: string | null,
     lastDiscoveredToolNames: readonly string[] = [],
+    oauthGrant?: GuildMcpOAuthGrant,
   ): Promise<GuildMcpServerRow | null> {
     try {
       const currentKey = keyManager.getCurrentKey();
@@ -268,7 +273,26 @@ class ToolRepository implements IRepository<ToolExportShape> {
 
       let row: GuildMcpServerRow;
 
-      if (rawAuthToken) {
+      if (oauthGrant) {
+        row = await sql.begin(async (tx) => {
+          const [result] = await tx`
+            INSERT INTO guild_mcp_servers (server_id, name, url, server_type, last_discovered_tool_names)
+            VALUES (
+              ${serverId}, ${name}, ${url}, ${serverType ?? null}, ${tx.array([...lastDiscoveredToolNames], "TEXT")}
+            )
+            RETURNING *
+          `;
+          const inserted = result as GuildMcpServerRow;
+          await guildMcpOAuthRepository.insertGrant(
+            tx,
+            inserted.guild_mcp_id ?? 0,
+            oauthGrant,
+            currentKey,
+            currentVersion,
+          );
+          return inserted;
+        });
+      } else if (rawAuthToken) {
         const [result] = await sql`
           INSERT INTO guild_mcp_servers (
             server_id, name, url, auth_token, key_version, server_type, last_discovered_tool_names

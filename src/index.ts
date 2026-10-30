@@ -51,6 +51,9 @@ await loadSecrets(environment);
 const oauthPublicBaseUrl = getOAuthPublicBaseUrl();
 if (oauthPublicBaseUrl) {
   initializeOAuthCallbackRoute();
+  // Imported here so the MCP and database modules it pulls in read configuration after secrets load.
+  const { initializeMcpOAuthRoutes } = await import("@/utils/mcp/oauth/routes");
+  initializeMcpOAuthRoutes(oauthPublicBaseUrl);
   if (environment !== "production") startHealthServer(healthPort);
   const callbackOrigin = new URL(oauthPublicBaseUrl);
   // Only a loopback base URL is plain HTTP; a Docker port mapping can make a mismatch intentional, so this only warns.

@@ -97,6 +97,12 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Encrypted credential recovery", () => {
     await testSql`INSERT INTO api_key_rotation (server_id, provider, api_key, key_version, is_main_key_pointer) VALUES (${serverId}, 'google', NULL, 9, true)`;
     await testSql`INSERT INTO opt_api_keys (server_id, service_name, api_key, key_version) VALUES (${serverId}, 'brave-search', ${encrypted[1]}, 2), (${serverId}, 'unused', NULL, 9)`;
     await testSql`INSERT INTO guild_mcp_servers (server_id, name, url, auth_token, key_version) VALUES (${serverId}, 'synthetic', 'https://mcp.example', ${encrypted[2]}, 4), (${serverId}, 'anonymous', 'https://anonymous.example', NULL, 9)`;
+    await testSql`INSERT INTO guild_mcp_oauth (
+      guild_mcp_id, issuer, token_endpoint, resource, client_id,
+      access_token, access_token_key_version, refresh_token, refresh_token_key_version
+    ) SELECT guild_mcp_id, 'https://auth.example', 'https://auth.example/token', 'https://anonymous.example', 'synthetic_client',
+      ${encrypted[1]}, 2, ${encrypted[0]}, 1
+    FROM guild_mcp_servers WHERE server_id = ${serverId} AND name = 'anonymous'`;
     await testSql`INSERT INTO discord_managed_webhooks (guild_disc_id, kind, channel_disc_id, webhook_disc_id, webhook_token, key_version) VALUES ('_recovery_guild', 'persona', '_recovery_channel', '_recovery_webhook', ${encrypted[0]}, NULL)`;
     await testSql`INSERT INTO server_model_configs (server_id, api_key, key_version) VALUES (${serverId}, ${encrypted[1]}, 2)`;
     await testSql`INSERT INTO pluralbuddy_oauth_connections (
