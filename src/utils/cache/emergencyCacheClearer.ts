@@ -23,6 +23,7 @@ import { clearUserCache, getUserCacheStats } from "@/utils/cache/userCache";
 import { clearWebhookIdentityCache, getWebhookIdentityCacheSize } from "@/utils/chat/webhookIdentity";
 import { clearWebhookCache, getWebhookCacheSizes } from "@/utils/discord/webhook/cache";
 import { clearPresetAvatarCache, getPresetAvatarCacheSize } from "@/utils/image/avatarHelper";
+import { clearImageCache, getImageCacheSize } from "@/utils/image/imageProcessor";
 import { log } from "@/utils/misc/logger";
 import {
   addProcessMemoryDeltaFields,
@@ -222,6 +223,7 @@ export function clearEmergencyCaches(options: EmergencyCacheClearOptions = {}): 
   // The OpenRouter catalogs are deliberately absent: they are provider metadata rather
   // than per-guild growth, and dropping one would gate chat on database flags until the
   // next refresh window for a few hundred KB.
+  clearMeasured(steps, "recentImages", getImageCacheSize, clearImageCache);
   clearMeasured(steps, "presetAvatar", getPresetAvatarCacheSize, clearPresetAvatarCache);
   clearMeasured(steps, "voiceTranscript", getVoiceTranscriptCacheSize, clearVoiceTranscriptCache);
   clearMeasured(steps, "markdownTable", getMarkdownTableCacheSize, clearMarkdownTableCache);

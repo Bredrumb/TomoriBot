@@ -14,6 +14,7 @@
  * - Handle mid-stream errors with unified error format
  */
 
+import { mapWithConcurrency } from "@/utils/async/bounded";
 import type { FunctionCall, FunctionResponseImageMetadata, ThoughtLogEntry } from "../../types/provider/interfaces";
 import type { StructuredContextItem } from "../../types/misc/context";
 import { log } from "../../utils/misc/logger";
@@ -2321,10 +2322,9 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         const role = item.role === "user" ? "user" : "assistant";
         // Collects resolved image parts from assistant turns for injection into a synthetic
         // user turn, since OpenRouter only permits image content on user-role messages.
-        const pendingBotImageParts: Array<Record<string, unknown>> = [];
-        const contentParts: Array<Record<string, unknown>> = [];
-
-        for (const part of item.parts) {
+        const partsByInput = await mapWithConcurrency(item.parts, 4, async (part) => {
+          const pendingBotImageParts: Array<Record<string, unknown>> = [];
+          const contentParts: Array<Record<string, unknown>> = [];
           if (part.type === "text") {
             contentParts.push({
               type: "text",
@@ -2338,12 +2338,12 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
 
             // Only process images if the model supports them
             if (!seesImages) {
-              log.info(`Skipping image (model doesn't support images): ${part.uri || "[inlineData]"}`);
+              log.info(`Skipping image (model doesn't support images)`);
               contentParts.push({
                 type: "text",
                 text: "[System: An image is attached to this message that this model cannot process.]",
               });
-              continue;
+              return { pendingBotImageParts, contentParts };
             }
 
             if ("inlineData" in part && part.inlineData) {
@@ -2393,7 +2393,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
                   error: inlineErr instanceof Error ? inlineErr.message : String(inlineErr),
                 });
               }
-              continue; // Skip to next part after handling inlineData
+              return { pendingBotImageParts, contentParts };
             }
 
             if (part.uri && part.mimeType) {
@@ -2410,16 +2410,14 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
                     log.info(`OpenrouterStreamAdapter: Parsed data URI (${finalMimeType})`);
                   } else {
                     log.warn(`OpenrouterStreamAdapter: Invalid data URI format: ${part.uri.substring(0, 50)}...`);
-                    continue;
+                    return { pendingBotImageParts, contentParts };
                   }
                 } else {
                   if (part.mimeType === "image/gif") {
                     if (process.env.RUN_ENV === "production") {
                       contentParts.push({ type: "text", text: buildGifUrlPlaceholder(part.uri) });
 
-                      log.info(
-                        `OpenrouterStreamAdapter: GIF detected in production mode, replaced with placeholder: ${part.uri}`,
-                      );
+                      log.info(`OpenrouterStreamAdapter: GIF detected in production mode, replaced with placeholder`);
                     } else {
                       contentParts.push({
                         type: "text",
@@ -2434,14 +2432,14 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
                         `OpenrouterStreamAdapter: GIF detected in dev mode, added process_gif hint for message: ${item.messageId}`,
                       );
                     }
-                    continue; // Skip adding the GIF as an image
+                    return { pendingBotImageParts, contentParts };
                   }
 
                   const optimized = await fetchAndOptimizeImage(part.uri, part.mimeType);
                   base64ImageData = optimized.data;
                   finalMimeType = optimized.mimeType;
 
-                  log.success(`Successfully fetched image: ${part.uri}`);
+                  log.success(`Successfully fetched image`);
                 }
 
                 imageTargetParts.push({
@@ -2461,14 +2459,14 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
                       type: "image_url",
                       image_url: { url: `data:${optimized.mimeType};base64,${optimized.data}` },
                     });
-                    log.info(`OpenrouterStreamAdapter: Image loaded via fallback CDN URL ${fallback}`);
+                    log.info(`OpenrouterStreamAdapter: Image loaded via fallback CDN`);
                   } catch (fallbackErr) {
-                    log.warn(`OpenrouterStreamAdapter: Image processing error (proxy + CDN both failed) ${part.uri}`, {
+                    log.warn(`OpenrouterStreamAdapter: Image processing error (proxy + CDN both failed)`, {
                       error: fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
                     });
                   }
                 } else {
-                  log.warn(`Error processing image: ${part.uri}`, {
+                  log.warn(`Error processing image`, {
                     error: imgErr instanceof Error ? imgErr.message : String(imgErr),
                   });
                 }
@@ -2485,7 +2483,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
                 type: "text",
                 text: "[System: A video is attached to this message that this model cannot process.]",
               });
-              continue;
+              return { pendingBotImageParts, contentParts };
             }
 
             try {
@@ -2493,7 +2491,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
               const isDataUrl = part.uri.startsWith("data:");
               if (!isHttpUrl && !isDataUrl) {
                 log.warn(`Skipping unsupported video URI format for OpenRouter: ${part.uri}`);
-                continue;
+                return { pendingBotImageParts, contentParts };
               }
 
               // OpenRouter accepts direct public URLs and data URLs for video_url.
@@ -2516,7 +2514,10 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
               });
             }
           }
-        }
+          return { pendingBotImageParts, contentParts };
+        });
+        const pendingBotImageParts = partsByInput.flatMap((parts) => parts.pendingBotImageParts);
+        const contentParts = partsByInput.flatMap((parts) => parts.contentParts);
 
         if (contentParts.length > 0 || pendingBotImageParts.length > 0) {
           // OpenRouter only accepts plain-text content on assistant turns. Extract text

@@ -12,6 +12,7 @@
  * - SSE uses named events: content_block_start, content_block_delta, etc.
  */
 
+import { mapWithConcurrency } from "@/utils/async/bounded";
 import type { FunctionCall, FunctionResponseImageMetadata, ThoughtLogEntry } from "../../types/provider/interfaces";
 import type { StructuredContextItem } from "../../types/misc/context";
 import { log } from "../../utils/misc/logger";
@@ -711,10 +712,9 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
         }
       } else if (item.role === "user" || item.role === "model") {
         const role = item.role === "user" ? ("user" as const) : ("assistant" as const);
-        const contentBlocks: AnthropicContentBlock[] = [];
-        const pendingBotImageBlocks: AnthropicImageBlock[] = [];
-
-        for (const part of item.parts) {
+        const partsByInput = await mapWithConcurrency(item.parts, 4, async (part) => {
+          const contentBlocks: AnthropicContentBlock[] = [];
+          const pendingBotImageBlocks: AnthropicImageBlock[] = [];
           if (part.type === "text") {
             contentBlocks.push({
               type: "text",
@@ -726,7 +726,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
 
             if (!seesImages) {
               log.info(`AnthropicStreamAdapter: Skipping image (model doesn't support images)`);
-              continue;
+              return { contentBlocks, pendingBotImageBlocks };
             }
 
             if ("inlineData" in part && part.inlineData) {
@@ -741,7 +741,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
                   },
                 });
               }
-              continue;
+              return { contentBlocks, pendingBotImageBlocks };
             }
 
             if (part.uri && part.mimeType) {
@@ -755,7 +755,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
                     finalMimeType = dataUriMatch[1];
                     base64Data = dataUriMatch[2];
                   } else {
-                    continue;
+                    return { contentBlocks, pendingBotImageBlocks };
                   }
                 } else {
                   const optimized = await fetchAndOptimizeImage(part.uri, part.mimeType);
@@ -774,14 +774,17 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
 
                 log.info(`AnthropicStreamAdapter: Added image to ${role} message`);
               } catch (imgErr) {
-                log.warn(`AnthropicStreamAdapter: Failed to process image: ${part.uri}`, {
+                log.warn(`AnthropicStreamAdapter: Failed to process image`, {
                   error: imgErr instanceof Error ? imgErr.message : String(imgErr),
                 });
               }
             }
           }
           // Note: video not supported by Anthropic, skip silently
-        }
+          return { contentBlocks, pendingBotImageBlocks };
+        });
+        const contentBlocks = partsByInput.flatMap((parts) => parts.contentBlocks);
+        const pendingBotImageBlocks = partsByInput.flatMap((parts) => parts.pendingBotImageBlocks);
 
         if (contentBlocks.length > 0 || pendingBotImageBlocks.length > 0) {
           if (role === "assistant") {

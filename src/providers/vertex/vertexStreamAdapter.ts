@@ -14,6 +14,7 @@
  *   - buildTokenCountPayload() is not supported in v1 (throws)
  */
 
+import { mapWithConcurrency } from "@/utils/async/bounded";
 import {
   BlockedReason,
   type Content,
@@ -982,8 +983,8 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
       if (isSystemInstructionContextItem(item)) {
         if (itemTextContent) systemInstructionParts.push(itemTextContent);
       } else if (item.role === "user" || item.role === "model") {
-        const geminiParts: Part[] = [];
-        for (const part of item.parts) {
+        const partsByInput = await mapWithConcurrency(item.parts, 4, async (part) => {
+          const geminiParts: Part[] = [];
           if (part.type === "text") {
             geminiParts.push({ text: part.text });
           } else if (part.type === "image" && !seesImages) {
@@ -1025,14 +1026,14 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
                 try {
                   const optimized = await fetchAndOptimizeImage(fallback, part.mimeType);
                   geminiParts.push({ inlineData: { mimeType: optimized.mimeType, data: optimized.data } });
-                  log.info(`VertexStreamAdapter: Image loaded via fallback CDN URL ${fallback}`);
+                  log.info(`VertexStreamAdapter: Image loaded via fallback CDN`);
                 } catch (fallbackErr) {
-                  log.warn(`VertexStreamAdapter: Image processing error (proxy + CDN both failed) ${part.uri}`, {
+                  log.warn(`VertexStreamAdapter: Image processing error (proxy + CDN both failed)`, {
                     error: fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
                   });
                 }
               } else {
-                log.warn(`VertexStreamAdapter: Image processing error ${part.uri}`, {
+                log.warn(`VertexStreamAdapter: Image processing error`, {
                   error: imgErr instanceof Error ? imgErr.message : String(imgErr),
                 });
               }
@@ -1102,7 +1103,9 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
               });
             }
           }
-        }
+          return geminiParts;
+        });
+        const geminiParts = partsByInput.flat();
 
         if (geminiParts.length > 0) {
           dialogueContents.push({
