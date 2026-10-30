@@ -1025,7 +1025,7 @@ describe("subscription membership refresh admission", () => {
       const result = await refreshSubscriptionMembership(user, "en-US");
       expect(result?.detail).toBe(
         localizedCopy("en-US", "commands.subscription.cooldown", {
-          time: `<t:${Math.floor((currentTime + 5000) / 1000)}:R>`,
+          time: `<t:${Math.ceil((currentTime + 5000) / 1000)}:T>`,
         }),
       );
       expect(refresh).not.toHaveBeenCalled();

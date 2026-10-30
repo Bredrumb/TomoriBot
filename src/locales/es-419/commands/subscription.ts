@@ -44,7 +44,7 @@ export default {
     cancel: `Cancelar`,
     back_providers: `Volver a proveedores`,
     back_personal: `Volver a proveedores personales`,
-    cooldown: `Tu membresía se revisó recientemente. Puedes revisarla de nuevo {time}.`,
+    cooldown: `Tu membresía se revisó recientemente. Puedes revisarla de nuevo después de las {time}.`,
     checked: `Revisé tu membresía con Patreon.`,
     refresh_failed: `No pude revisar tu membresía con Patreon. Inténtalo de nuevo en un momento.`,
     action_failed: `No pude completar esta acción. Tu configuración guardada sigue disponible. Inténtalo de nuevo en un momento.`,

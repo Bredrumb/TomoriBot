@@ -138,7 +138,7 @@ export async function refreshSubscriptionMembership(
   const attempt = refreshAttempts.get(discordUserId);
   const cooldownReceipt = (expires: number) =>
     receipt(locale, "commands.subscription.cooldown", false, {
-      time: `<t:${Math.floor(expires / 1000)}:R>`,
+      time: `<t:${Math.ceil(expires / 1000)}:T>`,
     });
   if (attempt) return cooldownReceipt(Math.max(attempt.expiresAt, now + (attempt.inFlight ? cooldownMs : 0)));
   if (refreshAttempts.size >= MAX_REFRESH_ATTEMPTS) return cooldownReceipt(now + cooldownMs);

@@ -44,7 +44,7 @@ export default {
     cancel: `Cancel`,
     back_providers: `Back to Providers`,
     back_personal: `Back to Personal Providers`,
-    cooldown: `Your membership was checked recently. You can check again {time}.`,
+    cooldown: `Your membership was checked recently. You can check again after {time}.`,
     checked: `I checked your membership with Patreon.`,
     refresh_failed: `I could not check your membership with Patreon. Try again in a moment.`,
     action_failed: `I could not complete this action. Your saved settings are still available. Try again in a moment.`,
