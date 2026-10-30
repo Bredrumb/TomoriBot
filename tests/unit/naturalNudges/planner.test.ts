@@ -11,14 +11,22 @@ import {
 import { BUILTIN_IDLE_NUDGES } from "@/modules/natural-nudges/runtime/idleNudges";
 import { createPersona } from "../../helpers/fixtures";
 import * as modelModule from "@/modules/natural-nudges/runtime/model";
+import { PLAY_SCENE_LONG_TURNS, PLAY_SCENE_SHORT_TURNS } from "@/modules/natural-nudges/runtime/tuning";
 
 const sceneNudge = BUILTIN_IDLE_NUDGES.find((candidate) => candidate.key === "play_scene.banter");
 const soloNudge = BUILTIN_IDLE_NUDGES.find((candidate) => candidate.category === "start_topic");
 if (!sceneNudge || !soloNudge) throw new Error("planner nudge fixtures missing");
 const candidates: PlannerCandidate[] = [
-  { idleNudge: sceneNudge, channelIndices: [0], partners: [{ persona: createPersona(), interests: [] }] },
+  {
+    idleNudge: sceneNudge,
+    channelIndices: [0],
+    partners: [{ persona: createPersona(), interests: [] }],
+    sceneTurns: PLAY_SCENE_SHORT_TURNS,
+  },
 ];
-const soloCandidates: PlannerCandidate[] = [{ idleNudge: soloNudge, channelIndices: [1], partners: [] }];
+const soloCandidates: PlannerCandidate[] = [
+  { idleNudge: soloNudge, channelIndices: [1], partners: [], sceneTurns: PLAY_SCENE_SHORT_TURNS },
+];
 const plan = {
   proceed: true,
   nudge: sceneNudge.key,
@@ -36,8 +44,15 @@ function maxMinItems(node: unknown): number {
 
 describe("Play Scene script rules", () => {
   it("accepts a script the lead opens, that alternates, and that gives every speaker a turn", () => {
-    expect(sceneScriptIssues([1, 2], 1, 1)).toEqual([]);
-    expect(sceneScriptIssues([1, 2, 3, 1], 2, 2)).toEqual([]);
+    expect(sceneScriptIssues([1, 2], 1, 1, PLAY_SCENE_SHORT_TURNS)).toEqual([]);
+    expect(sceneScriptIssues([1, 2, 3, 1], 2, 2, PLAY_SCENE_SHORT_TURNS)).toEqual([]);
+  });
+
+  it("holds a scene to the length range drawn for the attempt", () => {
+    const longScript = [1, 2, 1, 2, 1, 2, 1];
+    expect(sceneScriptIssues(longScript, 1, 1, PLAY_SCENE_LONG_TURNS)).toEqual([]);
+    expect(sceneScriptIssues(longScript, 1, 1, PLAY_SCENE_SHORT_TURNS)).toHaveLength(1);
+    expect(sceneScriptIssues([1, 2], 1, 1, PLAY_SCENE_LONG_TURNS)).toHaveLength(1);
   });
 
   it("names each broken rule once, so the retry note lists exactly what to fix", () => {
@@ -50,7 +65,7 @@ describe("Play Scene script rules", () => {
       [[1, 2], 2, 1],
     ];
     for (const [script, agendas, partners] of rejected) {
-      expect(sceneScriptIssues(script, agendas, partners)).toHaveLength(1);
+      expect(sceneScriptIssues(script, agendas, partners, PLAY_SCENE_SHORT_TURNS)).toHaveLength(1);
     }
   });
 
@@ -58,6 +73,13 @@ describe("Play Scene script rules", () => {
     const accept = buildAcceptedResult(candidates);
     expect(accept.safeParse({ ...plan, script: [1, 2], partner_agendas: ["Lose."] }).success).toBe(true);
     expect(accept.safeParse({ ...plan, script: [2, 1], partner_agendas: ["Lose."] }).success).toBe(false);
+  });
+
+  it("keeps the opener a short hook so longer intent has to live in the agenda", () => {
+    const accept = buildAcceptedResult(candidates);
+    const scene = { ...plan, script: [1, 2], partner_agendas: ["Lose."] };
+    expect(accept.safeParse({ ...scene, opener_direction: "x".repeat(200) }).success).toBe(true);
+    expect(accept.safeParse({ ...scene, opener_direction: "x".repeat(201) }).success).toBe(false);
   });
 
   it("sends providers no minItems above 1, which Anthropic's output grammar rejects", () => {
@@ -188,12 +210,54 @@ describe("nudge and channel selection", () => {
           idleNudge,
           channelIndices: [0],
           partners,
+          sceneTurns: PLAY_SCENE_SHORT_TURNS,
         })),
         channels: [{ name: "general", description: null, transcript: "" }],
       });
       expect(outcome.status).toBe("declined");
       expect(prompts).toHaveLength(1);
       expect(prompts[0].split(attribute).length - 1).toBe(1);
+    } finally {
+      resolve.mockRestore();
+      target.mockRestore();
+    }
+  });
+});
+
+describe("scene length in the planner prompt", () => {
+  it.each([PLAY_SCENE_SHORT_TURNS, PLAY_SCENE_LONG_TURNS])("asks for the drawn range %j", async (sceneTurns) => {
+    const persona = createPersona();
+    const systemPrompts: string[] = [];
+    const resolve = spyOn(modelModule, "resolveNudgeModel").mockResolvedValue({
+      kind: "ready",
+      resolved: {
+        state: persona,
+        apiKey: "fixture-key",
+        capability: {
+          callStructuredJSON: async (request, _schema, accepted) => {
+            systemPrompts.push(request.systemPrompt);
+            return { success: true, data: accepted.parse({ proceed: false }) };
+          },
+        },
+      },
+    });
+    const target = spyOn(modelModule, "resolveStructuredCallTarget").mockResolvedValue({
+      model: "fixture-model",
+      endpointUrl: undefined,
+      maxOutputTokens: 1000,
+    });
+    try {
+      await planIdleNudge({
+        admitRequest: () => true,
+        persona,
+        interests: [],
+        recentTopics: [],
+        plannerModel: { llmId: 1, slot: "nudge-planner" },
+        target: null,
+        candidates: [{ ...candidates[0], sceneTurns }],
+        channels: [{ name: "general", description: null, transcript: "" }],
+      });
+      expect(systemPrompts[0]).toContain(`${sceneTurns.min}-${sceneTurns.max} turns`);
     } finally {
       resolve.mockRestore();
       target.mockRestore();

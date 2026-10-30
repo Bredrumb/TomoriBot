@@ -182,6 +182,7 @@ export default {
       notice_character_prompt_line: `**キャラクター {index}:** {prompt}`,
       notice_image_tags_tip_line: `ヒント: \`image-tags\` コマンドでPhysical Appearanceタグを保存すると、キャラクターの一貫性が上がります。`,
       notice_avatar_reference_line: `アバター参照: {name}。`,
+      notice_character_reference_line: `キャラクターリファレンス: {name}。`,
       notice_reference_count_line: `参照画像を {count} 枚使用しています。`,
       generated_after_seconds_line: `{seconds}秒で生成しました。`,
       referenced_identities_line: `参照: {names}`,

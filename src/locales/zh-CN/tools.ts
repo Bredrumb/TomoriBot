@@ -179,6 +179,7 @@ export default {
       notice_character_prompt_line: `**角色 {index}：** {prompt}`,
       notice_image_tags_tip_line: `提示：用 \`image-tags\` 指令可以让角色更一致。`,
       notice_avatar_reference_line: `头像参考：{name}。`,
+      notice_character_reference_line: `角色参考：{name}。`,
       notice_reference_count_line: `使用了 {count} 张参考图。`,
       generated_after_seconds_line: `在 {seconds} 秒后生成完成`,
       referenced_identities_line: `引用了：{names}`,

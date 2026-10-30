@@ -121,6 +121,20 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
     expect(await readCount("message_sent", "", lineageA, refs.userId)).toBe(1);
   });
 
+  it("leaves the bot account off the top-user leaderboard", async () => {
+    for (const userId of [refs.userId, altUserId]) {
+      statRepository.recordStat({ serverId: refs.serverId, userId, lineageId: lineageA, metric: "message_sent" });
+    }
+    await statRepository.flush();
+
+    const topUsers = await statRepository.getTopUsers({
+      serverId: refs.serverId,
+      botUserDiscId: FIXTURE_IDS.altUserDiscId,
+    });
+
+    expect(topUsers.map((entry) => entry.userId)).toEqual([refs.userId]);
+  });
+
   it("renders actual dashboard tabs with round-trippable routes for every view and timeframe", async () => {
     await initializeLocalizer();
     const cases = collectCaseFailures();
@@ -138,7 +152,12 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
         { ...common, view: "persona", personaId: refs.personaId },
         { ...common, view: "server" },
       ];
-      const args = { ...common, from: resolveWindowFrom(timeframe), subtitle: "Stats" };
+      const args = {
+        ...common,
+        from: resolveWindowFrom(timeframe),
+        subtitle: "Stats",
+        botUserDiscId: FIXTURE_IDS.altUserDiscId,
+      };
       for (const context of contexts) {
         const tabs =
           context.view === "personal"

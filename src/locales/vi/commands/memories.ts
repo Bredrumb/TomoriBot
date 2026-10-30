@@ -205,6 +205,11 @@ export default {
       "Đã xuất {count} mục. Các giới hạn kênh, tên kênh đang chờ xử lý và trạng thái bộ sưu tập không được bao gồm.",
     lorebook_export_empty_heading: "Không có mục nào để xuất",
     lorebook_export_empty_detail: "Sách này không có mục nào.",
+    lorebook_export_sent_heading: "Đã gửi lorebook",
+    lorebook_export_sent_detail:
+      "**{name}** đã được gửi đến tin nhắn trực tiếp của bạn dưới dạng tệp JSON world info của SillyTavern.",
+    lorebook_export_dm_failed:
+      "Mình không thể gửi tin nhắn trực tiếp cho bạn, nên lorebook được đính kèm tại đây. Hãy lưu lại ngay vì tin nhắn này sẽ biến mất.",
     lorebook_import_no_book_heading: "Không tìm thấy Character Book",
     lorebook_import_no_book_detail: "Thẻ nhân vật này không có Character Book đính kèm.",
     lorebook_conversion_note: `Số mục đã bỏ qua: {skipped}. Từ khóa không được hỗ trợ: {keys}. Mục có cài đặt bị bỏ qua: {ignored}. Vị trí đặt được gộp: {placements}.`,

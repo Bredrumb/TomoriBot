@@ -698,15 +698,16 @@ export async function buildPersonaTabs(args: {
   timeframe: Timeframe;
   from?: string;
   subtitle: string;
+  botUserDiscId: string;
 }): Promise<StatsTab[]> {
   await statRepository.flush();
-  const { locale, serverId, lineageId, from, subtitle, timeframe } = args;
+  const { locale, serverId, lineageId, from, subtitle, timeframe, botUserDiscId } = args;
   const isAllTime = timeframe === "all_time";
   const scope = { serverId, lineageId, from };
 
   const [messages, topUsers, modelCost, tokens, cost, emoji, stickers, sprites, emotions] = await Promise.all([
     statRepository.getMetricTotal({ metric: "message_sent", ...scope }),
-    statRepository.getTopUsers({ serverId, lineageId, from, limit: 5 }),
+    statRepository.getTopUsers({ serverId, lineageId, from, limit: 5, botUserDiscId }),
     statRepository.getModelCostBreakdown({ serverId, lineageId, from, limit: 5 }),
     statRepository.getTokenTotals(scope),
     statRepository.getEstimatedCost({ serverId, lineageId, from }),
@@ -867,9 +868,10 @@ export async function buildServerTabs(args: {
   timeframe: Timeframe;
   from?: string;
   subtitle: string;
+  botUserDiscId: string;
 }): Promise<StatsTab[]> {
   await statRepository.flush();
-  const { locale, serverId, from, subtitle, timeframe } = args;
+  const { locale, serverId, from, subtitle, timeframe, botUserDiscId } = args;
   const isAllTime = timeframe === "all_time";
   const names = await resolvePersonaNames(args.guildId);
   const scope = { serverId, from };
@@ -892,7 +894,7 @@ export async function buildServerTabs(args: {
   ] = await Promise.all([
     statRepository.getMetricTotal({ metric: "message_sent", ...scope }),
     statRepository.getMetricTotal({ metric: "command_used", ...scope }),
-    statRepository.getTopUsers({ serverId, from, limit: 5 }),
+    statRepository.getTopUsers({ serverId, from, limit: 5, botUserDiscId }),
     statRepository.getModelCostBreakdown({ serverId, from, limit: 5 }),
     statRepository.getTokenTotals(scope),
     statRepository.getEstimatedCost({ serverId, from }),

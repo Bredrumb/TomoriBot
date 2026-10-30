@@ -1495,6 +1495,42 @@ class UserRepository implements IRepository<UserExportShape> {
     }
   }
 
+  /**
+   * Moves the stat counters of the users rows queued in `webhook_user_cleanup` (shared persona webhooks,
+   * queued by migration 131 or `scripts/maintenance/purge-webhook-users.ts`) onto the bot account's row,
+   * deletes those rows, and drops the queue, so server and persona spend totals survive.
+   *
+   * @returns The deleted rows' Discord IDs for cache invalidation, or null when no cleanup is pending.
+   */
+  async mergeWebhookUsersIntoBot(botUserId: number): Promise<string[] | null> {
+    return sql.begin(async (tx: SQL) => {
+      const [queue] = await tx<Array<{ pending: boolean }>>`
+        SELECT to_regclass('public.webhook_user_cleanup') IS NOT NULL AS pending
+      `;
+      if (!queue?.pending) return null;
+
+      await tx`
+        INSERT INTO stat_counters (server_id, user_id, persona_lineage_id, metric, metric_key, bucket, count, first_at, last_at)
+        SELECT sc.server_id, ${botUserId}, sc.persona_lineage_id, sc.metric, sc.metric_key, sc.bucket,
+               SUM(sc.count), MIN(sc.first_at), MAX(sc.last_at)
+        FROM stat_counters sc
+        JOIN webhook_user_cleanup c ON c.user_id = sc.user_id
+        GROUP BY sc.server_id, sc.persona_lineage_id, sc.metric, sc.metric_key, sc.bucket
+        ON CONFLICT (server_id, user_id, persona_lineage_id, metric, metric_key, bucket) DO UPDATE
+        SET count = stat_counters.count + EXCLUDED.count,
+            first_at = LEAST(stat_counters.first_at, EXCLUDED.first_at),
+            last_at = GREATEST(stat_counters.last_at, EXCLUDED.last_at)
+      `;
+      const deleted = await tx<Array<{ user_disc_id: string }>>`
+        DELETE FROM users u USING webhook_user_cleanup c
+        WHERE u.user_id = c.user_id
+        RETURNING u.user_disc_id
+      `;
+      await tx`DROP TABLE webhook_user_cleanup`;
+      return deleted.map((row) => row.user_disc_id);
+    });
+  }
+
   private pushUnsafeUpdateValue(field: string, rawValue: unknown, setParts: string[], values: SqlParameterArray): void {
     const placeholder = `$${values.length + 1}`;
     if (Array.isArray(rawValue)) {

@@ -993,6 +993,8 @@ export default {
       avatar_cleared_detail: `Se eliminó el avatar de {name}.`,
       avatar_preset_sprites_removed_detail:
         "Se eliminaron {count} sprite(s) predeterminado(s) incompatibles. Ejecuta `/persona default` para restaurarlos.",
+      avatar_preset_character_reference_removed_detail:
+        "Se eliminó la referencia de personaje predeterminada para que las imágenes generadas sigan la nueva apariencia. Sube una propia o ejecuta `/persona default` para restaurarla.",
       avatar_busy_heading: `Ocupada En Este Momento`,
       avatar_busy_detail: `La memoria está limitada. Por favor, intenta de nuevo pronto.`,
       avatar_quota_heading: `Límite de Avatar Alcanzado`,

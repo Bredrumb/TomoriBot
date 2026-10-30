@@ -56,6 +56,9 @@ import {
   PING_USER_REPEAT_REST_MS,
   PLANNER_HISTORY_MESSAGES,
   PLANNER_RECENT_TOPICS,
+  PLAY_SCENE_LONG_CHANCE,
+  PLAY_SCENE_LONG_TURNS,
+  PLAY_SCENE_SHORT_TURNS,
   TALKATIVENESS_TICKETS,
   UNANSWERED_STOP_STREAK,
   WAKING_HOURS_WINDOW_DAYS,
@@ -485,6 +488,7 @@ export class NaturalNudgeProcessor {
     const lastCategoryNudgeKey = idleFires.find((fire) => fire.category === category)?.idle_nudge_key;
     const otherIdleNudges = idleNudges.filter((candidate) => candidate.idleNudge.key !== lastCategoryNudgeKey);
     const remaining = otherIdleNudges.length > 0 ? otherIdleNudges : [...idleNudges];
+    const sceneTurns = Math.random() < PLAY_SCENE_LONG_CHANCE ? PLAY_SCENE_LONG_TURNS : PLAY_SCENE_SHORT_TURNS;
     const candidates: PlannerCandidate[] = [];
     while (candidates.length < MAX_PLANNER_NUDGES && remaining.length > 0) {
       const picked = drawRaffle(
@@ -504,6 +508,7 @@ export class NaturalNudgeProcessor {
         idleNudge: picked.idleNudge,
         channelIndices: picked.channelIndices,
         partners,
+        sceneTurns,
       });
     }
     if (candidates.length === 0) return "no_eligible_idle_nudge";

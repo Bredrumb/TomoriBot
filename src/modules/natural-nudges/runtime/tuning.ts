@@ -159,6 +159,14 @@ export const ACTIVE_NUDGE_UNDERDOG_MAX_BOOST = 4;
 
 /** A Play Scene draws one partner, and a second this often when one is available. */
 export const PLAY_SCENE_SECOND_PARTNER_CHANCE = 0.3;
-/** Scene length, opener included: long enough for an exchange, short enough to stay a moment. */
-export const PLAY_SCENE_MIN_TURNS = 2;
-export const PLAY_SCENE_MAX_TURNS = 4;
+export interface SceneTurnRange {
+  min: number;
+  max: number;
+}
+/** Scene length in turns, opener included, for the quick exchange most scenes are. */
+export const PLAY_SCENE_SHORT_TURNS: SceneTurnRange = { min: 2, max: 4 };
+/** A long scene is a real back-and-forth of one-line turns, and costs a persona generation each. */
+export const PLAY_SCENE_LONG_TURNS: SceneTurnRange = { min: 5, max: 8 };
+export const PLAY_SCENE_LONG_CHANCE = 0.2;
+/** Mention replies an unscripted nudge opener may start, independent of scene length because a scene is scripted up front and a mention chain is open-ended. */
+export const NUDGE_MENTION_CASCADE_LIMIT = 3;

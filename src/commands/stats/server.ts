@@ -70,6 +70,7 @@ export async function execute(
       timeframe,
       from,
       subtitle: `${guild.name} • ${subtitle}`,
+      botUserDiscId: interaction.client.user.id,
     });
 
     // Pin the server's icon to the dashboard's top-right corner (null when the guild

@@ -74,6 +74,8 @@ type ReminderMutationActor = {
   requester_user_id?: number;
   requester_discord_id?: string;
   requester_bridge_user_id?: string;
+  /** Only honored by deletes: a server manager may remove any reminder in their server. */
+  requester_can_manage_server?: boolean;
 };
 
 type ReminderScopedMutationResult =
@@ -989,6 +991,7 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     const requesterUserId = reminderData.actor.requester_user_id ?? -1;
     const requesterDiscordId = reminderData.actor.requester_discord_id ?? "";
     const requesterBridgeUserId = reminderData.actor.requester_bridge_user_id ?? "";
+    const requesterCanManageServer = reminderData.actor.requester_can_manage_server === true;
 
     try {
       const [deletedReminder] = await sql`
@@ -996,7 +999,8 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
         WHERE reminder_id = ${reminderData.reminder_id}
           AND server_id = ${reminderData.server_id}
           AND (
-            created_by_user_id = ${requesterUserId}
+            ${requesterCanManageServer}::boolean
+            OR created_by_user_id = ${requesterUserId}
             OR (
               COALESCE(self_reminder, false) = false
               AND user_discord_id = ${requesterDiscordId}

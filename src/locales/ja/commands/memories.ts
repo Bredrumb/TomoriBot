@@ -204,6 +204,10 @@ export default {
     lorebook_export_detail: `{count} 件のエントリをエクスポートしました。チャンネル制限、保留中のチャンネル名、コレクションの状態は含まれません。`,
     lorebook_export_empty_heading: `エクスポートするエントリがありません`,
     lorebook_export_empty_detail: `このロアブックにはエントリがありません。`,
+    lorebook_export_sent_heading: "ロアブックを送信しました",
+    lorebook_export_sent_detail: "**{name}** をSillyTavernワールドインフォJSONとしてDMに送信しました。",
+    lorebook_export_dm_failed:
+      "DMを送信できなかったため、代わりにここにロアブックを添付しました。このメッセージは消えるため、今すぐ保存してください。",
     lorebook_import_no_book_heading: `キャラクターブックが見つかりません`,
     lorebook_import_no_book_detail: `このキャラクターカードにはキャラクターブックが埋め込まれていません。`,
     lorebook_conversion_note: `スキップされたエントリ：{skipped}。未対応のキーワード：{keys}。無視された設定を含むエントリ：{ignored}。統合された配置：{placements}。`,

@@ -947,6 +947,8 @@ export default {
       avatar_success_detail: `已更新 {name} 的頭像。`,
       avatar_cleared_detail: `已移除 {name} 的頭像。`,
       avatar_preset_sprites_removed_detail: "已移除 {count} 個會不相符的預設立繪。 執行 `/persona default` 即可還原。",
+      avatar_preset_character_reference_removed_detail:
+        "已移除預設的角色參考，好讓生成的圖片採用全新外觀。你可以上傳自己的參考圖，或執行 `/persona default` 即可還原。",
       avatar_busy_heading: `目前忙碌中`,
       avatar_busy_detail: `記憶資源吃緊。請稍後再試。`,
       avatar_quota_heading: `已達頭像上限`,

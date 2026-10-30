@@ -49,6 +49,9 @@ and recurrence.
 :::tip
 Members with `Manage Server` see every schedule in the server, with other members' entries
 naming their creator. Everyone else sees only their own.
+
+Asking TomoriBot in chat to delete a schedule follows the same rule: you can delete ones you
+created or ones that remind you, and members with `Manage Server` can delete any.
 :::
 
 A server can hold up to 100 pending reminders and tasks at once. When it is full, TomoriBot

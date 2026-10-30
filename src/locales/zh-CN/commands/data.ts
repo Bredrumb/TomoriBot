@@ -10,6 +10,7 @@ export default {
       dm_title: `数据导出`,
       dm_description: `这是你向我索取的{type}数据！`,
       dm_failed_title: `🔴 无法发送私信`,
+      dm_failed_attached_description: `我无法向你发送私信，因此你的{type}导出文件已直接附在此处。请立即保存，因为此消息稍后会消失。开启允许服务器成员发送私信后，将来的导出文件就可以直接通过私信接收。`,
       no_permission_title: `🔴 权限不足`,
       no_permission_description: `导出服务器数据需要 **管理服务器** 权限。`,
       error_no_user_data: `没有找到你的数据。你可能需要先和我互动一次。`,

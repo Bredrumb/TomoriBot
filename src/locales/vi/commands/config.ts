@@ -975,6 +975,8 @@ export default {
       avatar_cleared_detail: `Đã xóa ảnh đại diện của {name}.`,
       avatar_preset_sprites_removed_detail:
         "Đã xóa {count} sprite mặc định không còn khớp. Chạy `/persona default` để khôi phục.",
+      avatar_preset_character_reference_removed_detail:
+        "Đã xóa ảnh tham chiếu nhân vật mặc định để các hình ảnh được tạo theo diện mạo mới. Hãy tải lên ảnh của bạn hoặc chạy `/persona default` để khôi phục.",
       avatar_busy_heading: `Hiện đang bận`,
       avatar_busy_detail: `Bộ nhớ đang bị giới hạn. Vui lòng thử lại sau giây lát.`,
       avatar_quota_heading: `Đã đạt giới hạn ảnh đại diện`,

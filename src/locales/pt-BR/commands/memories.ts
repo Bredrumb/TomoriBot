@@ -207,6 +207,10 @@ export default {
       "Exportadas {count} entradas. Restrições de canal, nomes de canais pendentes e estado da coleção não estão incluídos.",
     lorebook_export_empty_heading: "Nenhuma Entrada para Exportar",
     lorebook_export_empty_detail: "Este livro não possui entradas.",
+    lorebook_export_sent_heading: "Lorebook Enviado",
+    lorebook_export_sent_detail: "**{name}** foi enviado para suas DMs como JSON de world info do SillyTavern.",
+    lorebook_export_dm_failed:
+      "Não foi possível enviar uma DM para você, então o lorebook foi anexado aqui. Salve agora, pois esta mensagem irá desaparecer.",
     lorebook_import_no_book_heading: "Nenhum Character Book Encontrado",
     lorebook_import_no_book_detail: "Este card de personagem não possui um Character Book incorporado.",
     lorebook_conversion_note: `Entradas ignoradas: {skipped}. Palavras-chave não suportadas: {keys}. Entradas com configurações ignoradas: {ignored}. Posicionamentos ajustados: {placements}.`,

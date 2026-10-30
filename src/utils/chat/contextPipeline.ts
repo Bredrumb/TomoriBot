@@ -532,6 +532,8 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
         turn,
         effectivePersona,
         isUserImpersonation: incoming.isUserImpersonation,
+        // A chain turn carries the originator's clock but answers a persona, so it must not greet or clock them.
+        isPersonaSpeaker: turn.isSelfMessage || (incoming.sceneTurn?.turnIndex ?? 0) > 0,
         proxiedIdentityName: proxiedIdentity.name,
         proxiedIdentityUserDiscId: proxiedIdentity.userDiscId,
       });
