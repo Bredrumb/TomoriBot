@@ -12,10 +12,12 @@ import { createSignedOAuthState, validateSignedOAuthState } from "@/utils/oauth/
 import { getOAuthPublicBaseUrl } from "@/utils/oauth/settings";
 import { OAuthTokenError, requestOAuthToken } from "@/utils/oauth/tokenEndpoint";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { useEnvSandbox } from "../../helpers/env";
 import { localizedCopy } from "../../helpers/localeCases";
 
 beforeAll(initializeLocalizer);
 afterEach(clearOAuthCallbackFlowsForTests);
+useEnvSandbox(["TOMORI_PUBLIC_BASE_URL"]);
 
 const token = { access_token: "access-one", refresh_token: "refresh-two", token_type: "Bearer", expires_in: 3600 };
 const requestOptions = {
@@ -163,13 +165,8 @@ describe("shared OAuth boundaries", () => {
   });
 
   it("accepts only HTTPS public origins or loopback HTTP origins with a port", () => {
-    const configured = process.env.TOMORI_PUBLIC_BASE_URL;
     delete process.env.TOMORI_PUBLIC_BASE_URL;
-    try {
-      expect(getOAuthPublicBaseUrl()).toBeUndefined();
-    } finally {
-      if (configured !== undefined) process.env.TOMORI_PUBLIC_BASE_URL = configured;
-    }
+    expect(getOAuthPublicBaseUrl()).toBeUndefined();
     expect(getOAuthPublicBaseUrl(" ")).toBeUndefined();
     expect(getOAuthPublicBaseUrl("https://bot.example/")).toBe("https://bot.example");
     expect(getOAuthPublicBaseUrl("http://127.0.0.1:8080")).toBe("http://127.0.0.1:8080");
