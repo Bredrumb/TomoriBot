@@ -5,7 +5,6 @@ import { PrivacyLevel } from "@/types/db/schema";
 import { sql, withTransientDbRetry } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 import { NATURAL_NUDGE_FAILURE_STOP_THRESHOLD, NUDGE_DORMANCY_MS } from "@/modules/natural-nudges/runtime/tuning";
-import { heatWindowStart } from "@/modules/natural-nudges/runtime/meters";
 import {
   CUSTOM_IDLE_NUDGE_KEY_PREFIX,
   NUDGE_ADVANCED_STEP,
@@ -57,10 +56,6 @@ function parseRows<T>(schema: z.ZodType<T>, rows: unknown[], label: string): T[]
   }
   return parsed;
 }
-
-const idleNudgeServerRowSchema = enabledIdleNudgeServerSchema.extend({
-  config: serverNaturalNudgeConfigSchema.nullable(),
-});
 
 const presetIdleNudgesRowSchema = z.object({
   preset_idle_nudges: personaAuthoredIdleNudgesSchema,
@@ -156,16 +151,7 @@ class NaturalNudgeRepository {
   async listEnabledIdleNudgeServers(now: Date): Promise<EnabledIdleNudgeServer[]> {
     const rows = await withTransientDbRetry(
       () => sql`
-      SELECT s.server_id, s.server_disc_id, scc.timezone_offset,
-        CASE WHEN c.server_id IS NULL THEN NULL ELSE json_build_object(
-          'server_id', c.server_id, 'idle_nudges_enabled', c.idle_nudges_enabled,
-          'active_nudges_enabled', c.active_nudges_enabled,
-          'channel_disc_ids', c.channel_disc_ids, 'llm_id', c.llm_id,
-          'checker_llm_id', c.checker_llm_id, 'checker_decision_model_id', c.checker_decision_model_id,
-          'idle_nudge_frequency', c.idle_nudge_frequency, 'active_nudge_frequency', c.active_nudge_frequency,
-          'disabled_builtin_idle_nudges', c.disabled_builtin_idle_nudges,
-          'category_weights', c.category_weights, 'heat_offset', c.heat_offset
-        ) END AS config
+      SELECT s.server_id, s.server_disc_id, scc.timezone_offset
       FROM servers s
       JOIN server_natural_nudge_runtime_state runtime ON runtime.server_id = s.server_id
       LEFT JOIN server_natural_nudge_configs c ON c.server_id = s.server_id
@@ -173,19 +159,10 @@ class NaturalNudgeRepository {
       WHERE COALESCE(s.is_dm_channel, false) = false
         AND COALESCE(c.idle_nudges_enabled, true)
         AND runtime.last_direct_chat_at > ${new Date(now.getTime() - NUDGE_DORMANCY_MS)}
-        AND EXISTS (
-          SELECT 1 FROM stat_counters sc
-          WHERE sc.server_id = s.server_id
-            AND sc.metric = 'message_sent'
-            AND sc.bucket >= ${heatWindowStart(now).toISOString().slice(0, 10)}::date
-        )
     `,
       "list enabled idle nudge servers",
     );
-    return parseRows(idleNudgeServerRowSchema, rows, "enabled server").map((row) => ({
-      ...row,
-      config: row.config ?? defaultServerNaturalNudgeConfig(row.server_id),
-    }));
+    return parseRows(enabledIdleNudgeServerSchema, rows, "enabled server");
   }
 
   /** Channels with a turn since `since`, minus roleplay channels, where in-character talk is not a lull to fill. */

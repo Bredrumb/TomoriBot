@@ -12,7 +12,12 @@ import {
   type PersonaAuthoredIdleNudge,
 } from "@/modules/natural-nudges/db/types";
 import { resolveEffectiveChannelIds } from "@/modules/natural-nudges/runtime/channels";
-import { countUnansweredStreak, idleNudgesPerDay } from "@/modules/natural-nudges/runtime/meters";
+import { countUnansweredStreak } from "@/modules/natural-nudges/runtime/meters";
+import {
+  invalidateNaturalNudgeConfigCache,
+  readNaturalNudgeGate,
+  recordNaturalNudgeDirectChat,
+} from "@/modules/natural-nudges/runtime/configCache";
 import { UNANSWERED_STOP_STREAK } from "@/modules/natural-nudges/runtime/tuning";
 import { workspaceConfigExportSchema } from "@/types/db/dataExport";
 import { exportRepository } from "@/utils/db/repositories/ExportRepository";
@@ -559,7 +564,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Natural Nudges persistence: regression", (
       await testSql`DELETE FROM servers WHERE server_id = ANY(${testSql.array(serverIds, "INT")})`;
     });
 
-    it("lists a heated server with no settings row on defaults, and skips cold, DM, and turned-off ones", async () => {
+    it("lists warm and cold servers with default settings, and skips DM and turned-off ones", async () => {
       const heated = await insertServer("_rt_nudge_heated");
       const cold = await insertServer("_rt_nudge_cold");
       const dm = await insertServer("_rt_nudge_dm", true);
@@ -573,10 +578,12 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Natural Nudges persistence: regression", (
 
       const listed = await naturalNudgeRepository.listEnabledIdleNudgeServers(new Date());
       const ours = listed.filter((server) => serverIds.includes(server.server_id));
-      expect(ours.map((server) => server.server_id)).toEqual([heated]);
-      expect(ours[0]?.config).toEqual(defaultServerNaturalNudgeConfig(heated));
-      expect(ours[0]?.config.idle_nudges_enabled).toBe(true);
-      expect(idleNudgesPerDay(50, ours[0]?.config.idle_nudge_frequency ?? 0)).toBe(2);
+      expect(new Set(ours.map((server) => server.server_id))).toEqual(new Set([heated, cold]));
+      expect(ours.find((server) => server.server_id === heated)).toEqual({
+        server_id: heated,
+        server_disc_id: "_rt_nudge_heated",
+        timezone_offset: null,
+      });
     });
 
     it("excludes unused and dormant servers despite recent stats and boosted heat, then admits a direct-chat wake", async () => {
@@ -601,14 +608,31 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Natural Nudges persistence: regression", (
     });
 
     it("requires measured activity even with recent direct chat and a positive heat adjustment", async () => {
-      const serverId = await insertServer("_rt_nudge_offset_only");
-      await naturalNudgeRepository.saveServerConfig(serverId, { heat_offset: 5 });
-      await naturalNudgeRepository.recordDirectChat(serverId);
-      const cold = await naturalNudgeRepository.listEnabledIdleNudgeServers(new Date());
-      expect(cold.some((server) => server.server_id === serverId)).toBe(false);
-      await recordStat(serverId, "message_sent", "", daysAgo(0));
-      const heated = await naturalNudgeRepository.listEnabledIdleNudgeServers(new Date());
-      expect(heated.find((server) => server.server_id === serverId)?.config.heat_offset).toBe(5);
+      const discId = "_rt_nudge_offset_only";
+      const serverId = await insertServer(discId);
+      await testSql`
+        INSERT INTO personas (server_id, persona_nickname, is_alter)
+        VALUES (${serverId}, '_rt_nudge_persona', false)
+      `;
+      await naturalNudgeRepository.saveServerConfig(serverId, {
+        heat_offset: 5,
+        channel_disc_ids: ["1400000000000000001"],
+      });
+      try {
+        await recordNaturalNudgeDirectChat(serverId);
+        const cold = await naturalNudgeRepository.listEnabledIdleNudgeServers(new Date());
+        expect(cold.some((server) => server.server_id === serverId)).toBe(true);
+        expect(await readNaturalNudgeGate(discId)).toBeNull();
+        await testSql`
+          INSERT INTO stat_counters (server_id, user_id, persona_lineage_id, metric, metric_key, bucket, count)
+          VALUES (${serverId}, ${refs.userId}, 0, 'message_sent', '', CURRENT_DATE, 10)
+        `;
+        await recordNaturalNudgeDirectChat(serverId);
+        expect(await readNaturalNudgeGate(discId)).not.toBeNull();
+      } finally {
+        invalidateNaturalNudgeConfigCache(serverId);
+        cache.delete(discId);
+      }
     });
 
     it("backfills only existing warm servers with recent channel activity and preserves live timestamps on replay and rollback", async () => {

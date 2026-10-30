@@ -23,14 +23,17 @@ calls never delay reminders.
 | C, speak | `runIdleNudgeAttempt` (`runtime/runner.ts`) | Fresh re-checks, then a normal `tomoriChat` turn on the channel's latest message, run like reminders |
 
 Phase A runs every 60 seconds on the coordinator's reconcile tick, because no due-time column
-exists to wake on. Natural Nudges is on by default. `listEnabledIdleNudgeServers` selects guild
-servers with `message_sent` inside the heat window and uses column defaults for servers with no
-config row. Both modes require a direct chat trigger within the last 14 days, stored as
+exists to wake on. Natural Nudges is on by default. `listEnabledIdleNudgeServers` returns only
+server IDs, Discord IDs, and timezone offsets for guild servers with idle nudges enabled, including
+servers with no config row. The cached `readNaturalNudgeGate` snapshot supplies Phase A's settings
+and heat eligibility. Both modes require a direct chat trigger within the last 14 days, stored as
 `server_natural_nudge_runtime_state.last_direct_chat_at`. The scheduler filters dormant servers in
 SQL using an index on that timestamp. Both modes also require measured heat of at least 1,
 effective heat of at least 1, and a non-empty configured or automatic channel set. Heat adjustments change the pace
 of an eligible server; they cannot supply the measured activity needed to leave dormancy. Idle
-nudges turned off or an attempt in flight also skip evaluation.
+nudges turned off or an attempt in flight also skip evaluation. A server that is not due skips
+history, runtime, and meter reads until its due time or 15 minutes later, whichever comes first;
+a server with no due time waits 15 minutes, while pending verdicts keep their existing cadence.
 
 Migration `121_natural_nudge_dormancy` preserves existing eligible guild servers once: it seeds a
 missing activity timestamp from the latest channel turn within 14 days only when measured and

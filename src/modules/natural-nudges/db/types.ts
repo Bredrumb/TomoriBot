@@ -398,6 +398,5 @@ export const enabledIdleNudgeServerSchema = z.object({
   server_id: z.number().int(),
   server_disc_id: z.string(),
   timezone_offset: z.number().nullable(),
-  config: serverNaturalNudgeConfigSchema,
 });
 export type EnabledIdleNudgeServer = z.infer<typeof enabledIdleNudgeServerSchema>;
