@@ -65,7 +65,7 @@ For opted-in users, admission creates a service-scoped expectation before checki
 
 ### Persona-authored triggers
 
-A persona's webhook post is posted by the channel's shared managed webhook, so its author ID is never a person. An organic persona-to-persona reply is credited to the person who started the self-reply chain (`getSelfReplyChainOriginUser`); with no recorded originator, admission ignores the message as `persona_chain_without_origin`. A system turn (Natural Nudges, scheduled tasks) that anchors on persona output is credited to the bot account instead, and `getTopUsers` leaves the bot off leaderboards. Neither path greets anyone with a reunion note.
+A persona's webhook post is posted by the channel's shared managed webhook, so its author ID is never a person. An organic persona-to-persona reply is credited to the person who started the self-reply chain (`getSelfReplyChainOriginUser`); with no recorded originator, admission ignores the message as `persona_chain_without_origin`. A system turn (Natural Nudges, scheduled tasks) that anchors on any webhook post other than a Matrix relay is credited to the bot account instead, and `getTopUsers` leaves the bot off leaderboards. Neither path greets anyone with a reunion note.
 
 ### Audio transcription
 
