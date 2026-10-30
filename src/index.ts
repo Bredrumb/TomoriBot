@@ -1,4 +1,6 @@
 import { config } from "dotenv";
+import { initializeOAuthCallbackRoute } from "@/utils/oauth/callbackRoute";
+import { getOAuthPublicBaseUrl } from "@/utils/oauth/settings";
 import { resolveEnvironment } from "@/types/config";
 import { startHealthServer } from "@/init/healthServer";
 import { registerHeapSnapshotHandler } from "@/init/heapSnapshot";
@@ -36,13 +38,28 @@ config({ quiet: true });
 
 const environment = resolveEnvironment();
 
+const healthPort = Number.parseInt(process.env.PORT ?? "8080", 10);
+
 // Bind to PORT immediately so Cloud Run's startup probe passes before the rest of init runs
 if (environment === "production") {
-  const healthPort = Number.parseInt(process.env.PORT ?? "8080", 10);
   startHealthServer(healthPort);
 }
 
 await loadSecrets(environment);
+
+// Read after secrets load, because a deployment may supply the base URL as a secret.
+const oauthPublicBaseUrl = getOAuthPublicBaseUrl();
+if (oauthPublicBaseUrl) {
+  initializeOAuthCallbackRoute();
+  if (environment !== "production") startHealthServer(healthPort);
+  const callbackOrigin = new URL(oauthPublicBaseUrl);
+  // Only a loopback base URL is plain HTTP; a Docker port mapping can make a mismatch intentional, so this only warns.
+  if (callbackOrigin.protocol === "http:" && callbackOrigin.port !== String(healthPort)) {
+    log.warn(
+      `TOMORI_PUBLIC_BASE_URL uses port ${callbackOrigin.port}, but the callback server listens on PORT ${healthPort}`,
+    );
+  }
+}
 
 await initStartupBackup(environment);
 

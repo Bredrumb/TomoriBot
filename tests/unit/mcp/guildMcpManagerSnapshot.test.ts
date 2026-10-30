@@ -180,19 +180,6 @@ describe("guild MCP transport receipt", () => {
       validation.mockRestore();
     }
   });
-
-  it("refuses Smithery managed keys without starting a transport", async () => {
-    const manager = getGuildMcpManager() as unknown as TestableGuildMcpManager;
-    const fetchSpy = spyOn(globalThis, "fetch");
-    try {
-      await expect(
-        manager.connectWithFallback("fixture", "https://fixture.run.tools/mcp", "fixture-key"),
-      ).rejects.toThrow();
-      expect(fetchSpy).not.toHaveBeenCalled();
-    } finally {
-      fetchSpy.mockRestore();
-    }
-  });
 });
 
 describe("guild MCP connect failures", () => {

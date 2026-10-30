@@ -14,19 +14,6 @@ Use a provider's direct HTTPS endpoint supporting MCP Streamable HTTP or SSE:
 Add the endpoint and any required authentication under `/config` > `Plugins` > `MCP Servers`.
 Choose `Prose Linter` for a Response Drafting rule checker; its tools are not called during chat.
 
-### Adding a Smithery Server
-
-Servers hosted on Smithery have addresses ending in `.run.tools`. Paste that address into `URL`
-and your Smithery API key into `Auth Token`. TomoriBot sends the key only to Smithery's API at
-`api.smithery.ai`, never to the server address itself. Smithery then passes each tool call to the
-server, so Smithery sees every tool request and result. Registrations saved before this support
-returned work again without changes.
-
-Some servers ask you to sign in with the service they wrap. Adding one fails with a message that
-authorization is needed, and TomoriBot never shows the sign-in link in Discord. Open your Smithery
-dashboard, finish the sign-in for the connection whose name starts with `tomoribot-`, then add the
-server again. Connecting and listing tools must finish within 15 seconds.
-
 Authentication tokens are encrypted at rest. Disabling a server used for search or URL reading
 restores the built-in tool. A saved tool list reflects the last successful discovery and does not
 guarantee the server is currently reachable.

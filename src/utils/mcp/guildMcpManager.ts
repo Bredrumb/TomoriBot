@@ -5,7 +5,7 @@
  * MCP servers registered by guild admins. Each connection is keyed by
  * "${serverId}:${name}" and auto-evicted after a configurable idle TTL.
  *
- * Streamable HTTP, SSE, and Smithery Connect share pinned URL validation and response-byte limits.
+ * Streamable HTTP and SSE share pinned URL validation and response-byte limits.
  */
 
 import { Client as MCPClient } from "@modelcontextprotocol/sdk/client/index.js";
@@ -33,7 +33,6 @@ import { refreshToolExecutionContext } from "@/tools/availability";
 import { configToFeatureFlags } from "@/utils/tools/featureFlagMapper";
 import { validateFetchUrlTarget } from "@/tools/fetchUrl/urlSafety";
 import { createGuildMcpFetch } from "@/utils/mcp/guildMcpFetch";
-import { connectSmithery, isSmitheryUrl } from "@/utils/mcp/smitheryConnection";
 
 interface GuildMcpRoute {
   config: GuildMcpServerRow;
@@ -757,9 +756,6 @@ class GuildMcpManager {
     serverLabel?: string,
     privateFailure = false,
   ): Promise<{ client: MCPClient; functionNames: string[] }> {
-    if (isSmitheryUrl(url) && authToken) {
-      return await connectSmithery(clientName, url, authToken, AbortSignal.timeout(CONNECT_TIMEOUT_MS));
-    }
     const client = await this.connectWithFallback(clientName, url, authToken, serverLabel, privateFailure);
     try {
       const toolResult = await client.listTools();
@@ -772,8 +768,7 @@ class GuildMcpManager {
 
   /**
    * SSE-only servers reject the Streamable HTTP handshake, so both attempts need
-   * fresh clients and the same guarded fetcher. A Smithery account key must never
-   * become a bearer token for the upstream server, even after a Smithery failure.
+   * fresh clients and the same guarded fetcher.
    */
   private async connectWithFallback(
     clientName: string,
@@ -783,9 +778,6 @@ class GuildMcpManager {
     privateFailure = false,
   ): Promise<MCPClient> {
     const label = serverLabel ?? url;
-    if (isSmitheryUrl(url) && authToken) {
-      throw new Error("Smithery account keys are sent only to Smithery Connect");
-    }
     const urlValidation = await validateRemoteUrl(url);
     if (!urlValidation.valid) {
       throw new Error(urlValidation.details ?? `Guild MCP URL failed runtime validation for '${label}'.`);

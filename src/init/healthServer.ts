@@ -108,5 +108,12 @@ export function startHealthServer(port: number): void {
 
   server.on("error", (error) => {
     log.error("Health check server error", error);
+    if (!server.listening && registeredRoutes.size > 0) {
+      log.warn(
+        `Registered HTTP routes are unreachable because port ${port} could not be bound; set PORT to a free port`,
+        undefined,
+        { metadata: { routes: [...registeredRoutes.keys()] } },
+      );
+    }
   });
 }

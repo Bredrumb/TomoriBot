@@ -124,14 +124,6 @@ Use o endpoint HTTPS direto de um provedor compatível com MCP Streamable HTTP o
 2. Abra `/config` > Plugins > Servidores MCP e escolha `+ Adicionar MCP`.
 3. Cole o endpoint em `URL`, insira o token Bearer em `Token de Autenticação` se necessário e escolha o `Tipo de Servidor` desejado. **Propósito Geral** fica selecionado por padrão. Escolha `Corretor de prosa` para um linter que você queira usar como verificador de regras da Revisão de respostas: a Tomori nunca chama suas ferramentas por conta própria e ele aparece em `Verificações de Regras` na página de Revisão de respostas.
 
-### Adicionando um servidor Smithery
-
-Servidores hospedados no Smithery têm endereços terminados em `.run.tools`. Cole esse endereço em `URL` e sua chave de API do Smithery em `Token de Autenticação`. O TomoriBot envia a chave apenas para a API do Smithery em `api.smithery.ai`, nunca para o endereço do servidor em si. O Smithery então encaminha cada chamada de ferramenta para o servidor, portanto, o Smithery vê todas as solicitações e resultados de ferramentas. Os registros salvos antes do retorno deste suporte voltam a funcionar sem alterações.
-
-O TomoriBot mantém uma conexão do Smithery por endereço de servidor no primeiro namespace da sua conta do Smithery (o Smithery cria um namespace se você não tiver nenhum) e a reutiliza, evitando o acúmulo de conexões ao adicionar, testar e reconectar. O TomoriBot nunca exclui conexões. Versões anteriores do TomoriBot criavam uma nova conexão a cada reconexão, então sua conta pode ter várias conexões não utilizadas para o mesmo servidor; você pode removê-las no painel do Smithery.
-
-Alguns servidores exigem que você faça login no serviço que eles encapsulam. Tentar adicionar um servidor desse tipo falhará com uma mensagem informando que a autorização é necessária, e o TomoriBot nunca exibe o link de login no Discord. Abra o painel do Smithery, conclua o login para a conexão cujo nome começa com `tomoribot-` e adicione o servidor novamente. A conexão e a listagem de ferramentas devem ser concluídas em até 15 segundos.
-
 Desativar um registro selecionado para pesquisa ou leitura de URL restaura a seleção integrada do TomoriBot; mantê-lo ativado impede a troca automática. Os nomes de ferramentas salvos descrevem a última descoberta realizada, portanto, não comprovam que a conexão ainda esteja funcionando.
 
 As respostas são interrompidas em 8 MiB durante o download. Catálogos grandes de ferramentas ou resultados volumosos podem deixar um plugin indisponível ou fazer uma chamada de ferramenta falhar. Para conexões SSE, o limite abrange todo o fluxo de resposta, incluindo atualizações sucessivas. Solicite ao provedor resultados menores, paginação ou links de arquivos quando uma ferramenta retornar documentos grandes ou mídias incorporadas.

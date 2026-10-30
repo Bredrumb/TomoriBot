@@ -4,13 +4,15 @@
  * Periodically purges durable `short_term_memories` rows whose `updated_at`
  * timestamp is older than `STM_JANITOR_RETENTION_DAYS` (default 90 days).
  * This prevents unbounded table growth from abandoned channels while leaving
- * recently-touched rows fully intact.
+ * recently-touched rows fully intact. Each run also deletes expired and consumed
+ * `oauth_states` rows, which are useless once their sign-in has finished or timed out.
  *
- * The janitor is intentionally lightweight: one DELETE per run, triggered by
+ * The janitor is intentionally lightweight: one DELETE per table per run, triggered by
  * a setInterval on the existing timer infrastructure. It does NOT touch the
  * in-process cache: those entries expire via the normal TTL path.
  */
 
+import { oauthStateRepository } from "@/utils/db/repositories/OAuthStateRepository";
 import { shortTermMemoryRepository } from "@/utils/db/repositories/ShortTermMemoryRepository";
 import { log } from "@/utils/misc/logger";
 
@@ -33,6 +35,14 @@ async function tick(): Promise<void> {
     }
   } catch (error) {
     log.error("[STM janitor] Purge cycle failed", error as Error, { errorType: "STMJanitorError" });
+  }
+  try {
+    const { purgedStates } = await oauthStateRepository.purgeFinishedStates();
+    if (purgedStates > 0) {
+      log.info(`[STM janitor] Purged ${purgedStates} finished oauth_states row${purgedStates === 1 ? "" : "s"}`);
+    }
+  } catch (error) {
+    log.error("[STM janitor] OAuth state purge failed", error as Error, { errorType: "STMJanitorError" });
   }
 }
 
