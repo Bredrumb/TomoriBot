@@ -64,6 +64,67 @@ describe("Play Scene script rules", () => {
 });
 
 describe("nudge and channel selection", () => {
+  it("budgets substituted attributes in stored order for every scene character at sentence boundaries", async () => {
+    const attributes = ["a", "b", "c", "d"].map((letter) => `${letter.repeat(98)}. `.repeat(8));
+    const persona = createPersona({ persona_nickname: "Juno", attribute_list: attributes });
+    const partner = createPersona({
+      persona_nickname: "Mirri".repeat(10),
+      attribute_list: [" ", `${"あ".repeat(99)}。`.repeat(8), "{bot} likes trains. ".repeat(40)],
+    });
+    const prompts: string[] = [];
+    const resolve = spyOn(modelModule, "resolveNudgeModel").mockResolvedValue({
+      kind: "ready",
+      resolved: {
+        state: persona,
+        apiKey: "fixture-key",
+        capability: {
+          callStructuredJSON: async (request, _schema, accepted) => {
+            prompts.push(request.userPrompt);
+            return { success: true, data: accepted.parse({ proceed: false }) };
+          },
+        },
+      },
+    });
+    const target = spyOn(modelModule, "resolveStructuredCallTarget").mockResolvedValue({
+      model: "fixture-model",
+      endpointUrl: undefined,
+      maxOutputTokens: 1000,
+    });
+    try {
+      for (const attributeList of [attributes, [...attributes, "e".repeat(800), "must be omitted"]]) {
+        await planIdleNudge({
+          persona: { ...persona, attribute_list: attributeList },
+          interests: [],
+          plannerModel: { llmId: 1, slot: "nudge-planner" },
+          target: null,
+          candidates: [{ ...candidates[0], partners: [{ persona: partner, interests: [] }] }],
+          channels: [{ name: "general", description: null, transcript: "" }],
+        });
+      }
+      for (const prompt of prompts) {
+        const blocks = [...prompt.matchAll(/<character[^>]*>\n([\s\S]*?)\n<\/character>/g)];
+        expect(blocks).toHaveLength(2);
+        for (const block of blocks) {
+          const kept = block[1].split("\n");
+          expect(kept.reduce((total, attribute) => total + attribute.length, 0)).toBeLessThanOrEqual(1_800);
+          for (const attribute of kept) expect(attribute.length).toBeLessThanOrEqual(450);
+        }
+        const leadAttributes = blocks[0][1].split("\n");
+        expect(leadAttributes.slice(0, 4).map((attribute) => attribute[0])).toEqual(["a", "b", "c", "d"]);
+        for (const attribute of leadAttributes.slice(0, 4)) expect(attribute.endsWith(".")).toBe(true);
+        const partnerAttributes = blocks[1][1].split("\n");
+        expect(partnerAttributes[0]).toBe(`${"あ".repeat(99)}。`.repeat(4));
+        expect(partnerAttributes[1]).toContain(`${partner.persona_nickname} likes trains.`);
+        expect(partnerAttributes[1]).not.toContain("{bot}");
+        expect(partnerAttributes[1].endsWith(".")).toBe(true);
+        expect(prompt).not.toContain("must be omitted");
+      }
+    } finally {
+      resolve.mockRestore();
+      target.mockRestore();
+    }
+  });
+
   it("accepts only offered nudges paired with their allowed channels", () => {
     const accept = buildAcceptedResult(soloCandidates);
     const soloPlan = { ...plan, nudge: soloNudge.key, channel: 2 };
