@@ -280,6 +280,10 @@ export function parseTimeWithOffset(timeStr: string, offsetHours: number): Date 
   }
 
   const localDate = Date.UTC(year, month, day, hour, minute, 0, 0);
+  const calendarDate = new Date(localDate);
+  if (calendarDate.getUTCMonth() !== month || calendarDate.getUTCDate() !== day) {
+    return null;
+  }
 
   const utcDate = new Date(localDate - offsetHours * MILLISECONDS_PER_HOUR);
 
