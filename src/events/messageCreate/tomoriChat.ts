@@ -120,12 +120,15 @@ async function runAdmittedChatTurn(
         try {
           for (const turn of turnPlan.turns) {
             await runWithChatTurnLatency(latencyInvocation, admissionMs, planMs, async () => {
-              if (turn === turnPlan.turns[0]) {
-                await startTyping();
-                recordChatDiagnostic({ kind: "typing_started" });
-              }
+              const typingPromise =
+                turn === turnPlan.turns[0]
+                  ? startTyping().then(() => recordChatDiagnostic({ kind: "typing_started" }))
+                  : Promise.resolve();
               recordChatDiagnostic({ kind: "turn_started", ordinal: turn.personaIndex + 1, total: turn.totalPersonas });
-              const context = await measureChatTurnStage("context_ms", () => buildChatTurnContext(turn));
+              const [context] = await Promise.all([
+                measureChatTurnStage("context_ms", () => buildChatTurnContext(turn)),
+                typingPromise,
+              ]);
               const responseSink = createChatResponseSink(context);
               const result = await runWithChatDiagnosticStage({ turn: turn.personaIndex + 1 }, () =>
                 runGenerationTurn(context, responseSink),
