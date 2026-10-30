@@ -1495,10 +1495,15 @@ class UserRepository implements IRepository<UserExportShape> {
     }
   }
 
-  /** Whether migration 131 or the purge script left a `webhook_user_cleanup` queue to merge. */
+  /** Whether migration 131 or the purge script left `webhook_user_cleanup` rows to merge. */
   async hasPendingWebhookUserCleanup(): Promise<boolean> {
+    // Checked first because clean installs record migration 131 without running it, so the table may not exist.
+    const [table] = await sql<Array<{ present: boolean }>>`
+      SELECT to_regclass('public.webhook_user_cleanup') IS NOT NULL AS present
+    `;
+    if (!table?.present) return false;
     const [queue] = await sql<Array<{ pending: boolean }>>`
-      SELECT to_regclass('public.webhook_user_cleanup') IS NOT NULL AS pending
+      SELECT EXISTS (SELECT 1 FROM webhook_user_cleanup) AS pending
     `;
     return queue?.pending === true;
   }
@@ -1506,24 +1511,29 @@ class UserRepository implements IRepository<UserExportShape> {
   /**
    * Moves the stat counters of the users rows queued in `webhook_user_cleanup` (shared persona webhooks,
    * queued by migration 131 or `scripts/maintenance/purge-webhook-users.ts`) onto the bot account's row,
-   * deletes those rows, and drops the queue, so server and persona spend totals survive.
+   * deletes those rows, and empties the queue, so server and persona spend totals survive.
    *
    * @returns The deleted rows' Discord IDs for cache invalidation, or null when no cleanup is pending.
    */
   async mergeWebhookUsersIntoBot(botUserId: number): Promise<string[] | null> {
     return sql.begin(async (tx: SQL) => {
-      // Rechecked in the transaction because the purge script or another boot may have drained the queue.
-      const [queue] = await tx<Array<{ pending: boolean }>>`
-        SELECT to_regclass('public.webhook_user_cleanup') IS NOT NULL AS pending
+      const [table] = await tx<Array<{ present: boolean }>>`
+        SELECT to_regclass('public.webhook_user_cleanup') IS NOT NULL AS present
       `;
-      if (!queue?.pending) return null;
+      if (!table?.present) return null;
+
+      // The production runtime role has no DDL privilege, so the queue is emptied rather than dropped;
+      // claiming rows first leaves anything queued mid-merge for the next run instead of discarding it.
+      const claimed = await tx<Array<{ user_id: number }>>`DELETE FROM webhook_user_cleanup RETURNING user_id`;
+      if (claimed.length === 0) return null;
+      const userIds = claimed.map((row) => row.user_id);
 
       await tx`
         INSERT INTO stat_counters (server_id, user_id, persona_lineage_id, metric, metric_key, bucket, count, first_at, last_at)
         SELECT sc.server_id, ${botUserId}, sc.persona_lineage_id, sc.metric, sc.metric_key, sc.bucket,
                SUM(sc.count), MIN(sc.first_at), MAX(sc.last_at)
         FROM stat_counters sc
-        JOIN webhook_user_cleanup c ON c.user_id = sc.user_id
+        WHERE sc.user_id IN ${tx(userIds)}
         GROUP BY sc.server_id, sc.persona_lineage_id, sc.metric, sc.metric_key, sc.bucket
         ON CONFLICT (server_id, user_id, persona_lineage_id, metric, metric_key, bucket) DO UPDATE
         SET count = stat_counters.count + EXCLUDED.count,
@@ -1531,11 +1541,9 @@ class UserRepository implements IRepository<UserExportShape> {
             last_at = GREATEST(stat_counters.last_at, EXCLUDED.last_at)
       `;
       const deleted = await tx<Array<{ user_disc_id: string }>>`
-        DELETE FROM users u USING webhook_user_cleanup c
-        WHERE u.user_id = c.user_id
-        RETURNING u.user_disc_id
+        DELETE FROM users WHERE user_id IN ${tx(userIds)}
+        RETURNING user_disc_id
       `;
-      await tx`DROP TABLE webhook_user_cleanup`;
       return deleted.map((row) => row.user_disc_id);
     });
   }
