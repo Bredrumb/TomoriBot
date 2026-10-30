@@ -51,7 +51,8 @@ buildContext() (context-build pipeline)        ──► assembles StructuredCon
   or a deletion requiring older history take the REST path. A change arriving during a REST read
   forces another read because discord.js can overwrite a cached edit with the response. Signal
   overflow drops the window. Shard disconnects and reconnects drop all windows; disconnected shards
-  disable reuse. The idle channel keeps no window because the message sweeper can evict cache entries.
+  disable reuse. DM turns use REST unless the client subscribes to DM reaction events. The idle channel
+  keeps no window because the message sweeper can evict cache entries.
 - **History auxiliary reads**: proxy identities use the unfiltered history; sprite records, minimal
   notice bodies, and agendas use visible messages after blacklist and block filtering. These reads
   run concurrently before simplification.

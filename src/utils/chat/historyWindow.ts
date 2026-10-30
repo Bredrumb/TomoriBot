@@ -1,4 +1,4 @@
-import { LimitedCollection, type Message } from "discord.js";
+import { ChannelType, GatewayIntentBits, LimitedCollection, type Message } from "discord.js";
 import { channelLocks } from "@/utils/chat/channelQueue";
 import { MAX_MESSAGE_FETCH_LIMIT } from "@/utils/discord/messageFetchLimit";
 import { measureChatTurnStage, recordChatTurnHistory } from "@/utils/chat/turnLatency";
@@ -83,7 +83,9 @@ export async function readChannelHistory(
   const entry = channelLocks.get(channel.id);
   const signal = entry?.activeTurnAbortController?.signal;
   const ownsTurn = () => entry?.isLocked && entry.activeTurnAbortController?.signal === signal && !signal?.aborted;
-  const canStore = () => ownsTurn() && disconnectedShards.size === 0;
+  const receivesReactions =
+    channel.type !== ChannelType.DM || channel.client.options.intents.has(GatewayIntentBits.DirectMessageReactions);
+  const canStore = () => ownsTurn() && disconnectedShards.size === 0 && receivesReactions;
   const cache = channel.messages.cache;
   let window = canStore() ? entry?.historyWindow : undefined;
   const cacheOldest = [...cache.keys()].sort(compareIds)[0];
@@ -124,7 +126,7 @@ export async function readChannelHistory(
       cache,
       hasOlderMessages: false,
     };
-    if (canStore() && entry) entry.historyWindow = window;
+    if (ownsTurn() && entry) entry.historyWindow = window;
     const fetched = await measureChatTurnStage("history_fetch_ms", () => channel.messages.fetch({ limit: fetchLimit }));
     window.fetching = false;
     if (entry && !ownsTurn()) {
@@ -133,7 +135,7 @@ export async function readChannelHistory(
       return [...fetched.values()].reverse();
     }
     // REST patches cached instances, so even a cached edit during the request requires another read.
-    if (window.changedDuringFetch || (canStore() && entry?.historyWindow !== window)) continue;
+    if (window.changedDuringFetch || (ownsTurn() && entry?.historyWindow !== window)) continue;
     window.messages = [
       ...new Map([...fetched, ...window.messages.map((message) => [message.id, message] as const)]).values(),
     ].reverse();
@@ -142,6 +144,8 @@ export async function readChannelHistory(
       window.messages.sort((left, right) => compareIds(left.id, right.id));
       window.messages = mergeWindow(window, cache.values(), fetchLimit);
       window.newestAtBuild = window.messages.at(-1)?.id;
+    } else if (entry?.historyWindow === window) {
+      entry.historyWindow = undefined;
     }
     return [...window.messages];
   }
