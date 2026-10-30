@@ -1,4 +1,6 @@
-import { describe, expect, it, spyOn } from "bun:test";
+import { describe, expect, it, mock, spyOn } from "bun:test";
+import type { ProviderStructuredJsonRequest } from "@/types/provider/featureInterfaces";
+import { NudgeRequestBudget } from "@/modules/natural-nudges/runtime/requestBudget";
 import {
   buildAcceptedResult,
   buildPlannerJsonSchema,
@@ -93,6 +95,7 @@ describe("nudge and channel selection", () => {
     try {
       for (const attributeList of [attributes, [...attributes, "e".repeat(800), "must be omitted"]]) {
         await planIdleNudge({
+          admitRequest: () => true,
           persona: { ...persona, attribute_list: attributeList },
           interests: [],
           plannerModel: { llmId: 1, slot: "nudge-planner" },
@@ -174,6 +177,7 @@ describe("nudge and channel selection", () => {
     });
     try {
       const outcome = await planIdleNudge({
+        admitRequest: () => true,
         persona,
         interests: [],
         plannerModel: { llmId: 1, slot: "nudge-planner" },
@@ -188,6 +192,66 @@ describe("nudge and channel selection", () => {
       expect(outcome.status).toBe("declined");
       expect(prompts).toHaveLength(1);
       expect(prompts[0].split(attribute).length - 1).toBe(1);
+    } finally {
+      resolve.mockRestore();
+      target.mockRestore();
+    }
+  });
+});
+
+describe("planner request budget", () => {
+  it("checks room without spending or resetting another server-day's count", () => {
+    const budget = new NudgeRequestBudget();
+    const dayStart = new Date("2030-06-10T00:00:00Z");
+    const nextDay = new Date("2030-06-11T00:00:00Z");
+    expect(budget.hasRoom(1, dayStart, 1)).toBe(true);
+    expect(budget.hasRoom(1, dayStart, 1)).toBe(true);
+    expect(budget.take(1, dayStart, 1)).toBe(true);
+    expect(budget.hasRoom(1, dayStart, 1)).toBe(false);
+    expect(budget.hasRoom(2, dayStart, 1)).toBe(true);
+    expect(budget.take(2, dayStart, 1)).toBe(true);
+    expect(budget.hasRoom(1, nextDay, 1)).toBe(true);
+    expect(budget.take(1, dayStart, 1)).toBe(false);
+    expect(budget.take(1, nextDay, 1)).toBe(true);
+    expect(budget.take(1, nextDay, 1)).toBe(false);
+  });
+
+  it.each([0, 1, 2])("makes at most %s provider calls even when answers need a format retry", async (cap) => {
+    const persona = createPersona({ config: { thinking_level: "high" } });
+    const callStructuredJSON = mock(async (_request: ProviderStructuredJsonRequest) => ({
+      success: false as const,
+      error: "fixture",
+      failure: "malformed" as const,
+      malformed: { reason: "unparsable" as const },
+    }));
+    const resolve = spyOn(modelModule, "resolveNudgeModel").mockResolvedValue({
+      kind: "ready",
+      resolved: { state: persona, apiKey: "fixture-key", capability: { callStructuredJSON } },
+    });
+    const target = spyOn(modelModule, "resolveStructuredCallTarget").mockResolvedValue({
+      model: "fixture-model",
+      endpointUrl: undefined,
+      maxOutputTokens: 1000,
+    });
+    const budget = new NudgeRequestBudget();
+    const dayStart = new Date("2030-06-10T00:00:00Z");
+    try {
+      const outcome = await planIdleNudge({
+        persona,
+        interests: [],
+        plannerModel: { llmId: 1, slot: "nudge-planner" },
+        admitRequest: () => budget.take(persona.server_id, dayStart, cap),
+        target: null,
+        candidates: soloCandidates,
+        channels: [{ name: "general", description: null, transcript: "" }],
+      });
+      expect(outcome).toMatchObject(
+        cap === 0 ? { status: "unavailable", reason: "budget" } : { status: "failed", reason: "malformed" },
+      );
+      expect(callStructuredJSON).toHaveBeenCalledTimes(cap);
+      expect(budget.hasRoom(persona.server_id, dayStart, cap)).toBe(false);
+      if (cap > 0) expect(callStructuredJSON.mock.calls[0][0].thinkingLevel).toBe("high");
+      if (cap > 1) expect(callStructuredJSON.mock.calls[1][0].thinkingLevel).toBe("none");
     } finally {
       resolve.mockRestore();
       target.mockRestore();

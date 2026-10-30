@@ -41,6 +41,7 @@ export interface PlannerInput {
   candidates: readonly PlannerCandidate[];
   channels: readonly PlannerChannel[];
   plannerModel: NudgeModelRef;
+  admitRequest: () => boolean;
   target: PingUserTarget | null;
 }
 
@@ -141,7 +142,7 @@ export interface IdleNudgePlan {
 export type PlannerOutcome =
   | { status: "planned"; plan: IdleNudgePlan; usage: TokenUsage | null; model: string }
   | { status: "declined"; usage: TokenUsage | null; model: string }
-  | { status: "unavailable"; reason: "model_unavailable" | "credentials" | "denied" }
+  | { status: "unavailable"; reason: "model_unavailable" | "credentials" | "denied" | "budget" }
   | {
       status: "failed";
       reason: "transport" | "malformed" | "refusal" | "timeout";
@@ -299,8 +300,9 @@ export async function planIdleNudge(input: PlannerInput): Promise<PlannerOutcome
   const jsonSchema = buildPlannerJsonSchema(input.candidates);
   const abortSignal = AbortSignal.timeout(PLANNER_TIMEOUT_MS);
   let usage: TokenUsage | null = null;
-  const ask = (prompt: string, thinkingLevel: string | undefined) =>
-    withProviderUsageContext(resolved.usageContext, () =>
+  const ask = (prompt: string, thinkingLevel: string | undefined) => {
+    if (!input.admitRequest()) return null;
+    return withProviderUsageContext(resolved.usageContext, () =>
       resolved.capability.callStructuredJSON<PlannerResult>(
         {
           apiKey: resolved.apiKey,
@@ -322,11 +324,13 @@ export async function planIdleNudge(input: PlannerInput): Promise<PlannerOutcome
         buildAcceptedResult(input.candidates),
       ),
     );
+  };
 
   let result = await ask(userPrompt, resolved.state.config.thinking_level);
+  if (!result) return { status: "unavailable", reason: "budget" };
   // Reasoning off for the retry, because an exhausted reasoning budget is the usual cause of an empty reply.
   if (!result.success && result.failure === "malformed" && result.malformed && !abortSignal.aborted) {
-    result = await ask(`${userPrompt}\n\n${formatStructuredRetryNote(result.malformed)}`, "none");
+    result = (await ask(`${userPrompt}\n\n${formatStructuredRetryNote(result.malformed)}`, "none")) ?? result;
   }
   if (abortSignal.aborted) return { status: "failed", reason: "timeout", model, usage };
   if (!result.success && isNudgeCallDenied(resolved, result.cause)) {

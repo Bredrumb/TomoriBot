@@ -175,7 +175,11 @@ activity still controls dormancy.
   while the channel processing lock and admission gate still prevent overlapping turns.
 - **Caps follow the frequency level.** `IDLE_NUDGE_DAILY_CAPS` and `ACTIVE_NUDGE_DAILY_CAPS` in
   `runtime/tuning.ts` map each level to its daily ceiling, so the panel estimate, the idle nudge
-  re-check, and the Active Nudge check read one source. The server's `category_weights` set relative
+  re-check, and the Active Nudge check read one source. `IDLE_NUDGE_DAILY_PLANNER_CAPS` separately
+  limits planner requests per server, counting every provider call including format retries,
+  declines, failures, and plans aborted before delivery, with no refunds; it resets at the server's
+  local midnight and is forgotten on restart. Phase A skips fire-history reads while it is spent.
+  The server's `category_weights` set relative
   idle category tickets, with zero excluding a category in stored or imported settings.
   `/config` > `Plugins` > `Natural Nudges` edits these weights and `heat_offset` for members with
   `Manage Server`. The weight modal accepts four positive whole numbers totaling 100 and saves

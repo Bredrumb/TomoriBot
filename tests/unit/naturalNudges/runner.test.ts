@@ -190,6 +190,7 @@ function attemptWithHistory(latest: () => Promise<Message[]>): {
       },
     ],
     plannerModel: { llmId: 1, slot: "nudge-planner" },
+    admitRequest: () => true,
     availableTools: new Set(),
     plannerChannels: [{ channel, quietSinceMs: 0, transcript: "" }],
     target: null,
@@ -259,6 +260,29 @@ function attemptWithOwnerNudge(config = ownerConfig()): { attempt: IdleNudgeAtte
 }
 
 describe("idle nudge channel context", () => {
+  it.each([
+    false,
+    true,
+  ])("counts a malformed planner failure but not a budget abort (malformed: %s)", async (malformed) => {
+    const { attempt, sent } = attemptWithHistory(async () => []);
+    const failure = spyOn(naturalNudgeRepository, "recordFailure").mockResolvedValue(null);
+    spies.push(failure);
+    plannerSpy.mockResolvedValue(
+      malformed
+        ? { status: "failed", reason: "malformed", model: "fixture-planner", usage: null }
+        : { status: "unavailable", reason: "budget" },
+    );
+    expect(await runIdleNudgeAttempt(attempt)).toBe(malformed ? "failed" : "aborted");
+    expect(failure).toHaveBeenCalledTimes(malformed ? 1 : 0);
+    expect(samples.at(-1)).toMatchObject({
+      outcome: malformed ? "failed" : "aborted",
+      phase: "b",
+      reason: malformed ? "planner_malformed" : "budget",
+    });
+    expect(chatInputs).toHaveLength(0);
+    expect(sent).toHaveLength(0);
+  });
+
   it("makes no planner call or Discord post while dormant", async () => {
     const { attempt, sent } = attemptWithHistory(async () => []);
     spyOn(configCache, "readNaturalNudgeGate").mockResolvedValue(null);
