@@ -28,6 +28,7 @@ import { getCapabilityCredentialFailureCopy, resolveCapabilityCredentials } from
 import { resolveTextCredentialState } from "@/utils/provider/textModelSelection";
 import { invalidateEmojiStickerCache } from "@/utils/cache/emojiStickerCache";
 import { lazySyncGuildEmojis } from "@/utils/cache/emojiLazySync";
+import { stickerImage } from "@/utils/discord/stickerImage";
 import { lazySyncGuildStickers } from "@/utils/cache/stickerLazySync";
 import { callExpressionInitializationForProvider } from "@/providers/utils/providerFeatureExecutors";
 import { providerSupportsFeature } from "@/utils/provider/providerInfoRegistry";
@@ -73,17 +74,6 @@ function hexToNumber(hexColor: string): number {
  */
 function buildEmojiCDNUrl(emojiId: string): string {
   return `https://cdn.discordapp.com/emojis/${emojiId}.png`;
-}
-
-/**
- * Build Discord CDN URL for a sticker
- * Always use .png format
- *
- * @param stickerId - Discord sticker ID (snowflake)
- * @returns Discord CDN URL for the sticker as PNG
- */
-function buildStickerCDNUrl(stickerId: string): string {
-  return `https://cdn.discordapp.com/stickers/${stickerId}.png`;
 }
 
 function buildSystemPrompt(): string {
@@ -335,7 +325,17 @@ export async function execute(
       ]);
       return {
         pendingEmojis: emojis.filter((emoji) => !classifiedEmojiIds.has(emoji.emoji_disc_id)),
-        pendingStickers: stickers.filter((sticker) => !classifiedStickerIds.has(sticker.sticker_disc_id)),
+        // A sticker with no raster image stays out of every batch, because skipped-image indices map onto batch positions.
+        pendingStickers: stickers.flatMap((sticker) => {
+          const image = stickerImage(interaction.client.rest, {
+            id: sticker.sticker_disc_id,
+            name: sticker.sticker_name,
+            format: sticker.sticker_format,
+          });
+          return image && !classifiedStickerIds.has(sticker.sticker_disc_id)
+            ? [{ ...sticker, imageUrl: image.url }]
+            : [];
+        }),
       };
     };
 
@@ -403,16 +403,13 @@ export async function execute(
       }
 
       for (const sticker of pendingStickers) {
-        images.push({
-          url: buildStickerCDNUrl(sticker.sticker_disc_id),
-          name: sticker.sticker_name,
-        });
+        images.push({ url: sticker.imageUrl, name: sticker.sticker_name });
         items.push({ name: sticker.sticker_name, type: "sticker" });
         batchTargets.push({ type: "sticker", discId: sticker.sticker_disc_id });
       }
 
       // Apply provider batch size limit (different token/cost constraints per provider)
-      if (expressionBatchSize && images.length > expressionBatchSize) {
+      if (expressionBatchSize && items.length > expressionBatchSize) {
         images.splice(expressionBatchSize);
         items.splice(expressionBatchSize);
         batchTargets.splice(expressionBatchSize);
@@ -426,7 +423,7 @@ export async function execute(
           {
             description: localizer(locale, "commands.expressions.initialize.progress_analyzing_batch", {
               batch_number: batchNumber,
-              batch_size: images.length,
+              batch_size: items.length,
               remaining,
               processed: classifiedEmojiIds.size + classifiedStickerIds.size,
               grand_total: grandTotalUninitialized,

@@ -14,7 +14,8 @@ import { formatProviderErrorCodeForDisplay } from "@/utils/provider/providerErro
 import { hasLocaleKey, initializeLocalizer, localizer } from "@/utils/text/localizer";
 import providerLocale from "@/locales/en-US/providers";
 import { RUNTIME_LOCALES, collectCaseFailures, localizedCopy } from "../../helpers/localeCases";
-import { createProviderToolFailure } from "@/utils/provider/providerToolFailure";
+import { ConfiguredModelUnavailableError, createProviderToolFailure } from "@/utils/provider/providerToolFailure";
+import { CredentialUnavailableError } from "@/utils/provider/credentialResolver";
 
 // A synthetic credential an endpoint reflects back, in the encodings a pattern redactor misses.
 const CANARY = "sk-live-CANARY0001";
@@ -187,6 +188,107 @@ describe("public provider error descriptions", () => {
     );
     expect(auth.failure?.suggestedActions).toContain(localizedCopy("en-US", "genai.tips.verify_api_key_personal"));
     expect(auth.failure?.suggestedActions).not.toContain(localizedCopy("en-US", "genai.tips.verify_api_key"));
+  });
+
+  it("drops the chat reply-length tip, which no tool request reads", () => {
+    for (const credentialScope of ["server", "personal"] as const) {
+      const result = createProviderToolFailure(
+        { message: "HTTP 402: This request requires more credits, or fewer max_tokens.", status: 402 },
+        { locale: "en-US", provider: "openrouter", credentialScope, kind: "quota" },
+      );
+      expect(result.failure?.reason).toBe(localizedCopy("en-US", "genai.tool_failure.credit_limit"));
+      for (const key of ["genai.tips.reduce_output_tokens", "genai.tips.reduce_output_tokens_personal"]) {
+        expect(result.failure?.suggestedActions).not.toContain(localizedCopy("en-US", key));
+      }
+    }
+  });
+
+  const googleBody = (code: number, message: string, status: string) =>
+    JSON.stringify({ error: { code, message, status } });
+  it.each([
+    {
+      name: "a Google 429 that reports an exhausted quota",
+      error: new Error(
+        googleBody(
+          429,
+          "You exceeded your current quota, please check your plan and billing details.",
+          "RESOURCE_EXHAUSTED",
+        ),
+      ),
+      reason: "balance_exhausted",
+    },
+    {
+      name: "a Z.ai 429 that reports an empty balance",
+      error: Object.assign(
+        new Error(
+          'Z.ai image generation failed: 429 Too Many Requests. {"error":{"code":"1113","message":"Insufficient balance or no resource package. Please recharge."}}',
+        ),
+        { status: 429 },
+      ),
+      reason: "balance_exhausted",
+    },
+    {
+      name: "a malformed Google model ID",
+      error: new Error(
+        googleBody(400, "* GenerateContentRequest.model: unexpected model name format\n", "INVALID_ARGUMENT"),
+      ),
+      reason: "model_error",
+      tip: "check_tool_configuration",
+    },
+    {
+      name: "a retired Veo model",
+      error: new Error(
+        googleBody(404, "This model models/veo-3.1-generate-preview is no longer available.", "NOT_FOUND"),
+      ),
+      reason: "model_error",
+      tip: "check_tool_configuration",
+    },
+    {
+      name: "a speech model without voice design",
+      error: {
+        message: `HTTP 400: ${googleBody(400, "Model 'gemini-3.8-flash-lite-tts' does not support Prompted Voice Design.", "INVALID_ARGUMENT")}`,
+      },
+      kind: "invalid_request" as const,
+      reason: "model_error",
+      tip: "check_tool_configuration",
+    },
+    {
+      name: "a speech safety refusal",
+      error: {
+        message: `HTTP 400: ${googleBody(400, "Voice prompt was blocked by safety policies.", "INVALID_ARGUMENT")}`,
+      },
+      kind: "invalid_request" as const,
+      reason: "content_blocked",
+      tip: "revise_tool_request",
+    },
+    {
+      name: "a provider with no saved configuration",
+      error: new CredentialUnavailableError("google", "image-standard", "no_saved_config"),
+      reason: "not_configured",
+      tip: "check_tool_configuration",
+    },
+  ])("classifies $name from production", ({ error, kind, reason, tip }) => {
+    const result = createProviderToolFailure(error, {
+      locale: "en-US",
+      provider: "google",
+      credentialScope: "server",
+      kind,
+    });
+    expect(result.failure?.reason).toBe(localizedCopy("en-US", `genai.tool_failure.${reason}`));
+    expect(result.failure?.suggestedActions).not.toContain(localizedCopy("en-US", "genai.tips.wait_and_retry"));
+    if (tip) expect(result.failure?.suggestedActions).toEqual([localizedCopy("en-US", `genai.tips.${tip}`)]);
+  });
+
+  it("names configured model files only through the dedicated error", () => {
+    const result = createProviderToolFailure(
+      new ConfiguredModelUnavailableError("ComfyUI prompt failed: 400 Bad Request", ["anima.safetensors"], 400),
+      { locale: "en-US", provider: "custom", credentialScope: "server" },
+    );
+    expect(result.failure?.code).toBe("400");
+    expect(result.failure?.reason).toBe(
+      localizedCopy("en-US", "genai.tool_failure.model_files_missing", { models: "anima.safetensors" }),
+    );
+    expect(result.failure?.suggestedActions).toEqual([localizedCopy("en-US", "genai.tips.check_tool_configuration")]);
   });
 
   it("shows only status and enum-shaped codes", () => {

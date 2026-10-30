@@ -13,6 +13,8 @@ import * as modals from "@/utils/discord/ui/modals";
 import * as textDisplayModals from "@/utils/discord/textDisplayModal";
 import { executeAutoImageCommand } from "@/utils/image/autoImageCommand";
 import * as providerFactory from "@/utils/provider/providerFactory";
+import * as hiddenImageTurn from "@/utils/provider/hiddenImageTurn";
+import { log } from "@/utils/misc/logger";
 import { registerProviderOption } from "@/utils/provider/providerOptionRegistry";
 import { currentProviderUsageContext } from "@/utils/provider/providerUsage";
 import * as quota from "@/utils/quota/imageQuotaManager";
@@ -234,6 +236,23 @@ describe("auto image planning credentials", () => {
     expect(JSON.stringify(modal.calls)).toContain(
       localizedCopy("en-US", "commands.tool.visualize.success_description"),
     );
+  });
+
+  it("keeps provider text out of the failure reply and offers it behind the gated button", async () => {
+    const providerText = "connect ECONNREFUSED 100.64.0.7:8188 at /home/mirri/ComfyUI";
+    restores.push(
+      spyOn(hiddenImageTurn, "runHiddenImageTurn").mockRejectedValue(new Error(providerText)),
+      spyOn(log, "error").mockResolvedValue(undefined),
+    );
+
+    await execute();
+
+    const reply = modal.calls.findLast((call) => call.method === "editReply")?.args[0] as {
+      embeds?: unknown[];
+      components?: unknown[];
+    };
+    expect(JSON.stringify(reply.embeds)).not.toContain("100.64.0.7");
+    expect(JSON.stringify(reply.components)).toContain("error_full_detail");
   });
 
   it("reports unavailable option credentials without requesting generation", async () => {

@@ -15,6 +15,8 @@ export default {
       script_too_long: `The voice script exceeds the selected speech model's length limit.`,
       cancelled: `This tool request was cancelled.`,
       model_error: `The provider rejected the selected model for this tool request.`,
+      model_files_missing: `The generation server does not have these configured model files installed: {models}.`,
+      not_configured: `No usable provider is configured for this tool.`,
       balance_exhausted: `The provider account used for this tool request has run out of credit.`,
       credit_limit: `The provider account cannot cover the requested output length.`,
       context_length: `This tool request exceeds the selected model's context limit.`,

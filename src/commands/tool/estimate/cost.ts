@@ -63,6 +63,7 @@ import {
 import { ProviderFactory } from "@/utils/provider/providerFactory";
 import {
   appendComponentMediaFromMessage,
+  appendStickersFromMessage,
   appendSupportedMediaFromMessage,
   extractEmojiImageAttachments,
 } from "@/utils/chat/contextMedia";
@@ -698,18 +699,7 @@ async function buildRuntimeParityContext(
       componentMediaCounts.imageCount > 0 ||
       componentMediaCounts.videoCount > 0;
 
-    if (message.stickers.size > 0) {
-      for (const sticker of message.stickers.values()) {
-        const stickerUrl = `https://cdn.discordapp.com/stickers/${sticker.id}.png`;
-        imageAttachments.push({
-          url: stickerUrl,
-          proxyUrl: stickerUrl,
-          mimeType: "image/png",
-          filename: `${sticker.name}.png`,
-        });
-        hasLocalMedia = true;
-      }
-    }
+    if (appendStickersFromMessage(message, imageAttachments) > 0) hasLocalMedia = true;
 
     if (shouldExtractEmojiImages && message.content) {
       const emojiImages = extractEmojiImageAttachments(message.content);
