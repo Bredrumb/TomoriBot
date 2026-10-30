@@ -128,7 +128,7 @@ const handler = async (client: Client): Promise<void> => {
 
       const normalStatus: ActivityOptions[] = [
         {
-          name: `Natural Nudges Update! /update`,
+          name: `Playful Interactions! /update`,
           type: ActivityType.Playing,
         },
         {
