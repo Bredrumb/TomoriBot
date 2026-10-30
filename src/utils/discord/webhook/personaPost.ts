@@ -1,4 +1,5 @@
 import { invalidateWebhookCache } from "@/utils/discord/webhook/cache";
+import { recordHistoryWindowDelivery } from "@/utils/chat/historyWindow";
 import type {
   BaseGuildTextChannel,
   Message,
@@ -92,7 +93,8 @@ interface PersonaPostChannel {
   lastMessageId: string | null;
 }
 
-export function recordPersonaDelivery(receipt: PersonaDeliveryReceipt): void {
+export function recordPersonaDelivery(receipt: PersonaDeliveryReceipt, message?: Message): void {
+  recordHistoryWindowDelivery(receipt.channelId, receipt.messageId, message);
   if (receipt.route === "webhook" && receipt.webhookId) {
     recordChannelDeliveredWebhookIdentity(
       receipt.channelId,
@@ -308,7 +310,7 @@ async function sendPersonaPostAttempt(
             sprite: author.sprite,
             serverDiscId,
           };
-          recordPersonaDelivery(receipt);
+          recordPersonaDelivery(receipt, posted);
           context.deliveryReceipts?.push(receipt);
           if (context.replyNoticeState) context.replyNoticeState.sent = true;
         }
@@ -363,7 +365,7 @@ async function sendPersonaPostAttempt(
       sprite: author.sprite,
       serverDiscId,
     };
-    recordPersonaDelivery(receipt);
+    recordPersonaDelivery(receipt, message);
     context.deliveryReceipts?.push(receipt);
     return { status: "sent", message, receipt };
   } catch (error) {

@@ -186,7 +186,7 @@ describe("verified managed webhook identity", () => {
     const channel = {
       id: "fixture-channel",
       isThread: () => false,
-      messages: { fetch: async () => new Map(messages.map((message) => [message.id, message])) },
+      messages: { cache: new Map(), fetch: async () => new Map(messages.map((message) => [message.id, message])) },
     };
     const client = {
       user: { id: "fixture-bot", username: "Tomori" },

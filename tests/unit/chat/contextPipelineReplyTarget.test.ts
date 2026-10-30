@@ -12,6 +12,8 @@ import * as contextBuilder from "@/utils/text/contextBuilder";
 import { log } from "@/utils/misc/logger";
 import { createChatLatencyInvocation, runWithChatTurnLatency } from "@/utils/chat/turnLatency";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
+import { channelLocks, getOrCreateChannelLockEntry } from "@/utils/chat/channelQueue";
+import { recordHistoryWindowChange } from "@/utils/chat/historyWindow";
 import { createPersona, createUserRow } from "../../helpers/fixtures";
 
 describe("history reply context", () => {
@@ -21,6 +23,9 @@ describe("history reply context", () => {
     "forwarded-thread",
     "prefetched",
     "prefetch-failure",
+    "reused",
+    "queued-missing",
+    "queued-deleted",
   ])("resolves history references: %s", async (scenario) => {
     const prefetch = scenario.startsWith("prefetch");
     const fail = scenario === "prefetch-failure";
@@ -54,6 +59,7 @@ describe("history reply context", () => {
       }
     });
     let historyFetched = false;
+    let historyFetches = 0;
     const channel = {
       id: "fixture-channel",
       isThread: () => false,
@@ -62,7 +68,12 @@ describe("history reply context", () => {
         fetch: async (options: string | { limit: number }) => {
           if (typeof options === "string") return fetchById(options);
           historyFetched = true;
-          return new Map((forwardedThread ? messages.slice(0, 1) : messages).map((message) => [message.id, message]));
+          historyFetches++;
+          return new Map(
+            (forwardedThread ? messages.slice(0, 1) : scenario === "queued-missing" ? messages.slice(1) : messages).map(
+              (message) => [message.id, message],
+            ),
+          );
         },
       },
     };
@@ -125,6 +136,13 @@ describe("history reply context", () => {
         ),
       );
     }
+    const windowScenario = scenario === "reused" || scenario.startsWith("queued-");
+    if (windowScenario) {
+      messages[0].id = "101";
+      messages[1].id = "100";
+      if (messages[0].reference) messages[0].reference.messageId = "100";
+      getOrCreateChannelLockEntry(channel.id, "fixture-guild").isLocked = true;
+    }
     const fetchReference = mock(async () => messages[1]);
     if (forwardedThread) {
       Object.assign(messages[0], {
@@ -173,6 +191,8 @@ describe("history reply context", () => {
       allPersonas: [persona],
       userRow: createUserRow(),
       userDiscId: "fixture-juno",
+      triggererName: "Juno",
+      triggererFormattedName: "Juno",
       serverDiscId: "fixture-guild",
       isDMChannel: false,
       guild: null,
@@ -197,6 +217,26 @@ describe("history reply context", () => {
     });
     const metric = spyOn(log, "metric").mockImplementation(() => {});
     try {
+      if (windowScenario) {
+        if (scenario === "reused") {
+          const baseline = await buildChatTurnContext(turn);
+          turn.personaIndex = 1;
+          const reused = await buildChatTurnContext(turn);
+          expect(reused.simplifiedMessages).toEqual(baseline.simplifiedMessages);
+          expect(reused.messageIdMap).toEqual(baseline.messageIdMap);
+          expect(historyFetches).toBe(1);
+        } else {
+          incoming.isFromQueue = true;
+          if (scenario === "queued-deleted") {
+            await buildChatTurnContext(turn);
+            recordHistoryWindowChange(channel.id, "101", "deleted");
+            messages.shift();
+          }
+          const result = await buildChatTurnContext(turn);
+          expect(result.simplifiedMessages.some((message) => message.id === "101")).toBe(scenario === "queued-missing");
+        }
+        return;
+      }
       if (prefetch) {
         for (const [id, target] of targets) channel.messages.cache.set(id, target);
         const baseline = await buildChatTurnContext(turn);
@@ -249,6 +289,7 @@ describe("history reply context", () => {
       expect(reply?.content).toContain(messages[0].content);
       if (!channelEvicted) expect(reply?.content).toContain(messages[1].content);
     } finally {
+      if (windowScenario) channelLocks.delete(channel.id);
       release.resolve();
       for (const spy of [sql, read, privacy, blacklist, blocks, builder, metric]) spy.mockRestore();
     }
