@@ -9,6 +9,7 @@ import * as userCache from "@/utils/cache/userCache";
 import * as triggers from "@/utils/chat/triggerProcessor";
 import * as replyDecision from "@/utils/chat/replyDecision";
 import * as nudgeCache from "@/modules/natural-nudges/runtime/configCache";
+import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
 import { defaultServerNaturalNudgeConfig } from "@/modules/natural-nudges/db/types";
 import * as textModels from "@/utils/provider/textModelSelection";
 import { userNamingRepository } from "@/utils/db/repositories/UserNamingRepository";
@@ -20,6 +21,7 @@ import { createPersona, createUserRow } from "../../helpers/fixtures";
 import { createScopedModuleMocker, stubLogMembers } from "../../helpers/mockSurface";
 
 let resolutions: Array<credentials.ResolvedCredentials | Error> = [];
+const recordDirectChat = nudgeCache.recordNaturalNudgeDirectChat;
 const send = mock(async () => undefined);
 const resolve = mock(async () => {
   const result = resolutions.shift();
@@ -236,6 +238,31 @@ describe("text credential admission", () => {
 });
 
 describe("per-persona planning", () => {
+  it.each(["resolve", "reject"])("plans without waiting for the direct-chat activity write (%s)", async (outcome) => {
+    const write = Promise.withResolvers<Date>();
+    let activity: Promise<void> | undefined;
+    const record = spyOn(naturalNudgeRepository, "recordDirectChat").mockReturnValue(write.promise);
+    restores.push(
+      record,
+      spyOn(nudgeCache, "recordNaturalNudgeDirectChat").mockImplementation((serverId) => {
+        activity = recordDirectChat(serverId);
+        return activity;
+      }),
+    );
+    const turn = lockedTurn();
+    resolutions.push(resolved("server"), resolved("server"));
+    try {
+      const plan = await planChatTurns(turn);
+      expect(plan.turns.length).toBeGreaterThan(0);
+      expect(turn.admission.incoming.isDirectChat).toBe(true);
+      expect(record).toHaveBeenCalledWith(personas[0].server_id);
+    } finally {
+      if (outcome === "reject") write.reject(new Error("fixture activity write failure"));
+      else write.resolve(new Date());
+      await activity;
+    }
+  });
+
   it.each([
     [0, 0],
     [1, 1],

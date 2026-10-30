@@ -254,7 +254,7 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
     })
   ) {
     incoming.isDirectChat = true;
-    await recordNaturalNudgeDirectChat(tomoriState.server_id);
+    void recordNaturalNudgeDirectChat(tomoriState.server_id);
   }
 
   const personaPolicies = new Map<TomoriState, NonNullable<Awaited<ReturnType<typeof resolveTextCredentialPolicy>>>>();

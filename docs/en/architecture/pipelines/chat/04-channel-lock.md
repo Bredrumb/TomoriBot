@@ -31,6 +31,11 @@ try {
 }
 ```
 
+The first turn starts typing alongside context building and waits for both before generation, so
+the initial typing indicator cannot arrive after the reply. `typing_started` records completion of
+the initial request. After that request settles, the keepalive starts only if the same message still
+holds the lock; context failure can release it while the request is in flight.
+
 ### Mutex acquisition and re-entrancy
 
 When an admitted turn arrives:
