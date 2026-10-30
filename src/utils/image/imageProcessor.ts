@@ -10,6 +10,7 @@ import sharp from "sharp";
 import { recordChatTurnFetch } from "@/utils/chat/turnLatency";
 import { log } from "../misc/logger";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
+import { validateRemoteUrl } from "@/utils/security/remoteUrlSecurity";
 import { safeDownload } from "@/utils/security/safeDownload";
 
 // Images exceeding these limits are downscaled before being sent to providers
@@ -33,6 +34,80 @@ export interface OptimizedImage {
   data: string;
   /** MIME type of the resulting image (may change to image/jpeg after optimization) */
   mimeType: string;
+}
+
+interface FetchedImage {
+  data: string;
+  mimeType?: string;
+  contentType?: string;
+}
+
+const IMAGE_CACHE_MAX_BYTES = 64 * 1024 * 1024;
+const imageCache = new Map<string, FetchedImage>();
+const inFlightImages = new Map<string, Promise<FetchedImage>>();
+let imageCacheBytes = 0;
+
+function getImageCacheKey(url: string): string | undefined {
+  try {
+    const parsed = new URL(url);
+    if (
+      parsed.protocol !== "https:" ||
+      !["cdn.discordapp.com", "media.discordapp.net"].includes(parsed.hostname) ||
+      parsed.username ||
+      parsed.password ||
+      parsed.port
+    ) {
+      return undefined;
+    }
+    for (const parameter of ["ex", "is", "hm"]) parsed.searchParams.delete(parameter);
+    return parsed.href;
+  } catch {
+    return undefined;
+  }
+}
+
+export function clearImageCache(): void {
+  imageCache.clear();
+  inFlightImages.clear();
+  imageCacheBytes = 0;
+}
+
+export function getImageCacheSize(): number {
+  return imageCache.size;
+}
+
+function storeImage(key: string, image: FetchedImage): void {
+  const bytes = Buffer.byteLength(image.data);
+  if (bytes > IMAGE_CACHE_MAX_BYTES) return;
+  while (imageCacheBytes + bytes > IMAGE_CACHE_MAX_BYTES) {
+    const oldest = imageCache.entries().next();
+    if (oldest.done) break;
+    imageCache.delete(oldest.value[0]);
+    imageCacheBytes -= Buffer.byteLength(oldest.value[1].data);
+  }
+  imageCache.set(key, image);
+  imageCacheBytes += bytes;
+}
+
+async function fetchCachedImage(url: string): Promise<FetchedImage> {
+  const key = getImageCacheKey(url);
+  if (!key) return fetchImage(url);
+  const cached = imageCache.get(key) ?? inFlightImages.get(key);
+  if (cached) {
+    const validation = await validateRemoteUrl(url);
+    if (!validation.valid) throw new Error("Image URL refused by policy");
+    return cached;
+  }
+  const pending = fetchImage(url).then((image) => {
+    if (inFlightImages.get(key) === pending) storeImage(key, image);
+    return image;
+  });
+  inFlightImages.set(key, pending);
+  try {
+    return await pending;
+  } finally {
+    if (inFlightImages.get(key) === pending) inFlightImages.delete(key);
+  }
 }
 
 function detectImageMimeType(buffer: Buffer): string | undefined {
@@ -86,6 +161,14 @@ function normalizeMimeType(mimeType: string | undefined): string | undefined {
  * @throws Error if the fetch itself fails
  */
 export async function fetchAndOptimizeImage(url: string, sourceMimeType?: string): Promise<OptimizedImage> {
+  const image = await fetchCachedImage(url);
+  return {
+    data: image.data,
+    mimeType: image.mimeType ?? normalizeMimeType(sourceMimeType) ?? image.contentType ?? "image/jpeg",
+  };
+}
+
+async function fetchImage(url: string): Promise<FetchedImage> {
   const downloadStartedAt = performance.now();
   const downloadResult = await safeDownload(url, {
     maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,
@@ -102,14 +185,11 @@ export async function fetchAndOptimizeImage(url: string, sourceMimeType?: string
   const rawSize = buffer.byteLength;
   // Discord filenames and remote headers can disagree with the payload bytes. Provider APIs use
   // the data-URI MIME label while decoding, so prefer recognizable file signatures.
-  const finalMimeType =
-    detectImageMimeType(buffer) ??
-    normalizeMimeType(sourceMimeType) ??
-    normalizeMimeType(downloadResult.contentType) ??
-    "image/jpeg";
+  const finalMimeType = detectImageMimeType(buffer);
+  const contentType = normalizeMimeType(downloadResult.contentType);
 
   if (rawSize <= IMAGE_CONTEXT_MAX_BYTES) {
-    return { data: buffer.toString("base64"), mimeType: finalMimeType };
+    return { data: buffer.toString("base64"), mimeType: finalMimeType, contentType };
   }
 
   try {
@@ -119,7 +199,7 @@ export async function fetchAndOptimizeImage(url: string, sourceMimeType?: string
     const longestSide = Math.max(width, height);
 
     if (longestSide <= IMAGE_CONTEXT_MAX_DIMENSION) {
-      return { data: buffer.toString("base64"), mimeType: finalMimeType };
+      return { data: buffer.toString("base64"), mimeType: finalMimeType, contentType };
     }
 
     const optimizedBuffer = await sharp(buffer)
@@ -142,7 +222,7 @@ export async function fetchAndOptimizeImage(url: string, sourceMimeType?: string
     log.warn(
       `Image optimization failed, sending raw (${(rawSize / 1024 / 1024).toFixed(1)} MB): ${sharpError instanceof Error ? sharpError.message : String(sharpError)}`,
     );
-    return { data: buffer.toString("base64"), mimeType: finalMimeType };
+    return { data: buffer.toString("base64"), mimeType: finalMimeType, contentType };
   }
 }
 

@@ -15,7 +15,7 @@ For stores that only check expiry on read, unread entries remain resident until 
 
 The codebase bounds memory consumption through three coordinated mechanisms:
 
-1. **Size caps with insert-time eviction**: high-frequency caches enforce hard caps on entry counts. `personalSpotlightCache` enforces a cap of 2,000 entries, evicting expired entries first and then the oldest-inserted keys. `personaSpriteMessageCache` sweeps expired entries on its write path at most once every 10 minutes.
+1. **Size caps with insert-time eviction**: high-frequency caches enforce hard caps on entry counts or retained bytes. `personalSpotlightCache` enforces a cap of 2,000 entries, evicting expired entries first and then the oldest-inserted keys. `personaSpriteMessageCache` sweeps expired entries on its write path at most once every 10 minutes.
 2. **Coarse creation gates**: hierarchical keys consult a low-cardinality gate before allocating entries in a fine-grained map. `personalSpotlightCache` checks a per-server boolean gate before creating `serverId:userId:channelDiscId` keys. Servers that configure no spotlights contribute a single gate entry instead of combinatorial entries across users and channels.
 3. **Emergency cache clearer**: reactive memory recovery triggered by `src/utils/cache/emergencyCacheClearer.ts` when process memory reaches critical thresholds.
 
@@ -72,6 +72,7 @@ Application caches are partitioned by domain ownership, lifetime, and storage ba
 - **Short-term memory cache (`shortTermMemoryCache.ts`)**: stores recent conversation dialogue turns and generated summaries. Keyed by user-channel or server-channel identifiers, with persona-scoped variants. Fixed lifetimes: 12 hours for raw dialogue (`CRUDE_CONVERSATION_TTL_HOURS`) and 24 hours for summaries (`SUMMARY_TTL_HOURS`). Raw dialogue is volatile. Summaries, categories, and cadence state are backed by PostgreSQL; category-only entries use the 12-hour cache lifetime.
 - **Emoji and sticker cache (`emojiStickerCache.ts`)**: keyed by internal `server_id`. Stores native server expressions and registered custom expressions. Tracks category synchronization state so initial emoji fetches do not mask sticker data on later turns. Uses a 10-minute TTL.
 - **Markdown table cache (`markdownTableCache.ts`)**: keyed by Discord message ID. Stores original markdown text behind rendered table images. Uses a 120-minute TTL, matching the expiration window of the interactive `Show Markdown` component button.
+- **Recent context images (`src/utils/image/imageProcessor.ts`)**: shares downloaded and optimized image data across provider attempts and persona turns. Only HTTPS URLs on `cdn.discordapp.com` and `media.discordapp.net` qualify; keys omit the rotating `ex`, `is`, and `hm` signature parameters and retain other query parameters. Successful downloads populate the cache, concurrent requests share one download, and incoming URLs still pass the SSRF gate on hits. The cache retains at most 64 MB of base64 string bytes, evicting oldest-inserted entries at capacity; oversized results and failed downloads are never stored. It has no TTL and is recoverable through emergency clearing, which also prevents pending downloads from repopulating cleared entries. Other hosts remain uncached. Each stream adapter processes an item with at most four concurrent part conversions and preserves part order. Cache hits add no image download count or download time to chat latency metrics.
 - **Voice transcript cache (`voiceTranscriptCache.ts`)**: keyed by Discord message ID. Stores speech-to-text and text-to-speech transcripts for historical context. Uses a 120-minute TTL.
 
 ### Provider and integration metadata
@@ -138,7 +139,7 @@ Invalidating before write success is forbidden: a rolled-back transaction would 
 
 When the memory monitor observes RSS approaching container limits (`MEMORY_CRITICAL_THRESHOLD` of `CONTAINER_MEMORY_LIMIT_MB`), it triggers `clearEmergencyCaches()` in `src/utils/cache/emergencyCacheClearer.ts`.
 
-- **Evicted data**: clears recoverable database-backed and API-derived caches: Tomori state, user profiles, whitelists, channel LLM overrides, emoji and stickers, guild MCP configs, personal spotlights, NovelAI subscriptions, preset avatars, voice transcripts, markdown tables, persona sprites, committed persona appearances, and volatile Discord.js client collections (messages, bot users, presences, and voice states).
+- **Evicted data**: clears recoverable database-backed and API-derived caches: Tomori state, user profiles, whitelists, channel LLM overrides, emoji and stickers, guild MCP configs, personal spotlights, NovelAI subscriptions, preset avatars, recent context images, voice transcripts, markdown tables, persona sprites, committed persona appearances, and volatile Discord.js client collections (messages, bot users, presences, and voice states).
 - **Preserved data**: preserves active conversational state (non-expired short-term memories), static LLM model catalogs, provider capability maps, command registries, active channel locks, and background execution queues. Expired STM entries are swept.
 - **Forced collection**: `clearEmergencyCaches()` triggers a forced garbage collection pass before recording post-clear telemetry. Dropping references alone does not ensure immediate reclamation, so post-clear measurements need collection context. RSS and native allocations can still remain high.
 - **Configuration flags**:
@@ -173,4 +174,5 @@ Concurrency is the dominant factor: each concurrent pipeline retains independent
 - `src/utils/cache/personalSpotlightCache.ts`: personal spotlight dual-map cache and capacity enforcement.
 - `src/utils/cache/openrouterCatalog.ts`: multi-modal OpenRouter capability catalog and refresh loop.
 - `src/init/discord.ts`: client collection sweepers and voice participant protection.
+- `src/utils/image/imageProcessor.ts`: bounded recent-image downloads and shared in-flight processing.
 - `src/init/media.ts`: `sharp` native image buffer concurrency and memory caps.

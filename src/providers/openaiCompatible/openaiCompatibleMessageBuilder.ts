@@ -1,3 +1,4 @@
+import { mapWithConcurrency } from "@/utils/async/bounded";
 import type { FunctionCall, FunctionResponseImageMetadata } from "@/types/provider/interfaces";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import {
@@ -73,15 +74,14 @@ export async function buildOpenAICompatibleMessages(
     }
 
     const role = item.role === "user" ? "user" : "assistant";
-    const contentParts: Array<Record<string, unknown>> = [];
-
-    for (const part of item.parts) {
+    const partsByInput = await mapWithConcurrency(item.parts, 4, async (part) => {
+      const contentParts: Array<Record<string, unknown>> = [];
       if (part.type === "text") {
         contentParts.push({
           type: "text",
           text: part.text,
         });
-        continue;
+        return contentParts;
       }
 
       if (part.type === "video") {
@@ -91,11 +91,11 @@ export async function buildOpenAICompatibleMessages(
           type: "text",
           text: "[System: A video is attached to this message that this model cannot process.]",
         });
-        continue;
+        return contentParts;
       }
 
       if (part.type !== "image") {
-        continue;
+        return contentParts;
       }
       if (!options.seesImages) {
         // Image part present but model cannot process it, so add a text placeholder
@@ -105,7 +105,7 @@ export async function buildOpenAICompatibleMessages(
           type: "text",
           text: "[System: An image is attached to this message that this model cannot process.]",
         });
-        continue;
+        return contentParts;
       }
 
       const imagePart = await convertImagePartToOpenAIContentPart(part);
@@ -114,7 +114,9 @@ export async function buildOpenAICompatibleMessages(
         // relocated to a synthetic user turn by relocateAssistantMediaToUserTurns after the loop.
         contentParts.push(imagePart);
       }
-    }
+      return contentParts;
+    });
+    const contentParts = partsByInput.flat();
 
     if (role === "assistant") {
       // Emit the assistant turn with its parts intact. relocateAssistantMediaToUserTurns (run after
@@ -377,18 +379,18 @@ async function convertImagePartToOpenAIContentPart(
     if (fallback && fallback !== part.uri) {
       try {
         const optimized = await fetchAndOptimizeImage(fallback, part.mimeType);
-        log.info(`OpenAICompatible: Image loaded via fallback CDN URL ${fallback}`);
+        log.info(`OpenAICompatible: Image loaded via fallback CDN`);
         return {
           type: "image_url",
           image_url: { url: `data:${optimized.mimeType};base64,${optimized.data}` },
         };
       } catch (fallbackErr) {
-        log.warn(`OpenAICompatible: Image processing error (proxy + CDN both failed) ${part.uri}`, {
+        log.warn(`OpenAICompatible: Image processing error (proxy + CDN both failed)`, {
           error: fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
         });
       }
     } else {
-      log.warn(`Failed to fetch image: ${part.uri}`, {
+      log.warn(`Failed to fetch image`, {
         error: error instanceof Error ? error.message : String(error),
       });
     }
