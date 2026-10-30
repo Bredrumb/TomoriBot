@@ -41,6 +41,12 @@ buildContext() (context-build pipeline)        ──► assembles StructuredCon
 ### History fetching and simplification
 
 - **Message retrieval**: fetches up to `message_fetch_limit` messages from Discord.
+- **History auxiliary reads**: proxy identities use the unfiltered history; sprite records, minimal
+  notice bodies, and agendas use visible messages after blacklist and block filtering. These reads
+  run concurrently before simplification.
+- **Reply targets**: missing same-channel targets are deduplicated and fetched with at most four
+  concurrent REST calls before simplification. Failed targets omit their annotations without retrying
+  during that build. Simplification and compact ID registration remain in message order.
 - **Message ID translation**: `MessageIdMap` maps 64-bit Discord snowflake IDs to compact sequential
   identifiers (`ref_1`, `ref_2`). This reduces prompt token usage and provides stable references for
   tools that target messages.

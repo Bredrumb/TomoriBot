@@ -9,11 +9,21 @@ import * as blockCache from "@/utils/cache/personaUserBlockCache";
 import * as userCache from "@/utils/cache/userCache";
 import * as dbClient from "@/utils/db/client";
 import * as contextBuilder from "@/utils/text/contextBuilder";
+import { log } from "@/utils/misc/logger";
+import { createChatLatencyInvocation, runWithChatTurnLatency } from "@/utils/chat/turnLatency";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { createPersona, createUserRow } from "../../helpers/fixtures";
 
 describe("history reply context", () => {
-  it.each(["cached", "evicted", "forwarded-thread"])("resolves history references: %s", async (scenario) => {
+  it.each([
+    "cached",
+    "evicted",
+    "forwarded-thread",
+    "prefetched",
+    "prefetch-failure",
+  ])("resolves history references: %s", async (scenario) => {
+    const prefetch = scenario.startsWith("prefetch");
+    const fail = scenario === "prefetch-failure";
     const channelEvicted = scenario === "evicted";
     const forwardedThread = scenario === "forwarded-thread";
     const persona = createPersona({
@@ -24,8 +34,24 @@ describe("history reply context", () => {
         sticker_usage_enabled: false,
       },
     });
-    const fetchById = mock(async (_id: string) => {
-      throw new Error("reply target fetched individually");
+    const targets = new Map<string, Message>();
+    const release = Promise.withResolvers<void>();
+    const fourStarted = Promise.withResolvers<void>();
+    let active = 0;
+    let maximumActive = 0;
+    const fetchById = mock(async (id: string) => {
+      active++;
+      maximumActive = Math.max(maximumActive, active);
+      if (active === 4) fourStarted.resolve();
+      try {
+        await release.promise;
+        if (fail && id === "target-5") throw new Error("missing target");
+        const target = targets.get(id);
+        if (!target) throw new Error("reply target fetched individually");
+        return target;
+      } finally {
+        active--;
+      }
     });
     let historyFetched = false;
     const channel = {
@@ -77,6 +103,28 @@ describe("history reply context", () => {
         reference: null,
       },
     ] as unknown as Message[];
+    if (prefetch) {
+      const reply = messages[0];
+      const target = messages[1];
+      for (let i = 0; i < 6; i++) {
+        targets.set(`target-${i}`, { ...target, id: `target-${i}`, content: `target content ${i}` } as Message);
+      }
+      messages.splice(
+        0,
+        messages.length,
+        ...Array.from(
+          { length: 7 },
+          (_, i) =>
+            ({
+              ...reply,
+              id: `reply-${i}`,
+              author: { ...reply.author, id: `author-${i}` },
+              content: `reply content ${i}`,
+              reference: { messageId: `target-${i % 6}`, channelId: channel.id, type: MessageReferenceType.Default },
+            }) as Message,
+        ),
+      );
+    }
     const fetchReference = mock(async () => messages[1]);
     if (forwardedThread) {
       Object.assign(messages[0], {
@@ -147,7 +195,44 @@ describe("history reply context", () => {
       nudgeInjectionDepth: 0,
       messageIdMap: new MessageIdMap(),
     });
+    const metric = spyOn(log, "metric").mockImplementation(() => {});
     try {
+      if (prefetch) {
+        for (const [id, target] of targets) channel.messages.cache.set(id, target);
+        const baseline = await buildChatTurnContext(turn);
+        channel.messages.cache.clear();
+        const pending = runWithChatTurnLatency(createChatLatencyInvocation(Date.now(), "message"), 0, 0, () =>
+          buildChatTurnContext(turn),
+        );
+        await Promise.race([
+          fourStarted.promise,
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("four reply fetches did not start")), 2000),
+          ),
+        ]);
+        expect(fetchById).toHaveBeenCalledTimes(4);
+        release.resolve();
+        const result = await pending;
+        expect(maximumActive).toBe(4);
+        expect(fetchById.mock.calls.map(([id]) => id).sort()).toEqual([...targets.keys()].sort());
+        expect(metric.mock.calls.find(([name]) => name === "chat_turn_latency")?.[1]).toMatchObject({
+          reply_fetches: 6,
+        });
+        if (!fail) {
+          expect(result.simplifiedMessages).toEqual(baseline.simplifiedMessages);
+          expect(result.messageIdMap).toEqual(baseline.messageIdMap);
+        } else {
+          for (const message of result.simplifiedMessages) {
+            const expected = baseline.simplifiedMessages.find((entry) => entry.id === message.id);
+            if (message.id === "reply-5") {
+              expect(message.content).toBe(messages.find((entry) => entry.id === message.id)?.content ?? null);
+            } else {
+              expect(message.content?.replace(/ref_\d+/g, "ref")).toBe(expected?.content?.replace(/ref_\d+/g, "ref"));
+            }
+          }
+        }
+        return;
+      }
       const result = await buildChatTurnContext(turn);
       const reply = result.simplifiedMessages.find((message) => message.id === "reply");
       const target = result.simplifiedMessages.find((message) => message.id === "target");
@@ -164,7 +249,8 @@ describe("history reply context", () => {
       expect(reply?.content).toContain(messages[0].content);
       if (!channelEvicted) expect(reply?.content).toContain(messages[1].content);
     } finally {
-      for (const spy of [sql, read, privacy, blacklist, blocks, builder]) spy.mockRestore();
+      release.resolve();
+      for (const spy of [sql, read, privacy, blacklist, blocks, builder, metric]) spy.mockRestore();
     }
   });
 });

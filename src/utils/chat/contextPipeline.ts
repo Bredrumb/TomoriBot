@@ -1,3 +1,4 @@
+import { mapWithConcurrency } from "@/utils/async/bounded";
 import { verifyMessageWebhook, isManagedWebhookMessage } from "@/utils/chat/webhookIdentity";
 import type { Message } from "discord.js";
 import { MessageReferenceType, MessageType } from "discord.js";
@@ -806,7 +807,7 @@ async function buildSimplifiedHistory(
     messages.push(turn.lockedTurn.admission.message);
   }
   const fetchedMessages = messages;
-  const fetchedMessagesById = new Map(fetchedMessages.map((message) => [message.id, message]));
+  const fetchedMessagesById = new Map<string, Message | null>(fetchedMessages.map((message) => [message.id, message]));
   await Promise.all(messages.map(verifyMessageWebhook));
   messages = excludeMessagesAwaitingOwnTurn(
     messages,
@@ -843,7 +844,6 @@ async function buildSimplifiedHistory(
     messages = messages.slice(startIndex);
   }
 
-  const messageProxyIdentitiesByMessageId = await resolveMessageProxyMessageIdentitiesForHistory(messages);
   const activeUserBlocks = await loadActivePersonaUserBlocks(turn);
   // Map each 'block'-type target to its row so the simplify loop can render a
   // notice that includes the remaining block duration (from expires_at). 'mute'
@@ -893,12 +893,40 @@ async function buildSimplifiedHistory(
 
   // Prime the sprite message cache with one batched query so per-message
   // "Name (sprite):" label lookups inside simplifyMessage() are cache hits.
-  await primePersonaSpriteMessageRecords(visibleRawMessages.filter((msg) => msg.webhookId).map((msg) => msg.id));
-  const minimalNoticeBodies = await resolveMinimalNoticeBodies(visibleRawMessages);
-  const agendasByMessageId = await loadPersonaAgendas(
-    turn.persona.persona_id,
-    visibleRawMessages.map((msg) => msg.id),
-  );
+  const [messageProxyIdentitiesByMessageId, , minimalNoticeBodies, agendasByMessageId] = await Promise.all([
+    resolveMessageProxyMessageIdentitiesForHistory(messages),
+    primePersonaSpriteMessageRecords(visibleRawMessages.filter((msg) => msg.webhookId).map((msg) => msg.id)),
+    resolveMinimalNoticeBodies(visibleRawMessages),
+    loadPersonaAgendas(
+      turn.persona.persona_id,
+      visibleRawMessages.map((msg) => msg.id),
+    ),
+  ]);
+
+  const missingReplyTargets = new Map<string, Message>();
+  for (const msg of visibleRawMessages) {
+    const referenceMessageId = getReplyContextReferenceMessageId(msg);
+    if (
+      !referenceMessageId ||
+      (msg.reference?.channelId && msg.reference.channelId !== msg.channel.id) ||
+      fetchedMessagesById.has(referenceMessageId) ||
+      (await getCachedPrivacyLevel(messageProxyIdentitiesByMessageId.get(msg.id)?.senderDiscId ?? msg.author.id)) ===
+        PrivacyLevel.FULL
+    )
+      continue;
+    const cached = msg.channel.messages.cache.get(referenceMessageId);
+    if (cached) fetchedMessagesById.set(referenceMessageId, cached);
+    else missingReplyTargets.set(referenceMessageId, msg);
+  }
+  await mapWithConcurrency([...missingReplyTargets], REPLY_TARGET_FETCH_CONCURRENCY, async ([id, msg]) => {
+    try {
+      recordChatTurnFetch("reply");
+      fetchedMessagesById.set(id, await msg.channel.messages.fetch(id));
+    } catch (error) {
+      fetchedMessagesById.set(id, null);
+      log.warn(`Could not fetch referenced message ${id} for context`, error);
+    }
+  });
 
   const simplifiedMessages: SimplifiedMessageForContext[] = [];
   const userIds = new Set<string>();
@@ -1142,7 +1170,7 @@ async function simplifyMessage(
   messageProxyUsers: Map<string, MessageProxyConversationUser>,
   blockedContextUserIds: Set<string>,
   minimalNoticeBodies: ReadonlyMap<string, string>,
-  fetchedMessagesById: ReadonlyMap<string, Message>,
+  fetchedMessagesById: ReadonlyMap<string, Message | null>,
 ): Promise<{ message: SimplifiedMessageForContext; isDebug: boolean } | null> {
   const isJoin = msg.type === MessageType.UserJoin;
   const isWebhook = Boolean(msg.webhookId);
@@ -1411,6 +1439,17 @@ function tagNewMediaWithSource(
   }
 }
 
+const REPLY_TARGET_FETCH_CONCURRENCY = 4;
+
+function getReplyContextReferenceMessageId(msg: Message): string | undefined {
+  if (msg.reference?.type === MessageReferenceType.Forward || !msg.channel || !("messages" in msg.channel)) {
+    return undefined;
+  }
+  const embedTarget = !msg.reference?.messageId ? findReplyContextTargetInMessage(msg) : null;
+  if (embedTarget && embedTarget.channelId !== msg.channel.id) return undefined;
+  return msg.reference?.messageId ?? embedTarget?.messageId;
+}
+
 async function withReplyContext(
   turn: ChatTurn,
   msg: Message,
@@ -1419,20 +1458,11 @@ async function withReplyContext(
   personaByNickname: Map<string, ChatTurn["persona"]>,
   blockedContextUserIds: Set<string>,
   messageProxyIdentitiesByMessageId: Map<string, MessageProxyHistoryIdentity>,
-  fetchedMessagesById: ReadonlyMap<string, Message>,
+  fetchedMessagesById: ReadonlyMap<string, Message | null>,
 ): Promise<{ content: string; referencedMessage?: Message }> {
-  if (msg.reference?.type === MessageReferenceType.Forward || !msg.channel || !("messages" in msg.channel)) {
-    return { content };
-  }
-
-  let referenceMessageIdForLog = msg.reference?.messageId;
+  const referenceMessageId = getReplyContextReferenceMessageId(msg);
+  if (!referenceMessageId || fetchedMessagesById.get(referenceMessageId) === null) return { content };
   try {
-    const replyContextEmbedTarget = !msg.reference?.messageId ? findReplyContextTargetInMessage(msg) : null;
-    const referenceMessageId = msg.reference?.messageId ?? replyContextEmbedTarget?.messageId;
-    referenceMessageIdForLog = referenceMessageId;
-    if (!referenceMessageId || (replyContextEmbedTarget && replyContextEmbedTarget.channelId !== msg.channel.id)) {
-      return { content };
-    }
     // The fetched window comes first because the capped message cache evicts the newest messages of a large history fetch.
     let referenced = fetchedMessagesById.get(referenceMessageId) ?? msg.channel.messages.cache.get(referenceMessageId);
     if (!referenced) {
@@ -1463,7 +1493,7 @@ async function withReplyContext(
     });
     return { content: content ? `${annotation}\n${content}` : annotation, referencedMessage: referenced };
   } catch (error) {
-    log.warn(`Could not fetch referenced message ${referenceMessageIdForLog ?? "unknown"} for context`, error);
+    log.warn(`Could not fetch referenced message ${referenceMessageId} for context`, error);
     return { content };
   }
 }
