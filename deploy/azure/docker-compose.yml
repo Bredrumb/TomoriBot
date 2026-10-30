@@ -24,6 +24,7 @@ services:
     environment:
       NODE_ENV: production
       RUN_ENV: production
+      TOMORI_PUBLIC_BASE_URL: https://api.tomoribot.app
       PORT: "8081"
       SECRET_FILE: /run/secrets/tomoribot.json
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google-vertex-wif.json

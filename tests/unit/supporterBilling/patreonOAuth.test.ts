@@ -343,6 +343,7 @@ describe("Patreon OAuth URL generation", () => {
     const oauthUrl = buildPatreonOAuthAuthorizationUrl({
       clientId: "client_from_config_env",
       state: "state_123",
+      env: createEnabledEnv(),
     });
 
     expect(new URL(oauthUrl).searchParams.get("client_id")).toBe("client_from_config_env");
