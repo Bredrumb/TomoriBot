@@ -755,6 +755,20 @@ class NaturalNudgeRepository {
     return new Map(rows.map((row) => [row.idle_nudge_key, row.fired_at]));
   }
 
+  async loadRecentIdleNudgeTopics(serverId: number, personaId: number, limit: number): Promise<string[]> {
+    const rows = await withTransientDbRetry(
+      () => sql<Array<{ topic: string }>>`
+      SELECT topic
+      FROM natural_nudge_fires
+      WHERE server_id = ${serverId} AND persona_id = ${personaId} AND mode = 'idle' AND topic IS NOT NULL
+      ORDER BY fired_at DESC
+      LIMIT ${limit}
+    `,
+      "load recent idle nudge topics",
+    );
+    return rows.map((row) => row.topic);
+  }
+
   async setFireAnswered(fireId: number, answered: boolean): Promise<void> {
     await sql`UPDATE natural_nudge_fires SET answered = ${answered} WHERE fire_id = ${fireId} AND answered IS NULL`;
   }
@@ -772,9 +786,9 @@ class NaturalNudgeRepository {
         await tx`
           INSERT INTO natural_nudge_fires
             (server_id, channel_disc_id, persona_id, mode, category, idle_nudge_key, target_user_id,
-              opener_message_disc_id)
+              opener_message_disc_id, topic)
           VALUES (${fire.serverId}, ${fire.channelDiscId}, ${fire.personaId}, 'idle', ${fire.category},
-            ${fire.idleNudgeKey}, ${fire.targetUserId}, ${fire.openerMessageDiscId})
+            ${fire.idleNudgeKey}, ${fire.targetUserId}, ${fire.openerMessageDiscId}, ${fire.topic})
         `;
         for (const { personaId, agenda } of agendas) {
           await tx`

@@ -370,6 +370,7 @@ export interface NewFireRow {
   personaId: number;
   category: NaturalNudgeCategory;
   idleNudgeKey: string;
+  topic: string;
   targetUserId: number | null;
   openerMessageDiscId: string;
 }

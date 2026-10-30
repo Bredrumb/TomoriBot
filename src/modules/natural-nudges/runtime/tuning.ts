@@ -82,6 +82,7 @@ export const TALKATIVENESS_TICKETS = [0, 5, 10, 15, 20] as const;
 
 /** Messages per channel read for hanging detection and handed to the planner. */
 export const PLANNER_HISTORY_MESSAGES = 15;
+export const PLANNER_RECENT_TOPICS = 5;
 /** Lull channels read for hanging detection; the planner then sees at most three of them. */
 export const MAX_SCANNED_CHANNELS = 6;
 export const MAX_PLANNER_CHANNELS = 3;

@@ -182,6 +182,7 @@ function attemptWithHistory(latest: () => Promise<Message[]>): {
     awake: Array.from({ length: 24 }, () => true),
     persona: createPersona({ persona_id: PERSONA_ID, server_id: SERVER_ID }),
     interests: [],
+    recentTopics: ["model kits"],
     candidates: [
       {
         idleNudge: BUILTIN_IDLE_NUDGES.find((candidate) => candidate.category === "start_topic") as IdleNudgeDefinition,
@@ -433,6 +434,7 @@ describe("idle nudge channel context", () => {
     expect(refresh).toHaveBeenCalled();
     expect(recordFire.mock.calls[0][0]).toMatchObject({
       idleNudgeKey: imageNudge.key,
+      topic: "a drawing",
       category: imageNudge.category,
       targetUserId: null,
     });
@@ -538,6 +540,8 @@ describe("idle nudge anchor", () => {
     expect(chatInputs.map((input) => input.message)).toEqual([latest]);
     expect(chatInputs[0].borrowsTriggerMessage).toBe(true);
     expect(recordFire.mock.calls[0][0].openerMessageDiscId).toBe(PLACEHOLDER_ID);
+    expect(recordFire.mock.calls[0][0].topic).toBe("trains");
+    expect(plannerSpy.mock.calls[0][0].recentTopics).toEqual(attempt.recentTopics);
     expect(sent).toEqual([]);
   });
 

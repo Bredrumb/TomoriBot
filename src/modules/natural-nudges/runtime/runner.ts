@@ -54,6 +54,7 @@ export interface IdleNudgeAttempt {
   awake: readonly boolean[];
   persona: TomoriState;
   interests: readonly NaturalNudgeInterest[];
+  recentTopics: readonly string[];
   candidates: readonly PlannerCandidate[];
   plannerModel: NudgeModelRef;
   admitRequest: () => boolean;
@@ -340,6 +341,7 @@ export async function runIdleNudgeAttempt(input: IdleNudgeAttempt): Promise<Atte
   const planned = await planIdleNudge({
     persona: input.persona,
     interests: input.interests,
+    recentTopics: input.recentTopics,
     candidates: input.candidates,
     channels: input.plannerChannels.map((channel) => ({
       name: channel.channel.name,
@@ -412,6 +414,7 @@ export async function runIdleNudgeAttempt(input: IdleNudgeAttempt): Promise<Atte
         personaId,
         category: attempt.idleNudge.category,
         idleNudgeKey: attempt.idleNudge.key,
+        topic: planned.plan.topic,
         targetUserId: attempt.target?.userId ?? null,
         openerMessageDiscId: openerId ?? anchor.id,
       },
