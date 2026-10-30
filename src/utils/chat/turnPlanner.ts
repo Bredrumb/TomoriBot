@@ -31,6 +31,7 @@ import {
 import { channelLocks, queueScenePersonaJobsAtFront, setActiveChannelTurnState } from "@/utils/chat/channelQueue";
 import { hasDirectChatSignal, shouldSurfaceChatUserErrors } from "@/utils/chat/errorVisibility";
 import { readNaturalNudgeGate, recordNaturalNudgeDirectChat } from "@/modules/natural-nudges/runtime/configCache";
+import { PLAY_SCENE_MAX_TURNS } from "@/modules/natural-nudges/runtime/tuning";
 import { getMatchLimit, queueAdditionalPersonaTurns } from "@/utils/chat/personaQueue";
 import { shouldBotReply } from "@/utils/chat/replyDecision";
 import { buildSceneTextQuotaTriggerKey, buildSceneTurnDirective } from "@/utils/chat/sceneTurn";
@@ -963,6 +964,7 @@ async function enforceTurnGuards(
   const cascadeLimit = Math.min(
     Math.max(tomoriState.config.cascade_limit ?? DEFAULT_CASCADE_LIMIT, 0),
     MAX_CASCADE_LIMIT,
+    incoming.naturalNudge && !incoming.sceneTurn ? PLAY_SCENE_MAX_TURNS - 1 : MAX_CASCADE_LIMIT,
   );
   const triggerState = getSelfReplyChainState(channel.id);
   if (

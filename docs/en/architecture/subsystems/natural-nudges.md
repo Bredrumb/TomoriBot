@@ -150,8 +150,9 @@ activity still controls dormancy.
   A persona already queued in the same nudge chain is excluded before that limit applies.
   These jobs retain `naturalNudge`, system quota routing, and the borrowed anchor, so they cannot
   add human engagement, renew dormancy, or write short-term memory. They receive reply guidance
-  without the opener's private goal or tool grants. The opener starts a fresh cascade budget;
-  each reply consumes it through the ordinary cascade guard. Gateway echoes cannot reset it.
+  without the opener's private goal or tool grants. The opener starts a fresh cascade budget of
+  `min(cascade_limit, PLAY_SCENE_MAX_TURNS - 1)` mention replies, so an unscripted nudge chain cannot
+  outlast a scripted scene. Gateway echoes cannot reset it.
   A member's message cancels queued nudge replies and prevents the current turn from adding more.
   Admission rejection or a turn that finishes without delivery discards the remaining queued nudge
   turns; a pending empty-response retry decides whether the chain can continue.
