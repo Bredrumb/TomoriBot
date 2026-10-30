@@ -154,7 +154,7 @@ test.skipIf(process.platform === "win32" && !existsSync(bash))(
 );
 
 test.skipIf(process.platform === "win32" && !existsSync(bash))(
-  "deploy verification fails on repository and post-start errors without printing records",
+  "deploy verification fails on repository errors and post-start error storms without printing records",
   async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), "tomoribot-deploy-verify-"));
     try {
@@ -177,7 +177,11 @@ test.skipIf(process.platform === "win32" && !existsSync(bash))(
             case "$1" in
               exec)
                 if [[ "$*" == *error_logs* ]]; then
-                  if [ "$CHECK_MODE" = db_error ]; then echo 1; else echo 0; fi
+                  case "$CHECK_MODE" in
+                    db_error) echo 1 ;;
+                    db_storm) echo 1000 ;;
+                    *) echo 0 ;;
+                  esac
                 elif [ "$CHECK_MODE" = user_error ]; then
                   echo 'SMOKE_FAILED:user_repository'
                   return 1
@@ -196,7 +200,10 @@ test.skipIf(process.platform === "win32" && !existsSync(bash))(
                 esac
                 ;;
               logs)
-                if [ "$CHECK_MODE" = container_error ]; then echo '{"level":50,"msg":"private user data"}'; fi
+                case "$CHECK_MODE" in
+                  container_error) echo '{"level":50,"msg":"private user data"}' ;;
+                  container_storm) for _ in $(seq 1000); do echo '{"level":50,"msg":"private user data"}'; done ;;
+                esac
                 ;;
             esac
           }
@@ -228,12 +235,14 @@ test.skipIf(process.platform === "win32" && !existsSync(bash))(
       const endpoint = await run("endpoint_error");
       expect(endpoint.exitCode).toBe(1);
       expect(endpoint.output).toContain("Custom endpoint repository smoke check failed.");
-      const database = await run("db_error");
+      expect((await run("db_error")).exitCode).toBe(0);
+      expect((await run("container_error")).exitCode).toBe(0);
+      const database = await run("db_storm");
       expect(database.exitCode).toBe(1);
-      expect(database.output).toContain("Post-start error log check failed");
-      const container = await run("container_error");
+      expect(database.output).toContain("Post-start error storm: 1000 error_logs row(s)");
+      const container = await run("container_storm");
       expect(container.exitCode).toBe(1);
-      expect(container.output).toContain("New container emitted 1 error log(s).");
+      expect(container.output).toContain("Post-start error storm: 1000 container error log(s)");
       expect(container.output).not.toContain("private user data");
     } finally {
       await rm(directory, { recursive: true, force: true });
