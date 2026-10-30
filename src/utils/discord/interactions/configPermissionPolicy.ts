@@ -75,6 +75,7 @@ export type ConfigMcpAction =
   | "add-open"
   | "add-submit"
   | "set-enabled"
+  | "reconnect"
   | "remove-prompt"
   | "remove-cancel"
   | "remove-confirm";
@@ -535,6 +536,7 @@ export const MCP_ACTION_BY_ROUTE: Partial<Record<ConfigPanelRoute["action"], Con
   "mcp-add-open": "add-open",
   "mcp-add-submit": "add-submit",
   "mcp-set-enabled": "set-enabled",
+  "mcp-reconnect": "reconnect",
   "mcp-remove-prompt": "remove-prompt",
   "mcp-remove-cancel": "remove-cancel",
   "mcp-remove-confirm": "remove-confirm",

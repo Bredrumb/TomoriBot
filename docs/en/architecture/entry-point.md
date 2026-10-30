@@ -28,9 +28,9 @@ set, because that variable means the instance receives OAuth callbacks. Containe
 configuration belongs to the deployment guides; gateway login errors are reported in process logs.
 Optional modules can call `registerHealthServerRoute()` during startup to register a method and path
 on the same server. Without `TOMORI_PUBLIC_BASE_URL` the base installation has no extra routes; with
-it, `GET /oauth/callback` and `POST /oauth/mcp/confirm` are registered, plus `GET /oauth/client.json`
-unless the base URL is a loopback origin. If the port cannot be bound while routes are registered, a
-warning lists them. Built-in health probes take precedence,
+it, `GET /oauth/callback`, `GET /oauth/mcp/start`, and `POST /oauth/mcp/confirm` are registered,
+plus `GET /oauth/client.json` unless the base URL is a loopback origin. If the port cannot be bound
+while routes are registered, a warning lists them. Built-in health probes take precedence,
 and registered handlers receive the parsed request URL. Every registered route answers with
 `Content-Security-Policy: frame-ancestors 'none'`, so a sign-in page cannot be framed. Invalid URLs
 return 400, and failed handlers return 500 or close the response if headers have already been sent.

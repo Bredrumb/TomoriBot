@@ -10,6 +10,7 @@ import { initializeMcpOAuthRoutes } from "@/utils/mcp/oauth/routes";
 import {
   configureMcpSignIn,
   deriveMcpStateSigner,
+  findMcpAuthorizationUrl,
   handleMcpOAuthCallback,
   handleMcpOAuthConfirm,
   isMcpSignInAvailable,
@@ -126,8 +127,11 @@ function harness(options: { server?: McpAuthorizationServer; token?: Record<stri
         report,
       });
       if (started.status !== "started") throw new Error("Sign-in did not start");
-      const authorizationUrl = new URL(started.authorizationUrl);
-      return { authorizationUrl, state: authorizationUrl.searchParams.get("state") ?? "" };
+      const signInUrl = new URL(started.signInUrl);
+      const target = findMcpAuthorizationUrl(signInUrl.searchParams.get("id") ?? "");
+      if (!target) throw new Error("Sign-in link does not resolve");
+      const authorizationUrl = new URL(target);
+      return { signInUrl, authorizationUrl, state: authorizationUrl.searchParams.get("state") ?? "" };
     },
   };
 }
@@ -179,6 +183,24 @@ describe("MCP sign-in authorization request", () => {
     const validation = validateSignedOAuthState(state, SIGNER, new Date("2026-10-30T00:09:59Z"), "mcp");
     expect(validation.valid && validation.payload).toMatchObject({ subject: "100000000000000001", locale: "en-US" });
     expect(validateSignedOAuthState(state, SIGNER, new Date("2026-10-30T00:10:00Z"), "mcp").valid).toBe(false);
+  });
+});
+
+describe("MCP sign-in link", () => {
+  it("fits a Discord button URL and resolves only while the sign-in waits for its callback", async () => {
+    const first = harness();
+    const { signInUrl, state } = await first.start();
+    expect(`${signInUrl.origin}${signInUrl.pathname}`).toBe(`${PUBLIC_BASE}/oauth/mcp/start`);
+    expect(signInUrl.href.length).toBeLessThanOrEqual(512);
+    const id = signInUrl.searchParams.get("id") ?? "";
+    await callback(state);
+    expect(findMcpAuthorizationUrl(id)).toBeNull();
+
+    const second = harness();
+    const expiring = await second.start();
+    second.advance(10 * 60_000);
+    expect(findMcpAuthorizationUrl(expiring.signInUrl.searchParams.get("id") ?? "")).toBeNull();
+    expect(findMcpAuthorizationUrl("unknown")).toBeNull();
   });
 });
 
@@ -384,6 +406,17 @@ describe("MCP sign-in routes", () => {
       const oversized = await fetch(`${base}/oauth/mcp/confirm`, { method: "POST", body: "x".repeat(9 * 1024) });
       expect(oversized.status).toBe(413);
       await oversized.text();
+
+      const unknownStart = await fetch(`${base}/oauth/mcp/start?id=unknown`, { redirect: "manual" });
+      expect(unknownStart.headers.get("cache-control")).toBe("no-store");
+      expect(await unknownStart.text()).toContain(page("expired_title"));
+      const { signInUrl, authorizationUrl } = await harness().start();
+      const started = await fetch(`${base}/oauth/mcp/start${signInUrl.search}`, { redirect: "manual" });
+      expect(started.status).toBe(303);
+      expect(started.headers.get("location")).toBe(authorizationUrl.href);
+      expect(started.headers.get("cache-control")).toBe("no-store");
+      expect(started.headers.get("referrer-policy")).toBe("no-referrer");
+      await started.text();
     } finally {
       activeServer.close();
       eventLoopMonitor.stop();

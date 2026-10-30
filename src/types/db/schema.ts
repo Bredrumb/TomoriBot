@@ -1873,6 +1873,8 @@ const guildMcpServerSchema = z.object({
   last_discovered_tool_names: z.array(z.string()).nullable().optional(),
   failing_since: z.date().nullable().optional(),
   failure_reason: z.enum(["unauthorized", "unreachable"]).nullable().optional(),
+  /** Null for a bearer-token or open registration; read from `guild_mcp_oauth`. */
+  oauth_status: z.enum(["active", "needs_reauthorization"]).nullable().optional(),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });

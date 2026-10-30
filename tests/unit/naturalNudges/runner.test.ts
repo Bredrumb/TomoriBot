@@ -16,6 +16,7 @@ import {
   type IdleNudgeDefinition,
 } from "@/modules/natural-nudges/runtime/idleNudges";
 import * as planner from "@/modules/natural-nudges/runtime/planner";
+import { PLAY_SCENE_SHORT_TURNS } from "@/modules/natural-nudges/runtime/tuning";
 import * as configCache from "@/modules/natural-nudges/runtime/configCache";
 import * as plannerModel from "@/modules/natural-nudges/runtime/model";
 import * as toolsModule from "@/modules/natural-nudges/runtime/tools";
@@ -188,6 +189,7 @@ function attemptWithHistory(latest: () => Promise<Message[]>): {
         idleNudge: BUILTIN_IDLE_NUDGES.find((candidate) => candidate.category === "start_topic") as IdleNudgeDefinition,
         channelIndices: [0],
         partners: [],
+        sceneTurns: PLAY_SCENE_SHORT_TURNS,
       },
     ],
     plannerModel: { llmId: 1, slot: "nudge-planner" },
@@ -337,7 +339,10 @@ describe("idle nudge channel context", () => {
         prerequisites: ["relationship_user"],
       }),
     );
-    attempt.candidates = [...attempt.candidates, { idleNudge: targetedNudge, channelIndices: [0], partners: [] }];
+    attempt.candidates = [
+      ...attempt.candidates,
+      { idleNudge: targetedNudge, channelIndices: [0], partners: [], sceneTurns: PLAY_SCENE_SHORT_TURNS },
+    ];
     attempt.target = {
       userId: 9,
       userDiscId: "1300000000000000009",
@@ -370,8 +375,9 @@ describe("idle nudge channel context", () => {
         ),
         channelIndices: [0],
         partners: [],
+        sceneTurns: PLAY_SCENE_SHORT_TURNS,
       },
-      { idleNudge: imageNudge, channelIndices: [0], partners: [] },
+      { idleNudge: imageNudge, channelIndices: [0], partners: [], sceneTurns: PLAY_SCENE_SHORT_TURNS },
     ];
     attempt.target = {
       userId: 9,

@@ -8,6 +8,7 @@ import type { ConfigRouteDependencies, ConfigScope } from "@/utils/discord/inter
 import { InteractionRouteRegistry } from "@/utils/discord/interactions/routeRegistry";
 import { buildConfigPanelPayload } from "@/utils/discord/ui/configPanel";
 import { validateComponentsV2MessageLimits } from "@/utils/discord/ui/componentsV2Limits";
+import type { AddMcpResult } from "@/utils/mcp/mcpConfigOperations";
 import type { McpSignInRequest } from "@/utils/mcp/oauth/signIn";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 import { localizedCopy, localizedProse } from "../../helpers/localeCases";
@@ -98,6 +99,11 @@ function makeHarness(options: { manager?: boolean; status?: "fresh" | "stale" | 
         expect(interaction?.deferred).toBe(true);
         return { status: "success", row: row(1) };
       },
+      prepareReconnect: async () => {
+        operationCalls += 1;
+        expect(interaction?.deferred).toBe(true);
+        return { status: "not-found" };
+      },
     } as ConfigRouteDependencies["mcpOperations"],
   };
   return {
@@ -178,6 +184,9 @@ describe("Config-hosted MCP Servers", () => {
       name: ["N".repeat(20_000), "`".repeat(8), "🌟".repeat(20_000)][index % 3],
       url: `https://server-${index + 1}.example.invalid/${"u".repeat(20_000)}`,
       last_discovered_tool_names: ["T".repeat(20_000)],
+      oauth_status: index % 2 === 0 ? ("needs_reauthorization" as const) : ("active" as const),
+      failure_reason: "unreachable" as const,
+      failing_since: new Date(0),
     }));
 
     for (const locale of ["en-US", "ja"]) {
@@ -287,13 +296,13 @@ describe("Config-hosted MCP Servers", () => {
     it("links the sign-in from the deferred panel and repaints the result through the same interaction", async () => {
       const { harness, requests } = signInHarness(async () => ({
         status: "started",
-        authorizationUrl: "https://auth.example/authorize?state=signed&path=(x)",
+        signInUrl: "https://bot.example/oauth/mcp/start?id=abc",
         host: "mcp.example",
       }));
       await dispatch(harness, addSubmit, { kind: "modal", fields });
       const panel = JSON.stringify(harness.edits.at(-1));
       expect(panel).toMatch(localizedProse("en-US", "commands.mcps.sign_in_title"));
-      expect(panel).toContain("(https://auth.example/authorize?state=signed&path=%28x%29)");
+      expect(panel).toContain('"url":"https://bot.example/oauth/mcp/start?id=abc"');
       expect(requests[0]?.draft.guildName).toBe("Juno Lounge");
 
       const editsBefore = harness.edits.length;
@@ -310,6 +319,69 @@ describe("Config-hosted MCP Servers", () => {
 
       await requests[0]?.report({ status: "declined" });
       expect(JSON.stringify(harness.edits.at(-1))).toMatch(localizedProse("en-US", "commands.mcps.sign_in_declined"));
+    });
+
+    it("reconnects a paused sign-in through the same sign-in page and reports it as a reconnect", async () => {
+      const harness = makeHarness();
+      const paused = { ...row(3), oauth_status: "needs_reauthorization" as const };
+      const requests: McpSignInRequest[] = [];
+      harness.dependencies.loadMcpRead = async () => ({ status: "fresh", configs: [paused] });
+      harness.dependencies.mcpOperations = {
+        prepareReconnect: async (input) => {
+          expect(input.guildMcpId).toBe(3);
+          return {
+            status: "sign-in-required",
+            draft: {
+              serverId: 9,
+              serverDiscId: "guild-1",
+              name: paused.name,
+              url: paused.url,
+              serverType: "general",
+              guildMcpId: 3,
+            },
+            challenge: {},
+          };
+        },
+      } as ConfigRouteDependencies["mcpOperations"];
+      harness.dependencies.startMcpSignIn = async (request) => {
+        requests.push(request);
+        return { status: "started", signInUrl: "https://bot.example/oauth/mcp/start?id=abc", host: "mcp.example" };
+      };
+
+      await dispatch(harness, buildConfigRouteId({ action: "mcp-retry", locale: "en-US", selectedId: "none" }));
+      const collection = JSON.stringify(harness.edits.at(-1));
+      expect(collection).toContain("config:v2:mcp-reconnect:en-US:3");
+      expect(collection).not.toContain("config:v2:mcp-set-enabled:en-US:3");
+      expect(collection).toMatch(localizedProse("en-US", "commands.mcps.oauth_reauthorization_needed"));
+
+      await dispatch(harness, buildConfigRouteId({ action: "mcp-reconnect", locale: "en-US", entityId: 3 }));
+      expect(JSON.stringify(harness.edits.at(-1))).toMatch(localizedProse("en-US", "commands.mcps.sign_in_title"));
+      expect(requests[0]?.draft.guildMcpId).toBe(3);
+
+      await requests[0]?.report({
+        status: "completed",
+        result: { status: "success", row: row(3), test: { success: true, toolCount: 2, functionNames: ["a", "b"] } },
+      });
+      expect(JSON.stringify(harness.edits.at(-1))).toContain(localizedCopy("en-US", "commands.mcps.reconnected"));
+      await requests[0]?.report({ status: "declined" });
+      expect(JSON.stringify(harness.edits.at(-1))).toContain(localizedCopy("en-US", "commands.mcps.change_failed"));
+    });
+
+    it("names why a 401 on add did not offer sign-in", async () => {
+      for (const signInHint of ["unconfigured", "dm"] as const) {
+        const harness = makeHarness();
+        harness.dependencies.mcpOperations = {
+          add: async (_input): Promise<AddMcpResult> => ({
+            status: "connection-failed",
+            error: "HTTP 401",
+            signInHint,
+          }),
+        } as ConfigRouteDependencies["mcpOperations"];
+        await dispatch(harness, addSubmit, { kind: "modal", fields });
+        expect(JSON.stringify(harness.edits.at(-1))).toMatch(
+          localizedProse("en-US", `commands.mcps.sign_in_hint_${signInHint}`),
+        );
+      }
     });
 
     it("explains a sign-in that could not start", async () => {

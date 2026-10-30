@@ -337,7 +337,7 @@ export interface ConfigRouteDependencies {
     selectedChannelId?: string,
   ): Promise<ConfigChannelsView>;
   loadMcpRead(serverId: number, forceRefresh?: boolean): Promise<GuildMcpConfigReadResult>;
-  mcpOperations: Pick<McpConfigOperations, "add" | "setEnabled" | "remove">;
+  mcpOperations: Pick<McpConfigOperations, "add" | "prepareReconnect" | "setEnabled" | "remove">;
   startMcpSignIn(request: McpSignInRequest): Promise<McpSignInStart>;
   loadModelChoices(
     state: TomoriState,

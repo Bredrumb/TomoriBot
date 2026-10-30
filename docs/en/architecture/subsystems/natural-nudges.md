@@ -160,8 +160,8 @@ activity still controls dormancy.
   These jobs retain `naturalNudge`, system quota routing, and the borrowed anchor, so they cannot
   add human engagement, renew dormancy, or write short-term memory. They receive reply guidance
   without the opener's private goal or tool grants. The opener starts a fresh cascade budget of
-  `min(cascade_limit, PLAY_SCENE_MAX_TURNS - 1)` mention replies, so an unscripted nudge chain cannot
-  outlast a scripted scene. Gateway echoes cannot reset it.
+  `min(cascade_limit, NUDGE_MENTION_CASCADE_LIMIT)` mention replies. The limit is independent of scene
+  length because a scene is scripted up front, while a mention chain is open-ended. Gateway echoes cannot reset it.
   A member's message cancels queued nudge replies and prevents the current turn from adding more.
   Admission rejection or a turn that finishes without delivery discards the remaining queued nudge
   turns; a pending empty-response retry decides whether the chain can continue.
@@ -297,8 +297,11 @@ A Play Scene idle nudge reuses the `/generate scene` machinery: the runner passe
   offered scene nudge uses that cast; each option's allowed channels narrow to the shared set,
   and options with no compatible channel are removed. `two_personas` passes when such a partner exists.
   Every Play Scene idle nudge needs one, even a custom one that omits `two_personas`.
-- **Script.** The planner returns `script` (speaker numbers, 2-4 turns, lead first, no speaker twice
-  in a row, everyone at least once) and one `partner_agendas` entry per partner. `sceneScriptIssues`
+- **Script.** The planner returns `script` (speaker numbers, lead first, no speaker twice
+  in a row, everyone at least once). Its length comes from a per-attempt draw: 2-4 turns, or 5-8 at
+  `PLAY_SCENE_LONG_CHANCE`. Every scene turn carries a brevity instruction, so a long scene is
+  an exchange of one-line reactions and the opener stays a short hook while the substance lives in
+  the agendas. It also returns one `partner_agendas` entry per partner. `sceneScriptIssues`
   checks every one of these rules, the lengths included, because Anthropic's output grammar rejects
   `minItems` above 1; a violation gets the one format retry. Other categories omit these fields
   from the planner response schema and receive no scene partner profiles.

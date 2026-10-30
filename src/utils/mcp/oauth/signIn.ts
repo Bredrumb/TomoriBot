@@ -28,6 +28,8 @@ import { keyManager } from "@/utils/security/keyManager";
 
 export const MCP_OAUTH_FLOW = "mcp";
 export const MCP_OAUTH_CONFIRM_PATH = "/oauth/mcp/confirm";
+/** Discord caps button URLs at 512 characters and authorization URLs run longer, so the button opens this redirect. */
+export const MCP_OAUTH_START_PATH = "/oauth/mcp/start";
 
 /** Short enough that the callback usually lands inside Discord's 15-minute interaction token. */
 const MCP_SIGN_IN_TTL_SECONDS = 10 * 60;
@@ -38,7 +40,7 @@ export type McpSignInOutcome =
   | { status: "completed"; result: CompleteMcpSignInResult }
   | { status: "declined" | "cancelled" | "failed" };
 
-export type McpSignInStart = { status: "started"; authorizationUrl: string; host: string } | { status: "unavailable" };
+export type McpSignInStart = { status: "started"; signInUrl: string; host: string } | { status: "unavailable" };
 
 export interface McpSignInRequest {
   draft: McpSignInDraft & { guildName: string };
@@ -59,6 +61,7 @@ export interface McpSignInDependencies {
 
 interface PendingMcpSignIn extends Pick<McpSignInRequest, "draft" | "locale" | "report"> {
   expiresAt: number;
+  authorizationUrl: string;
   issuer: string;
   issParameterSupported: boolean;
   tokenEndpoint: string;
@@ -190,6 +193,7 @@ export async function startMcpSignIn(request: McpSignInRequest): Promise<McpSign
       locale: request.locale,
       report: request.report,
       expiresAt: now.getTime() + MCP_SIGN_IN_TTL_SECONDS * 1000,
+      authorizationUrl: authorizationUrl.href,
       issuer: server.issuer,
       issParameterSupported: server.issParameterSupported,
       tokenEndpoint: server.tokenEndpoint,
@@ -199,7 +203,7 @@ export async function startMcpSignIn(request: McpSignInRequest): Promise<McpSign
       redirectUri,
       codeVerifier,
     });
-    return { status: "started", authorizationUrl: authorizationUrl.href, host };
+    return { status: "started", signInUrl: `${publicBaseUrl}${MCP_OAUTH_START_PATH}?id=${nonceHash}`, host };
   } catch (error) {
     log.warn("MCP sign-in could not start", undefined, {
       metadata: {
@@ -212,6 +216,13 @@ export async function startMcpSignIn(request: McpSignInRequest): Promise<McpSign
     });
     return { status: "unavailable" };
   }
+}
+
+/** Only a sign-in still waiting for its callback redirects, so a used or expired link shows the expired page. */
+export function findMcpAuthorizationUrl(nonceHash: string): string | null {
+  if (!runtime) return null;
+  const record = liveSignIn(nonceHash, runtime.dependencies.now());
+  return record && !record.awaiting ? record.authorizationUrl : null;
 }
 
 /**

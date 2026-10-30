@@ -37,12 +37,18 @@ class McpRepository implements IRepository<null> {
   async loadGuildMcpConfigsResult(serverId: number): Promise<McpConfigRepositoryReadResult> {
     try {
       const rows = await sql`
-        SELECT guild_mcp_id, server_id, name, url, auth_token, key_version,
-               is_enabled, server_type, last_discovered_tool_names, failing_since, failure_reason,
-               created_at, updated_at
-        FROM guild_mcp_servers
-        WHERE server_id = ${serverId}
-        ORDER BY created_at ASC
+        SELECT g.guild_mcp_id, g.server_id, g.name, g.url, g.auth_token, g.key_version,
+               g.is_enabled, g.server_type, g.last_discovered_tool_names, g.failing_since, g.failure_reason,
+               g.created_at, g.updated_at,
+               CASE
+                 WHEN o.guild_mcp_id IS NULL THEN NULL
+                 WHEN o.needs_reauthorization THEN 'needs_reauthorization'
+                 ELSE 'active'
+               END AS oauth_status
+        FROM guild_mcp_servers AS g
+        LEFT JOIN guild_mcp_oauth AS o ON o.guild_mcp_id = g.guild_mcp_id
+        WHERE g.server_id = ${serverId}
+        ORDER BY g.created_at ASC
       `;
       return { status: "fresh", configs: rows as GuildMcpServerRow[] };
     } catch (error) {

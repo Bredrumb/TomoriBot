@@ -160,6 +160,31 @@ describe("verified managed webhook identity", () => {
     }
   });
 
+  it("credits a system turn anchored on persona output to the bot account, not the shared webhook", async () => {
+    const message = webhookMessage("Mirri");
+    Object.assign(message.channel, { type: ChannelType.PublicThread });
+    Object.assign(message, { guild: { id: message.guildId, members: { me: null } } });
+    const read = spyOn(stateCache, "getCachedAllPersonas").mockResolvedValue(personas);
+    const privacy = spyOn(userCache, "getCachedPrivacyLevel").mockResolvedValue(PrivacyLevel.MINIMAL);
+    const blacklist = spyOn(userCache, "getCachedBlacklistStatus").mockResolvedValue(false);
+    try {
+      const incoming = normalizeChatInvocation({
+        client: message.client,
+        message,
+        skipLock: true,
+        isFromQueue: false,
+        isManuallyTriggered: true,
+      });
+      const admission = await evaluateChatAdmission(incoming);
+      if (admission.disposition !== "run") throw new Error("Expected system turn admission");
+      expect(admission.userDiscId).toBe("fixture-bot");
+    } finally {
+      read.mockRestore();
+      privacy.mockRestore();
+      blacklist.mockRestore();
+    }
+  });
+
   it("does not resolve a foreign context author through the persona roster", async () => {
     const read = spyOn(stateCache, "getCachedAllPersonas").mockResolvedValue(personas);
     try {

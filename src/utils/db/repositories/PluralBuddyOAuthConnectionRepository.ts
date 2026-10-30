@@ -85,7 +85,7 @@ class PluralBuddyOAuthConnectionRepository {
     accessToken: string,
     key: string,
     version: number,
-    expiresAt: Date,
+    expiresAt: Date | null,
   ): Promise<void> {
     await tx`
       UPDATE pluralbuddy_oauth_connections

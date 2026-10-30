@@ -31,7 +31,7 @@ import {
 import { channelLocks, queueScenePersonaJobsAtFront, setActiveChannelTurnState } from "@/utils/chat/channelQueue";
 import { hasDirectChatSignal, shouldSurfaceChatUserErrors } from "@/utils/chat/errorVisibility";
 import { readNaturalNudgeGate, recordNaturalNudgeDirectChat } from "@/modules/natural-nudges/runtime/configCache";
-import { PLAY_SCENE_MAX_TURNS } from "@/modules/natural-nudges/runtime/tuning";
+import { NUDGE_MENTION_CASCADE_LIMIT } from "@/modules/natural-nudges/runtime/tuning";
 import { getMatchLimit, queueAdditionalPersonaTurns } from "@/utils/chat/personaQueue";
 import { shouldBotReply } from "@/utils/chat/replyDecision";
 import { buildSceneTextQuotaTriggerKey, buildSceneTurnDirective } from "@/utils/chat/sceneTurn";
@@ -571,10 +571,12 @@ async function loadOrRegisterTriggerUser(
   if (existing) return existing;
 
   const locale = manualTriggerInvoker?.locale ?? guild?.preferredLocale ?? "en-US";
+  // A persona webhook message is credited to the bot, so the persona's webhook name must not name the bot's row.
+  const author = userDiscId === message.client.user?.id ? message.client.user : message.author;
   const displayName = resolvePreferredDiscordDisplayName({
     memberDisplayName: manualTriggerInvoker?.member?.displayName ?? message.member?.displayName,
-    user: manualTriggerInvoker ? { username: manualTriggerInvoker.username } : message.author,
-    fallback: manualTriggerInvoker?.username ?? message.author.username,
+    user: manualTriggerInvoker ? { username: manualTriggerInvoker.username } : author,
+    fallback: manualTriggerInvoker?.username ?? author.username,
   });
   const registered = await userRepository.register(userDiscId, displayName, locale);
   if (!registered) {
@@ -964,7 +966,7 @@ async function enforceTurnGuards(
   const cascadeLimit = Math.min(
     Math.max(tomoriState.config.cascade_limit ?? DEFAULT_CASCADE_LIMIT, 0),
     MAX_CASCADE_LIMIT,
-    incoming.naturalNudge && !incoming.sceneTurn ? PLAY_SCENE_MAX_TURNS - 1 : MAX_CASCADE_LIMIT,
+    incoming.naturalNudge && !incoming.sceneTurn ? NUDGE_MENTION_CASCADE_LIMIT : MAX_CASCADE_LIMIT,
   );
   const triggerState = getSelfReplyChainState(channel.id);
   if (

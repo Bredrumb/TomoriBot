@@ -690,6 +690,7 @@ export type ConfigPanelRoute =
   | { action: "mcp-add-open"; locale: string }
   | { action: "mcp-add-submit"; locale: string; nonce: string }
   | { action: "mcp-set-enabled"; locale: string; entityId: number; enabled: boolean }
+  | { action: "mcp-reconnect"; locale: string; entityId: number }
   | { action: "mcp-remove-prompt" | "mcp-remove-cancel" | "mcp-remove-confirm"; locale: string; entityId: number }
   | {
       action:
@@ -1274,6 +1275,7 @@ export const CONFIG_ROUTE_CODECS: ConfigRouteCodecs = {
   "mcp-add-open": { wireToken: "mcp-add-open", fields: [] },
   "mcp-add-submit": { wireToken: "mcp-add-submit", fields: [nonceField] },
   "mcp-set-enabled": { wireToken: "mcp-set-enabled", fields: [mcpEntityIdField, enabledField] },
+  "mcp-reconnect": { wireToken: "mcp-reconnect", fields: [mcpEntityIdField] },
   "mcp-remove-prompt": { wireToken: "mcp-remove-prompt", fields: [mcpEntityIdField] },
   "mcp-remove-cancel": { wireToken: "mcp-remove-cancel", fields: [mcpEntityIdField] },
   "mcp-remove-confirm": { wireToken: "mcp-remove-confirm", fields: [mcpEntityIdField] },
@@ -1390,6 +1392,8 @@ export const CONFIG_MCP_PANEL_ROUTE_ADAPTER: McpsPanelRouteAdapter = {
           entityId: route.entityId,
           enabled: route.enabled,
         });
+      case "reconnect":
+        return buildConfigRouteId({ action: "mcp-reconnect", locale: route.locale, entityId: route.entityId });
       case "remove-prompt":
         return buildConfigRouteId({ action: "mcp-remove-prompt", locale: route.locale, entityId: route.entityId });
       case "remove-cancel":

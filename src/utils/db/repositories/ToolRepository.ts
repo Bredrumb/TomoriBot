@@ -17,6 +17,7 @@ import { invalidateGuildMcpConfigCache } from "@/utils/cache/guildMcpConfigCache
 import type { IRepository } from "./IRepository";
 import { normalizeMcpToolNameSnapshot } from "@/utils/mcp/mcpToolSnapshot";
 import { type GuildMcpOAuthGrant, guildMcpOAuthRepository } from "@/utils/db/repositories/GuildMcpOAuthRepository";
+import { forgetMcpAccessToken } from "@/utils/mcp/oauth/accessToken";
 
 /** Portable tool config export shape (expanded in Phase 6 #16.7). */
 type ToolExportShape = {
@@ -115,6 +116,51 @@ class ToolRepository implements IRepository<ToolExportShape> {
       oauthGrant,
     );
     if (row) {
+      invalidateGuildMcpConfigCache(serverId);
+      invalidateTomoriStateCache(serverDiscId);
+    }
+    return row;
+  }
+
+  /**
+   * Replaces a signed-in registration's grant after Reconnect, keeping its name, type, and slot.
+   *
+   * @returns The refreshed row, or null when the registration is gone or the write failed
+   */
+  async replaceMcpOAuthGrant(
+    serverId: number,
+    guildMcpId: number,
+    grant: GuildMcpOAuthGrant,
+    lastDiscoveredToolNames: readonly string[],
+    serverDiscId: string,
+  ): Promise<GuildMcpServerRow | null> {
+    const toolNames = normalizeMcpToolNameSnapshot(lastDiscoveredToolNames);
+    let row: GuildMcpServerRow | null;
+    try {
+      row = await sql.begin(async (tx) => {
+        const [updated] = await tx`
+          UPDATE guild_mcp_servers
+          SET last_discovered_tool_names = ${tx.array([...toolNames], "TEXT")}, failing_since = NULL, failure_reason = NULL
+          WHERE server_id = ${serverId} AND guild_mcp_id = ${guildMcpId}
+          RETURNING *
+        `;
+        if (!updated) return null;
+        const replaced = await guildMcpOAuthRepository.replaceGrant(
+          tx,
+          guildMcpId,
+          grant,
+          keyManager.getCurrentKey(),
+          keyManager.getCurrentVersion(),
+        );
+        if (!replaced) throw new Error("Signed-in MCP registration has no grant to replace");
+        return { ...(updated as GuildMcpServerRow), oauth_status: "active" as const };
+      });
+    } catch (error) {
+      log.error(`[GuildMcpDb] Failed to replace the sign-in grant for MCP server ID ${guildMcpId}`, error);
+      return null;
+    }
+    if (row) {
+      forgetMcpAccessToken(guildMcpId);
       invalidateGuildMcpConfigCache(serverId);
       invalidateTomoriStateCache(serverDiscId);
     }
@@ -243,12 +289,18 @@ class ToolRepository implements IRepository<ToolExportShape> {
   private async sqlLoadGuildMcpServers(serverId: number): Promise<GuildMcpServerRow[]> {
     try {
       const rows = await sql`
-        SELECT guild_mcp_id, server_id, name, url, auth_token, key_version,
-               is_enabled, server_type, last_discovered_tool_names, failing_since, failure_reason,
-               created_at, updated_at
-        FROM guild_mcp_servers
-        WHERE server_id = ${serverId}
-        ORDER BY created_at ASC
+        SELECT g.guild_mcp_id, g.server_id, g.name, g.url, g.auth_token, g.key_version,
+               g.is_enabled, g.server_type, g.last_discovered_tool_names, g.failing_since, g.failure_reason,
+               g.created_at, g.updated_at,
+               CASE
+                 WHEN o.guild_mcp_id IS NULL THEN NULL
+                 WHEN o.needs_reauthorization THEN 'needs_reauthorization'
+                 ELSE 'active'
+               END AS oauth_status
+        FROM guild_mcp_servers AS g
+        LEFT JOIN guild_mcp_oauth AS o ON o.guild_mcp_id = g.guild_mcp_id
+        WHERE g.server_id = ${serverId}
+        ORDER BY g.created_at ASC
       `;
 
       return rows as GuildMcpServerRow[];
@@ -290,7 +342,7 @@ class ToolRepository implements IRepository<ToolExportShape> {
             currentKey,
             currentVersion,
           );
-          return inserted;
+          return { ...inserted, oauth_status: "active" as const };
         });
       } else if (rawAuthToken) {
         const [result] = await sql`
@@ -441,12 +493,18 @@ class ToolRepository implements IRepository<ToolExportShape> {
   private async sqlLoadAllEnabledGuildMcpServers(): Promise<GuildMcpServerRow[]> {
     try {
       const rows = await sql`
-        SELECT guild_mcp_id, server_id, name, url, auth_token, key_version,
-               is_enabled, server_type, last_discovered_tool_names, failing_since, failure_reason,
-               created_at, updated_at
-        FROM guild_mcp_servers
-        WHERE is_enabled = true
-        ORDER BY server_id ASC, created_at ASC
+        SELECT g.guild_mcp_id, g.server_id, g.name, g.url, g.auth_token, g.key_version,
+               g.is_enabled, g.server_type, g.last_discovered_tool_names, g.failing_since, g.failure_reason,
+               g.created_at, g.updated_at,
+               CASE
+                 WHEN o.guild_mcp_id IS NULL THEN NULL
+                 WHEN o.needs_reauthorization THEN 'needs_reauthorization'
+                 ELSE 'active'
+               END AS oauth_status
+        FROM guild_mcp_servers AS g
+        LEFT JOIN guild_mcp_oauth AS o ON o.guild_mcp_id = g.guild_mcp_id
+        WHERE g.is_enabled = true
+        ORDER BY g.server_id ASC, g.created_at ASC
       `;
 
       return rows as GuildMcpServerRow[];

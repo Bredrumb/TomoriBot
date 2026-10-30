@@ -181,6 +181,7 @@ export default {
       notice_character_prompt_line: `**Personagem {index}:** {prompt}`,
       notice_image_tags_tip_line: `Dica: Use os comandos \`image-tags\` para personagens mais consistentes.`,
       notice_avatar_reference_line: `Referência de avatar: {name}.`,
+      notice_character_reference_line: `Referência de personagem: {name}.`,
       notice_reference_count_line: `Usando {count} imagem(ns) de referência.`,
       generated_after_seconds_line: `Gerado após {seconds} segundos`,
       referenced_identities_line: `Referenciado: {names}`,

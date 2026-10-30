@@ -207,6 +207,11 @@ export default {
     lorebook_export_detail: `Se exportaron {count} entradas. Las restricciones de canal, los nombres de canales pendientes y el estado de la colección no se incluyen.`,
     lorebook_export_empty_heading: `No hay entradas para exportar`,
     lorebook_export_empty_detail: `Este libro no tiene entradas.`,
+    lorebook_export_sent_heading: "Lorebook enviado",
+    lorebook_export_sent_detail:
+      "**{name}** se ha enviado a tus mensajes directos como JSON de world info de SillyTavern.",
+    lorebook_export_dm_failed:
+      "No pude enviarte un mensaje directo, así que el lorebook se adjuntó aquí. Guárdalo ahora, porque este mensaje desaparecerá.",
     lorebook_import_no_book_heading: `No se encontró ningún Character Book`,
     lorebook_import_no_book_detail: `Esta tarjeta de personaje no tiene ningún Character Book incrustado.`,
     lorebook_conversion_note: `Entradas omitidas: {skipped}. Palabras clave no compatibles: {keys}. Entradas con ajustes ignorados: {ignored}. Ubicaciones combinadas: {placements}.`,

@@ -78,7 +78,7 @@ export async function gatherServerCardData(args: GatherServerCardArgs): Promise<
 
   // One grouped query per ranked block: no per-row token/cost lookups.
   const [rawTopMembers, personaTokenCosts, modelCosts, tokenTotals, totalTriggers, estimatedCost] = await Promise.all([
-    statRepository.getTopUsers({ serverId, limit: 25, ...windowArg }),
+    statRepository.getTopUsers({ serverId, limit: 25, botUserDiscId: guild.client.user.id, ...windowArg }),
     statRepository.getPersonaTokenCostBreakdown({ serverId, limit: 5, ...windowArg }),
     statRepository.getModelCostBreakdown({ serverId, limit: 3, ...windowArg }),
     statRepository.getTokenTotals({ serverId, ...windowArg }),

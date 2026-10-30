@@ -10,6 +10,7 @@ export default {
       dm_title: `データエクスポート`,
       dm_description: `リクエストされた{type}データをお送りします！`,
       dm_failed_title: `🔴 DMを送信できませんでした`,
+      dm_failed_attached_description: `DMを送信できなかったため、代わりにここに{type}のエクスポートファイルを添付しました。このメッセージは消えるため、今すぐ保存してください。今後のエクスポートをDMで受け取るには、サーバーメンバーからのDMを許可してください。`,
       no_permission_title: `🔴 権限がありません`,
       no_permission_description: `サーバーデータをエクスポートするには**サーバー管理**権限が必要です。`,
       error_no_user_data: `ユーザーデータが見つかりません。まずボットとやり取りする必要があるかもしれません。`,

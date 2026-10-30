@@ -181,6 +181,7 @@ export default {
       notice_character_prompt_line: `**Nhân vật {index}:** {prompt}`,
       notice_image_tags_tip_line: `Mẹo: Dùng lệnh \`image-tags\` để nhân vật nhất quán hơn.`,
       notice_avatar_reference_line: `Tham chiếu avatar: {name}.`,
+      notice_character_reference_line: `Ảnh tham chiếu nhân vật: {name}.`,
       notice_reference_count_line: `Sử dụng {count} ảnh tham chiếu.`,
       generated_after_seconds_line: `Được tạo sau {seconds} giây`,
       referenced_identities_line: `Đã tham chiếu: {names}`,

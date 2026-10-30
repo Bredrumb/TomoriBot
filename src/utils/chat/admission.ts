@@ -262,13 +262,23 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
 
   const chainOriginUserDiscId =
     !incoming.isManuallyTriggered && isLikelySelfMessage ? getSelfReplyChainOriginUser(channel.id) : null;
+  if (!incoming.isManuallyTriggered && isLikelySelfMessage && !chainOriginUserDiscId) {
+    // No person is behind this chain to credit, and late gateway echoes of nudge output also land here.
+    return ignored("persona_chain_without_origin");
+  }
   // System-initiated turns (reminders, boomerangs) pass whatever message was last in the
   // channel as their trigger, which in a DM is frequently one of Tomori's own. Falling back
   // to the author there would resolve the DM owner (and thus the DM's server key) to the
   // bot itself, so prefer the channel's recipient whenever the author is the client user.
   const dmOwnerDiscId = channel instanceof DMChannel ? (channel.recipientId ?? null) : null;
+  // Persona webhooks are pooled per channel, so their author ID would become one misnamed users row per
+  // webhook; a system turn anchored on persona output is credited to the bot account instead.
   const authorFallbackDiscId =
-    dmOwnerDiscId && message.author.id === client.user?.id ? dmOwnerDiscId : message.author.id;
+    dmOwnerDiscId && message.author.id === client.user?.id
+      ? dmOwnerDiscId
+      : isLikelySelfMessage
+        ? (client.user?.id ?? message.author.id)
+        : message.author.id;
   // A system turn borrows an arbitrary channel message as its trigger, so its declared
   // identity outranks a proxy sender that only happens to own that message.
   const userDiscId =

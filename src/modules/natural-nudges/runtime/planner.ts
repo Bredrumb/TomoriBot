@@ -11,11 +11,7 @@ import {
   resolveNudgeModel,
   resolveStructuredCallTarget,
 } from "@/modules/natural-nudges/runtime/model";
-import {
-  PLANNER_RECENT_TOPICS,
-  PLAY_SCENE_MAX_TURNS,
-  PLAY_SCENE_MIN_TURNS,
-} from "@/modules/natural-nudges/runtime/tuning";
+import { PLANNER_RECENT_TOPICS, type SceneTurnRange } from "@/modules/natural-nudges/runtime/tuning";
 import { formatStructuredRetryNote } from "@/utils/provider/serverStructuredOutput";
 import { log } from "@/utils/misc/logger";
 import type { TokenUsage } from "@/utils/text/tokenEstimate";
@@ -26,6 +22,8 @@ const PLANNER_TIMEOUT_MS = 90_000;
 const TARGET_MEMORY_MAX_CHARS = 300;
 const PLANNER_ATTRIBUTE_MAX_CHARS = 450;
 const PLANNER_CHARACTER_ATTRIBUTE_MAX_CHARS = 1_800;
+/** The opener is a hook; anything the persona should pursue afterward belongs in the agenda. */
+const OPENER_DIRECTION_MAX = 200;
 
 interface PlannerChannel {
   name: string;
@@ -55,6 +53,8 @@ export interface PlannerCandidate {
   channelIndices: readonly number[];
   /** Scene candidates share one cast for the attempt, so the planner can read its profiles once. */
   partners: readonly ScenePartner[];
+  /** Drawn once per attempt, so the planner writes a script of the length the draw allows. */
+  sceneTurns: SceneTurnRange;
 }
 
 const agendaSchema = z.string().trim().min(1).max(NATURAL_NUDGE_AGENDA_MAX);
@@ -63,7 +63,7 @@ const plannedFields = {
   proceed: z.literal(true),
   channel: z.number().int().min(1),
   topic: z.string().trim().min(1).max(200),
-  opener_direction: z.string().trim().min(1).max(600),
+  opener_direction: z.string().trim().min(1).max(OPENER_DIRECTION_MAX),
   agenda: agendaSchema,
 };
 const plainPlanSchema = z.object({ ...plannedFields, nudge: z.string() }).strict();
@@ -91,11 +91,16 @@ export function buildPlannerJsonSchema(candidates: readonly PlannerCandidate[]) 
  * The script rules the provider schema does not carry, worded for the format retry note. Speaker 1 is
  * the lead and partners follow in order.
  */
-export function sceneScriptIssues(script: readonly number[], partnerAgendas: number, partners: number): string[] {
+export function sceneScriptIssues(
+  script: readonly number[],
+  partnerAgendas: number,
+  partners: number,
+  turns: SceneTurnRange,
+): string[] {
   const speakers = partners + 1;
   const issues: string[] = [];
-  if (script.length < PLAY_SCENE_MIN_TURNS || script.length > PLAY_SCENE_MAX_TURNS)
-    issues.push(`script must have ${PLAY_SCENE_MIN_TURNS}-${PLAY_SCENE_MAX_TURNS} turns`);
+  if (script.length < turns.min || script.length > turns.max)
+    issues.push(`script must have ${turns.min}-${turns.max} turns`);
   if (partnerAgendas !== partners)
     issues.push(`partner_agendas must hold exactly ${partners} goal(s), one per partner in number order`);
   if (script[0] !== 1) issues.push("script must start with character 1, who opens the scene");
@@ -126,7 +131,12 @@ export function buildAcceptedResult(candidates: readonly PlannerCandidate[]) {
         context.addIssue({ code: "custom", message: "channel must be one of the selected nudge's allowed channels" });
       }
       if (!("script" in value)) return;
-      const issues = sceneScriptIssues(value.script, value.partner_agendas.length, candidate.partners.length);
+      const issues = sceneScriptIssues(
+        value.script,
+        value.partner_agendas.length,
+        candidate.partners.length,
+        candidate.sceneTurns,
+      );
       for (const message of issues) {
         context.addIssue({ code: "custom", message });
       }
@@ -179,7 +189,7 @@ function buildTargetLine(input: PlannerInput, candidate: PlannerCandidate, name:
 
 function buildSystemPrompt(input: PlannerInput): string {
   const name = input.persona.persona_nickname;
-  const hasScenes = input.candidates.some((candidate) => candidate.partners.length > 0);
+  const sceneCandidate = input.candidates.find((candidate) => candidate.partners.length > 0);
   return [
     `You plan one unprompted Discord message for the character ${name}. Nobody asked ${name} to speak, so the opener must feel natural for the channel, short, and in character.`,
     ...input.candidates.map((candidate) =>
@@ -203,14 +213,14 @@ function buildSystemPrompt(input: PlannerInput): string {
       "Rules:",
       "- Choose one nudge by its id and one of that nudge's allowed channels by its number, then write the plan for that pair.",
       "- Respect the channel's purpose as indicated by its name and description. The opener and agenda must fit that purpose even if recent messages drift off topic.",
-      `- opener_direction tells ${name} what to say in one or two sentences. Do not write the message itself.`,
+      `- opener_direction tells ${name} what to say as one short hook (a line or two, under ${OPENER_DIRECTION_MAX} characters). Do not write the message itself, and do not front-load the whole story: what ${name} wants to bring out later belongs in the agenda.`,
       "- A conversational opening can be a specific thought, observation, or action that leaves room for a reply. Do not default to a question; use one when it suits the brief and character.",
       "- Pick a concrete angle grounded in the character or available context. If the opening asks a question, avoid stacking questions or repeating the invitation to answer.",
-      `- agenda is one small personal intention that guides ${name}'s later replies. It may be something ${name} wants to express, enjoy, share, or do, or something ${name} hopes to learn or invite. It does not need to make anyone respond or take action. Choose an intention that fits the nudge's brief and ${name}'s character. An agenda never seeks personal data, money, or any action outside the chat.`,
-      hasScenes
-        ? `- For a Play Scene nudge, script lists who speaks, in order, by character number: ${PLAY_SCENE_MIN_TURNS}-${PLAY_SCENE_MAX_TURNS} turns, starting with 1, never the same character twice in a row, and every character at least once. Use only that nudge's partners.`
+      `- agenda is one small personal intention that guides ${name}'s later replies. It may be something ${name} wants to express, enjoy, share, or do, or something ${name} hopes to learn or invite. It does not need to make anyone respond or take action. It is pursued through ordinary conversation: the opener and later turns must not announce it, and must not simply ask it outright. Choose an intention that fits the nudge's brief and ${name}'s character. An agenda never seeks personal data, money, or any action outside the chat.`,
+      sceneCandidate
+        ? `- For a Play Scene nudge, script lists who speaks, in order, by character number: ${sceneCandidate.sceneTurns.min}-${sceneCandidate.sceneTurns.max} turns, starting with 1, never the same character twice in a row, and every character at least once. Use only that nudge's partners. Every turn is a single short message, so plan an exchange of quick reactions rather than speeches.`
         : "",
-      hasScenes
+      sceneCandidate
         ? "- partner_agendas holds one goal for each partner in number order, under the same limits as agenda."
         : "",
       "- Set proceed to false when no offered nudge and allowed channel fit naturally, the recent conversation is sensitive or private, or an opener would feel forced. Saying nothing is always acceptable.",

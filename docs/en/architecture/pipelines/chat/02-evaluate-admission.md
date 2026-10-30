@@ -63,6 +63,10 @@ Before loading persona configuration or calling models, guild channels pass thre
 
 For opted-in users, admission creates a service-scoped expectation before checking the proxy bot's guild presence. A verified repost can then replace the original while it is held. PluralKit attests the exact original; PluralBuddy cannot pair concurrent originals from one host. Verified proxy reposts pass the webhook gate, while persona and Matrix handling require a managed webhook. Privacy, quota, and cooldown checks use the attested host account. See [message-proxy integration](/architecture/integrations/message-proxy/) for matching and queue constraints.
 
+### Persona-authored triggers
+
+A persona's webhook post is posted by the channel's shared managed webhook, so its author ID is never a person. An organic persona-to-persona reply is credited to the person who started the self-reply chain (`getSelfReplyChainOriginUser`); with no recorded originator, admission ignores the message as `persona_chain_without_origin`. A system turn (Natural Nudges, scheduled tasks) that anchors on persona output is credited to the bot account instead, and `getTopUsers` leaves the bot off leaderboards. Neither path greets anyone with a reunion note.
+
 ### Audio transcription
 
 When a message contains audio attachments and voice transcription is enabled,

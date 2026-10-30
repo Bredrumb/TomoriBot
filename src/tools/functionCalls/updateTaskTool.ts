@@ -5,6 +5,7 @@
  * The ID is shown in participant context as "ID:N".
  */
 
+import { PermissionFlagsBits } from "discord.js";
 import { extractBridgeUserId } from "@/utils/bridges";
 import { isMatrixRelayMessage } from "@/utils/chat/triggerProcessor";
 import { verifyMessageWebhook } from "@/utils/chat/webhookIdentity";
@@ -276,7 +277,7 @@ function formatRepeatText(locale: string, repetitionIntervalHours: number | null
 export class UpdateTaskTool extends BaseTool {
   name = "update_task";
   description =
-    "Replace or delete an existing scheduled task/reminder by ID. Use the reminder ID shown in context (for example, ID:42). Set reminder_purpose to the full replacement content. If reminder_purpose is empty or blank, delete the targeted reminder instead. You may optionally reschedule it with reminder_time in YYYY-MM-DD_HH:MM (pass the wall-clock time exactly as the user expressed it. NEVER convert between timezones yourself; it is interpreted in the server timezone unless you set utc_offset to the offset the user spoke in), or relative time parameters such as minutes_from_now/hours_from_now/days_from_now/months_from_now. If no time is provided, keep the existing trigger time. You may optionally set repetition_interval_hours to 0 for one-time, or 1+ for recurring; if omitted, keep the existing repeat interval. Do not use this to change target user, target channel, or whether it is a self task.";
+    "Replace or delete an existing scheduled task/reminder by ID. Use the reminder ID shown in context (for example, ID:42). Set reminder_purpose to the full replacement content. If reminder_purpose is empty or blank, delete the targeted reminder instead (members with Manage Server may delete any reminder in the server; everyone else only their own). You may optionally reschedule it with reminder_time in YYYY-MM-DD_HH:MM (pass the wall-clock time exactly as the user expressed it. NEVER convert between timezones yourself; it is interpreted in the server timezone unless you set utc_offset to the offset the user spoke in), or relative time parameters such as minutes_from_now/hours_from_now/days_from_now/months_from_now. If no time is provided, keep the existing trigger time. You may optionally set repetition_interval_hours to 0 for one-time, or 1+ for recurring; if omitted, keep the existing repeat interval. Do not use this to change target user, target channel, or whether it is a self task.";
   category = "utility" as const;
 
   parameters: ToolParameterSchema = {
@@ -383,6 +384,11 @@ export class UpdateTaskTool extends BaseTool {
     };
 
     if (parsedArgs.isDeleteRequested) {
+      // The message author is not necessarily the triggerer (proxied and relayed turns), so the
+      // permission is read from the resolved triggerer's member record, never from the message.
+      const requesterMember = requesterDiscordId
+        ? await context.message?.guild?.members.fetch(requesterDiscordId).catch(() => null)
+        : null;
       const deleteResult = await serverScheduleRepository.deleteReminderForRequester({
         reminder_id: parsedArgs.reminderId,
         server_id: tomoriState.server_id,
@@ -390,6 +396,7 @@ export class UpdateTaskTool extends BaseTool {
           requester_user_id: actor.requesterUserId,
           requester_discord_id: actor.requesterDiscordId,
           requester_bridge_user_id: actor.requesterBridgeUserId,
+          requester_can_manage_server: requesterMember?.permissions.has(PermissionFlagsBits.ManageGuild) ?? false,
         },
       });
 
@@ -399,7 +406,7 @@ export class UpdateTaskTool extends BaseTool {
       if (deleteResult.status === "unauthorized") {
         return buildFailureResult(
           "task_update_failed_unauthorized",
-          "You can only delete reminders/tasks you created, or non-self reminders targeted at you.",
+          "You can only delete reminders/tasks you created, non-self reminders targeted at you, or any reminder if you have the Manage Server permission.",
         );
       }
       if (deleteResult.status !== "deleted") {

@@ -197,6 +197,8 @@ export default {
     panel: {
       avatar_preset_sprites_removed_detail:
         "新しいアバターと合わないデフォルトのスプライト（{count}件）を削除しました。 /persona defaultで元に戻せます。",
+      avatar_preset_character_reference_removed_detail:
+        "生成される画像が新しい外見に従うよう、デフォルトのキャラクターリファレンスを削除しました。独自のリファレンスをアップロードするか、/persona defaultを実行して元に戻してください。",
       channels_welcome_range_placeholder: `ようこそ設定：ペルソナのページを選択`,
       channels_auto_trigger_range_placeholder: `自動トリガー設定：ペルソナのページを選択`,
       random_trigger_add_persona_range_placeholder: `ランダムトリガー追加：ペルソナのページを選択`,
