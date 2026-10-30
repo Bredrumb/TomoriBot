@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { TomoriState } from "@/types/db/schema";
 import { NATURAL_NUDGE_AGENDA_MAX, type NaturalNudgeInterest } from "@/modules/natural-nudges/db/types";
-import { escapeDataText } from "@/modules/natural-nudges/runtime/channels";
+import { clipAtBoundary, escapeDataText } from "@/modules/natural-nudges/runtime/channels";
 import { idleNudgeNeedsTarget, type IdleNudgeDefinition } from "@/modules/natural-nudges/runtime/idleNudges";
 import type { PingUserTarget } from "@/modules/natural-nudges/runtime/targets";
 import {
@@ -20,6 +20,8 @@ import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 /** A planner that hangs past this would plan for a moment that has already passed. */
 const PLANNER_TIMEOUT_MS = 90_000;
 const TARGET_MEMORY_MAX_CHARS = 300;
+const PLANNER_ATTRIBUTE_MAX_CHARS = 450;
+const PLANNER_CHARACTER_ATTRIBUTE_MAX_CHARS = 1_800;
 
 interface PlannerChannel {
   name: string;
@@ -232,7 +234,16 @@ function buildCharacterBlocks(
   interests: readonly NaturalNudgeInterest[],
   number: number | null,
 ): string[] {
-  const attributes = persona.attribute_list.map((attribute) => attribute.replaceAll("{bot}", persona.persona_nickname));
+  const attributes: string[] = [];
+  let remaining = PLANNER_CHARACTER_ATTRIBUTE_MAX_CHARS;
+  for (const attribute of persona.attribute_list) {
+    if (remaining <= 0) break;
+    const text = attribute.replaceAll("{bot}", persona.persona_nickname).trim();
+    if (!text) continue;
+    const clipped = clipAtBoundary(text, Math.min(PLANNER_ATTRIBUTE_MAX_CHARS, remaining));
+    attributes.push(clipped);
+    remaining -= clipped.length;
+  }
   const numbered = number === null ? "" : ` number="${number}"`;
   const lines = interests.map((interest) => `- ${interest.label}: ${interest.description}`);
   return [

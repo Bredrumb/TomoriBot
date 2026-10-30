@@ -116,6 +116,8 @@ times. Token and model stats still record.
 - **Channel purpose**: Phase B receives each offered channel's name, description (Discord topic),
   and recent messages. The planner must fit the opener and agenda to the channel's purpose, even
   when recent messages drift off topic, and decline if no offered nudge and channel fit.
+  The planner sees budgeted persona attributes and escaped transcripts that favor the newest
+  messages, with clips preferring sentence boundaries; the speaking turn keeps the full persona.
 - **Nudge shortlist**: Phase A raffles one category using category weights and rest among categories
   with a nudge that passes channel and tool checks. It excludes the last idle category when another
   category with positive weight passes those checks. Only then does it load target context when a
