@@ -898,6 +898,7 @@ const WIRE_CONTRACT_V2: ReadonlyArray<readonly [string, ConfigPanelRoute]> = [
   ["config:v2:mcp-add-open:en-US", { action: "mcp-add-open", locale: "en-US" }],
   ["config:v2:mcp-add-submit:en-US:nonce1234567", { action: "mcp-add-submit", locale: "en-US", nonce: "nonce1234567" }],
   ["config:v2:mcp-set-enabled:en-US:1:0", { action: "mcp-set-enabled", locale: "en-US", entityId: 1, enabled: false }],
+  ["config:v2:mcp-reconnect:en-US:1", { action: "mcp-reconnect", locale: "en-US", entityId: 1 }],
   ["config:v2:mcp-remove-prompt:en-US:1", { action: "mcp-remove-prompt", locale: "en-US", entityId: 1 }],
   ["config:v2:mcp-remove-cancel:en-US:1", { action: "mcp-remove-cancel", locale: "en-US", entityId: 1 }],
   ["config:v2:mcp-remove-confirm:en-US:1", { action: "mcp-remove-confirm", locale: "en-US", entityId: 1 }],

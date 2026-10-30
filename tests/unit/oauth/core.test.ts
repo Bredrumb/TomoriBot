@@ -163,7 +163,13 @@ describe("shared OAuth boundaries", () => {
   });
 
   it("accepts only HTTPS public origins or loopback HTTP origins with a port", () => {
-    expect(getOAuthPublicBaseUrl(undefined)).toBeUndefined();
+    const configured = process.env.TOMORI_PUBLIC_BASE_URL;
+    delete process.env.TOMORI_PUBLIC_BASE_URL;
+    try {
+      expect(getOAuthPublicBaseUrl()).toBeUndefined();
+    } finally {
+      if (configured !== undefined) process.env.TOMORI_PUBLIC_BASE_URL = configured;
+    }
     expect(getOAuthPublicBaseUrl(" ")).toBeUndefined();
     expect(getOAuthPublicBaseUrl("https://bot.example/")).toBe("https://bot.example");
     expect(getOAuthPublicBaseUrl("http://127.0.0.1:8080")).toBe("http://127.0.0.1:8080");

@@ -33,7 +33,8 @@ import { ToolRegistry } from "@/tools/toolRegistry";
 import { refreshToolExecutionContext } from "@/tools/availability";
 import { configToFeatureFlags } from "@/utils/tools/featureFlagMapper";
 import { validateFetchUrlTarget } from "@/tools/fetchUrl/urlSafety";
-import { createGuildMcpFetch } from "@/utils/mcp/guildMcpFetch";
+import { createGuildMcpFetch, type GuildMcpFetchAuthorization } from "@/utils/mcp/guildMcpFetch";
+import { createMcpFetchAuthorization, type McpFetchAuthorization } from "@/utils/mcp/oauth/accessToken";
 
 interface GuildMcpRoute {
   config: GuildMcpServerRow;
@@ -199,7 +200,7 @@ class GuildMcpManager {
 
   /** Reads the exact connected registration; a same-name replacement cannot inherit its binding. */
   async getRegisteredTool(config: GuildMcpServerRow, privateFailure = false): Promise<CallableTool | null> {
-    if (!config.is_enabled) return null;
+    if (!config.is_enabled || config.oauth_status === "needs_reauthorization") return null;
     const connection =
       this.pool.get(this.poolKey(config.server_id, config.name)) ?? (await this.connectServer(config, privateFailure));
     return connection && connection.guildMcpId === config.guild_mcp_id
@@ -623,6 +624,8 @@ class GuildMcpManager {
 
     const existing = this.pool.get(key);
     if (existing) return existing;
+    // An expired grant needs a human rather than a disable, so it never enters the failure streak.
+    if (config.oauth_status === "needs_reauthorization") return null;
 
     // Circuit breaker: skip servers that recently failed to connect until their
     // cooldown elapses. Without this, one unreachable server re-pays the full
@@ -638,13 +641,17 @@ class GuildMcpManager {
 
     this.connectingKeys.add(key);
 
+    let authorization: McpFetchAuthorization | undefined;
     try {
-      const authToken = await toolRepository.decryptMcpAuthToken(config, privateFailure);
+      if (config.oauth_status) {
+        authorization = await createMcpFetchAuthorization(config.guild_mcp_id ?? 0, config.server_id);
+      }
+      const credential = authorization ?? (await toolRepository.decryptMcpAuthToken(config, privateFailure));
 
       const { client, functionNames } = await this.connectAndDiscover(
         `tomoribot-guild-${config.server_id}-${config.name}`,
         config.url,
-        authToken ?? undefined,
+        credential ?? undefined,
         config.name,
         privateFailure,
       );
@@ -716,6 +723,12 @@ class GuildMcpManager {
 
       return conn;
     } catch (error) {
+      if (authorization?.reauthorizationRequired) {
+        log.info(
+          `[GuildMcpManager] Guild MCP server "${config.name}" (server: ${config.server_id}) needs sign-in again`,
+        );
+        return null;
+      }
       await this.recordConnectFailure(config, key, error, privateFailure);
       return null;
     } finally {
@@ -769,7 +782,7 @@ class GuildMcpManager {
   private async connectAndDiscover(
     clientName: string,
     url: string,
-    authToken?: string,
+    credential?: string | GuildMcpFetchAuthorization,
     serverLabel?: string,
     privateFailure = false,
     onUnauthorized?: (response: Response) => void,
@@ -777,7 +790,7 @@ class GuildMcpManager {
     const client = await this.connectWithFallback(
       clientName,
       url,
-      authToken,
+      credential,
       serverLabel,
       privateFailure,
       onUnauthorized,
@@ -798,7 +811,7 @@ class GuildMcpManager {
   private async connectWithFallback(
     clientName: string,
     url: string,
-    authToken?: string,
+    credential?: string | GuildMcpFetchAuthorization,
     serverLabel?: string,
     privateFailure = false,
     onUnauthorized?: (response: Response) => void,
@@ -815,11 +828,15 @@ class GuildMcpManager {
     const errors: string[] = [];
     let authRejected = false;
 
-    const guardedFetch = createGuildMcpFetch(url, onUnauthorized);
+    const guardedFetch = createGuildMcpFetch(
+      url,
+      onUnauthorized,
+      typeof credential === "object" ? credential : undefined,
+    );
 
     const headers: Record<string, string> = {};
-    if (authToken) {
-      headers.Authorization = `Bearer ${authToken}`;
+    if (typeof credential === "string" && credential) {
+      headers.Authorization = `Bearer ${credential}`;
     }
 
     const parsedUrl = new URL(url);

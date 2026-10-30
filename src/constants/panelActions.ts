@@ -53,6 +53,7 @@ export const PANEL_ACTIONS = [
   "mcps.workspace.server.enable",
   "mcps.workspace.server.disable",
   "mcps.workspace.server.remove",
+  "mcps.workspace.server.reconnect",
 
   // st-presets
   "st-presets.workspace.preset.add",

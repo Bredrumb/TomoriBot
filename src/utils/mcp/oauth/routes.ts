@@ -10,10 +10,12 @@ import { renderMcpOAuthResultPage } from "@/utils/mcp/oauth/pages";
 import {
   configureMcpSignIn,
   deriveMcpStateSigner,
+  findMcpAuthorizationUrl,
   handleMcpOAuthCallback,
   handleMcpOAuthConfirm,
   MCP_OAUTH_CONFIRM_PATH,
   MCP_OAUTH_FLOW,
+  MCP_OAUTH_START_PATH,
 } from "@/utils/mcp/oauth/signIn";
 import { type OAuthCallbackResponse, registerOAuthCallbackFlow } from "@/utils/oauth/callbackRoute";
 
@@ -50,6 +52,16 @@ export function initializeMcpOAuthRoutes(publicBaseUrl: string): void {
     dependencies: { complete: (draft, grant) => mcpConfigOperations.completeSignIn(draft, grant) },
   });
   registerOAuthCallbackFlow(MCP_OAUTH_FLOW, { signerSecret, handle: handleMcpOAuthCallback });
+  registerHealthServerRoute({
+    method: "GET",
+    path: MCP_OAUTH_START_PATH,
+    handler: (_req, res, { requestUrl }) => {
+      const authorizationUrl = findMcpAuthorizationUrl(requestUrl.searchParams.get("id") ?? "");
+      if (!authorizationUrl) return writePage(res, renderMcpOAuthResultPage("en-US", "expired"));
+      res.writeHead(303, { Location: authorizationUrl, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
+      res.end();
+    },
+  });
   registerHealthServerRoute({
     method: "POST",
     path: MCP_OAUTH_CONFIRM_PATH,

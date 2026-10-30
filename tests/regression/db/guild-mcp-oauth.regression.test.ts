@@ -2,7 +2,9 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { getCachedGuildMcpConfigs } from "@/utils/cache/guildMcpConfigCache";
 import { guildMcpOAuthRepository, type GuildMcpOAuthGrant } from "@/utils/db/repositories/GuildMcpOAuthRepository";
 import { toolRepository } from "@/utils/db/repositories/ToolRepository";
+import { clearMcpAccessTokensForTests, createMcpFetchAuthorization } from "@/utils/mcp/oauth/accessToken";
 import { keyManager } from "@/utils/security/keyManager";
+import { STUB_PUBLIC_HOST, stubGlobalFetch } from "../../helpers/fetchStub";
 import { cleanupFixtures, FIXTURE_IDS, insertFixtures, type FixtureRefs } from "./setup/fixtures";
 import { DB_TESTS_AVAILABLE, executeTestSqlFile, setupTestDb, testSql } from "./setup/testDb";
 
@@ -27,6 +29,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Guild MCP OAuth storage", () => {
   });
 
   afterAll(async () => {
+    clearMcpAccessTokensForTests();
     await testSql`DELETE FROM mcp_oauth_clients WHERE issuer LIKE 'https://%.example.invalid'`;
     await cleanupFixtures(testSql);
   });
@@ -102,6 +105,93 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Guild MCP OAuth storage", () => {
 
     expect(await toolRepository.deleteMcpServerById(refs.serverId, guildMcpId, FIXTURE_IDS.serverDiscId)).toBe(true);
     expect(await readGrant(guildMcpId)).toBeNull();
+  });
+
+  it("refreshes before use, persists each rotated pair, and pauses the registration for Reconnect", async () => {
+    const tokenEndpoint = `https://${STUB_PUBLIC_HOST}/token`;
+    const row = await toolRepository.insertMcpServer(
+      refs.serverId,
+      "oauth-rotating",
+      GRANT.resource,
+      undefined,
+      null,
+      [],
+      FIXTURE_IDS.serverDiscId,
+      { ...GRANT, tokenEndpoint, refreshToken: "refresh-one", expiresAt: new Date("2020-01-01T00:00:00Z") },
+    );
+    const guildMcpId = row?.guild_mcp_id ?? 0;
+    const statusOf = async () =>
+      (await getCachedGuildMcpConfigs(refs.serverId)).find((config) => config.guild_mcp_id === guildMcpId)
+        ?.oauth_status;
+    expect(await statusOf()).toBe("active");
+
+    const issued = ["two", "three"];
+    const refreshRequests: URLSearchParams[] = [];
+    const fetchSpy = stubGlobalFetch((_input, init) => {
+      refreshRequests.push(new URLSearchParams(String(init?.body)));
+      const generation = issued.shift();
+      return Response.json({
+        access_token: `access-${generation}`,
+        refresh_token: `refresh-${generation}`,
+        token_type: "Bearer",
+      });
+    });
+    try {
+      const authorization = await createMcpFetchAuthorization(guildMcpId, refs.serverId);
+      expect(await authorization.token()).toBe("access-two");
+      expect(Object.fromEntries(refreshRequests[0] ?? [])).toMatchObject({
+        grant_type: "refresh_token",
+        refresh_token: "refresh-one",
+        resource: GRANT.resource,
+        client_id: GRANT.clientId,
+      });
+      expect(await readGrant(guildMcpId)).toMatchObject({
+        access_token: "access-two",
+        refresh_token: "refresh-two",
+        expires_at: null,
+      });
+
+      expect(await authorization.replace("access-two")).toBe("access-three");
+      expect(refreshRequests[1]?.get("refresh_token")).toBe("refresh-two");
+      expect(await readGrant(guildMcpId)).toMatchObject({
+        access_token: "access-three",
+        refresh_token: "refresh-three",
+      });
+
+      await authorization.reauthorize("read admin");
+      expect(await readGrant(guildMcpId)).toMatchObject({
+        needs_reauthorization: true,
+        requested_scopes: "read write admin",
+      });
+      expect(await statusOf()).toBe("needs_reauthorization");
+      await expect(authorization.token()).rejects.toThrow();
+      expect(authorization.reauthorizationRequired).toBe(true);
+      expect(refreshRequests).toHaveLength(2);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+
+    const reconnected = await toolRepository.replaceMcpOAuthGrant(
+      refs.serverId,
+      guildMcpId,
+      { ...GRANT, accessToken: "access-reconnected", requestedScopes: "read write admin" },
+      ["search_issues"],
+      FIXTURE_IDS.serverDiscId,
+    );
+    expect(reconnected).toMatchObject({ guild_mcp_id: guildMcpId, last_discovered_tool_names: ["search_issues"] });
+    expect(await readGrant(guildMcpId)).toMatchObject({
+      access_token: "access-reconnected",
+      refresh_token: null,
+      needs_reauthorization: false,
+    });
+    expect(await statusOf()).toBe("active");
+    const renewed = await createMcpFetchAuthorization(guildMcpId, refs.serverId);
+    expect(await renewed.token()).toBe("access-reconnected");
+
+    // Without a refresh token, a rejected access token can only be replaced by signing in again.
+    expect(await renewed.replace("access-reconnected")).toBeNull();
+    expect(renewed.reauthorizationRequired).toBe(true);
+    expect(await statusOf()).toBe("needs_reauthorization");
   });
 
   it("rolls back the registration when its grant cannot be stored", async () => {

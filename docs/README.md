@@ -74,6 +74,7 @@ source open to follow these.
   - [`local-endpoints/speech-to-text/`](./en/self-hosting/local-endpoints/speech-to-text/README.mdx): local STT engines
 - [`self-hosting/maintenance.md`](./en/self-hosting/maintenance.md): maintenance scripts, updating, backups/restore
 - [`self-hosting/pluralbuddy-oauth.md`](./en/self-hosting/pluralbuddy-oauth.md): authorize the official PluralBuddy message lookup
+- [`self-hosting/mcp-sign-in.md`](./en/self-hosting/mcp-sign-in.md): set `TOMORI_PUBLIC_BASE_URL` so admins can add MCP servers that need sign-in
 - [`self-hosting/local-monitoring.md`](./en/self-hosting/local-monitoring.md)
 
 ## Contributing (order 4)

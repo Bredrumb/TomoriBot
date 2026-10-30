@@ -44,6 +44,11 @@ function isHttpsUrl(value: string): boolean {
   return URL.parse(value)?.protocol === "https:";
 }
 
+export function unionMcpScopes(...lists: (string | null | undefined)[]): string | undefined {
+  const scopes = new Set(lists.flatMap((list) => list?.split(" ").filter(Boolean) ?? []));
+  return scopes.size > 0 ? [...scopes].join(" ") : undefined;
+}
+
 /** Challenged scope first, then the resource's advertised scopes, otherwise the server default. */
 export function selectMcpScope(
   challengedScope: string | undefined,

@@ -21,6 +21,26 @@ guarantee the server is currently reachable.
 Tool responses are limited to 8 MiB, including the entire stream for SSE connections. Ask the
 provider for pagination or smaller results if a tool exceeds the limit.
 
+### Adding an MCP that needs sign-in
+
+Some services, such as Linear and Notion, ask you to sign in to your account instead of giving you
+a token. Add the MCP with `Auth Token` left blank. When the server asks for a sign-in, the panel
+shows a `Sign In` button:
+
+1. Choose `Sign In` and sign in to the service within 10 minutes.
+2. The confirmation page names your Discord server and the MCP's address. Choose `Connect` only if
+   both are right and you started this sign-in yourself.
+3. The panel updates in Discord once the MCP is added.
+
+Every member who uses the MCP's tools acts as the account that signed in, so use an account whose
+data the whole server may see.
+
+When a sign-in expires or the service asks for more access, that MCP's tools pause and its row
+shows `Reconnect`. Choose it and sign in again; the MCP keeps its name, type, and slot.
+
+Sign-in works only when adding an MCP in a server, not in a DM. On a self-hosted bot, the host sets
+it up first; see [MCP Sign-In Setup](/self-hosting/mcp-sign-in/).
+
 ### Local MCP Servers
 
 Local MCP servers are supported on self-hosted instances only, because the public hosted bot

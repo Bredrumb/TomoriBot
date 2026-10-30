@@ -30,6 +30,8 @@ function dependencies(overrides: Partial<McpConfigOperationDependencies> = {}): 
     testConnection: async () => ({ success: true, toolCount: 0, functionNames: [] }),
     insert: async (serverId, name, url) => ({ ...existingRow(2), server_id: serverId, name, url }),
     signInAvailable: () => false,
+    requestedScopes: async () => null,
+    replaceGrant: async () => null,
     updateEnabled: async () => true,
     remove: async () => true,
     disconnect: async () => {},
@@ -395,13 +397,16 @@ describe("canonical MCP config operations", () => {
         signInAvailable: () => true,
       }),
     );
-    for (const [operations, attempt] of [
-      [configured, { ...input, authToken: "bearer-value" }],
-      [configured, { ...input, allowSignIn: false }],
-      [unconfigured, input],
-      [offline, input],
+    for (const [operations, attempt, signInHint] of [
+      [configured, { ...input, authToken: "bearer-value" }, undefined],
+      [configured, { ...input, allowSignIn: false }, "dm"],
+      [unconfigured, { ...input, allowSignIn: false }, "dm"],
+      [unconfigured, input, "unconfigured"],
+      [offline, input, undefined],
     ] as const) {
-      expect((await operations.add(attempt)).status).toBe("connection-failed");
+      const result = await operations.add(attempt);
+      expect(result.status).toBe("connection-failed");
+      expect(result.status === "connection-failed" ? result.signInHint : "not-refused").toBe(signInHint);
     }
   });
 
@@ -448,6 +453,80 @@ describe("canonical MCP config operations", () => {
       dependencies({ read: async () => ({ status: "fresh", configs: full }), insert: async () => existingRow(99) }),
     );
     expect((await limited.completeSignIn(draft, grant)).status).toBe("limit-reached");
+  });
+
+  it("reconnects a signed-in registration in place, asking for the stored and newly challenged scopes", async () => {
+    const signedIn = { ...existingRow(4), server_type: null, oauth_status: "needs_reauthorization" as const };
+    const bearer = existingRow(5);
+    const full = [
+      signedIn,
+      bearer,
+      ...Array.from({ length: MAX_MCP_SERVERS_PER_WORKSPACE }, (_, index) => existingRow(index + 6)),
+    ];
+    const replaced: Array<{ guildMcpId: number; tools: readonly string[] }> = [];
+    const disconnected: string[] = [];
+    let inserts = 0;
+    const operations = new McpConfigOperations(
+      dependencies({
+        read: async () => ({ status: "fresh", configs: full }),
+        signInAvailable: () => true,
+        requestedScopes: async () => "read write",
+        testConnection: async (_url, authToken) =>
+          authToken
+            ? { success: true, toolCount: 1, functionNames: ["search_issues"] }
+            : {
+                success: false,
+                toolCount: 0,
+                functionNames: [],
+                error: "HTTP 401",
+                unauthorized: { resourceMetadataUrl: "https://mcp.example.com/prm", scope: "read admin" },
+              },
+        insert: async () => {
+          inserts++;
+          return existingRow(99);
+        },
+        replaceGrant: async (_serverId, guildMcpId, _grant, tools) => {
+          replaced.push({ guildMcpId, tools });
+          return { ...signedIn, oauth_status: "active" };
+        },
+        disconnect: async (_serverId, name) => {
+          disconnected.push(name);
+        },
+      }),
+    );
+    const target = { serverId: 10, serverDiscId: "100", guildMcpId: 4 };
+    const prepared = await operations.prepareReconnect(target);
+    expect(prepared).toEqual({
+      status: "sign-in-required",
+      draft: {
+        serverId: 10,
+        serverDiscId: "100",
+        name: "search",
+        url: signedIn.url,
+        serverType: "general",
+        guildMcpId: 4,
+      },
+      challenge: { resourceMetadataUrl: "https://mcp.example.com/prm", scope: "read write admin" },
+    });
+    expect((await operations.prepareReconnect({ ...target, guildMcpId: 5 })).status).toBe("not-found");
+
+    if (prepared.status !== "sign-in-required") throw new Error("Reconnect did not ask for sign-in");
+    const grant = {
+      issuer: "https://auth.example",
+      tokenEndpoint: "https://auth.example/token",
+      resource: signedIn.url,
+      clientId: "client-one",
+      requestedScopes: "read write admin",
+      grantedScopes: null,
+      accessToken: "synthetic-access",
+      refreshToken: null,
+      expiresAt: null,
+    };
+    // The workspace is full, which would refuse an add; a reconnect keeps its own slot.
+    expect((await operations.completeSignIn(prepared.draft, grant)).status).toBe("success");
+    expect(inserts).toBe(0);
+    expect(replaced).toEqual([{ guildMcpId: 4, tools: ["search_issues"] }]);
+    expect(disconnected).toEqual(["search"]);
   });
 
   it("redacts submitted credentials from connection errors", () => {
