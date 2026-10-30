@@ -8,6 +8,7 @@ export default async (client: Client): Promise<void> => {
   const botUser = client.user;
   if (!botUser) return;
   try {
+    if (!(await userRepository.hasPendingWebhookUserCleanup())) return;
     const botRow =
       (await getCachedUserRow(botUser.id)) ?? (await userRepository.register(botUser.id, botUser.username));
     if (botRow?.user_id === undefined) throw new Error("Bot users row unavailable");

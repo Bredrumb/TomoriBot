@@ -1495,6 +1495,14 @@ class UserRepository implements IRepository<UserExportShape> {
     }
   }
 
+  /** Whether migration 131 or the purge script left a `webhook_user_cleanup` queue to merge. */
+  async hasPendingWebhookUserCleanup(): Promise<boolean> {
+    const [queue] = await sql<Array<{ pending: boolean }>>`
+      SELECT to_regclass('public.webhook_user_cleanup') IS NOT NULL AS pending
+    `;
+    return queue?.pending === true;
+  }
+
   /**
    * Moves the stat counters of the users rows queued in `webhook_user_cleanup` (shared persona webhooks,
    * queued by migration 131 or `scripts/maintenance/purge-webhook-users.ts`) onto the bot account's row,
@@ -1504,6 +1512,7 @@ class UserRepository implements IRepository<UserExportShape> {
    */
   async mergeWebhookUsersIntoBot(botUserId: number): Promise<string[] | null> {
     return sql.begin(async (tx: SQL) => {
+      // Rechecked in the transaction because the purge script or another boot may have drained the queue.
       const [queue] = await tx<Array<{ pending: boolean }>>`
         SELECT to_regclass('public.webhook_user_cleanup') IS NOT NULL AS pending
       `;
