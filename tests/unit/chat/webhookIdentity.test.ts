@@ -160,24 +160,30 @@ describe("verified managed webhook identity", () => {
     }
   });
 
-  it("credits a system turn anchored on persona output to the bot account, not the shared webhook", async () => {
-    const message = webhookMessage("Mirri");
-    Object.assign(message.channel, { type: ChannelType.PublicThread });
-    Object.assign(message, { guild: { id: message.guildId, members: { me: null } } });
+  it("credits a system turn anchored on any webhook post to the bot account, not the webhook", async () => {
     const read = spyOn(stateCache, "getCachedAllPersonas").mockResolvedValue(personas);
     const privacy = spyOn(userCache, "getCachedPrivacyLevel").mockResolvedValue(PrivacyLevel.MINIMAL);
     const blacklist = spyOn(userCache, "getCachedBlacklistStatus").mockResolvedValue(false);
     try {
-      const incoming = normalizeChatInvocation({
-        client: message.client,
-        message,
-        skipLock: true,
-        isFromQueue: false,
-        isManuallyTriggered: true,
-      });
-      const admission = await evaluateChatAdmission(incoming);
-      if (admission.disposition !== "run") throw new Error("Expected system turn admission");
-      expect(admission.userDiscId).toBe("fixture-bot");
+      for (const message of [webhookMessage("Mirri"), webhookMessage("Mudae", "foreign-hook")]) {
+        Object.assign(message, {
+          channel: { ...message.channel, type: ChannelType.PublicThread },
+          guild: { id: message.guildId, members: { me: null } },
+        });
+        const incoming = normalizeChatInvocation({
+          client: message.client,
+          message,
+          skipLock: true,
+          isFromQueue: false,
+          isManuallyTriggered: true,
+        });
+        const admission = await evaluateChatAdmission(incoming);
+        if (admission.disposition !== "run") throw new Error(`Expected admission for ${message.author.username}`);
+        expect({ author: message.author.username, userDiscId: admission.userDiscId }).toEqual({
+          author: message.author.username,
+          userDiscId: "fixture-bot",
+        });
+      }
     } finally {
       read.mockRestore();
       privacy.mockRestore();

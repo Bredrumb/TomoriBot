@@ -271,12 +271,12 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
   // to the author there would resolve the DM owner (and thus the DM's server key) to the
   // bot itself, so prefer the channel's recipient whenever the author is the client user.
   const dmOwnerDiscId = channel instanceof DMChannel ? (channel.recipientId ?? null) : null;
-  // Persona webhooks are pooled per channel, so their author ID would become one misnamed users row per
-  // webhook; a system turn anchored on persona output is credited to the bot account instead.
+  // A webhook's author ID is never a person (persona webhooks are even pooled per channel), so a system turn
+  // anchored on one is credited to the bot account; Matrix relays keep their bridge webhook identity.
   const authorFallbackDiscId =
     dmOwnerDiscId && message.author.id === client.user?.id
       ? dmOwnerDiscId
-      : isLikelySelfMessage
+      : isWebhookMessage && !isMatrixRelay
         ? (client.user?.id ?? message.author.id)
         : message.author.id;
   // A system turn borrows an arbitrary channel message as its trigger, so its declared
