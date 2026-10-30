@@ -12,7 +12,12 @@ import {
   type PersonaAuthoredIdleNudge,
 } from "@/modules/natural-nudges/db/types";
 import { resolveEffectiveChannelIds } from "@/modules/natural-nudges/runtime/channels";
-import { countUnansweredStreak, idleNudgesPerDay } from "@/modules/natural-nudges/runtime/meters";
+import { countUnansweredStreak } from "@/modules/natural-nudges/runtime/meters";
+import {
+  invalidateNaturalNudgeConfigCache,
+  readNaturalNudgeGate,
+  recordNaturalNudgeDirectChat,
+} from "@/modules/natural-nudges/runtime/configCache";
 import { UNANSWERED_STOP_STREAK } from "@/modules/natural-nudges/runtime/tuning";
 import { workspaceConfigExportSchema } from "@/types/db/dataExport";
 import { exportRepository } from "@/utils/db/repositories/ExportRepository";
@@ -79,6 +84,130 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Natural Nudges persistence: regression", (
     await testSql`DELETE FROM servers WHERE server_id = ${otherServerId}`;
     await testSql`DELETE FROM persona_presets WHERE persona_preset_name = ${PRESET_NAME}`;
     await cleanupFixtures(testSql);
+  });
+
+  it("adds one nullable checked topic column to an existing fire table across schema replays", async () => {
+    await testSql`ALTER TABLE natural_nudge_fires DROP COLUMN topic`;
+    await executeTestSqlFile("src/db/schema.sql");
+    await executeTestSqlFile("src/db/schema.sql");
+    const columns = await testSql`
+      SELECT data_type, is_nullable FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'natural_nudge_fires' AND column_name = 'topic'
+    `;
+    expect(columns).toEqual([{ data_type: "text", is_nullable: "YES" }]);
+    const checks = await testSql`
+      SELECT pg_get_constraintdef(oid) AS definition FROM pg_constraint
+      WHERE conrelid = 'natural_nudge_fires'::regclass AND contype = 'c'
+        AND pg_get_constraintdef(oid) LIKE '%btrim(topic)%'
+    `;
+    expect(checks).toHaveLength(1);
+    for (const topic of ["", "   ", "x".repeat(201)]) {
+      await expect(
+        testSql`
+        INSERT INTO natural_nudge_fires (server_id, channel_disc_id, persona_id, mode, opener_message_disc_id, topic)
+        VALUES (${refs.serverId}, '1200000000000000001', ${refs.personaId}, 'idle', '1300000000000000099', ${topic})
+      `.execute(),
+      ).rejects.toThrow(/natural_nudge_fires_topic_check/);
+    }
+  });
+
+  it("loads only one persona's non-null idle topics in one server, newest first and limited", async () => {
+    const [other] = await testSql`
+      INSERT INTO personas (server_id, persona_nickname)
+      VALUES (${otherServerId}, '_rt_topic_persona') RETURNING persona_id
+    `;
+    const baseTime = Date.now() - 5 * 86_400_000;
+    const fires = [
+      {
+        serverId: refs.serverId,
+        personaId: refs.personaId,
+        topic: "oldest",
+        mode: "idle",
+        category: "start_topic",
+        age: 1,
+      },
+      {
+        serverId: refs.serverId,
+        personaId: refs.personaId,
+        topic: "newest",
+        mode: "idle",
+        category: "play_scene",
+        age: 3,
+      },
+      {
+        serverId: refs.serverId,
+        personaId: refs.personaId,
+        topic: "middle",
+        mode: "idle",
+        category: "revive_topic",
+        age: 2,
+      },
+      {
+        serverId: refs.serverId,
+        personaId: otherPersonaId,
+        topic: "partner",
+        mode: "idle",
+        category: "start_topic",
+        age: 4,
+      },
+      {
+        serverId: otherServerId,
+        personaId: other.persona_id,
+        topic: "elsewhere",
+        mode: "idle",
+        category: "start_topic",
+        age: 4,
+      },
+      {
+        serverId: refs.serverId,
+        personaId: refs.personaId,
+        topic: null,
+        mode: "idle",
+        category: "start_topic",
+        age: 4,
+      },
+    ];
+    try {
+      for (const [index, fire] of fires.entries()) {
+        await testSql`
+          INSERT INTO natural_nudge_fires
+            (server_id, channel_disc_id, persona_id, mode, category, topic, opener_message_disc_id, fired_at)
+          VALUES (${fire.serverId}, '1200000000000000001', ${fire.personaId}, ${fire.mode}, ${fire.category},
+            ${fire.topic}, ${`13000000000000002${index.toString().padStart(2, "0")}`}, ${new Date(baseTime + fire.age * 60_000)})
+        `;
+      }
+      expect(
+        await naturalNudgeRepository.recordActiveNudgeFire({
+          serverId: refs.serverId,
+          channelDiscId: "1200000000000000001",
+          personaId: refs.personaId,
+          openerMessageDiscId: "1300000000000000299",
+          detour: false,
+        }),
+      ).toBe(true);
+      const [active] =
+        await testSql`SELECT topic FROM natural_nudge_fires WHERE opener_message_disc_id = '1300000000000000299'`;
+      expect(active.topic).toBeNull();
+      expect(await naturalNudgeRepository.loadRecentIdleNudgeTopics(refs.serverId, refs.personaId, 5)).toEqual([
+        "newest",
+        "middle",
+        "oldest",
+      ]);
+      expect(await naturalNudgeRepository.loadRecentIdleNudgeTopics(refs.serverId, refs.personaId, 2)).toEqual([
+        "newest",
+        "middle",
+      ]);
+      expect(await naturalNudgeRepository.loadRecentIdleNudgeTopics(refs.serverId, otherPersonaId, 5)).toEqual([
+        "partner",
+      ]);
+      expect(await naturalNudgeRepository.loadRecentIdleNudgeTopics(otherServerId, refs.personaId, 5)).toEqual([]);
+      expect(await naturalNudgeRepository.loadRecentIdleNudgeTopics(otherServerId, other.persona_id, 5)).toEqual([
+        "elsewhere",
+      ]);
+    } finally {
+      await testSql`DELETE FROM natural_nudge_fires WHERE server_id IN (${refs.serverId}, ${otherServerId})`;
+      await testSql`DELETE FROM personas WHERE persona_id = ${other.persona_id}`;
+    }
   });
 
   it("resolves persona settings from the row, then the live preset, then the defaults", async () => {
@@ -559,7 +688,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Natural Nudges persistence: regression", (
       await testSql`DELETE FROM servers WHERE server_id = ANY(${testSql.array(serverIds, "INT")})`;
     });
 
-    it("lists a heated server with no settings row on defaults, and skips cold, DM, and turned-off ones", async () => {
+    it("lists warm and cold servers with default settings, and skips DM and turned-off ones", async () => {
       const heated = await insertServer("_rt_nudge_heated");
       const cold = await insertServer("_rt_nudge_cold");
       const dm = await insertServer("_rt_nudge_dm", true);
@@ -573,10 +702,12 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Natural Nudges persistence: regression", (
 
       const listed = await naturalNudgeRepository.listEnabledIdleNudgeServers(new Date());
       const ours = listed.filter((server) => serverIds.includes(server.server_id));
-      expect(ours.map((server) => server.server_id)).toEqual([heated]);
-      expect(ours[0]?.config).toEqual(defaultServerNaturalNudgeConfig(heated));
-      expect(ours[0]?.config.idle_nudges_enabled).toBe(true);
-      expect(idleNudgesPerDay(50, ours[0]?.config.idle_nudge_frequency ?? 0)).toBe(2);
+      expect(new Set(ours.map((server) => server.server_id))).toEqual(new Set([heated, cold]));
+      expect(ours.find((server) => server.server_id === heated)).toEqual({
+        server_id: heated,
+        server_disc_id: "_rt_nudge_heated",
+        timezone_offset: null,
+      });
     });
 
     it("excludes unused and dormant servers despite recent stats and boosted heat, then admits a direct-chat wake", async () => {
@@ -601,14 +732,31 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Natural Nudges persistence: regression", (
     });
 
     it("requires measured activity even with recent direct chat and a positive heat adjustment", async () => {
-      const serverId = await insertServer("_rt_nudge_offset_only");
-      await naturalNudgeRepository.saveServerConfig(serverId, { heat_offset: 5 });
-      await naturalNudgeRepository.recordDirectChat(serverId);
-      const cold = await naturalNudgeRepository.listEnabledIdleNudgeServers(new Date());
-      expect(cold.some((server) => server.server_id === serverId)).toBe(false);
-      await recordStat(serverId, "message_sent", "", daysAgo(0));
-      const heated = await naturalNudgeRepository.listEnabledIdleNudgeServers(new Date());
-      expect(heated.find((server) => server.server_id === serverId)?.config.heat_offset).toBe(5);
+      const discId = "_rt_nudge_offset_only";
+      const serverId = await insertServer(discId);
+      await testSql`
+        INSERT INTO personas (server_id, persona_nickname, is_alter)
+        VALUES (${serverId}, '_rt_nudge_persona', false)
+      `;
+      await naturalNudgeRepository.saveServerConfig(serverId, {
+        heat_offset: 5,
+        channel_disc_ids: ["1400000000000000001"],
+      });
+      try {
+        await recordNaturalNudgeDirectChat(serverId);
+        const cold = await naturalNudgeRepository.listEnabledIdleNudgeServers(new Date());
+        expect(cold.some((server) => server.server_id === serverId)).toBe(true);
+        expect(await readNaturalNudgeGate(discId)).toBeNull();
+        await testSql`
+          INSERT INTO stat_counters (server_id, user_id, persona_lineage_id, metric, metric_key, bucket, count)
+          VALUES (${serverId}, ${refs.userId}, 0, 'message_sent', '', CURRENT_DATE, 10)
+        `;
+        await recordNaturalNudgeDirectChat(serverId);
+        expect(await readNaturalNudgeGate(discId)).not.toBeNull();
+      } finally {
+        invalidateNaturalNudgeConfigCache(serverId);
+        cache.delete(discId);
+      }
     });
 
     it("backfills only existing warm servers with recent channel activity and preserves live timestamps on replay and rollback", async () => {
@@ -809,6 +957,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Natural Nudges persistence: regression", (
             personaId: refs.personaId,
             category: "ping_user",
             idleNudgeKey: "ping_user.memory_callback",
+            topic: "the exam",
             targetUserId: mirriId,
             openerMessageDiscId: openerId,
           },
@@ -817,6 +966,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Natural Nudges persistence: regression", (
       ).toBe(true);
       const history = await naturalNudgeRepository.loadFireHistory(refs.serverId, new Date(0), 5);
       expect(history.recent.find((fire) => fire.opener_message_disc_id === openerId)?.target_user_id).toBe(mirriId);
+      const [fire] = await testSql`SELECT topic FROM natural_nudge_fires WHERE opener_message_disc_id = ${openerId}`;
+      expect(fire?.topic).toBe("the exam");
       const [agenda] =
         await testSql`SELECT target_user_id FROM natural_nudge_agendas WHERE message_disc_id = ${openerId}`;
       expect(agenda?.target_user_id).toBe(mirriId);
@@ -903,6 +1054,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Natural Nudges persistence: regression", (
           personaId: refs.personaId,
           category: "play_scene",
           idleNudgeKey: "play_scene.banter",
+          topic: "mecha rivalry",
           targetUserId: null,
           openerMessageDiscId: openerId,
         },

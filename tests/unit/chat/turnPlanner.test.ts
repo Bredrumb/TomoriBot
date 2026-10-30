@@ -236,6 +236,89 @@ describe("text credential admission", () => {
 });
 
 describe("per-persona planning", () => {
+  it.each([
+    [0, 0],
+    [1, 1],
+    [2, 2],
+    [3, 3],
+    [10, 3],
+  ])("caps nudge mention replies at %i configured replies or scene length", async (cascadeLimit, replyLimit) => {
+    const turn = lockedTurn();
+    turn.admission.tomoriState = createPersona({ config: { cascade_limit: cascadeLimit } });
+    Object.assign(turn.admission.incoming, {
+      isManuallyTriggered: true,
+      isPersonaJob: true,
+      borrowsTriggerMessage: true,
+      selectedPersonaId: personas[1].persona_id,
+      naturalNudge: { toolNames: [] },
+      textQuotaSource: "system",
+    });
+    const chain = getSelfReplyChainState(turn.channelId);
+    try {
+      if (replyLimit > 0) {
+        chain.triggerCount = replyLimit;
+        resolutions.push(resolved("server"));
+        expect((await planChatTurns(turn)).turns).toHaveLength(1);
+      }
+
+      chain.triggerCount = replyLimit + 1;
+      resolutions.push(resolved("server"));
+      expect((await planChatTurns(turn)).turns).toHaveLength(0);
+    } finally {
+      chain.triggerCount = 0;
+    }
+  });
+
+  it("admits the tenth ordinary persona reply at cascade limit ten", async () => {
+    const turn = lockedTurn();
+    turn.admission.tomoriState = createPersona({ config: { cascade_limit: 10 } });
+    Object.assign(turn.admission.incoming, {
+      isManuallyTriggered: true,
+      isPersonaJob: true,
+      selectedPersonaId: personas[1].persona_id,
+    });
+    const chain = getSelfReplyChainState(turn.channelId);
+    try {
+      chain.triggerCount = 10;
+      resolutions.push(resolved("server"));
+      expect((await planChatTurns(turn)).turns).toHaveLength(1);
+
+      chain.triggerCount = 11;
+      resolutions.push(resolved("server"));
+      expect((await planChatTurns(turn)).turns).toHaveLength(0);
+    } finally {
+      chain.triggerCount = 0;
+    }
+  });
+
+  it("preserves the scene cascade budget when a nudge scene borrows a persona message", async () => {
+    const turn = lockedTurn();
+    turn.admission.tomoriState = createPersona({ config: { cascade_limit: 10 } });
+    Object.assign(turn.admission.incoming, {
+      isManuallyTriggered: true,
+      isPersonaJob: true,
+      borrowsTriggerMessage: true,
+      selectedPersonaId: personas[1].persona_id,
+      naturalNudge: { toolNames: [] },
+      textQuotaSource: "system",
+      sceneTurn: {
+        commandId: "fixture-scene",
+        sequence: personas.map((persona) => ({ personaId: persona.persona_id, personaName: persona.persona_nickname })),
+        turnIndex: 1,
+        totalTurns: 2,
+      },
+    });
+    restores.push(spyOn(triggers, "isSelfTriggerMessage").mockReturnValue(true));
+    const chain = getSelfReplyChainState(turn.channelId);
+    try {
+      chain.triggerCount = 4;
+      resolutions.push(resolved("server"));
+      expect((await planChatTurns(turn)).turns).toHaveLength(1);
+    } finally {
+      chain.triggerCount = 0;
+    }
+  });
+
   it("keeps nudge handoffs on server credentials and stops at the cascade limit", async () => {
     const turn = lockedTurn();
     const incoming = turn.admission.incoming;

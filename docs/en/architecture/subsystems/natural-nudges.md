@@ -23,14 +23,17 @@ calls never delay reminders.
 | C, speak | `runIdleNudgeAttempt` (`runtime/runner.ts`) | Fresh re-checks, then a normal `tomoriChat` turn on the channel's latest message, run like reminders |
 
 Phase A runs every 60 seconds on the coordinator's reconcile tick, because no due-time column
-exists to wake on. Natural Nudges is on by default. `listEnabledIdleNudgeServers` selects guild
-servers with `message_sent` inside the heat window and uses column defaults for servers with no
-config row. Both modes require a direct chat trigger within the last 14 days, stored as
+exists to wake on. Natural Nudges is on by default. `listEnabledIdleNudgeServers` returns only
+server IDs, Discord IDs, and timezone offsets for guild servers with idle nudges enabled, including
+servers with no config row. The cached `readNaturalNudgeGate` snapshot supplies Phase A's settings
+and heat eligibility. Both modes require a direct chat trigger within the last 14 days, stored as
 `server_natural_nudge_runtime_state.last_direct_chat_at`. The scheduler filters dormant servers in
 SQL using an index on that timestamp. Both modes also require measured heat of at least 1,
 effective heat of at least 1, and a non-empty configured or automatic channel set. Heat adjustments change the pace
 of an eligible server; they cannot supply the measured activity needed to leave dormancy. Idle
-nudges turned off or an attempt in flight also skip evaluation.
+nudges turned off or an attempt in flight also skip evaluation. A server that is not due skips
+history, runtime, and meter reads until its due time or 15 minutes later, whichever comes first;
+a server with no due time waits 15 minutes, while pending verdicts keep their existing cadence.
 
 Migration `121_natural_nudge_dormancy` preserves existing eligible guild servers once: it seeds a
 missing activity timestamp from the latest channel turn within 14 days only when measured and
@@ -90,6 +93,10 @@ hours come from `stat_counters`:
   decays from its full value.
 - **Waking hours** come from 30 days of `active_hour`, with a fixed local night below 50 turns.
 
+Each delivered idle fire stores its planner topic until the fire is pruned after 30 days; Active Nudge
+fires leave it null. The planner sees the lead persona's five latest idle topics in this server as
+escaped data and must avoid repeating a subject, declining if every fitting nudge would repeat one.
+
 Human `/reward` turns contribute three times as much heat as an ordinary turn; `/punish` contributes
 once. Their `message_sent` rows use `reward` or `punish` as the metric key and still count as one
 message in statistics. `getServerDailyHeatCounts` applies the reward weight before time decay.
@@ -116,6 +123,8 @@ times. Token and model stats still record.
 - **Channel purpose**: Phase B receives each offered channel's name, description (Discord topic),
   and recent messages. The planner must fit the opener and agenda to the channel's purpose, even
   when recent messages drift off topic, and decline if no offered nudge and channel fit.
+  The planner sees budgeted persona attributes and escaped transcripts that favor the newest
+  messages, with clips preferring sentence boundaries; the speaking turn keeps the full persona.
 - **Nudge shortlist**: Phase A raffles one category using category weights and rest among categories
   with a nudge that passes channel and tool checks. It excludes the last idle category when another
   category with positive weight passes those checks. Only then does it load target context when a
@@ -150,8 +159,9 @@ activity still controls dormancy.
   A persona already queued in the same nudge chain is excluded before that limit applies.
   These jobs retain `naturalNudge`, system quota routing, and the borrowed anchor, so they cannot
   add human engagement, renew dormancy, or write short-term memory. They receive reply guidance
-  without the opener's private goal or tool grants. The opener starts a fresh cascade budget;
-  each reply consumes it through the ordinary cascade guard. Gateway echoes cannot reset it.
+  without the opener's private goal or tool grants. The opener starts a fresh cascade budget of
+  `min(cascade_limit, PLAY_SCENE_MAX_TURNS - 1)` mention replies, so an unscripted nudge chain cannot
+  outlast a scripted scene. Gateway echoes cannot reset it.
   A member's message cancels queued nudge replies and prevents the current turn from adding more.
   Admission rejection or a turn that finishes without delivery discards the remaining queued nudge
   turns; a pending empty-response retry decides whether the chain can continue.
@@ -169,7 +179,11 @@ activity still controls dormancy.
   while the channel processing lock and admission gate still prevent overlapping turns.
 - **Caps follow the frequency level.** `IDLE_NUDGE_DAILY_CAPS` and `ACTIVE_NUDGE_DAILY_CAPS` in
   `runtime/tuning.ts` map each level to its daily ceiling, so the panel estimate, the idle nudge
-  re-check, and the Active Nudge check read one source. The server's `category_weights` set relative
+  re-check, and the Active Nudge check read one source. `IDLE_NUDGE_DAILY_PLANNER_CAPS` separately
+  limits planner requests per server, counting every provider call including format retries,
+  declines, failures, and plans aborted before delivery, with no refunds; it resets at the server's
+  local midnight and is forgotten on restart. Phase A skips fire-history reads while it is spent.
+  The server's `category_weights` set relative
   idle category tickets, with zero excluding a category in stored or imported settings.
   `/config` > `Plugins` > `Natural Nudges` edits these weights and `heat_offset` for members with
   `Manage Server`. The weight modal accepts four positive whole numbers totaling 100 and saves

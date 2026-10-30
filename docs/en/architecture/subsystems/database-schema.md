@@ -259,8 +259,9 @@ Natural Nudges stores events and derives its meters on read
   Excluded from export; a missing timestamp keeps the server dormant. The dormancy migration seeds
   it once from recent channel activity only for existing servers that already pass the heat and
   channel gates, preserving the original event time and any live direct-chat timestamp.
-- **`natural_nudge_fires`**: the fire log every meter reads, with `target_user_id` for a Ping User. Active Nudge
-  rows (`mode = 'active'`) have no category or verdict and set `detour` when another persona took the
+- **`natural_nudge_fires`**: the fire log every meter reads, with `target_user_id` for a Ping User and nullable
+  `topic` for the idle planner's 1-200 character subject. Active Nudge
+  rows (`mode = 'active'`) have no topic, category, or verdict and set `detour` when another persona took the
   turn. Pruned after 30 days.
 - **`natural_nudge_agendas`**: hidden agendas keyed by `(message_disc_id, persona_id)`. Pruned after
   90 days; `target_user_id` cascades so erasing a user removes agendas built from their data.

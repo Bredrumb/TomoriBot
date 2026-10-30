@@ -26,6 +26,9 @@ export const IDLE_NUDGE_HEAT_DIVISORS: Record<IdleNudgeFrequencyLevel, number> =
 /** Daily idle nudge ceilings are shared across all personas and channels in a server. */
 export const IDLE_NUDGE_DAILY_CAPS: Record<IdleNudgeFrequencyLevel, number> = { 0: 1, 1: 2, 2: 3, 3: 6 };
 
+/** Three planner requests per allowed idle nudge cover a plan, its format retry, and one decline. */
+export const IDLE_NUDGE_DAILY_PLANNER_CAPS: Record<IdleNudgeFrequencyLevel, number> = { 0: 3, 1: 6, 2: 9, 3: 18 };
+
 /**
  * Automatic channel eligibility follows heat's horizon: 14 quiet days decay a server's heat to about
  * 4%, so a channel with no turn in that span could not be what keeps the server nudging. A Ping User nudge
@@ -79,6 +82,7 @@ export const TALKATIVENESS_TICKETS = [0, 5, 10, 15, 20] as const;
 
 /** Messages per channel read for hanging detection and handed to the planner. */
 export const PLANNER_HISTORY_MESSAGES = 15;
+export const PLANNER_RECENT_TOPICS = 5;
 /** Lull channels read for hanging detection; the planner then sees at most three of them. */
 export const MAX_SCANNED_CHANNELS = 6;
 export const MAX_PLANNER_CHANNELS = 3;
