@@ -2683,6 +2683,42 @@ function describeComfyUiHistoryOutputs(outputs: Record<string, unknown> | undefi
   };
 }
 
+/**
+ * Summarizes `/prompt` `node_errors`, which ComfyUI returns beside a `prompt_id` when it drops the
+ * outputs that depend on an invalid node and still runs the rest.
+ */
+function describeComfyUiNodeErrors(nodeErrors: unknown): string[] {
+  if (!isRecord(nodeErrors)) {
+    return [];
+  }
+
+  return Object.entries(nodeErrors).map(([nodeId, nodeError]) => {
+    const classType = isRecord(nodeError) && typeof nodeError.class_type === "string" ? nodeError.class_type : "node";
+    const errors = isRecord(nodeError) && Array.isArray(nodeError.errors) ? nodeError.errors : [];
+    const reasons = errors
+      .filter(isRecord)
+      .map((error) => [error.message, error.details].filter((part) => typeof part === "string" && part).join(": "));
+    return `${classType} ${nodeId}${reasons.length > 0 ? `: ${reasons.join("; ")}` : ""}`;
+  });
+}
+
+function describeComfyUiExecutionError(messages: unknown): string | null {
+  if (!Array.isArray(messages)) {
+    return null;
+  }
+
+  for (const message of messages) {
+    if (!Array.isArray(message) || message[0] !== "execution_error" || !isRecord(message[1])) {
+      continue;
+    }
+    const { node_type: nodeType, node_id: nodeId, exception_message: exceptionMessage } = message[1];
+    return `${typeof nodeType === "string" ? nodeType : "node"} ${typeof nodeId === "string" ? nodeId : "?"}: ${
+      typeof exceptionMessage === "string" ? exceptionMessage.trim() : "execution error"
+    }`;
+  }
+  return null;
+}
+
 async function generateWithComfyUi(
   endpoint: CustomEndpointRow,
   apiKey: string,
@@ -2842,16 +2878,18 @@ async function generateWithComfyUi(
     throw new Error(`ComfyUI prompt failed: ${promptResponse.status} ${promptResponse.statusText}${errorDetail}`);
   }
 
-  const promptPayload = (await promptResponse.json()) as { prompt_id?: string };
+  const promptPayload = (await promptResponse.json()) as { prompt_id?: string; node_errors?: unknown };
   if (!promptPayload.prompt_id) {
     throw new Error("ComfyUI did not return a prompt_id.");
   }
   const promptId = promptPayload.prompt_id;
+  const rejectedNodes = describeComfyUiNodeErrors(promptPayload.node_errors);
 
   log.info(
     `ComfyUI prompt accepted ${JSON.stringify({
       promptId: promptPayload.prompt_id,
       mode: generationOptions.mode,
+      ...(rejectedNodes.length > 0 ? { rejectedNodes } : {}),
     })}`,
   );
 
@@ -2888,6 +2926,7 @@ async function generateWithComfyUi(
             status?: {
               completed?: boolean;
               status_str?: string;
+              messages?: unknown;
             };
           }
         >;
@@ -2916,11 +2955,20 @@ async function generateWithComfyUi(
             })}`,
           );
         }
-        if (generationOptions.mode === "video" && historyItem?.status?.completed === true) {
+        // ComfyUI writes `status` only when the prompt leaves the queue, so either flag means no
+        // further outputs will arrive; an "error" run reports completed: false.
+        const status = historyItem?.status;
+        if (status?.completed === true || status?.status_str === "error") {
+          const reasons = [
+            describeComfyUiExecutionError(status.messages),
+            rejectedNodes.length > 0 ? `rejected nodes: ${rejectedNodes.join(" | ")}` : null,
+          ].filter((reason): reason is string => reason !== null);
           throw new Error(
-            `ComfyUI completed video prompt without returning a video file. Outputs: ${JSON.stringify(
+            `ComfyUI finished the ${generationOptions.mode} prompt (${status.status_str ?? "completed"}) without a final ${
+              generationOptions.mode
+            } file.${reasons.length > 0 ? ` ${reasons.join("; ")}.` : ""} Outputs: ${JSON.stringify(
               describeComfyUiHistoryOutputs(outputs),
-            ).slice(0, 2000)}`,
+            )}`.slice(0, 2000),
           );
         }
       }

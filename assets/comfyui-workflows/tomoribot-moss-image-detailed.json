@@ -1,0 +1,765 @@
+{
+  "moss:model": {
+    "inputs": {
+      "unet_name": "moss_image_sft_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "MOSS Image SFT INT8 model"
+    }
+  },
+  "moss:clip": {
+    "inputs": {
+      "clip_name": "qwen3.5_9b_w4a8_gptq.safetensors",
+      "type": "moss_image",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Qwen 3.5 9B W4A8 multimodal prompt encoder"
+    }
+  },
+  "moss:vae": {
+    "inputs": {
+      "vae_name": "flux2-vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "FLUX.2 image VAE"
+    }
+  },
+  "moss:slg": {
+    "inputs": {
+      "model": [
+        "moss:model",
+        0
+      ],
+      "double_layers": "",
+      "single_layers": "22",
+      "start_percent": 0,
+      "end_percent": 0.5
+    },
+    "class_type": "SkipLayerGuidanceDiTSimple",
+    "_meta": {
+      "title": "Optional skip-layer guidance: MOSS layer 22"
+    }
+  },
+  "moss:slg_switch": {
+    "inputs": {
+      "on_false": [
+        "moss:model",
+        0
+      ],
+      "on_true": [
+        "moss:slg",
+        0
+      ],
+      "switch": false
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "MOSS SLG disabled by default; enable if desired"
+    }
+  },
+  "moss:raw_prompt": {
+    "inputs": {
+      "value": "{TOMORI_PROMPT}"
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "TomoriBot scene prompt"
+    }
+  },
+  "moss:negative": {
+    "inputs": {
+      "clip": [
+        "moss:clip",
+        0
+      ],
+      "text": "{TOMORI_NEGATIVE_PROMPT}"
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "TomoriBot negative prompt"
+    }
+  },
+  "ref:1": {
+    "inputs": {
+      "image": "{TOMORI_REFERENCE_IMAGE_1_FILENAME}"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Character source image 1 (leftmost)"
+    }
+  },
+  "ref:2": {
+    "inputs": {
+      "image": "{TOMORI_REFERENCE_IMAGE_2_FILENAME}"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Character source image 2 (middle/right)"
+    }
+  },
+  "ref:3": {
+    "inputs": {
+      "image": "{TOMORI_REFERENCE_IMAGE_3_FILENAME}"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Character source image 3 (rightmost)"
+    }
+  },
+  "ref:has1": {
+    "inputs": {
+      "cmp": "a > b",
+      "a": [
+        "ref_count",
+        0
+      ],
+      "b": [
+        "ref_threshold_0",
+        0
+      ]
+    },
+    "class_type": "ImpactCompare",
+    "_meta": {
+      "title": "Has more than 0 character references? (connected INT inputs)"
+    }
+  },
+  "ref:has2": {
+    "inputs": {
+      "cmp": "a > b",
+      "a": [
+        "ref_count",
+        0
+      ],
+      "b": [
+        "ref_threshold_1",
+        0
+      ]
+    },
+    "class_type": "ImpactCompare",
+    "_meta": {
+      "title": "Has more than 1 character references? (connected INT inputs)"
+    }
+  },
+  "ref:has3": {
+    "inputs": {
+      "cmp": "a > b",
+      "a": [
+        "ref_count",
+        0
+      ],
+      "b": [
+        "ref_threshold_2",
+        0
+      ]
+    },
+    "class_type": "ImpactCompare",
+    "_meta": {
+      "title": "Has more than 2 character references? (connected INT inputs)"
+    }
+  },
+  "ref:stitch2": {
+    "inputs": {
+      "image1": [
+        "ref:1",
+        0
+      ],
+      "image2": [
+        "ref:2",
+        0
+      ],
+      "direction": "right",
+      "match_image_size": true,
+      "spacing_width": 0,
+      "spacing_color": "white"
+    },
+    "class_type": "ImageStitch",
+    "_meta": {
+      "title": "Stitch references 1 + 2 horizontally"
+    }
+  },
+  "ref:choose2": {
+    "inputs": {
+      "cond": [
+        "ref:has2",
+        0
+      ],
+      "tt_value": [
+        "ref:stitch2",
+        0
+      ],
+      "ff_value": [
+        "ref:1",
+        0
+      ]
+    },
+    "class_type": "ImpactConditionalBranch",
+    "_meta": {
+      "title": "Select one or two references"
+    }
+  },
+  "ref:stitch3": {
+    "inputs": {
+      "image1": [
+        "ref:choose2",
+        0
+      ],
+      "image2": [
+        "ref:3",
+        0
+      ],
+      "direction": "right",
+      "match_image_size": true,
+      "spacing_width": 0,
+      "spacing_color": "white"
+    },
+    "class_type": "ImageStitch",
+    "_meta": {
+      "title": "Append reference 3 to the right"
+    }
+  },
+  "ref:choose3": {
+    "inputs": {
+      "cond": [
+        "ref:has3",
+        0
+      ],
+      "tt_value": [
+        "ref:stitch3",
+        0
+      ],
+      "ff_value": [
+        "ref:choose2",
+        0
+      ]
+    },
+    "class_type": "ImpactConditionalBranch",
+    "_meta": {
+      "title": "Select one, two, or three reference images"
+    }
+  },
+  "moss:text_system": {
+    "inputs": {
+      "value": "You are a MOSS-Image prompt enhancer. Convert the user request into a specific, self-contained, visually grounded English caption describing the finished image. Keep all stated facts, subjects, character appearances, visible text, style, composition, actions and exclusions. Preserve quoted text exactly. Only include details that can be seen in one image, never editor instructions. Describe the medium and subject first, then appearance, poses, foreground/background, framing, lighting, material and visual style. Add only plausible details, avoid contradictory instructions. No title, preface, alternatives or markdown. Output only the caption in flowing prose (roughly 100-250 words if warranted, shorter when the user requests minimalism)."
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "Text-only enhancer system instructions"
+    }
+  },
+  "moss:ref_system": {
+    "inputs": {
+      "value": "You are a careful multimodal image captioner writing an image-generation caption for MOSS-Image. The user provided up to THREE character/source reference images. They are STITCHED LEFT TO RIGHT without gutters. For one image there is one source; for two, the left image is reference 1 and right image is reference 2; for three, left/middle/right correspond to references 1/2/3. The user request and the source images together specify a NEW finished image, not an image edit.\n\nFIRST, inspect each image carefully. Describe the character(s) from each relevant source, preserving their specific hair style and color, horn/ear shape, eye color, moles, scars, accessories, outfits, body proportions, markings, and other distinct features; preserve all exact visible numbers/labels ONLY if confidently readable or explicitly stated by the user. Maintain the number of people in the user request. If there are two/three references, treat them as distinct identities unless the user asks otherwise. Do not collapse their traits, mistake parts of the side-by-side reference sheet for a physical scene, or automatically draw the source images as a triptych. User-supplied text takes priority where it contradicts a reference. Do not invent sensitive identities or unreadable text.\n\nSECOND, describe the requested new scene, posing, expressions, framing, art medium, lighting, and composition naturally, preserving the individual subject features. Make character descriptions sufficiently specific to help a text-to-image model recreate their appearance even though it cannot directly see the visual references. Do not say 'reference image', 'copy this', 'replace', 'keep unchanged', or 'inpaint' in the final caption. Do not claim exact visual identity can be achieved. Quote any text intended to appear in the finished image exactly, including numbers. Avoid inventing scenery, new people, brand text, or unrelated props. State the result visually rather than giving instructions to an editor.\n\nOutput ONLY the final self-contained detailed English visual caption as coherent prose, without bullets, questions, headers, meta-explanation or code. Prefer about 180-350 words when detailed characters or multi-person scenes warrant it, shorter for minimalist requests."
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "Multireference character captioning instructions"
+    }
+  },
+  "moss:ref_request": {
+    "inputs": {
+      "value": "User image request: {TOMORI_PROMPT}\nReference images supplied: {TOMORI_REFERENCE_IMAGE_COUNT}. Interpret them from left to right."
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "TomoriBot user request + ordered reference count"
+    }
+  },
+  "moss:caption_text": {
+    "inputs": {
+      "clip": [
+        "moss:clip",
+        0
+      ],
+      "max_length": 2048,
+      "sampling_mode": "on",
+      "sampling_mode.temperature": 0.5,
+      "sampling_mode.top_k": 64,
+      "sampling_mode.top_p": 0.95,
+      "sampling_mode.min_p": 0.05,
+      "sampling_mode.repetition_penalty": 1,
+      "sampling_mode.seed": 0,
+      "sampling_mode.presence_penalty": 0,
+      "thinking": false,
+      "use_default_template": true,
+      "mtp": "auto",
+      "system_prompt": [
+        "moss:text_system",
+        0
+      ],
+      "prompt": [
+        "moss:raw_prompt",
+        0
+      ]
+    },
+    "class_type": "TextGenerate",
+    "_meta": {
+      "title": "Text-only caption enhancer"
+    }
+  },
+  "moss:caption_ref": {
+    "inputs": {
+      "clip": [
+        "moss:clip",
+        0
+      ],
+      "max_length": 2048,
+      "sampling_mode": "on",
+      "sampling_mode.temperature": 0.5,
+      "sampling_mode.top_k": 64,
+      "sampling_mode.top_p": 0.95,
+      "sampling_mode.min_p": 0.05,
+      "sampling_mode.repetition_penalty": 1,
+      "sampling_mode.seed": 0,
+      "sampling_mode.presence_penalty": 0,
+      "thinking": false,
+      "use_default_template": true,
+      "mtp": "auto",
+      "image": [
+        "ref:choose3",
+        0
+      ],
+      "system_prompt": [
+        "moss:ref_system",
+        0
+      ],
+      "prompt": [
+        "moss:ref_request",
+        0
+      ]
+    },
+    "class_type": "TextGenerate",
+    "_meta": {
+      "title": "Describe up to 3 references into a new scene caption"
+    }
+  },
+  "moss:caption_select": {
+    "inputs": {
+      "cond": [
+        "ref:has1",
+        0
+      ],
+      "tt_value": [
+        "moss:caption_ref",
+        0
+      ],
+      "ff_value": [
+        "moss:caption_text",
+        0
+      ]
+    },
+    "class_type": "ImpactConditionalBranch",
+    "_meta": {
+      "title": "Reference path only when at least one reference exists"
+    }
+  },
+  "moss:preview_text": {
+    "inputs": {
+      "source": [
+        "moss:caption_select",
+        0
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "Prompt-enhancer output used for image generation"
+    }
+  },
+  "moss:positive": {
+    "inputs": {
+      "clip": [
+        "moss:clip",
+        0
+      ],
+      "text": [
+        "moss:preview_text",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "MOSS final positive conditioning (caption output)"
+    }
+  },
+  "moss:latent": {
+    "inputs": {
+      "width": [
+        "canvas_width",
+        0
+      ],
+      "height": [
+        "canvas_height",
+        0
+      ],
+      "batch_size": 1
+    },
+    "class_type": "EmptyFlux2LatentImage",
+    "_meta": {
+      "title": "MOSS FLUX2 canvas with connected integer dimensions"
+    }
+  },
+  "moss:sample": {
+    "inputs": {
+      "model": [
+        "moss:slg_switch",
+        0
+      ],
+      "positive": [
+        "moss:positive",
+        0
+      ],
+      "negative": [
+        "moss:negative",
+        0
+      ],
+      "latent_image": [
+        "moss:latent",
+        0
+      ],
+      "seed": "{TOMORI_SEED}",
+      "steps": 25,
+      "cfg": 2.5,
+      "sampler_name": "er_sde",
+      "scheduler": "simple",
+      "denoise": 1
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "MOSS text-to-image sampling: 25 steps CFG 2.5"
+    }
+  },
+  "moss:decode": {
+    "inputs": {
+      "samples": [
+        "moss:sample",
+        0
+      ],
+      "vae": [
+        "moss:vae",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "Decode original MOSS image"
+    }
+  },
+  "detail:upscaler": {
+    "inputs": {
+      "model_name": "realesrganX4plusAnime_v1.pt"
+    },
+    "class_type": "UpscaleModelLoader",
+    "_meta": {
+      "title": "Tomori installed anime upscaler"
+    }
+  },
+  "detail:upscale4": {
+    "inputs": {
+      "upscale_model": [
+        "detail:upscaler",
+        0
+      ],
+      "image": [
+        "moss:decode",
+        0
+      ]
+    },
+    "class_type": "ImageUpscaleWithModel",
+    "_meta": {
+      "title": "Upscale image with RealESRGAN x4"
+    }
+  },
+  "detail:upscale15": {
+    "inputs": {
+      "image": [
+        "detail:upscale4",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "scale_by": 0.375
+    },
+    "class_type": "ImageScaleBy",
+    "_meta": {
+      "title": "Final 1.5x enlargement; 0.5 for 2x instead"
+    }
+  },
+  "detail:encode": {
+    "inputs": {
+      "pixels": [
+        "detail:upscale15",
+        0
+      ],
+      "vae": [
+        "moss:vae",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "MOSS hi-res encode"
+    }
+  },
+  "detail:sample": {
+    "inputs": {
+      "model": [
+        "moss:slg_switch",
+        0
+      ],
+      "positive": [
+        "moss:positive",
+        0
+      ],
+      "negative": [
+        "moss:negative",
+        0
+      ],
+      "latent_image": [
+        "detail:encode",
+        0
+      ],
+      "seed": "{TOMORI_SEED}",
+      "steps": 8,
+      "cfg": 2.5,
+      "sampler_name": "er_sde",
+      "scheduler": "simple",
+      "denoise": 0.15
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "MOSS second pass: conservative 8-step refinement"
+    }
+  },
+  "detail:decode": {
+    "inputs": {
+      "samples": [
+        "detail:sample",
+        0
+      ],
+      "vae": [
+        "moss:vae",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "Decode MOSS refined image"
+    }
+  },
+  "detail:face_detector": {
+    "inputs": {
+      "model_name": "bbox/face_yolov8s.pt"
+    },
+    "class_type": "UltralyticsDetectorProvider",
+    "_meta": {
+      "title": "Model: face detector"
+    }
+  },
+  "detail:face": {
+    "inputs": {
+      "image": [
+        "detail:decode",
+        0
+      ],
+      "model": [
+        "moss:slg_switch",
+        0
+      ],
+      "clip": [
+        "moss:clip",
+        0
+      ],
+      "vae": [
+        "moss:vae",
+        0
+      ],
+      "guide_size": 768,
+      "guide_size_for": true,
+      "max_size": 1024,
+      "seed": "{TOMORI_SEED}",
+      "steps": 12,
+      "cfg": 2.5,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "positive": [
+        "moss:positive",
+        0
+      ],
+      "negative": [
+        "moss:negative",
+        0
+      ],
+      "denoise": 0.18,
+      "feather": 5,
+      "noise_mask": true,
+      "force_inpaint": true,
+      "bbox_threshold": 0.5,
+      "bbox_dilation": 10,
+      "bbox_crop_factor": 2,
+      "sam_detection_hint": "center-1",
+      "sam_dilation": 0,
+      "sam_threshold": 0.93,
+      "sam_bbox_expansion": 0,
+      "sam_mask_hint_threshold": 0.7,
+      "sam_mask_hint_use_negative": "False",
+      "drop_size": 10,
+      "bbox_detector": [
+        "detail:face_detector",
+        0
+      ],
+      "wildcard": "",
+      "cycle": 1,
+      "inpaint_model": false,
+      "noise_mask_feather": 20,
+      "tiled_encode": false,
+      "tiled_decode": false
+    },
+    "class_type": "FaceDetailer",
+    "_meta": {
+      "title": "MOSS face detailer"
+    }
+  },
+  "detail:hand_detector": {
+    "inputs": {
+      "model_name": "bbox/hand_yolov8s.pt"
+    },
+    "class_type": "UltralyticsDetectorProvider",
+    "_meta": {
+      "title": "Model: hand detector"
+    }
+  },
+  "detail:hand": {
+    "inputs": {
+      "image": [
+        "detail:face",
+        0
+      ],
+      "model": [
+        "moss:slg_switch",
+        0
+      ],
+      "clip": [
+        "moss:clip",
+        0
+      ],
+      "vae": [
+        "moss:vae",
+        0
+      ],
+      "guide_size": 768,
+      "guide_size_for": true,
+      "max_size": 1024,
+      "seed": "{TOMORI_SEED}",
+      "steps": 10,
+      "cfg": 2.5,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "positive": [
+        "moss:positive",
+        0
+      ],
+      "negative": [
+        "moss:negative",
+        0
+      ],
+      "denoise": 0.13,
+      "feather": 5,
+      "noise_mask": true,
+      "force_inpaint": true,
+      "bbox_threshold": 0.35,
+      "bbox_dilation": 15,
+      "bbox_crop_factor": 2.5,
+      "sam_detection_hint": "center-1",
+      "sam_dilation": 0,
+      "sam_threshold": 0.93,
+      "sam_bbox_expansion": 0,
+      "sam_mask_hint_threshold": 0.7,
+      "sam_mask_hint_use_negative": "False",
+      "drop_size": 10,
+      "bbox_detector": [
+        "detail:hand_detector",
+        0
+      ],
+      "wildcard": "",
+      "cycle": 1,
+      "inpaint_model": false,
+      "noise_mask_feather": 20,
+      "tiled_encode": false,
+      "tiled_decode": false
+    },
+    "class_type": "FaceDetailer",
+    "_meta": {
+      "title": "MOSS hand detailer"
+    }
+  },
+  "output:final": {
+    "inputs": {
+      "images": [
+        "detail:hand",
+        0
+      ],
+      "filename_prefix": "TomoriBot_MOSS_Reference_Detailed"
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Final TomoriBot MOSS image (only SaveImage output)"
+    }
+  },
+  "ref_count": {
+    "inputs": {
+      "value": "{TOMORI_REFERENCE_IMAGE_COUNT}"
+    },
+    "class_type": "ImpactInt",
+    "_meta": {
+      "title": "TomoriBot number of character references"
+    }
+  },
+  "ref_threshold_0": {
+    "inputs": {
+      "value": 0
+    },
+    "class_type": "ImpactInt",
+    "_meta": {
+      "title": "Reference threshold 0"
+    }
+  },
+  "ref_threshold_1": {
+    "inputs": {
+      "value": 1
+    },
+    "class_type": "ImpactInt",
+    "_meta": {
+      "title": "Reference threshold 1"
+    }
+  },
+  "ref_threshold_2": {
+    "inputs": {
+      "value": 2
+    },
+    "class_type": "ImpactInt",
+    "_meta": {
+      "title": "Reference threshold 2"
+    }
+  },
+  "canvas_width": {
+    "inputs": {
+      "value": "{TOMORI_WIDTH}"
+    },
+    "class_type": "ImpactInt",
+    "_meta": {
+      "title": "TomoriBot output width (integer)"
+    }
+  },
+  "canvas_height": {
+    "inputs": {
+      "value": "{TOMORI_HEIGHT}"
+    },
+    "class_type": "ImpactInt",
+    "_meta": {
+      "title": "TomoriBot output height (integer)"
+    }
+  }
+}
