@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
-import { Collection, LimitedCollection, type Client, type Message } from "discord.js";
+import {
+  ChannelType,
+  Collection,
+  GatewayIntentBits,
+  IntentsBitField,
+  LimitedCollection,
+  type Client,
+  type Message,
+} from "discord.js";
 import {
   acquireChannelLockForTurn,
   channelLocks,
@@ -24,7 +32,7 @@ import { log } from "@/utils/misc/logger";
 
 const CHANNEL_ID = "history-window-channel";
 
-function createHistoryFixture(count = 80) {
+function createHistoryFixture(count = 80, channelType: ChannelType.GuildText | ChannelType.DM = ChannelType.GuildText) {
   const cache = new LimitedCollection<string, Message>({ maxSize: 50 });
   const rest = new Map<string, Message>();
   const fetch = mock(async ({ limit }: { limit: number }) => {
@@ -38,8 +46,16 @@ function createHistoryFixture(count = 80) {
     }
     return result;
   });
-  const client = { user: { id: "fixture-bot" } } as Client;
-  const channel = { id: CHANNEL_ID, messages: { cache, fetch } } as unknown as Message["channel"];
+  const client = {
+    user: { id: "fixture-bot" },
+    options: { intents: new IntentsBitField([GatewayIntentBits.GuildMessageReactions]) },
+  } as Client;
+  const channel = {
+    id: CHANNEL_ID,
+    type: channelType,
+    client,
+    messages: { cache, fetch },
+  } as unknown as Message["channel"];
   const message = (id: number, content = String(id)) =>
     ({
       id: String(id),
@@ -139,8 +155,11 @@ describe("busy channel history window", () => {
     expect(fixture.fetch).toHaveBeenCalledTimes(2);
   });
 
-  it("refetches after an edit during REST even when stale REST data overwrites the cached edit", async () => {
-    const fixture = createHistoryFixture();
+  it.each([
+    ChannelType.GuildText,
+    ChannelType.DM,
+  ])("refetches an in-flight cached edit before using REST data for channel type %s", async (channelType) => {
+    const fixture = createHistoryFixture(80, channelType);
     const cached = fixture.rest.get("80") as Message;
     fixture.cache.set(cached.id, cached);
     const pendingRest = Promise.withResolvers<Collection<string, Message>>();
@@ -206,6 +225,15 @@ describe("busy channel history window", () => {
     } finally {
       metrics.mockRestore();
     }
+  });
+
+  it.each([false, true])("reuses DM history only when DM reactions are subscribed: %s", async (subscribed) => {
+    const fixture = createHistoryFixture(80, ChannelType.DM);
+    if (subscribed) fixture.client.options.intents.add(GatewayIntentBits.DirectMessageReactions);
+    await readChannelHistory(fixture.channel, 80, false);
+    await readChannelHistory(fixture.channel, 80, true);
+    expect(fixture.fetch).toHaveBeenCalledTimes(subscribed ? 1 : 2);
+    if (!subscribed) expect(fixture.entry.historyWindow).toBeUndefined();
   });
 
   it("drops the window on idle release, and an idle trigger fetches", async () => {
