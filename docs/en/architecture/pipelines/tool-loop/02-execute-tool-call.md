@@ -137,7 +137,10 @@ history because the injected context replaces it.
 
 A failed call stores `{ status: "tool_execution_failed", reason, tool_name, code, suggested_actions }`.
 Provider-backed media tools supply a classified reason, a safe provider code, and localized recovery
-guidance selected from the same tips as the error UI. Other failures retain the tool's message or
+guidance selected from the same tips as the error UI. The classifier reads the provider's message
+before its HTTP status, because providers answer an exhausted balance with 429 and tools report safety
+or model refusals as invalid requests. A missing ComfyUI model file is the one reason that names a
+value: the filename the workflow sent, never text from the endpoint. Other failures retain the tool's message or
 error, with `tool_error` when no code is available and an empty guidance list when none is supplied.
 The normal tool loop and hidden image agent use the same failure builder. Internal data and raw
 provider responses are not copied into model history.

@@ -3,6 +3,7 @@ import type {
   ProviderNativeImageGenerationResult,
 } from "@/types/provider/featureInterfaces";
 import { log } from "@/utils/misc/logger";
+import { readProviderErrorBody } from "@/utils/provider/providerErrorMetrics";
 import { toZaiApiModelName, ZAI_GENERAL_IMAGES_GENERATIONS_URL } from "@/providers/zai/zaiShared";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
@@ -65,16 +66,14 @@ export async function generateZaiNativeImage(
   });
 
   if (!response.ok) {
-    const errorBody = await response.text();
-    log.error("Z.ai image generation request failed", new Error(errorBody), {
-      errorType: "ZaiImageGenerationHttpError",
-      metadata: {
-        model: apiModel,
+    const errorBody = await readProviderErrorBody(response, request.apiKey);
+    // Z.ai answers an exhausted balance with 429, so only the body tells it apart from a rate limit.
+    throw Object.assign(
+      new Error(`Z.ai image generation failed: ${response.status} ${response.statusText}. ${errorBody}`),
+      {
         status: response.status,
-        size,
       },
-    });
-    throw new Error(`Z.ai image generation failed: ${response.status} ${response.statusText}`);
+    );
   }
 
   const result = (await response.json()) as {
