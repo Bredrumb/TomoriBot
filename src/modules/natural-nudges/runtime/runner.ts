@@ -56,6 +56,7 @@ export interface IdleNudgeAttempt {
   interests: readonly NaturalNudgeInterest[];
   candidates: readonly PlannerCandidate[];
   plannerModel: NudgeModelRef;
+  admitRequest: () => boolean;
   availableTools: ReadonlySet<string>;
   plannerChannels: Array<NudgeChannel & { transcript: string }>;
   target: PingUserTarget | null;
@@ -346,6 +347,7 @@ export async function runIdleNudgeAttempt(input: IdleNudgeAttempt): Promise<Atte
       transcript: channel.transcript,
     })),
     plannerModel: input.plannerModel,
+    admitRequest: input.admitRequest,
     target: input.target,
   });
   const usage =

@@ -44,6 +44,7 @@ import {
   CATEGORY_REST_MS,
   DAY_MS,
   IDLE_NUDGE_DAILY_CAPS,
+  IDLE_NUDGE_DAILY_PLANNER_CAPS,
   IDLE_NUDGE_REST_MS,
   FIRE_RETENTION_MS,
   HOUR_MS,
@@ -59,6 +60,7 @@ import {
   WAKING_HOURS_WINDOW_DAYS,
 } from "@/modules/natural-nudges/runtime/tuning";
 import { isFailureStopped } from "@/modules/natural-nudges/runtime/failureStop";
+import { NudgeRequestBudget } from "@/modules/natural-nudges/runtime/requestBudget";
 import { readNaturalNudgeGate } from "@/modules/natural-nudges/runtime/configCache";
 import { claimNudgeServer, isNudgeServerBusy, releaseNudgeServer } from "@/modules/natural-nudges/runtime/inFlight";
 import { type NudgeModelRef, resolvePlannerModel } from "@/modules/natural-nudges/runtime/model";
@@ -114,6 +116,7 @@ export class NaturalNudgeProcessor {
   private readonly lullHours = new Map<number, number>();
   private readonly verdictCheckedAt = new Map<number, number>();
   private readonly meters = new Map<number, ServerMeters>();
+  private readonly plannerBudget = new NudgeRequestBudget();
   private lastPruneAt = 0;
 
   constructor(client: Client) {
@@ -207,6 +210,11 @@ export class NaturalNudgeProcessor {
     const { config } = gate;
     if ((this.notBefore.get(serverId) ?? 0) > now.getTime()) return;
 
+    const timezoneOffset = server.timezone_offset ?? 0;
+    const dayStart = serverDayStart(now, timezoneOffset);
+    if (!this.plannerBudget.hasRoom(serverId, dayStart, IDLE_NUDGE_DAILY_PLANNER_CAPS[config.idle_nudge_frequency]))
+      return;
+
     const history = await naturalNudgeRepository.loadFireHistory(
       serverId,
       new Date(now.getTime() - IDLE_NUDGE_REST_MS),
@@ -221,7 +229,6 @@ export class NaturalNudgeProcessor {
     const runtime = await naturalNudgeRepository.loadRuntimeState(serverId);
     if (await isFailureStopped(serverId, runtime.stopped_at)) return;
 
-    const timezoneOffset = server.timezone_offset ?? 0;
     const meters = await this.loadMeters(serverId, timezoneOffset, now, gate.heat);
     const streak = countUnansweredStreak(history.latestIdleNudges, meters.lastMessageSentAt);
     if (streak >= UNANSWERED_STOP_STREAK) return;
@@ -240,7 +247,6 @@ export class NaturalNudgeProcessor {
       );
       return;
     }
-    const dayStart = serverDayStart(now, timezoneOffset);
     const firedToday = history.recent.filter((fire) => fire.mode === "idle" && fire.fired_at >= dayStart).length;
     if (firedToday >= IDLE_NUDGE_DAILY_CAPS[config.idle_nudge_frequency]) return;
     if (!isWithinWakingHours(meters.awake, now, serverId)) return;
@@ -508,6 +514,12 @@ export class NaturalNudgeProcessor {
       candidates,
       plannerModel,
       availableTools,
+      admitRequest: () =>
+        this.plannerBudget.take(
+          server.server_id,
+          serverDayStart(new Date(), server.timezone_offset ?? 0),
+          IDLE_NUDGE_DAILY_PLANNER_CAPS[config.idle_nudge_frequency],
+        ),
       plannerChannels,
       target: candidates.some((candidate) => idleNudgeNeedsTarget(candidate.idleNudge)) ? target : null,
     };

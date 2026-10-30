@@ -19,7 +19,7 @@ import { NaturalNudgeProcessor } from "@/modules/natural-nudges/runtime/processo
 import * as runnerModule from "@/modules/natural-nudges/runtime/runner";
 import * as targetsModule from "@/modules/natural-nudges/runtime/targets";
 import * as toolsModule from "@/modules/natural-nudges/runtime/tools";
-import { DAY_MS, MAX_PLANNER_NUDGES } from "@/modules/natural-nudges/runtime/tuning";
+import { DAY_MS, IDLE_NUDGE_DAILY_PLANNER_CAPS, MAX_PLANNER_NUDGES } from "@/modules/natural-nudges/runtime/tuning";
 import * as personaCache from "@/utils/cache/tomoriStateCache";
 import { statRepository } from "@/utils/db/repositories";
 import { whitelistRepository } from "@/utils/db/repositories/WhitelistRepository";
@@ -194,6 +194,35 @@ function fixture(category: NaturalNudgeCategory = "start_topic") {
 }
 
 describe("idle nudge shortlist", () => {
+  it("skips fire history after the planner budget is spent and resumes at the server's local midnight", async () => {
+    setSystemTime(new Date("2030-06-10T10:00:00Z"));
+    const { processor, config, run } = fixture();
+    const history = spyOn(naturalNudgeRepository, "loadFireHistory");
+    const listed = spyOn(naturalNudgeRepository, "listEnabledIdleNudgeServers").mockResolvedValue([
+      { server_id: SERVER_ID, server_disc_id: "fixture-guild", timezone_offset: 8 },
+    ]);
+    spies.push(history, listed);
+    run.mockImplementationOnce(async (attempt) => {
+      const cap = IDLE_NUDGE_DAILY_PLANNER_CAPS[config.idle_nudge_frequency];
+      for (let index = 0; index < cap; index++) expect(attempt.admitRequest()).toBe(true);
+      expect(attempt.admitRequest()).toBe(false);
+      return "aborted";
+    });
+    await processor.processDueIdleNudges();
+    expect(run).toHaveBeenCalledTimes(1);
+    history.mockClear();
+
+    setSystemTime(new Date("2030-06-10T13:00:00Z"));
+    await processor.processDueIdleNudges();
+    expect(history).not.toHaveBeenCalled();
+    expect(run).toHaveBeenCalledTimes(1);
+
+    setSystemTime(new Date("2030-06-10T16:00:00Z"));
+    await processor.processDueIdleNudges();
+    expect(history).toHaveBeenCalledTimes(1);
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+
   it("does no server evaluation or provider work while dormant, even with boosted heat", async () => {
     const { processor, config, run, readMessages } = fixture();
     config.heat_offset = 1000;
