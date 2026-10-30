@@ -103,6 +103,7 @@ import { resolveReunionNote } from "@/utils/chat/reunionPresence";
 import { getCalendarDayWithOffset } from "@/utils/text/timezoneHelper";
 import {
   createParticipantRequestScope,
+  fetchParticipantMember,
   prepareParticipantContext,
   type ParticipantRequestScope,
 } from "@/utils/text/participants/preparation";
@@ -130,6 +131,7 @@ async function buildHistoryNamingProjection(params: {
   guild: Message["guild"];
   personalizationEnabled: boolean;
   extraUserIds?: string[];
+  requestScope: ParticipantRequestScope;
 }): Promise<{ userLabels: Map<string, string>; personaMentionLabels: Map<string, string> }> {
   const userLabels = new Map<string, string>();
   const personaMentionLabels = new Map<string, string>();
@@ -155,7 +157,7 @@ async function buildHistoryNamingProjection(params: {
     [...targetIds].map(async (targetId) => {
       const [row, member] = await Promise.all([
         getCachedUserRow(targetId),
-        params.guild?.members.fetch(targetId).catch(() => null) ?? Promise.resolve(null),
+        params.guild ? fetchParticipantMember(params.guild, targetId, params.requestScope) : Promise.resolve(null),
       ]);
       if (row?.user_id) targetRows.set(targetId, row);
       if (member) {
@@ -510,6 +512,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     guild: message.guild,
     personalizationEnabled: effectivePersona.config.personal_memories_enabled !== false,
     extraUserIds: incoming.impersonatedUserId ? [incoming.impersonatedUserId] : [],
+    requestScope: participantRequestScope,
   });
   if (incoming.impersonatedUserId) {
     impersonatedUserNickname = historyNaming.userLabels.get(incoming.impersonatedUserId) ?? impersonatedUserNickname;

@@ -6,7 +6,7 @@ import { buildUncensorInjectionText } from "@/utils/text/uncensor";
 import { createToolPromptMacroResolver, resolvePromptCapabilityValues } from "@/utils/tools/toolPromptMacros";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import { appendDialogueHistoryContext, DOCUMENT_HINT_TEMPLATE } from "./dialogueHistory";
-import { convertMentions as convertMentionsBase } from "./mentionNormalizer";
+import { convertMentions as convertMentionsBase, type MentionMemo } from "./mentionNormalizer";
 import { buildServerMemoryContextItem, buildShortTermMemoryContext } from "./memories";
 import { buildParticipantContextItem } from "./participants";
 import { buildPersonaUserBlocksContextItem } from "./personaUserBlocks";
@@ -89,6 +89,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     messageIdMap,
   } = params;
 
+  const mentionMemo: MentionMemo = new Map();
   const convertMentions: MentionConverter = (
     text,
     mentionClient,
@@ -112,6 +113,8 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
         userFormatted: triggererFormattedName,
         userTerm: triggererAddressTerm,
       },
+      mentionMemo,
+      preparedParticipantContext.requestScope,
     );
 
   const contextItems: StructuredContextItem[] = [];
@@ -329,6 +332,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       preloadedReferencedUserRows: preparedParticipantContext.referencedUserRows,
       referencedUserIds: preparedParticipantContext.referencedUserIds,
       profileEnricherRegistry: preparedParticipantContext.profileEnricherRegistry,
+      requestScope: preparedParticipantContext.requestScope,
       toolPromptMacroResolver,
       conversationCorpus,
       snapshot,

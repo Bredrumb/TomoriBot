@@ -47,9 +47,9 @@ buildContext() (context-build pipeline)        ──► assembles StructuredCon
 - **Same-author merging**: consecutive pure-text messages from the same author collapse into a single
   entry while preserving individual timestamps and IDs for metadata tools. Media-bearing messages,
   including messages with file attachments, remain distinct to keep media attachments unambiguous.
-- **File attachments**: text-readable files are recorded as `documentAttachments` on the entry, not as
-  hint text in `content`. A reply carries its target's files the same way it carries the target's
-  images. The `read_file` hint is rendered later, once the turn's tool list is known (see
+- **File attachments**: text-readable files are recorded as `documentAttachments` on the entry. A reply
+  carries its target's files the same way it carries the target's images. The `read_file` hint is rendered
+  later, once the turn's tool list is known (see
   [Dialogue history](/architecture/pipelines/context-build/02-native-assembly/11-dialogue-history/)).
 - **Thread starter media**: references to parent-channel messages are fetched from the referenced
   channel, including forwarded snapshots; image references use the starter's ID so tools can retrieve
@@ -71,7 +71,18 @@ so older media never keeps a tool exposed. Each tool's own availability gate sti
 
 - **Participant context**: `prepareParticipantContext()` scans visible messages for mentions, aliases,
   and persona triggers. Results are cached in a request-scoped map (`participantRequestScopes`) across
-  co-responding persona turns under the same channel lock.
+  co-responding persona turns under the same channel lock. The same scope shares member-fetch promises,
+  keyed by guild and user, across history naming, participant hydration, presence, and mention resolution.
+  Failed member fetches remain shared for that invocation; a new invocation can retry.
+- **Hydration**: user rows, blacklist status, and privacy use the user cache. Both hydration phases run
+  at most four seeds at once and assemble profiles and proxy namespace notes in seed order. Registration
+  invalidates a cached missing user after the write succeeds. Cache failures use the existing restrictive
+  blacklist and privacy defaults.
+- **Mention names**: each native build memoizes user-name promises by guild and user. Persona builds
+  share member fetches but resolve mention names independently because personalization can differ.
+  Callers outside native assembly can omit the memo and resolve names locally.
+- **Timing**: `context_built.participantMs` measures participant preparation; hydration remains inside
+  the native-build duration.
 - **Prompt construction**: delegates to `buildContext()` in `src/utils/text/contextBuilder.ts`.
   The [Context-Build Pipeline](/architecture/pipelines/context-build/) owns persona system prompts,
   retrieved memories, and RAG document assembly.
