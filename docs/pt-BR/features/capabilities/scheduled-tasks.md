@@ -2,7 +2,6 @@
 title: "Tarefas Agendadas"
 sidebar:
   order: 2
-aiGenerated: true
 ---
 
 Defina lembretes para você mesmo ou agende anúncios recorrentes sem sair do chat. Pergunte diretamente ao bot e ela criará a programação para você. As tarefas agendadas pertencem à persona ativa.
@@ -16,9 +15,12 @@ Diga a ela o que agendar no chat:
 ```text
 remind me to submit the report at 14:30
 every Friday at 8pm, post a reminder that game night is starting
+on the 31st of every month, remind me to pay rent
 ```
 
 Ela analisa o tempo solicitado e a recorrência. Os lembretes enviam ping ao usuário alvo quando eles são acionados. As tarefas são ações silenciosas que a persona realiza quando chega a hora.
+
+Um agendamento pode se repetir a cada poucas horas ou a cada poucos meses. Um agendamento mensal mantém o mesmo dia e horário. Em um mês que não tenha esse dia, ele será executado no último dia do mês (30 de abril para o dia 31) e voltará ao dia 31 no mês seguinte.
 
 ## Fusos Horários
 
@@ -30,10 +32,16 @@ Quando um lembrete é direcionado a um usuário cujo fuso horário pessoal é di
 
 Dois comandos de barra permitem revisar e ajustar programações existentes:
 
-- `/scheduled-task edit`: altera o conteúdo de uma tarefa, o próximo horário de acionamento, o intervalo de recorrência ou o alvo do lembrete. Defina o intervalo como `0` para tornar uma tarefa recorrente única.
+- `/scheduled-task edit`: altera o conteúdo de uma tarefa, o próximo horário de acionamento, o intervalo de repetição (em horas ou meses) ou o alvo do lembrete. Defina o intervalo como `0` para tornar uma tarefa recorrente única.
 - `/scheduled-task remove`: exclua um lembrete ou tarefa.
 
-Ambos os comandos abrem um seletor listando suas programações existentes por pessoa, horário, canal e recorrência.
+Ambos os comandos abrem um seletor listando suas programações existentes por persona, horário, canal e recorrência.
+
+:::tip
+Membros com `Gerenciar Servidor` veem todos os agendamentos do servidor, com as entradas de outros membros mostrando quem as criou. Todos os outros veem apenas os seus próprios.
+
+Pedir à TomoriBot no chat para excluir um agendamento segue a mesma regra: você pode excluir aqueles que criou ou que lembram você, e membros com `Gerenciar Servidor` podem excluir qualquer um.
+:::
 
 Um servidor pode conter até 100 lembretes e tarefas pendentes por vez. Quando estiver cheio, a TomoriBot avisará você em vez de adicionar outro; remova os antigos com `/scheduled-task remove` para liberar espaço.
 
@@ -45,4 +53,4 @@ Se a entrega falhar repetidamente e atingir o limite de novas tentativas, Tomori
 
 ---
 
-Para obter mais recursos, consulte [Ferramentas e extensões](/pt-BR/features/capabilities/tools-and-extensions/).
+Para obter mais recursos, consulte [Ferramentas e extensões](/features/capabilities/tools-and-extensions/built-in-tools/).

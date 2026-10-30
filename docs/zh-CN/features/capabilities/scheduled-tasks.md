@@ -2,7 +2,6 @@
 title: "定时任务"
 sidebar:
   order: 2
-aiGenerated: true
 ---
 
 为自己设置提醒或安排定期公告，而无需离开聊天室。直接询问机器人，她会为你创建时间表。计划任务属于主动人格。
@@ -16,9 +15,12 @@ aiGenerated: true
 ```text
 remind me to submit the report at 14:30
 every Friday at 8pm, post a reminder that game night is starting
+on the 31st of every month, remind me to pay rent
 ```
 
 她解析请求的时间和重复次数。提醒在触发时会ping目标用户。任务是人格人格在时机到来时执行的无声的自我行动。
+
+定时计划可以每隔几小时或每隔几个月重复一次。按月重复的计划会保持在同一天和同一时间。在没有那一天的月份里，它会在该月的最后一天运行（例如 31 日会改在 4 月 30 日），并在下一个月恢复为 31 日。
 
 ## 时区
 
@@ -30,10 +32,16 @@ every Friday at 8pm, post a reminder that game night is starting
 
 两个斜杠命令可让你查看和调整现有计划：
 
-- `/scheduled-task edit`：更改任务内容、下次触发时间、重复间隔或提醒目标。将时间间隔设置为`0`以一次性生成重复任务。
+- `/scheduled-task edit`：更改任务内容、下次触发时间、重复间隔（以小时或月为单位）或提醒目标。将间隔设置为 `0` 即可将重复任务改为一次性。
 - `/scheduled-task remove`：删除提醒或任务。
 
 这两个命令都会打开一个选择器，按人格、时间、频道和重复次数列出你现有的计划。
+
+:::tip
+拥有「管理服务器」权限的成员可以看到服务器中的所有计划，其他成员的条目会标明创建者。其他人只能看到自己的计划。
+
+在聊天中让 TomoriBot 删除计划也遵循相同的规则：你可以删除自己创建的计划或提醒自己的计划，而拥有「管理服务器」权限的成员可以删除任何计划。
+:::
 
 一个服务器最多可以同时保留 100 个待处理的提醒和任务。达到上限时，TomoriBot 会通知你而不是继续添加；使用 `/scheduled-task remove` 删除旧的即可腾出空间。
 
@@ -45,4 +53,4 @@ every Friday at 8pm, post a reminder that game night is starting
 
 ---
 
-更多功能请参见[工具与扩展](/zh-CN/features/capabilities/tools-and-extensions/)。
+更多功能请参见[工具与扩展](/features/capabilities/tools-and-extensions/built-in-tools/)。

@@ -38,9 +38,9 @@ export enum HumanizerDegree {
 }
 
 export enum PrivacyLevel {
-  MINIMAL = 0, // Minimal privacy (full personalization features)
-  PARTIAL = 1, // Partial privacy (limited personalization)
-  FULL = 2, // Full privacy (maximum protection - completely invisible)
+  MINIMAL = 0, // Full personalization features
+  PARTIAL = 1, // Limited personalization
+  FULL = 2, // Maximum protection: completely invisible
 }
 
 export enum CooldownType {
@@ -60,18 +60,18 @@ export const userSchema = z.object({
   user_disc_id: z.string(),
   user_nickname: z.string().nullable(),
   language_pref: z.string().default("en-US"),
-  registration_locale: z.string().nullable(), // Static locale captured at registration
+  registration_locale: z.string().nullable(),
   privacy_level: z.nativeEnum(PrivacyLevel).default(PrivacyLevel.MINIMAL),
   personal_memories: z.array(z.string()).default([]),
-  physical_appearance_tags: z.array(z.string()).default([]), // Public imageboard-style physical appearance tags
-  char_ref_url: z.string().nullable().optional(), // User-specific character reference image for image generation
-  impersonation_prompt: z.string().nullable().optional(), // Added March 2026 - Global user-owned prompt for user impersonation replies
-  shortterm_cache_crossserver_opt_in: z.boolean().default(false), // Short-term memory cross-server sharing
-  personal_dtm: z.enum(["off", "follow", "on"]).default("follow"), // Added April 2026 - User-scoped DTM tri-state: 'off' (always disabled), 'follow' (server setting), 'on' (always enabled)
-  personal_deliberate_tool_mode: z.enum(["off", "follow", "on"]).default("follow"), // Added May 2026 - User-scoped deliberate tool mode tri-state
+  physical_appearance_tags: z.array(z.string()).default([]),
+  char_ref_url: z.string().nullable().optional(),
+  impersonation_prompt: z.string().nullable().optional(), // Global user-owned prompt for user impersonation replies
+  shortterm_cache_crossserver_opt_in: z.boolean().default(false),
+  personal_dtm: z.enum(["off", "follow", "on"]).default("follow"), // User-scoped DTM tri-state: 'off' (always disabled), 'follow' (server setting), 'on' (always enabled)
+  personal_deliberate_tool_mode: z.enum(["off", "follow", "on"]).default("follow"),
   personal_server_fallback_enabled: z.boolean().default(true), // Whether a failed personal text route may fall back to the server's model
   natural_nudge_opt_out: z.boolean().default(false),
-  timezone_offset: utcOffsetSchema.nullable().optional(), // Added June 2026 - Personal UTC offset; NULL = not set / opt-out
+  timezone_offset: utcOffsetSchema.nullable().optional(), // NULL = not set or opt-out
   message_proxy_service: z.string().nullable().default(null),
   message_proxy_instance_id: z.string().nullable().default(null),
   prefix_override: z.string().nullable().optional(),
@@ -87,8 +87,8 @@ export type UserRow = z.infer<typeof userSchema>;
 const serverSchema = z.object({
   server_id: z.number().optional(),
   server_disc_id: z.string(),
-  is_dm_channel: z.boolean().default(false), // Added for DM support
-  registration_locale: z.string().nullable(), // Static locale captured at server setup
+  is_dm_channel: z.boolean().default(false),
+  registration_locale: z.string().nullable(),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });
@@ -123,10 +123,9 @@ export const tomoriSchema = z.object({
   attribute_list: z.array(z.string()).default([]),
   sample_dialogues_in: z.array(z.string()).default([]),
   sample_dialogues_out: z.array(z.string()).default([]),
-  // autoch_counter and autoch_next_target moved to personaAutochRuntimeStateSchema (migration 015).
-  is_alter: z.boolean().default(false), // Added January 2026 - Distinguishes main persona (false) from alter personas (true)
-  webhook_avatar_url: z.string().nullable().optional(), // Added January 2026 - Stored alter avatar reference (production URL; non-production URL or local avatar path)
-  applied_avatar_hash: z.string().nullable().optional(), // Added migration 033 - preset_avatar_hash last PATCHed onto this persona's guild member avatar (NULL = never synced)
+  is_alter: z.boolean().default(false), // Distinguishes main persona (false) from alter personas (true)
+  webhook_avatar_url: z.string().nullable().optional(), // Stored alter avatar reference (production URL; non-production URL or local avatar path)
+  applied_avatar_hash: z.string().nullable().optional(), // preset_avatar_hash last PATCHed onto this persona's guild member avatar (NULL = never synced)
   is_nsfw: z.boolean().default(false),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
@@ -134,20 +133,20 @@ export const tomoriSchema = z.object({
 export type TomoriRow = z.infer<typeof tomoriSchema>;
 
 const personaScopedConfigStateSchema = z.object({
-  physical_appearance_tags: z.array(z.string()).default([]), // From persona_imagegen_configs
-  char_ref_url: z.string().nullable().optional(), // From persona_imagegen_configs
-  nai_attg_author: z.string().nullable().optional(), // From persona_textgen_configs
-  nai_attg_title: z.string().nullable().optional(), // From persona_textgen_configs
-  nai_attg_tags: z.string().nullable().optional(), // From persona_textgen_configs
-  nai_attg_genre: z.string().nullable().optional(), // From persona_textgen_configs
-  nai_attg_stars: z.number().int().min(1).max(5).nullable().optional(), // From persona_textgen_configs
-  context_note: z.string().nullable().optional(), // From persona_context_note_configs
-  context_note_depth: z.number().int().min(0).max(100).default(0), // From persona_context_note_configs
-  speech_voice_sample_id: z.number().int().nullable().optional(), // From persona_voice_configs
-  speech_voice_id: z.string().nullable().optional(), // From persona_voice_configs
-  speech_voice_name: z.string().nullable().optional(), // From persona_voice_configs
+  physical_appearance_tags: z.array(z.string()).default([]),
+  char_ref_url: z.string().nullable().optional(),
+  nai_attg_author: z.string().nullable().optional(),
+  nai_attg_title: z.string().nullable().optional(),
+  nai_attg_tags: z.string().nullable().optional(),
+  nai_attg_genre: z.string().nullable().optional(),
+  nai_attg_stars: z.number().int().min(1).max(5).nullable().optional(),
+  context_note: z.string().nullable().optional(),
+  context_note_depth: z.number().int().min(0).max(100).default(0),
+  speech_voice_sample_id: z.number().int().nullable().optional(),
+  speech_voice_id: z.string().nullable().optional(),
+  speech_voice_name: z.string().nullable().optional(),
   speech_voice_design_prompt: z.string().nullable().optional(),
-  voice_source_priority: z.enum(["design", "clone"]).default("design"), // From persona_voice_configs
+  voice_source_priority: z.enum(["design", "clone"]).default("design"),
 });
 type PersonaScopedConfigState = z.infer<typeof personaScopedConfigStateSchema>;
 
@@ -215,7 +214,7 @@ export const resolvedMinimalNoticeRefSchema = z.object({
 export type ResolvedMinimalNoticeRefRow = z.infer<typeof resolvedMinimalNoticeRefSchema>;
 
 /**
- * Runtime autochat counters for a persona (Phase 6 Step #16B).
+ * Runtime autochat counters for a persona.
  * Separated from personas so identity rows are not mutated on every message tick.
  * FK column is persona_id → personas(persona_id); ON DELETE CASCADE keeps cleanup atomic.
  */
@@ -253,7 +252,7 @@ export const messageProxyIdentitySchema = z.object({
 export type MessageProxyIdentityRow = z.infer<typeof messageProxyIdentitySchema>;
 
 /**
- * Schema for voice_samples table : reference audio clips for local TTS voice cloning.
+ * Reference audio clips for local TTS voice cloning.
  * file_path stores either a production S3/CloudFront URL or a local data/voice-samples path.
  */
 export const voiceSampleSchema = z.object({
@@ -548,9 +547,7 @@ export type DecisionModelRegistrationRow = z.infer<typeof decisionModelRegistrat
 /**
  * Normalizes a JSONB array value from the database driver.
  * Handles the case where Bun SQL returns JSONB columns as strings
- * instead of parsed objects ; parses the string before returning.
- * @param value - Raw value from the database (may be array, string, or other)
- * @returns Parsed array, or empty array if parsing fails
+ * instead of parsed objects; parses the string before returning.
  */
 function normalizeJsonbArray(value: unknown): unknown[] {
   if (Array.isArray(value)) return value;
@@ -593,7 +590,7 @@ const fallbackModelRefSchema = z.object({
 });
 export type FallbackModelRef = z.infer<typeof fallbackModelRefSchema>;
 
-/** Resolved fallback entry : either a known LLM row or a custom endpoint row. */
+/** Resolved fallback entry: either a known LLM row or a custom endpoint row. */
 export type FallbackEntry =
   | { kind: "llm"; model: z.infer<typeof llmSchema> }
   | { kind: "custom_endpoint"; endpoint: z.infer<typeof customEndpointSchema> };
@@ -986,12 +983,12 @@ const serverTriggerBehaviorConfigSchema = z.object({
   server_id: z.number().int(),
   always_reply_enabled: z.boolean().default(false),
   deliberate_trigger_mode: z.boolean().default(false),
-  deliberate_tool_mode: z.boolean().default(false), // Added May 2026 - Tools require explicit tool intent when enabled
-  deliberate_tool_context_turns: z.number().int().min(0).max(10).nullable().default(null), // Added May 2026 - Successful tools remain available for this many following channel turns; NULL uses env default
+  deliberate_tool_mode: z.boolean().default(false), // Tools require explicit tool intent when enabled
+  deliberate_tool_context_turns: z.number().int().min(0).max(10).nullable().default(null), // Successful tools remain available for this many following channel turns; NULL uses env default
   deliberate_tool_triggers: z.preprocess(
     (value) => normalizeDeliberateToolTriggers(value),
     z.record(z.string(), z.array(deliberateToolTriggerEntrySchema)).default({}),
-  ), // Added May 2026 - Server-defined deliberate tool trigger phrases by tool target
+  ), // Server-defined deliberate tool trigger phrases by tool target
   cooldown_type: z.number().int().default(0),
   cooldown_length: z.number().int().default(5),
   created_at: z.date().optional(),
@@ -1026,7 +1023,7 @@ export type ServerByokConfigRow = z.infer<typeof serverByokConfigSchema>;
 const serverMemoryConfigSchema = z.object({
   server_id: z.number().int(),
   memory_tagging_enabled: z.boolean().default(false),
-  channel_memory_enabled: z.boolean().default(false), // Added May 2026 - Per-channel memory scoping toggle
+  channel_memory_enabled: z.boolean().default(false),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });
@@ -1096,9 +1093,9 @@ const shortTermMemoryRowSchema = z.object({
 export type ShortTermMemoryRow = z.infer<typeof shortTermMemoryRowSchema>;
 
 /**
- * Assembled view over the 13 split server config tables (Phase 6 / Stage B).
+ * Assembled view over the 13 split server config tables.
  * Replaces the previous monolithic `tomori_configs` row shape.
- * Callers read this as a flat object : nested restructuring (config.model.X) is deferred to Task G.
+ * Callers read this as a flat object.
  *
  * Composition order: serverModelConfigSchema anchors the merge chain (13 tables total).
  * Shared identity columns (server_id, created_at, updated_at) are omitted from every
@@ -1155,8 +1152,7 @@ export const assembledServerConfigSchema = serverModelConfigSchema
 export type AssembledServerConfig = z.infer<typeof assembledServerConfigSchema>;
 
 /**
- * Schema for a NovelAI sampling preset row.
- * Stores the full parameter JSON alongside human-readable descriptions.
+ * Stores the full parameter JSON alongside human-readable descriptions for NovelAI sampling presets.
  * Schema-compatible fields (temperature, top_k, top_p, min_p) are written
  * to the split server config tables; NAI-specific fields are merged at generation time.
  */
@@ -1165,7 +1161,7 @@ export const naiPresetSchema = z.object({
   preset_name: z.string(),
   model_target: z.string(), // "kayra" or "erato"
   is_default: z.boolean(),
-  preset_desc: z.string(), // EN human-readable description
+  preset_desc: z.string(),
   descriptions: z.record(z.string(), z.string()).nullable().optional(),
   parameters: z.record(z.string(), z.unknown()),
   created_at: z.date().optional(),
@@ -1179,8 +1175,8 @@ export const personaConfigSchema = z.object({
   persona_prompt: z.string().nullable().optional(),
   reward_conditioning_enabled: z.boolean().default(true),
   punish_conditioning_enabled: z.boolean().default(true),
-  llm_id: z.number().int().nullable().optional(), // Added March 2026 - Persona-specific LLM model override
-  humanizer_degree: z.number().int().min(0).max(3).nullable().optional(), // Added July 2026 - Persona humanizer override; NULL inherits server_chat_configs
+  llm_id: z.number().int().nullable().optional(),
+  humanizer_degree: z.number().int().min(0).max(3).nullable().optional(), // NULL inherits server_chat_configs
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });
@@ -1355,7 +1351,7 @@ export const serverMemorySchema = z.object({
     }
     return value;
   }, z.number().int().nonnegative()),
-  user_id: z.number().nullable(), // Nullable - set to NULL if user deleted
+  user_id: z.number().nullable(), // NULL if user was deleted
   content: z.string(),
   tags: z.preprocess((v) => (Array.isArray(v) ? v : []), z.array(z.string().max(32)).max(5)),
   /** Discord channel IDs the memory is limited to; empty means every channel. */
@@ -1426,7 +1422,6 @@ export const personaUserBlockSchema = z.object({
 export type PersonaUserBlockRow = z.infer<typeof personaUserBlockSchema>;
 
 /**
- * Channel Whitelist Schema
  * Defines channel allowlist entries with optional per-channel cooldown overrides.
  * When ANY channel is whitelisted, ONLY whitelisted channels can trigger the bot.
  */
@@ -1441,7 +1436,6 @@ const channelWhitelistSchema = z.object({
 export type ChannelWhitelistRow = z.infer<typeof channelWhitelistSchema>;
 
 /**
- * Role Whitelist Schema
  * Defines role-based trigger access for server-wide whitelist restrictions.
  * When ANY role is whitelisted, only members with whitelisted roles can trigger the bot.
  */
@@ -1454,7 +1448,6 @@ const roleWhitelistSchema = z.object({
 export type RoleWhitelistRow = z.infer<typeof roleWhitelistSchema>;
 
 /**
- * Channel Persona Whitelist Schema
  * Defines persona-specific channel allowlists for automatic message triggers.
  * If a channel has no entries, all personas remain eligible in that channel.
  */
@@ -1470,38 +1463,38 @@ export type ChannelPersonaWhitelistRow = z.infer<typeof channelPersonaWhitelistS
 export interface ErrorContext {
   personaId?: number | null;
   userId?: number | null;
-  serverId?: number | null; // Database ID only - use metadata for Discord snowflakes
+  serverId?: number | null; // Database ID only; use metadata for Discord snowflakes
   errorType?: string;
   metadata?: Record<string, unknown> | null;
 }
 
 export const reminderSchema = z.object({
-  reminder_id: z.number().optional(), // Primary key, optional as it's generated
-  server_id: z.number(), // Foreign key to servers table
+  reminder_id: z.number().optional(),
+  server_id: z.number(),
   server_disc_id: z.string().optional(), // Joined routing identity for scheduler-triggered turns
   server_is_dm_channel: z.boolean().optional(), // Joined routing scope for scheduler-triggered turns
   server_timezone_offset: z.number().optional(), // Joined calendar frame for stepping monthly repeats
-  channel_disc_id: z.string(), // Discord channel ID where reminder was set
-  user_discord_id: z.string(), // Target user's Discord ID
-  user_nickname: z.string(), // Target user's nickname for display
-  reminder_purpose: z.string(), // What the reminder is for
-  reminder_time: z.date(), // When to trigger the reminder (TIMESTAMP WITH TIME ZONE)
+  channel_disc_id: z.string(),
+  user_discord_id: z.string(),
+  user_nickname: z.string(),
+  reminder_purpose: z.string(),
+  reminder_time: z.date(),
   next_attempt_at: z.date().nullable().optional(), // Retry lease; canonical cadence stays in reminder_time
   delivery_retry_count: z.number().int().nonnegative().default(0),
   failed_occurrence_count: z.number().int().nonnegative().default(0),
-  repetition_interval_hours: z.number().int().nullable().optional(), // Optional: repeat interval in hours
-  repetition_interval_months: z.number().int().nullable().optional(), // Optional: repeat interval in calendar months
+  repetition_interval_hours: z.number().int().nullable().optional(),
+  repetition_interval_months: z.number().int().nullable().optional(),
   repetition_anchor_day: z.number().int().nullable().optional(), // Monthly target day after a short-month clamp
-  self_reminder: z.boolean().nullable().optional(), // Optional: reminder targets the bot itself
-  created_by_user_id: z.number().nullable(), // Who requested the reminder (nullable - set to NULL if user deleted)
-  persona_id: z.number().nullable().optional(), // Persona that created the reminder (nullable - fallback to main)
-  created_at: z.date().optional(), // Handled by DB default
-  updated_at: z.date().optional(), // Handled by DB default/trigger
+  self_reminder: z.boolean().nullable().optional(),
+  created_by_user_id: z.number().nullable(), // NULL if user was deleted
+  persona_id: z.number().nullable().optional(), // NULL falls back to main persona
+  created_at: z.date().optional(),
+  updated_at: z.date().optional(),
 });
 export type ReminderRow = z.infer<typeof reminderSchema>;
 
 /**
- * API Key Rotation error types for cooldown logic
+ * API Key Rotation error types for cooldown logic:
  * - rate_limit: 429 errors, 60-second cooldown
  * - api_error: Other API errors (401, 403, etc.), 5-minute cooldown
  */
@@ -1533,27 +1526,27 @@ const coerceIntNumber = z.preprocess((value) => {
  * Runtime telemetry lives in api_key_rotation_runtime_state.
  */
 const apiKeyRotationConfigSchema = z.object({
-  rotation_key_id: z.number().optional(), // Primary key, auto-generated
-  server_id: z.number(), // Foreign key to servers table
-  provider: z.string(), // Must match the active provider for this server
-  api_key: z.instanceof(Buffer).nullable(), // NULL if is_main_key_pointer = true
-  key_version: z.number().int().default(1), // Encryption key version
-  is_main_key_pointer: z.boolean().default(false), // true = use the assembled server config api_key
-  is_enabled: z.boolean().default(true), // Manual or auto-disabled after errors
-  created_at: z.date().optional(), // Handled by DB default
-  updated_at: z.date().optional(), // Handled by DB default/trigger
+  rotation_key_id: z.number().optional(),
+  server_id: z.number(),
+  provider: z.string(),
+  api_key: z.instanceof(Buffer).nullable(), // NULL when is_main_key_pointer is true
+  key_version: z.number().int().default(1),
+  is_main_key_pointer: z.boolean().default(false), // Uses the assembled server config api_key
+  is_enabled: z.boolean().default(true),
+  created_at: z.date().optional(),
+  updated_at: z.date().optional(),
 });
 
 /** Excluded from export; reset independently of config/credentials. */
 const apiKeyRotationRuntimeStateSchema = z.object({
-  rotation_key_id: z.number(), // PK + FK → api_key_rotation(rotation_key_id) ON DELETE CASCADE
-  usage_count: coerceNumber.default(0), // For round-robin tracking
+  rotation_key_id: z.number(), // FK to api_key_rotation(rotation_key_id) with cascade delete
+  usage_count: coerceNumber.default(0),
   error_count: coerceIntNumber.default(0), // Consecutive errors since last success
-  last_used_at: z.date().nullable().optional(), // Last successful API call
-  last_error_at: z.date().nullable().optional(), // For cooldown logic
-  last_error_type: ApiKeyRotationErrorType.nullable().optional(), // Error category for cooldown
-  last_error_message: z.string().nullable().optional(), // Human-readable error (truncated to 500)
-  updated_at: z.date().optional(), // Handled by DB default/trigger
+  last_used_at: z.date().nullable().optional(),
+  last_error_at: z.date().nullable().optional(),
+  last_error_type: ApiKeyRotationErrorType.nullable().optional(),
+  last_error_message: z.string().nullable().optional(),
+  updated_at: z.date().optional(),
 });
 /**
  * Schema for the joined api_key_rotation + api_key_rotation_runtime_state row.
@@ -1564,165 +1557,143 @@ export const apiKeyRotationSchema = apiKeyRotationConfigSchema.merge(
 );
 export type ApiKeyRotationRow = z.infer<typeof apiKeyRotationSchema>;
 
-/**
- * Schema for image quota configuration (per-server settings)
- * Controls daily user quotas and server-wide quota pools
- */
+/** Per-server image quota configuration controlling daily user quotas and server-wide quota pools. */
 export const imageQuotaConfigSchema = z.object({
-  server_id: z.number(), // Foreign key to servers table
-  daily_user_quota: z.number().int().min(0).max(100).default(0), // Per-user daily limit (0 = unlimited)
-  serverwide_quota: z.number().int().min(0).max(99999).default(0), // Total server quota (0 = unlimited)
-  serverwide_quota_resets_in: z.number().int().min(0).max(365).default(365), // Days before server quota resets (1-365)
-  enabled: z.boolean().default(false), // Master toggle for quota system
-  created_at: z.date().optional(), // Handled by DB default
-  updated_at: z.date().optional(), // Handled by DB default/trigger
+  server_id: z.number(),
+  daily_user_quota: z.number().int().min(0).max(100).default(0), // 0 = unlimited
+  serverwide_quota: z.number().int().min(0).max(99999).default(0), // 0 = unlimited
+  serverwide_quota_resets_in: z.number().int().min(0).max(365).default(365), // Days before server quota resets
+  enabled: z.boolean().default(false),
+  created_at: z.date().optional(),
+  updated_at: z.date().optional(),
 });
 export type ImageQuotaConfigRow = z.infer<typeof imageQuotaConfigSchema>;
 
-/**
- * Schema for per-user daily image quota tracking
- * Resets daily at midnight (server timezone)
- */
+/** Per-user daily image quota tracking, reset daily at midnight in the server's timezone. */
 export const imageQuotaSchema = z.object({
-  quota_id: z.number().optional(), // Primary key, auto-generated
-  server_id: z.number(), // Foreign key to servers table
-  user_disc_id: z.string(), // User's Discord ID
-  usage_count: z.number().int().min(0).default(0), // Images generated today
-  quota_date: z.date(), // Date this quota is for (YYYY-MM-DD)
-  last_reset: z.date().optional(), // Handled by DB default
+  quota_id: z.number().optional(),
+  server_id: z.number(),
+  user_disc_id: z.string(),
+  usage_count: z.number().int().min(0).default(0),
+  quota_date: z.date(),
+  last_reset: z.date().optional(),
 });
 export type ImageQuotaRow = z.infer<typeof imageQuotaSchema>;
 
-/**
- * Schema for server-wide image quota tracking
- * Resets based on serverwide_quota_resets_in configuration
- */
+/** Server-wide image quota tracking. */
 export const serverwideQuotaSchema = z.object({
-  server_id: z.number(), // Primary key, foreign key to servers table
-  usage_count: z.number().int().min(0).default(0), // Total images generated this period
-  quota_period_start: z.date(), // When this quota period started
-  quota_period_end: z.date(), // When this quota period ends (calculated from config)
-  last_updated: z.date().optional(), // Handled by DB default
+  server_id: z.number(),
+  usage_count: z.number().int().min(0).default(0),
+  quota_period_start: z.date(),
+  quota_period_end: z.date(),
+  last_updated: z.date().optional(),
 });
 export type ServerwideQuotaRow = z.infer<typeof serverwideQuotaSchema>;
 
-/**
- * Schema for text quota configuration (per-server settings)
- * Controls daily user quotas and server-wide quota pools for text generations
- */
+/** Per-server text quota configuration controlling daily user quotas and server-wide quota pools. */
 export const textQuotaConfigSchema = z.object({
-  server_id: z.number(), // Foreign key to servers table
-  daily_user_quota: z.number().int().min(0).max(100).default(0), // Per-user daily limit (0 = unlimited)
-  serverwide_quota: z.number().int().min(0).max(99999).default(0), // Total server quota (0 = unlimited)
-  serverwide_quota_resets_in: z.number().int().min(0).max(365).default(365), // Days before server quota resets (1-365)
-  enabled: z.boolean().default(false), // Master toggle for quota system
-  created_at: z.date().optional(), // Handled by DB default
-  updated_at: z.date().optional(), // Handled by DB default/trigger
+  server_id: z.number(),
+  daily_user_quota: z.number().int().min(0).max(100).default(0), // 0 = unlimited
+  serverwide_quota: z.number().int().min(0).max(99999).default(0), // 0 = unlimited
+  serverwide_quota_resets_in: z.number().int().min(0).max(365).default(365), // Days before server quota resets
+  enabled: z.boolean().default(false),
+  created_at: z.date().optional(),
+  updated_at: z.date().optional(),
 });
 export type TextQuotaConfigRow = z.infer<typeof textQuotaConfigSchema>;
 
-/**
- * Schema for video quota configuration (per-server settings)
- * Controls daily user quotas and server-wide quota pools for video generation
- */
+/** Per-server video quota configuration controlling daily user quotas and server-wide quota pools. */
 export const videoQuotaConfigSchema = z.object({
-  server_id: z.number(), // Foreign key to servers table
-  daily_user_quota: z.number().int().min(0).max(100).default(0), // Per-user daily limit (0 = unlimited)
-  serverwide_quota: z.number().int().min(0).max(99999).default(0), // Total server quota (0 = unlimited)
-  serverwide_quota_resets_in: z.number().int().min(0).max(365).default(365), // Days before server quota resets (1-365)
-  enabled: z.boolean().default(false), // Master toggle for quota system
-  created_at: z.date().optional(), // Handled by DB default
-  updated_at: z.date().optional(), // Handled by DB default/trigger
+  server_id: z.number(),
+  daily_user_quota: z.number().int().min(0).max(100).default(0), // 0 = unlimited
+  serverwide_quota: z.number().int().min(0).max(99999).default(0), // 0 = unlimited
+  serverwide_quota_resets_in: z.number().int().min(0).max(365).default(365), // Days before server quota resets
+  enabled: z.boolean().default(false),
+  created_at: z.date().optional(),
+  updated_at: z.date().optional(),
 });
 export type VideoQuotaConfigRow = z.infer<typeof videoQuotaConfigSchema>;
 
-/**
- * Schema for per-user daily video quota tracking
- * Resets daily at midnight (server timezone)
- */
+/** Per-user daily video quota tracking, reset daily at midnight in the server's timezone. */
 export const videoQuotaSchema = z.object({
-  quota_id: z.number().optional(), // Primary key, auto-generated
-  server_id: z.number(), // Foreign key to servers table
-  user_disc_id: z.string(), // User's Discord ID
-  usage_count: z.number().int().min(0).default(0), // Videos generated today
-  quota_date: z.date(), // Date this quota is for (YYYY-MM-DD)
-  last_reset: z.date().optional(), // Handled by DB default
+  quota_id: z.number().optional(),
+  server_id: z.number(),
+  user_disc_id: z.string(),
+  usage_count: z.number().int().min(0).default(0),
+  quota_date: z.date(),
+  last_reset: z.date().optional(),
 });
 export type VideoQuotaRow = z.infer<typeof videoQuotaSchema>;
 
-/**
- * Schema for server-wide video quota tracking
- * Resets based on serverwide_quota_resets_in configuration
- */
+/** Server-wide video quota tracking. */
 export const videoServerwideQuotaSchema = z.object({
-  server_id: z.number(), // Primary key, foreign key to servers table
-  usage_count: z.number().int().min(0).default(0), // Total videos generated this period
-  quota_period_start: z.date(), // When this quota period started
-  quota_period_end: z.date(), // When this quota period ends (calculated from config)
-  updated_at: z.date().optional(), // Handled by DB default
+  server_id: z.number(),
+  usage_count: z.number().int().min(0).default(0),
+  quota_period_start: z.date(),
+  quota_period_end: z.date(),
+  updated_at: z.date().optional(),
 });
 export type VideoServerwideQuotaRow = z.infer<typeof videoServerwideQuotaSchema>;
 export const randomTriggerSchema = z.object({
-  trigger_id: z.number().optional(), // Primary key, auto-generated
-  server_id: z.number(), // Foreign key to servers table
-  channel_disc_id: z.string(), // Discord channel ID where trigger fires
-  persona_id: z.number().nullable().optional(), // NULL = "Random" persona selection
-  timer_hours: z.number().int().min(1), // How often to roll the dice (hours)
-  random_offset_range: z.number().int().min(0).nullable().optional(), // Optional +/- jitter range (hours)
-  chance_percent: z.number().int().min(1).max(100), // Probability of firing (1-100%)
+  trigger_id: z.number().optional(),
+  server_id: z.number(),
+  channel_disc_id: z.string(),
+  persona_id: z.number().nullable().optional(), // NULL selects a random persona
+  timer_hours: z.number().int().min(1),
+  random_offset_range: z.number().int().min(0).nullable().optional(), // Jitter range in hours (+/-)
+  chance_percent: z.number().int().min(1).max(100),
   silence_threshold_hours: z.number().int().nullable().optional(), // Skip if channel active within N hours
   respond_to_self: z.boolean().default(false), // Whether to fire if persona spoke last
-  custom_prompt: z.string().nullable().optional(), // Optional injected system prompt
-  failure_threshold: z.number().int().min(1).nullable().optional(), // NULL = disabled; force-fire after N consecutive misses
-  consecutive_failures: z.number().int().min(0).default(0).optional(), // Current consecutive miss count; resets on fire
-  next_trigger_at: z.date(), // Scheduled time for next dice roll
+  custom_prompt: z.string().nullable().optional(),
+  failure_threshold: z.number().int().min(1).nullable().optional(), // NULL disables; force-fire after N consecutive misses
+  consecutive_failures: z.number().int().min(0).default(0).optional(), // Resets on fire
+  next_trigger_at: z.date(),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });
 export type RandomTriggerRow = z.infer<typeof randomTriggerSchema>;
 
 /**
- * Tomori's combined state (base config + LLM settings + LLM info)
+ * Tomori's combined state (base config + LLM settings + LLM info).
  */
 export type TomoriState = TomoriRow &
   PersonaScopedConfigState & {
     config: AssembledServerConfig;
-    llm: LlmRow; // Added LLM information
-    trigger_words: string[]; // Persona-scoped trigger words from persona_configs
-    persona_prompt: string | null; // Optional persona-specific prompt appended after system prompt
+    llm: LlmRow;
+    trigger_words: string[];
+    persona_prompt: string | null; // Appended after system prompt
     naming_config: PersonaNamingConfig;
-    persona_attributes: PersonaAttributeRow[]; // Ordered persona attributes with public/private visibility
-    reward_conditioning_enabled: boolean; // Persona-scoped reward conditioning injection toggle
-    punish_conditioning_enabled: boolean; // Persona-scoped punish conditioning injection toggle
-    humanizer_degree_override: number | null; // Persona-scoped humanizer override; when set, load-time overlay writes it onto config.humanizer_degree
-    server_memories: string[]; // Changed to string array to match implementation
-    rotation_keys?: ApiKeyRotationRow[]; // Optional: API key rotation pool for load balancing/failover
-    persona_llm?: LlmRow; // Added March 2026 - Persona-specific model override (highest priority in chain)
-    vision_llm?: LlmRow; // Added March 2026 - Dedicated vision model for non-vision chat models
-    nai_preset?: NaiPresetRow; // Added March 2026 - Active NovelAI sampling preset (null when not using NAI)
-    fallback_llms?: LlmRow[]; // Added March 2026 - Resolved LLM rows for fallback model failover chain (legacy; prefer fallback_chain)
-    fallback_chain?: FallbackEntry[]; // Added April 2026 - Ordered fallback entries resolving both llm and custom_endpoint refs
-    // Autochat runtime counters from persona_autoch_runtime_state (migration 015).
+    persona_attributes: PersonaAttributeRow[];
+    reward_conditioning_enabled: boolean;
+    punish_conditioning_enabled: boolean;
+    humanizer_degree_override: number | null; // When set, load-time overlay writes it onto config.humanizer_degree
+    server_memories: string[];
+    rotation_keys?: ApiKeyRotationRow[];
+    persona_llm?: LlmRow; // Persona-specific model override (highest priority in chain)
+    vision_llm?: LlmRow; // Dedicated vision model for non-vision chat models
+    nai_preset?: NaiPresetRow; // Active NovelAI sampling preset (null when not using NAI)
+    fallback_llms?: LlmRow[]; // Legacy; prefer fallback_chain
+    fallback_chain?: FallbackEntry[]; // Ordered fallback entries resolving both llm and custom_endpoint refs
     autoch_counter: number;
     autoch_next_target: number;
   };
 
 export const tomoriStateSchema = tomoriSchema.merge(personaScopedConfigStateSchema).extend({
   config: assembledServerConfigSchema,
-  llm: llmSchema, // Added LLM schema validation
+  llm: llmSchema,
   trigger_words: z.array(z.string()).default([]),
   persona_prompt: z.string().nullable().default(null),
   naming_config: personaNamingConfigSchema.default(EMPTY_PERSONA_NAMING_CONFIG),
   persona_attributes: z.array(personaAttributeSchema).default([]),
   reward_conditioning_enabled: z.boolean().default(true),
   punish_conditioning_enabled: z.boolean().default(true),
-  humanizer_degree_override: z.number().int().min(0).max(3).nullable().default(null), // Persona humanizer override; NULL = inherit global
-  server_memories: z.array(z.string()).default([]), // Changed to array of strings
-  rotation_keys: z.array(apiKeyRotationSchema).optional(), // API key rotation pool
-  persona_llm: llmSchema.optional(), // Added March 2026 - Persona-specific model override
-  vision_llm: llmSchema.optional(), // Added March 2026 - Dedicated vision model for non-vision chat models
-  nai_preset: naiPresetSchema.optional(), // Added March 2026 - Active NovelAI sampling preset
-  fallback_llms: z.array(llmSchema).optional(), // Added March 2026 - Resolved fallback LLM rows (legacy; prefer fallback_chain)
+  humanizer_degree_override: z.number().int().min(0).max(3).nullable().default(null), // NULL inherits global setting
+  server_memories: z.array(z.string()).default([]),
+  rotation_keys: z.array(apiKeyRotationSchema).optional(),
+  persona_llm: llmSchema.optional(), // Persona-specific model override (highest priority in chain)
+  vision_llm: llmSchema.optional(), // Dedicated vision model for non-vision chat models
+  nai_preset: naiPresetSchema.optional(), // Active NovelAI sampling preset
+  fallback_llms: z.array(llmSchema).optional(), // Legacy; prefer fallback_chain
   fallback_chain: z
     .array(
       z.discriminatedUnion("kind", [
@@ -1730,8 +1701,7 @@ export const tomoriStateSchema = tomoriSchema.merge(personaScopedConfigStateSche
         z.object({ kind: z.literal("custom_endpoint"), endpoint: customEndpointSchema }),
       ]),
     )
-    .optional(), // Added April 2026 - Ordered fallback entries (llm + custom_endpoint refs)
-  // Autochat runtime counters loaded from persona_autoch_runtime_state (migration 015).
+    .optional(), // Ordered fallback entries resolving both llm and custom_endpoint refs
   autoch_counter: z.number().int().default(0),
   autoch_next_target: z.number().int().default(0),
 });
@@ -1860,7 +1830,7 @@ export const setupResultSchema = z.object({
 export type SetupResult = z.infer<typeof setupResultSchema>;
 
 /**
- * Guild MCP Server : per-guild remote MCP server registration.
+ * Per-guild remote MCP server registration.
  * Stored in guild_mcp_servers table; auth_token is PGP-encrypted BYTEA and
  * last_discovered_tool_names is display-only metadata, never an invocation source.
  */
@@ -1885,8 +1855,8 @@ export type GuildMcpServerRow = z.infer<typeof guildMcpServerSchema>;
 export type GuildMcpFailureReason = NonNullable<GuildMcpServerRow["failure_reason"]>;
 
 /**
- * Saved Provider Config : snapshot of provider-specific settings stored in
- * saved_provider_configs. One row per provider per server; UPSERT on save.
+ * Snapshot of provider-specific settings stored in saved_provider_configs.
+ * One row per provider per server; UPSERT on save.
  */
 export const savedProviderConfigSchema = z.object({
   saved_config_id: z.number().optional(),
@@ -1899,24 +1869,24 @@ export const savedProviderConfigSchema = z.object({
   diffusion_model_id: z.number().nullable(),
   embedding_model_id: z.number().nullable(),
   nai_diffusion_model_id: z.number().nullable(),
-  video_model_id: z.number().nullable().optional(), // Added April 2026 - Video model snapshot
-  vision_llm_id: z.number().nullable().optional(), // Added March 2026 - Vision model snapshot
+  video_model_id: z.number().nullable().optional(),
+  vision_llm_id: z.number().nullable().optional(),
   nai_preset_name: z.string().nullable(),
-  llm_temperature: z.number().nullable().optional(), // Added March 2026 - Sampler snapshot
-  llm_top_p: z.number().nullable().optional(), // Added March 2026 - Sampler snapshot
-  llm_top_k: z.number().int().nullable().optional(), // Added March 2026 - Sampler snapshot
-  llm_frequency_penalty: z.number().nullable().optional(), // Added March 2026 - Sampler snapshot
-  llm_presence_penalty: z.number().nullable().optional(), // Added March 2026 - Sampler snapshot
-  llm_min_p: z.number().nullable().optional(), // Added March 2026 - Sampler snapshot
-  llm_max_output_tokens: z.number().int().min(1).nullable().optional(), // Added April 2026 - Max output tokens override snapshot
+  llm_temperature: z.number().nullable().optional(),
+  llm_top_p: z.number().nullable().optional(),
+  llm_top_k: z.number().int().nullable().optional(),
+  llm_frequency_penalty: z.number().nullable().optional(),
+  llm_presence_penalty: z.number().nullable().optional(),
+  llm_min_p: z.number().nullable().optional(),
+  llm_max_output_tokens: z.number().int().min(1).nullable().optional(),
   llm_disabled_params: z.preprocess(
     (value) => normalizeDisabledLlmParams(value),
     z.array(supportedParamSchema).default([]),
-  ), // Added April 2026 - Omitted parameter snapshot
+  ),
   llm_logit_biases: z.preprocess(
     (value) => normalizeLogitBiasEntries(value),
     z.array(logitBiasEntrySchema).default([]),
-  ), // Added March 2026 - Logit bias snapshot
+  ),
   thinking_level: z.enum(THINKING_LEVEL_VALUES).default(DEFAULT_THINKING_LEVEL),
   fallback_model_refs: z.preprocess(
     (value) => normalizeFallbackModelRefs(value),
@@ -1949,8 +1919,8 @@ export const personalProviderCapabilitySchema = z.enum([
 export type PersonalProviderCapability = z.infer<typeof personalProviderCapabilitySchema>;
 
 /**
- * User Saved Provider Config : personal provider snapshot stored in
- * user_saved_provider_configs. One row per provider per user; UPSERT on save.
+ * Personal provider snapshot stored in user_saved_provider_configs.
+ * One row per provider per user; UPSERT on save.
  */
 export const userSavedProviderConfigSchema = z.object({
   user_saved_config_id: z.number().optional(),
@@ -1974,7 +1944,7 @@ export const userSavedProviderConfigSchema = z.object({
   llm_frequency_penalty: z.number().nullable().optional(),
   llm_presence_penalty: z.number().nullable().optional(),
   llm_min_p: z.number().nullable().optional(),
-  llm_max_output_tokens: z.number().int().min(1).nullable().optional(), // Added April 2026 - Max output tokens override snapshot
+  llm_max_output_tokens: z.number().int().min(1).nullable().optional(),
   llm_disabled_params: z.preprocess(
     (value) => normalizeDisabledLlmParams(value),
     z.array(supportedParamSchema).default([]),
@@ -2011,7 +1981,7 @@ export type UserSavedProviderConfigUpsert = Omit<
 >;
 
 /**
- * SillyTavern Preset : imported preset metadata + raw JSON blob.
+ * Imported SillyTavern preset metadata and raw JSON blob.
  * Stored in st_presets table; scoped per server_id.
  * Multiple presets may exist per server; only one is active at a time.
  */
@@ -2028,8 +1998,7 @@ const stPresetSchema = z.object({
 export type StPresetRow = z.infer<typeof stPresetSchema>;
 
 /**
- * SillyTavern Preset Node : individual toggleable prompt node parsed
- * from a preset's prompts array. Stored in st_preset_nodes table.
+ * Individual toggleable prompt node parsed from a SillyTavern preset's prompts array.
  * Nodes are ordered by node_order (matching the preset's prompt_order).
  */
 const stPresetNodeSchema = z.object({

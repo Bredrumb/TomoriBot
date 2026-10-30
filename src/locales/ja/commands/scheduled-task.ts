@@ -11,10 +11,17 @@ export default {
       select_type_task: `タスク`,
       select_type_reminder: `{user_nickname}さんへのリマインダー`,
       select_repeat_text: ` | {hours}時間ごとに繰り返し`,
+      select_repeat_months_text: ` | {months}か月ごとに繰り返し`,
       select_manager_created_by_text: ` | 作成者: {creator_name}`,
       no_entries_title: `スケジュール済みタスクがありません`,
       no_entries: `編集するスケジュール済みタスクやリマインダーがありません。リマインドしてほしい内容を私に伝えるか、タスクを予定してください。`,
       confirm_title: `このスケジュール済みタスクを編集しますか？`,
+      confirm_details: `**内容：** {reminder_purpose}
+**次回実行：** {reminder_time}
+**繰り返し：** {repeat_text}
+**種別：** {reminder_type}
+**対象ユーザー：** {target_user}
+**チャンネル：** {target_channel}`,
       modal_title: `スケジュール済みタスクの編集`,
       purpose_input_label: `リマインダー/タスク内容`,
       purpose_input_description: `実行時にボットが見るテキストです。`,
@@ -22,9 +29,12 @@ export default {
       time_input_label: `次回実行時刻`,
       time_input_description: `14:30 または 1430 のような24時間表記を使います。`,
       time_input_placeholder: `14:30`,
-      interval_input_label: `間隔（時間）`,
-      interval_input_description: `繰り返しを無効にするには0を設定します。`,
+      interval_input_label: `繰り返しの間隔`,
+      interval_input_description: `実行の間隔（時間または月数）を指定します。繰り返しを無効にするには0を設定します。`,
       interval_input_placeholder: `0`,
+      interval_unit_label: `間隔の単位`,
+      interval_unit_hours_option: `時間`,
+      interval_unit_months_option: `か月（毎月同じ日）`,
       reminder_checkbox_label: `自分宛てのリマインダーにする`,
       reminder_checkbox_description: `実行されるたびにあなたをメンションします。`,
       type_reminder: `リマインダー`,
@@ -35,10 +45,16 @@ export default {
       invalid_time_title: `実行時刻が無効です`,
       invalid_time_description: `\`14:30\`、\`1430\`、\`00:00\`、\`2400\` のような24時間表記を入力してください。`,
       invalid_interval_title: `間隔が無効です`,
-      invalid_interval_description: `間隔は時間単位の整数である必要があります。繰り返しを無効にするには \`0\` を使ってください。`,
+      invalid_interval_description: `間隔は整数である必要があります。繰り返しを無効にするには \`0\` を使ってください。`,
       no_changes_title: `変更はありません`,
       no_changes_description: `スケジュール済みタスクは変更されませんでした。`,
       success_title: `スケジュール済みタスクを更新しました`,
+      success_details: `**内容：** {reminder_purpose}
+**次回実行：** {reminder_time}
+**繰り返し：** {repeat_text}
+**種別：** {reminder_type}
+**対象ユーザー：** {target_user}
+**チャンネル：** {target_channel}`,
     },
     remove: {
       description: `スケジュール済みタスクまたはリマインダーを削除します。`,
@@ -48,6 +64,7 @@ export default {
       select_placeholder: `スケジュール済みタスクを選択...`,
       select_option_description: `[{persona_name}] {reminder_time} ({timezone}) #{target_channel}{repeat_text}{manager_created_by_text}`,
       select_repeat_text: ` | {hours}時間ごとに繰り返し`,
+      select_repeat_months_text: ` | {months}か月ごとに繰り返し`,
       select_manager_created_by_text: ` | 作成者: {creator_name}`,
       no_entries_title: `スケジュール済みタスクがありません`,
       no_entries: `削除するスケジュール済みタスクやリマインダーがありません。リマインドしてほしい内容を私に伝えるか、タスクを予定してください。`,

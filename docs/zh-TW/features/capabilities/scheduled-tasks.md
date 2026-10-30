@@ -2,7 +2,6 @@
 title: "排程任務"
 sidebar:
   order: 2
-aiGenerated: true
 ---
 
 為自己設定提醒或安排定期公告，而無需離開聊天室。直接詢問機器人，她會為你創建時間表。計劃任務屬於主動人格。
@@ -16,9 +15,12 @@ aiGenerated: true
 ```text
 remind me to submit the report at 14:30
 every Friday at 8pm, post a reminder that game night is starting
+on the 31st of every month, remind me to pay rent
 ```
 
 她解析請求的時間和重複次數。提醒在觸發時會ping目標使用者。任務是人格人格在時機到來時所執行的無聲的自我行動。
+
+排程可以每隔幾小時或每隔幾個月重複一次。按月重複的排程會保持在相同的日期與時間。在沒有該日期的月份中，它會在該月的最後一天執行（例如 31 日會改在 4 月 30 日），並在下個月恢復為 31 日。
 
 ## 時區
 
@@ -30,10 +32,16 @@ every Friday at 8pm, post a reminder that game night is starting
 
 兩個斜杠命令可讓你查看和調整現有計劃：
 
-- `/scheduled-task edit`：更改任務內容、下次觸發時間、重複間隔或提醒目標。將時間間隔設為`0`以一次產生重複任務。
+- `/scheduled-task edit`：變更任務內容、下次觸發時間、重複間隔（以小時或月為單位）或提醒目標。將間隔設為 `0` 即可將重複任務改為單次。
 - `/scheduled-task remove`：刪除提醒或任務。
 
-這兩個指令都會開啟一個選擇器，按人格、時間、頻道和重複次數列出你現有的計畫。
+這兩個指令都會開啟一個選擇器，按人格、時間、頻道和重複次數列出你現有的排程。
+
+:::tip
+擁有「管理伺服器」權限的成員可以看到伺服器中的所有排程，其他成員的項目會標註其建立者。其他人只能看到自己的排程。
+
+在聊天中要求 TomoriBot 刪除排程也遵循相同的規則：你可以刪除自己建立的排程或提醒自己的排程，而擁有「管理伺服器」權限的成員可以刪除任何排程。
+:::
 
 一個伺服器最多可以同時保留 100 個待處理的提醒與任務。達到上限時，TomoriBot 會通知你而不是繼續新增；使用 `/scheduled-task remove` 刪除舊的即可騰出空間。
 
@@ -45,4 +53,4 @@ every Friday at 8pm, post a reminder that game night is starting
 
 ---
 
-更多功能請參考[工具與擴充](/zh-TW/features/capabilities/tools-and-extensions/)。
+更多功能請參考[工具與擴充](/features/capabilities/tools-and-extensions/built-in-tools/)。

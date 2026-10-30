@@ -2,12 +2,11 @@
 title: "Tareas programadas"
 sidebar:
   order: 2
-aiGenerated: true
 ---
 
-Configura recordatorios para usted o programe anuncios recurrentes sin salir del chat. Pregúntale directamente al robot y ella creará el cronograma por ti. Las tareas programadas pertenecen a la persona activa.
+Configura recordatorios para ti o programa anuncios recurrentes sin salir del chat. Pregúntale directamente al bot y ella creará la programación por ti. Las tareas programadas pertenecen a la persona activa.
 
-Los recordatorios notifican al usuario objetivo cuando dispara, mientras que las tareas automáticas son acciones que la persona realiza por sí sola a la hora programada.
+Los recordatorios notifican al usuario objetivo cuando se activan, mientras que las tareas automáticas son acciones que la persona realiza por su cuenta a la hora programada.
 
 ## Crear una tarea
 
@@ -16,24 +15,33 @@ Dile qué programar en el chat:
 ```text
 remind me to submit the report at 14:30
 every Friday at 8pm, post a reminder that game night is starting
+on the 31st of every month, remind me to pay rent
 ```
 
-Ella analiza el tiempo solicitado y la recurrencia. Los recordatorios hacen ping al usuario objetivo cuando dispara. Las tareas son acciones silenciosas que la persona lleva a cabo cuando llega el momento.
+Ella analiza la hora solicitada y la recurrencia. Los recordatorios mencionan al usuario objetivo cuando se activan. Las tareas son acciones silenciosas que la persona lleva a cabo cuando llega el momento.
+
+Una programación puede repetirse cada pocas horas o cada pocos meses. Una mensual mantiene el mismo día y hora. En un mes que no tenga ese día, se ejecuta el último día del mes (el 30 de abril para el 31) y vuelve al 31 el mes siguiente.
 
 ## Zonas horarias
 
-Las horas absolutas (como "a las 14:30" o "el viernes a las 8 p.m.") utilizan la zona horaria del servidor (`/config` > `Comportamiento` > `Comportamiento general`) de forma predeterminada. Si configura su propia zona horaria con `/personal config`, el bot convierte su hora local automáticamente. "recuérdamelo a las 9 a. m." significa tus 9:00 a. m., incluso si el servidor está en otra zona horaria. Los tiempos relativos (como "en 2 horas") no dependen de zonas horarias y siempre son seguros.
+Las horas absolutas (como "a las 14:30" o "el viernes a las 8 p.m.") utilizan la zona horaria del servidor (`/config` > `Comportamiento` > `Comportamiento general`) de forma predeterminada. Si configuras tu propia zona horaria con `/personal config`, el bot convierte tu hora local automáticamente. "recuérdamelo a las 9 a. m." significa tus 9:00 a. m., incluso si el servidor está en otra zona horaria. Los tiempos relativos (como "en 2 horas") no dependen de zonas horarias y siempre son seguros.
 
-Cuando un recordatorio se dirige a un usuario cuya zona horaria personal difiere de la del servidor, la confirmación muestra ambos relojes: la hora del servidor y la hora local del objetivo. Si una hora está mal etiquetada, corríjala con un mensaje de seguimiento o `/scheduled-task edit`.
+Cuando un recordatorio se dirige a un usuario cuya zona horaria personal difiere de la del servidor, la confirmación muestra ambos relojes: la hora del servidor y la hora local del destinatario. Si una hora está mal etiquetada, corrígela con un mensaje de seguimiento o `/scheduled-task edit`.
 
 ## Administrar tareas
 
-Dos comandos de barra diagonal le permiten revisar y ajustar los horarios existentes:
+Dos comandos de barra te permiten revisar y ajustar las programaciones existentes:
 
-- `/scheduled-task edit`: cambia el contenido de una tarea, la próxima hora de activación, el intervalo de recurrencia o el objetivo del recordatorio. Establece el intervalo en `0` para realizar una tarea recurrente por única vez.
-- `/scheduled-task remove`: eliminar un recordatorio o tarea.
+- `/scheduled-task edit`: cambia el contenido de una tarea, la próxima hora de activación, el intervalo de repetición (en horas o meses) o el objetivo del recordatorio. Establece el intervalo en `0` para que una tarea recurrente sea de una sola vez.
+- `/scheduled-task remove`: elimina un recordatorio o tarea.
 
-Ambos comandos abren un selector que enumera sus programaciones existentes por persona, hora, canal y recurrencia.
+Ambos comandos abren un selector que enumera tus programaciones existentes por persona, hora, canal y recurrencia.
+
+:::tip
+Los miembros con `Gestionar servidor` ven todas las programaciones del servidor, y las entradas de otros miembros muestran a su creador. Todos los demás solo ven las suyas.
+
+Pedirle a TomoriBot en el chat que elimine una programación sigue la misma regla: puedes eliminar las que tú creaste o las que te recuerdan a ti, y los miembros con `Gestionar servidor` pueden eliminar cualquiera.
+:::
 
 Un servidor puede almacenar hasta 100 recordatorios y tareas pendientes a la vez. Cuando esté lleno, TomoriBot te avisará en lugar de agregar otro; elimina los anteriores con `/scheduled-task remove` para liberar espacio.
 
@@ -45,4 +53,4 @@ Si la entrega falla repetidamente y alcanza el límite de reintentos, TomoriBot 
 
 ---
 
-Para obtener más capacidades, consulte [Herramientas y extensiones](/es-419/features/capabilities/tools-and-extensions/).
+Para obtener más capacidades, consulta [Herramientas y extensiones](/features/capabilities/tools-and-extensions/built-in-tools/).
