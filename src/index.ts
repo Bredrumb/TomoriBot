@@ -8,6 +8,7 @@ import { loadSecrets } from "@/init/secrets";
 import { initStartupBackup } from "@/init/backup";
 import { createDiscordClient, isTransientGatewayError, resolvePresenceIntentEnabled } from "@/init/discord";
 import { initDatabase } from "@/init/database";
+import { initSupporterBilling } from "@/init/supporterBilling";
 import { initLoaders } from "@/init/loaders";
 import { initBridges } from "@/init/bridges";
 import { initTimers } from "@/init/timers";
@@ -79,6 +80,7 @@ const client = createDiscordClient(includePresences);
 
 await initDatabase(environment);
 
+await initSupporterBilling(environment, client);
 // GUILD_CREATE caches presences during login, so restore eligible pairs before connecting.
 if (includePresences) {
   const presencePairs = await statRepository.getPresenceRetentionPairs();
