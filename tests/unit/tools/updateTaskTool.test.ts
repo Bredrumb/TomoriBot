@@ -1,8 +1,23 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it, setSystemTime } from "bun:test";
 import { canReminderActorModifyReminder, parseUpdateTaskArguments } from "@/tools/functionCalls/updateTaskTool";
 import { formatPendingReminderForContext } from "@/utils/text/context/participants";
 
+afterEach(() => {
+  setSystemTime();
+});
+
 describe("update_task helpers", () => {
+  it("reschedules by calendar months before adding fixed-length parts", () => {
+    setSystemTime(new Date("2026-01-31T09:00:00Z"));
+    const result = parseUpdateTaskArguments(
+      { reminder_id: 3, reminder_purpose: "Renew the domain.", months_from_now: 1, days_from_now: 2 },
+      0,
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.newReminderTime?.toISOString()).toBe("2026-03-02T09:00:00.000Z");
+  });
   it("parses blank reminder_purpose as delete and ignores scheduling fields", () => {
     const result = parseUpdateTaskArguments(
       {

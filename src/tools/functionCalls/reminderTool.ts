@@ -8,6 +8,7 @@ import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema }
 import { validateFutureTime } from "@/utils/text/processors/timeUtils";
 import { formatLocalizedDuration, formatTimeRemaining } from "@/utils/text/processors/formatters";
 import {
+  addMonthsWithOffset,
   parseTimeWithOffset,
   formatUTCOffset,
   formatTimeWithOffset,
@@ -70,7 +71,7 @@ export class ReminderTool extends BaseTool {
       months_from_now: {
         type: "number",
         description:
-          "OPTIONAL: Months from the current time to schedule the task. Can be combined with other 'from now' parameters. Uses calendar months (30.44 days average).",
+          "OPTIONAL: Months from the current time to schedule the task. Can be combined with other 'from now' parameters. Counts calendar months in the server timezone and keeps the time of day; a date past the end of the target month lands on its last day.",
       },
       repetition_interval_hours: {
         type: "number",
@@ -382,6 +383,10 @@ export class ReminderTool extends BaseTool {
 
       timeCalculationMethod = "relative";
       const currentTime = new Date();
+      const monthShiftedTime =
+        typeof monthsFromNowArg === "number" && monthsFromNowArg > 0
+          ? addMonthsWithOffset(currentTime, monthsFromNowArg, timezoneOffset)
+          : currentTime;
       let totalMilliseconds = 0;
 
       if (typeof effectiveMinutesFromNow === "number" && effectiveMinutesFromNow > 0) {
@@ -393,12 +398,8 @@ export class ReminderTool extends BaseTool {
       if (typeof daysFromNowArg === "number" && daysFromNowArg > 0) {
         totalMilliseconds += daysFromNowArg * 24 * 60 * 60 * 1000;
       }
-      if (typeof monthsFromNowArg === "number" && monthsFromNowArg > 0) {
-        // Use average month length (30.44 days) for consistency
-        totalMilliseconds += monthsFromNowArg * 30.44 * 24 * 60 * 60 * 1000;
-      }
 
-      finalReminderTime = new Date(currentTime.getTime() + totalMilliseconds);
+      finalReminderTime = new Date(monthShiftedTime.getTime() + totalMilliseconds);
     }
 
     const reminderPurpose = reminderPurposeArg.trim();

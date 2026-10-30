@@ -15,6 +15,7 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import { validateFutureTime } from "@/utils/text/processors/timeUtils";
 import {
+  addMonthsWithOffset,
   formatTimeWithOffset,
   formatUTCOffset,
   isValidUtcOffset,
@@ -28,12 +29,13 @@ const RELATIVE_TIME_MULTIPLIERS_MS = {
   minutes_from_now: 60 * 1000,
   hours_from_now: 60 * 60 * 1000,
   days_from_now: 24 * 60 * 60 * 1000,
-  months_from_now: 30.44 * 24 * 60 * 60 * 1000,
 } as const;
 
-type RelativeTimeKey = keyof typeof RELATIVE_TIME_MULTIPLIERS_MS;
+type FixedRelativeTimeKey = keyof typeof RELATIVE_TIME_MULTIPLIERS_MS;
 
-const RELATIVE_TIME_KEYS = Object.keys(RELATIVE_TIME_MULTIPLIERS_MS) as RelativeTimeKey[];
+const RELATIVE_TIME_KEYS = ["months_from_now", ...Object.keys(RELATIVE_TIME_MULTIPLIERS_MS)] as Array<
+  FixedRelativeTimeKey | "months_from_now"
+>;
 
 export type UpdateTaskActor = {
   requesterUserId?: number;
@@ -137,6 +139,7 @@ export function parseUpdateTaskArguments(
   } else {
     const hasRelativeParams = RELATIVE_TIME_KEYS.some((key) => hasProvidedArg(args, key));
     if (hasRelativeParams) {
+      let baseTime = new Date();
       let totalMilliseconds = 0;
 
       for (const key of RELATIVE_TIME_KEYS) {
@@ -151,18 +154,14 @@ export function parseUpdateTaskArguments(
           };
         }
 
-        totalMilliseconds += value * RELATIVE_TIME_MULTIPLIERS_MS[key];
+        if (key === "months_from_now") {
+          baseTime = addMonthsWithOffset(baseTime, value, timezoneOffset);
+        } else {
+          totalMilliseconds += value * RELATIVE_TIME_MULTIPLIERS_MS[key];
+        }
       }
 
-      if (totalMilliseconds <= 0) {
-        return {
-          ok: false,
-          status: "task_update_failed_invalid_time",
-          reason: "Relative time parameters must schedule the task in the future.",
-        };
-      }
-
-      newReminderTime = new Date(Date.now() + totalMilliseconds);
+      newReminderTime = new Date(baseTime.getTime() + totalMilliseconds);
     }
   }
 
@@ -319,7 +318,8 @@ export class UpdateTaskTool extends BaseTool {
       },
       months_from_now: {
         type: "number",
-        description: "OPTIONAL: Months from now for the replacement trigger time. Uses calendar months as 30.44 days.",
+        description:
+          "OPTIONAL: Months from now for the replacement trigger time. Counts calendar months in the server timezone and keeps the time of day; a date past the end of the target month lands on its last day.",
       },
       repetition_interval_hours: {
         type: "number",
