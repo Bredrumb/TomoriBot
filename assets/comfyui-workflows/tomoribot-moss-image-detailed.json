@@ -31,10 +31,7 @@
   },
   "moss:slg": {
     "inputs": {
-      "model": [
-        "moss:model",
-        0
-      ],
+      "model": ["moss:model", 0],
       "double_layers": "",
       "single_layers": "22",
       "start_percent": 0,
@@ -47,14 +44,8 @@
   },
   "moss:slg_switch": {
     "inputs": {
-      "on_false": [
-        "moss:model",
-        0
-      ],
-      "on_true": [
-        "moss:slg",
-        0
-      ],
+      "on_false": ["moss:model", 0],
+      "on_true": ["moss:slg", 0],
       "switch": false
     },
     "class_type": "ComfySwitchNode",
@@ -73,10 +64,7 @@
   },
   "moss:negative": {
     "inputs": {
-      "clip": [
-        "moss:clip",
-        0
-      ],
+      "clip": ["moss:clip", 0],
       "text": "{TOMORI_NEGATIVE_PROMPT}"
     },
     "class_type": "CLIPTextEncode",
@@ -114,14 +102,8 @@
   "ref:has1": {
     "inputs": {
       "cmp": "a > b",
-      "a": [
-        "ref_count",
-        0
-      ],
-      "b": [
-        "ref_threshold_0",
-        0
-      ]
+      "a": ["ref_count", 0],
+      "b": ["ref_threshold_0", 0]
     },
     "class_type": "ImpactCompare",
     "_meta": {
@@ -131,14 +113,8 @@
   "ref:has2": {
     "inputs": {
       "cmp": "a > b",
-      "a": [
-        "ref_count",
-        0
-      ],
-      "b": [
-        "ref_threshold_1",
-        0
-      ]
+      "a": ["ref_count", 0],
+      "b": ["ref_threshold_1", 0]
     },
     "class_type": "ImpactCompare",
     "_meta": {
@@ -148,14 +124,8 @@
   "ref:has3": {
     "inputs": {
       "cmp": "a > b",
-      "a": [
-        "ref_count",
-        0
-      ],
-      "b": [
-        "ref_threshold_2",
-        0
-      ]
+      "a": ["ref_count", 0],
+      "b": ["ref_threshold_2", 0]
     },
     "class_type": "ImpactCompare",
     "_meta": {
@@ -164,14 +134,8 @@
   },
   "ref:stitch2": {
     "inputs": {
-      "image1": [
-        "ref:1",
-        0
-      ],
-      "image2": [
-        "ref:2",
-        0
-      ],
+      "image1": ["ref:1", 0],
+      "image2": ["ref:2", 0],
       "direction": "right",
       "match_image_size": true,
       "spacing_width": 0,
@@ -184,18 +148,9 @@
   },
   "ref:choose2": {
     "inputs": {
-      "cond": [
-        "ref:has2",
-        0
-      ],
-      "tt_value": [
-        "ref:stitch2",
-        0
-      ],
-      "ff_value": [
-        "ref:1",
-        0
-      ]
+      "cond": ["ref:has2", 0],
+      "tt_value": ["ref:stitch2", 0],
+      "ff_value": ["ref:1", 0]
     },
     "class_type": "ImpactConditionalBranch",
     "_meta": {
@@ -204,14 +159,8 @@
   },
   "ref:stitch3": {
     "inputs": {
-      "image1": [
-        "ref:choose2",
-        0
-      ],
-      "image2": [
-        "ref:3",
-        0
-      ],
+      "image1": ["ref:choose2", 0],
+      "image2": ["ref:3", 0],
       "direction": "right",
       "match_image_size": true,
       "spacing_width": 0,
@@ -224,18 +173,9 @@
   },
   "ref:choose3": {
     "inputs": {
-      "cond": [
-        "ref:has3",
-        0
-      ],
-      "tt_value": [
-        "ref:stitch3",
-        0
-      ],
-      "ff_value": [
-        "ref:choose2",
-        0
-      ]
+      "cond": ["ref:has3", 0],
+      "tt_value": ["ref:stitch3", 0],
+      "ff_value": ["ref:choose2", 0]
     },
     "class_type": "ImpactConditionalBranch",
     "_meta": {
@@ -271,10 +211,7 @@
   },
   "moss:caption_text": {
     "inputs": {
-      "clip": [
-        "moss:clip",
-        0
-      ],
+      "clip": ["moss:clip", 0],
       "max_length": 2048,
       "sampling_mode": "on",
       "sampling_mode.temperature": 0.5,
@@ -287,14 +224,8 @@
       "thinking": false,
       "use_default_template": true,
       "mtp": "auto",
-      "system_prompt": [
-        "moss:text_system",
-        0
-      ],
-      "prompt": [
-        "moss:raw_prompt",
-        0
-      ]
+      "system_prompt": ["moss:text_system", 0],
+      "prompt": ["moss:raw_prompt", 0]
     },
     "class_type": "TextGenerate",
     "_meta": {
@@ -303,10 +234,7 @@
   },
   "moss:caption_ref": {
     "inputs": {
-      "clip": [
-        "moss:clip",
-        0
-      ],
+      "clip": ["moss:clip", 0],
       "max_length": 2048,
       "sampling_mode": "on",
       "sampling_mode.temperature": 0.5,
@@ -319,18 +247,9 @@
       "thinking": false,
       "use_default_template": true,
       "mtp": "auto",
-      "image": [
-        "ref:choose3",
-        0
-      ],
-      "system_prompt": [
-        "moss:ref_system",
-        0
-      ],
-      "prompt": [
-        "moss:ref_request",
-        0
-      ]
+      "image": ["ref:choose3", 0],
+      "system_prompt": ["moss:ref_system", 0],
+      "prompt": ["moss:ref_request", 0]
     },
     "class_type": "TextGenerate",
     "_meta": {
@@ -339,18 +258,9 @@
   },
   "moss:caption_select": {
     "inputs": {
-      "cond": [
-        "ref:has1",
-        0
-      ],
-      "tt_value": [
-        "moss:caption_ref",
-        0
-      ],
-      "ff_value": [
-        "moss:caption_text",
-        0
-      ]
+      "cond": ["ref:has1", 0],
+      "tt_value": ["moss:caption_ref", 0],
+      "ff_value": ["moss:caption_text", 0]
     },
     "class_type": "ImpactConditionalBranch",
     "_meta": {
@@ -359,10 +269,7 @@
   },
   "moss:preview_text": {
     "inputs": {
-      "source": [
-        "moss:caption_select",
-        0
-      ]
+      "source": ["moss:caption_select", 0]
     },
     "class_type": "PreviewAny",
     "_meta": {
@@ -371,14 +278,8 @@
   },
   "moss:positive": {
     "inputs": {
-      "clip": [
-        "moss:clip",
-        0
-      ],
-      "text": [
-        "moss:preview_text",
-        0
-      ]
+      "clip": ["moss:clip", 0],
+      "text": ["moss:preview_text", 0]
     },
     "class_type": "CLIPTextEncode",
     "_meta": {
@@ -387,14 +288,8 @@
   },
   "moss:latent": {
     "inputs": {
-      "width": [
-        "canvas_width",
-        0
-      ],
-      "height": [
-        "canvas_height",
-        0
-      ],
+      "width": ["canvas_width", 0],
+      "height": ["canvas_height", 0],
       "batch_size": 1
     },
     "class_type": "EmptyFlux2LatentImage",
@@ -404,22 +299,10 @@
   },
   "moss:sample": {
     "inputs": {
-      "model": [
-        "moss:slg_switch",
-        0
-      ],
-      "positive": [
-        "moss:positive",
-        0
-      ],
-      "negative": [
-        "moss:negative",
-        0
-      ],
-      "latent_image": [
-        "moss:latent",
-        0
-      ],
+      "model": ["moss:slg_switch", 0],
+      "positive": ["moss:positive", 0],
+      "negative": ["moss:negative", 0],
+      "latent_image": ["moss:latent", 0],
       "seed": "{TOMORI_SEED}",
       "steps": 25,
       "cfg": 2.5,
@@ -434,14 +317,8 @@
   },
   "moss:decode": {
     "inputs": {
-      "samples": [
-        "moss:sample",
-        0
-      ],
-      "vae": [
-        "moss:vae",
-        0
-      ]
+      "samples": ["moss:sample", 0],
+      "vae": ["moss:vae", 0]
     },
     "class_type": "VAEDecode",
     "_meta": {
@@ -459,14 +336,8 @@
   },
   "detail:upscale4": {
     "inputs": {
-      "upscale_model": [
-        "detail:upscaler",
-        0
-      ],
-      "image": [
-        "moss:decode",
-        0
-      ]
+      "upscale_model": ["detail:upscaler", 0],
+      "image": ["moss:decode", 0]
     },
     "class_type": "ImageUpscaleWithModel",
     "_meta": {
@@ -475,10 +346,7 @@
   },
   "detail:upscale15": {
     "inputs": {
-      "image": [
-        "detail:upscale4",
-        0
-      ],
+      "image": ["detail:upscale4", 0],
       "upscale_method": "lanczos",
       "scale_by": 0.375
     },
@@ -489,14 +357,8 @@
   },
   "detail:encode": {
     "inputs": {
-      "pixels": [
-        "detail:upscale15",
-        0
-      ],
-      "vae": [
-        "moss:vae",
-        0
-      ]
+      "pixels": ["detail:upscale15", 0],
+      "vae": ["moss:vae", 0]
     },
     "class_type": "VAEEncode",
     "_meta": {
@@ -505,22 +367,10 @@
   },
   "detail:sample": {
     "inputs": {
-      "model": [
-        "moss:slg_switch",
-        0
-      ],
-      "positive": [
-        "moss:positive",
-        0
-      ],
-      "negative": [
-        "moss:negative",
-        0
-      ],
-      "latent_image": [
-        "detail:encode",
-        0
-      ],
+      "model": ["moss:slg_switch", 0],
+      "positive": ["moss:positive", 0],
+      "negative": ["moss:negative", 0],
+      "latent_image": ["detail:encode", 0],
       "seed": "{TOMORI_SEED}",
       "steps": 8,
       "cfg": 2.5,
@@ -535,14 +385,8 @@
   },
   "detail:decode": {
     "inputs": {
-      "samples": [
-        "detail:sample",
-        0
-      ],
-      "vae": [
-        "moss:vae",
-        0
-      ]
+      "samples": ["detail:sample", 0],
+      "vae": ["moss:vae", 0]
     },
     "class_type": "VAEDecode",
     "_meta": {
@@ -560,22 +404,10 @@
   },
   "detail:face": {
     "inputs": {
-      "image": [
-        "detail:decode",
-        0
-      ],
-      "model": [
-        "moss:slg_switch",
-        0
-      ],
-      "clip": [
-        "moss:clip",
-        0
-      ],
-      "vae": [
-        "moss:vae",
-        0
-      ],
+      "image": ["detail:decode", 0],
+      "model": ["moss:slg_switch", 0],
+      "clip": ["moss:clip", 0],
+      "vae": ["moss:vae", 0],
       "guide_size": 768,
       "guide_size_for": true,
       "max_size": 1024,
@@ -584,14 +416,8 @@
       "cfg": 2.5,
       "sampler_name": "euler",
       "scheduler": "simple",
-      "positive": [
-        "moss:positive",
-        0
-      ],
-      "negative": [
-        "moss:negative",
-        0
-      ],
+      "positive": ["moss:positive", 0],
+      "negative": ["moss:negative", 0],
       "denoise": 0.18,
       "feather": 5,
       "noise_mask": true,
@@ -606,10 +432,7 @@
       "sam_mask_hint_threshold": 0.7,
       "sam_mask_hint_use_negative": "False",
       "drop_size": 10,
-      "bbox_detector": [
-        "detail:face_detector",
-        0
-      ],
+      "bbox_detector": ["detail:face_detector", 0],
       "wildcard": "",
       "cycle": 1,
       "inpaint_model": false,
@@ -633,22 +456,10 @@
   },
   "detail:hand": {
     "inputs": {
-      "image": [
-        "detail:face",
-        0
-      ],
-      "model": [
-        "moss:slg_switch",
-        0
-      ],
-      "clip": [
-        "moss:clip",
-        0
-      ],
-      "vae": [
-        "moss:vae",
-        0
-      ],
+      "image": ["detail:face", 0],
+      "model": ["moss:slg_switch", 0],
+      "clip": ["moss:clip", 0],
+      "vae": ["moss:vae", 0],
       "guide_size": 768,
       "guide_size_for": true,
       "max_size": 1024,
@@ -657,14 +468,8 @@
       "cfg": 2.5,
       "sampler_name": "euler",
       "scheduler": "simple",
-      "positive": [
-        "moss:positive",
-        0
-      ],
-      "negative": [
-        "moss:negative",
-        0
-      ],
+      "positive": ["moss:positive", 0],
+      "negative": ["moss:negative", 0],
       "denoise": 0.13,
       "feather": 5,
       "noise_mask": true,
@@ -679,10 +484,7 @@
       "sam_mask_hint_threshold": 0.7,
       "sam_mask_hint_use_negative": "False",
       "drop_size": 10,
-      "bbox_detector": [
-        "detail:hand_detector",
-        0
-      ],
+      "bbox_detector": ["detail:hand_detector", 0],
       "wildcard": "",
       "cycle": 1,
       "inpaint_model": false,
@@ -697,10 +499,7 @@
   },
   "output:final": {
     "inputs": {
-      "images": [
-        "detail:hand",
-        0
-      ],
+      "images": ["detail:hand", 0],
       "filename_prefix": "TomoriBot_MOSS_Reference_Detailed"
     },
     "class_type": "SaveImage",
