@@ -5,6 +5,7 @@ import { extractNoticeTextFromComponents } from "@/utils/discord/componentNotice
 import { MAX_MESSAGE_FETCH_LIMIT } from "@/utils/discord/messageFetchLimit";
 import { classifyProtocolEmbed, classifyProtocolTitle, isMinimalTitleKind } from "@/utils/discord/embedProtocol";
 import { resolveMinimalNoticeBodies } from "@/utils/discord/minimalNoticeBodies";
+import { stickerImage } from "@/utils/discord/stickerImage";
 import type { ConversationContext, ImageReference } from "./types";
 
 export async function buildConversationContext(
@@ -72,10 +73,12 @@ export async function buildConversationContext(
       }
 
       for (const sticker of msg.stickers.values()) {
+        const image = stickerImage(sticker.client.rest, sticker);
+        if (!image) continue;
         messageImages.push({
           label: `Image ${imageCounter++}`,
-          url: `https://cdn.discordapp.com/stickers/${sticker.id}.png`,
-          mimeType: "image/png",
+          url: image.url,
+          mimeType: image.mimeType,
           source: `${authorName} sticker (${sticker.name})`,
         });
       }

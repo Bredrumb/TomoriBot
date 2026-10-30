@@ -26,6 +26,8 @@ import { CooldownType, type TomoriState, type UserRow } from "@/types/db/schema"
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { runHiddenImageTurn } from "@/utils/provider/hiddenImageTurn";
+import { createProviderToolFailure } from "@/utils/provider/providerToolFailure";
+import { buildRestrictedErrorDetail } from "@/utils/discord/stream/errorUi";
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { getCachedWhitelistStatus } from "@/utils/cache/channelWhitelistCache";
 import { getCachedPersonalSpotlightStatus } from "@/utils/cache/personalSpotlightCache";
@@ -751,18 +753,28 @@ export async function executeAutoImageCommand(
 
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     const isPersonalText = Boolean(activeConfigs?.text);
+    const credentialScope = isPersonalText ? "personal" : "server";
     const tipKeys = await recoveryTips([
       "genai.tips.refresh_context",
       ...(isPersonalText
         ? ["genai.tips.disable_personal_text_override", "genai.tips.switch_model_provider_personal"]
         : ["genai.tips.switch_model_provider"]),
     ]);
+    const failure = createProviderToolFailure(error, {
+      locale,
+      provider: tomoriState.llm.llm_provider,
+      credentialScope,
+    }).failure;
     await replyInfoEmbed(modalSubmitInteraction, locale, {
       titleKey: "commands.generate.image.error_generation_failed_title",
       descriptionKey: "commands.generate.image.error_generation_failed_description",
-      descriptionVars: { error: errorMessage },
+      descriptionVars: { error: failure?.reason ?? "" },
       color: ColorCode.ERROR,
       tipKeys,
+      restrictedDetail: buildRestrictedErrorDetail(errorMessage, {
+        textCredentialSource: credentialScope,
+        triggererDiscId: interaction.user.id,
+      }),
     });
   }
 }

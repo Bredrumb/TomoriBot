@@ -52,8 +52,8 @@ const MODEL_ERROR_PATTERNS: RegExp[] = [
   // model in a shape the patterns above match, so both fell through to API-key advice.
   /\breached\s+its\s+end\s+of\s+life\b/i,
   /\bnot\s+found\s+for\s+account\b/i,
-  // Google answers a retired model with "is no longer available", a malformed model ID with
-  // "unexpected model name format", and a feature the model lacks with "Model '<id>' does not support".
+  // Google words a retired model, a malformed model ID, and a missing model feature this way, so
+  // without these patterns each one reads as a retryable API error instead of a configuration problem.
   /\bno\s+longer\s+available\b/i,
   /\bunexpected\s+model\s+name\s+format\b/i,
   /\bmodel\s+[`"'A-Za-z0-9_.:/-]{1,160}\s+does\s+not\s+support\b/i,

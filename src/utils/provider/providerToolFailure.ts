@@ -125,7 +125,7 @@ export function createProviderToolFailure(error: unknown, context: ProviderToolF
   if (error instanceof CredentialUnavailableError) kind = "not_configured";
   else if (error instanceof ConfiguredModelUnavailableError) kind = "model_error";
   else if (GENERIC_KINDS.has(kind) && /\b(?:safety|blocked|content filter)\b/i.test(message)) kind = "content_blocked";
-  // Google and Z.ai answer an exhausted balance with 429, which no amount of waiting fixes.
+  // Google and Z.ai answer an exhausted balance with 429, so the status alone would advise waiting on a limit that never resets.
   else if (
     (GENERIC_KINDS.has(kind) || kind === "rate_limit") &&
     isAccountBalanceExhaustedError({ type: "api_error", message, retryable: false })
@@ -177,6 +177,8 @@ export function createProviderToolFailure(error: unknown, context: ProviderToolF
         "genai.tips.model_fallback_personal",
         "genai.tips.disable_personal_text_override",
         "genai.tips.api_key_rotation",
+        "genai.tips.reduce_output_tokens",
+        "genai.tips.reduce_output_tokens_personal",
       ].includes(key),
   );
   if (reasonKey === "content_blocked" || reasonKey === "invalid_request") tipKeys = ["genai.tips.revise_tool_request"];

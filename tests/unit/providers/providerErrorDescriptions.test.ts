@@ -190,6 +190,19 @@ describe("public provider error descriptions", () => {
     expect(auth.failure?.suggestedActions).not.toContain(localizedCopy("en-US", "genai.tips.verify_api_key"));
   });
 
+  it("drops the chat reply-length tip, which no tool request reads", () => {
+    for (const credentialScope of ["server", "personal"] as const) {
+      const result = createProviderToolFailure(
+        { message: "HTTP 402: This request requires more credits, or fewer max_tokens.", status: 402 },
+        { locale: "en-US", provider: "openrouter", credentialScope, kind: "quota" },
+      );
+      expect(result.failure?.reason).toBe(localizedCopy("en-US", "genai.tool_failure.credit_limit"));
+      for (const key of ["genai.tips.reduce_output_tokens", "genai.tips.reduce_output_tokens_personal"]) {
+        expect(result.failure?.suggestedActions).not.toContain(localizedCopy("en-US", key));
+      }
+    }
+  });
+
   const googleBody = (code: number, message: string, status: string) =>
     JSON.stringify({ error: { code, message, status } });
   it.each([

@@ -2702,7 +2702,7 @@ function describeComfyUiNodeErrors(nodeErrors: unknown): string[] {
     const errors = isRecord(nodeError) && Array.isArray(nodeError.errors) ? nodeError.errors : [];
     const reasons = errors.filter(isRecord).map((error) => {
       const rejected = describeRejectedComfyUiInput(error);
-      // `details` on a `value_not_in_list` error lists every installed file, which can bury the cause.
+      // ComfyUI's `details` for a rejected value lists every installed file, so naming the input and value keeps the cause from being buried.
       const details = rejected ? `${rejected.inputName} '${rejected.value}'` : error.details;
       return [error.message, details].filter((part) => typeof part === "string" && part).join(": ");
     });

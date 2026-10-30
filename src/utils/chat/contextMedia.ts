@@ -9,6 +9,7 @@ import type { MessageIdMap } from "@/utils/text/messageIdMap";
 import { formatInlineSystemContent } from "@/utils/chat/contextAnnotations";
 import { processEmbedsFromMessage } from "@/utils/chat/contextEmbeds";
 import { resolveForwardChain } from "@/utils/discord/forwardChain";
+import { stickerImage } from "@/utils/discord/stickerImage";
 
 const SUPPORTED_VIDEO_MIME_TYPES = [
   "video/mp4",
@@ -344,13 +345,9 @@ export function appendStickersFromMessage(
 ): number {
   let stickerCount = 0;
   for (const sticker of message.stickers.values()) {
-    const stickerUrl = `https://cdn.discordapp.com/stickers/${sticker.id}.png`;
-    imageAttachments.push({
-      url: stickerUrl,
-      proxyUrl: stickerUrl,
-      mimeType: "image/png",
-      filename: `${sticker.name}.png`,
-    });
+    const image = stickerImage(sticker.client.rest, sticker);
+    if (!image) continue;
+    imageAttachments.push({ ...image, proxyUrl: image.url });
     stickerCount++;
   }
   return stickerCount;

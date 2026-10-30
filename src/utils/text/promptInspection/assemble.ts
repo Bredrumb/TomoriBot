@@ -26,6 +26,7 @@ import { formatTargetEmbedForContext } from "@/utils/chat/contextEmbeds";
 import {
   appendComponentMediaFromMessage,
   appendDocumentAttachmentsFromMessage,
+  appendStickersFromMessage,
   appendSupportedMediaFromMessage,
   getEffectiveAttachmentContentType,
   isSupportedImageAttachmentContentType,
@@ -591,16 +592,7 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
       componentMediaCounts.imageCount > 0 ||
       componentMediaCounts.videoCount > 0;
 
-    for (const sticker of message.stickers.values()) {
-      const stickerUrl = `https://cdn.discordapp.com/stickers/${sticker.id}.png`;
-      imageAttachments.push({
-        url: stickerUrl,
-        proxyUrl: stickerUrl,
-        mimeType: "image/png",
-        filename: `${sticker.name}.png`,
-      });
-      hasLocalMedia = true;
-    }
+    if (appendStickersFromMessage(message, imageAttachments) > 0) hasLocalMedia = true;
 
     if (message.content) {
       for (const pattern of YOUTUBE_URL_PATTERNS) {

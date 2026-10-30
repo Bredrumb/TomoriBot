@@ -236,6 +236,23 @@ describe("Media generation failures", () => {
     }
   });
 
+  it("keeps provider text out of the public image failure reply and offers it behind the gated button", async () => {
+    spyOn(log, "error").mockResolvedValue(undefined);
+    const providerText = "connect ECONNREFUSED 100.64.0.7:8188 at /home/mirri/ComfyUI";
+    spyOn(dispatcher, "generateCustomImageViaEndpoint").mockRejectedValue(new Error(providerText));
+    const { interaction } = makeFakeInteraction({
+      channel: {},
+      options: { getString: (name) => (name === "mode" ? "manual" : null), getBoolean: () => false },
+    });
+    await image({} as Client, interaction as unknown as ChatInputCommandInteraction, createUserRow(), "en-US");
+    const reply = modal.calls.findLast((call) => call.method === "editReply")?.args[0] as {
+      embeds?: EmbedBuilder[];
+      components?: unknown[];
+    };
+    expect(JSON.stringify(reply.embeds)).not.toContain("100.64.0.7");
+    expect(JSON.stringify(reply.components)).toContain("error_full_detail");
+  });
+
   it("classifies real custom image and video HTTP failures as warnings or operational errors", async () => {
     const errorLog = spyOn(log, "error").mockResolvedValue(undefined);
     const warnLog = spyOn(log, "warn").mockImplementation(() => {});
