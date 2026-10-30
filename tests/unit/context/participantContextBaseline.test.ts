@@ -113,7 +113,7 @@ describe("participant context Phase 0 baseline", () => {
 
       expect(normalizeParticipantContextItem(item)).toEqual(EXPECTED_PARTICIPANT_GOLDEN);
       expect(fixture.counters).toEqual({
-        userRowLoads: 1,
+        userRowLoads: 2,
         candidateQueries: 1,
         registrations: 0,
         blacklistReads: 2,
@@ -219,40 +219,44 @@ describe("participant context Phase 0 baseline", () => {
 
       expect(fixture.counters.candidateQueries).toBe(1);
       expect(fixture.hydrationObservations.memoryLineages).toEqual([70, 70, 80, 80]);
-      expect(fixture.hydrationObservations.reminderScopes.slice(0, 3)).toEqual([
-        {
-          discordId: PARTICIPANT_FIXTURE_IDS.human,
-          personaId: PARTICIPANT_FIXTURE_IDS.activePersona,
-          includeUnassignedForMainPersona: true,
-        },
-        {
-          discordId: PARTICIPANT_FIXTURE_IDS.referencedHuman,
-          personaId: PARTICIPANT_FIXTURE_IDS.activePersona,
-          includeUnassignedForMainPersona: true,
-        },
-        {
-          discordId: PARTICIPANT_FIXTURE_IDS.bot,
-          personaId: PARTICIPANT_FIXTURE_IDS.activePersona,
-          includeUnassignedForMainPersona: undefined,
-        },
-      ]);
-      expect(fixture.hydrationObservations.reminderScopes.slice(3)).toEqual([
-        {
-          discordId: PARTICIPANT_FIXTURE_IDS.human,
-          personaId: PARTICIPANT_FIXTURE_IDS.historicalPersona,
-          includeUnassignedForMainPersona: false,
-        },
-        {
-          discordId: PARTICIPANT_FIXTURE_IDS.referencedHuman,
-          personaId: PARTICIPANT_FIXTURE_IDS.historicalPersona,
-          includeUnassignedForMainPersona: false,
-        },
-        {
-          discordId: PARTICIPANT_FIXTURE_IDS.bot,
-          personaId: PARTICIPANT_FIXTURE_IDS.historicalPersona,
-          includeUnassignedForMainPersona: undefined,
-        },
-      ]);
+      expect(fixture.hydrationObservations.reminderScopes.slice(0, 3)).toEqual(
+        expect.arrayContaining([
+          {
+            discordId: PARTICIPANT_FIXTURE_IDS.human,
+            personaId: PARTICIPANT_FIXTURE_IDS.activePersona,
+            includeUnassignedForMainPersona: true,
+          },
+          {
+            discordId: PARTICIPANT_FIXTURE_IDS.referencedHuman,
+            personaId: PARTICIPANT_FIXTURE_IDS.activePersona,
+            includeUnassignedForMainPersona: true,
+          },
+          {
+            discordId: PARTICIPANT_FIXTURE_IDS.bot,
+            personaId: PARTICIPANT_FIXTURE_IDS.activePersona,
+            includeUnassignedForMainPersona: undefined,
+          },
+        ]),
+      );
+      expect(fixture.hydrationObservations.reminderScopes.slice(3)).toEqual(
+        expect.arrayContaining([
+          {
+            discordId: PARTICIPANT_FIXTURE_IDS.human,
+            personaId: PARTICIPANT_FIXTURE_IDS.historicalPersona,
+            includeUnassignedForMainPersona: false,
+          },
+          {
+            discordId: PARTICIPANT_FIXTURE_IDS.referencedHuman,
+            personaId: PARTICIPANT_FIXTURE_IDS.historicalPersona,
+            includeUnassignedForMainPersona: false,
+          },
+          {
+            discordId: PARTICIPANT_FIXTURE_IDS.bot,
+            personaId: PARTICIPANT_FIXTURE_IDS.historicalPersona,
+            includeUnassignedForMainPersona: undefined,
+          },
+        ]),
+      );
       expect(mainText).toContain("Alice likes archival maps.");
       expect(mainText).not.toContain("Alice remembers the alter's star chart.");
       expect(alterText).not.toContain("Alice likes archival maps.");

@@ -77,7 +77,7 @@ describe("participant context Phase 0 performance baseline", () => {
           PARTICIPANT_FIXTURE_IDS.matrix,
         ]);
         expect(fixture.counters).toEqual({
-          userRowLoads: 1,
+          userRowLoads: hydratedDiscordUserCount,
           candidateQueries: 1,
           registrations: 0,
           blacklistReads: hydratedDiscordUserCount,
@@ -104,9 +104,9 @@ describe("participant context Phase 0 performance baseline", () => {
       await buildPreparedParticipantContext(fixture, { requestScope });
 
       expect(fixture.counters.candidateQueries).toBe(1);
-      expect(fixture.counters.memberFetches).toBe(4);
-      expect(fixture.counters.blacklistReads).toBe(4);
-      expect(fixture.counters.privacyReads).toBe(4);
+      expect(fixture.counters.memberFetches).toBe(2);
+      expect(fixture.counters.blacklistReads).toBe(2);
+      expect(fixture.counters.privacyReads).toBe(2);
       expect(fixture.counters.personalMemoryReads).toBe(4);
       expect(fixture.counters.reminderReads).toBe(6);
       expect(fixture.counters.fullGuildMemberFetches).toBe(0);

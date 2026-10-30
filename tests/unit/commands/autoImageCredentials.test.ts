@@ -161,6 +161,7 @@ beforeEach(() => {
       messageIdMap: new MessageIdMap(),
     }),
     spyOn(participants, "prepareParticipantContext").mockResolvedValue({
+      requestScope: participants.createParticipantRequestScope(),
       discoveryPlan: {
         seeds: [],
         evidence: [],
