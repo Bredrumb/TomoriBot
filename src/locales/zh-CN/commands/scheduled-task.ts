@@ -15,12 +15,6 @@ export default {
       no_entries_title: `没有定时任务`,
       no_entries: `目前没有可以编辑的定时任务或提醒。直接让我提醒你，或者让我安排一个任务，就能建好。`,
       confirm_title: `要编辑这个定时任务吗？`,
-      confirm_description: `**内容：** {reminder_purpose}
-**下次触发：** {reminder_time}
-**间隔小时数：** {repetition_interval_hours}
-**类型：** {reminder_type}
-**目标用户：** {target_user}
-**频道：** {target_channel}`,
       modal_title: `编辑定时任务`,
       purpose_input_label: `提醒／任务内容`,
       purpose_input_description: `触发时 bot 看到的文字。`,
@@ -45,12 +39,6 @@ export default {
       no_changes_title: `没有更改`,
       no_changes_description: `定时任务没有更改。`,
       success_title: `定时任务已更新`,
-      success_description: `**内容：** {reminder_purpose}
-**下次触发：** {reminder_time}
-**间隔小时数：** {repetition_interval_hours}
-**类型：** {reminder_type}
-**目标用户：** {target_user}
-**频道：** {target_channel}`,
     },
     remove: {
       description: `移除定时任务或提醒。`,

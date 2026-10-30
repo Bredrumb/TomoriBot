@@ -15,12 +15,6 @@ export default {
       no_entries_title: `Nenhuma Tarefa Agendada`,
       no_entries: `Não há tarefas agendadas ou lembretes para editar. Defina um me pedindo para lembrá-lo ou agendando uma tarefa.`,
       confirm_title: `Editar Esta Tarefa Agendada?`,
-      confirm_description: `**Conteúdo:** {reminder_purpose}
-**Próximo Gatilho:** {reminder_time}
-**Intervalo em Horas:** {repetition_interval_hours}
-**Tipo:** {reminder_type}
-**Usuário Alvo:** {target_user}
-**Canal:** {target_channel}`,
       modal_title: `Editar Tarefa Agendada`,
       purpose_input_label: `Conteúdo do Lembrete/Tarefa`,
       purpose_input_description: `O texto que o bot vê quando isto é acionado.`,
@@ -45,12 +39,6 @@ export default {
       no_changes_title: `Sem Alterações`,
       no_changes_description: `A tarefa agendada não foi alterada.`,
       success_title: `Tarefa Agendada Atualizada`,
-      success_description: `**Conteúdo:** {reminder_purpose}
-**Próximo Gatilho:** {reminder_time}
-**Intervalo em Horas:** {repetition_interval_hours}
-**Tipo:** {reminder_type}
-**Usuário Alvo:** {target_user}
-**Canal:** {target_channel}`,
     },
     remove: {
       description: `Remove uma tarefa agendada ou lembrete.`,

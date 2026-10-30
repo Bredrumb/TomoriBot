@@ -15,12 +15,6 @@ export default {
       no_entries_title: `Không có tác vụ đã lên lịch`,
       no_entries: `Không có tác vụ đã lên lịch hay lời nhắc nào để sửa. Hãy bảo mình nhắc bạn hoặc lên lịch tác vụ.`,
       confirm_title: `Chỉnh sửa tác vụ đã lên lịch này?`,
-      confirm_description: `**Nội dung:** {reminder_purpose}
-**Kích hoạt tiếp theo:** {reminder_time}
-**Khoảng cách (giờ):** {repetition_interval_hours}
-**Loại:** {reminder_type}
-**Người dùng nhận:** {target_user}
-**Kênh:** {target_channel}`,
       modal_title: `Chỉnh sửa tác vụ đã lên lịch`,
       purpose_input_label: `Nội dung lời nhắc/tác vụ`,
       purpose_input_description: `Văn bản mình thấy khi mục này được kích hoạt.`,
@@ -45,12 +39,6 @@ export default {
       no_changes_title: `Không có thay đổi`,
       no_changes_description: `Tác vụ đã lên lịch không thay đổi.`,
       success_title: `Đã cập nhật tác vụ lên lịch`,
-      success_description: `**Nội dung:** {reminder_purpose}
-**Kích hoạt tiếp theo:** {reminder_time}
-**Khoảng cách (giờ):** {repetition_interval_hours}
-**Loại:** {reminder_type}
-**Người dùng nhận:** {target_user}
-**Kênh:** {target_channel}`,
     },
     remove: {
       description: `Xóa tác vụ đã lên lịch hoặc lời nhắc.`,

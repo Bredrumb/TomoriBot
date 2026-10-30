@@ -1744,7 +1744,9 @@ CREATE TABLE IF NOT EXISTS reminders (
   reminder_purpose TEXT NOT NULL,                      -- What the reminder is for
   reminder_time TIMESTAMP WITH TIME ZONE NOT NULL,     -- When to trigger the reminder
   repetition_interval_hours INTEGER,                   -- Optional: repeat interval in hours for recurring reminders
-  self_reminder BOOLEAN DEFAULT false,                 -- Optional: reminder targets the bot itself
+  repetition_interval_months INTEGER,                  -- Optional: repeat interval in calendar months; exclusive with hours
+  repetition_anchor_day SMALLINT,                      -- Day a monthly series returns to after a short month; NULL = reminder_time's day
+  self_reminder BOOLEAN DEFAULT false,               -- Optional: reminder targets the bot itself
   created_by_user_id INT,                              -- User who created this reminder (nullable - set to NULL if user deleted)
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1756,6 +1758,8 @@ CREATE TABLE IF NOT EXISTS reminders (
 SELECT add_column_if_not_exists('reminders', 'persona_id', 'INTEGER');
 -- Recurring reminders: optional repeat interval in hours (January 2026)
 SELECT add_column_if_not_exists('reminders', 'repetition_interval_hours', 'INTEGER');
+SELECT add_column_if_not_exists('reminders', 'repetition_interval_months', 'INTEGER');
+SELECT add_column_if_not_exists('reminders', 'repetition_anchor_day', 'SMALLINT');
 -- Self reminders (January 2026)
 SELECT add_column_if_not_exists('reminders', 'self_reminder', 'BOOLEAN', 'false');
 -- Delivery retries must not replace reminder_time because recurring schedules use it as their cadence anchor.

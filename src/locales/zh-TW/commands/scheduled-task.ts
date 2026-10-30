@@ -15,12 +15,6 @@ export default {
       no_entries_title: `沒有排程任務`,
       no_entries: `沒有排程任務或提醒可以編輯。請叫我提醒你，或請我排一項任務來建立。`,
       confirm_title: `要編輯這項排程任務嗎？`,
-      confirm_description: `**內容：** {reminder_purpose}
-**下次觸發：** {reminder_time}
-**間隔時數：** {repetition_interval_hours}
-**類型：** {reminder_type}
-**目標使用者：** {target_user}
-**頻道：** {target_channel}`,
       modal_title: `編輯排程任務`,
       purpose_input_label: `提醒／任務內容`,
       purpose_input_description: `觸發時 bot 會看到的文字。`,
@@ -45,12 +39,6 @@ export default {
       no_changes_title: `沒有變更`,
       no_changes_description: `排程任務沒有變更。`,
       success_title: `排程任務已更新`,
-      success_description: `**內容：** {reminder_purpose}
-**下次觸發：** {reminder_time}
-**間隔時數：** {repetition_interval_hours}
-**類型：** {reminder_type}
-**目標使用者：** {target_user}
-**頻道：** {target_channel}`,
     },
     remove: {
       description: `移除排程任務或提醒。`,

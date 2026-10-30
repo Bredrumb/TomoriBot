@@ -15,12 +15,6 @@ export default {
       no_entries_title: `スケジュール済みタスクがありません`,
       no_entries: `編集するスケジュール済みタスクやリマインダーがありません。リマインドしてほしい内容を私に伝えるか、タスクを予定してください。`,
       confirm_title: `このスケジュール済みタスクを編集しますか？`,
-      confirm_description: `**内容:** {reminder_purpose}
-**次回実行:** {reminder_time}
-**間隔（時間）:** {repetition_interval_hours}
-**種類:** {reminder_type}
-**対象ユーザー:** {target_user}
-**チャンネル:** {target_channel}`,
       modal_title: `スケジュール済みタスクの編集`,
       purpose_input_label: `リマインダー/タスク内容`,
       purpose_input_description: `実行時にボットが見るテキストです。`,
@@ -45,12 +39,6 @@ export default {
       no_changes_title: `変更はありません`,
       no_changes_description: `スケジュール済みタスクは変更されませんでした。`,
       success_title: `スケジュール済みタスクを更新しました`,
-      success_description: `**内容:** {reminder_purpose}
-**次回実行:** {reminder_time}
-**間隔（時間）:** {repetition_interval_hours}
-**種類:** {reminder_type}
-**対象ユーザー:** {target_user}
-**チャンネル:** {target_channel}`,
     },
     remove: {
       description: `スケジュール済みタスクまたはリマインダーを削除します。`,

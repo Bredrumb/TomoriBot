@@ -1480,6 +1480,7 @@ export const reminderSchema = z.object({
   server_id: z.number(), // Foreign key to servers table
   server_disc_id: z.string().optional(), // Joined routing identity for scheduler-triggered turns
   server_is_dm_channel: z.boolean().optional(), // Joined routing scope for scheduler-triggered turns
+  server_timezone_offset: z.number().optional(), // Joined calendar frame for stepping monthly repeats
   channel_disc_id: z.string(), // Discord channel ID where reminder was set
   user_discord_id: z.string(), // Target user's Discord ID
   user_nickname: z.string(), // Target user's nickname for display
@@ -1489,6 +1490,8 @@ export const reminderSchema = z.object({
   delivery_retry_count: z.number().int().nonnegative().default(0),
   failed_occurrence_count: z.number().int().nonnegative().default(0),
   repetition_interval_hours: z.number().int().nullable().optional(), // Optional: repeat interval in hours
+  repetition_interval_months: z.number().int().nullable().optional(), // Optional: repeat interval in calendar months
+  repetition_anchor_day: z.number().int().nullable().optional(), // Monthly target day after a short-month clamp
   self_reminder: z.boolean().nullable().optional(), // Optional: reminder targets the bot itself
   created_by_user_id: z.number().nullable(), // Who requested the reminder (nullable - set to NULL if user deleted)
   persona_id: z.number().nullable().optional(), // Persona that created the reminder (nullable - fallback to main)

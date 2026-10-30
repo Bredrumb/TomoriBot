@@ -15,12 +15,6 @@ export default {
       no_entries_title: `No hay tareas programadas`,
       no_entries: `No hay tareas programadas ni recordatorios para editar. Configura uno pidiéndome que te recuerde algo o que programe una tarea.`,
       confirm_title: `¿Editar esta tarea programada?`,
-      confirm_description: `**Contenido:** {reminder_purpose}
-**Próxima activación:** {reminder_time}
-**Intervalo en horas:** {repetition_interval_hours}
-**Tipo:** {reminder_type}
-**Usuario objetivo:** {target_user}
-**Canal:** {target_channel}`,
       modal_title: `Editar tarea programada`,
       purpose_input_label: `Contenido del recordatorio/tarea`,
       purpose_input_description: `El texto que el bot verá cuando esto se active.`,
@@ -45,12 +39,6 @@ export default {
       no_changes_title: `Sin cambios`,
       no_changes_description: `La tarea programada no fue modificada.`,
       success_title: `Tarea programada actualizada`,
-      success_description: `**Contenido:** {reminder_purpose}
-**Próxima activación:** {reminder_time}
-**Intervalo en horas:** {repetition_interval_hours}
-**Tipo:** {reminder_type}
-**Usuario objetivo:** {target_user}
-**Canal:** {target_channel}`,
     },
     remove: {
       description: `Elimina una tarea programada o un recordatorio.`,

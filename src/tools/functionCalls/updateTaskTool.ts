@@ -15,6 +15,13 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import { validateFutureTime } from "@/utils/text/processors/timeUtils";
 import {
+  formatReminderRepetition,
+  getReminderRepetition,
+  parseRepetitionArgs,
+  type ReminderRepetition,
+  toRepetitionColumns,
+} from "@/utils/text/processors/reminderRepetition";
+import {
   addMonthsWithOffset,
   formatTimeWithOffset,
   formatUTCOffset,
@@ -50,8 +57,8 @@ export type UpdateTaskArgumentParseResult =
       newPurpose: string;
       isDeleteRequested: boolean;
       newReminderTime?: Date;
-      hasRepetitionIntervalUpdate: boolean;
-      repetitionIntervalHours?: number | null;
+      hasRepetitionUpdate: boolean;
+      repetition?: ReminderRepetition;
     }
   | {
       ok: false;
@@ -104,7 +111,7 @@ export function parseUpdateTaskArguments(
       reminderId: Math.trunc(reminderIdArg),
       newPurpose,
       isDeleteRequested,
-      hasRepetitionIntervalUpdate: false,
+      hasRepetitionUpdate: false,
     };
   }
 
@@ -173,24 +180,9 @@ export function parseUpdateTaskArguments(
     };
   }
 
-  let hasRepetitionIntervalUpdate = false;
-  let repetitionIntervalHours: number | null | undefined;
-  if (hasProvidedArg(args, "repetition_interval_hours")) {
-    const repetitionIntervalHoursArg = args.repetition_interval_hours;
-    if (
-      typeof repetitionIntervalHoursArg !== "number" ||
-      !Number.isSafeInteger(repetitionIntervalHoursArg) ||
-      repetitionIntervalHoursArg < 0
-    ) {
-      return {
-        ok: false,
-        status: "task_update_failed_invalid_args",
-        reason: "The 'repetition_interval_hours' argument must be 0 or an integer greater than or equal to 1.",
-      };
-    }
-
-    hasRepetitionIntervalUpdate = true;
-    repetitionIntervalHours = repetitionIntervalHoursArg > 0 ? repetitionIntervalHoursArg : null;
+  const repetitionArgs = parseRepetitionArgs(args.repetition_interval_hours, args.repetition_interval_months);
+  if (!repetitionArgs.ok) {
+    return { ok: false, status: "task_update_failed_invalid_args", reason: repetitionArgs.reason };
   }
 
   return {
@@ -199,8 +191,8 @@ export function parseUpdateTaskArguments(
     newPurpose,
     isDeleteRequested,
     newReminderTime,
-    hasRepetitionIntervalUpdate,
-    repetitionIntervalHours,
+    hasRepetitionUpdate: repetitionArgs.provided,
+    repetition: repetitionArgs.provided ? repetitionArgs.repetition : undefined,
   };
 }
 
@@ -263,20 +255,10 @@ function formatReminderTime(reminderTime: Date, timezoneOffset: number, locale: 
   )} (${formatUTCOffset(timezoneOffset)})`;
 }
 
-function formatRepeatText(locale: string, repetitionIntervalHours: number | null | undefined): string {
-  if (typeof repetitionIntervalHours === "number" && repetitionIntervalHours >= 1) {
-    return localizer(locale, "reminders.task_update_repeat_hours", {
-      repetition_interval_hours: repetitionIntervalHours,
-    });
-  }
-
-  return localizer(locale, "reminders.task_update_repeat_none");
-}
-
 export class UpdateTaskTool extends BaseTool {
   name = "update_task";
   description =
-    "Replace or delete an existing scheduled task/reminder by ID. Use the reminder ID shown in context (for example, ID:42). Set reminder_purpose to the full replacement content. If reminder_purpose is empty or blank, delete the targeted reminder instead (members with Manage Server may delete any reminder in the server; everyone else only their own). You may optionally reschedule it with reminder_time in YYYY-MM-DD_HH:MM (pass the wall-clock time exactly as the user expressed it. NEVER convert between timezones yourself; it is interpreted in the server timezone unless you set utc_offset to the offset the user spoke in), or relative time parameters such as minutes_from_now/hours_from_now/days_from_now/months_from_now. If no time is provided, keep the existing trigger time. You may optionally set repetition_interval_hours to 0 for one-time, or 1+ for recurring; if omitted, keep the existing repeat interval. Do not use this to change target user, target channel, or whether it is a self task.";
+    "Replace or delete an existing scheduled task/reminder by ID. Use the reminder ID shown in context (for example, ID:42). Set reminder_purpose to the full replacement content. If reminder_purpose is empty or blank, delete the targeted reminder instead (members with Manage Server may delete any reminder in the server; everyone else only their own). You may optionally reschedule it with reminder_time in YYYY-MM-DD_HH:MM (pass the wall-clock time exactly as the user expressed it. NEVER convert between timezones yourself; it is interpreted in the server timezone unless you set utc_offset to the offset the user spoke in), or relative time parameters such as minutes_from_now/hours_from_now/days_from_now/months_from_now. If no time is provided, keep the existing trigger time. You may optionally set repetition_interval_hours (every X hours) or repetition_interval_months (every X calendar months) to 1+ for recurring, or 0 for one-time; if both are omitted, keep the existing repeat interval. Do not use this to change target user, target channel, or whether it is a self task.";
   category = "utility" as const;
 
   parameters: ToolParameterSchema = {
@@ -324,7 +306,12 @@ export class UpdateTaskTool extends BaseTool {
       repetition_interval_hours: {
         type: "number",
         description:
-          "OPTIONAL: Set to 0 for a one-time task/reminder, or 1+ to make it recurring. If omitted, the existing repeat interval is preserved.",
+          "OPTIONAL: Set to 0 for a one-time task/reminder, or 1+ to make it recurring every X hours. If both repeat parameters are omitted, the existing repeat interval is preserved.",
+      },
+      repetition_interval_months: {
+        type: "number",
+        description:
+          "OPTIONAL: Set to 1+ to repeat every X calendar months on the same day and time of day (1 for monthly, 12 for yearly), or 0 for one-time. In months without that day it runs on the last day, then returns to the original day. Cannot be combined with a positive 'repetition_interval_hours'.",
       },
     },
     required: ["reminder_id", "reminder_purpose"],
@@ -463,16 +450,16 @@ export class UpdateTaskTool extends BaseTool {
       return buildFailureResult("task_update_failed_invalid_time", "The updated reminder time must be in the future.");
     }
 
-    const finalRepetitionIntervalHours = parsedArgs.hasRepetitionIntervalUpdate
-      ? (parsedArgs.repetitionIntervalHours ?? null)
-      : (existingReminder.repetition_interval_hours ?? null);
+    const finalRepetition = parsedArgs.hasRepetitionUpdate
+      ? (parsedArgs.repetition ?? null)
+      : getReminderRepetition(existingReminder);
 
     const updateResult = await serverScheduleRepository.updateReminderCoreForRequester({
       reminder_id: parsedArgs.reminderId,
       server_id: tomoriState.server_id,
       reminder_purpose: parsedArgs.newPurpose,
       reminder_time: finalReminderTime,
-      repetition_interval_hours: finalRepetitionIntervalHours,
+      repetition: finalRepetition,
       actor: {
         requester_user_id: actor.requesterUserId,
         requester_discord_id: actor.requesterDiscordId,
@@ -537,7 +524,7 @@ export class UpdateTaskTool extends BaseTool {
             user_nickname: existingReminder.user_nickname,
           })
         : formatReminderTime(finalReminderTime, timezoneOffset, context.locale);
-    const repeatText = formatRepeatText(context.locale, finalRepetitionIntervalHours);
+    const repeatText = formatReminderRepetition(context.locale, finalRepetition);
 
     await sendTaskEmbedWithExpand(
       context,
@@ -568,7 +555,7 @@ export class UpdateTaskTool extends BaseTool {
         reminder_id: parsedArgs.reminderId,
         reminder_purpose: parsedArgs.newPurpose,
         reminder_time: finalReminderTime.toISOString(),
-        repetition_interval_hours: finalRepetitionIntervalHours,
+        ...toRepetitionColumns(finalRepetition),
         self_reminder: existingReminder.self_reminder ?? false,
         target_user: existingReminder.user_nickname,
         target_channel_id: existingReminder.channel_disc_id,

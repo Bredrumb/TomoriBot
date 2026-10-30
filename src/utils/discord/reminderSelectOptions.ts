@@ -2,6 +2,7 @@ import type { ReminderSelectionRow } from "@/utils/db/repositories";
 import type { TomoriState } from "@/types/db/schema";
 import { isBridgeUserId } from "@/utils/bridges";
 import { localizer } from "@/utils/text/localizer";
+import { getReminderRepetition } from "@/utils/text/processors/reminderRepetition";
 import { formatTimeWithOffset, formatUTCOffset } from "@/utils/text/timezoneHelper";
 
 /** Option values both scheduled-task selectors share, keyed for the shared locale placeholders. */
@@ -20,8 +21,9 @@ interface ReminderOptionPartsInput {
   timezoneOffset: number;
   hasManagePermission: boolean;
   viewerUserId: number | undefined;
-  /** Locale key for the repeat suffix, which each command owns. */
+  /** Locale keys for the hourly and monthly repeat suffixes, which each command owns. */
   repeatTextKey: string;
+  repeatMonthsTextKey: string;
   /** Locale key for the creator suffix, which each command owns. */
   managerCreatedByKey: string;
 }
@@ -37,6 +39,7 @@ interface ReminderOptionPartsInput {
  */
 export function buildReminderOptionParts(input: ReminderOptionPartsInput): ReminderOptionParts {
   const { reminder } = input;
+  const repetition = getReminderRepetition(reminder);
   const isMatrixReminder = reminder.created_by_user_id === null && isBridgeUserId(reminder.user_discord_id);
   const creatorName = isMatrixReminder
     ? `${reminder.user_nickname} (Matrix)`
@@ -58,10 +61,11 @@ export function buildReminderOptionParts(input: ReminderOptionPartsInput): Remin
       input.locale,
     ),
     timezone: formatUTCOffset(input.timezoneOffset),
-    repeat_text:
-      typeof reminder.repetition_interval_hours === "number" && reminder.repetition_interval_hours >= 1
-        ? localizer(input.locale, input.repeatTextKey, { hours: reminder.repetition_interval_hours })
-        : "",
+    repeat_text: !repetition
+      ? ""
+      : repetition.unit === "months"
+        ? localizer(input.locale, input.repeatMonthsTextKey, { months: repetition.interval })
+        : localizer(input.locale, input.repeatTextKey, { hours: repetition.interval }),
     manager_created_by_text:
       input.hasManagePermission && reminder.created_by_user_id !== input.viewerUserId
         ? localizer(input.locale, input.managerCreatedByKey, { creator_name: creatorName })

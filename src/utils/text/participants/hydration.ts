@@ -19,6 +19,7 @@ import { formatMemoryWithId } from "@/utils/memory/memoryId";
 import { getUserPresenceDetails } from "@/utils/text/context/history";
 import type { MentionConverter } from "@/utils/text/context/templates";
 import type { MessageProxyConversationUser, PublicPersonaProfile } from "@/utils/text/context/types";
+import { getReminderRepetition } from "@/utils/text/processors/reminderRepetition";
 import {
   buildBridgeUserAliases,
   buildDiscordUserAliases,
@@ -250,7 +251,10 @@ export function canMentionParticipant(seed: ParticipantSeed): boolean {
 }
 
 export function formatPendingReminderForContext(
-  reminder: Pick<ReminderRow, "reminder_id" | "reminder_purpose" | "reminder_time" | "repetition_interval_hours">,
+  reminder: Pick<
+    ReminderRow,
+    "reminder_id" | "reminder_purpose" | "reminder_time" | "repetition_interval_hours" | "repetition_interval_months"
+  >,
   timezoneOffset: number,
 ): string {
   const formattedTime = `${formatTimeWithOffset(new Date(reminder.reminder_time), timezoneOffset, {
@@ -262,10 +266,10 @@ export function formatPendingReminderForContext(
     minute: "2-digit",
   })} (${formatUTCOffset(timezoneOffset)})`;
   const reminderIdPrefix = typeof reminder.reminder_id === "number" ? `ID:${reminder.reminder_id} ` : "";
-  const repeatText =
-    typeof reminder.repetition_interval_hours === "number" && reminder.repetition_interval_hours >= 1
-      ? `, repeats every ${reminder.repetition_interval_hours} hour(s)`
-      : "";
+  const repetition = getReminderRepetition(reminder);
+  const repeatText = repetition
+    ? `, repeats every ${repetition.interval} ${repetition.unit === "months" ? "month(s)" : "hour(s)"}`
+    : "";
 
   return `${reminderIdPrefix}"${reminder.reminder_purpose}" (scheduled for ${formattedTime}${repeatText})`;
 }

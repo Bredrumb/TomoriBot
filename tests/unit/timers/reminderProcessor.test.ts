@@ -14,13 +14,14 @@ import * as realWebhookManager from "@/utils/discord/webhookManager";
 import * as realTomoriChat from "@/events/messageCreate/tomoriChat";
 import * as realLogger from "@/utils/misc/logger";
 import type { QueuedMessageDiscardHandler } from "@/utils/chat/types";
+import type { ReminderOccurrence } from "@/utils/text/processors/reminderRepetition";
 import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
 
 const getDueRemindersMock = mock<typeof realRepositories.serverScheduleRepository.getDueReminders>(async () => []);
 const rescheduleReminderMock = mock(
-  async (_reminderId: number, nextReminderTime: Date, _failedOccurrenceCount?: number) => ({
+  async (_reminderId: number, nextOccurrence: ReminderOccurrence, _failedOccurrenceCount?: number) => ({
     reminder_id: _reminderId,
-    reminder_time: nextReminderTime,
+    reminder_time: nextOccurrence.time,
   }),
 );
 const scheduleReminderRetryMock = mock(
@@ -172,9 +173,9 @@ function makeClient() {
 describe("ReminderProcessor delivery acknowledgement", () => {
   beforeEach(() => {
     getDueRemindersMock.mockImplementation(async () => []);
-    rescheduleReminderMock.mockImplementation(async (_reminderId: number, nextReminderTime: Date) => ({
+    rescheduleReminderMock.mockImplementation(async (_reminderId: number, nextOccurrence: ReminderOccurrence) => ({
       reminder_id: _reminderId,
-      reminder_time: nextReminderTime,
+      reminder_time: nextOccurrence.time,
     }));
     scheduleReminderRetryMock.mockImplementation(
       async (_reminderId: number, nextAttemptAt: Date, deliveryRetryCount: number) => ({
@@ -281,9 +282,9 @@ describe("ReminderProcessor delivery acknowledgement", () => {
 describe("ReminderProcessor delivery retry cap", () => {
   beforeEach(() => {
     getDueRemindersMock.mockImplementation(async () => []);
-    rescheduleReminderMock.mockImplementation(async (_reminderId: number, nextReminderTime: Date) => ({
+    rescheduleReminderMock.mockImplementation(async (_reminderId: number, nextOccurrence: ReminderOccurrence) => ({
       reminder_id: _reminderId,
-      reminder_time: nextReminderTime,
+      reminder_time: nextOccurrence.time,
     }));
     scheduleReminderRetryMock.mockImplementation(
       async (_reminderId: number, nextAttemptAt: Date, deliveryRetryCount: number) => ({
@@ -378,9 +379,9 @@ describe("ReminderProcessor delivery retry cap", () => {
     expect(scheduleReminderRetryMock).toHaveBeenCalledTimes(5);
     expect(rescheduleReminderMock).toHaveBeenCalledTimes(1);
     expect(deleteReminderByIdMock).not.toHaveBeenCalled();
-    const nextOccurrence = rescheduleReminderMock.mock.calls[0]?.[1];
-    expect(nextOccurrence.getTime()).toBeGreaterThan(Date.now());
-    expect((nextOccurrence.getTime() - canonicalTime.getTime()) % (60 * 60 * 1_000)).toBe(0);
+    const nextOccurrence = rescheduleReminderMock.mock.calls[0]?.[1].time;
+    expect(nextOccurrence?.getTime()).toBeGreaterThan(Date.now());
+    expect(((nextOccurrence?.getTime() ?? 0) - canonicalTime.getTime()) % (60 * 60 * 1_000)).toBe(0);
 
     const fallbackPayload = channel.send.mock.calls[0]?.[0] as
       | { embeds?: Array<{ toJSON(): { footer?: { text?: string } } }> }
