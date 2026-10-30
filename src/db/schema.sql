@@ -3633,11 +3633,17 @@ CREATE TABLE IF NOT EXISTS natural_nudge_fires (
   mode                   TEXT NOT NULL CHECK (mode IN ('active', 'idle')),
   category               TEXT CHECK (category IN ('ping_user', 'revive_topic', 'start_topic', 'play_scene')),
   idle_nudge_key            TEXT,
+  topic                  TEXT CHECK (topic IS NULL OR char_length(btrim(topic)) BETWEEN 1 AND 200),
   target_user_id         INT  REFERENCES users(user_id) ON DELETE CASCADE,
   opener_message_disc_id TEXT NOT NULL,
   answered               BOOLEAN,
   detour                 BOOLEAN NOT NULL DEFAULT false,
   fired_at               TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+SELECT add_column_if_not_exists(
+  'natural_nudge_fires', 'topic', 'TEXT', NULL,
+  'CHECK (topic IS NULL OR char_length(btrim(topic)) BETWEEN 1 AND 200)'
 );
 
 CREATE INDEX IF NOT EXISTS idx_natural_nudge_fires_server_time ON natural_nudge_fires(server_id, fired_at);

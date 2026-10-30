@@ -93,6 +93,10 @@ hours come from `stat_counters`:
   decays from its full value.
 - **Waking hours** come from 30 days of `active_hour`, with a fixed local night below 50 turns.
 
+Each delivered idle fire stores its planner topic until the fire is pruned after 30 days; Active Nudge
+fires leave it null. The planner sees the lead persona's five latest idle topics in this server as
+escaped data and must avoid repeating a subject, declining if every fitting nudge would repeat one.
+
 Human `/reward` turns contribute three times as much heat as an ordinary turn; `/punish` contributes
 once. Their `message_sent` rows use `reward` or `punish` as the metric key and still count as one
 message in statistics. `getServerDailyHeatCounts` applies the reward weight before time decay.

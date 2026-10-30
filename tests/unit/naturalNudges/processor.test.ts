@@ -19,11 +19,17 @@ import { NaturalNudgeProcessor } from "@/modules/natural-nudges/runtime/processo
 import * as runnerModule from "@/modules/natural-nudges/runtime/runner";
 import * as targetsModule from "@/modules/natural-nudges/runtime/targets";
 import * as toolsModule from "@/modules/natural-nudges/runtime/tools";
-import { DAY_MS, IDLE_NUDGE_DAILY_PLANNER_CAPS, MAX_PLANNER_NUDGES } from "@/modules/natural-nudges/runtime/tuning";
+import {
+  DAY_MS,
+  IDLE_NUDGE_DAILY_PLANNER_CAPS,
+  MAX_PLANNER_NUDGES,
+  PLANNER_RECENT_TOPICS,
+} from "@/modules/natural-nudges/runtime/tuning";
 import * as personaCache from "@/utils/cache/tomoriStateCache";
 import { statRepository } from "@/utils/db/repositories";
 import { whitelistRepository } from "@/utils/db/repositories/WhitelistRepository";
 import { metricSampleRepository } from "@/utils/db/repositories/MetricSampleRepository";
+import { log } from "@/utils/misc/logger";
 import { createCustomIdleNudge, createPersona } from "../../helpers/fixtures";
 
 const SERVER_ID = 7;
@@ -104,6 +110,7 @@ function fixture(category: NaturalNudgeCategory = "start_topic") {
   const customs = spyOn(naturalNudgeRepository, "listCustomIdleNudges").mockResolvedValue([]);
   const scopes = spyOn(naturalNudgeRepository, "loadPersonaScopes").mockResolvedValue(new Map());
   const run = spyOn(runnerModule, "runIdleNudgeAttempt").mockResolvedValue("aborted");
+  const topics = spyOn(naturalNudgeRepository, "loadRecentIdleNudgeTopics").mockResolvedValue([]);
   const drawPartners = spyOn(partnersModule, "drawScenePartners");
   const history: { recent: NaturalNudgeFireRow[]; latestIdleNudges: NaturalNudgeFireRow[] } = {
     recent: [],
@@ -129,6 +136,7 @@ function fixture(category: NaturalNudgeCategory = "start_topic") {
     customs,
     scopes,
     run,
+    topics,
     spyOn(Math, "random").mockReturnValue(0),
     spyOn(configCache, "readNaturalNudgeGate").mockResolvedValue({
       serverId: SERVER_ID,
@@ -188,12 +196,37 @@ function fixture(category: NaturalNudgeCategory = "start_topic") {
     customs,
     scopes,
     run,
+    topics,
     drawPartners,
     history,
   };
 }
 
 describe("idle nudge shortlist", () => {
+  it("loads only the drawn lead's recent topics, including for scenes", async () => {
+    const { processor, run, topics } = fixture("play_scene");
+    const recentTopics = ["tiny railways", "cello recital"];
+    topics.mockResolvedValue(recentTopics);
+    await processor.processDueIdleNudges();
+    expect(run).toHaveBeenCalledTimes(1);
+    const attempt = run.mock.calls[0][0];
+    expect(attempt.candidates[0].partners.length).toBeGreaterThan(0);
+    expect(topics).toHaveBeenCalledTimes(1);
+    expect(topics).toHaveBeenCalledWith(SERVER_ID, attempt.persona.persona_id, PLANNER_RECENT_TOPICS);
+    expect(attempt.recentTopics).toEqual(recentTopics);
+  });
+
+  it("reports a recent-topic read failure through the Phase A error path", async () => {
+    const { processor, run, topics } = fixture();
+    const failure = new Error("topic read unavailable");
+    topics.mockRejectedValue(failure);
+    const error = spyOn(log, "error").mockResolvedValue(undefined);
+    spies.push(error);
+    await processor.processDueIdleNudges();
+    expect(run).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledWith(expect.any(String), failure, { serverId: SERVER_ID });
+  });
+
   it("skips fire history after the planner budget is spent and resumes at the server's local midnight", async () => {
     setSystemTime(new Date("2030-06-10T10:00:00Z"));
     const { processor, config, run } = fixture();

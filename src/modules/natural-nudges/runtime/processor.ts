@@ -55,6 +55,7 @@ import {
   PERSONA_REST_MS,
   PING_USER_REPEAT_REST_MS,
   PLANNER_HISTORY_MESSAGES,
+  PLANNER_RECENT_TOPICS,
   TALKATIVENESS_TICKETS,
   UNANSWERED_STOP_STREAK,
   WAKING_HOURS_WINDOW_DAYS,
@@ -345,6 +346,11 @@ export class NaturalNudgeProcessor {
       })),
     );
     if (!persona) return "no_eligible_persona";
+    const recentTopics = await naturalNudgeRepository.loadRecentIdleNudgeTopics(
+      server.server_id,
+      persona.persona_id,
+      PLANNER_RECENT_TOPICS,
+    );
     const personaConfig = personaConfigs.get(persona.persona_id) as PersonaNaturalNudgeConfig;
 
     const personaChannels = channelsFor(persona.persona_id);
@@ -511,6 +517,7 @@ export class NaturalNudgeProcessor {
       awake: meters.awake,
       persona,
       interests: personaConfig.interests,
+      recentTopics,
       candidates,
       plannerModel,
       availableTools,
