@@ -1,5 +1,6 @@
 import { ApplicationFlags, Client, GatewayIntentBits, Options, Partials, REST, Routes } from "discord.js";
 import { log } from "@/utils/misc/logger";
+import { setHistoryWindowGatewayConnected } from "@/utils/chat/historyWindow";
 import { healthTracker } from "@/utils/misc/healthTracker";
 import type { AppEnvironment } from "@/types/config";
 import { shouldRejectWebhookRateLimit } from "@/utils/discord/webhook/avatarEditRateLimit";
@@ -198,18 +199,21 @@ export function createDiscordClient(
   // disconnect would re-arm error level for the next attempt of the same outage, which is the
   // repetition the reporter exists to absorb.
   client.on("shardReady", (shardId) => {
+    setHistoryWindowGatewayConnected(shardId, true);
     gatewayErrorReporter.reset(shardId);
     healthTracker.recordGatewayConnected();
     log.rateLimit(`Discord gateway shard ready (shard ${shardId})`, { shardId });
   });
 
   client.on("shardResume", (shardId, replayedEvents) => {
+    setHistoryWindowGatewayConnected(shardId, true);
     gatewayErrorReporter.reset(shardId);
     healthTracker.recordGatewayConnected();
     log.rateLimit(`Discord gateway session resumed (shard ${shardId})`, { shardId, replayedEvents });
   });
 
   client.on("shardDisconnect", (event, shardId) => {
+    setHistoryWindowGatewayConnected(shardId, false);
     log.rateLimit(`Discord gateway disconnected (shard ${shardId})`, {
       code: event.code,
       reason: event.reason ?? "",
@@ -218,6 +222,7 @@ export function createDiscordClient(
   });
 
   client.on("shardReconnecting", (shardId) => {
+    setHistoryWindowGatewayConnected(shardId, false);
     log.rateLimit(`Discord gateway reconnecting (shard ${shardId})`, { shardId });
   });
 

@@ -711,7 +711,7 @@ export class StreamUiUpdater {
       sprite: viaWebhook ? sprite : undefined,
       serverDiscId: "guildId" in context.channel ? context.channel.guildId : undefined,
     };
-    recordPersonaDelivery(receipt);
+    recordPersonaDelivery(receipt, message);
     context.deliveryReceipts?.push(receipt);
   }
 

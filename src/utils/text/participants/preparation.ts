@@ -1,4 +1,4 @@
-import type { Client } from "discord.js";
+import type { Client, Guild, GuildMember } from "discord.js";
 import type { TomoriState, UserRow } from "@/types/db/schema";
 import type { ContributionExecutionDiagnostic } from "@/utils/contributions/registry";
 import type {
@@ -26,6 +26,7 @@ import type { ParticipantProfileEnricherRegistry } from "@/utils/text/participan
 
 export interface ParticipantRequestScope {
   discoveries: Map<string, Promise<CachedParticipantDiscovery>>;
+  memberFetches: Map<string, Promise<GuildMember | null>>;
 }
 
 interface ParticipantPreparationExternalCalls {
@@ -46,6 +47,7 @@ interface ParticipantPreparationDiagnostics {
 }
 
 export interface PreparedParticipantContext {
+  requestScope: ParticipantRequestScope;
   discoveryPlan: ParticipantDiscoveryPlan;
   matrixUsers: ReadonlyMap<string, string>;
   syntheticUsers: ReadonlyMap<string, { displayName: string; type: "persona" | "webhook" }>;
@@ -93,7 +95,20 @@ const EMPTY_REJECTION_COUNTS: Record<ParticipantDiscoveryRejectionReason, number
 };
 
 export function createParticipantRequestScope(): ParticipantRequestScope {
-  return { discoveries: new Map() };
+  return { discoveries: new Map(), memberFetches: new Map() };
+}
+
+export function fetchParticipantMember(
+  guild: Guild,
+  discordId: string,
+  requestScope?: ParticipantRequestScope,
+): Promise<GuildMember | null> {
+  const key = `${guild.id}:${discordId}`;
+  const cached = requestScope?.memberFetches.get(key);
+  if (cached) return cached;
+  const promise = guild.members.fetch(discordId).catch(() => null);
+  requestScope?.memberFetches.set(key, promise);
+  return promise;
 }
 
 export async function prepareParticipantContext(
@@ -146,6 +161,7 @@ export async function prepareParticipantContext(
   for (const rejection of discoveryPlan.rejections) rejectionCounts[rejection.reason] += rejection.count;
 
   return {
+    requestScope,
     discoveryPlan,
     matrixUsers: frozen.matrixUsers,
     syntheticUsers: frozen.syntheticUsers,

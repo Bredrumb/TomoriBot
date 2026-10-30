@@ -23,6 +23,7 @@ import type {
 } from "@/utils/chat/types";
 import { parseIntegerEnvFlag } from "@/utils/misc/envFlags";
 import { getMessageProxyMessageRecord } from "@/utils/messageProxy/proxyExpectation";
+import type { ChannelHistoryWindow } from "@/utils/chat/historyWindow";
 
 export const CHANNEL_LOCK_TIMEOUT_MS = parseIntegerEnvFlag(process.env.CHANNEL_LOCK_TIMEOUT_MS, 180000, 10000);
 const DISCORD_TYPING_KEEPALIVE_INTERVAL_MS = 8000;
@@ -72,6 +73,8 @@ export type QueuedMessage = {
 };
 
 export interface ChannelLockEntry {
+  historyWindow?: ChannelHistoryWindow;
+  pendingHistoryReplay?: QueuedMessage;
   isLocked: boolean;
   lockedAt: number;
   currentMessageId?: string;
@@ -141,6 +144,10 @@ export async function runWithChannelLock<T>(
   releaseStaleChannelLockIfExpired(channelId, lockEntry);
 
   const userDiscId = admission.userDiscId ?? admission.message.author.id;
+  if (!admission.incoming.isFromQueue || lockEntry.pendingHistoryReplay?.message.id !== admission.message.id) {
+    lockEntry.historyWindow = undefined;
+  }
+  lockEntry.pendingHistoryReplay = undefined;
   acquireChannelLockForTurn(lockEntry, {
     messageId: admission.message.id,
     userDiscId,
@@ -267,6 +274,8 @@ export function releaseStaleChannelLockIfExpired(channelId: string, lockEntry: C
   lockEntry.activeStreamKill?.(new Error("SDK_CALL_TIMEOUT: stale lock forcibly released"));
   lockEntry.activeStreamKill = null;
   stopDiscordTypingKeepalive(channelId, lockEntry, "stale_lock_release");
+  lockEntry.historyWindow = undefined;
+  lockEntry.pendingHistoryReplay = undefined;
   lockEntry.isLocked = false;
   lockEntry.userDiscId = undefined;
   lockEntry.activeProxyIdentityUserDiscId = undefined;
@@ -691,8 +700,11 @@ export function releaseChannelLockAndReplayQueue(args: {
 
   const nextMessageData = args.lockEntry.messageQueue.shift();
   if (!nextMessageData) {
+    args.lockEntry.historyWindow = undefined;
+    args.lockEntry.pendingHistoryReplay = undefined;
     return;
   }
+  args.lockEntry.pendingHistoryReplay = nextMessageData;
 
   log.info(
     `Processing next message ${nextMessageData.message.id} from queue for channel ${args.channelId}. ` +
@@ -700,10 +712,18 @@ export function releaseChannelLockAndReplayQueue(args: {
   );
 
   setImmediate(() => {
-    args.processQueuedMessage(nextMessageData).catch((error) => {
-      log.error(`Error processing queued message ${nextMessageData.message.id}:`, error);
-      discardQueuedMessages([nextMessageData], "queued_processing_failed");
-    });
+    void args
+      .processQueuedMessage(nextMessageData)
+      .catch((error) => {
+        log.error(`Error processing queued message ${nextMessageData.message.id}:`, error);
+        discardQueuedMessages([nextMessageData], "queued_processing_failed");
+      })
+      .finally(() => {
+        if (args.lockEntry.pendingHistoryReplay === nextMessageData) {
+          args.lockEntry.historyWindow = undefined;
+          args.lockEntry.pendingHistoryReplay = undefined;
+        }
+      });
   });
 }
 
@@ -737,16 +757,27 @@ export async function startDiscordTypingKeepalive(
   messageId: string,
 ): Promise<void> {
   stopDiscordTypingKeepalive(channel.id, lockEntry, "restart");
+  const controller = lockEntry.activeTurnAbortController;
+  const ownsTurn = () =>
+    lockEntry.isLocked &&
+    lockEntry.currentMessageId === messageId &&
+    lockEntry.activeTurnAbortController === controller &&
+    !controller?.signal.aborted;
   await refreshDiscordTypingIndicator(channel, "lock_scope_start");
-  lockEntry.typingKeepaliveTimer = setInterval(() => {
+  if (!ownsTurn()) {
+    return;
+  }
+  const timer = setInterval(() => {
     // Not gated on stop requests: internal and follow-up stops are cleared while the turn keeps the lock.
-    if (!lockEntry.isLocked || lockEntry.currentMessageId !== messageId) {
-      stopDiscordTypingKeepalive(channel.id, lockEntry, "lock_scope_end");
+    if (!ownsTurn()) {
+      clearInterval(timer);
+      if (lockEntry.typingKeepaliveTimer === timer) lockEntry.typingKeepaliveTimer = null;
       return;
     }
 
     void refreshDiscordTypingIndicator(channel, "lock_scope_keepalive");
   }, DISCORD_TYPING_KEEPALIVE_INTERVAL_MS);
+  lockEntry.typingKeepaliveTimer = timer;
 
   log.info(
     `Discord typing keepalive started for channel ${channel.id} (message ${messageId}, interval ${DISCORD_TYPING_KEEPALIVE_INTERVAL_MS}ms).`,
@@ -788,6 +819,8 @@ export function getChannelTurnAbortSignal(channelId: string): AbortSignal | unde
 export function forceKillChannelStream(channelId: string): boolean {
   const lockEntry = channelLocks.get(channelId);
   if (!lockEntry) return false;
+  lockEntry.historyWindow = undefined;
+  lockEntry.pendingHistoryReplay = undefined;
   let killed = false;
   if (lockEntry.activeTurnAbortController) {
     lockEntry.activeTurnAbortController.abort();
@@ -802,6 +835,10 @@ export function forceKillChannelStream(channelId: string): boolean {
 
 export function clearChannelProcessingQueue(channelId: string): number {
   const lockEntry = channelLocks.get(channelId);
+  if (lockEntry) {
+    lockEntry.historyWindow = undefined;
+    lockEntry.pendingHistoryReplay = undefined;
+  }
   if (!lockEntry || lockEntry.messageQueue.length === 0) {
     return 0;
   }
@@ -958,6 +995,10 @@ export function isNudgeOutputActive(channelId: string): boolean {
 
 function discardQueuedMessages(messages: QueuedMessage[], reason: QueuedMessageDiscardReason): void {
   for (const queuedMessage of messages) {
+    const entry = channelLocks.get(queuedMessage.message.channelId);
+    if (entry && !entry.isLocked && entry.messageQueue.length === 0 && !entry.pendingHistoryReplay) {
+      entry.historyWindow = undefined;
+    }
     if (!queuedMessage.onQueueDiscard) {
       continue;
     }

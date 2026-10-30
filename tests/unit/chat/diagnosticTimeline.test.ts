@@ -90,6 +90,15 @@ describe("chat troubleshooting timeline", () => {
     const trigger = incoming();
     await runWithChatDiagnostic(trigger, async () => {
       recordChatDiagnostic({ kind: "admission", disposition: "run" });
+      recordChatDiagnostic({ kind: "typing_started" });
+      recordChatDiagnostic({
+        kind: "context_built",
+        historyFetchMs: 12,
+        replyFetches: 2,
+        participantMs: 8,
+        nativeMs: 25,
+      });
+      recordChatDiagnostic({ kind: "provider_first_chunk" });
       recordChatContextHistory(
         [
           { id: triggerId, authorId: ownerId, isBot: false, createdAt: trigger.message.createdTimestamp },
@@ -120,6 +129,13 @@ describe("chat troubleshooting timeline", () => {
 
     const report = getChatDiagnostic({ ownerId, channelId, guildId });
     expect(report?.invocationCount).toBe(2);
+    expect(report?.events.map(({ event }) => event)).toEqual(
+      expect.arrayContaining([
+        { kind: "typing_started" },
+        { kind: "context_built", historyFetchMs: 12, replyFetches: 2, participantMs: 8, nativeMs: 25 },
+        { kind: "provider_first_chunk" },
+      ]),
+    );
     expect(report?.events.some(({ event }) => event.kind === "tool_continuation")).toBe(false);
     const context = report?.events.find(({ event }) => event.kind === "context_history")?.event;
     expect(context?.kind).toBe("context_history");

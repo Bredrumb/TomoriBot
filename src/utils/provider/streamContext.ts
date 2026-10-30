@@ -106,6 +106,7 @@ export function buildStreamContext(params: BuildStreamContextParams): StreamCont
     naiContinuationPrefill: streamingContext?.naiContinuationPrefill,
 
     abortSignal: streamingContext?.abortSignal,
+    onStreamProgress: streamingContext?.onStreamProgress,
 
     emptyResponseRetryCount: streamingContext?.emptyResponseRetryCount,
 

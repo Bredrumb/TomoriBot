@@ -1,3 +1,4 @@
+import { clearUserCache } from "@/utils/cache/userCache";
 import { Collection, type Client, type GuildMember } from "discord.js";
 import type {
   AssembledServerConfig,
@@ -148,6 +149,7 @@ function createMessage(
  * in a `finally` block so the shared Bun test process cannot retain the fakes.
  */
 export function createParticipantContextFixture(): ParticipantContextFixture {
+  clearUserCache();
   const counters: ParticipantFixtureCounters = {
     userRowLoads: 0,
     candidateQueries: 0,
@@ -398,6 +400,7 @@ export function createParticipantContextFixture(): ParticipantContextFixture {
     restoreRepositories() {
       if (restored) return;
       restored = true;
+      clearUserCache();
       userRepository.loadByDiscordId = originals.loadByDiscordId;
       userRepository.loadContextReferenceCandidates = originals.loadContextReferenceCandidates;
       userRepository.register = originals.register;
@@ -482,6 +485,7 @@ export async function buildPreparedParticipantContext(
     publicPersonaProfiles: prepared.publicPersonaProfiles,
     preloadedReferencedUserRows: prepared.referencedUserRows,
     referencedUserIds: prepared.referencedUserIds,
+    requestScope: prepared.requestScope,
     toolPromptMacroResolver: { expand: async (text) => text },
     conversationCorpus: fixture.history
       .map((message) => message.content ?? "")

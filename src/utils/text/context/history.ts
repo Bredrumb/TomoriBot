@@ -7,6 +7,7 @@ import {
 } from "@/types/misc/context";
 import type { SimplifiedMessageForContext } from "./types";
 import { log } from "@/utils/misc/logger";
+import { fetchParticipantMember, type ParticipantRequestScope } from "@/utils/text/participants/preparation";
 
 export const MEDIA_IMAGE_MESSAGE_LIMIT = (() => {
   const parsed = Number.parseInt(process.env.MEDIA_IMAGE_MESSAGE_LIMIT || "3", 10);
@@ -185,6 +186,7 @@ export async function getUserPresenceDetails(
   userId: string,
   guildId: string,
   preloadedMember?: import("discord.js").GuildMember | null,
+  requestScope?: ParticipantRequestScope,
 ): Promise<string> {
   try {
     const guild = client.guilds.cache.get(guildId);
@@ -204,12 +206,7 @@ export async function getUserPresenceDetails(
     if (preloadedMember && preloadedMember.id === userId) {
       member = preloadedMember;
     } else {
-      // force:true fetches fresh member metadata (roles, nickname) via REST,
-      // but presence data is gateway-only and comes from guild.presences.cache
-      member = await guild.members.fetch({ user: userId }).catch((error) => {
-        log.warn(`Failed to fetch member ${userId}: ${error}`);
-        return null;
-      });
+      member = await fetchParticipantMember(guild, userId, requestScope);
     }
 
     if (!member) {

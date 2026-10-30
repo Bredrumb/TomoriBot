@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, mock, spyOn } from "bun:test";
 import { Collection, type Client, type GuildMember, type User } from "discord.js";
 import {
   PrivacyLevel,
@@ -23,6 +23,11 @@ import { aliasesForPurpose } from "@/utils/text/participants/aliases";
 import { createBotKey, createDiscordUserKey, type ParticipantSeed } from "@/utils/text/participants/identity";
 import { renderParticipantPrompt } from "@/utils/text/participants/renderer";
 import type { PersonaNamingConfig } from "@/types/personaNaming";
+
+import { getCachedUserRow, clearUserCache } from "@/utils/cache/userCache";
+import { userRepository } from "@/utils/db/repositories/UserRepository";
+import * as dbClient from "@/utils/db/client";
+import { createUserRow as createSharedUserRow } from "../../helpers/fixtures";
 
 const GUILD_ID = "100000000000000001";
 const CHANNEL_ID = "200000000000000001";
@@ -873,4 +878,106 @@ describe("service-owned message-proxy presentation", () => {
     expect(rendered).not.toMatch(/shared account|\bmember\b|plural system/iu);
     expect(fixture.memberLoads).not.toContain(identityUserId);
   });
+});
+
+describe("bounded participant hydration", () => {
+  it("keeps both hydration phases within four seeds and renders in seed order", async () => {
+    const ids = Array.from({ length: 6 }, (_, index) => `40000000000000001${index}`);
+    const seeds = ids.map((id, index) => ({
+      ...createHumanSeed(),
+      key: createDiscordUserKey(id),
+      firstSeenOrder: index,
+    }));
+    const fixture = createFixture({ participantSeeds: [...seeds, createBotSeed()] });
+    const rowGates = ids.map(() => Promise.withResolvers<UserRow | null>());
+    const memoryGates = ids.map(() => Promise.withResolvers<PersonalMemoryRow[]>());
+    const rowStarts = ids.map(() => Promise.withResolvers<void>());
+    const memoryStarts = ids.map(() => Promise.withResolvers<void>());
+    const completed: number[] = [];
+    let rowsInFlight = 0;
+    let memoriesInFlight = 0;
+    let maxRows = 0;
+    let maxMemories = 0;
+    const result = hydrateParticipantProfiles(fixture.params, {
+      ...fixture.dependencies,
+      loadUserRow: async (id) => {
+        const index = ids.indexOf(id);
+        maxRows = Math.max(maxRows, ++rowsInFlight);
+        rowStarts[index].resolve();
+        const row = await rowGates[index].promise;
+        rowsInFlight--;
+        return row;
+      },
+      loadPersonalMemories: async (userId) => {
+        const index = userId - 100;
+        maxMemories = Math.max(maxMemories, ++memoriesInFlight);
+        memoryStarts[index].resolve();
+        const memories = await memoryGates[index].promise;
+        completed.push(index);
+        memoriesInFlight--;
+        return memories;
+      },
+    });
+    await Promise.all(rowStarts.slice(0, 4).map((gate) => gate.promise));
+    for (const index of [3, 4, 5, 2, 1, 0]) {
+      await rowStarts[index].promise;
+      rowGates[index].resolve(
+        createSharedUserRow({ user_id: 100 + index, user_disc_id: ids[index], user_nickname: `Member ${index}` }),
+      );
+    }
+    await Promise.all(memoryStarts.slice(0, 4).map((gate) => gate.promise));
+    for (const index of [3, 4, 5, 2, 1, 0]) {
+      await memoryStarts[index].promise;
+      memoryGates[index].resolve([]);
+    }
+    const hydrated = await result;
+    expect(maxRows).toBe(4);
+    expect(maxMemories).toBe(4);
+    expect(completed).toEqual([3, 4, 5, 2, 1, 0]);
+    expect(hydrated.profiles.map((profile) => profile.key)).toEqual([
+      ...seeds.map((seed) => seed.key),
+      createBotSeed().key,
+    ]);
+    expect(hydrated.profiles.slice(0, 6).map((profile) => profile.displayName)).toEqual(
+      ids.map((_, index) => `Member ${index}`),
+    );
+  });
+});
+
+it("registers a missing participant and invalidates the cached missing row", async () => {
+  clearUserCache();
+  const fixture = createFixture();
+  const row = createSharedUserRow({ user_disc_id: USER_ID, user_nickname: null });
+  let registered = false;
+  const load = spyOn(userRepository, "loadByDiscordId").mockImplementation(async () => (registered ? row : null));
+  const privacy = spyOn(userRepository, "getPrivacyLevel").mockResolvedValue(PrivacyLevel.MINIMAL);
+  const blacklist = spyOn(userRepository, "isBlacklisted").mockResolvedValue(false);
+  const tx = (async () => [{ user_id: row.user_id }]) as unknown as typeof dbClient.sql;
+  const sqlSpy = spyOn(dbClient, "sql");
+  const begin = mock(async (callback: (transaction: typeof dbClient.sql) => Promise<unknown>) => {
+    registered = true;
+    return callback(tx);
+  });
+  Object.assign(sqlSpy, { begin });
+  const {
+    loadUserRow: _load,
+    registerUser: _register,
+    isBlacklisted: _blacklist,
+    getPrivacyLevel: _privacy,
+    ...overrides
+  } = fixture.dependencies;
+  try {
+    expect(await getCachedUserRow(USER_ID)).toBeNull();
+    const result = await hydrateParticipantProfiles(fixture.params, overrides);
+    expect(begin).toHaveBeenCalled();
+    expect(registered).toBe(true);
+    expect(
+      result.profiles.some((profile) => profile.key.kind === "discord_user" && profile.key.discordId === USER_ID),
+    ).toBe(true);
+    expect(result.diagnostics.externalCalls.registrations).toBe(1);
+    expect(await getCachedUserRow(USER_ID)).toEqual(row);
+  } finally {
+    for (const spy of [sqlSpy, blacklist, privacy, load]) spy.mockRestore();
+    clearUserCache();
+  }
 });

@@ -13,6 +13,7 @@
  * - Convert Google chunks to normalized ProcessedChunk format
  */
 
+import { mapWithConcurrency } from "@/utils/async/bounded";
 import {
   BlockedReason,
   type Content,
@@ -1027,8 +1028,8 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
       if (isSystemInstructionContextItem(item)) {
         if (itemTextContent) systemInstructionParts.push(itemTextContent);
       } else if (item.role === "user" || item.role === "model") {
-        const geminiParts: Part[] = [];
-        for (const part of item.parts) {
+        const partsByInput = await mapWithConcurrency(item.parts, 4, async (part) => {
+          const geminiParts: Part[] = [];
           if (part.type === "text") {
             geminiParts.push({ text: part.text });
           } else if (part.type === "image" && !seesImages) {
@@ -1045,9 +1046,7 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
                 if (process.env.RUN_ENV === "production") {
                   geminiParts.push({ text: buildGifUrlPlaceholder(part.uri) });
 
-                  log.info(
-                    `GoogleStreamAdapter: GIF detected in production mode, replaced with placeholder: ${part.uri}`,
-                  );
+                  log.info(`GoogleStreamAdapter: GIF detected in production mode, replaced with placeholder`);
                 } else {
                   geminiParts.push({
                     text: buildGifToolHint({
@@ -1077,14 +1076,14 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
                 try {
                   const optimized = await fetchAndOptimizeImage(fallback, part.mimeType);
                   geminiParts.push({ inlineData: { mimeType: optimized.mimeType, data: optimized.data } });
-                  log.info(`GoogleStreamAdapter: Image loaded via fallback CDN URL ${fallback}`);
+                  log.info(`GoogleStreamAdapter: Image loaded via fallback CDN`);
                 } catch (fallbackErr) {
-                  log.warn(`GoogleStreamAdapter: Image processing error (proxy + CDN both failed) ${part.uri}`, {
+                  log.warn(`GoogleStreamAdapter: Image processing error (proxy + CDN both failed)`, {
                     error: fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
                   });
                 }
               } else {
-                log.warn(`GoogleStreamAdapter: Image processing error ${part.uri}`, {
+                log.warn(`GoogleStreamAdapter: Image processing error`, {
                   error: imgErr instanceof Error ? imgErr.message : String(imgErr),
                 });
               }
@@ -1204,7 +1203,9 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
               });
             }
           }
-        }
+          return geminiParts;
+        });
+        const geminiParts = partsByInput.flat();
 
         if (geminiParts.length > 0) {
           dialogueContents.push({ role: item.role, parts: geminiParts });
