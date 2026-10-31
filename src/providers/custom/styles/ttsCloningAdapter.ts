@@ -6,6 +6,7 @@ import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import { stripTtsUnsupportedEmojiAttempts } from "@/utils/text/emojiHelper";
 import { loadVoiceSampleById } from "@/utils/db/repositories/SpeechRepository";
 import { resolveTtsSynthesizeTimeoutMs } from "@/providers/custom/styles/ttsSynthesizeTimeout";
+import { getEndpointRemotePolicy } from "@/utils/security/remoteUrlSecurity";
 
 /** Timeout for local /synthesize requests, configurable via env. */
 const TTS_SYNTHESIZE_TIMEOUT_MS = resolveTtsSynthesizeTimeoutMs();
@@ -231,12 +232,16 @@ export async function synthesizeSpeechViaTtsCloneBuffer(request: TtsCloneBufferR
     const abortController = new AbortController();
     const timer = setTimeout(() => abortController.abort(), TTS_SYNTHESIZE_TIMEOUT_MS);
     try {
-      response = await fetchUserRemoteUrl(`${endpointUrl}/synthesize`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(body),
-        signal: abortSignal ? AbortSignal.any([abortController.signal, abortSignal]) : abortController.signal,
-      });
+      response = await fetchUserRemoteUrl(
+        `${endpointUrl}/synthesize`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify(body),
+          signal: abortSignal ? AbortSignal.any([abortController.signal, abortSignal]) : abortController.signal,
+        },
+        getEndpointRemotePolicy(),
+      );
     } finally {
       clearTimeout(timer);
     }

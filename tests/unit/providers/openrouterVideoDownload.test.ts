@@ -5,6 +5,7 @@ import {
   readBoundedProcessOutput,
 } from "@/providers/openrouter/openrouterVideoGeneration";
 import { PROVIDER_VIDEO_DOWNLOAD_MAX_MB } from "@/providers/utils/providerVideoDownload";
+import { STUB_PUBLIC_HOST, stubGlobalFetch } from "../../helpers/fetchStub";
 
 describe("OpenRouter video download bounds", () => {
   let server: ReturnType<typeof Bun.serve> | undefined;
@@ -60,38 +61,38 @@ describe("OpenRouter video download bounds", () => {
   it("downloads a third-party video anonymously, refusing one past the size cap", async () => {
     const authorization: Array<string | null> = [];
     const oversized = PROVIDER_VIDEO_DOWNLOAD_MAX_MB * 1024 * 1024 + 1;
-    server = Bun.serve({
-      hostname: "127.0.0.1",
-      port: 0,
-      fetch: (request) => {
-        authorization.push(request.headers.get("authorization"));
-        const path = new URL(request.url).pathname;
-        if (path === "/missing.mp4") return new Response("gone", { status: 404 });
-        if (path === "/huge.mp4") {
-          const chunk = new Uint8Array(1024 * 1024);
-          let sent = 0;
-          return new Response(
-            new ReadableStream({
-              pull(controller) {
-                if (sent >= oversized) return controller.close();
-                sent += chunk.byteLength;
-                controller.enqueue(chunk);
-              },
-            }),
-          );
-        }
-        return new Response(Buffer.from("small-video"));
-      },
+    const fetchSpy = stubGlobalFetch((input, init) => {
+      authorization.push(new Headers(init?.headers).get("authorization"));
+      const path = new URL(input instanceof Request ? input.url : input).pathname;
+      if (path === "/missing.mp4") return new Response("gone", { status: 404 });
+      if (path === "/huge.mp4") {
+        const chunk = new Uint8Array(1024 * 1024);
+        let sent = 0;
+        return new Response(
+          new ReadableStream({
+            pull(controller) {
+              if (sent >= oversized) return controller.close();
+              sent += chunk.byteLength;
+              controller.enqueue(chunk);
+            },
+          }),
+        );
+      }
+      return new Response(Buffer.from("small-video"));
     });
-    const base = `http://127.0.0.1:${server.port}`;
+    const base = `https://${STUB_PUBLIC_HOST}`;
 
-    const small = await downloadOpenRouterVideo(`${base}/ok.mp4`, "sk-or-synthetic-canary", undefined);
-    expect(small.videoData?.toString()).toBe("small-video");
-    const huge = await downloadOpenRouterVideo(`${base}/huge.mp4`, "sk-or-synthetic-canary", undefined);
-    expect(huge.videoData).toBeNull();
-    const missing = await downloadOpenRouterVideo(`${base}/missing.mp4`, "sk-or-synthetic-canary", undefined);
-    expect(missing.status).toBe(404);
-    expect(authorization).toEqual([null, null, null]);
+    try {
+      const small = await downloadOpenRouterVideo(`${base}/ok.mp4`, "sk-or-synthetic-canary", undefined);
+      expect(small.videoData?.toString()).toBe("small-video");
+      const huge = await downloadOpenRouterVideo(`${base}/huge.mp4`, "sk-or-synthetic-canary", undefined);
+      expect(huge.videoData).toBeNull();
+      const missing = await downloadOpenRouterVideo(`${base}/missing.mp4`, "sk-or-synthetic-canary", undefined);
+      expect(missing.status).toBe(404);
+      expect(authorization).toEqual([null, null, null]);
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
   // The PowerShell helper only runs on Windows hosts, where OpenRouter's storage redirect must come

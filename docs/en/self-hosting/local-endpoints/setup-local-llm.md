@@ -204,5 +204,6 @@ model at Q8**.
   `http://host.docker.internal:<port>` (Windows/macOS) or the host's LAN IP, and bind the
   model server to `0.0.0.0`.
 - **Private addresses follow `ALLOW_PRIVATE_NETWORK`.** It is on unless `.env`
-  sets it to `false`. Plain HTTP works only for `localhost`; LAN hosts need HTTPS. `FETCH_URL_ALLOW_PRIVATE_NETWORK` is a separate
+  sets it to `false`, and while it is on, endpoints on `localhost`, LAN hosts, and
+  `host.docker.internal` work over plain HTTP. `FETCH_URL_ALLOW_PRIVATE_NETWORK` is a separate
   setting for the `fetch_url` tool and does not change endpoint rules.

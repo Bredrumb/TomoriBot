@@ -55,9 +55,10 @@ Once you run the command, you'll pick one of two paths:
 
 The wizard asks whether TomoriBot may reach `localhost` and your LAN, and saves the answer as
 `ALLOW_PRIVATE_NETWORK` in `.env`. Keep it on (the default) if only you or a trusted Discord
-community uses the bot, so local models and MCP servers work. Turn it off if untrusted members use
-the bot, because the endpoints they add and the links they post could then make the bot send
-requests into your network.
+community uses the bot, so local models and MCP servers work, including over plain HTTP. Turn it off
+if untrusted members use the bot, because the custom endpoints and MCP servers they add could then
+make the bot send requests into your network. Links and attachments that members post never reach
+private addresses, whatever you choose.
 With it off, a local model still works through an HTTPS tunnel such as Cloudflare Tunnel or ngrok.
 
 ### Full Install extras

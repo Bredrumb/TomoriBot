@@ -87,6 +87,7 @@ import { parseCustomProvider } from "@/utils/provider/customProviderUtils";
 import { buildCustomHeaders } from "@/providers/custom/customOpenAICompatibleUtils";
 import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
 import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
+import { getEndpointRemotePolicy } from "@/utils/security/remoteUrlSecurity";
 
 /**
  * Default model name placeholder for custom provider
@@ -174,14 +175,18 @@ export class CustomProvider
       throw new Error("Custom embedding endpoint is not configured.");
     }
 
-    const response = await fetchUserRemoteUrl(`${endpointUrl.replace(/\/+$/, "")}/embeddings`, {
-      method: "POST",
-      headers: buildCustomHeaders(request.apiKey),
-      body: JSON.stringify({
-        model: modelName,
-        input: request.inputs,
-      }),
-    });
+    const response = await fetchUserRemoteUrl(
+      `${endpointUrl.replace(/\/+$/, "")}/embeddings`,
+      {
+        method: "POST",
+        headers: buildCustomHeaders(request.apiKey),
+        body: JSON.stringify({
+          model: modelName,
+          input: request.inputs,
+        }),
+      },
+      getEndpointRemotePolicy(),
+    );
 
     if (!response.ok) {
       throw new Error(`Custom embedding request failed: ${response.status} ${response.statusText}`);

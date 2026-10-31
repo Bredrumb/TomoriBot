@@ -8,6 +8,7 @@ import {
 } from "@/providers/custom/customComfyUiEndpoint";
 import { buildCustomHeaders } from "@/providers/custom/customOpenAICompatibleUtils";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
+import { getEndpointRemotePolicy } from "@/utils/security/remoteUrlSecurity";
 
 type GenerateCustomImageEndpointParams = Parameters<typeof generateComfyUiImageViaEndpoint>[0];
 type GenerateCustomVideoEndpointParams = Parameters<typeof generateComfyUiVideoViaEndpoint>[0];
@@ -21,18 +22,22 @@ export async function generateCustomImageViaEndpoint(
     return generateComfyUiImageViaEndpoint(params);
   }
 
-  const response = await fetchUserRemoteUrl(`${endpoint.endpoint_url.replace(/\/+$/, "")}/images/generations`, {
-    method: "POST",
-    headers: buildCustomHeaders(apiKey),
-    body: JSON.stringify({
-      model: endpoint.model_name,
-      prompt,
-      ...(negativePrompt ? { negative_prompt: negativePrompt, negativePrompt } : {}),
-      size: aspectRatio,
-      ...(referenceImages?.length ? { reference_images: referenceImages } : {}),
-    }),
-    signal: abortSignal,
-  });
+  const response = await fetchUserRemoteUrl(
+    `${endpoint.endpoint_url.replace(/\/+$/, "")}/images/generations`,
+    {
+      method: "POST",
+      headers: buildCustomHeaders(apiKey),
+      body: JSON.stringify({
+        model: endpoint.model_name,
+        prompt,
+        ...(negativePrompt ? { negative_prompt: negativePrompt, negativePrompt } : {}),
+        size: aspectRatio,
+        ...(referenceImages?.length ? { reference_images: referenceImages } : {}),
+      }),
+      signal: abortSignal,
+    },
+    getEndpointRemotePolicy(),
+  );
 
   if (!response.ok) {
     throw Object.assign(new Error(`Custom image generation failed: ${response.status} ${response.statusText}`), {
@@ -72,24 +77,28 @@ export async function generateCustomVideoViaEndpoint(
     return generateComfyUiVideoViaEndpoint(params);
   }
 
-  const response = await fetchUserRemoteUrl(`${endpoint.endpoint_url.replace(/\/+$/, "")}/videos/generations`, {
-    method: "POST",
-    headers: buildCustomHeaders(apiKey),
-    body: JSON.stringify({
-      model: endpoint.model_name,
-      prompt,
-      aspect_ratio: aspectRatio,
-      duration: durationSeconds,
-      // Only include fps when explicitly provided so endpoints that don't accept it are unaffected.
-      ...(fps !== undefined ? { fps } : {}),
-      resolution,
-      generate_audio: generateAudio,
-      audio_prompt: audioPrompt,
-      loop: loop === true,
-      ...(referenceImages?.length ? { reference_images: referenceImages } : {}),
-    }),
-    signal: abortSignal,
-  });
+  const response = await fetchUserRemoteUrl(
+    `${endpoint.endpoint_url.replace(/\/+$/, "")}/videos/generations`,
+    {
+      method: "POST",
+      headers: buildCustomHeaders(apiKey),
+      body: JSON.stringify({
+        model: endpoint.model_name,
+        prompt,
+        aspect_ratio: aspectRatio,
+        duration: durationSeconds,
+        // Only include fps when explicitly provided so endpoints that don't accept it are unaffected.
+        ...(fps !== undefined ? { fps } : {}),
+        resolution,
+        generate_audio: generateAudio,
+        audio_prompt: audioPrompt,
+        loop: loop === true,
+        ...(referenceImages?.length ? { reference_images: referenceImages } : {}),
+      }),
+      signal: abortSignal,
+    },
+    getEndpointRemotePolicy(),
+  );
 
   if (!response.ok) {
     throw Object.assign(new Error(`Custom video generation failed: ${response.status} ${response.statusText}`), {

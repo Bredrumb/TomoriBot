@@ -416,7 +416,7 @@ async function configurePrivateNetwork(
 
   log.info("Private networks let custom endpoints and MCP servers reach localhost and your LAN, so local models work.");
   log.info(
-    "Keep this on if only you or a trusted Discord community will use this bot. Turn it off if untrusted members use it, because their endpoints and posted links can make the bot request your network. HTTPS tunnels still work.",
+    "Keep this on if only you or a trusted Discord community will use this bot. Turn it off if untrusted members use it, because the endpoints they add can make the bot request your network. Posted links and attachments never can. HTTPS tunnels still work.",
   );
   log.info("Production (RUN_ENV=production) always blocks private networks, whatever you choose here.");
   const allow = await confirm("Allow private networks?", current ? ["true", "1", "yes", "on"].includes(current) : true);

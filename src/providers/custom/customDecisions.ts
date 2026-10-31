@@ -6,12 +6,13 @@ import {
   parseNamedDecisionAnswers,
   parseOrderedDecisionAnswers,
 } from "@/providers/utils/decisions";
+import { getEndpointRemotePolicy } from "@/utils/security/remoteUrlSecurity";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import { normalizeCustomEndpointUrlForStorage } from "@/utils/provider/customEndpointService";
 
 export async function callCustomDecisions(
   request: ProviderDecisionRequest,
-  fetchImpl: typeof fetchUserRemoteUrl = fetchUserRemoteUrl,
+  fetchImpl: typeof fetchUserRemoteUrl = (input, init) => fetchUserRemoteUrl(input, init, getEndpointRemotePolicy()),
 ): Promise<DecisionResult> {
   if (!request.endpointUrl || (request.apiStyle !== "system-one" && request.apiStyle !== "openai-decisions")) {
     return { status: "unavailable", reason: "unsupported", correlationId: request.correlationId, errorLogged: false };

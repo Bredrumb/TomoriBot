@@ -37,6 +37,7 @@ import {
 } from "@/utils/provider/personalProviderHelpers";
 import { resolveLogitBiasEntriesForLlm } from "@/utils/provider/logitBiasResolver";
 import { decryptApiKey, encryptApiKey } from "@/utils/security/crypto";
+import { getEndpointRemotePolicy } from "@/utils/security/remoteUrlSecurity";
 import { fetchUserRemoteUrl, RemoteUrlPolicyError } from "@/utils/security/userRemoteFetch";
 
 type RegistrationScope =
@@ -777,7 +778,7 @@ export async function validateCustomEndpointReachability(params: {
     headers.Authorization = `Bearer ${params.apiKey.trim()}`;
   }
 
-  const fetchOptions = { strict: params.strict };
+  const fetchOptions = { strict: params.strict, ...getEndpointRemotePolicy() };
 
   try {
     const baseUrl = params.endpointUrl.replace(/\/+$/, "");

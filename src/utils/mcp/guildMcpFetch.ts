@@ -1,6 +1,7 @@
 import { extractWWWAuthenticateParams } from "@modelcontextprotocol/sdk/client/auth.js";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import { ResponseSizeError } from "@/utils/security/boundedResponse";
+import { getEndpointRemotePolicy } from "@/utils/security/remoteUrlSecurity";
 
 const MAX_MCP_RESPONSE_BYTES = 8 * 1024 * 1024;
 
@@ -35,11 +36,15 @@ export function createGuildMcpFetch(
       throw new Error("MCP transport requests must stay on the registered origin without URL credentials");
     }
     const send = (token?: string) =>
-      fetchUserRemoteUrl(input, {
-        ...init,
-        ...(token ? { headers: withBearer(init?.headers, token) } : {}),
-        redirect: "error",
-      });
+      fetchUserRemoteUrl(
+        input,
+        {
+          ...init,
+          ...(token ? { headers: withBearer(init?.headers, token) } : {}),
+          redirect: "error",
+        },
+        getEndpointRemotePolicy(),
+      );
     let response: Response;
     if (authorization) {
       const token = await authorization.token();

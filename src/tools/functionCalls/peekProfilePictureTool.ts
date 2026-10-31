@@ -29,6 +29,7 @@ import { resolveVisionApiModelName } from "@/utils/provider/visionCaption";
 import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAttribution";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
+import { getEndpointRemotePolicy } from "@/utils/security/remoteUrlSecurity";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import { readOpenRouterLimitError } from "@/providers/openrouter/openrouterLimit";
 import { fetchWithProviderRequest } from "@/utils/provider/providerRequestHook";
@@ -556,7 +557,7 @@ export class PeekProfilePictureTool extends BaseTool {
         },
         body: JSON.stringify(requestBody),
       },
-      fetchUserRemoteUrl,
+      (input, init) => fetchUserRemoteUrl(input, init, getEndpointRemotePolicy()),
     );
 
     if (!response.ok) {

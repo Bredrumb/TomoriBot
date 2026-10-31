@@ -13,6 +13,7 @@ import {
 } from "@/utils/provider/customEndpointService";
 import { parseCustomProvider } from "@/utils/provider/customProviderUtils";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
+import { getEndpointRemotePolicy } from "@/utils/security/remoteUrlSecurity";
 
 export interface TextModelHandoffLease {
   /** Callers fire and forget, so a Discord upload is never held behind text-model readiness. */
@@ -193,10 +194,14 @@ export async function detectVramHandoffBackend(params: {
   const probe = async (pathname: string): Promise<Record<string, unknown> | null> => {
     try {
       return await readJson(
-        await fetchUserRemoteUrl(replaceEndpointPath(params.endpointUrl, pathname), {
-          headers,
-          signal: AbortSignal.timeout(BACKEND_PROBE_TIMEOUT_MS),
-        }),
+        await fetchUserRemoteUrl(
+          replaceEndpointPath(params.endpointUrl, pathname),
+          {
+            headers,
+            signal: AbortSignal.timeout(BACKEND_PROBE_TIMEOUT_MS),
+          },
+          getEndpointRemotePolicy(),
+        ),
       );
     } catch {
       return null;
@@ -214,9 +219,13 @@ async function waitForKoboldCppLlmState(endpointUrl: string, expectedLoaded: boo
   while (Date.now() < deadline) {
     try {
       const payload = await readJson(
-        await fetchUserRemoteUrl(replaceEndpointPath(endpointUrl, "/api/extra/version"), {
-          signal: AbortSignal.timeout(BACKEND_PROBE_TIMEOUT_MS),
-        }),
+        await fetchUserRemoteUrl(
+          replaceEndpointPath(endpointUrl, "/api/extra/version"),
+          {
+            signal: AbortSignal.timeout(BACKEND_PROBE_TIMEOUT_MS),
+          },
+          getEndpointRemotePolicy(),
+        ),
       );
       if (payload?.llm === expectedLoaded) return true;
     } catch {
@@ -233,12 +242,16 @@ async function requestKoboldCppModelState(params: {
   filename: "initial_model" | "unload_model";
 }): Promise<boolean> {
   const payload = await readJson(
-    await fetchUserRemoteUrl(replaceEndpointPath(params.endpointUrl, "/api/admin/reload_config"), {
-      method: "POST",
-      headers: buildCustomHeaders(params.apiKey),
-      body: JSON.stringify({ filename: params.filename }),
-      signal: AbortSignal.timeout(CONTROL_REQUEST_TIMEOUT_MS),
-    }),
+    await fetchUserRemoteUrl(
+      replaceEndpointPath(params.endpointUrl, "/api/admin/reload_config"),
+      {
+        method: "POST",
+        headers: buildCustomHeaders(params.apiKey),
+        body: JSON.stringify({ filename: params.filename }),
+        signal: AbortSignal.timeout(CONTROL_REQUEST_TIMEOUT_MS),
+      },
+      getEndpointRemotePolicy(),
+    ),
   );
   return payload?.success === true;
 }
@@ -283,12 +296,16 @@ async function prepareKoboldCpp(endpointUrl: string, apiKey: string): Promise<bo
 
 async function prepareOllama(endpointUrl: string, apiKey: string, model: string): Promise<boolean> {
   try {
-    const response = await fetchUserRemoteUrl(replaceEndpointPath(endpointUrl, "/api/generate"), {
-      method: "POST",
-      headers: buildCustomHeaders(apiKey),
-      body: JSON.stringify({ model, keep_alive: 0, stream: false }),
-      signal: AbortSignal.timeout(CONTROL_REQUEST_TIMEOUT_MS),
-    });
+    const response = await fetchUserRemoteUrl(
+      replaceEndpointPath(endpointUrl, "/api/generate"),
+      {
+        method: "POST",
+        headers: buildCustomHeaders(apiKey),
+        body: JSON.stringify({ model, keep_alive: 0, stream: false }),
+        signal: AbortSignal.timeout(CONTROL_REQUEST_TIMEOUT_MS),
+      },
+      getEndpointRemotePolicy(),
+    );
     await response.body?.cancel().catch(() => undefined);
     return response.ok;
   } catch {
@@ -299,10 +316,14 @@ async function prepareOllama(endpointUrl: string, apiKey: string, model: string)
 async function readComfyUiFreeVram(endpointUrl: string, apiKey: string): Promise<number | null> {
   try {
     const stats = await readJson(
-      await fetchUserRemoteUrl(`${endpointUrl.replace(/\/+$/, "")}/system_stats`, {
-        headers: buildCustomHeaders(apiKey),
-        signal: AbortSignal.timeout(BACKEND_PROBE_TIMEOUT_MS),
-      }),
+      await fetchUserRemoteUrl(
+        `${endpointUrl.replace(/\/+$/, "")}/system_stats`,
+        {
+          headers: buildCustomHeaders(apiKey),
+          signal: AbortSignal.timeout(BACKEND_PROBE_TIMEOUT_MS),
+        },
+        getEndpointRemotePolicy(),
+      ),
     );
     const [device] = Array.isArray(stats?.devices) ? (stats.devices as Array<{ vram_free?: unknown }>) : [];
     return typeof device?.vram_free === "number" ? device.vram_free : null;
@@ -322,12 +343,16 @@ async function readComfyUiFreeVram(endpointUrl: string, apiKey: string): Promise
 async function releaseComfyUiVram(endpointUrl: string, apiKey: string): Promise<void> {
   const before = await readComfyUiFreeVram(endpointUrl, apiKey);
   try {
-    const response = await fetchUserRemoteUrl(`${endpointUrl.replace(/\/+$/, "")}/free`, {
-      method: "POST",
-      headers: buildCustomHeaders(apiKey),
-      body: JSON.stringify({ unload_models: true, free_memory: true }),
-      signal: AbortSignal.timeout(CONTROL_REQUEST_TIMEOUT_MS),
-    });
+    const response = await fetchUserRemoteUrl(
+      `${endpointUrl.replace(/\/+$/, "")}/free`,
+      {
+        method: "POST",
+        headers: buildCustomHeaders(apiKey),
+        body: JSON.stringify({ unload_models: true, free_memory: true }),
+        signal: AbortSignal.timeout(CONTROL_REQUEST_TIMEOUT_MS),
+      },
+      getEndpointRemotePolicy(),
+    );
     await response.body?.cancel().catch(() => undefined);
     if (!response.ok) return;
   } catch {

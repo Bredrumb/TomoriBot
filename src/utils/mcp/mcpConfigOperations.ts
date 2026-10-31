@@ -7,7 +7,11 @@ import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
 import { unionMcpScopes } from "@/utils/mcp/oauth/discovery";
 import { isMcpSignInAvailable } from "@/utils/mcp/oauth/signIn";
 import { normalizeMcpToolNameSnapshot } from "@/utils/mcp/mcpToolSnapshot";
-import { type RemoteUrlValidationResult, validateRemoteUrl } from "@/utils/security/remoteUrlSecurity";
+import {
+  getEndpointRemotePolicy,
+  type RemoteUrlValidationResult,
+  validateRemoteUrl,
+} from "@/utils/security/remoteUrlSecurity";
 
 export const MAX_MCP_SERVERS_PER_WORKSPACE = Number(process.env.MAX_MCP_SERVERS_PER_GUILD) || 10;
 const MCP_SERVER_TYPES = ["general", "web_search", "url_fetcher", "prose_linter"] as const;
@@ -360,7 +364,7 @@ export class McpConfigOperations {
 
 export const mcpConfigOperations = new McpConfigOperations({
   read: getGuildMcpConfigReadResult,
-  validateUrl: validateRemoteUrl,
+  validateUrl: (url) => validateRemoteUrl(url, getEndpointRemotePolicy()),
   testConnection: (url, authToken) => getGuildMcpManager().testConnection(url, authToken),
   insert: (serverId, name, url, authToken, serverType, lastDiscoveredToolNames, serverDiscId, oauthGrant) =>
     toolRepository.insertMcpServer(

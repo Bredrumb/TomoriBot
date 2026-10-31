@@ -14,6 +14,7 @@ import {
 import { deleteExpressionMedia, loadExpressionMedia, storeExpressionMedia } from "@/utils/storage/expressionStorage";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { useEnvSandbox } from "../../helpers/env";
+import { STUB_PUBLIC_HOST, stubGlobalFetch } from "../../helpers/fetchStub";
 
 describe("expression media validation and owned storage", () => {
   let png: Buffer;
@@ -163,20 +164,17 @@ describe("expression media validation and owned storage", () => {
   });
   it("keeps links unfetched, stores uploads and blocks unsafe redirect destinations", async () => {
     let requests = 0;
-    const server = Bun.serve({
-      port: 0,
-      fetch(request) {
-        requests++;
-        if (new URL(request.url).pathname === "/redirect")
-          return Response.redirect("http://169.254.169.254/latest/meta-data");
-        return new Response(new Uint8Array(png), { headers: { "content-type": "image/png" } });
-      },
+    const fetchSpy = stubGlobalFetch((input) => {
+      requests++;
+      if (new URL(input instanceof Request ? input.url : input).pathname === "/redirect")
+        return Response.redirect("http://169.254.169.254/latest/meta-data");
+      return new Response(new Uint8Array(png), { headers: { "content-type": "image/png" } });
     });
     const id = randomUUID();
     let reference: string | null = null;
     try {
-      const url = `http://localhost:${server.port}/image.png`;
-      for (const link of [url, `http://localhost:${server.port}/hospital`])
+      const url = `https://${STUB_PUBLIC_HOST}/image.png`;
+      for (const link of [url, `https://${STUB_PUBLIC_HOST}/hospital`])
         expect(await prepareExpressionMedia(1, id, link, [], false)).toEqual({
           source_kind: "link",
           delivery_kind: "link",
@@ -198,13 +196,13 @@ describe("expression media validation and owned storage", () => {
       expect(upload).toMatchObject({ source_kind: "upload", delivery_kind: "stored" });
       if (!reference) throw new Error("Upload did not store media");
       expect(await loadExpressionMedia(reference, 1, id)).toEqual(png);
-      expect(await safeDownload(`http://localhost:${server.port}/redirect`, { maxSizeMB: 10 })).toMatchObject({
+      expect(await safeDownload(`https://${STUB_PUBLIC_HOST}/redirect`, { maxSizeMB: 10 })).toMatchObject({
         success: false,
         error: "blocked_by_policy",
       });
     } finally {
       if (reference) await deleteExpressionMedia(reference, 1, id);
-      server.stop(true);
+      fetchSpy.mockRestore();
     }
   });
 });

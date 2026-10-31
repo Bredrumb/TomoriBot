@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { validateRemoteUrl } from "@/utils/security/remoteUrlSecurity";
+import { getEndpointRemotePolicy, validateRemoteUrl } from "@/utils/security/remoteUrlSecurity";
 import { useEnvSandbox } from "../../helpers/env";
 
 const RUN_ENV_NAME = "RUN_ENV";
@@ -101,7 +101,9 @@ describe("validateRemoteUrl cloud-metadata denylist", () => {
         if (setting) process.env[PRIVATE_NETWORK_ENV] = setting;
         else delete process.env[PRIVATE_NETWORK_ENV];
         const key = `${runEnv ?? "unset"}/${setting ?? "unset"}`;
-        results[key] = await Promise.all(privateUrls.map(async (url) => (await validateRemoteUrl(url)).valid));
+        results[key] = await Promise.all(
+          privateUrls.map(async (url) => (await validateRemoteUrl(url, getEndpointRemotePolicy())).valid),
+        );
       }
     }
 
@@ -129,15 +131,43 @@ describe("validateRemoteUrl cloud-metadata denylist", () => {
     expect((await validateRemoteUrl(lanHttp, { allowPrivateNetwork: true })).valid).toBe(true);
   });
 
+  it("admits a plain-HTTP Docker host gateway endpoint under the endpoint policy", async () => {
+    delete process.env[RUN_ENV_NAME];
+    delete process.env[PRIVATE_NETWORK_ENV];
+    // This is the address Docker Desktop gives host.docker.internal, so the case matches a real Compose setup.
+    const dockerHostUrl = "http://192.168.65.254:11434/v1";
+
+    expect((await validateRemoteUrl(dockerHostUrl, getEndpointRemotePolicy())).valid).toBe(true);
+    expect((await validateRemoteUrl(dockerHostUrl)).valid).toBe(false);
+  });
+
+  it("refuses loopback and private targets for member media in every RUN_ENV", async () => {
+    process.env[PRIVATE_NETWORK_ENV] = "true";
+    const memberUrls = ["http://localhost:8188/view", "https://127.0.0.1:8188/view", "https://192.168.1.50/a.png"];
+
+    const admitted: string[] = [];
+    for (const runEnv of ["development", "production", undefined]) {
+      if (runEnv) process.env[RUN_ENV_NAME] = runEnv;
+      else delete process.env[RUN_ENV_NAME];
+      for (const url of memberUrls) {
+        if ((await validateRemoteUrl(url)).valid) admitted.push(`${runEnv ?? "unset"} ${url}`);
+      }
+    }
+
+    expect(admitted).toEqual([]);
+  });
+
   it("treats a bracketed IPv6 loopback literal as localhost", async () => {
     process.env[RUN_ENV_NAME] = "development";
     delete process.env[PRIVATE_NETWORK_ENV];
     const loopbackHttp = "http://[::1]:8080/";
 
-    expect((await validateRemoteUrl(loopbackHttp)).valid).toBe(true);
+    expect((await validateRemoteUrl(loopbackHttp, getEndpointRemotePolicy())).valid).toBe(true);
 
     process.env[PRIVATE_NETWORK_ENV] = "false";
-    expect((await validateRemoteUrl(loopbackHttp)).failureCode).toBe("PRODUCTION_LOCALHOST_FORBIDDEN");
+    expect((await validateRemoteUrl(loopbackHttp, getEndpointRemotePolicy())).failureCode).toBe(
+      "PRODUCTION_LOCALHOST_FORBIDDEN",
+    );
   });
 
   it("blocks private endpoints in production even when ALLOW_PRIVATE_NETWORK is true", async () => {
@@ -145,8 +175,8 @@ describe("validateRemoteUrl cloud-metadata denylist", () => {
     process.env[PRIVATE_NETWORK_ENV] = "true";
 
     const admitted: string[] = [];
-    for (const url of ["https://localhost/", "https://192.168.1.50/", "https://10.0.0.5/"]) {
-      if ((await validateRemoteUrl(url)).valid) admitted.push(url);
+    for (const url of ["https://localhost/", "https://192.168.1.50/", "http://192.168.65.254:11434/"]) {
+      if ((await validateRemoteUrl(url, getEndpointRemotePolicy())).valid) admitted.push(url);
     }
 
     expect(admitted).toEqual([]);

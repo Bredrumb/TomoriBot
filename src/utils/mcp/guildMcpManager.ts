@@ -27,7 +27,7 @@ import { getGuildMcpConfigReadResult } from "@/utils/cache/guildMcpConfigCache";
 import { toolRepository } from "@/utils/db/repositories/ToolRepository";
 import { sendToolNotice } from "@/utils/discord/toolProgressNotice";
 import { sendFetchProgressNotice } from "@/tools/fetchUrl/fetchProgressNotice";
-import { validateRemoteUrl } from "@/utils/security/remoteUrlSecurity";
+import { getEndpointRemotePolicy, validateRemoteUrl } from "@/utils/security/remoteUrlSecurity";
 import { localizer } from "@/utils/text/localizer";
 import { ToolRegistry } from "@/tools/toolRegistry";
 import { refreshToolExecutionContext } from "@/tools/availability";
@@ -817,7 +817,7 @@ class GuildMcpManager {
     onUnauthorized?: (response: Response) => void,
   ): Promise<MCPClient> {
     const label = serverLabel ?? url;
-    const urlValidation = await validateRemoteUrl(url);
+    const urlValidation = await validateRemoteUrl(url, getEndpointRemotePolicy());
     if (!urlValidation.valid) {
       throw new Error(urlValidation.details ?? `Guild MCP URL failed runtime validation for '${label}'.`);
     }

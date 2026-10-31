@@ -7,9 +7,11 @@
  * dispatches out-of-process. Its in-process `safe_http` engine still reaches this gate, with
  * `strict` unless the operator set `FETCH_URL_ALLOW_PRIVATE_NETWORK`.
  *
- * Outside production, private targets are admitted unless the operator sets
- * `ALLOW_PRIVATE_NETWORK=false`, so self-hosted local model servers work without setup. Production
- * always refuses them because the hosted instance serves untrusted communities.
+ * Private targets are refused unless the caller passes `allowPrivateNetwork`. Endpoint callers pass
+ * `getEndpointRemotePolicy()`, which admits them outside production unless the operator sets
+ * `ALLOW_PRIVATE_NETWORK=false`, so self-hosted local model servers work without setup. Member-supplied
+ * media keeps the default because any member can post a link to it. Production always refuses private
+ * endpoints because the hosted instance serves untrusted communities.
  *
  * Add new user-URL entry points here rather than writing a third guard.
  */
@@ -60,6 +62,11 @@ function isEndpointPrivateNetworkAllowed(): boolean {
   const raw = process.env[PRIVATE_NETWORK_ENV]?.trim().toLowerCase();
   if (!raw) return true;
   return raw === "true" || raw === "1" || raw === "yes" || raw === "on";
+}
+
+/** For registered endpoints only, because any member can post a link that reaches a media download. */
+export function getEndpointRemotePolicy(): { allowPrivateNetwork: boolean } {
+  return { allowPrivateNetwork: isEndpointPrivateNetworkAllowed() };
 }
 
 function normalizeHostname(hostname: string): string {
@@ -251,8 +258,8 @@ async function resolveHostnameAddresses(hostname: string): Promise<ResolvedRemot
   return Array.from(addresses.values());
 }
 
-function getPrivateNetworkRemedy(strict: boolean): string {
-  if (strict) return "";
+function getPrivateNetworkRemedy(endpointPolicyDenied: boolean): string {
+  if (!endpointPolicyDenied) return "";
   return isProductionRuntime()
     ? " Production always blocks private addresses."
     : ` The host blocks private addresses with ${PRIVATE_NETWORK_ENV}=false.`;
@@ -262,13 +269,13 @@ function buildBlockedAddressDetails(
   hostname: string,
   blockedAddress: ResolvedRemoteAddress,
   allAddresses: ResolvedRemoteAddress[],
-  strict: boolean,
+  endpointPolicyDenied: boolean,
 ): string {
   const resolvedList = allAddresses.map((entry) => entry.address).join(", ");
   return (
     `Resolved address '${blockedAddress.address}' for '${hostname}' is ${blockedAddress.reason}. ` +
     `Only publicly routable hosts are allowed. Resolved addresses: ${resolvedList}.` +
-    getPrivateNetworkRemedy(strict)
+    getPrivateNetworkRemedy(endpointPolicyDenied)
   );
 }
 
@@ -300,8 +307,7 @@ function getHttpProtocolFailure(
 }
 
 export interface ValidateRemoteUrlOptions {
-  /** Always enforce the private/link-local/loopback blocklist, ignoring `ALLOW_PRIVATE_NETWORK`.
-   *  Use when a caller's policy must remain production-strict during development. */
+  /** Enforce the private/link-local/loopback blocklist even when `allowPrivateNetwork` is set. */
   strict?: boolean;
   /** Permit private targets (plain HTTP too when every resolved address is private); cloud metadata stays blocked. */
   allowPrivateNetwork?: boolean;
@@ -313,8 +319,8 @@ export async function validateRemoteUrl(
 ): Promise<RemoteUrlValidationResult> {
   const isProduction = isProductionRuntime();
   const strict = options?.strict === true;
-  const privateNetworkAllowed = !strict && (options?.allowPrivateNetwork === true || isEndpointPrivateNetworkAllowed());
-  const enforceBlocklist = !privateNetworkAllowed;
+  const privateNetworkAllowed = !strict && options?.allowPrivateNetwork === true;
+  const endpointPolicyDenied = !strict && options?.allowPrivateNetwork === false;
 
   let parsedUrl: URL;
   try {
@@ -339,21 +345,19 @@ export async function validateRemoteUrl(
   const hostname = normalizeHostname(parsedUrl.hostname);
   const isLocalHost = isExplicitLocalHost(hostname);
   // Most LAN services only speak HTTP, so under the opt-in the HTTP decision waits for DNS.
-  // Only an explicit caller opt-in widens HTTP: media downloads also reach this gate, and Discord's proxy
-  // fallback hands them plain-HTTP origins any member can post.
-  const httpNeedsPrivateTarget = !strict && options?.allowPrivateNetwork === true && parsedUrl.protocol === "http:";
+  const httpNeedsPrivateTarget = privateNetworkAllowed && parsedUrl.protocol === "http:";
   const httpFailure = getHttpProtocolFailure(parsedUrl, hostname, isProduction, isLocalHost);
 
   if (httpFailure && !httpNeedsPrivateTarget) {
     return httpFailure;
   }
 
-  if (enforceBlocklist && isLocalHost) {
+  if (!privateNetworkAllowed && isLocalHost) {
     return {
       valid: false,
       failureCode: "PRODUCTION_LOCALHOST_FORBIDDEN",
       hostname,
-      details: `Localhost is not allowed for this endpoint.${getPrivateNetworkRemedy(strict)}`,
+      details: `Localhost is not allowed for this endpoint.${getPrivateNetworkRemedy(endpointPolicyDenied)}`,
     };
   }
 
@@ -382,7 +386,7 @@ export async function validateRemoteUrl(
   // Always-on floor: cloud-metadata / link-local addresses are never valid
   // targets, even when the general blocklist is relaxed (development, or a
   // production private-network opt-in). They are the primary SSRF credential-
-  // theft target, so this check runs independently of `enforceBlocklist`.
+  // theft target, so this check runs independently of `privateNetworkAllowed`.
   const metadataAddress = resolvedAddresses.find((entry) => isCloudMetadataAddress(entry.address));
   if (metadataAddress) {
     return {
@@ -401,7 +405,7 @@ export async function validateRemoteUrl(
     return httpFailure;
   }
 
-  if (enforceBlocklist) {
+  if (!privateNetworkAllowed) {
     const blockedAddress = resolvedAddresses.find((entry) => entry.blockedInProduction);
     if (blockedAddress) {
       return {
@@ -410,7 +414,7 @@ export async function validateRemoteUrl(
         hostname,
         blockedAddress: blockedAddress.address,
         resolvedAddresses: resolvedAddresses.map((entry) => entry.address),
-        details: buildBlockedAddressDetails(hostname, blockedAddress, resolvedAddresses, strict),
+        details: buildBlockedAddressDetails(hostname, blockedAddress, resolvedAddresses, endpointPolicyDenied),
       };
     }
   }

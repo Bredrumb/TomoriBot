@@ -62,7 +62,7 @@ docker compose up      # bot + database
 
 For later starts, `docker compose up` alone is enough unless you change code or dependencies. Once the bot connects to Discord, run `/setup` in any server channel to add your AI provider key. See the [Quickstart](/introduction/quickstart/) for setup options in Discord.
 
-Compose pins `RUN_ENV=development` in its service definition so `.env` secrets and local HTTP endpoints work. Local endpoints rely on `ALLOW_PRIVATE_NETWORK`, which is on unless `.env` sets it to `false`; see [Private networks](/self-hosting/setup-wizard/#private-networks) before inviting the bot to a community you don't trust. The container healthcheck reports whether the bot process is running; it does not test Discord gateway connectivity.
+Compose pins `RUN_ENV=development` in its service definition so `.env` secrets and local HTTP endpoints work. Local endpoints such as `http://host.docker.internal:11434` rely on `ALLOW_PRIVATE_NETWORK`, which is on unless `.env` sets it to `false`; see [Private networks](/self-hosting/setup-wizard/#private-networks) before inviting the bot to a community you don't trust. The container healthcheck reports whether the bot process is running; it does not test Discord gateway connectivity.
 
 ## 4. Optional local servers (Compose profiles)
 

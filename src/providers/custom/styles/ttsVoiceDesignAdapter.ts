@@ -5,6 +5,7 @@ import { stripTtsUnsupportedEmojiAttempts } from "@/utils/text/emojiHelper";
 import { log } from "@/utils/misc/logger";
 import type { TtsCloneErrorKind, TtsCloneResult } from "@/providers/custom/styles/ttsCloningAdapter";
 import { resolveTtsSynthesizeTimeoutMs } from "@/providers/custom/styles/ttsSynthesizeTimeout";
+import { getEndpointRemotePolicy } from "@/utils/security/remoteUrlSecurity";
 
 function isEnabledEnv(value: string | undefined): boolean {
   return value === "true" || value === "1";
@@ -155,12 +156,16 @@ export async function synthesizeSpeechViaTtsVoiceDesign(request: TtsVoiceDesignR
     const abortController = new AbortController();
     const timer = setTimeout(() => abortController.abort(), TTS_SYNTHESIZE_TIMEOUT_MS);
     try {
-      response = await fetchUserRemoteUrl(`${endpointUrl}/synthesize`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(body),
-        signal: abortSignal ? AbortSignal.any([abortController.signal, abortSignal]) : abortController.signal,
-      });
+      response = await fetchUserRemoteUrl(
+        `${endpointUrl}/synthesize`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify(body),
+          signal: abortSignal ? AbortSignal.any([abortController.signal, abortSignal]) : abortController.signal,
+        },
+        getEndpointRemotePolicy(),
+      );
     } finally {
       clearTimeout(timer);
     }

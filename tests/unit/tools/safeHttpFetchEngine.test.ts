@@ -11,6 +11,7 @@ import {
 } from "@/utils/security/userRemoteFetch";
 import { validateRemoteUrl } from "@/utils/security/remoteUrlSecurity";
 import { useEnvSandbox } from "../../helpers/env";
+import { getEndpointRemotePolicy } from "@/utils/security/remoteUrlSecurity";
 
 const PRIVATE_NETWORK_ENV = "FETCH_URL_ALLOW_PRIVATE_NETWORK";
 const RUN_ENV_NAME = "RUN_ENV";
@@ -93,7 +94,11 @@ describe("safe HTTP fetch engine", () => {
           }),
         ),
     });
-    const responsePromise = fetchUserRemoteUrl(`http://localhost:${server.port}/stream`);
+    const responsePromise = fetchUserRemoteUrl(
+      `http://localhost:${server.port}/stream`,
+      undefined,
+      getEndpointRemotePolicy(),
+    );
     const timeoutMarker = Symbol("response timeout");
 
     try {
@@ -131,11 +136,15 @@ describe("safe HTTP fetch engine", () => {
     });
 
     try {
-      const response = await fetchUserRemoteUrl(`http://localhost:${server.port}/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: "hello" }),
-      });
+      const response = await fetchUserRemoteUrl(
+        `http://localhost:${server.port}/chat`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: "hello" }),
+        },
+        getEndpointRemotePolicy(),
+      );
 
       expect(response.ok).toBe(true);
       expect(requestCount).toBe(1);
@@ -309,7 +318,11 @@ describe("user remote fetch redirect credentials", () => {
   it("sends credentials on a direct request", async () => {
     const target = fixture({ "/v1/models": () => Response.json({ data: [] }) });
 
-    const response = await fetchUserRemoteUrl(`${target.origin}/v1/models`, { headers: CREDENTIAL_HEADERS });
+    const response = await fetchUserRemoteUrl(
+      `${target.origin}/v1/models`,
+      { headers: CREDENTIAL_HEADERS },
+      getEndpointRemotePolicy(),
+    );
 
     expect(response.status).toBe(200);
     expect(target.received[0]?.headers.authorization).toBe(SYNTHETIC_BEARER);
@@ -321,7 +334,11 @@ describe("user remote fetch redirect credentials", () => {
       "/v1/models": () => Response.json({ data: [] }),
     });
 
-    const response = await fetchUserRemoteUrl(`${target.origin}/v1/models/`, { headers: CREDENTIAL_HEADERS });
+    const response = await fetchUserRemoteUrl(
+      `${target.origin}/v1/models/`,
+      { headers: CREDENTIAL_HEADERS },
+      getEndpointRemotePolicy(),
+    );
 
     expect(response.status).toBe(200);
     expect(target.received.map((request) => request.headers.authorization)).toEqual([
@@ -342,11 +359,15 @@ describe("user remote fetch redirect credentials", () => {
       "/synthesize": () => Response.json({ detail: "validation" }, { status: 422 }),
     });
 
-    const response = await fetchUserRemoteUrl(`${target.origin}/synthesize/`, {
-      method: "POST",
-      headers: { ...CREDENTIAL_HEADERS, "Content-Type": "application/json" },
-      body: '{"text":"hello"}',
-    });
+    const response = await fetchUserRemoteUrl(
+      `${target.origin}/synthesize/`,
+      {
+        method: "POST",
+        headers: { ...CREDENTIAL_HEADERS, "Content-Type": "application/json" },
+        body: '{"text":"hello"}',
+      },
+      getEndpointRemotePolicy(),
+    );
 
     const followed = target.received[1];
     expect(response.status).toBe(422);
@@ -359,9 +380,13 @@ describe("user remote fetch redirect credentials", () => {
     const assetHost = fixture({ "/signed/video.mp4": () => new Response("video-bytes") });
     const apiHost = fixture({ "/files/video": () => redirectTo(`${assetHost.origin}/signed/video.mp4`, 302) });
 
-    const response = await fetchUserRemoteUrl(`${apiHost.origin}/files/video`, {
-      headers: { ...CREDENTIAL_HEADERS, "User-Agent": "TomoriBot-test", Accept: "video/mp4" },
-    });
+    const response = await fetchUserRemoteUrl(
+      `${apiHost.origin}/files/video`,
+      {
+        headers: { ...CREDENTIAL_HEADERS, "User-Agent": "TomoriBot-test", Accept: "video/mp4" },
+      },
+      getEndpointRemotePolicy(),
+    );
 
     expect(await response.text()).toBe("video-bytes");
     expect(receivedCanary(assetHost.received)).toBe(false);
@@ -375,11 +400,15 @@ describe("user remote fetch redirect credentials", () => {
       "/v1/chat/completions": () => redirectTo(`${otherHost.origin}/v1/chat/completions`, 307),
     });
 
-    const error = await fetchUserRemoteUrl(`${apiHost.origin}/v1/chat/completions`, {
-      method: "POST",
-      headers: { ...CREDENTIAL_HEADERS, "Content-Type": "application/json" },
-      body: '{"messages":[]}',
-    }).catch((caught: unknown) => caught);
+    const error = await fetchUserRemoteUrl(
+      `${apiHost.origin}/v1/chat/completions`,
+      {
+        method: "POST",
+        headers: { ...CREDENTIAL_HEADERS, "Content-Type": "application/json" },
+        body: '{"messages":[]}',
+      },
+      getEndpointRemotePolicy(),
+    ).catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(RemoteUrlPolicyError);
     expect((error as RemoteUrlPolicyError).failureCode).toBe("REDIRECT_CREDENTIALS_WITHHELD");
@@ -394,7 +423,11 @@ describe("user remote fetch redirect credentials", () => {
       "/landed": () => new Response("landed"),
     });
 
-    const response = await fetchUserRemoteUrl(`${target.origin}/start`, { headers: CREDENTIAL_HEADERS });
+    const response = await fetchUserRemoteUrl(
+      `${target.origin}/start`,
+      { headers: CREDENTIAL_HEADERS },
+      getEndpointRemotePolicy(),
+    );
 
     expect(await response.text()).toBe("landed");
     expect(target.received[1]?.headers.authorization).toBeUndefined();
@@ -405,7 +438,11 @@ describe("user remote fetch redirect credentials", () => {
     const bounceHost = fixture({ "/bounce": () => redirectTo(`${apiHost.origin}/final`, 302) });
     apiHost.routes["/start"] = () => redirectTo(`${bounceHost.origin}/bounce`, 302);
 
-    const response = await fetchUserRemoteUrl(`${apiHost.origin}/start`, { headers: CREDENTIAL_HEADERS });
+    const response = await fetchUserRemoteUrl(
+      `${apiHost.origin}/start`,
+      { headers: CREDENTIAL_HEADERS },
+      getEndpointRemotePolicy(),
+    );
 
     expect(await response.text()).toBe("final");
     expect(apiHost.received[0]?.headers.authorization).toBe(SYNTHETIC_BEARER);
