@@ -9,6 +9,7 @@ import {
   RemoteUrlPolicyError,
   resolveValidatedUserRedirect,
 } from "@/utils/security/userRemoteFetch";
+import { validateRemoteUrl } from "@/utils/security/remoteUrlSecurity";
 import { useEnvSandbox } from "../../helpers/env";
 
 const PRIVATE_NETWORK_ENV = "FETCH_URL_ALLOW_PRIVATE_NETWORK";
@@ -34,9 +35,13 @@ describe("safe HTTP fetch engine", () => {
     expect(getFetchUrlEngineOrder()).toEqual(["crawl4ai", "safe_http"]);
   });
 
-  it("tries a configured external browser fetcher first outside production, with safe_http as fallback", () => {
+  it("requires the private-network opt-in for an external browser fetcher outside production too", () => {
     delete process.env[RUN_ENV_NAME];
     process.env[CRAWL4AI_BASE_URL_ENV] = "http://127.0.0.1:11235/";
+    delete process.env[PRIVATE_NETWORK_ENV];
+    expect(getFetchUrlEngineOrder()).toEqual(["safe_http"]);
+
+    process.env[PRIVATE_NETWORK_ENV] = "true";
     expect(getFetchUrlEngineOrder()).toEqual(["crawl4ai", "safe_http"]);
   });
 
@@ -142,6 +147,7 @@ describe("safe HTTP fetch engine", () => {
 
   it("includes fetched page content in provider-visible result data", async () => {
     process.env[RUN_ENV_NAME] = "development";
+    process.env[PRIVATE_NETWORK_ENV] = "true";
     const server = Bun.serve({
       hostname: "::",
       port: 0,
@@ -168,6 +174,7 @@ describe("safe HTTP fetch engine", () => {
 
   it("preserves start_index pagination in provider-visible summaries", async () => {
     process.env[RUN_ENV_NAME] = "development";
+    process.env[PRIVATE_NETWORK_ENV] = "true";
     const server = Bun.serve({
       hostname: "::",
       port: 0,
@@ -191,6 +198,41 @@ describe("safe HTTP fetch engine", () => {
       expect(secondData.nextIndex).toBe(20);
     } finally {
       server.stop(true);
+    }
+  });
+
+  it("refuses loopback pages in development unless the operator opted in", async () => {
+    process.env[RUN_ENV_NAME] = "development";
+    delete process.env[PRIVATE_NETWORK_ENV];
+    let requests = 0;
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch: () => {
+        requests += 1;
+        return new Response("local admin page");
+      },
+    });
+
+    try {
+      await expect(
+        new SafeHttpFetchEngine().fetch(`http://localhost:${server.port}/`, {}, {} as ToolContext),
+      ).rejects.toBeInstanceOf(RemoteUrlPolicyError);
+      expect(requests).toBe(0);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  it("lets the opt-in reach private hosts over plain HTTP but never public hosts", async () => {
+    for (const runEnv of ["production", "development"]) {
+      process.env[RUN_ENV_NAME] = runEnv;
+      expect((await validateRemoteUrl("http://192.168.1.50/", { allowPrivateNetwork: true })).valid).toBe(true);
+      expect((await validateRemoteUrl("http://93.184.216.34/", { allowPrivateNetwork: true })).valid).toBe(false);
+      expect((await validateRemoteUrl("http://192.168.1.50/")).valid).toBe(false);
+      expect((await validateRemoteUrl("http://192.168.1.50/", { allowPrivateNetwork: true, strict: true })).valid).toBe(
+        false,
+      );
     }
   });
 

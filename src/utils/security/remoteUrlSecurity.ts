@@ -4,8 +4,8 @@
  * Guards guild MCP servers, guild and personal custom endpoints, and every
  * `safeDownload()` caller through `fetchUserRemoteUrl()`. `fetch_url` runs its own
  * parallel guard in `src/tools/fetchUrl/urlSafety.ts` because the Crawl4AI engine
- * dispatches out-of-process; the two are kept deliberately in lockstep on the same
- * `RUN_ENV` production signal and the same always-on cloud-metadata denylist.
+ * dispatches out-of-process. Its in-process `safe_http` engine still reaches this gate, with
+ * `strict` unless the operator set `FETCH_URL_ALLOW_PRIVATE_NETWORK`.
  *
  * Add new user-URL entry points here rather than writing a third guard.
  */
@@ -236,14 +236,38 @@ function buildBlockedAddressDetails(
   );
 }
 
+function getHttpProtocolFailure(
+  parsedUrl: URL,
+  hostname: string,
+  isProduction: boolean,
+  isLocalHost: boolean,
+): RemoteUrlValidationResult | undefined {
+  if (isProduction && parsedUrl.protocol !== "https:") {
+    return {
+      valid: false,
+      failureCode: "PRODUCTION_HTTPS_REQUIRED",
+      hostname,
+      details: "Production requires HTTPS. The target host must be reachable over TLS.",
+    };
+  }
+
+  if (!isProduction && parsedUrl.protocol === "http:" && !isLocalHost) {
+    return {
+      valid: false,
+      failureCode: "REMOTE_HTTP_FORBIDDEN",
+      hostname,
+      details: "HTTP is only allowed for localhost in development. Use HTTPS for remote hosts.",
+    };
+  }
+
+  return undefined;
+}
+
 export interface ValidateRemoteUrlOptions {
   /** Always enforce the private/link-local/loopback blocklist, regardless of RUN_ENV.
    *  Use when a caller's policy must remain production-strict during development. */
   strict?: boolean;
-  /** Permit private/internal targets even in production, mirroring the `fetch_url`
-   *  `FETCH_URL_ALLOW_PRIVATE_NETWORK` opt-in so both SSRF gates stay aligned.
-   *  The always-on cloud-metadata denylist is NOT bypassed by this. Ignored when
-   *  `strict` is set (strict always wins). */
+  /** Permit private targets (plain HTTP too when every resolved address is private); cloud metadata stays blocked. */
   allowPrivateNetwork?: boolean;
 }
 
@@ -252,9 +276,8 @@ export async function validateRemoteUrl(
   options?: ValidateRemoteUrlOptions,
 ): Promise<RemoteUrlValidationResult> {
   const isProduction = isProductionRuntime();
-  // strict always enforces; otherwise enforce in production unless the caller
-  // explicitly opts into private-network targets (fetch_url alignment).
-  const enforceBlocklist = options?.strict === true || (isProduction && options?.allowPrivateNetwork !== true);
+  const privateNetworkAllowed = options?.strict !== true && options?.allowPrivateNetwork === true;
+  const enforceBlocklist = options?.strict === true || (isProduction && !privateNetworkAllowed);
 
   let parsedUrl: URL;
   try {
@@ -278,23 +301,12 @@ export async function validateRemoteUrl(
 
   const hostname = normalizeHostname(parsedUrl.hostname);
   const isLocalHost = isExplicitLocalHost(hostname);
+  // Most LAN services only speak HTTP, so under the opt-in the HTTP decision waits for DNS.
+  const httpNeedsPrivateTarget = privateNetworkAllowed && parsedUrl.protocol === "http:";
+  const httpFailure = getHttpProtocolFailure(parsedUrl, hostname, isProduction, isLocalHost);
 
-  if (isProduction && parsedUrl.protocol !== "https:") {
-    return {
-      valid: false,
-      failureCode: "PRODUCTION_HTTPS_REQUIRED",
-      hostname,
-      details: "Production requires HTTPS. The target host must be reachable over TLS.",
-    };
-  }
-
-  if (!isProduction && parsedUrl.protocol === "http:" && !isLocalHost) {
-    return {
-      valid: false,
-      failureCode: "REMOTE_HTTP_FORBIDDEN",
-      hostname,
-      details: "HTTP is only allowed for localhost in development. Use HTTPS for remote hosts.",
-    };
+  if (httpFailure && !httpNeedsPrivateTarget) {
+    return httpFailure;
   }
 
   if (enforceBlocklist && isLocalHost) {
@@ -344,6 +356,10 @@ export async function validateRemoteUrl(
         `Resolved address '${metadataAddress.address}' for '${hostname}' is a cloud instance-metadata ` +
         "or link-local endpoint, which is always blocked and cannot be enabled by any opt-in.",
     };
+  }
+
+  if (httpFailure && httpNeedsPrivateTarget && resolvedAddresses.some((entry) => !entry.blockedInProduction)) {
+    return httpFailure;
   }
 
   if (enforceBlocklist) {

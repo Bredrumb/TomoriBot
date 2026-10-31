@@ -1,6 +1,7 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import { isCloudMetadataAddress } from "@/utils/security/cloudMetadata";
+import type { FetchUserRemoteUrlOptions } from "@/utils/security/userRemoteFetch";
 
 const PRIVATE_NETWORK_ENV = "FETCH_URL_ALLOW_PRIVATE_NETWORK";
 
@@ -17,6 +18,7 @@ type FetchUrlSafetyFailureCode =
   | "INVALID_FORMAT"
   | "INVALID_PROTOCOL"
   | "DNS_RESOLUTION_FAILED"
+  | "METADATA_ADDRESS_BLOCKED"
   | "PRIVATE_NETWORK_BLOCKED";
 
 export interface FetchUrlSafetyResult {
@@ -27,36 +29,20 @@ export interface FetchUrlSafetyResult {
 }
 
 /**
- * Whether the current process is a production deployment.
- *
- * Mirrors the production signal in `remoteUrlSecurity.ts`
- * (`validateRemoteUrl`), which guards the same SSRF domain, so both
- * fetch guards stay in lockstep on a single environment variable.
- */
-function isProductionRuntime(): boolean {
-  return process.env.RUN_ENV === "production";
-}
-
-/**
  * Whether `fetch_url` may reach private/internal network addresses.
  *
- * - Outside production the SSRF blocklist auto-relaxes so local
- *    development can fetch localhost/private endpoints (and admit the
- *    Crawl4AI engine) with zero configuration.
- * - In production the blocklist stays enforced unless an operator
- *    explicitly opts in with `FETCH_URL_ALLOW_PRIVATE_NETWORK`, matching
- *    the production-gated model of `validateRemoteUrl`.
- *
- * @returns True when private-network fetch targets are permitted.
+ * Only the explicit `FETCH_URL_ALLOW_PRIVATE_NETWORK` opt-in grants this, in every `RUN_ENV`,
+ * because self-hosted community instances commonly run in development mode with untrusted members.
  */
 export function isPrivateNetworkFetchAllowed(): boolean {
-  // Development/local runtimes are trusted; skip the blocklist with no setup.
-  if (!isProductionRuntime()) {
-    return true;
-  }
-
   const raw = process.env[PRIVATE_NETWORK_ENV]?.trim().toLowerCase();
   return raw === "true" || raw === "1" || raw === "yes" || raw === "on";
+}
+
+/** Gate-2 policy for `fetchUserRemoteUrl`, so every redirect hop follows the same opt-in as gate 1. */
+export function getFetchUrlRemotePolicy(): FetchUserRemoteUrlOptions {
+  const allowPrivateNetwork = isPrivateNetworkFetchAllowed();
+  return { strict: !allowPrivateNetwork, allowPrivateNetwork };
 }
 
 function normalizeHostname(hostname: string): string {
@@ -183,7 +169,6 @@ function buildBlockedFetchMessage(hostname: string, blocked: ResolvedFetchAddres
   const resolvedList = resolved.map((entry) => entry.address).join(", ");
   return (
     `The URL host '${hostname}' resolved to '${blocked.address}', which is ${blocked.reason}. ` +
-    `TomoriBot blocks private/internal URL fetch targets in production unless ${PRIVATE_NETWORK_ENV}=true. ` +
     `Resolved addresses: ${resolvedList}.`
   );
 }
@@ -233,15 +218,14 @@ export async function validateFetchUrlTarget(url: string): Promise<FetchUrlSafet
     };
   }
 
-  // Always-on floor: cloud-metadata / link-local addresses are blocked
-  //    unconditionally, so the private-network opt-in and dev auto-relax cannot
-  //    reach them, since they are the primary SSRF credential-theft target.
+  // Cloud-metadata and link-local addresses are the primary SSRF credential-theft target, so the
+  // private-network opt-in never reaches them.
   const metadataAddress = resolvedAddresses.find((entry) => isCloudMetadataAddress(entry.address));
   if (metadataAddress) {
     const resolvedList = resolvedAddresses.map((entry) => entry.address).join(", ");
     return {
       allowed: false,
-      failureCode: "PRIVATE_NETWORK_BLOCKED",
+      failureCode: "METADATA_ADDRESS_BLOCKED",
       error:
         `The URL host '${hostname}' resolved to '${metadataAddress.address}', a cloud instance-metadata ` +
         `or link-local address that TomoriBot never fetches. Resolved addresses: ${resolvedList}.`,
@@ -249,7 +233,6 @@ export async function validateFetchUrlTarget(url: string): Promise<FetchUrlSafet
     };
   }
 
-  // Development or explicit production opt-in: skip the general blocklist.
   if (allowPrivateNetwork) {
     return { allowed: true };
   }
@@ -261,9 +244,6 @@ export async function validateFetchUrlTarget(url: string): Promise<FetchUrlSafet
       allowed: false,
       failureCode: "PRIVATE_NETWORK_BLOCKED",
       error,
-      details:
-        `Set ${PRIVATE_NETWORK_ENV}=true only in a trusted self-hosted deployment if you intentionally want ` +
-        "`fetch_url` to reach private network addresses.",
     };
   }
 

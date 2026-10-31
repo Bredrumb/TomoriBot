@@ -206,5 +206,5 @@ model at Q8**.
 - **Using Compose?** Its `RUN_ENV=development` setting permits local HTTP endpoints. A
   production runtime enforces HTTPS and blocks private-network destinations unless the caller
   explicitly permits them. `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` permits private targets for
-  `fetch_url` in production; it does not change provider endpoint rules. Cloud metadata addresses
+  `fetch_url` in every mode; it does not change provider endpoint rules. Cloud metadata addresses
   remain blocked in every mode.

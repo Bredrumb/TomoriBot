@@ -362,7 +362,7 @@ async function fetchUserRemoteUrlInternal(
 export interface FetchUserRemoteUrlOptions {
   /** Enforce the private/link-local/loopback blocklist even outside production. */
   strict?: boolean;
-  /** Permit private/internal targets even in production, aligning with the
+  /** Permit private/internal targets (plain HTTP included), aligning with the
    *  `fetch_url` `FETCH_URL_ALLOW_PRIVATE_NETWORK` opt-in. The always-on
    *  cloud-metadata denylist still applies. Ignored when `strict` is set. */
   allowPrivateNetwork?: boolean;

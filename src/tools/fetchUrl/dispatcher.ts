@@ -23,12 +23,11 @@ function createEngine(name: FetchEngineName): FetchEngine {
 export function getFetchUrlEngineOrder(): FetchEngineName[] {
   if (!isCrawl4aiConfigured()) return ["safe_http"];
 
-  // Crawl4AI follows redirects outside this process, so it is only admitted
-  // where private-network fetches are permitted: any non-production runtime,
-  // or production with an explicit FETCH_URL_ALLOW_PRIVATE_NETWORK opt-in.
+  // Crawl4AI follows redirects outside this process with no SSRF gate, so admitting it already
+  // grants private-network reach and requires the same explicit opt-in.
   if (!isPrivateNetworkFetchAllowed()) {
     log.warn(
-      "Ignoring Crawl4AI for fetch_url: private-network fetching is disabled (production without FETCH_URL_ALLOW_PRIVATE_NETWORK)",
+      "Ignoring Crawl4AI for fetch_url: set FETCH_URL_ALLOW_PRIVATE_NETWORK=true in .env to admit it, because it can reach private network addresses",
     );
     return ["safe_http"];
   }

@@ -6,7 +6,7 @@ import { localizer } from "@/utils/text/localizer";
 import { executeFetchUrlWithFallback } from "./dispatcher";
 import { sendFetchProgressNotice } from "./fetchProgressNotice";
 import type { FetchOpts } from "./types";
-import { isPrivateNetworkFetchAllowed, validateFetchUrlTarget } from "./urlSafety";
+import { getFetchUrlRemotePolicy, validateFetchUrlTarget } from "./urlSafety";
 
 /**
  * Validates fetch URL size before downloading
@@ -26,7 +26,7 @@ async function validateFetchSize(url: string): Promise<{ allowed: boolean; reaso
         method: "HEAD",
         signal: AbortSignal.timeout(5000), // 5 second timeout
       },
-      { allowPrivateNetwork: isPrivateNetworkFetchAllowed() },
+      getFetchUrlRemotePolicy(),
     );
 
     // Get Content-Length header (may not always be present)
