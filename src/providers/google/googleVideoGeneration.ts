@@ -29,7 +29,9 @@ const interactionSchema = z.object({
       }),
     )
     .optional(),
-  errors: z.array(z.object({ code: z.string().optional(), message: z.string().optional() })).optional(),
+  errors: z
+    .array(z.object({ code: z.union([z.string(), z.number()]).optional(), message: z.string().optional() }))
+    .optional(),
 });
 
 type GoogleInteraction = z.infer<typeof interactionSchema>;

@@ -64,8 +64,11 @@ describe("Google Gemini Omni video generation", () => {
     expect(body.generation_config.video_config.task).toBe("image_to_video");
   });
 
-  it("throws the interaction's errors when it does not complete", async () => {
-    responses = [{ id: "synthetic", status: "failed", errors: [{ message: "synthetic interaction failure" }] }];
+  it.each([
+    { name: "a URI", code: "https://example.invalid/errors/synthetic" },
+    { name: "a numeric status", code: 3 },
+  ])("throws the interaction's errors when it fails with $name code", async ({ code }) => {
+    responses = [{ id: "synthetic", status: "failed", errors: [{ code, message: "synthetic interaction failure" }] }];
 
     await expect(generateGoogleNativeVideo(REQUEST)).rejects.toThrow("synthetic interaction failure");
   });
