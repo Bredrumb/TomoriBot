@@ -15,6 +15,8 @@ export default {
       script_too_long: `El guión de voz supera el límite de longitud del modelo de voz seleccionado.`,
       cancelled: `Se canceló esta solicitud de herramienta.`,
       model_error: `El proveedor rechazó el modelo seleccionado para esta solicitud de herramienta.`,
+      model_files_missing: `El servidor de generación no tiene instalados estos archivos de modelo configurados: {models}.`,
+      not_configured: `No hay ningún proveedor utilizable configurado para esta herramienta.`,
       balance_exhausted: `La cuenta del proveedor utilizada para esta solicitud de herramienta se ha quedado sin saldo.`,
       credit_limit: `La cuenta del proveedor no puede cubrir la longitud de salida solicitada.`,
       context_length: `Esta solicitud de herramienta supera el límite de contexto del modelo seleccionado.`,

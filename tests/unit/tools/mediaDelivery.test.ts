@@ -1,7 +1,7 @@
 import { StreamUiUpdater } from "@/utils/discord/stream/uiUpdater";
 import { createDefaultStreamState } from "@/types/stream/types";
 import type { StreamContext } from "@/types/stream/interfaces";
-import { afterEach, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
+import { afterEach, beforeAll, describe, expect, it, mock, spyOn } from "bun:test";
 import {
   AttachmentBuilder,
   type AnyThreadChannel,
@@ -39,7 +39,6 @@ import { DiscordDeliveryError } from "@/utils/discord/webhook/deliveryOutcome";
 import * as lifecycle from "@/utils/discord/webhook/lifecycle";
 import * as identity from "@/utils/discord/webhook/identity";
 import { recordPersonaDelivery, type PersonaDeliveryReceipt } from "@/utils/discord/webhook/personaPost";
-import { getSingleAttemptWebhookRest } from "@/utils/discord/webhook/webhookCore";
 import { deliverVoiceMessage, postVoiceTranscriptCaption } from "@/utils/discord/webhook/voiceMessageDelivery";
 import { buildToolPersonaPostContext } from "@/utils/discord/webhook/toolPersonaDelivery";
 import { resolveToolSpriteSelection } from "@/tools/spriteSelection";
@@ -56,17 +55,11 @@ const SPRITE = "https://example.com/joy.png";
 const BOT = "1400000000000000001";
 let serial = 1400000000000000010n;
 const clients: Client[] = [];
-let bucket: { globalRemaining: number; globalReset: number };
 type Outcome = "sent" | "lost" | "components" | "attachment" | "server" | "missing_id" | "refused";
 
 beforeAll(initializeLocalizer);
-beforeEach(() => {
-  const rest = getSingleAttemptWebhookRest();
-  bucket = { globalRemaining: rest.globalRemaining, globalReset: rest.globalReset };
-});
 afterEach(() => {
   mock.restore();
-  Object.assign(getSingleAttemptWebhookRest(), bucket);
   clearPersonaSpriteCache();
   clearPersonaAppearances();
   clearAllChannelDeliveryContinuity();
@@ -74,9 +67,6 @@ afterEach(() => {
 });
 
 function fixture(isAlter = false, isIdentity = false, inThread = true, rememberSprite = true) {
-  const webhookRest = getSingleAttemptWebhookRest();
-  webhookRest.globalRemaining = webhookRest.options.globalRequestsPerSecond;
-  webhookRest.globalReset = 0;
   clearPersonaAppearances();
   clearAllChannelDeliveryContinuity();
   const persona = createPersona({
@@ -230,7 +220,7 @@ function fixture(isAlter = false, isIdentity = false, inThread = true, rememberS
       text: () => response.text(),
     };
   };
-  spyOn(getSingleAttemptWebhookRest().options, "makeRequest").mockImplementation(makeRequest);
+  // The single-attempt client copies these options when a send first builds it for this client.
   spyOn(client.rest.options, "makeRequest").mockImplementation(makeRequest);
   const voiceFetch = () =>
     spyOn(globalThis, "fetch").mockImplementation(

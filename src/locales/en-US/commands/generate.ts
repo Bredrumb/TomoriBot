@@ -66,7 +66,7 @@ export default {
     video: {
       nsfw_description: `Add a Discord spoiler to the video only; does not change generation or content filters`,
       model_description: `Use this model for this generation only; leave blank to use your current default`,
-      description: `Generate an AI video using Google Veo, OpenRouter, or Z.ai`,
+      description: `Generate an AI video using Google Gemini Omni, OpenRouter, or Z.ai`,
       modal: {
         title: `Generate Video`,
         prompt_label: `Video Prompt`,

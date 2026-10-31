@@ -1,7 +1,6 @@
 import {
   AttachmentBuilder,
   MessageFlags,
-  Routes,
   type AnyThreadChannel,
   type BaseGuildTextChannel,
   type TextChannel,
@@ -21,7 +20,7 @@ import {
   sendPersonaPost,
 } from "@/utils/discord/webhook/personaPost";
 import {
-  getSingleAttemptBotRest,
+  postChannelMessageOnce,
   sendChannelMessageOnce,
   sendSelectedWebhookMessageOnce,
 } from "@/utils/discord/webhook/singleAttemptMessage";
@@ -179,16 +178,15 @@ async function sendNativeVoice(
       return delivery.result.id;
     }
     const form = voiceForm(options, author);
-    const rest = target.channel.client.rest;
     assertCanDispatch(target);
     dispatched = true;
     // Bot REST needs passThroughBody because JSON serialization would corrupt the multipart boundary and drop native waveform metadata.
     const message = requireMessage(
-      await rest.post.call(getSingleAttemptBotRest(target.channel.client), Routes.channelMessages(target.channel.id), {
-        body: form,
-        passThroughBody: true,
-        signal: target.personaPost?.abortSignal,
-      }),
+      await postChannelMessageOnce(
+        target.channel,
+        { body: form, passThroughBody: true, signal: target.personaPost?.abortSignal },
+        () => assertCanDispatch(target),
+      ),
     );
     commitDelivery(target, botAuthor(target, author), message, null);
     return message.id;

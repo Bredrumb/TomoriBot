@@ -17,7 +17,7 @@ export interface GuildMcpOAuthGrant {
   expiresAt: Date | null;
 }
 
-export interface GuildMcpOAuthRefreshRow {
+interface GuildMcpOAuthRefreshRow {
   client_id: string;
   access_token: Buffer;
   access_token_key_version: number;

@@ -15,7 +15,7 @@ import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 import { createProviderToolFailure } from "@/utils/provider/providerToolFailure";
 /**
  * Video Generation Command (/generate video)
- * Allows users to generate AI videos using Google Veo, OpenRouter, or Z.ai.
+ * Allows users to generate AI videos using Google Gemini Omni, OpenRouter, or Z.ai.
  * Supports text-to-video and image-to-video via an optional reference image upload.
  * Video generation is async: takes 1-5 minutes with provider-side polling.
  */
@@ -128,7 +128,7 @@ export const autocomplete = createGenerationModelAutocomplete("video");
 
 /**
  * @param videoModelId - Database ID of the video generation model
- * @returns The model codename string (e.g., "veo-3.1-generate-preview")
+ * @returns The model codename string (e.g., "gemini-omni-1.1-flash")
  */
 async function getVideoModelCodename(videoModelId: number): Promise<string> {
   const model = await llmModelRepo.loadVideoGenerationModelById(videoModelId);

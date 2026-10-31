@@ -20,10 +20,9 @@ import {
   type PersonaPostAuthor,
 } from "@/utils/discord/webhook/personaPost";
 import { buildChatPersonaPostContext } from "@/utils/chat/responseEmitter";
-import { sendChannelMessageOnce } from "@/utils/discord/webhook/singleAttemptMessage";
+import { sendChannelMessageOnce, sendWebhookMessageOnce } from "@/utils/discord/webhook/singleAttemptMessage";
 import { classifyDiscordDeliveryFailure, DiscordDeliveryError } from "@/utils/discord/webhook/deliveryOutcome";
 import type { ResolvedWebhookIdentity } from "@/utils/discord/webhook/identity";
-import { sendWebhookMessageOnce } from "@/utils/discord/webhook/webhookCore";
 import { log } from "@/utils/misc/logger";
 import { EXPRESSION_MEDIA_MAX_BYTES } from "@/utils/storage/expressionMedia";
 import { loadExpressionMedia } from "@/utils/storage/expressionStorage";

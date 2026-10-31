@@ -106,7 +106,7 @@ Generate AI images, videos, and voice messages.
 |---|---|
 | `/generate image` | Generate an AI image from your own prompt or the current channel scene |
 | `/generate scene` | Generate a short scripted text scene between selected personas. |
-| `/generate video` | Generate an AI video using Google Veo, OpenRouter, or Z.ai |
+| `/generate video` | Generate an AI video using Google Gemini Omni, OpenRouter, or Z.ai |
 | `/generate voice-message` | Speak a message with a voice you pick |
 
 ## `/help`

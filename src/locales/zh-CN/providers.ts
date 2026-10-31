@@ -15,6 +15,8 @@ export default {
       script_too_long: `语音脚本超出了所选语音模型的长度上限。`,
       cancelled: `此工具请求已取消。`,
       model_error: `提供方拒绝了为此工具请求选择的模型。`,
+      model_files_missing: `生成服务器未安装以下已配置的模型文件：{models}。`,
+      not_configured: `此工具未配置可用的提供方。`,
       balance_exhausted: `此工具请求使用的提供方账户余额已用尽。`,
       credit_limit: `提供方账户余额无法支付所请求的输出长度。`,
       context_length: `此工具请求超出了所选模型的上下文上限。`,

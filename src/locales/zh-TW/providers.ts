@@ -15,6 +15,8 @@ export default {
       script_too_long: `語音腳本超出所選語音模型的長度上限。`,
       cancelled: `此工具請求已取消。`,
       model_error: `供應商拒絕了為此工具請求選用的模型。`,
+      model_files_missing: `生成伺服器未安裝以下已設定的模型檔案：{models}。`,
+      not_configured: `此工具未設定可用的供應商。`,
       balance_exhausted: `此工具請求使用的供應商帳戶額度已用盡。`,
       credit_limit: `供應商帳戶額度無法涵蓋所請求的輸出長度。`,
       context_length: `此工具請求超出所選模型的脈絡上限。`,

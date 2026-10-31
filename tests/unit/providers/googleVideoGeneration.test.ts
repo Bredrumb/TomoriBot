@@ -1,24 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { generateGoogleNativeVideo } from "@/providers/google/googleVideoGeneration";
-import { ProviderVideoFilteredError } from "@/providers/utils/providerVideoErrors";
 import { log } from "@/utils/misc/logger";
 import { stubGlobalFetch } from "../../helpers/fetchStub";
 
-const REQUEST = { apiKey: "synthetic-google-video-key", model: "veo-synthetic", prompt: "A quiet harbor" };
+const REQUEST = { apiKey: "synthetic-google-video-key", model: "gemini-omni-synthetic", prompt: "A quiet harbor" };
+const VIDEO_BYTES = Buffer.from("synthetic mp4 bytes");
 
-describe("Google video completion without videos", () => {
+describe("Google Gemini Omni video generation", () => {
   const spies: Array<{ mockRestore(): void }> = [];
-  let operation: Record<string, unknown>;
-  let errorSpy: ReturnType<typeof spyOn<typeof log, "error">>;
-  let warnSpy: ReturnType<typeof spyOn<typeof log, "warn">>;
+  let calls: Array<{ url: string; init?: RequestInit }>;
+  let responses: Array<Record<string, unknown>>;
 
   beforeEach(() => {
-    errorSpy = spyOn(log, "error").mockResolvedValue(undefined);
-    warnSpy = spyOn(log, "warn").mockImplementation(() => undefined);
+    calls = [];
     spies.push(
-      errorSpy,
-      warnSpy,
-      stubGlobalFetch(() => Response.json(operation)),
+      spyOn(log, "info").mockImplementation(() => undefined),
+      spyOn(log, "warn").mockImplementation(() => undefined),
+      stubGlobalFetch((input, init) => {
+        calls.push({ url: String(input), init });
+        return Response.json(responses.shift());
+      }),
     );
   });
 
@@ -26,25 +27,49 @@ describe("Google video completion without videos", () => {
     for (const spy of spies.splice(0)) spy.mockRestore();
   });
 
-  it("throws the provider's operation error instead of returning an empty result", async () => {
-    operation = {
-      name: "operations/synthetic",
-      done: true,
-      error: { code: 3, message: "synthetic operation failure" },
-    };
-    await expect(generateGoogleNativeVideo(REQUEST)).rejects.toThrow("synthetic operation failure");
+  it("polls a stored background interaction and decodes the inline video", async () => {
+    responses = [
+      { id: "synthetic/interaction", status: "in_progress" },
+      {
+        id: "synthetic/interaction",
+        status: "completed",
+        steps: [
+          {
+            type: "model_output",
+            content: [{ type: "video", mime_type: "video/mp4", data: VIDEO_BYTES.toString("base64") }],
+          },
+        ],
+      },
+    ];
+
+    const result = await generateGoogleNativeVideo({ ...REQUEST, aspectRatio: "1:1" });
+
+    expect(result.videoData?.equals(VIDEO_BYTES)).toBe(true);
+    expect(calls[1].url).toEndWith("/interactions/synthetic%2Finteraction");
+    const body = JSON.parse(String(calls[0].init?.body));
+    expect(body).toMatchObject({ background: true, store: true, input: REQUEST.prompt });
+    expect(body.response_format).not.toHaveProperty("aspect_ratio");
   });
 
-  it("reports filter reasons as an expected refusal without an error log", async () => {
-    operation = {
-      name: "operations/synthetic",
-      done: true,
-      response: {
-        generateVideoResponse: { raiMediaFilteredCount: 1, raiMediaFilteredReasons: ["synthetic filter reason"] },
-      },
-    };
-    await expect(generateGoogleNativeVideo(REQUEST)).rejects.toBeInstanceOf(ProviderVideoFilteredError);
-    expect(errorSpy).not.toHaveBeenCalled();
-    expect(warnSpy.mock.calls.some(([message]) => message.includes("synthetic filter reason"))).toBe(true);
+  it("sends a reference image as the starting frame of an image-to-video task", async () => {
+    responses = [{ id: "synthetic", status: "completed", steps: [] }];
+
+    await generateGoogleNativeVideo({
+      ...REQUEST,
+      referenceImages: [{ mimeType: "image/png", data: "c3ludGhldGlj" }],
+    });
+
+    const body = JSON.parse(String(calls[0].init?.body));
+    expect(body.input[0]).toEqual({ type: "image", data: "c3ludGhldGlj", mime_type: "image/png" });
+    expect(body.generation_config.video_config.task).toBe("image_to_video");
+  });
+
+  it.each([
+    { name: "a URI", code: "https://example.invalid/errors/synthetic" },
+    { name: "a numeric status", code: 3 },
+  ])("throws the interaction's errors when it fails with $name code", async ({ code }) => {
+    responses = [{ id: "synthetic", status: "failed", errors: [{ code, message: "synthetic interaction failure" }] }];
+
+    await expect(generateGoogleNativeVideo(REQUEST)).rejects.toThrow("synthetic interaction failure");
   });
 });

@@ -84,6 +84,23 @@ export function noteSendFailure(channelId: string, reason: SendFailureReason): {
   return { isFirstOfEpisode };
 }
 
+const loggedSendFailures = new WeakSet<object>();
+
+/**
+ * Marks a failure the send site has already logged with its delivery metadata. The same error then
+ * propagates through the stream orchestrator and the generation emitter, and each would otherwise
+ * log it again at error level, turning one failed reply into three incident rows.
+ */
+export function markSendFailureLogged<T extends object>(error: T): T {
+  loggedSendFailures.add(error);
+  return error;
+}
+
+/** Whether a send site already logged this failure, so a later layer should log it at warn. */
+export function wasSendFailureLogged(error: unknown): boolean {
+  return typeof error === "object" && error !== null && loggedSendFailures.has(error);
+}
+
 /** The cached reason when sends to this channel are still known to fail, otherwise null. */
 export function getBlockedSendReason(channelId: string): SendFailureReason | null {
   const entry = sendFailureCache.get(channelId);

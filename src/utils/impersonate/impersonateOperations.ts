@@ -486,7 +486,7 @@ export async function executeUserImpersonation(
           })
           .setColor(ColorCode.INFO);
 
-        const notice = await sendChannelMessageOnce(channel, { embeds: [noticeEmbed] }, () => undefined);
+        const notice = await channel.send({ embeds: [noticeEmbed] });
         recordPersonaDelivery({
           messageId: notice.id,
           channelId: notice.channelId,
@@ -633,7 +633,7 @@ export async function executeSystemImpersonation(
     iconURL: invokerAvatarUrl,
   });
 
-  const notice = await sendChannelMessageOnce(channel, { embeds: [embed] }, () => undefined);
+  const notice = await channel.send({ embeds: [embed] });
   recordPersonaDelivery({
     messageId: notice.id,
     channelId: notice.channelId,
