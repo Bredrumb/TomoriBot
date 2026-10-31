@@ -1099,23 +1099,6 @@
       "title": "Diagnostic output: mask overlay"
     }
   },
-  "10006:231": {
-    "inputs": {
-      "expand": 0,
-      "incremental_expandrate": 0,
-      "tapered_corners": true,
-      "flip_input": false,
-      "blur_radius": 0,
-      "lerp_alpha": 1,
-      "decay_factor": 1,
-      "fill_holes": true,
-      "mask": ["10006:236", 0]
-    },
-    "class_type": "GrowMaskWithBlur",
-    "_meta": {
-      "title": "Regular preserve mask"
-    }
-  },
   "10006:289": {
     "inputs": {
       "value": "{TOMORI_INPAINT_USE_CLOTHING_PARSER_PROTECTION}"
@@ -1125,9 +1108,43 @@
       "title": "Branch value: use clothing parser protection"
     }
   },
+  "10007:crop": {
+    "inputs": {
+      "image": ["10002:178", 0],
+      "mask": ["10006:227", 0],
+      "downscale_algorithm": "bilinear",
+      "upscale_algorithm": "bicubic",
+      "preresize": false,
+      "preresize_mode": "ensure minimum resolution",
+      "preresize_min_width": 1024,
+      "preresize_min_height": 1024,
+      "preresize_max_width": 16384,
+      "preresize_max_height": 16384,
+      "mask_fill_holes": false,
+      "mask_expand_pixels": 0,
+      "mask_invert": false,
+      "mask_blend_pixels": "{TOMORI_LANPAINT_MASK_BLEND_OVERLAP}",
+      "mask_hipass_filter": 0.1,
+      "extend_for_outpainting": false,
+      "extend_up_factor": 1,
+      "extend_down_factor": 1,
+      "extend_left_factor": 1,
+      "extend_right_factor": 1,
+      "context_from_mask_extend_factor": 1.2,
+      "output_resize_to_target_size": true,
+      "output_target_width": "{TOMORI_SOURCE_WIDTH}",
+      "output_target_height": "{TOMORI_SOURCE_HEIGHT}",
+      "output_padding": "32",
+      "device_mode": "cpu (compatible)"
+    },
+    "class_type": "InpaintCropImproved",
+    "_meta": {
+      "title": "Regular inpaint: crop around edit mask at source resolution"
+    }
+  },
   "10007:340": {
     "inputs": {
-      "pixels": ["10002:178", 0],
+      "pixels": ["10007:crop", 1],
       "vae": ["10001:17", 0]
     },
     "class_type": "VAEEncode",
@@ -1138,7 +1155,7 @@
   "10007:204": {
     "inputs": {
       "samples": ["10007:340", 0],
-      "mask": ["10006:227", 0]
+      "mask": ["10007:crop", 2]
     },
     "class_type": "SetLatentNoiseMask",
     "_meta": {
@@ -1178,22 +1195,20 @@
       "title": "Regular inpaint decode"
     }
   },
-  "10007:266": {
+  "10007:stitch": {
     "inputs": {
-      "blend_overlap": "{TOMORI_LANPAINT_MASK_BLEND_OVERLAP}",
-      "image1": ["10002:178", 0],
-      "image2": ["10007:197", 0],
-      "mask": ["10006:227", 0]
+      "stitcher": ["10007:crop", 0],
+      "inpainted_image": ["10007:197", 0]
     },
-    "class_type": "LanPaint_MaskBlend",
+    "class_type": "InpaintStitchImproved",
     "_meta": {
-      "title": "LanPaint blend: regular inpaint restore source"
+      "title": "Regular inpaint: stitch edited crop into source"
     }
   },
   "10009:191": {
     "inputs": {
       "cond": ["10000:198", 3],
-      "tt_value": ["10009:229", 0],
+      "tt_value": ["10009:298", 0],
       "ff_value": ["10012:hires_decode", 0]
     },
     "class_type": "ImpactConditionalBranch",
@@ -1212,36 +1227,11 @@
       "title": "Branch: final txt2img/reference path"
     }
   },
-  "10009:228": {
-    "inputs": {
-      "x": 0,
-      "y": 0,
-      "resize_source": true,
-      "destination": ["10007:197", 0],
-      "source": ["10002:178", 0],
-      "mask": ["10006:231", 0]
-    },
-    "class_type": "ImageCompositeMasked",
-    "_meta": {
-      "title": "Invert-mask regular inpaint preserve composite"
-    }
-  },
-  "10009:229": {
-    "inputs": {
-      "cond": ["10000:223", 3],
-      "tt_value": ["10009:228", 0],
-      "ff_value": ["10009:298", 0]
-    },
-    "class_type": "ImpactConditionalBranch",
-    "_meta": {
-      "title": "Branch: inverted regular mask or normal/outpaint path"
-    }
-  },
   "10009:298": {
     "inputs": {
       "cond": ["10000:297", 3],
       "tt_value": ["10008:469", 0],
-      "ff_value": ["10007:266", 0]
+      "ff_value": ["10007:stitch", 0]
     },
     "class_type": "ImpactConditionalBranch",
     "_meta": {

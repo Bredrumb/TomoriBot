@@ -110,4 +110,33 @@ describe.each(bundledWorkflows)("bundled ComfyUI workflow $file", ({ file, detai
     expect(countClass(workflow, "FaceDetailer")).toBe(0);
     expect(countClass(workflow, "LanPaint_KSampler")).toBeGreaterThan(0);
   });
+
+  it("inpaints a crop of the edit mask at source resolution and stitches it into the saved image", async () => {
+    const endpoint = await loadEndpoint(file);
+    for (const inpaintMaskMode of ["target", "background"] as const) {
+      const workflow = await submitWorkflow(endpoint, {
+        referenceImages: [referenceImage],
+        inpaint: true,
+        maskPrompt: "dress",
+        inpaintMaskMode,
+      });
+      const crop = Object.values(workflow).find((node) => node.class_type === "InpaintCropImproved");
+      const finalSave = Object.values(workflow).find(
+        (node) => node.class_type === "SaveImage" && String(node.inputs.filename_prefix).startsWith("TomoriBot_"),
+      );
+      if (!crop || !finalSave) throw new Error(`Missing crop or final save for ${inpaintMaskMode} inpaint`);
+      const source = workflow[(crop.inputs.image as [string, number])[0]];
+      const savedImage = workflow[(finalSave.inputs.images as [string, number])[0]];
+
+      expect({
+        inpaintMaskMode,
+        cropSize: [crop.inputs.output_target_width, crop.inputs.output_target_height],
+        savedFrom: savedImage?.class_type,
+      }).toEqual({
+        inpaintMaskMode,
+        cropSize: [source?.inputs.width, source?.inputs.height],
+        savedFrom: "InpaintStitchImproved",
+      });
+    }
+  });
 });
