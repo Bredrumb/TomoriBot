@@ -61,7 +61,7 @@ reach whatever you allow here, so pick by who uses the bot:
 | Value | Choose it when |
 |---|---|
 | `true` | Only you or a trusted Discord community uses the bot. Local models and MCP servers on `localhost` or your LAN work, including over plain HTTP. |
-| A `host:port` list, such as `localhost:5001,host.docker.internal:11434` | You share local servers, such as KoboldCPP or ComfyUI, with members you don't fully trust. Only the listed servers work, so their endpoints can't reach anything else on your network. |
+| A `host:port` list, such as `localhost:5001,localhost:8188` | You share local servers, such as KoboldCPP or ComfyUI, with members you don't fully trust. Only the listed servers work, so their endpoints can't reach anything else on your network. |
 | `false` | Untrusted members use the bot and you share no local server. |
 
 Public HTTPS endpoints, such as hosted OpenAI-compatible APIs, work with every value. So does a local

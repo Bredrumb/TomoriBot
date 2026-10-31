@@ -176,6 +176,7 @@ const NON_INCIDENT_PROVIDER_CODES = new Set([
   "429_balance",
   "429_plan_access",
   "ECONNREFUSED",
+  "PRIVATE_NETWORK_BLOCKED",
   "billing_error",
   "not_found_error",
   // Anthropic's mid-stream SSE error event arrives as a non-retryable api_error whatever its cause.

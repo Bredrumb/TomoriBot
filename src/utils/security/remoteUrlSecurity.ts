@@ -113,7 +113,7 @@ export function getPrivateNetworkStartupError(): string | null {
   return [
     `${style(["bold", "red"], `TomoriBot did not start: ${problem}.`)}\nAdd one of these lines to .env, then start TomoriBot again.`,
     `${style(["bold", "green"], `${PRIVATE_NETWORK_ENV}=true`)}\nChoose this if only people you trust use the bot. Servers on localhost or your LAN work, so local models run.`,
-    `${style(["bold", "magenta"], `${PRIVATE_NETWORK_ENV}=localhost:5001,host.docker.internal:11434`)}\nChoose this to share local servers, such as KoboldCPP or ComfyUI, with members you don't fully trust. Only the listed host:port pairs work.`,
+    `${style(["bold", "magenta"], `${PRIVATE_NETWORK_ENV}=localhost:5001,localhost:8188`)}\nChoose this to share local servers, such as KoboldCPP or ComfyUI, with members you don't fully trust. Only the listed host:port pairs work.`,
     `${style(["bold", "yellow"], `${PRIVATE_NETWORK_ENV}=false`)}\nChoose this if members you don't trust use the bot. No localhost or LAN servers work.`,
     `Public HTTPS endpoints, such as hosted APIs or a tunnel to a local model, work with every option. You can also run ${style("cyan", "`bun run setup`")} to choose. With Docker Compose, run ${style("cyan", "`docker compose up -d`")} after editing .env so the container rereads it.`,
   ].join("\n\n");

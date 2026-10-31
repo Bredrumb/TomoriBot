@@ -443,7 +443,7 @@ async function configurePrivateNetwork(
     validate: (value) =>
       parsePrivateNetworkSetting(value)?.mode === "listed"
         ? null
-        : "Enter host:port entries separated by commas, such as localhost:5001,host.docker.internal:11434.",
+        : "Enter host:port entries separated by commas, such as localhost:5001,localhost:8188.",
   });
   return { ALLOW_PRIVATE_NETWORK: list.trim() };
 }

@@ -7,7 +7,7 @@ import {
   isProviderTimeoutMessage,
 } from "@/utils/provider/providerErrorClassification";
 import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
-import { RemoteUrlPolicyError } from "@/utils/security/userRemoteFetch";
+import { isPrivateNetworkRefusal, RemoteUrlPolicyError } from "@/utils/security/userRemoteFetch";
 import { localizer } from "@/utils/text/localizer";
 
 interface ParsedOpenAICompatibleErrorPayload {
@@ -107,6 +107,16 @@ export function normalizeOpenAICompatibleProviderError(
       type: "api_error",
       message: `${options.errorMessagePrefix}: ${errorMessage}`,
       code: error.failureCode,
+      retryable: false,
+      originalError: error,
+    };
+  }
+
+  if (isPrivateNetworkRefusal(error)) {
+    return {
+      type: "api_error",
+      message: `${options.errorMessagePrefix}: ${errorMessage}`,
+      code: "PRIVATE_NETWORK_BLOCKED",
       retryable: false,
       originalError: error,
     };

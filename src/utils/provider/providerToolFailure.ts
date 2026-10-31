@@ -12,9 +12,11 @@ import {
 } from "@/utils/provider/providerErrorClassification";
 import { CredentialUnavailableError } from "@/utils/provider/credentialResolver";
 import { resolveProviderErrorPresentation } from "@/utils/provider/providerErrorPresentation";
+import { isPrivateNetworkRefusal } from "@/utils/security/userRemoteFetch";
 import { localizer } from "@/utils/text/localizer";
 
 const TOOL_FAILURE_REASON_KEYS = {
+  endpoint_blocked: "genai.tool_failure.endpoint_blocked",
   content_blocked: "genai.tool_failure.content_blocked",
   authentication: "genai.tool_failure.authentication",
   quota: "genai.tool_failure.quota",
@@ -62,7 +64,8 @@ type FailureKind =
   | "sample_read_failed"
   | "invalid_response"
   | "missing_api_key"
-  | "not_configured";
+  | "not_configured"
+  | "endpoint_blocked";
 
 /** Kinds that only say the request failed, so the provider's message may name a sharper cause. */
 const GENERIC_KINDS = new Set<FailureKind>([
@@ -124,6 +127,7 @@ export function createProviderToolFailure(error: unknown, context: ProviderToolF
   if (kind === "quota" && status === "429") kind = "rate_limit";
   if (error instanceof CredentialUnavailableError) kind = "not_configured";
   else if (error instanceof ConfiguredModelUnavailableError) kind = "model_error";
+  else if (isPrivateNetworkRefusal(error)) kind = "endpoint_blocked";
   else if (GENERIC_KINDS.has(kind) && /\b(?:safety|blocked|content filter)\b/i.test(message)) kind = "content_blocked";
   // Google and Z.ai answer an exhausted balance with 429, so the status alone would advise waiting on a limit that never resets.
   else if (
@@ -145,7 +149,7 @@ export function createProviderToolFailure(error: unknown, context: ProviderToolF
     else if (status === "400" || status === "422") kind = "invalid_request";
     else kind = "provider_error";
   }
-  const code = suppliedCode ?? kind;
+  const code = kind === "endpoint_blocked" ? "PRIVATE_NETWORK_BLOCKED" : (suppliedCode ?? kind);
   const providerError: ProviderError = {
     type:
       kind === "content_blocked" ||
@@ -182,6 +186,12 @@ export function createProviderToolFailure(error: unknown, context: ProviderToolF
       ].includes(key),
   );
   if (reasonKey === "content_blocked" || reasonKey === "invalid_request") tipKeys = ["genai.tips.revise_tool_request"];
+  else if (kind === "endpoint_blocked")
+    tipKeys = [
+      context.credentialScope === "personal"
+        ? "genai.tips.endpoint_not_allowed_personal"
+        : "genai.tips.endpoint_not_allowed",
+    ];
   else if (kind === "authentication")
     tipKeys = [
       context.credentialScope === "personal" ? "genai.tips.verify_api_key_personal" : "genai.tips.verify_api_key",

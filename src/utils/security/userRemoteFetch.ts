@@ -33,6 +33,14 @@ export class RemoteUrlPolicyError extends Error {
   }
 }
 
+/** True when the host's private-network setting refused the endpoint, as opposed to any other policy refusal. */
+export function isPrivateNetworkRefusal(error: unknown): error is RemoteUrlPolicyError {
+  return (
+    error instanceof RemoteUrlPolicyError &&
+    (error.failureCode === "PRODUCTION_LOCALHOST_FORBIDDEN" || error.failureCode === "PRODUCTION_BLOCKED_ADDRESS")
+  );
+}
+
 export interface PinnedFetchRequest {
   url: URL;
   init: BunFetchRequestInit;
