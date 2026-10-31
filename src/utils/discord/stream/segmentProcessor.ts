@@ -67,6 +67,11 @@ const SUSPECTED_RENDER_MODIFIER_LABEL_RE = /\([^()\n\r:：]{1,64}\)\s*[:：]/;
 /** How much of a segment to echo into the diagnostic line. */
 const RENDER_MODIFIER_DIAGNOSTIC_HEAD_CHARS = 80;
 
+function joinFlushedSegments(held: string, next: string, opensLine: boolean): string {
+  const separator = held && !/\s$/u.test(held) && !/^\s/u.test(next) ? (opensLine ? "\n" : " ") : "";
+  return held + separator + next;
+}
+
 /**
  * Owns normalization and routing for flushed stream text segments before Discord delivery.
  */
@@ -259,7 +264,7 @@ export class StreamSegmentProcessor {
       resolvedSegment = normalizedLeadingWhitespace + resolvedSegment;
     }
 
-    let segmentToSend = this.stripPrefillFromSegment(resolvedSegment, state);
+    let segmentToSend = this.stripPrefillFromSegment(resolvedSegment, opensLine, state);
 
     let shouldStopForSpeakerGuard = false;
     if (context.tomoriState.config.llm_stop_speaker_pattern_enabled ?? false) {
@@ -306,8 +311,7 @@ export class StreamSegmentProcessor {
       const next = (deliveryOptions?.accumulatedTextPrefix ?? "") + segmentToSend;
       // The buffer consumes the newline or space it flushed at, and replay posts each segment as its
       // own message, but the reviewer and the rewrite request read this as one continuous draft.
-      const separator = held && !/\s$/u.test(held) && !/^\s/u.test(next) ? (opensLine ? "\n" : " ") : "";
-      state.pendingResponseText = held + separator + next;
+      state.pendingResponseText = joinFlushedSegments(held, next, opensLine);
       if (shouldClearActiveRenderModifier) state.activeRenderModifier = undefined;
       if (shouldStopForSpeakerGuard) this.deps.requestStop(context.channel.id, "speaker_guard");
       const deliverable = resolveDeliverableHeldLength(context);
@@ -689,14 +693,16 @@ export class StreamSegmentProcessor {
     );
   }
 
-  private stripPrefillFromSegment(segment: string, state: StreamState): string {
+  private stripPrefillFromSegment(segment: string, opensLine: boolean, state: StreamState): string {
     const target = state.prefillTarget;
     if (!target || state.prefillMatchFailed || state.prefillMatched >= target.length) {
       return segment;
     }
 
-    // The target is trimmed, so whitespace before an echo would otherwise fail the match at index 0.
-    let index = state.prefillMatched === 0 ? (segment.match(/^\s*/)?.[0].length ?? 0) : 0;
+    // The buffer consumes the newline or space it flushed at, so whitespace at a segment boundary is
+    // skipped on both sides; the trimmed target likewise has none before an echo's opening.
+    let index = segment.match(/^\s*/)?.[0].length ?? 0;
+    state.prefillMatched += target.slice(state.prefillMatched).match(/^\s*/)?.[0].length ?? 0;
     while (index < segment.length && state.prefillMatched < target.length) {
       if (segment[index] === target[state.prefillMatched]) {
         state.prefillMatched += 1;
@@ -704,7 +710,7 @@ export class StreamSegmentProcessor {
         continue;
       }
       // Text withheld by an earlier partial match is model output, not an echo, so it is released.
-      const released = state.prefillHeld + segment;
+      const released = joinFlushedSegments(state.prefillHeld, segment, opensLine);
       state.prefillHeld = "";
       state.prefillMatchFailed = true;
       state.prefillMatched = target.length;
@@ -716,7 +722,7 @@ export class StreamSegmentProcessor {
       return segment.slice(index);
     }
 
-    state.prefillHeld += segment;
+    state.prefillHeld = joinFlushedSegments(state.prefillHeld, segment, opensLine);
     return "";
   }
 

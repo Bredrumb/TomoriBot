@@ -192,7 +192,9 @@ describe("applyAssistantPrefill", () => {
     });
     expect(instructed.outputPrefill).toBe("Mirri: Apples, pears,");
     expect(instructed.contextItems.some((item) => item.role === "model")).toBe(false);
-    expect(JSON.stringify(instructed.contextItems.at(-1)?.parts)).toContain("Mirri: Apples, pears,");
+    const directive = JSON.stringify(instructed.contextItems.at(-1)?.parts);
+    expect(directive).toContain("Apples, pears,");
+    expect(directive).not.toContain("Mirri: Apples");
   });
 
   it("leaves tool macros in delivered text unexpanded", async () => {

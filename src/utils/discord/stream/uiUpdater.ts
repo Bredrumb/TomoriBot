@@ -641,7 +641,11 @@ export class StreamUiUpdater {
       );
     }
     if (textForState) {
-      state.accumulatedText += textForState;
+      // Each send is its own Discord message, so the record keeps the line break the channel shows;
+      // a continuation prefill and short-term memory read this text back.
+      const separator =
+        state.accumulatedText && !/\s$/u.test(state.accumulatedText) && !/^\s/u.test(textForState) ? "\n" : "";
+      state.accumulatedText += separator + textForState;
     }
     // The array is a shared reference off StreamingContext, so appends survive an abandoned
     // (timed-out) stream promise.

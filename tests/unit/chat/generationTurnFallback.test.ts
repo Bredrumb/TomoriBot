@@ -1685,7 +1685,8 @@ describe("runGenerationTurn fallback behavior", () => {
     ]);
     const retryContext = toolLoopCalls[1]?.contextItems ?? [];
     expect(retryContext.some((item) => item.role === "model")).toBe(false);
-    expect(JSON.stringify(retryContext.at(-1)?.parts)).toContain("Tomori: First half.");
+    expect(JSON.stringify(retryContext.at(-1)?.parts)).toContain("First half.");
+    expect(JSON.stringify(retryContext.at(-1)?.parts)).not.toContain("Tomori: First half.");
     expect(context.streamingContext.outputPrefill).toBe("Tomori: First half.");
     expect(sink.emittedErrors).toHaveLength(0);
     expect(result.personaResponses[0]?.text).toBe("First half.\nsecond half.");

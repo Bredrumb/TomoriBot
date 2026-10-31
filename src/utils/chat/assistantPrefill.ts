@@ -169,8 +169,12 @@ export async function applyAssistantPrefill(args: {
     };
   }
 
+  // A continuation is already in the channel, so the model is not asked to echo it: the echo strip
+  // matches character by character, and one divergence in a long echo reposts the whole reply.
   const directive = buildTailDirectiveMessage(
-    `Begin your next reply with: "${outputPrefill}". Continue directly after it without repeating the prefix.`,
+    args.prefill.source === "continuation"
+      ? `Your reply was cut off after you had already sent this part: "${text}". That part is already in the chat, so write only what comes after it and do not repeat any of it.`
+      : `Begin your next reply with: "${outputPrefill}". Continue directly after it without repeating the prefix.`,
   );
   return { contextItems: directive ? [...args.contextItems, directive] : args.contextItems, outputPrefill };
 }
