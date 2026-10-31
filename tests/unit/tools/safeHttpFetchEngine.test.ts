@@ -229,7 +229,7 @@ describe("safe HTTP fetch engine", () => {
       process.env[RUN_ENV_NAME] = runEnv;
       expect((await validateRemoteUrl("http://192.168.1.50/", { allowPrivateNetwork: true })).valid).toBe(true);
       expect((await validateRemoteUrl("http://93.184.216.34/", { allowPrivateNetwork: true })).valid).toBe(false);
-      expect((await validateRemoteUrl("http://192.168.1.50/")).valid).toBe(false);
+      expect((await validateRemoteUrl("http://192.168.1.50/", { strict: true })).valid).toBe(false);
       expect((await validateRemoteUrl("http://192.168.1.50/", { allowPrivateNetwork: true, strict: true })).valid).toBe(
         false,
       );

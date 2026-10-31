@@ -1,6 +1,7 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import { isCloudMetadataAddress } from "@/utils/security/cloudMetadata";
+import { getEmbeddedIpv4 } from "@/utils/security/embeddedIpv4";
 import type { FetchUserRemoteUrlOptions } from "@/utils/security/userRemoteFetch";
 
 const PRIVATE_NETWORK_ENV = "FETCH_URL_ALLOW_PRIVATE_NETWORK";
@@ -54,39 +55,9 @@ function normalizeHostname(hostname: string): string {
   return normalized;
 }
 
-function getMappedIpv4Address(address: string): string | null {
-  const mapped = address.match(/^(?:::ffff:|0:0:0:0:0:ffff:)(.+)$/);
-  if (!mapped) {
-    return null;
-  }
-
-  const tail = mapped[1];
-  if (tail && isIP(tail) === 4) {
-    return tail;
-  }
-
-  const hexTail = tail?.match(/^([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
-  if (!hexTail) {
-    return null;
-  }
-
-  const high = Number.parseInt(hexTail[1] ?? "", 16);
-  const low = Number.parseInt(hexTail[2] ?? "", 16);
-  if (Number.isNaN(high) || Number.isNaN(low)) {
-    return null;
-  }
-
-  return `${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`;
-}
-
 function normalizeAddress(address: string): string {
   const normalized = address.trim().toLowerCase();
-  const mappedIpv4 = getMappedIpv4Address(normalized);
-  if (mappedIpv4) {
-    return mappedIpv4;
-  }
-
-  return normalized;
+  return getEmbeddedIpv4(normalized) ?? normalized;
 }
 
 function classifyIpv4Address(address: string): AddressClassification {

@@ -7,12 +7,17 @@
  * dispatches out-of-process. Its in-process `safe_http` engine still reaches this gate, with
  * `strict` unless the operator set `FETCH_URL_ALLOW_PRIVATE_NETWORK`.
  *
+ * Outside production, private targets are admitted unless the operator sets
+ * `ALLOW_PRIVATE_NETWORK=false`, so self-hosted local model servers work without setup. Production
+ * always refuses them because the hosted instance serves untrusted communities.
+ *
  * Add new user-URL entry points here rather than writing a third guard.
  */
 
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import { isCloudMetadataAddress } from "@/utils/security/cloudMetadata";
+import { getEmbeddedIpv4 } from "@/utils/security/embeddedIpv4";
 
 export type RemoteUrlValidationFailureCode =
   | "INVALID_FORMAT"
@@ -43,8 +48,18 @@ export interface RemoteUrlValidationResult {
   details?: string;
 }
 
+const PRIVATE_NETWORK_ENV = "ALLOW_PRIVATE_NETWORK";
+
 function isProductionRuntime(): boolean {
   return process.env.RUN_ENV === "production";
+}
+
+/** Unset means on, while an unrecognized value means off, so a typo fails closed. */
+function isEndpointPrivateNetworkAllowed(): boolean {
+  if (isProductionRuntime()) return false;
+  const raw = process.env[PRIVATE_NETWORK_ENV]?.trim().toLowerCase();
+  if (!raw) return true;
+  return raw === "true" || raw === "1" || raw === "yes" || raw === "on";
 }
 
 function normalizeHostname(hostname: string): string {
@@ -155,6 +170,12 @@ function classifyIpv6Address(address: string): {
   if (address === "::1") {
     return { blockedInProduction: true, reason: "a loopback IPv6 address" };
   }
+  // Classify by the embedded IPv4 but keep the IPv6 address, because the fetch pins to it and an
+  // IPv6-only host behind NAT64 cannot dial the IPv4 directly.
+  const embeddedIpv4 = getEmbeddedIpv4(address);
+  if (embeddedIpv4) {
+    return classifyIpv4Address(embeddedIpv4);
+  }
   if (/^f[cd]/.test(address)) {
     return { blockedInProduction: true, reason: "a unique-local IPv6 range" };
   }
@@ -224,15 +245,24 @@ async function resolveHostnameAddresses(hostname: string): Promise<ResolvedRemot
   return Array.from(addresses.values());
 }
 
+function getPrivateNetworkRemedy(strict: boolean): string {
+  if (strict) return "";
+  return isProductionRuntime()
+    ? " Production always blocks private addresses."
+    : ` The host blocks private addresses with ${PRIVATE_NETWORK_ENV}=false.`;
+}
+
 function buildBlockedAddressDetails(
   hostname: string,
   blockedAddress: ResolvedRemoteAddress,
   allAddresses: ResolvedRemoteAddress[],
+  strict: boolean,
 ): string {
   const resolvedList = allAddresses.map((entry) => entry.address).join(", ");
   return (
     `Resolved address '${blockedAddress.address}' for '${hostname}' is ${blockedAddress.reason}. ` +
-    `Production only allows publicly routable hosts. Resolved addresses: ${resolvedList}`
+    `Only publicly routable hosts are allowed. Resolved addresses: ${resolvedList}.` +
+    getPrivateNetworkRemedy(strict)
   );
 }
 
@@ -264,7 +294,7 @@ function getHttpProtocolFailure(
 }
 
 export interface ValidateRemoteUrlOptions {
-  /** Always enforce the private/link-local/loopback blocklist, regardless of RUN_ENV.
+  /** Always enforce the private/link-local/loopback blocklist, ignoring `ALLOW_PRIVATE_NETWORK`.
    *  Use when a caller's policy must remain production-strict during development. */
   strict?: boolean;
   /** Permit private targets (plain HTTP too when every resolved address is private); cloud metadata stays blocked. */
@@ -276,8 +306,9 @@ export async function validateRemoteUrl(
   options?: ValidateRemoteUrlOptions,
 ): Promise<RemoteUrlValidationResult> {
   const isProduction = isProductionRuntime();
-  const privateNetworkAllowed = options?.strict !== true && options?.allowPrivateNetwork === true;
-  const enforceBlocklist = options?.strict === true || (isProduction && !privateNetworkAllowed);
+  const strict = options?.strict === true;
+  const privateNetworkAllowed = !strict && (options?.allowPrivateNetwork === true || isEndpointPrivateNetworkAllowed());
+  const enforceBlocklist = !privateNetworkAllowed;
 
   let parsedUrl: URL;
   try {
@@ -302,7 +333,9 @@ export async function validateRemoteUrl(
   const hostname = normalizeHostname(parsedUrl.hostname);
   const isLocalHost = isExplicitLocalHost(hostname);
   // Most LAN services only speak HTTP, so under the opt-in the HTTP decision waits for DNS.
-  const httpNeedsPrivateTarget = privateNetworkAllowed && parsedUrl.protocol === "http:";
+  // Only an explicit caller opt-in widens HTTP: media downloads also reach this gate, and Discord's proxy
+  // fallback hands them plain-HTTP origins any member can post.
+  const httpNeedsPrivateTarget = !strict && options?.allowPrivateNetwork === true && parsedUrl.protocol === "http:";
   const httpFailure = getHttpProtocolFailure(parsedUrl, hostname, isProduction, isLocalHost);
 
   if (httpFailure && !httpNeedsPrivateTarget) {
@@ -314,7 +347,7 @@ export async function validateRemoteUrl(
       valid: false,
       failureCode: "PRODUCTION_LOCALHOST_FORBIDDEN",
       hostname,
-      details: "Localhost is not allowed for this endpoint.",
+      details: `Localhost is not allowed for this endpoint.${getPrivateNetworkRemedy(strict)}`,
     };
   }
 
@@ -371,7 +404,7 @@ export async function validateRemoteUrl(
         hostname,
         blockedAddress: blockedAddress.address,
         resolvedAddresses: resolvedAddresses.map((entry) => entry.address),
-        details: buildBlockedAddressDetails(hostname, blockedAddress, resolvedAddresses),
+        details: buildBlockedAddressDetails(hostname, blockedAddress, resolvedAddresses, strict),
       };
     }
   }

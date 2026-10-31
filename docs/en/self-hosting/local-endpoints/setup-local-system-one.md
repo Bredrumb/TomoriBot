@@ -84,5 +84,5 @@ Open `/config` > `Models` > `Switch Models` and pick `kev-latest` in the `Decisi
 
 - **Stop the server** with `Ctrl+C`. TomoriBot does not start or stop Kev for you.
 - **TomoriBot in Docker?** `127.0.0.1` inside the container is not your host. Use `http://host.docker.internal:8009/v1` and start Kev with `--host 0.0.0.0`. Kev has no login by default, so set `KEV_API_KEY` first and put the same value in `Auth Token`.
-- **Production runtimes** enforce HTTPS and block private addresses for provider endpoints. A local HTTP URL works when `RUN_ENV=development`. See [Local LLM](/self-hosting/local-endpoints/setup-local-llm/#notes--gotchas).
+- **Production runtimes** enforce HTTPS and block private addresses for provider endpoints. A local HTTP URL works outside production unless `ALLOW_PRIVATE_NETWORK=false`. See [Local LLM](/self-hosting/local-endpoints/setup-local-llm/#notes--gotchas).
 - **Other System One servers** such as Laya use the same steps with their own URL and model name. A server that implements the OpenAI Decisions API uses `OpenAI Decisions compatible` instead.

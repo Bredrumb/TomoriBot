@@ -11,7 +11,7 @@ Users who want to use Docker Compose should skip this wizard, see
 [Docker Compose](/self-hosting/docker-compose/) for the containerized install path.
 :::
 
-`bun run setup` is the recommended self-host path for local Bun-based installs. The command installs the dependencies from `bun.lock` before loading the wizard, including on a fresh clone. The wizard creates your `.env`, generates a `CRYPTO_SECRET`, asks for your Discord bot token, and configures PostgreSQL. It's safe
+`bun run setup` is the recommended self-host path for local Bun-based installs. The command installs the dependencies from `bun.lock` before loading the wizard, including on a fresh clone. The wizard creates your `.env`, generates a `CRYPTO_SECRET`, asks for your Discord bot token, asks whether to [allow private networks](#private-networks), and configures PostgreSQL. It's safe
 to re-run; existing `.env` values are kept unless you choose to reconfigure them.
 
 
@@ -49,6 +49,16 @@ Once you run the command, you'll pick one of two paths:
 | Full Install | You want the recommended setup with lightweight extras. | Runs Base Install, then attempts the extras below. |
 | Base Install | You want only the minimum working bot. | Creates/configures `.env`, Discord token, PostgreSQL, and dependencies. |
 
+
+### Private networks
+<!-- anchor: private-networks -->
+
+The wizard asks whether TomoriBot may reach `localhost` and your LAN, and saves the answer as
+`ALLOW_PRIVATE_NETWORK` in `.env`. Keep it on (the default) if only you or a trusted Discord
+community uses the bot, so local models and MCP servers work. Turn it off if untrusted members use
+the bot, because the endpoints they add and the links they post could then make the bot send
+requests into your network.
+With it off, a local model still works through an HTTPS tunnel such as Cloudflare Tunnel or ngrok.
 
 ### Full Install extras
 

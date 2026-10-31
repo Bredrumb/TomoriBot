@@ -41,6 +41,20 @@ describe("validateFetchUrlTarget in production", () => {
     expect(result.error).toContain("127.0.0.1");
   });
 
+  it("blocks private and metadata targets embedded in NAT64, 6to4, and IPv4-compatible addresses", async () => {
+    process.env[ENV_NAME] = "true";
+    const metadataResult = await validateFetchUrlTarget("http://[64:ff9b::a9fe:a9fe]/");
+    expect(metadataResult.failureCode).toBe("METADATA_ADDRESS_BLOCKED");
+
+    delete process.env[ENV_NAME];
+    const admitted: string[] = [];
+    for (const url of ["http://[::127.0.0.1]/", "http://[64:ff9b::7f00:1]/", "http://[2002:c0a8:132::]/"]) {
+      if ((await validateFetchUrlTarget(url)).allowed) admitted.push(url);
+    }
+    expect(admitted).toEqual([]);
+    expect((await validateFetchUrlTarget("https://[64:ff9b::5db8:d822]/")).allowed).toBe(true);
+  });
+
   it("blocks the Azure Instance Metadata Service address", async () => {
     delete process.env[ENV_NAME];
 

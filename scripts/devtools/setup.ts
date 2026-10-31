@@ -405,6 +405,24 @@ async function configureCryptoSecret(
   return { CRYPTO_SECRET: secret };
 }
 
+async function configurePrivateNetwork(
+  env: Record<string, string>,
+  mode: EnvConfigureMode,
+): Promise<Record<string, string>> {
+  const current = env.ALLOW_PRIVATE_NETWORK?.trim().toLowerCase();
+  if (mode === "keep" || (mode === "fill" && current)) {
+    return {};
+  }
+
+  log.info("Private networks let custom endpoints and MCP servers reach localhost and your LAN, so local models work.");
+  log.info(
+    "Keep this on if only you or a trusted Discord community will use this bot. Turn it off if untrusted members use it, because their endpoints and posted links can make the bot request your network. HTTPS tunnels still work.",
+  );
+  log.info("Production (RUN_ENV=production) always blocks private networks, whatever you choose here.");
+  const allow = await confirm("Allow private networks?", current ? ["true", "1", "yes", "on"].includes(current) : true);
+  return { ALLOW_PRIVATE_NETWORK: allow ? "true" : "false" };
+}
+
 function needsDatabaseConfig(env: Record<string, string>, mode: EnvConfigureMode): boolean {
   if (mode === "keep") return false;
   if (mode === "reconfigure") return true;
@@ -557,6 +575,7 @@ async function runBaseInstall(scan: PrereqScan, options: BaseInstallOptions = {}
 
   Object.assign(envUpdates, await configureCryptoSecret(env, mode));
   Object.assign(envUpdates, await configureDiscordToken({ ...env, ...envUpdates }, mode));
+  Object.assign(envUpdates, await configurePrivateNetwork({ ...env, ...envUpdates }, mode));
   const database = await configureDatabase({ ...env, ...envUpdates }, mode, scan);
   Object.assign(envUpdates, database.values);
 

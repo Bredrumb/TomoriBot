@@ -203,8 +203,6 @@ model at Q8**.
 - **Running TomoriBot in Docker?** `localhost` inside the container is not your host. Use
   `http://host.docker.internal:<port>` (Windows/macOS) or the host's LAN IP, and bind the
   model server to `0.0.0.0`.
-- **Using Compose?** Its `RUN_ENV=development` setting permits local HTTP endpoints. A
-  production runtime enforces HTTPS and blocks private-network destinations unless the caller
-  explicitly permits them. `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` permits private targets for
-  `fetch_url` in every mode; it does not change provider endpoint rules. Cloud metadata addresses
-  remain blocked in every mode.
+- **Private addresses follow `ALLOW_PRIVATE_NETWORK`.** It is on unless `.env`
+  sets it to `false`. Plain HTTP works only for `localhost`; LAN hosts need HTTPS. `FETCH_URL_ALLOW_PRIVATE_NETWORK` is a separate
+  setting for the `fetch_url` tool and does not change endpoint rules.
