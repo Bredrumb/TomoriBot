@@ -56,6 +56,13 @@ or interrupt arrives.
 - **Bot messages:** Used for the main persona's base appearance through single-attempt channel delivery,
   with native reply references when applicable.
 
+Single-attempt delivery lives in `src/utils/discord/webhook/singleAttemptMessage.ts` and posts at
+most once. Neither route carries a nonce, so a timeout, reset, or 5xx after the request left ends
+as `unconfirmed` instead of being retried. Rate limits are the exception, because Discord accepted
+nothing: the module waits them out for up to 30 seconds and runs the caller's stop check
+throughout. Its REST client never leaves that module, so a new at-most-once send calls one of its
+functions instead of building a client.
+
 `sendWebhookMessageWithIdentity()` and its batch variant use the managed pool dispatcher in
 `webhookCore.ts`. Local avatars reuse verified image assignments across threads; a deferred avatar
 PATCH can create an additional slot or deliver with Discord's generic avatar. Local-avatar selection

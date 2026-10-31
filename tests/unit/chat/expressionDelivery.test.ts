@@ -4,7 +4,7 @@ import * as lifecycle from "@/utils/discord/webhook/lifecycle";
 import * as fallback from "@/utils/discord/webhook/fallback";
 import { clearPersonaAppearances } from "@/utils/cache/personaAppearanceCacheStore";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
-import { DiscordAPIError, RateLimitError, REST, type Sticker, Webhook } from "discord.js";
+import { DiscordAPIError, RateLimitError, REST, type RESTOptions, type Sticker, Webhook } from "discord.js";
 import type { RecordStatInput } from "@/utils/db/repositories/StatRepository";
 import type { ChatIncoming, ChatTurnContext } from "@/utils/chat/types";
 import type { StickerSelection } from "@/types/discord/stickerSelection";
@@ -19,7 +19,6 @@ import {
   getChannelLastDelivery,
   recordChannelDeliveredWebhookIdentity,
 } from "@/utils/discord/stream/channelDeliveryContinuity";
-import { getSingleAttemptWebhookRest } from "@/utils/discord/webhook/webhookCore";
 import { deleteExpressionMedia, storeExpressionMedia } from "@/utils/storage/expressionStorage";
 import { createCustomExpression, createPersona } from "../../helpers/fixtures";
 import { useEnvSandbox } from "../../helpers/env";
@@ -106,19 +105,21 @@ interface WebhookPost {
   body: Record<string, unknown>;
 }
 
+type WebhookTransport = (url: string, init: { body?: unknown }) => Promise<Response>;
+let webhookTransport: WebhookTransport | null = null;
+
 /**
- * Routes the single-attempt webhook client's network layer through `respond`. The REST client
- * reads `makeRequest` per request, so this exercises its real retry and error handling.
+ * Routes the single-attempt webhook client's network layer through `respond`. That client copies a
+ * webhook's REST options once and keeps them, so each test webhook's transport reads this at request
+ * time instead, which exercises the client's real retry and error handling.
  */
 function interceptWebhookPosts(respond: () => Response): { posts: WebhookPost[]; restore: () => void } {
-  const options = getSingleAttemptWebhookRest().options as { makeRequest: unknown };
-  const original = options.makeRequest;
   const posts: WebhookPost[] = [];
-  options.makeRequest = async (url: string, init: { body?: unknown }) => {
+  webhookTransport = async (url, init) => {
     posts.push({ url, body: typeof init.body === "string" ? JSON.parse(init.body) : {} });
     return respond();
   };
-  return { posts, restore: () => (options.makeRequest = original) };
+  return { posts, restore: () => (webhookTransport = null) };
 }
 
 /** Discord's 429, with a Retry-After short enough to keep the test fast. */
@@ -143,7 +144,15 @@ function makeWebhook(edit: () => void = () => undefined): Webhook {
     token: "webhook-token",
     avatar: null,
     channelId: null,
-    client: { options: {} },
+    client: {
+      options: {},
+      rest: new REST({
+        makeRequest: (async (url: string, init: { body?: unknown }) => {
+          if (!webhookTransport) throw new Error("Unexpected webhook POST without an intercepted transport");
+          return webhookTransport(url, init);
+        }) as unknown as RESTOptions["makeRequest"],
+      }),
+    },
     edit: async () => {
       edit();
       return webhook;
@@ -562,11 +571,12 @@ describe("expression delivery at tool invocation", () => {
   it("shares the deadline across repeated refusals instead of restarting the budget", async () => {
     const context = makeContext();
     context.currentPersona.is_alter = true;
-    context.responseTarget = { webhook: makeWebhook(), personaUsername: "Juno" };
+    const webhook = makeWebhook();
+    context.responseTarget = { webhook, personaUsername: "Juno" };
     const now = Date.now;
     let elapsed = 0;
     const clock = spyOn(Date, "now").mockImplementation(() => now() + elapsed);
-    const post = spyOn(getSingleAttemptWebhookRest(), "post").mockImplementation(async () => {
+    const post = spyOn(webhook.client.rest, "post").mockImplementation(async () => {
       elapsed += 16_000;
       throw new RateLimitError({
         global: false,
