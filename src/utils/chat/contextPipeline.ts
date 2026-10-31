@@ -541,8 +541,8 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   const proxiedSpeakerName = proxiedIdentity.userDiscId
     ? (await getCachedUserRow(proxiedIdentity.userDiscId))?.user_nickname?.trim() || proxiedIdentity.name
     : null;
-  // A nudge borrows an absent author's message as its trigger, so it must neither greet nor clock them.
-  const { note: reunionNote, presence: reunionPresence } = incoming.naturalNudge
+  // A system turn borrows a bystander's message as its trigger, so it must neither greet nor clock them.
+  const { note: reunionNote, presence: reunionPresence } = incoming.borrowsTriggerMessage
     ? { note: null, presence: null }
     : await resolveReunionNote({
         turn,

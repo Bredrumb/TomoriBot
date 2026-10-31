@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import { customEndpointSchema, personaSpriteSchema } from "@/types/db/schema";
 import { GenerateVoiceMessageTool } from "@/tools/functionCalls/generateVoiceMessageTool";
 import { ConditioningInteractionTool } from "@/tools/functionCalls/conditioningInteractionTool";
@@ -23,6 +23,7 @@ import type { TextQuotaTriggerState } from "@/utils/chat/textQuotaState";
 // in its own process (per-file isolation in runTests.ts) fails to link exports
 // like `serverScheduleRepository` that the graph imports but the stub omitted.
 import * as realRepositories from "@/utils/db/repositories";
+import * as speechRepository from "@/utils/db/repositories/SpeechRepository";
 // Same link-time capture for every other module mocked below, for the same
 // reason: a partial factory leaks for the rest of the run and breaks files
 // loaded later. Spreading the real namespace keeps each mock full-surface.
@@ -1209,6 +1210,30 @@ describe("runGenerationTurn fallback behavior", () => {
     await runGenerationTurn(context, sink);
 
     expect(toolLoopCalls.map((call) => call.model)).toEqual(["personal-primary", "server-primary"]);
+  });
+
+  it("reads the billed owner's opt-out, not the anchor author's, on a borrowed-trigger turn", async () => {
+    const context = makePersonalContext(
+      makeLlm(1, "server-primary"),
+      makeLlm(2, "server-fallback"),
+      makeLlm(3, "personal-primary"),
+    );
+    context.personalRoutingUserId = 77;
+    const policy = spyOn(speechRepository, "loadSpeechRoutingPolicy").mockResolvedValue({
+      serverAllowed: true,
+      fallbackEnabled: false,
+    });
+    queuedResults.push(personalRouteFailure());
+    try {
+      const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+      const result = await runGenerationTurn(context, collectingSink());
+
+      expect(policy.mock.calls[0]?.[1]).toBe(77);
+      expect(toolLoopCalls.map((call) => call.model)).toEqual(["personal-primary"]);
+      expect(result.status).toBe("error");
+    } finally {
+      policy.mockRestore();
+    }
   });
 
   it("refuses the server model fallback when the server's text quota is exhausted", async () => {

@@ -7,6 +7,7 @@ import type { ProviderError } from "@/types/stream/interfaces";
 import type { ToolContext } from "@/types/tool/interfaces";
 import { resolveServerTextModel } from "@/utils/provider/textModelSelection";
 import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
+import { loadSpeechRoutingPolicy } from "@/utils/db/repositories/SpeechRepository";
 import { type FallbackNoticeAttempt, sendFallbackModelUsageNotice } from "@/utils/discord/fallbackModelNotice";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import type { sendStandardEmbed } from "@/utils/discord/embedHelper";
@@ -369,7 +370,7 @@ function setStreamUserErrorSuppression(context: ChatTurnContext, temporarySuppre
 async function buildGenerationPlan(context: ChatTurnContext): Promise<GenerationPlan> {
   return {
     attempts: await buildPlannedRouteAttempts(context),
-    extendWithServerRoute: resolveServerRouteExtension(context),
+    extendWithServerRoute: await resolveServerRouteExtension(context),
   };
 }
 
@@ -381,9 +382,9 @@ async function buildGenerationPlan(context: ChatTurnContext): Promise<Generation
  * outright: a server that requires members to bring their own provider never lends its models to a
  * member-triggered turn, and the account-wide setting below is the user's own refusal.
  */
-function resolveServerRouteExtension(
+async function resolveServerRouteExtension(
   context: ChatTurnContext,
-): ((startIndex: number) => Promise<GenerationAttempt[]>) | null {
+): Promise<((startIndex: number) => Promise<GenerationAttempt[]>) | null> {
   if (
     context.turn.lockedTurn.admission.incoming.sceneTurn?.modelSelection ||
     context.textCredentialSource !== "personal" ||
@@ -400,8 +401,14 @@ function resolveServerRouteExtension(
   // Only an explicit opt-out withholds the route. The column is NOT NULL DEFAULT true and the
   // projection reports that default for an account with no personalization row yet, so an account
   // that never touched the setting keeps the fallback it already had.
-  if (context.turn.userRow.personal_server_fallback_enabled === false) {
-    log.info(`Skipping the server model fallback for user ${context.userDiscId}: disabled in their personal config.`);
+  // A borrowed-trigger turn bills someone other than the anchor message's author, so the opt-out is theirs.
+  const routingUserId = context.personalRoutingUserId;
+  const fallbackEnabled =
+    routingUserId == null || routingUserId === context.turn.userRow.user_id
+      ? context.turn.userRow.personal_server_fallback_enabled !== false
+      : (await loadSpeechRoutingPolicy(context.currentPersona.server_id, routingUserId)).fallbackEnabled;
+  if (!fallbackEnabled) {
+    log.info(`Skipping the server model fallback for user_id ${routingUserId}: disabled in their personal config.`);
     return null;
   }
   return (startIndex) => buildServerRouteAttempts(context, startIndex);

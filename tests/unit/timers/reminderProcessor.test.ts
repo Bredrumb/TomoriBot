@@ -277,6 +277,16 @@ describe("ReminderProcessor delivery acknowledgement", () => {
       userDiscId: "human_001",
     });
   });
+
+  it("treats the latest channel message as a bystander anchor and credits the reminder's creator", async () => {
+    getDueRemindersMock.mockImplementation(async () => [makeReminder({ created_by_user_id: 7 })]);
+
+    await new ReminderProcessor(makeClient() as never).processDueReminders();
+
+    const input = tomoriChatMock.mock.calls[0]?.[0];
+    expect(input?.borrowsTriggerMessage).toBeTrue();
+    expect(input?.reminderData?.created_by_user_id).toBe(7);
+  });
 });
 
 describe("ReminderProcessor delivery retry cap", () => {

@@ -32,6 +32,7 @@ async function buildTurnContext(
     hasTools?: boolean;
     includeInteractionHistory?: boolean;
     gestureHistory?: boolean;
+    borrowsTriggerMessage?: boolean;
   } = {},
 ): Promise<{
   context: ChatTurnContext;
@@ -115,6 +116,7 @@ async function buildTurnContext(
     isFromQueue: false,
     isManuallyTriggered: true,
     naturalNudge,
+    borrowsTriggerMessage: options.borrowsTriggerMessage ?? naturalNudge !== undefined,
     conditioningInteraction: options.conditioningInteraction,
     injectedContextItems: interactionEvent ? [interactionEvent] : undefined,
   });
@@ -191,6 +193,11 @@ describe("Natural Nudges turn context", () => {
     const nudge = await buildTurnContext({ toolNames: [] });
     expect(nudge.reunionCalls).toBe(0);
     expect(JSON.stringify(nudge.context.contextItems)).not.toContain(CONTINUE_DIRECTIVE);
+  });
+
+  it("skips the anchor author's reunion for every borrowed-trigger turn, such as a reminder", async () => {
+    const reminder = await buildTurnContext(undefined, { borrowsTriggerMessage: true });
+    expect(reminder.reunionCalls).toBe(0);
   });
 
   it("lets a Ping User nudge ping only its target, and leaves other nudges unrestricted", async () => {

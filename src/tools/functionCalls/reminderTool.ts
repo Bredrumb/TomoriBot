@@ -509,7 +509,10 @@ export class ReminderTool extends BaseTool {
         reminder_time: finalReminderTime,
         repetition,
         self_reminder: isSelfReminder,
-        created_by_user_id: requestingUserRow?.user_id ?? null,
+        // The creator's personal key pays for the reminder when it fires, so a bystander anchor never becomes it.
+        created_by_user_id: context.borrowsTriggerMessage
+          ? (context.internalUserId ?? null)
+          : (requestingUserRow?.user_id ?? null),
         persona_id: context.tomoriState.persona_id ?? null,
       });
 
