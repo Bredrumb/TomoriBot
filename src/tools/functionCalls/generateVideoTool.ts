@@ -86,7 +86,7 @@ export class GenerateVideoTool extends BaseTool {
       aspect_ratio: {
         type: "string",
         description:
-          "Optional: The aspect ratio for the generated video. Default is '16:9'. Note: '1:1' is not supported by all providers (e.g. Google Veo) and will fall back to '16:9'.",
+          "Optional: The aspect ratio for the generated video. Default is '16:9'. Note: '1:1' is not supported by all providers (e.g. Google) and will fall back to '16:9'.",
         enum: ["16:9", "9:16", "1:1"],
       },
       duration: {
@@ -176,7 +176,7 @@ export class GenerateVideoTool extends BaseTool {
 
   /**
    * Get the video model codename from the database via repository.
-   * @returns The model codename string (e.g., "veo-3.1-generate-preview")
+   * @returns The model codename string (e.g., "gemini-omni-1.1-flash")
    */
   private async getVideoModelCodename(videoModelId: number): Promise<string> {
     const model = await llmModelRepo.loadVideoGenerationModelById(videoModelId);

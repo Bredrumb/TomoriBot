@@ -235,7 +235,7 @@ export class NvidiaProvider
   }
 
   supportsEmbeddingTaskType(): boolean {
-    return false;
+    return true;
   }
 
   async generateEmbeddings(request: EmbeddingRequest): Promise<number[][]> {
@@ -253,6 +253,8 @@ export class NvidiaProvider
       body: JSON.stringify({
         model: request.model || NVIDIA_DEFAULT_EMBEDDING_MODEL,
         input: request.inputs,
+        // NIM answers 400 when an asymmetric embedder such as Nemotron Embed gets no input_type.
+        input_type: request.taskType === "RETRIEVAL_QUERY" ? "query" : "passage",
       }),
     });
 

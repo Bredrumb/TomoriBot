@@ -21,7 +21,7 @@ Administrative controls manage model selection and quotas:
 
 Provider implementations are resolved via `resolveProviderFeatureImplementation` in `src/utils/provider/providerInfoRegistry.ts`:
 
-- Google Veo: `src/providers/google/googleVideoGeneration.ts`
+- Google Gemini Omni: `src/providers/google/googleVideoGeneration.ts`
 - OpenRouter: `src/providers/openrouter/openrouterVideoGeneration.ts`
 - Z.ai: `src/providers/zai/zaiVideoGeneration.ts`
 - Custom ComfyUI endpoints: `src/providers/custom/customEndpointDispatcher.ts` via `generateCustomVideoViaEndpoint`

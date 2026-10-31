@@ -4170,12 +4170,27 @@ export const imageSections: ModelSection<ImageInput>[] = [
 
 export const videoSections: ModelSection<VideoInput>[] = [
   {
-    comment: "Google Veo Video Generation Models",
+    comment: "Google Video Generation Models",
     rows: [
       {
         provider: "google",
-        codename: "veo-3.1-generate-preview",
+        codename: "gemini-omni-1.1-flash",
         isDefault: true,
+        desc: "Google Gemini Omni Flash: videos with native audio from text or a starting image, in 16:9 or 9:16",
+        i18n: {
+          ja: "Google Gemini Omni Flash：テキストまたは開始画像から、ネイティブ音声付きの16:9または9:16の動画を生成",
+          "pt-BR": "Google Gemini Omni Flash: vídeos com áudio nativo a partir de texto ou imagem inicial",
+          "es-419":
+            "Google Gemini Omni Flash: videos con audio nativo a partir de texto o una imagen inicial, en 16:9 o 9:16",
+          "zh-TW": "Google Gemini Omni Flash：由文字或起始圖片生成附原生音訊的 16:9 或 9:16 影片",
+          vi: "Google Gemini Omni Flash: tạo video kèm âm thanh gốc từ văn bản hoặc ảnh khởi đầu, tỉ lệ 16:9 hoặc 9:16",
+          "zh-CN": "Google Gemini Omni Flash：由文字或起始图片生成带原生音频的 16:9 或 9:16 视频",
+        },
+      },
+      {
+        provider: "google",
+        codename: "veo-3.1-generate-preview",
+        isDeprecated: true,
         desc: "Google Veo 3.1 — 8-second 720p/1080p/4K videos with native audio generation",
         i18n: {
           ja: "Google Veo 3.1 — ネイティブオーディオ生成付き8秒の720p/1080p/4K動画",
@@ -4189,6 +4204,7 @@ export const videoSections: ModelSection<VideoInput>[] = [
       {
         provider: "google",
         codename: "veo-3.1-fast-generate-preview",
+        isDeprecated: true,
         desc: "Google Veo 3.1 Fast — faster video generation with reduced quality",
         i18n: {
           ja: "Google Veo 3.1 Fast — 品質を抑えた高速動画生成",
@@ -4202,6 +4218,7 @@ export const videoSections: ModelSection<VideoInput>[] = [
       {
         provider: "google",
         codename: "veo-3.1-lite-generate-preview",
+        isDeprecated: true,
         desc: "Google Veo 3.1 Lite — lightweight video generation (no 4K support)",
         i18n: {
           ja: "Google Veo 3.1 Lite — 軽量な動画生成（4K非対応）",
@@ -4465,6 +4482,21 @@ export const embeddingSections: ModelSection<EmbeddingInput>[] = [
         provider: "nvidia",
         codename: "nv-embed-v1",
         family: "nv-embed-v1",
+        isDeprecated: true,
+        desc: "Deprecated embedding model (not selectable)",
+        i18n: {
+          ja: "非推奨の埋め込みモデル（選択不可）",
+          "pt-BR": "Modelo de embedding obsoleto (não selecionável)",
+          "es-419": "Modelo de embeddings obsoleto (no seleccionable)",
+          "zh-TW": "已淘汰的嵌入模型（無法選用）",
+          vi: "Model embedding đã lỗi thời (không thể chọn)",
+          "zh-CN": "已淘汰的嵌入模型（无法选用）",
+        },
+      },
+      {
+        provider: "nvidia",
+        codename: "nvidia/nemotron-3.5-embed-1b",
+        family: "nemotron-3.5-embed-1b",
         isDefault: true,
         desc: "Default NVIDIA NIM embedding model for retrieval and document indexing",
         i18n: {

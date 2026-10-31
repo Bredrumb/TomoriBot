@@ -103,6 +103,7 @@ function signaturesMatch(actualSignature: string, expectedSignature: string): bo
   }
 }
 
+/** @public Release-only `tests/unit/supporterBilling/patreonOAuth.test.ts` imports this. */
 export function hashOAuthNonce(nonce: string): string {
   return createHash("sha256").update(nonce).digest("hex");
 }

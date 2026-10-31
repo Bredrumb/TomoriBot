@@ -181,7 +181,7 @@ function carriedCodenames(catalog: CatalogLookup, table: ModelTable, provider: s
 function supportsMediaModel(provider: string, model: SourceModel, kind: "image" | "video"): boolean {
   if (!outputIs(model, kind) || REJECT_MEDIA.test(model.id)) return false;
   if (provider === "openrouter") return true;
-  if (kind === "video") return provider === "google" && model.id.startsWith("veo-");
+  if (kind === "video") return provider === "google" && model.id.startsWith("gemini-omni-");
   return (provider === "google" || provider === "vertex") && model.id.startsWith("gemini-");
 }
 
@@ -363,7 +363,7 @@ function sectionFor(table: ModelTable, provider: string): string {
     if (provider === "vertex") return "Vertex AI Gemini Image Generation Models";
     return provider === "google" ? "Google Gemini Image Generation Models" : "OpenRouter Image Generation Models";
   }
-  return provider === "google" ? "Google Veo Video Generation Models" : "OpenRouter Video Generation Models";
+  return provider === "google" ? "Google Video Generation Models" : "OpenRouter Video Generation Models";
 }
 
 export function insertRows(source: string, candidates: Candidate[]): string {

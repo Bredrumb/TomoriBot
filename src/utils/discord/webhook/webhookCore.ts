@@ -1159,10 +1159,8 @@ export function getSingleAttemptWebhookRest(): REST {
 }
 
 /**
- * Runs a POST through a single-attempt client, waiting out every rate limit that client rejects and
- * then retrying. The retry cannot duplicate: Discord refused the limited request, or the client
- * refused to send it. Every single-attempt POST must go through here, because that client rejects
- * even the routine wait for a channel's message bucket to refill.
+ * Every single-attempt POST must go through here, because that client rejects even the routine wait
+ * for a channel's message bucket to refill (retrying cannot duplicate, since the request was refused).
  *
  * @param beforePost - Runs immediately before every attempt and throughout each wait; throwing from
  *   it cancels the send with nothing posted

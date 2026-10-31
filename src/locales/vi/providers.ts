@@ -15,6 +15,8 @@ export default {
       script_too_long: `Kịch bản giọng nói vượt quá giới hạn độ dài của model giọng nói đã chọn.`,
       cancelled: `Yêu cầu công cụ này đã bị hủy.`,
       model_error: `Nhà cung cấp đã từ chối model đã chọn cho yêu cầu công cụ này.`,
+      model_files_missing: `Máy chủ tạo nội dung chưa cài đặt các tệp model đã thiết lập sau: {models}.`,
+      not_configured: `Chưa có nhà cung cấp khả dụng nào được thiết lập cho công cụ này.`,
       balance_exhausted: `Tài khoản nhà cung cấp dùng cho yêu cầu công cụ này đã hết tiền.`,
       credit_limit: `Tài khoản nhà cung cấp không đủ chi trả cho độ dài đầu ra được yêu cầu.`,
       context_length: `Yêu cầu công cụ này vượt quá giới hạn ngữ cảnh của model đã chọn.`,

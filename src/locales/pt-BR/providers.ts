@@ -15,6 +15,8 @@ export default {
       script_too_long: `O texto da voz excede o limite de comprimento do modelo de fala selecionado.`,
       cancelled: `Esta solicitação de ferramenta foi cancelada.`,
       model_error: `O provedor rejeitou o modelo selecionado para esta solicitação de ferramenta.`,
+      model_files_missing: `O servidor de geração não tem estes arquivos de modelo configurados instalados: {models}.`,
+      not_configured: `Nenhum provedor utilizável está configurado para esta ferramenta.`,
       balance_exhausted: `A conta do provedor usada para esta solicitação de ferramenta ficou sem créditos.`,
       credit_limit: `A conta do provedor não pode cobrir o comprimento de saída solicitado.`,
       context_length: `Esta solicitação de ferramenta excede o limite de contexto do modelo selecionado.`,

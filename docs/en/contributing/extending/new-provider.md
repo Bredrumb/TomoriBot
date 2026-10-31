@@ -193,7 +193,7 @@ set `isDeprecated: true`; to remove it, delete the row.
 
 The weekly drift check in `scripts/checks/modelDrift.ts` drafts media rows only for supported
 routes. Google and Vertex image candidates require a `gemini-` ID and image output metadata;
-Google video candidates require a `veo-` ID and video output metadata. OpenRouter uses output
+Google video candidates require a `gemini-omni-` ID and video output metadata. OpenRouter uses output
 metadata for both. Extend the route predicate and catalog section mapping when adding a route,
 so supported models are drafted into the right section rather than reported as unsupported.
 
