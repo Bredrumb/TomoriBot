@@ -1,4 +1,3 @@
-import { sendChannelMessageOnce } from "@/utils/discord/webhook/singleAttemptMessage";
 /**
  * Expandable Components V2 notification helper.
  *
@@ -189,7 +188,7 @@ async function deliverNoticeComponents(
   }
 
   try {
-    const message = await sendChannelMessageOnce(channel, payload, () => undefined);
+    const message = await channel.send(payload);
     recordPersonaDelivery({
       messageId: message.id,
       channelId: message.channelId,

@@ -8,6 +8,7 @@ import {
 import type { SendableChannel } from "@/utils/discord/resolveSendableChannel";
 import {
   getSingleAttemptWebhookRest,
+  postWithRateLimitWait,
   sendSelectedWebhookMessage,
   type WebhookIdentitySelection,
 } from "@/utils/discord/webhook/webhookCore";
@@ -35,10 +36,10 @@ async function withPostRest<T extends { client: { rest: REST } }, R>(
   const transport = new Proxy(target.client.rest, {
     get(original, key) {
       if (key === "post")
-        return (...args: Parameters<REST["post"]>) => {
-          if (active) beforePost();
-          return original.post.call(active ? rest : original, ...args);
-        };
+        return (...args: Parameters<REST["post"]>) =>
+          active
+            ? postWithRateLimitWait(beforePost, () => original.post.call(rest, ...args))
+            : original.post.call(original, ...args);
       const value = Reflect.get(original, key, original);
       return typeof value === "function" ? value.bind(original) : value;
     },

@@ -1,4 +1,3 @@
-import { sendChannelMessageOnce } from "@/utils/discord/webhook/singleAttemptMessage";
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -266,7 +265,7 @@ export async function sendStandardEmbed(
     sentMessage = outcome.message;
     sentViaWebhook = outcome.receipt.route === "webhook";
   } else {
-    sentMessage = await sendChannelMessageOnce(channel, { embeds: [embed], components }, () => undefined);
+    sentMessage = await channel.send({ embeds: [embed], components });
     recordPersonaDelivery({
       messageId: sentMessage.id,
       channelId: sentMessage.channelId,

@@ -1142,14 +1142,14 @@ async function sendWebhookMessagesInternal(
  * can observe a stop before posting again.
  */
 let singleAttemptRest: REST | null = null;
-const EXPRESSION_RATE_LIMIT_BUDGET_MS = 30_000;
-const EXPRESSION_STOP_CHECK_INTERVAL_MS = 100;
+const SINGLE_ATTEMPT_RATE_LIMIT_BUDGET_MS = 30_000;
+const SINGLE_ATTEMPT_STOP_CHECK_INTERVAL_MS = 100;
 
-/** @public Release-only `src/utils/chat/expressionDelivery.ts` imports this error, which marks exhausted rate-limited POSTs as definite non-delivery. */
-export class WebhookExpressionRateLimitTimeoutError extends DiscordDeliveryError {
+/** Marks a POST that ran out of rate-limit budget as definite non-delivery: no attempt was accepted. */
+class SingleAttemptRateLimitTimeoutError extends DiscordDeliveryError {
   constructor() {
-    super("definite_refusal", new Error("Webhook expression rate-limit budget exhausted"));
-    this.name = "WebhookExpressionRateLimitTimeoutError";
+    super("definite_refusal", new Error("Single-attempt POST rate-limit budget exhausted"));
+    this.name = "SingleAttemptRateLimitTimeoutError";
   }
 }
 
@@ -1159,12 +1159,43 @@ export function getSingleAttemptWebhookRest(): REST {
 }
 
 /**
+ * Runs a POST through a single-attempt client, waiting out every rate limit that client rejects and
+ * then retrying. The retry cannot duplicate: Discord refused the limited request, or the client
+ * refused to send it. Every single-attempt POST must go through here, because that client rejects
+ * even the routine wait for a channel's message bucket to refill.
+ *
+ * @param beforePost - Runs immediately before every attempt and throughout each wait; throwing from
+ *   it cancels the send with nothing posted
+ */
+export async function postWithRateLimitWait<T>(beforePost: () => void, post: () => Promise<T>): Promise<T> {
+  const deadline = Date.now() + SINGLE_ATTEMPT_RATE_LIMIT_BUDGET_MS;
+  for (;;) {
+    beforePost();
+    if (Date.now() >= deadline) throw new SingleAttemptRateLimitTimeoutError();
+    try {
+      return await post();
+    } catch (error) {
+      if (!(error instanceof RateLimitError)) throw error;
+      // A 429 reports the bucket reset in `timeToReset` and Discord's Retry-After in `retryAfter`.
+      beforePost();
+      const retryAt = Date.now() + Math.max(error.timeToReset, error.retryAfter);
+      if (retryAt >= deadline) throw new SingleAttemptRateLimitTimeoutError();
+      // A caller may hold a watchdog exemption during this wait (expression delivery does), so
+      // repeated refusals need their own deadline.
+      while (Date.now() < retryAt) {
+        beforePost();
+        await new Promise((resolve) =>
+          setTimeout(resolve, Math.min(SINGLE_ATTEMPT_STOP_CHECK_INTERVAL_MS, retryAt - Date.now())),
+        );
+      }
+    }
+  }
+}
+
+/**
  * Executes one webhook message without transport retries, for sends where a duplicate is worse
  * than an unconfirmed outcome. Applies the same identity and avatar handling as
  * {@link sendWebhookMessageWithIdentity}.
- *
- * A rate limit is waited out here and the POST retried, which cannot duplicate: Discord refused the
- * limited request, or the client refused to send it.
  *
  * @param beforePost - Runs after the avatar is settled and immediately before every POST attempt;
  *   throwing from it cancels the send with nothing posted
@@ -1183,35 +1214,17 @@ export async function sendWebhookMessageOnce(
     // Only an incoming webhook has the token checked above, which is what execution requires.
     const target = selected.webhook as Webhook<WebhookType.Incoming>;
     const { body, files } = await MessagePayload.create(target, finalPayload).resolveBody().resolveFiles();
-    const deadline = Date.now() + EXPRESSION_RATE_LIMIT_BUDGET_MS;
-    for (;;) {
-      beforePost();
-      if (Date.now() >= deadline) throw new WebhookExpressionRateLimitTimeoutError();
-      try {
-        const created = (await getSingleAttemptWebhookRest().post(Routes.webhook(selected.webhookId, token), {
-          body,
-          files: files ?? undefined,
-          query: makeURLSearchParams({ wait: true, thread_id: finalPayload.threadId }),
-          auth: false,
-        })) as APIMessage;
-        if (!created || typeof created.id !== "string" || !created.id)
-          throw new DiscordDeliveryError("unconfirmed", new Error("Discord expression response has no message ID"));
-        return { id: created.id, channelId: created.channel_id };
-      } catch (error) {
-        if (!(error instanceof RateLimitError)) throw error;
-        // A 429 reports the bucket reset in `timeToReset` and Discord's Retry-After in `retryAfter`.
-        beforePost();
-        const retryAt = Date.now() + Math.max(error.timeToReset, error.retryAfter);
-        if (retryAt >= deadline) throw new WebhookExpressionRateLimitTimeoutError();
-        // The phase holds a watchdog exemption, so repeated refusals need their own deadline.
-        while (Date.now() < retryAt) {
-          beforePost();
-          await new Promise((resolve) =>
-            setTimeout(resolve, Math.min(EXPRESSION_STOP_CHECK_INTERVAL_MS, retryAt - Date.now())),
-          );
-        }
-      }
-    }
+    const created = (await postWithRateLimitWait(beforePost, () =>
+      getSingleAttemptWebhookRest().post(Routes.webhook(selected.webhookId, token), {
+        body,
+        files: files ?? undefined,
+        query: makeURLSearchParams({ wait: true, thread_id: finalPayload.threadId }),
+        auth: false,
+      }),
+    )) as APIMessage;
+    if (!created || typeof created.id !== "string" || !created.id)
+      throw new DiscordDeliveryError("unconfirmed", new Error("Discord expression response has no message ID"));
+    return { id: created.id, channelId: created.channel_id };
   });
   return { ...delivery.result, webhookId: delivery.webhookId, identity: delivery.identity };
 }

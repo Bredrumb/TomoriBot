@@ -1,4 +1,4 @@
-import { REST } from "discord.js";
+import { DiscordAPIError, REST } from "discord.js";
 import { ProviderRequestDeniedError, type ProviderUsageContext } from "@/utils/provider/providerUsage";
 import { localizer } from "@/utils/text/localizer";
 import { afterEach, beforeAll, describe, expect, it, mock, spyOn } from "bun:test";
@@ -21,6 +21,8 @@ import {
 import { createPersona } from "../../helpers/fixtures";
 import { makeFakeInteraction } from "../../helpers/fakeInteraction";
 import { log } from "@/utils/misc/logger";
+import { createChatResponseSink } from "@/utils/chat/responseEmitter";
+import type { ChatTurnContext } from "@/utils/chat/types";
 
 const config: StreamConfig = {
   model: "fixture",
@@ -307,6 +309,42 @@ describe("StreamOrchestrator failed-stream delivery", () => {
       const result = await new StreamOrchestrator().streamToDiscord(provider, config, context);
       expect(result.status).toBe("error");
       expect(result.accumulatedText).toContain(POSTED_LINE.trim());
+    }
+  });
+});
+
+describe("a refused stream send", () => {
+  beforeAll(async () => {
+    await initializeLocalizer();
+  });
+
+  it("is reported at error level once across the send, the orchestrator, and the generation report", async () => {
+    const errors = spyOn(log, "error").mockResolvedValue(undefined);
+    const warnings = spyOn(log, "warn").mockImplementation(() => {});
+    const metrics = spyOn(log, "metric").mockImplementation(() => {});
+    try {
+      const { context, provider, send } = fixture([{ type: "text", content: POSTED_LINE }], true);
+      send.mockRejectedValueOnce(
+        new DiscordAPIError({ code: 50006, message: "Cannot send an empty message" }, 50006, 400, "POST", "/", {}),
+      );
+      const turn = {
+        message: { id: "source_1" },
+        streamingContext: {},
+        isUserImpersonation: false,
+        shouldSurfaceUserErrors: false,
+      } as unknown as ChatTurnContext;
+
+      const result = await new StreamOrchestrator().streamToDiscord(provider, config, context);
+      await createChatResponseSink(turn).emitStreamResult(result);
+
+      expect(result.status).toBe("error");
+      expect(errors).toHaveBeenCalledTimes(1);
+      // Only the send site carries the delivery metadata, so it is the row worth keeping.
+      expect(errors.mock.calls[0]?.[2]).toMatchObject({ metadata: { usingWebhook: false } });
+    } finally {
+      errors.mockRestore();
+      warnings.mockRestore();
+      metrics.mockRestore();
     }
   });
 });

@@ -24,7 +24,12 @@ import {
   isInvalidWebhookError,
 } from "@/utils/discord/webhook/deliveryOutcome";
 import { buildWebhookReplyNoticePayload } from "@/utils/discord/webhookReply";
-import { classifySendFailure, clearSendFailure, noteSendFailure } from "@/utils/discord/stream/sendFailureCache";
+import {
+  classifySendFailure,
+  clearSendFailure,
+  markSendFailureLogged,
+  noteSendFailure,
+} from "@/utils/discord/stream/sendFailureCache";
 import type { DeliveredSpeaker } from "@/utils/discord/stream/channelDeliveryContinuity";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { STREAMING_LIMITS } from "@/utils/security/rateLimiter";
@@ -581,7 +586,9 @@ export class StreamUiUpdater {
 
       if (classifyDiscordDeliveryFailure(terminalError) === "unconfirmed" && context.deliveryState)
         context.deliveryState.unconfirmed = true;
-      throw new DiscordDeliveryError(classifyDiscordDeliveryFailure(terminalError), terminalError);
+      throw markSendFailureLogged(
+        new DiscordDeliveryError(classifyDiscordDeliveryFailure(terminalError), terminalError),
+      );
     }
   }
 

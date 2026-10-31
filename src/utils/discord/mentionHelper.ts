@@ -1,4 +1,3 @@
-import { sendChannelMessageOnce } from "@/utils/discord/webhook/singleAttemptMessage";
 import { ChannelType, type Client, type Guild, type TextBasedChannel } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import type { ForcedMention } from "@/types/discord/mentions";
@@ -91,11 +90,7 @@ export async function sendPersonaMention(
 }
 
 async function sendBotMention(channel: SendableChannel, content: string, targetUserId: string): Promise<void> {
-  const message = await sendChannelMessageOnce(
-    channel,
-    { content, allowedMentions: { users: [targetUserId], roles: [], parse: [] } },
-    () => undefined,
-  );
+  const message = await channel.send({ content, allowedMentions: { users: [targetUserId], roles: [], parse: [] } });
   recordPersonaDelivery({
     messageId: message.id,
     channelId: message.channelId,

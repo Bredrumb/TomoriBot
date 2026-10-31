@@ -25,6 +25,7 @@ import {
   sendChannelMessageOnce,
   sendSelectedWebhookMessageOnce,
 } from "@/utils/discord/webhook/singleAttemptMessage";
+import { postWithRateLimitWait } from "@/utils/discord/webhook/webhookCore";
 
 const DISCORD_API_BASE = "https://discord.com/api/v10";
 
@@ -184,11 +185,15 @@ async function sendNativeVoice(
     dispatched = true;
     // Bot REST needs passThroughBody because JSON serialization would corrupt the multipart boundary and drop native waveform metadata.
     const message = requireMessage(
-      await rest.post.call(getSingleAttemptBotRest(target.channel.client), Routes.channelMessages(target.channel.id), {
-        body: form,
-        passThroughBody: true,
-        signal: target.personaPost?.abortSignal,
-      }),
+      await postWithRateLimitWait(
+        () => assertCanDispatch(target),
+        () =>
+          rest.post.call(getSingleAttemptBotRest(target.channel.client), Routes.channelMessages(target.channel.id), {
+            body: form,
+            passThroughBody: true,
+            signal: target.personaPost?.abortSignal,
+          }),
+      ),
     );
     commitDelivery(target, botAuthor(target, author), message, null);
     return message.id;

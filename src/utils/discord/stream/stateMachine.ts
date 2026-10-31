@@ -21,7 +21,7 @@ import {
 import { StreamBufferFlusher } from "@/utils/discord/stream/bufferFlusher";
 import { StreamErrorUi } from "@/utils/discord/stream/errorUi";
 import { StreamMessageDelivery } from "@/utils/discord/stream/messageDelivery";
-import { classifySendFailure } from "@/utils/discord/stream/sendFailureCache";
+import { classifySendFailure, wasSendFailureLogged } from "@/utils/discord/stream/sendFailureCache";
 import { StreamSegmentProcessor } from "@/utils/discord/stream/segmentProcessor";
 import {
   cleanupOldStopRequests,
@@ -231,7 +231,7 @@ export class StreamOrchestrator implements IStreamOrchestrator {
           ...(sendFailureReason ? { sendFailureReason } : {}),
         },
       };
-      if (sendFailureReason) {
+      if (sendFailureReason || wasSendFailureLogged(lastError)) {
         log.warn(`Stream orchestrator failed: ${lastError.message}`, lastError, orchestratorMetadata, {
           redactValues: [config.apiKey],
         });
