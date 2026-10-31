@@ -63,7 +63,13 @@ function isEndpointPrivateNetworkAllowed(): boolean {
 }
 
 function normalizeHostname(hostname: string): string {
-  return hostname.trim().toLowerCase().replace(/\.+$/, "");
+  const normalized = hostname.trim().toLowerCase().replace(/\.+$/, "");
+  // Strip the brackets WHATWG keeps on IPv6 literals, because Linux getaddrinfo rejects a bracketed name.
+  if (normalized.startsWith("[") && normalized.endsWith("]")) {
+    return normalized.slice(1, -1);
+  }
+
+  return normalized;
 }
 
 function normalizeResolvedAddress(address: string): string {

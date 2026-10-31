@@ -129,6 +129,17 @@ describe("validateRemoteUrl cloud-metadata denylist", () => {
     expect((await validateRemoteUrl(lanHttp, { allowPrivateNetwork: true })).valid).toBe(true);
   });
 
+  it("treats a bracketed IPv6 loopback literal as localhost", async () => {
+    process.env[RUN_ENV_NAME] = "development";
+    delete process.env[PRIVATE_NETWORK_ENV];
+    const loopbackHttp = "http://[::1]:8080/";
+
+    expect((await validateRemoteUrl(loopbackHttp)).valid).toBe(true);
+
+    process.env[PRIVATE_NETWORK_ENV] = "false";
+    expect((await validateRemoteUrl(loopbackHttp)).failureCode).toBe("PRODUCTION_LOCALHOST_FORBIDDEN");
+  });
+
   it("blocks private endpoints in production even when ALLOW_PRIVATE_NETWORK is true", async () => {
     process.env[RUN_ENV_NAME] = "production";
     process.env[PRIVATE_NETWORK_ENV] = "true";
