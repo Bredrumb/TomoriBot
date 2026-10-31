@@ -15,6 +15,7 @@ import { initMediaProcessing } from "@/init/media";
 import { log } from "@/utils/misc/logger";
 import { discordPresenceRetention } from "@/utils/cache/discordPresenceRetention";
 import { statRepository } from "@/utils/db/repositories/StatRepository";
+import { getPrivateNetworkStartupError } from "@/utils/security/remoteUrlSecurity";
 
 /**
  * Detects Discord's "privileged intent not approved" rejection.
@@ -37,6 +38,13 @@ function isDisallowedIntentsError(error: unknown): boolean {
 config({ quiet: true });
 
 const environment = resolveEnvironment();
+
+const privateNetworkStartupError = getPrivateNetworkStartupError();
+if (privateNetworkStartupError) {
+  // Printed directly because the Docker image has no pino-pretty, so the logger would emit this as one JSON line.
+  console.error(privateNetworkStartupError);
+  process.exit(1);
+}
 
 const healthPort = Number.parseInt(process.env.PORT ?? "8080", 10);
 

@@ -45,6 +45,8 @@ Required:
 - `CRYPTO_SECRET`: a 32-character encryption key (used to encrypt stored API keys).
 - PostgreSQL connection: `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`,
   `POSTGRES_PASSWORD`, `POSTGRES_DB`.
+- `ALLOW_PRIVATE_NETWORK`: `true`, `false`, or a `host:port` list. See
+  [Private networks](/self-hosting/setup-wizard/#private-networks) to choose.
 
 Keep a protected copy of your encryption secret separately from database backups. New backups contain no `.env`. For rotation, use `CRYPTO_SECRET_V1`, `CRYPTO_SECRET_V2`, or any later positive integer version, with optional `CRYPTO_SECRET_CURRENT` selection.
 :::note[No native PostgreSQL?]

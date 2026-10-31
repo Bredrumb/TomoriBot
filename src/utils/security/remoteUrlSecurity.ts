@@ -8,16 +8,17 @@
  * `strict` unless the operator set `FETCH_URL_ALLOW_PRIVATE_NETWORK`.
  *
  * Private targets are refused unless the caller passes `allowPrivateNetwork`. Endpoint callers pass
- * `getEndpointRemotePolicy()`, which admits them outside production unless the operator sets
- * `ALLOW_PRIVATE_NETWORK=false`, so self-hosted local model servers work without setup. Member-supplied
- * media keeps the default because any member can post a link to it. Production always refuses private
- * endpoints because the hosted instance serves untrusted communities.
+ * `getEndpointRemotePolicy()`, which admits them outside production when the operator sets
+ * `ALLOW_PRIVATE_NETWORK=true`, or only the `host:port` origins it lists, so self-hosted local model servers work. Member-supplied media keeps the
+ * default because any member can post a link to it. Production always refuses private endpoints
+ * because the hosted instance serves untrusted communities.
  *
  * Add new user-URL entry points here rather than writing a third guard.
  */
 
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
+import { styleText } from "node:util";
 import { isCloudMetadataAddress } from "@/utils/security/cloudMetadata";
 import { getEmbeddedIpv4 } from "@/utils/security/embeddedIpv4";
 
@@ -51,22 +52,79 @@ export interface RemoteUrlValidationResult {
 }
 
 const PRIVATE_NETWORK_ENV = "ALLOW_PRIVATE_NETWORK";
+// The port is required because a bare host would admit every service on it; the host is a bracketed IPv6 literal or has no URL delimiters.
+const PRIVATE_ORIGIN_PATTERN = /^(\[[0-9a-f:.]+\]|[^\s:/?#@[\]]+):(\d{1,5})$/i;
+const MAX_PORT = 65_535;
+
+export type PrivateNetworkSetting =
+  | { mode: "all" }
+  | { mode: "none" }
+  | { mode: "listed"; origins: ReadonlySet<string> };
 
 function isProductionRuntime(): boolean {
   return process.env.RUN_ENV === "production";
 }
 
-/** Unset means on, while an unrecognized value means off, so a typo fails closed. */
-function isEndpointPrivateNetworkAllowed(): boolean {
-  if (isProductionRuntime()) return false;
-  const raw = process.env[PRIVATE_NETWORK_ENV]?.trim().toLowerCase();
-  if (!raw) return true;
-  return raw === "true" || raw === "1" || raw === "yes" || raw === "on";
+function toPrivateOriginKey(hostname: string, port: string): string {
+  return `${hostname.toLowerCase().replace(/\.+$/, "")}:${port}`;
+}
+
+function parsePrivateOrigin(entry: string): string | null {
+  const match = PRIVATE_ORIGIN_PATTERN.exec(entry);
+  const port = Number(match?.[2]);
+  if (!match?.[1] || !Number.isInteger(port) || port < 1 || port > MAX_PORT) return null;
+  // Parsed like a request URL so both keys match, because the URL parser canonicalizes hosts (`127.1` becomes `127.0.0.1`).
+  const host = URL.parse(`http://${match[1]}/`)?.hostname;
+  return host ? toPrivateOriginKey(host, String(port)) : null;
+}
+
+/** Null for a missing value or anything besides `true`, `false`, or `host:port` entries, which startup refuses outside production. */
+export function parsePrivateNetworkSetting(raw: string | undefined): PrivateNetworkSetting | null {
+  const normalized = raw?.trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized === "true") return { mode: "all" };
+  if (normalized === "false") return { mode: "none" };
+
+  const origins = new Set<string>();
+  for (const entry of normalized.split(",")) {
+    if (!entry.trim()) continue;
+    const origin = parsePrivateOrigin(entry.trim());
+    if (!origin) return null;
+    origins.add(origin);
+  }
+  return origins.size > 0 ? { mode: "listed", origins } : null;
+}
+
+/**
+ * Startup refuses to guess this setting outside production, because no default suits both a host
+ * running local models and a community host with untrusted members.
+ *
+ * @returns The reason to refuse startup, or null when the setting is valid or production ignores it.
+ */
+export function getPrivateNetworkStartupError(): string | null {
+  const raw = process.env[PRIVATE_NETWORK_ENV]?.trim();
+  if (isProductionRuntime() || parsePrivateNetworkSetting(raw) !== null) return null;
+
+  const style = (format: Parameters<typeof styleText>[0], text: string) =>
+    styleText(format, text, { stream: process.stderr });
+  const problem = raw
+    ? `${PRIVATE_NETWORK_ENV} is "${raw}", which is not true, false, or a list of host:port entries`
+    : `${PRIVATE_NETWORK_ENV} is not set`;
+  return [
+    `${style(["bold", "red"], `TomoriBot did not start: ${problem}.`)}\nAdd one of these lines to .env, then start TomoriBot again.`,
+    `${style(["bold", "green"], `${PRIVATE_NETWORK_ENV}=true`)}\nChoose this if only people you trust use the bot. Servers on localhost or your LAN work, so local models run.`,
+    `${style(["bold", "magenta"], `${PRIVATE_NETWORK_ENV}=localhost:5001,host.docker.internal:11434`)}\nChoose this to share local servers, such as KoboldCPP or ComfyUI, with members you don't fully trust. Only the listed host:port pairs work.`,
+    `${style(["bold", "yellow"], `${PRIVATE_NETWORK_ENV}=false`)}\nChoose this if members you don't trust use the bot. No localhost or LAN servers work.`,
+    `Public HTTPS endpoints, such as hosted APIs or a tunnel to a local model, work with every option. You can also run ${style("cyan", "`bun run setup`")} to choose. With Docker Compose, run ${style("cyan", "`docker compose up -d`")} after editing .env so the container rereads it.`,
+  ].join("\n\n");
 }
 
 /** For registered endpoints only, because any member can post a link that reaches a media download. */
-export function getEndpointRemotePolicy(): { allowPrivateNetwork: boolean } {
-  return { allowPrivateNetwork: isEndpointPrivateNetworkAllowed() };
+export function getEndpointRemotePolicy(): ValidateRemoteUrlOptions {
+  const setting = isProductionRuntime() ? null : parsePrivateNetworkSetting(process.env[PRIVATE_NETWORK_ENV]);
+  if (setting?.mode === "all") return { allowPrivateNetwork: true };
+  if (setting?.mode === "listed") return { allowPrivateNetwork: false, privateOrigins: setting.origins };
+  return { allowPrivateNetwork: false };
 }
 
 function normalizeHostname(hostname: string): string {
@@ -258,10 +316,11 @@ async function resolveHostnameAddresses(hostname: string): Promise<ResolvedRemot
   return Array.from(addresses.values());
 }
 
-function getPrivateNetworkRemedy(endpointPolicyDenied: boolean): string {
-  if (!endpointPolicyDenied) return "";
-  return isProductionRuntime()
-    ? " Production always blocks private addresses."
+function getPrivateNetworkRemedy(options: ValidateRemoteUrlOptions | undefined, origin: string): string {
+  if (options?.strict === true || options?.allowPrivateNetwork !== false) return "";
+  if (isProductionRuntime()) return " Production always blocks private addresses.";
+  return options.privateOrigins
+    ? ` ${PRIVATE_NETWORK_ENV} does not list ${origin}.`
     : ` The host blocks private addresses with ${PRIVATE_NETWORK_ENV}=false.`;
 }
 
@@ -269,13 +328,12 @@ function buildBlockedAddressDetails(
   hostname: string,
   blockedAddress: ResolvedRemoteAddress,
   allAddresses: ResolvedRemoteAddress[],
-  endpointPolicyDenied: boolean,
+  remedy: string,
 ): string {
   const resolvedList = allAddresses.map((entry) => entry.address).join(", ");
   return (
     `Resolved address '${blockedAddress.address}' for '${hostname}' is ${blockedAddress.reason}. ` +
-    `Only publicly routable hosts are allowed. Resolved addresses: ${resolvedList}.` +
-    getPrivateNetworkRemedy(endpointPolicyDenied)
+    `Only publicly routable hosts are allowed. Resolved addresses: ${resolvedList}.${remedy}`
   );
 }
 
@@ -309,8 +367,13 @@ function getHttpProtocolFailure(
 export interface ValidateRemoteUrlOptions {
   /** Enforce the private/link-local/loopback blocklist even when `allowPrivateNetwork` is set. */
   strict?: boolean;
-  /** Permit private targets (plain HTTP too when every resolved address is private); cloud metadata stays blocked. */
+  /**
+   * Permit private targets (plain HTTP too when every resolved address is private) but never cloud metadata, so
+   * only `getEndpointRemotePolicy()` and `getFetchUrlRemotePolicy()` set it and member-supplied media never does.
+   */
   allowPrivateNetwork?: boolean;
+  /** `host:port` keys that `allowPrivateNetwork` admits on their own, from an `ALLOW_PRIVATE_NETWORK` list. */
+  privateOrigins?: ReadonlySet<string>;
 }
 
 export async function validateRemoteUrl(
@@ -319,8 +382,6 @@ export async function validateRemoteUrl(
 ): Promise<RemoteUrlValidationResult> {
   const isProduction = isProductionRuntime();
   const strict = options?.strict === true;
-  const privateNetworkAllowed = !strict && options?.allowPrivateNetwork === true;
-  const endpointPolicyDenied = !strict && options?.allowPrivateNetwork === false;
 
   let parsedUrl: URL;
   try {
@@ -343,6 +404,13 @@ export async function validateRemoteUrl(
   }
 
   const hostname = normalizeHostname(parsedUrl.hostname);
+  const origin = toPrivateOriginKey(
+    parsedUrl.hostname,
+    parsedUrl.port || (parsedUrl.protocol === "https:" ? "443" : "80"),
+  );
+  const privateNetworkAllowed =
+    !strict && (options?.allowPrivateNetwork === true || options?.privateOrigins?.has(origin) === true);
+  const remedy = getPrivateNetworkRemedy(options, origin);
   const isLocalHost = isExplicitLocalHost(hostname);
   // Most LAN services only speak HTTP, so under the opt-in the HTTP decision waits for DNS.
   const httpNeedsPrivateTarget = privateNetworkAllowed && parsedUrl.protocol === "http:";
@@ -357,7 +425,7 @@ export async function validateRemoteUrl(
       valid: false,
       failureCode: "PRODUCTION_LOCALHOST_FORBIDDEN",
       hostname,
-      details: `Localhost is not allowed for this endpoint.${getPrivateNetworkRemedy(endpointPolicyDenied)}`,
+      details: `Localhost is not allowed for this endpoint.${remedy}`,
     };
   }
 
@@ -414,7 +482,7 @@ export async function validateRemoteUrl(
         hostname,
         blockedAddress: blockedAddress.address,
         resolvedAddresses: resolvedAddresses.map((entry) => entry.address),
-        details: buildBlockedAddressDetails(hostname, blockedAddress, resolvedAddresses, endpointPolicyDenied),
+        details: buildBlockedAddressDetails(hostname, blockedAddress, resolvedAddresses, remedy),
       };
     }
   }

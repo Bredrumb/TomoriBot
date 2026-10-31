@@ -15,7 +15,7 @@ Pick the first row that fits. A code constant is the default.
 | Location | For | Examples |
 |---|---|---|
 | Database (a command or server setting) | Values servers or users change at runtime | Channel rules, persona prompts, temperature |
-| `.env.example` | Credentials and endpoints the bot cannot boot without | `DISCORD_TOKEN`, `DATABASE_URL` |
+| `.env.example` | Credentials, endpoints, and security choices the bot cannot boot without | `DISCORD_TOKEN`, `DATABASE_URL`, `ALLOW_PRIVATE_NETWORK` |
 | `.env.optional.example` | Host resources, network behavior, external credentials or quotas, opt-in integrations, choices that differ between installations. Each needs a working default in code | `WEB_SEARCH_TIMEOUT_MS`, `MAX_DOCUMENT_SIZE_MB` |
 | Code constant (module, or `src/constants/` when shared) | Probabilities, lookbacks, UI geometry, algorithm tuning, protocol and Discord limits | The 15-minute interaction token window |
 

@@ -51,8 +51,9 @@ connections, then runs the bot in watch mode. The container keeps running after 
 `check_slop_file`, which reads a file path inside the container; the rule checker never offers it
 because it does not take the reply text.
 
-Local addresses work because self-hosted TomoriBot runs with `RUN_ENV=development` (Compose pins it)
-and `ALLOW_PRIVATE_NETWORK` is on by default. With `ALLOW_PRIVATE_NETWORK=false` or
+Local addresses need `RUN_ENV=development` (Compose pins it) and an `ALLOW_PRIVATE_NETWORK` that
+allows them: `true`, or a list containing slop-guard's `host:port`.
+With `ALLOW_PRIVATE_NETWORK=false` or
 `RUN_ENV=production`, TomoriBot refuses MCP URLs that resolve to private or loopback addresses.
 
 ## Settings

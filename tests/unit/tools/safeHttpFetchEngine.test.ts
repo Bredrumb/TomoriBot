@@ -14,10 +14,11 @@ import { useEnvSandbox } from "../../helpers/env";
 import { getEndpointRemotePolicy } from "@/utils/security/remoteUrlSecurity";
 
 const PRIVATE_NETWORK_ENV = "FETCH_URL_ALLOW_PRIVATE_NETWORK";
+const ENDPOINT_PRIVATE_NETWORK_ENV = "ALLOW_PRIVATE_NETWORK";
 const RUN_ENV_NAME = "RUN_ENV";
 const CRAWL4AI_BASE_URL_ENV = "CRAWL4AI_BASE_URL";
 
-useEnvSandbox([PRIVATE_NETWORK_ENV, RUN_ENV_NAME, CRAWL4AI_BASE_URL_ENV]);
+useEnvSandbox([PRIVATE_NETWORK_ENV, ENDPOINT_PRIVATE_NETWORK_ENV, RUN_ENV_NAME, CRAWL4AI_BASE_URL_ENV]);
 
 describe("safe HTTP fetch engine", () => {
   it("uses only the guarded in-process engine when Crawl4AI is not configured", () => {
@@ -250,7 +251,7 @@ describe("safe HTTP fetch engine", () => {
       resolveValidatedUserRedirect(
         new URL("https://example.com/start"),
         "https://169.254.169.254/metadata/identity/oauth2/token",
-        true,
+        { strict: true },
       ),
     ).rejects.toThrow(/link-local|publicly routable/i);
   });
@@ -314,6 +315,24 @@ describe("user remote fetch redirect credentials", () => {
     servers.push(server);
     return { routes, received, origin: `http://127.0.0.1:${server.port}` };
   }
+
+  it("keeps a listed private origin from redirecting to an unlisted one", async () => {
+    const otherHost = fixture({ "/landed": () => new Response("landed") });
+    const apiHost = fixture({
+      "/ok": () => new Response("ok"),
+      "/start": () => redirectTo(`${otherHost.origin}/landed`, 302),
+    });
+    process.env[ENDPOINT_PRIVATE_NETWORK_ENV] = new URL(apiHost.origin).host;
+
+    const direct = await fetchUserRemoteUrl(`${apiHost.origin}/ok`, undefined, getEndpointRemotePolicy());
+    expect(await direct.text()).toBe("ok");
+
+    const error = await fetchUserRemoteUrl(`${apiHost.origin}/start`, undefined, getEndpointRemotePolicy()).catch(
+      (caught: unknown) => caught,
+    );
+    expect(error).toBeInstanceOf(RemoteUrlPolicyError);
+    expect(otherHost.received).toEqual([]);
+  });
 
   it("sends credentials on a direct request", async () => {
     const target = fixture({ "/v1/models": () => Response.json({ data: [] }) });

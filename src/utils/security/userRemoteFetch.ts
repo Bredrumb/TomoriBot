@@ -1,5 +1,9 @@
 import { isIP } from "node:net";
-import { type RemoteUrlValidationFailureCode, validateRemoteUrl } from "@/utils/security/remoteUrlSecurity";
+import {
+  type RemoteUrlValidationFailureCode,
+  type ValidateRemoteUrlOptions,
+  validateRemoteUrl,
+} from "@/utils/security/remoteUrlSecurity";
 
 export type RemoteUrlPolicyFailureCode =
   | RemoteUrlValidationFailureCode
@@ -226,11 +230,10 @@ export function checkCrossOriginRedirect(currentUrl: URL, nextUrl: URL, requestI
 export async function resolveValidatedUserRedirect(
   currentUrl: URL,
   location: string,
-  strict: boolean,
-  allowPrivateNetwork = false,
+  policy: FetchUserRemoteUrlOptions,
 ): Promise<URL> {
   const nextUrl = new URL(location, currentUrl);
-  const validation = await validateRemoteUrl(nextUrl.toString(), { strict, allowPrivateNetwork });
+  const validation = await validateRemoteUrl(nextUrl.toString(), policy);
   if (!validation.valid) {
     throw new RemoteUrlPolicyError(
       validation.details ?? `Remote redirect validation failed for '${nextUrl.hostname}'.`,
@@ -243,8 +246,7 @@ export async function resolveValidatedUserRedirect(
 
 interface RedirectState {
   redirectCount: number;
-  strict: boolean;
-  allowPrivateNetwork: boolean;
+  policy: FetchUserRemoteUrlOptions;
   /** Set once a hop dropped credentials; they are never reattached, even if a later hop returns. */
   credentialsWithheld: boolean;
 }
@@ -254,9 +256,9 @@ async function fetchUserRemoteUrlInternal(
   init: RequestInit | undefined,
   state: RedirectState,
 ): Promise<Response> {
-  const { redirectCount, strict, allowPrivateNetwork } = state;
+  const { redirectCount, policy } = state;
   const { url, requestInit } = await normalizeRequestInput(input, init);
-  const validation = await validateRemoteUrl(url.toString(), { strict, allowPrivateNetwork });
+  const validation = await validateRemoteUrl(url.toString(), policy);
   if (!validation.valid) {
     throw new RemoteUrlPolicyError(
       validation.details ?? `Remote URL validation failed for '${url.hostname}'.`,
@@ -345,7 +347,7 @@ async function fetchUserRemoteUrlInternal(
     );
   }
 
-  const nextUrl = await resolveValidatedUserRedirect(url, location, strict, allowPrivateNetwork);
+  const nextUrl = await resolveValidatedUserRedirect(url, location, policy);
   const crossOrigin = url.origin !== nextUrl.origin;
   const withholdsCredentials = crossOrigin && checkCrossOriginRedirect(url, nextUrl, requestInit);
   return await fetchUserRemoteUrlInternal(
@@ -359,12 +361,7 @@ async function fetchUserRemoteUrlInternal(
   );
 }
 
-export interface FetchUserRemoteUrlOptions {
-  /** Enforce the private/link-local/loopback blocklist even outside production. */
-  strict?: boolean;
-  /** Set only through `getEndpointRemotePolicy()` or `getFetchUrlRemotePolicy()`, because it admits private targets over plain HTTP. */
-  allowPrivateNetwork?: boolean;
-}
+export type FetchUserRemoteUrlOptions = ValidateRemoteUrlOptions;
 
 export async function fetchUserRemoteUrl(
   input: RequestInfo | URL,
@@ -373,8 +370,7 @@ export async function fetchUserRemoteUrl(
 ): Promise<Response> {
   return await fetchUserRemoteUrlInternal(input, init, {
     redirectCount: 0,
-    strict: options?.strict === true,
-    allowPrivateNetwork: options?.allowPrivateNetwork === true,
+    policy: options ?? {},
     credentialsWithheld: false,
   });
 }

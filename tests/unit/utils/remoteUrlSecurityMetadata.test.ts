@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { getEndpointRemotePolicy, validateRemoteUrl } from "@/utils/security/remoteUrlSecurity";
+import {
+  getEndpointRemotePolicy,
+  getPrivateNetworkStartupError,
+  validateRemoteUrl,
+} from "@/utils/security/remoteUrlSecurity";
 import { useEnvSandbox } from "../../helpers/env";
 
 const RUN_ENV_NAME = "RUN_ENV";
@@ -91,7 +95,72 @@ describe("validateRemoteUrl cloud-metadata denylist", () => {
     expect((await validateRemoteUrl("https://[64:ff9b::5db8:d822]/", { strict: true })).valid).toBe(true);
   });
 
-  it("admits private endpoints outside production unless the host turns them off", async () => {
+  it("refuses to start outside production until the private-network setting is true, false, or a list", () => {
+    const settings = [
+      undefined,
+      "",
+      "true",
+      " FALSE ",
+      "localhost:5001, [::1]:8080,",
+      "1",
+      "flase",
+      "localhost",
+      "localhost:70000",
+      "localhost:5001,http://lan:8080",
+    ];
+    const refusedOutsideProduction = [
+      "unset",
+      "",
+      "1",
+      "flase",
+      "localhost",
+      "localhost:70000",
+      "localhost:5001,http://lan:8080",
+    ];
+    const refused: string[] = [];
+    for (const runEnv of ["development", "production", undefined]) {
+      if (runEnv) process.env[RUN_ENV_NAME] = runEnv;
+      else delete process.env[RUN_ENV_NAME];
+      for (const setting of settings) {
+        if (setting === undefined) delete process.env[PRIVATE_NETWORK_ENV];
+        else process.env[PRIVATE_NETWORK_ENV] = setting;
+        if (getPrivateNetworkStartupError()) refused.push(`${runEnv ?? "unset"}/${setting ?? "unset"}`);
+      }
+    }
+
+    expect(refused).toEqual([
+      ...refusedOutsideProduction.map((setting) => `development/${setting}`),
+      ...refusedOutsideProduction.map((setting) => `unset/${setting}`),
+    ]);
+  });
+
+  it("admits only the listed private origins when ALLOW_PRIVATE_NETWORK is a list", async () => {
+    process.env[RUN_ENV_NAME] = "development";
+    process.env[PRIVATE_NETWORK_ENV] = "localhost:5001, 192.168.65.254:11434, [::1]:8080, 192.168.1.50:443";
+    const expected: Record<string, boolean> = {
+      "http://localhost:5001/v1": true,
+      "http://LOCALHOST.:5001/api/v1": true,
+      "http://[::1]:8080/": true,
+      "http://192.168.65.254:11434/v1": true,
+      "https://192.168.1.50/": true,
+      "http://localhost:5002/v1": false,
+      "http://127.0.0.1:5001/v1": false,
+      "http://192.168.65.254:8188/": false,
+      "https://10.0.0.5/": false,
+    };
+
+    const results: Record<string, boolean> = {};
+    for (const url of Object.keys(expected)) {
+      results[url] = (await validateRemoteUrl(url, getEndpointRemotePolicy())).valid;
+    }
+
+    expect(results).toEqual(expected);
+    expect((await validateRemoteUrl("http://localhost:5001/v1")).valid).toBe(false);
+    process.env[RUN_ENV_NAME] = "production";
+    expect((await validateRemoteUrl("https://192.168.1.50/", getEndpointRemotePolicy())).valid).toBe(false);
+  });
+
+  it("admits private endpoints outside production only when the host turns them on", async () => {
     const privateUrls = ["http://localhost:11434/v1", "https://192.168.1.50:8188/", "https://10.0.0.5/"];
     const results: Record<string, boolean[]> = {};
     for (const runEnv of ["development", undefined]) {
@@ -108,11 +177,11 @@ describe("validateRemoteUrl cloud-metadata denylist", () => {
     }
 
     expect(results).toEqual({
-      "development/unset": [true, true, true],
+      "development/unset": [false, false, false],
       "development/true": [true, true, true],
       "development/false": [false, false, false],
       "development/flase": [false, false, false],
-      "unset/unset": [true, true, true],
+      "unset/unset": [false, false, false],
       "unset/true": [true, true, true],
       "unset/false": [false, false, false],
       "unset/flase": [false, false, false],
@@ -133,7 +202,7 @@ describe("validateRemoteUrl cloud-metadata denylist", () => {
 
   it("admits a plain-HTTP Docker host gateway endpoint under the endpoint policy", async () => {
     delete process.env[RUN_ENV_NAME];
-    delete process.env[PRIVATE_NETWORK_ENV];
+    process.env[PRIVATE_NETWORK_ENV] = "true";
     // This is the address Docker Desktop gives host.docker.internal, so the case matches a real Compose setup.
     const dockerHostUrl = "http://192.168.65.254:11434/v1";
 
@@ -159,7 +228,7 @@ describe("validateRemoteUrl cloud-metadata denylist", () => {
 
   it("treats a bracketed IPv6 loopback literal as localhost", async () => {
     process.env[RUN_ENV_NAME] = "development";
-    delete process.env[PRIVATE_NETWORK_ENV];
+    process.env[PRIVATE_NETWORK_ENV] = "true";
     const loopbackHttp = "http://[::1]:8080/";
 
     expect((await validateRemoteUrl(loopbackHttp, getEndpointRemotePolicy())).valid).toBe(true);

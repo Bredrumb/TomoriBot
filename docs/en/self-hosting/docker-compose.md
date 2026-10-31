@@ -28,6 +28,7 @@ Set these required variables in `.env`:
 | `DISCORD_TOKEN` | Your Discord bot token (enable the `GuildMembers`, `MessageContent`, and `GuildPresences` privileged intents). |
 | `CRYPTO_SECRET` | A 32-character encryption key used to encrypt stored API keys. |
 | `POSTGRES_PASSWORD` | The database password. Every other `POSTGRES_*` value is auto-configured. |
+| `ALLOW_PRIVATE_NETWORK` | `true` lets custom endpoints and MCP servers on your machine or LAN work, a `host:port` list allows only those servers, and `false` blocks them. The bot won't start until this is set. See [Private networks](/self-hosting/setup-wizard/#private-networks) to choose. |
 
 Generate a random 32-character value for `CRYPTO_SECRET` using Docker, then copy it into `.env`:
 
@@ -62,7 +63,7 @@ docker compose up      # bot + database
 
 For later starts, `docker compose up` alone is enough unless you change code or dependencies. Once the bot connects to Discord, run `/setup` in any server channel to add your AI provider key. See the [Quickstart](/introduction/quickstart/) for setup options in Discord.
 
-Compose pins `RUN_ENV=development` in its service definition so `.env` secrets and local HTTP endpoints work. Local endpoints such as `http://host.docker.internal:11434` rely on `ALLOW_PRIVATE_NETWORK`, which is on unless `.env` sets it to `false`; see [Private networks](/self-hosting/setup-wizard/#private-networks) before inviting the bot to a community you don't trust. The container healthcheck reports whether the bot process is running; it does not test Discord gateway connectivity.
+Compose pins `RUN_ENV=development` in its service definition so `.env` secrets and local HTTP endpoints work. Local endpoints such as `http://host.docker.internal:11434` need `ALLOW_PRIVATE_NETWORK` to allow them (`true`, or a list containing `host.docker.internal:11434`); Compose maps that name to your machine on Linux too. After changing `.env`, run `docker compose up -d` so the container rereads it. The container healthcheck reports whether the bot process is running; it does not test Discord gateway connectivity.
 
 ## 4. Optional local servers (Compose profiles)
 

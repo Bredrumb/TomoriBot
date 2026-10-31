@@ -12,6 +12,6 @@
  */
 process.env.RUN_ENV = "development";
 
-// Workstation private-network settings would otherwise flip SSRF fixtures in either direction.
-delete process.env.ALLOW_PRIVATE_NETWORK;
+// Pinned to what a local-model install chooses, because a workstation's .env would otherwise flip SSRF fixtures.
+process.env.ALLOW_PRIVATE_NETWORK = "true";
 delete process.env.FETCH_URL_ALLOW_PRIVATE_NETWORK;
