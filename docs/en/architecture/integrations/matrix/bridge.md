@@ -117,8 +117,10 @@ appservice token is attached.
 
 The spec allows the download route to answer 307 or 308 with a CDN location. The bridge never
 forwards the token to a redirect: it downloads the location anonymously through `safeDownload`,
-which applies the SSRF gate and the same size limit. Persona avatars and Discord attachments use
-`safeDownload` directly.
+which applies the SSRF gate and the same size limit. The redirect takes the endpoint policy
+(`ALLOW_PRIVATE_NETWORK`) because the operator chose the homeserver, so a LAN media store works
+outside production when that variable is `true`. Persona avatars and Discord attachments use `safeDownload` directly and keep
+the member-media default.
 
 ## Room encryption gate
 

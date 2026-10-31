@@ -8,6 +8,7 @@ import { isPlaceholder, readEnvValues, seedFromExample, upsertEnvKeys } from "..
 import { ask, askSecret, confirm, isNonInteractiveMode, type MenuItem, selectMenu } from "../lib/prompt";
 import { type SetupContext, type SetupModule, getFullInstallModules } from "../setup/registry";
 import { log } from "../lib/cliLogger";
+import { type PrivateNetworkSetting, parsePrivateNetworkSetting } from "@/utils/security/remoteUrlSecurity";
 
 config({ quiet: true });
 
@@ -183,7 +184,9 @@ function validateNonPlaceholder(label: string): (value: string) => string | null
 }
 
 function getMissingRequiredEnvKeys(env: Record<string, string>): string[] {
-  return REQUIRED_ENV_KEYS.filter((key) => isPlaceholder(env[key]));
+  const missing = REQUIRED_ENV_KEYS.filter((key) => isPlaceholder(env[key]));
+  if (parsePrivateNetworkSetting(env.ALLOW_PRIVATE_NETWORK) === null) missing.push("ALLOW_PRIVATE_NETWORK");
+  return missing;
 }
 
 function quoteSqlIdentifier(value: string): string {
@@ -405,6 +408,46 @@ async function configureCryptoSecret(
   return { CRYPTO_SECRET: secret };
 }
 
+async function configurePrivateNetwork(
+  env: Record<string, string>,
+  mode: EnvConfigureMode,
+): Promise<Record<string, string>> {
+  const currentRaw = env.ALLOW_PRIVATE_NETWORK?.trim() ?? "";
+  const current = parsePrivateNetworkSetting(currentRaw);
+  if (mode === "keep" || (mode === "fill" && current !== null)) {
+    return {};
+  }
+
+  log.info("Private networks let custom endpoints and MCP servers reach localhost and your LAN, so local models work.");
+  log.info(
+    "Any member who can add an endpoint can reach whatever you allow here. Posted images, files, and link previews never can. Public HTTPS endpoints, including tunnels to local models, work with every choice.",
+  );
+  const choices: MenuItem<PrivateNetworkSetting["mode"]>[] = [
+    { id: "all", label: "Allow all", description: "Only you or a trusted Discord community uses this bot." },
+    {
+      id: "listed",
+      label: "Allow only listed servers",
+      description: "Share your local servers, such as KoboldCPP or ComfyUI, with members you don't fully trust.",
+    },
+    { id: "none", label: "Block", description: "Untrusted members use this bot." },
+  ];
+  // The menu defaults to its first item, so the current choice leads and a `--yes` rerun never widens access.
+  choices.sort((a, b) => Number(b.id === current?.mode) - Number(a.id === current?.mode));
+  const selected = await selectMenu("Allow private networks?", choices);
+  if (selected.id !== "listed") {
+    return { ALLOW_PRIVATE_NETWORK: selected.id === "all" ? "true" : "false" };
+  }
+
+  const list = await ask("Servers to allow, as host:port separated by commas", {
+    default: current?.mode === "listed" ? currentRaw : "localhost:5001",
+    validate: (value) =>
+      parsePrivateNetworkSetting(value)?.mode === "listed"
+        ? null
+        : "Enter host:port entries separated by commas, such as localhost:5001,localhost:8188.",
+  });
+  return { ALLOW_PRIVATE_NETWORK: list.trim() };
+}
+
 function needsDatabaseConfig(env: Record<string, string>, mode: EnvConfigureMode): boolean {
   if (mode === "keep") return false;
   if (mode === "reconfigure") return true;
@@ -557,6 +600,7 @@ async function runBaseInstall(scan: PrereqScan, options: BaseInstallOptions = {}
 
   Object.assign(envUpdates, await configureCryptoSecret(env, mode));
   Object.assign(envUpdates, await configureDiscordToken({ ...env, ...envUpdates }, mode));
+  Object.assign(envUpdates, await configurePrivateNetwork({ ...env, ...envUpdates }, mode));
   const database = await configureDatabase({ ...env, ...envUpdates }, mode, scan);
   Object.assign(envUpdates, database.values);
 

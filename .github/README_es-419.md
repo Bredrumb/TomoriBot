@@ -186,15 +186,8 @@ Este proyecto está bajo la licencia [AGPLv3](../LICENSE).
 Si encuentras útil (o divertido) a TomoriBot, ¡considera darle una ⭐ al repositorio o apoyar el desarrollo a través de Ko-fi o Patreon!
 
 <p align="left">
-
-  &nbsp;
-  <a href="https://ko-fi.com/bredrumb">
-    <img src="https://img.shields.io/badge/Support_on_Ko--fi-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Support on Ko-fi">
-  </a>
-  &nbsp;
-  <a href="https://www.patreon.com/cw/tomoribot">
-    <img src="https://img.shields.io/badge/Support_on_Patreon-FF424D?style=for-the-badge&logo=patreon&logoColor=white" alt="Support on Patreon">
-  </a>
+  <a href="https://ko-fi.com/bredrumb"><img src="https://img.shields.io/badge/Support_on_Ko--fi-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Support on Ko-fi"></a>
+  <a href="https://www.patreon.com/cw/tomoribot"><img src="https://img.shields.io/badge/Support_on_Patreon-FF424D?style=for-the-badge&logo=patreon&logoColor=white" alt="Support on Patreon"></a>
 </p>
 
 

@@ -20,7 +20,10 @@ TomoriBot picks the path per request:
 |---|---|
 | Prompt only | Text-to-image, then the finish |
 | A message image, user, or persona as reference, or any mix of them | Character reference through Anima Ref Adapter, then the finish |
-| Inpaint or outpaint on a reference image | LanPaint inpaint/outpaint, without upscale or detailers so only the masked area changes |
+| Inpaint on a reference image | The area around the mask is cropped, resized to the requested size, repainted with LanPaint, and stitched back, so only the masked area changes and small targets get full resolution |
+| Outpaint on a reference image | LanPaint fills each padded edge in turn |
+
+Neither edit path runs the upscale or detailers.
 
 TomoriBot folds the workflow's branches before submitting it, so a request only runs the nodes
 on its own path. A text-to-image request never loads the reference adapter.
@@ -53,7 +56,8 @@ then restart ComfyUI. ComfyUI itself must be recent enough to include the core `
 | [ComfyUI-Impact-Subpack](https://github.com/ltdrdata/ComfyUI-Impact-Subpack) (detailed only) | `UltralyticsDetectorProvider` |
 | [ComfyUI-KJNodes](https://github.com/kijai/ComfyUI-KJNodes) | `GrowMaskWithBlur` |
 | [ComfyUI-RMBG](https://github.com/1038lab/ComfyUI-RMBG) | `RMBG`, `ClothesSegment`, `AILab_Florence2` |
-| [LanPaint](https://github.com/scraed/LanPaint) | `LanPaint_KSampler`, `LanPaint_MaskBlend` |
+| [LanPaint](https://github.com/scraed/LanPaint) | `LanPaint_KSampler` |
+| [ComfyUI-Inpaint-CropAndStitch](https://github.com/lquesada/ComfyUI-Inpaint-CropAndStitch) | `InpaintCropImproved`, `InpaintStitchImproved` |
 
 ```sh
 cd ComfyUI/custom_nodes
@@ -63,6 +67,7 @@ git clone https://github.com/ltdrdata/ComfyUI-Impact-Subpack.git
 git clone https://github.com/kijai/ComfyUI-KJNodes.git
 git clone https://github.com/1038lab/ComfyUI-RMBG.git
 git clone https://github.com/scraed/LanPaint.git
+git clone https://github.com/lquesada/ComfyUI-Inpaint-CropAndStitch.git
 ```
 
 Install each pack's Python requirements into the Python environment that runs ComfyUI
@@ -133,6 +138,71 @@ Anima variant are:
 
 `buildComfyUiPlaceholderMap` in `src/providers/custom/customComfyUiEndpoint.ts` defines every
 placeholder and its value.
+
+## MOSS Image Workflows
+
+Two [MOSS-Image](https://huggingface.co/OpenMOSS-Team/MOSS-Image-SFT) SFT workflows ship here. Both
+draw at 25 steps and CFG 2.5; they differ only in finish:
+
+| Workflow | Finish | Speed |
+|---|---|---|
+| `tomoribot-moss-image.json` (standard) | None: saves at the requested size | Faster |
+| `tomoribot-moss-image-detailed.json` | 2x anime upscale and a short hires pass, then face and hand detailers | Slower |
+
+| Request | Path |
+|---|---|
+| Prompt only | The Qwen 3.5 text encoder rewrites the prompt into a detailed caption, then MOSS draws it |
+| A message image, user, or persona as reference, or any mix of them | The encoder looks at the references and writes a caption describing those characters in the requested scene, then MOSS draws it |
+
+MOSS has no reference adapter, so references only reach the image through that caption. It keeps
+hair, eyes, and outfit well when the reference shows them clearly, but it cannot copy a face or a
+logo exactly. Up to three references are stitched left to right, in the same order as the Anima
+workflow. Neither workflow has an inpaint or outpaint path.
+
+### 1. Install the custom nodes
+
+Every node except the reference branching and the detailers is in core ComfyUI, which must be
+recent enough to support MOSS-Image (`TextGenerate`, `ComfySwitchNode`, `EmptyFlux2LatentImage`,
+and the `moss_image` text encoder type). The other nodes come from:
+
+| Node pack | Nodes the workflow uses |
+|---|---|
+| [ComfyUI-Impact-Pack](https://github.com/ltdrdata/ComfyUI-Impact-Pack) | `ImpactCompare`, `ImpactConditionalBranch`, `ImpactInt`, `FaceDetailer` (detailed only) |
+| [ComfyUI-Impact-Subpack](https://github.com/ltdrdata/ComfyUI-Impact-Subpack) (detailed only) | `UltralyticsDetectorProvider` |
+
+### 2. Download the models
+
+The MOSS files come from [Comfy-Org/MOSS-Image](https://huggingface.co/Comfy-Org/MOSS-Image). The
+detailed workflow also needs the upscaler and detector files from the Anima table above. Keep the
+filenames unchanged:
+
+| File | Folder | Download |
+|---|---|---|
+| `moss_image_sft_int8_convrot.safetensors` (5.4 GB) | `ComfyUI/models/diffusion_models/` | [Comfy-Org/MOSS-Image](https://huggingface.co/Comfy-Org/MOSS-Image/blob/main/diffusion_models/moss_image_sft_int8_convrot.safetensors) |
+| `qwen3.5_9b_w4a8_gptq.safetensors` (7.3 GB) | `ComfyUI/models/text_encoders/` | [Comfy-Org/MOSS-Image](https://huggingface.co/Comfy-Org/MOSS-Image/blob/main/text_encoders/qwen3.5_9b_w4a8_gptq.safetensors) |
+| `flux2-vae.safetensors` (336 MB) | `ComfyUI/models/vae/` | [Comfy-Org/MOSS-Image](https://huggingface.co/Comfy-Org/MOSS-Image/blob/main/vae/flux2-vae.safetensors) |
+| `RealESRGAN_x4plus_anime_6B.pth` (18 MB, detailed) | `ComfyUI/models/upscale_models/` | [xinntao/Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth) |
+| `face_yolov8s.pt` (23 MB, detailed) | `ComfyUI/models/ultralytics/bbox/` | [Bingsu/adetailer](https://huggingface.co/Bingsu/adetailer/blob/main/face_yolov8s.pt) |
+| `hand_yolov8s.pt` (23 MB, detailed) | `ComfyUI/models/ultralytics/bbox/` | [Bingsu/adetailer](https://huggingface.co/Bingsu/adetailer/blob/main/hand_yolov8s.pt) |
+
+The same repo has larger `bf16` versions of the model and encoder. To use one, change `unet_name`
+or `clip_name` on the matching loader node.
+
+The detailed workflow's images are 2x the requested size. Lower `scale_by` on the `Upscale: scale
+to 2x` node (for example to 0.375 for 1.5x) if large PNGs exceed the server's upload limit.
+
+Skip-layer guidance on layer 22 ships turned off. Set `switch` to `true` on the `MOSS SLG disabled
+by default` node to try it.
+
+### 3. Register
+
+Test one prompt in the ComfyUI web UI first, as with Anima. When registering the endpoint, choose
+the `image` capability and tick `Text to image`, `Reference image`, and `Negative prompt`. Leave
+`Inpainting` unticked.
+
+References reach these workflows as files TomoriBot uploads to ComfyUI, through the
+`{TOMORI_REFERENCE_IMAGE_<n>_FILENAME}` placeholders, rather than the data URLs the Anima workflows
+use.
 
 ## Wan I2V Loop Video Workflow
 

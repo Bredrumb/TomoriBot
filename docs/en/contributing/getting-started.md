@@ -32,6 +32,7 @@ POSTGRES_USER=...
 POSTGRES_PASSWORD=...
 POSTGRES_DB=tomodb
 RUN_ENV=development
+ALLOW_PRIVATE_NETWORK=true
 ```
 
 - The code branches on `RUN_ENV`, not `NODE_ENV`.

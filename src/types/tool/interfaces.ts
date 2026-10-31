@@ -206,6 +206,8 @@ export interface ToolContext {
   emojiStrings?: string[];
   userId?: string;
   internalUserId?: number;
+  /** The turn's trigger message is a bystander's anchor, so `userId` names no requester and `internalUserId` is who pays. */
+  borrowsTriggerMessage?: boolean;
   guildId?: string;
   streamContext?: StreamingContext; // Optional streaming context for enhanced functionality
 

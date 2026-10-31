@@ -4,7 +4,7 @@ import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { FETCH_LIMITS } from "@/utils/security/rateLimiter";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import type { FetchEngine, FetchOpts } from "./types";
-import { isPrivateNetworkFetchAllowed } from "./urlSafety";
+import { getFetchUrlRemotePolicy } from "./urlSafety";
 
 const MAX_CONTENT_LENGTH = Math.max(
   1,
@@ -62,10 +62,7 @@ export class SafeHttpFetchEngine implements FetchEngine {
         },
         signal,
       },
-      // Keep gate 2 aligned with gate 1: honor the same private-network policy
-      // (dev auto-relax / production opt-in). The always-on cloud-metadata
-      // denylist inside gate 2 is not affected by this.
-      { allowPrivateNetwork: isPrivateNetworkFetchAllowed() },
+      getFetchUrlRemotePolicy(),
     );
 
     if (!response.ok) {

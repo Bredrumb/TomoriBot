@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { config } from "dotenv";
 import pc from "picocolors";
+import { isPrivateNetworkFetchAllowed } from "@/tools/fetchUrl/urlSafety";
 import { resolvePythonExe } from "../lib/pyenv";
 import { DEFAULT_PYTHON_HEALTH_TIMEOUT_MS, resolvePositiveTimeoutMs } from "../lib/launchReadiness";
 
@@ -495,6 +496,13 @@ async function main(): Promise<void> {
         // Without a token the pinned image binds only the container's loopback, so the bot could never connect.
         if (flag === "crawl4ai" && !process.env.CRAWL4AI_TOKEN) {
           throw new Error("Set CRAWL4AI_TOKEN in .env; Crawl4AI refuses outside connections without an API token.");
+        }
+        if (flag === "crawl4ai" && !isPrivateNetworkFetchAllowed()) {
+          console.warn(
+            pc.yellow(
+              "Crawl4AI will start, but fetch_url ignores it until .env sets FETCH_URL_ALLOW_PRIVATE_NETWORK=true.",
+            ),
+          );
         }
         await ensureDockerLocalServer(def);
       } else {

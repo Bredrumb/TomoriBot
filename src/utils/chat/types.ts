@@ -28,6 +28,8 @@ export interface ChatReminderData {
   reminder_purpose: string;
   reminder_lateness?: string | null;
   self_reminder?: boolean;
+  /** Routes the turn's personal key, because the borrowed trigger message's author is a bystander. */
+  created_by_user_id?: number | null;
 }
 
 export type QueuedMessageDiscardReason =
@@ -131,7 +133,7 @@ export interface TomoriChatInput {
   nudgeSceneCatcherPersonaId?: number;
   /**
    * System turn that borrows the channel's latest message as its trigger, so that message's author is
-   * a bystander: no personal key, and none of their access gates.
+   * a bystander: not their personal key, reunion clock, or access gates.
    */
   borrowsTriggerMessage?: boolean;
   carriedExpressionDelivery?: CarriedExpressionDelivery;
@@ -179,7 +181,7 @@ export interface ChatIncoming {
   nudgeSceneCatcherPersonaId?: number;
   /**
    * System turn that borrows the channel's latest message as its trigger, so that message's author is
-   * a bystander: no personal key, and none of their access gates.
+   * a bystander: not their personal key, reunion clock, or access gates.
    */
   borrowsTriggerMessage?: boolean;
   carriedExpressionDelivery?: CarriedExpressionDelivery;

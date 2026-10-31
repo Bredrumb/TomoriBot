@@ -76,12 +76,15 @@ Download a ready-to-use API-format workflow. Examples can be found in the repo u
 |----------|-------|
 | Anima turbo (image, fast) : `tomoribot-anima-image-turbo.json` | text to image, character reference, inpaint/outpaint |
 | Anima detailed (image, slower, face and hand detailers) : `tomoribot-anima-image-detailed.json` | text to image, character reference, inpaint/outpaint |
+| MOSS standard (image, prompt rewritten by a multimodal encoder) : `tomoribot-moss-image.json` | text to image, character reference |
+| MOSS detailed (image, slower, 2x upscale with face and hand detailers) : `tomoribot-moss-image-detailed.json` | text to image, character reference |
 | WAN i2v loop (video) : `tomoribot-wan-i2v-loop-video.json` | image-to-video |
 
 Each workflow needs specific custom nodes and model files in specific ComfyUI folders. The
 [workflow README](https://github.com/Bredrumb/TomoriBot/tree/main/assets/comfyui-workflows) lists
-them for the Anima workflow, with download links and the folder each file goes in. Install those
-before registering, or generation fails with a missing node or `Value not in list` error.
+them for the Anima and MOSS workflows, with download links and the folder each file goes in.
+Install those before registering, or generation fails with a missing node or `Value not in list`
+error.
 
 These are API format (the JSON ComfyUI exports via *Save (API Format)*), not the regular
 UI-save format. If you author your own, it must contain the `{TOMORI_*}` placeholders

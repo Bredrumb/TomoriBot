@@ -5,6 +5,7 @@ import type { ToolContext } from "@/types/tool/interfaces";
 import { FETCH_LIMITS } from "@/utils/security/rateLimiter";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { useEnvSandbox } from "../../helpers/env";
+import { localizedCopy } from "../../helpers/localeCases";
 import { createPersona } from "../../helpers/fixtures";
 import { stubGlobalFetch } from "../../helpers/fetchStub";
 
@@ -16,21 +17,18 @@ const CRAWL4AI_BASE_URL_ENV_NAME = "CRAWL4AI_BASE_URL";
 
 useEnvSandbox([ENV_NAME, RUN_ENV_NAME, CRAWL4AI_BASE_URL_ENV_NAME]);
 
-// The blocklist only engages in production; pin RUN_ENV so these cases
-// exercise the guarded path rather than the dev auto-relax.
 describe("validateFetchUrlTarget in production", () => {
   beforeEach(() => {
     process.env[RUN_ENV_NAME] = "production";
   });
 
-  it("blocks loopback IPv4 targets by default with an env-specific error", async () => {
+  it("blocks loopback IPv4 targets by default", async () => {
     delete process.env[ENV_NAME];
 
     const result = await validateFetchUrlTarget("http://127.0.0.1:11235/");
 
     expect(result.allowed).toBe(false);
     expect(result.failureCode).toBe("PRIVATE_NETWORK_BLOCKED");
-    expect(result.error).toContain("FETCH_URL_ALLOW_PRIVATE_NETWORK=true");
   });
 
   it("blocks IPv4-mapped IPv6 loopback targets", async () => {
@@ -43,13 +41,27 @@ describe("validateFetchUrlTarget in production", () => {
     expect(result.error).toContain("127.0.0.1");
   });
 
+  it("blocks private and metadata targets embedded in NAT64, 6to4, and IPv4-compatible addresses", async () => {
+    process.env[ENV_NAME] = "true";
+    const metadataResult = await validateFetchUrlTarget("http://[64:ff9b::a9fe:a9fe]/");
+    expect(metadataResult.failureCode).toBe("METADATA_ADDRESS_BLOCKED");
+
+    delete process.env[ENV_NAME];
+    const admitted: string[] = [];
+    for (const url of ["http://[::127.0.0.1]/", "http://[64:ff9b::7f00:1]/", "http://[2002:c0a8:132::]/"]) {
+      if ((await validateFetchUrlTarget(url)).allowed) admitted.push(url);
+    }
+    expect(admitted).toEqual([]);
+    expect((await validateFetchUrlTarget("https://[64:ff9b::5db8:d822]/")).allowed).toBe(true);
+  });
+
   it("blocks the Azure Instance Metadata Service address", async () => {
     delete process.env[ENV_NAME];
 
     const result = await validateFetchUrlTarget("http://169.254.169.254/metadata/identity/oauth2/token");
 
     expect(result.allowed).toBe(false);
-    expect(result.failureCode).toBe("PRIVATE_NETWORK_BLOCKED");
+    expect(result.failureCode).toBe("METADATA_ADDRESS_BLOCKED");
     // IMDS is caught by the always-on cloud-metadata denylist, which runs
     // ahead of the general private-network blocklist.
     expect(result.error).toContain("cloud instance-metadata");
@@ -90,8 +102,7 @@ describe("validateFetchUrlTarget in production", () => {
     try {
       for (const runEnv of ["production", "development"]) {
         process.env[RUN_ENV_NAME] = runEnv;
-        if (runEnv === "production") process.env[ENV_NAME] = "true";
-        else delete process.env[ENV_NAME];
+        process.env[ENV_NAME] = "true";
         const result = await new FetchUrlTool().execute({ url: "https://127.0.0.1/oversized" }, context);
         expect(result.success).toBe(false);
         expect(result.error).toContain(String(FETCH_LIMITS.MAX_FETCH_SIZE_MB + 1));
@@ -105,7 +116,9 @@ describe("validateFetchUrlTarget in production", () => {
       delete process.env[ENV_NAME];
       const blocked = await new FetchUrlTool().execute({ url: "https://127.0.0.1/oversized" }, context);
       expect(blocked.success).toBe(false);
-      expect(blocked.error).toContain("FETCH_URL_ALLOW_PRIVATE_NETWORK");
+      expect(blocked.message).toBe(
+        localizedCopy("en-US", "tools.fetch.private_network_blocked_description", { error: blocked.error ?? "" }),
+      );
       expect(requests).toHaveLength(2);
     } finally {
       fetchSpy.mockRestore();
@@ -113,30 +126,71 @@ describe("validateFetchUrlTarget in production", () => {
   });
 });
 
-// Outside production the guard auto-relaxes so local development can reach
-// private endpoints with no configuration.
+// Self-hosted community instances often keep the default development RUN_ENV, so it must not
+// grant private-network reach on its own.
 describe("validateFetchUrlTarget outside production", () => {
   beforeEach(() => {
     delete process.env[RUN_ENV_NAME];
     delete process.env[ENV_NAME];
   });
 
-  it("allows private targets without any opt-in", async () => {
+  it("blocks private targets without the opt-in and tells the host which setting allows them", async () => {
+    const context: ToolContext = {
+      channel: { id: "fixture-channel" } as ToolContext["channel"],
+      client: {} as ToolContext["client"],
+      locale: "en-US",
+      provider: "google",
+      tomoriState: createPersona({ config: { web_search_enabled: true } }),
+      suppressProgressNotices: true,
+    };
+    const fetchSpy = stubGlobalFetch(() => new Response("unexpected"));
+    try {
+      const result = await new FetchUrlTool().execute({ url: "http://127.0.0.1:11235/" }, context);
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe(
+        localizedCopy("en-US", "tools.fetch.private_network_blocked_description", { error: result.error ?? "" }),
+      );
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("allows private targets with the opt-in", async () => {
+    process.env[ENV_NAME] = "true";
+
     const result = await validateFetchUrlTarget("http://127.0.0.1:11235/");
 
     expect(result.allowed).toBe(true);
   });
 
-  it("still blocks cloud-metadata addresses despite the dev auto-relax", async () => {
-    const result = await validateFetchUrlTarget("http://169.254.169.254/metadata/identity/oauth2/token");
+  it("does not suggest the opt-in for cloud-metadata addresses", async () => {
+    const context: ToolContext = {
+      channel: { id: "fixture-channel" } as ToolContext["channel"],
+      client: {} as ToolContext["client"],
+      locale: "en-US",
+      provider: "google",
+      tomoriState: createPersona({ config: { web_search_enabled: true } }),
+      suppressProgressNotices: true,
+    };
+    process.env[ENV_NAME] = "true";
 
-    expect(result.allowed).toBe(false);
-    expect(result.failureCode).toBe("PRIVATE_NETWORK_BLOCKED");
+    const result = await new FetchUrlTool().execute(
+      { url: "http://169.254.169.254/metadata/identity/oauth2/token" },
+      context,
+    );
+
+    expect(result.success).toBe(false);
     expect(result.error).toContain("metadata");
+    expect(result.message).toBe(
+      localizedCopy("en-US", "tools.fetch.fetch_failed_description", { error: result.error ?? "" }),
+    );
   });
 
   it("refuses an unresolvable host before dispatching to the external Crawl4AI browser", async () => {
     process.env[CRAWL4AI_BASE_URL_ENV_NAME] = "http://127.0.0.1:11235";
+    process.env[ENV_NAME] = "true";
     const context: ToolContext = {
       channel: { id: "fixture-channel" } as ToolContext["channel"],
       client: {} as ToolContext["client"],
@@ -167,6 +221,6 @@ describe("validateFetchUrlTarget outside production", () => {
     const result = await validateFetchUrlTarget("http://169.254.169.254/");
 
     expect(result.allowed).toBe(false);
-    expect(result.failureCode).toBe("PRIVATE_NETWORK_BLOCKED");
+    expect(result.failureCode).toBe("METADATA_ADDRESS_BLOCKED");
   });
 });

@@ -16,6 +16,7 @@ import providerLocale from "@/locales/en-US/providers";
 import { RUNTIME_LOCALES, collectCaseFailures, localizedCopy } from "../../helpers/localeCases";
 import { ConfiguredModelUnavailableError, createProviderToolFailure } from "@/utils/provider/providerToolFailure";
 import { CredentialUnavailableError } from "@/utils/provider/credentialResolver";
+import { RemoteUrlPolicyError } from "@/utils/security/userRemoteFetch";
 
 // A synthetic credential an endpoint reflects back, in the encodings a pattern redactor misses.
 const CANARY = "sk-live-CANARY0001";
@@ -277,6 +278,23 @@ describe("public provider error descriptions", () => {
     expect(result.failure?.reason).toBe(localizedCopy("en-US", `genai.tool_failure.${reason}`));
     expect(result.failure?.suggestedActions).not.toContain(localizedCopy("en-US", "genai.tips.wait_and_retry"));
     if (tip) expect(result.failure?.suggestedActions).toEqual([localizedCopy("en-US", `genai.tips.${tip}`)]);
+  });
+
+  it("tells the host's refusal of an endpoint address apart from a provider failure", () => {
+    const result = createProviderToolFailure(
+      new RemoteUrlPolicyError(
+        "Localhost is not allowed for this endpoint. ALLOW_PRIVATE_NETWORK does not list 127.0.0.1:8000.",
+        "127.0.0.1",
+        "PRODUCTION_LOCALHOST_FORBIDDEN",
+      ),
+      { locale: "en-US", provider: "custom", credentialScope: "personal" },
+    );
+    expect(result.failure?.code).toBe("PRIVATE_NETWORK_BLOCKED");
+    expect(result.failure?.reason).toBe(localizedCopy("en-US", "genai.tool_failure.endpoint_blocked"));
+    expect(result.failure?.suggestedActions).toEqual([
+      localizedCopy("en-US", "genai.tips.endpoint_not_allowed_personal"),
+    ]);
+    expect(result.failure?.reason).not.toContain("ALLOW_PRIVATE_NETWORK");
   });
 
   it("names configured model files only through the dedicated error", () => {

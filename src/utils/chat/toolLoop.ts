@@ -887,6 +887,7 @@ async function executeToolCall(
     userId:
       params.context.turn.lockedTurn.admission.incoming.naturalNudge?.targetUserDiscId ?? params.context.userDiscId,
     internalUserId: params.context.personalRoutingUserId ?? undefined,
+    borrowsTriggerMessage: params.context.turn.lockedTurn.admission.incoming.borrowsTriggerMessage,
     guildId: params.context.guild?.id,
     tomoriState: params.tomoriState,
     locale: params.context.locale,

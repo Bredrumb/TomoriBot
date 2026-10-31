@@ -1,6 +1,7 @@
 export default {
   genai: {
     tool_failure: {
+      endpoint_blocked: `This host does not allow requests to this endpoint's address.`,
       content_blocked: `The provider rejected this tool request through its content filter.`,
       authentication: `The provider rejected the credentials used for this tool request.`,
       quota: `The provider refused this tool request because a quota or billing limit was reached.`,
@@ -100,6 +101,7 @@ export default {
       context_length_title: `Message Too Long for This Model`,
       credit_limit_title: `Not Enough Provider Credits`,
       balance_exhausted_title: `Provider Account Out of Credit`,
+      endpoint_blocked_title: `Endpoint Not Allowed`,
       flush_limit_title: `Response Length Limit Reached`,
       flush_limit_description: `This response has reached the maximum message length limit and has been stopped. You can use \`/respond\` to manually continue the response if needed.`,
       inactivity_timeout_title: `Response Timed Out`,
@@ -133,6 +135,8 @@ export default {
       choose_supported_model_personal: `Choose a supported model ID with \`/personal config\` or your custom endpoint settings.`,
       verify_api_key: `Double-check this server's API key, then try again.`,
       verify_api_key_personal: `Double-check your personal API key with \`/personal providers\`, then try again.`,
+      endpoint_not_allowed: `Switch to a public HTTPS endpoint with \`/providers\`, or ask whoever runs this host whether a local server can be allowed.`,
+      endpoint_not_allowed_personal: `Switch to a public HTTPS endpoint with \`/personal providers\`, or ask whoever runs this host whether a local server can be allowed.`,
       verify_api_key_expiry: `NVIDIA NIM keys expire, and NVIDIA refuses an expired key with the same error as a mistyped one. Check its expiry on [build.nvidia.com](https://build.nvidia.com) and generate a new key if it has lapsed.`,
       nvidia_register_free_model: `If this model keeps failing, NVIDIA may have retired it or its free queue may be backed up. Pick one it currently serves from [NVIDIA's free endpoints](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview), copy its model ID (such as \`deepseek-ai/deepseek-v4.1-flash\`), then add it in \`/providers\` > NVIDIA NIM > **+ Add new Text Model**.`,
       nvidia_register_free_model_personal: `If this model keeps failing, NVIDIA may have retired it or its free queue may be backed up. Pick one it currently serves from [NVIDIA's free endpoints](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview), copy its model ID (such as \`deepseek-ai/deepseek-v4.1-flash\`), then add it in \`/personal providers\` > NVIDIA NIM > **+ Add new Text Model**.`,
@@ -218,6 +222,7 @@ The selected model requires allowing data for paid model training, but your Open
     },
     custom: {
       "402_default_message": `Your account with this endpoint has insufficient balance`,
+      PRIVATE_NETWORK_BLOCKED_default_message: `This host does not allow requests to this endpoint's address.`,
       REDIRECT_CREDENTIALS_WITHHELD_default_message: `This endpoint redirected to a different address, so TomoriBot did not send its API key there. Whoever manages this endpoint in \`/providers\` can fix it by changing its URL to the final address the server redirects to.`,
       unknown_default_message: `An unexpected error occurred`,
     },

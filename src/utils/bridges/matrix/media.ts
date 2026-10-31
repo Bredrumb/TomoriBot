@@ -6,6 +6,7 @@ import { safeDownload } from "@/utils/security/safeDownload";
 import { getMatrixBridge, getMatrixSettings } from "./state";
 import { ensurePersonaInRoom, getPersonaIntent } from "./userMapping";
 import { trackSentMatrixEvent } from "./stateSync";
+import { getEndpointRemotePolicy } from "@/utils/security/remoteUrlSecurity";
 
 const BYTES_PER_MIB = 1024 * 1024;
 // Discord accepts avatar uploads up to 10 MB, so a persona avatar never needs more.
@@ -184,6 +185,7 @@ async function followAnonymousMediaRedirect(
   const result = await safeDownload(target.toString(), {
     maxSizeMB: maxAttachmentBytes / BYTES_PER_MIB,
     timeoutMs: mediaTimeoutMs,
+    remotePolicy: getEndpointRemotePolicy(),
   });
   if (!result.success || !result.buffer) {
     log.warn(`Matrix bridge: redirected media download refused or failed (${result.error ?? "unknown"})`);

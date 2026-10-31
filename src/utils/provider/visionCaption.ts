@@ -37,6 +37,7 @@ import { normalizeProviderName } from "@/utils/provider/providerInfoRegistry";
 import { toDeepseekApiModelName } from "@/providers/deepseek/deepseekShared";
 import { resolveVisionCaptionMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
 import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAttribution";
+import { getEndpointRemotePolicy } from "@/utils/security/remoteUrlSecurity";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import {
   toZaiApiModelName,
@@ -432,7 +433,7 @@ export async function callOpenAiCompatibleVision(
       }),
       signal,
     },
-    fetchUserRemoteUrl,
+    (input, init) => fetchUserRemoteUrl(input, init, getEndpointRemotePolicy()),
   );
 
   if (!response.ok) {

@@ -47,6 +47,7 @@ import { readProviderErrorBody } from "@/utils/provider/providerErrorMetrics";
 import { ConfiguredModelUnavailableError } from "@/utils/provider/providerToolFailure";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import { safeDownload } from "@/utils/security/safeDownload";
+import { getEndpointRemotePolicy } from "@/utils/security/remoteUrlSecurity";
 
 type ComfyUiGenerationMode = "image" | "video";
 type ComfyUiOutpaintStrategy = "edge_extend" | "zoom_out" | "full_canvas";
@@ -249,14 +250,18 @@ async function unloadComfyUiModelsAfterSuccessfulGeneration(
   }
 
   try {
-    const response = await fetchUserRemoteUrl(`${endpoint.endpoint_url.replace(/\/+$/, "")}/free`, {
-      method: "POST",
-      headers: buildCustomHeaders(apiKey),
-      body: JSON.stringify({
-        unload_models: true,
-        free_memory: true,
-      }),
-    });
+    const response = await fetchUserRemoteUrl(
+      `${endpoint.endpoint_url.replace(/\/+$/, "")}/free`,
+      {
+        method: "POST",
+        headers: buildCustomHeaders(apiKey),
+        body: JSON.stringify({
+          unload_models: true,
+          free_memory: true,
+        }),
+      },
+      getEndpointRemotePolicy(),
+    );
 
     if (!response.ok) {
       log.warn(
@@ -1595,11 +1600,15 @@ async function uploadComfyUiReferenceImage(
 
   const headers = buildCustomHeaders(apiKey);
   delete headers["Content-Type"];
-  const response = await fetchUserRemoteUrl(`${endpoint.endpoint_url.replace(/\/+$/, "")}/upload/image`, {
-    method: "POST",
-    headers,
-    body: formData,
-  });
+  const response = await fetchUserRemoteUrl(
+    `${endpoint.endpoint_url.replace(/\/+$/, "")}/upload/image`,
+    {
+      method: "POST",
+      headers,
+      body: formData,
+    },
+    getEndpointRemotePolicy(),
+  );
 
   if (!response.ok) {
     throw new Error(`ComfyUI reference image upload failed: ${response.status} ${response.statusText}`);
@@ -2913,14 +2922,18 @@ async function generateWithComfyUi(
   delete getHeaders["Content-Type"];
   const clientId = `tomoribot-${Date.now()}`;
 
-  const promptResponse = await fetchUserRemoteUrl(`${endpoint.endpoint_url.replace(/\/+$/, "")}/prompt`, {
-    method: "POST",
-    headers: postHeaders,
-    body: JSON.stringify({
-      prompt: preparedWorkflow,
-      client_id: clientId,
-    }),
-  });
+  const promptResponse = await fetchUserRemoteUrl(
+    `${endpoint.endpoint_url.replace(/\/+$/, "")}/prompt`,
+    {
+      method: "POST",
+      headers: postHeaders,
+      body: JSON.stringify({
+        prompt: preparedWorkflow,
+        client_id: clientId,
+      }),
+    },
+    getEndpointRemotePolicy(),
+  );
 
   if (!promptResponse.ok) {
     const errorBody = (await readProviderErrorBody(promptResponse, apiKey)).trim();
@@ -2967,6 +2980,7 @@ async function generateWithComfyUi(
       const historyResponse = await fetchUserRemoteUrl(
         `${endpoint.endpoint_url.replace(/\/+$/, "")}/history/${encodeURIComponent(promptPayload.prompt_id)}`,
         { headers: getHeaders, signal: options.abortSignal },
+        getEndpointRemotePolicy(),
       );
 
       if (historyResponse.ok) {
@@ -3069,11 +3083,15 @@ export async function cancelComfyUiPrompt(
   const headers = buildCustomHeaders(apiKey);
   const request = async (path: string, init: RequestInit = {}): Promise<Response | null> => {
     try {
-      return await fetchUserRemoteUrl(`${baseUrl}${path}`, {
-        ...init,
-        headers,
-        signal: AbortSignal.timeout(COMFYUI_CANCEL_REQUEST_TIMEOUT_MS),
-      });
+      return await fetchUserRemoteUrl(
+        `${baseUrl}${path}`,
+        {
+          ...init,
+          headers,
+          signal: AbortSignal.timeout(COMFYUI_CANCEL_REQUEST_TIMEOUT_MS),
+        },
+        getEndpointRemotePolicy(),
+      );
     } catch {
       return null;
     }
@@ -3122,7 +3140,7 @@ async function downloadComfyUiAsset(endpoint: CustomEndpointRow, apiKey: string,
   const headers = { ...buildCustomHeaders(apiKey) };
   delete headers["Content-Type"];
 
-  const response = await fetchUserRemoteUrl(url.toString(), { headers });
+  const response = await fetchUserRemoteUrl(url.toString(), { headers }, getEndpointRemotePolicy());
   if (!response.ok) {
     throw new Error(`ComfyUI asset download failed: ${response.status} ${response.statusText}`);
   }

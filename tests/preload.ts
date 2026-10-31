@@ -14,6 +14,10 @@ export {};
  */
 process.env.RUN_ENV = "development";
 
-// Imported after the pin above, and registered here because the release guard suites assert registered behavior.
+// Pinned to what a local-model install chooses, because a workstation's .env would otherwise flip SSRF fixtures.
+process.env.ALLOW_PRIVATE_NETWORK = "true";
+delete process.env.FETCH_URL_ALLOW_PRIVATE_NETWORK;
+
+// Imported after the pins above, and registered here because the release guard suites assert registered behavior.
 const { registerSupporterProviderExtensions } = await import("@/modules/supporter-billing/registration");
 registerSupporterProviderExtensions();

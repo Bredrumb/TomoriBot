@@ -24,6 +24,7 @@ import { ZAI_CODING_CHAT_COMPLETIONS_URL, ZAI_GENERAL_CHAT_COMPLETIONS_URL } fro
 import { waitForWelcomeGate } from "@/events/guildMemberAdd/helpers/welcomeGate";
 import { type WelcomeMembershipCheck, checkWelcomeMembership } from "@/events/guildMemberAdd/helpers/welcomeMembership";
 import { type WelcomeHandoff, openWelcomeHandoff } from "@/utils/chat/welcomeHandoff";
+import { getEndpointRemotePolicy } from "@/utils/security/remoteUrlSecurity";
 
 /**
  * Provider-to-chat-completions-URL mapping for vision model routing.
@@ -90,15 +91,19 @@ async function callOpenAICompatibleVisionForAvatar(
     ],
     max_tokens: 1024,
   };
-  const response = await fetchUserRemoteUrl(endpointUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-      ...(endpointUrl === VISION_PROVIDER_URLS.openrouter && buildOpenRouterAttributionHeaders()),
+  const response = await fetchUserRemoteUrl(
+    endpointUrl,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+        ...(endpointUrl === VISION_PROVIDER_URLS.openrouter && buildOpenRouterAttributionHeaders()),
+      },
+      body: JSON.stringify(requestBody),
     },
-    body: JSON.stringify(requestBody),
-  });
+    getEndpointRemotePolicy(),
+  );
   if (!response.ok) {
     const errorText = await response.text().catch(() => "Unknown error");
     throw new Error(`Vision API returned ${response.status}: ${errorText}`);

@@ -1,6 +1,7 @@
 import { log } from "@/utils/misc/logger";
 import type { CustomEndpointRow } from "@/types/db/schema";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
+import { getEndpointRemotePolicy } from "@/utils/security/remoteUrlSecurity";
 
 /** Timeout for /v1/audio/transcriptions requests, configurable via env. */
 const OPENAI_STT_TIMEOUT_MS =
@@ -69,12 +70,16 @@ export async function transcribeViaOpenAIAdapter(
     const abortController = new AbortController();
     const timer = setTimeout(() => abortController.abort(), OPENAI_STT_TIMEOUT_MS);
     try {
-      response = await fetchUserRemoteUrl(targetUrl, {
-        method: "POST",
-        headers,
-        body: form,
-        signal: abortController.signal,
-      });
+      response = await fetchUserRemoteUrl(
+        targetUrl,
+        {
+          method: "POST",
+          headers,
+          body: form,
+          signal: abortController.signal,
+        },
+        getEndpointRemotePolicy(),
+      );
     } finally {
       clearTimeout(timer);
     }

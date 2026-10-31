@@ -1219,6 +1219,7 @@ describe("runGenerationTurn fallback behavior", () => {
       context.currentPersona.fallback_chain = [{ kind: "llm", model: primary }];
       if (personal) {
         context.personalRoutingUserId = 91;
+        context.turn.userRow.user_id = 91;
         context.turn.userRow.personal_server_fallback_enabled = false;
         personalOverlayState = context.currentPersona;
       }

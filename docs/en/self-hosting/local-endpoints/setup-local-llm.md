@@ -201,10 +201,11 @@ model at Q8**.
 - **Model Name is the API identifier.** It is the exact string sent to the server. Getting it wrong is the most
   common "it connected but responses fail" cause.
 - **Running TomoriBot in Docker?** `localhost` inside the container is not your host. Use
-  `http://host.docker.internal:<port>` (Windows/macOS) or the host's LAN IP, and bind the
-  model server to `0.0.0.0`.
-- **Using Compose?** Its `RUN_ENV=development` setting permits local HTTP endpoints. A
-  production runtime enforces HTTPS and blocks private-network destinations unless the caller
-  explicitly permits them. `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` permits private targets for
-  `fetch_url` in production; it does not change provider endpoint rules. Cloud metadata addresses
-  remain blocked in every mode.
+  `http://host.docker.internal:<port>` or the host's LAN IP, and bind the model server to `0.0.0.0`.
+  The bundled Compose file maps that name on Linux too. With your own Compose file or `docker run` on
+  Linux, add `extra_hosts: ["host.docker.internal:host-gateway"]` (`--add-host=host.docker.internal:host-gateway`
+  for `docker run`).
+- **Private addresses need `ALLOW_PRIVATE_NETWORK` to allow them.** With `true`, endpoints on
+  `localhost`, LAN hosts, and `host.docker.internal` work over plain HTTP. A `host:port` list such as
+  `localhost:5001` allows only those servers, which suits sharing your models with a whole Discord server. `FETCH_URL_ALLOW_PRIVATE_NETWORK` is a separate
+  setting for the `fetch_url` tool and does not change endpoint rules.

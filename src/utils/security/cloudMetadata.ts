@@ -1,9 +1,10 @@
 import { isIP } from "node:net";
+import { getEmbeddedIpv4 } from "@/utils/security/embeddedIpv4";
 
 /**
  * Cloud instance-metadata and link-local addresses that must NEVER be
  * reachable through any user-driven fetch, regardless of runtime environment
- * (`RUN_ENV`) or private-network opt-in (`FETCH_URL_ALLOW_PRIVATE_NETWORK`).
+ * (`RUN_ENV`) or either private-network opt-in (`ALLOW_PRIVATE_NETWORK`, `FETCH_URL_ALLOW_PRIVATE_NETWORK`).
  *
  * These endpoints are the primary SSRF credential-theft target: the cloud
  * Instance Metadata Service (AWS/Azure/GCP all expose it at `169.254.169.254`)
@@ -35,6 +36,8 @@ export function isCloudMetadataAddress(address: string): boolean {
   // IPv6 link-local (fe80::/10), the AWS IPv6 IMDS address (fd00:ec2::254), and
   //    GCP's metadata server address for IPv6-only VMs (fd20:ce::254).
   if (family === 6) {
+    const embeddedIpv4 = getEmbeddedIpv4(normalized);
+    if (embeddedIpv4) return isCloudMetadataAddress(embeddedIpv4);
     return /^fe[89ab]/.test(normalized) || normalized === "fd00:ec2::254" || normalized === "fd20:ce::254";
   }
 

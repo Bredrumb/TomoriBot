@@ -162,7 +162,9 @@ function formatTomoriSelfDebugEmbedAsSystemMessage(embed: Embed): string | null 
   }
 
   const isErrorEmbed = embed.color === ERROR_EMBED_COLOR_DECIMAL;
-  const lines: string[] = [isErrorEmbed ? "Tomori emitted an error embed." : "Tomori emitted a diagnostic embed."];
+  const lines: string[] = [
+    isErrorEmbed ? "The system emitted an error embed." : "The system emitted a diagnostic embed.",
+  ];
 
   if (embed.title?.trim()) {
     lines.push(`Title: ${truncateForSystemContext(embed.title, 160)}`);

@@ -282,6 +282,7 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
       isManuallyTriggered: incoming.isManuallyTriggered,
       isUserImpersonation: incoming.isUserImpersonation,
       borrowsTriggerMessage: incoming.borrowsTriggerMessage === true,
+      borrowedTurnOwnerUserId: incoming.reminderData?.created_by_user_id,
       userRow,
       channel,
       locale,
@@ -667,6 +668,8 @@ export async function resolveTextCredentialPolicy(params: {
   isManuallyTriggered?: boolean;
   isUserImpersonation: boolean;
   borrowsTriggerMessage: boolean;
+  /** Who a borrowed-trigger turn bills instead of the anchor message's author, such as a reminder's creator. */
+  borrowedTurnOwnerUserId?: number | null;
   userRow: UserRow;
   channel: Message["channel"];
   locale: string;
@@ -692,9 +695,9 @@ export async function resolveTextCredentialPolicy(params: {
     ...params.dependencies,
   };
   // A borrowed trigger's author is whoever spoke last, so a personal key there would bill a bystander.
-  const personalRoutingUserId =
-    params.borrowsTriggerMessage ||
-    (params.isSelfMessage && !params.isPersonaJob && !params.isManuallyTriggered && !params.isUserImpersonation)
+  const personalRoutingUserId = params.borrowsTriggerMessage
+    ? (params.borrowedTurnOwnerUserId ?? null)
+    : params.isSelfMessage && !params.isPersonaJob && !params.isManuallyTriggered && !params.isUserImpersonation
       ? null
       : (params.userRow.user_id ?? null);
   const sendFailureNotice = async (options: Parameters<typeof sendStandardEmbed>[2]): Promise<void> => {

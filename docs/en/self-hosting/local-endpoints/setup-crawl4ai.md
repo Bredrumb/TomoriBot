@@ -10,7 +10,7 @@ Render JavaScript-heavy web pages into clean Markdown for TomoriBot using a loca
 
 The built-in `fetch_url` tool uses the lightweight `safe_http` engine by default. Crawl4AI adds an optional headless Playwright browser that executes client-side scripts and extracts page content before returning Markdown to the bot.
 
-Because Crawl4AI follows redirects outside TomoriBot's guarded HTTP client, it is only admitted where private-network fetching is permitted. Outside production (`RUN_ENV` != `production`), private-network fetching is enabled automatically. In production environments, it requires setting `FETCH_URL_ALLOW_PRIVATE_NETWORK=true`.
+Because Crawl4AI follows redirects outside TomoriBot's guarded HTTP client, it is only admitted where private-network fetching is permitted, which requires `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` in every `RUN_ENV`. That setting also lets `fetch_url` read localhost and LAN pages, so enable it only on an instance whose members you trust.
 
 :::caution[What TomoriBot can and cannot check]
 TomoriBot refuses a URL whose hostname does not resolve, or resolves to a cloud metadata address, before it asks Crawl4AI to open it. It cannot control what the browser does next: Crawl4AI resolves the name again, follows redirects, and loads images and scripts on its own. TomoriBot's always-on metadata block does not cover those requests.
@@ -24,7 +24,7 @@ Choose a setup path:
 
 ### Option A: Docker Compose (when TomoriBot runs in Docker)
 
-Use this path if you run TomoriBot with the repo's Docker Compose stack. First, set `CRAWL4AI_BASE_URL=http://crawl4ai:11235/` and `CRAWL4AI_TOKEN` in `.env`. Outside production no private-network opt-in is needed; only add `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` if you run this stack with `RUN_ENV=production`.
+Use this path if you run TomoriBot with the repo's Docker Compose stack. First, set `CRAWL4AI_BASE_URL=http://crawl4ai:11235/`, `CRAWL4AI_TOKEN`, and `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` in `.env`.
 
 Then, start with:
 
@@ -46,7 +46,7 @@ docker compose --profile searxng --profile fetch-crawl4ai up -d
 
 ### Option B: Standalone Docker (when running `bun run dev`)
 
-First, set `CRAWL4AI_BASE_URL=http://localhost:11235/` and `CRAWL4AI_TOKEN` in `.env` so the bot connects to the container port published on `127.0.0.1`. Outside production no private-network opt-in is needed; only add `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` if you run with `RUN_ENV=production`.
+First, set `CRAWL4AI_BASE_URL=http://localhost:11235/`, `CRAWL4AI_TOKEN`, and `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` in `.env` so the bot connects to the container port published on `127.0.0.1`.
 
 Then, instead of running TomoriBot directly with `bun run dev`, use `bun run launch --crawl4ai`. This handles the container lifecycle automatically and waits for the server to be healthy before starting the bot. It stops with an error if `CRAWL4AI_TOKEN` is missing:
 
@@ -174,9 +174,9 @@ Cookie values are sensitive, so treat them like passwords. They grant full sessi
 
 | Variable | Default | Description |
 |---|---|---|
-| `CRAWL4AI_BASE_URL` | unset | Enables Crawl4AI when set: TomoriBot tries it first and falls back to `safe_http` when it is down or a fetch fails. Ignored in production unless `FETCH_URL_ALLOW_PRIVATE_NETWORK=true`. Use `http://crawl4ai:11235/` from Docker Compose, or `http://localhost:11235/` when TomoriBot runs directly on your machine. |
+| `CRAWL4AI_BASE_URL` | unset | Enables Crawl4AI when set: TomoriBot tries it first and falls back to `safe_http` when it is down or a fetch fails. Ignored unless `FETCH_URL_ALLOW_PRIVATE_NETWORK=true`. Use `http://crawl4ai:11235/` from Docker Compose, or `http://localhost:11235/` when TomoriBot runs directly on your machine. |
 | `CRAWL4AI_TOKEN` | unset | Required bearer token. Must match `CRAWL4AI_API_TOKEN` on the Crawl4AI container, which refuses outside connections without one. |
 | `FETCH_URL_TIMEOUT_MS` | `15000` | Per-engine request timeout for Crawl4AI and the other URL-fetch engines. |
 | `FETCH_URL_MAX_CONTENT_LENGTH` | `50000` | Maximum characters returned by one fetch call before continuation is required. |
-| `FETCH_URL_ALLOW_PRIVATE_NETWORK` | `false` | Production-only opt-in. Outside production (`RUN_ENV` != `production`) the SSRF guard auto-relaxes, so localhost/private/internal fetches and Crawl4AI dispatch work with no setup. Set `true` only to permit private-network fetches in a trusted production deployment. |
+| `FETCH_URL_ALLOW_PRIVATE_NETWORK` | `false` | Required for Crawl4AI in every `RUN_ENV`. Also lets `fetch_url` read localhost, LAN, and other private addresses, including over plain HTTP. Cloud metadata addresses stay blocked. |
 | `FETCH_URL_FILTER_MODE` | `fit` | Crawl4AI `/md` filter mode. `fit` keeps markdown cleaner for LLM use; `fetch_url(..., raw=true)` overrides it per request. |

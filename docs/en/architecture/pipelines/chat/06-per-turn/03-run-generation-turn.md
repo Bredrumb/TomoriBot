@@ -77,9 +77,11 @@ attempt continues the reply from where the failed one stopped:
   usage to the model that finished the turn.
 - Once any text is carried, it replaces the turn's `/respond` or server prefill. Each key attempt
   applies it as a `continuation` prefill and trims history to make room for it. The prefill is a
-  native trailing assistant turn when the model can continue one, otherwise a `[System:]` tail
-  directive. Either way the stream strips an echo of the
-  carried text, so only the continuation is posted. Tool macros are not expanded in carried text.
+  native trailing assistant turn when the model can continue one. Otherwise it is a `[System:]` tail
+  directive that shows the carried text as already sent and asks only for what follows, because the
+  echo strip matches character by character and one divergence in a long echo reposts the reply.
+  The stream still strips an echo of the carried text, so only the continuation is posted. Tool
+  macros are not expanded in carried text.
 - A provider error with a suppressed embed does not flush the stream buffer, so an unfinished clause
   is never posted as a fragment for the continuation to repeat. An error the user sees still flushes
   it first. Unhumanized replies aggregate into one final send, so their failed attempts post nothing

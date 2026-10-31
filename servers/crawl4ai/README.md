@@ -27,8 +27,8 @@ Set the bot env to the compose service URL:
 ```env
 CRAWL4AI_BASE_URL=http://crawl4ai:11235/
 CRAWL4AI_TOKEN=change-me
-# Only needed when RUN_ENV=production; outside production the guard auto-relaxes.
-# FETCH_URL_ALLOW_PRIVATE_NETWORK=true
+# Required in every RUN_ENV, because Crawl4AI can reach private network addresses.
+FETCH_URL_ALLOW_PRIVATE_NETWORK=true
 ```
 
 Crawl4AI 0.9.4 refuses outside connections without an API token, so
@@ -98,11 +98,10 @@ target site's responses. Operators are responsible for using this server only
 where they have permission to fetch content and for honoring site terms,
 rate-limits, and robots expectations.
 
-In production TomoriBot blocks localhost/private/internal target URLs before it
-calls Crawl4AI unless `FETCH_URL_ALLOW_PRIVATE_NETWORK=true`. Outside production
-(`RUN_ENV` != `production`) the guard auto-relaxes and no opt-in is needed. Keep
-the production default false unless a trusted deployment must let `fetch_url`
-reach internal network addresses.
+TomoriBot skips Crawl4AI and blocks localhost/private/internal target URLs unless
+`FETCH_URL_ALLOW_PRIVATE_NETWORK=true`, in every `RUN_ENV`. That setting also lets
+`fetch_url` read internal network pages, so enable it only on an instance whose
+members you trust.
 
 ## Internal Redis Notes
 
@@ -120,7 +119,7 @@ deployment, keep it private to the Crawl4AI service.
 | `CRAWL4AI_TOKEN` | TomoriBot and the compose container | unset |
 | `FETCH_URL_TIMEOUT_MS` | TomoriBot | `15000` |
 | `FETCH_URL_HEALTHCHECK_CACHE_SEC` | TomoriBot | `60` |
-| `FETCH_URL_ALLOW_PRIVATE_NETWORK` | TomoriBot | `false` (production-only opt-in; auto-relaxed outside production) |
+| `FETCH_URL_ALLOW_PRIVATE_NETWORK` | TomoriBot | `false` (required for Crawl4AI in every `RUN_ENV`) |
 | `FETCH_URL_FILTER_MODE` | TomoriBot Crawl4AI `/md` requests | `fit` |
 
 `FETCH_URL_FILTER_MODE=fit` uses Crawl4AI's content filtering for cleaner

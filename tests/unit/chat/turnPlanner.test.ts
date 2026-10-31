@@ -195,6 +195,20 @@ describe("text credential admission", () => {
     }
   });
 
+  it("bills a borrowed trigger's owner, never the anchor message's author", async () => {
+    for (const owner of [77, null]) {
+      resolutions.push(resolved("server"));
+      expect(
+        await resolveTextCredentialPolicy({
+          ...policyParams(),
+          isManuallyTriggered: true,
+          borrowsTriggerMessage: true,
+          borrowedTurnOwnerUserId: owner,
+        }),
+      ).toMatchObject({ personalRoutingUserId: owner });
+    }
+  });
+
   it("shows one credential refusal per trigger across failure categories and personas", async () => {
     for (const error of [
       new DatabaseUnavailableError("fixture-unavailable"),

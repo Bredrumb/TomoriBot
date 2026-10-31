@@ -4,6 +4,7 @@ import {
   createOpenAICompatibleHttpError,
   normalizeOpenAICompatibleProviderError,
 } from "@/providers/openaiCompatible/openaiCompatibleErrorFormatter";
+import { resolveProviderErrorPresentation } from "@/utils/provider/providerErrorPresentation";
 import { RemoteUrlPolicyError } from "@/utils/security/userRemoteFetch";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { localizedCopy } from "../../helpers/localeCases";
@@ -64,6 +65,34 @@ describe("openAI-compatible provider error formatting", () => {
     expect(error.retryable).toBe(false);
     expect(description).toContain(localizedCopy("en-US", "genai.custom.REDIRECT_CREDENTIALS_WITHHELD_default_message"));
     expect(description).not.toContain("private-gateway.example");
+  });
+
+  it("explains a private-network refusal instead of reporting an unknown error", () => {
+    for (const failureCode of ["PRODUCTION_LOCALHOST_FORBIDDEN", "PRODUCTION_BLOCKED_ADDRESS"] as const) {
+      const error = normalizeOpenAICompatibleProviderError(
+        new RemoteUrlPolicyError("ALLOW_PRIVATE_NETWORK does not list localhost:5001.", "localhost", failureCode),
+        { errorMessagePrefix: "Custom endpoint error" },
+      );
+
+      expect(error.code).toBe("PRIVATE_NETWORK_BLOCKED");
+      expect(error.retryable).toBe(false);
+      expect(error.message).toContain("ALLOW_PRIVATE_NETWORK");
+
+      const description = createOpenAICompatibleErrorDescription(error, "en-US", {
+        localeNamespace: "genai.custom",
+        fallbackMessage: "Fallback should not be needed",
+      });
+      expect(description).toContain(localizedCopy("en-US", "genai.custom.PRIVATE_NETWORK_BLOCKED_default_message"));
+      expect(description).not.toContain("ALLOW_PRIVATE_NETWORK");
+
+      const presentation = resolveProviderErrorPresentation(error, "custom", {
+        textCredentialSource: "personal",
+        tomoriState: { fallback_chain: [], fallback_llms: [] },
+      });
+      expect(presentation.titleKey).toBe("genai.stream.endpoint_blocked_title");
+      expect(presentation.tipKeys).toContain("genai.tips.endpoint_not_allowed_personal");
+      expect(presentation.tipKeys).not.toContain("genai.tips.verify_api_key_personal");
+    }
   });
 
   it("uses generic unknown fallbacks for OpenAI-compatible provider namespaces", () => {

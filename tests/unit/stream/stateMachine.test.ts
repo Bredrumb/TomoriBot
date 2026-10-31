@@ -284,6 +284,24 @@ describe("StreamOrchestrator failed-stream delivery", () => {
     }
   });
 
+  // Regression: sends were joined with no separator, so a continuation retry was shown the posted
+  // lines run together and echoed them back in that form.
+  it("records separately posted lines with the line break between them", async () => {
+    const { context, provider } = fixture(
+      [
+        { type: "text", content: POSTED_LINE },
+        { type: "text", content: "Mirri wrote a second line.\n" },
+        { type: "text", content: UNFINISHED_CLAUSE },
+        { type: "error", error: providerError },
+      ],
+      true,
+    );
+
+    const result = await new StreamOrchestrator().streamToDiscord(provider, config, context);
+
+    expect(result.accumulatedText).toBe(`${POSTED_LINE}Mirri wrote a second line.`);
+  });
+
   it("returns the posted text when the stream is aborted or throws", async () => {
     const abortController = new AbortController();
     const aborted = fixture(

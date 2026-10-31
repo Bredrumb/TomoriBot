@@ -218,12 +218,12 @@ activity still controls dormancy.
   it also pauses the server's checks like an HTTP 429.
 - **The borrowed trigger lends no identity.** Phase C passes the channel's newest message to
   `tomoriChat` as its trigger, but its author is a bystander. `borrowsTriggerMessage` (shared with
-  random triggers) puts the turn on the reminder path: server text key only, and no blacklist,
-  role-whitelist, spotlight, or user-block gate from that author (only the persona channel
-  whitelist applies). A guild turn uses the guild locale and the server's Deliberate Tool Mode,
-  ignoring that author's language and personal override. Their name still fills `{user}`, except
-  in a Ping User nudge (below). Nudge turns also skip the reunion note and presence write, and the
-  "continue your last message" directive. Deliberate Tool Mode admits the idle nudge's tools from
+  reminders and random triggers) means the server text key only (a reminder bills its creator's
+  personal key instead), and no blacklist, role-whitelist, spotlight, or user-block gate from that
+  author (only the persona channel whitelist applies). A guild turn uses the guild locale and the
+  server's Deliberate Tool Mode, ignoring that author's language and personal override. Their name
+  still fills `{user}`, except in a Ping User nudge (below). Every borrowed turn skips the reunion
+  note and presence write, and nudge turns also skip the "continue your last message" directive. Deliberate Tool Mode admits the idle nudge's tools from
   `naturalNudge.toolNames`, because no human message carries their trigger words.
 - **The anchor uses current history.** The runner borrows the newest surviving message, including
   messages posted during planning. The placeholder is sent only when the history read succeeds and

@@ -53,6 +53,7 @@ import { BaseStreamAdapter } from "@/types/stream/interfaces";
 import { log } from "@/utils/misc/logger";
 import { isParamDisabled } from "@/utils/provider/samplingControl";
 import { isProviderModelErrorMessage } from "@/utils/provider/providerErrorClassification";
+import { getEndpointRemotePolicy } from "@/utils/security/remoteUrlSecurity";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import { localizer } from "@/utils/text/localizer";
 import { truncateBeforeGenericSpeakerLine } from "@/utils/text/processors/llmOutputProcessor";
@@ -280,7 +281,10 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
         `${this.options.adapterName}: Sampling params - temp: ${effectiveTemperatureLabel}, top_p: ${effectiveTopPLabel}, top_k: ${effectiveTopKLabel}, freq_penalty: ${effectiveFrequencyPenaltyLabel}, pres_penalty: ${effectivePresencePenaltyLabel}, rep_penalty: ${openAICompatibleConfig.repetitionPenalty ?? "default"}, min_p: ${effectiveMinPLabel}, logit_bias: ${Object.keys(openAICompatibleConfig.logitBias ?? {}).length}`,
       );
 
-      const fetchImpl = this.options.providerName === "custom" ? fetchUserRemoteUrl : fetch;
+      const fetchImpl =
+        this.options.providerName === "custom"
+          ? (input: string, init: RequestInit) => fetchUserRemoteUrl(input, init, getEndpointRemotePolicy())
+          : fetch;
       const { attempts, prepareAttempts } = createDegradationQueue(requestBody, {
         mandatoryKeys: new Set(["model", "messages", "stream", ...(this.options.mandatoryBodyKeys ?? [])]),
         stripImages: (attemptMessages) =>

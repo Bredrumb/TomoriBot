@@ -5,7 +5,11 @@
  */
 
 import { log } from "@/utils/misc/logger";
-import { fetchUserRemoteUrl, RemoteUrlPolicyError } from "@/utils/security/userRemoteFetch";
+import {
+  type FetchUserRemoteUrlOptions,
+  fetchUserRemoteUrl,
+  RemoteUrlPolicyError,
+} from "@/utils/security/userRemoteFetch";
 import { readBoundedResponse, ResponseSizeError } from "@/utils/security/boundedResponse";
 
 export interface SafeDownloadOptions {
@@ -36,6 +40,9 @@ export interface SafeDownloadOptions {
    * When fired, it also aborts the internal timeout controller early.
    */
   externalSignal?: AbortSignal;
+
+  /** Pass `getEndpointRemotePolicy()` only for an operator-registered service, because unset keeps member media off private networks. */
+  remotePolicy?: FetchUserRemoteUrlOptions;
 }
 
 export interface SafeDownloadResult {
@@ -98,7 +105,7 @@ export async function safeDownload(url: string, options: SafeDownloadOptions): P
   } catch {
     urlOrigin = "invalid";
   }
-  const { maxSizeMB, timeoutMs = 10000, knownSize, requestInit, externalSignal } = options;
+  const { maxSizeMB, timeoutMs = 10000, knownSize, requestInit, externalSignal, remotePolicy } = options;
   const maxSizeBytes = maxSizeMB * 1024 * 1024;
 
   if (knownSize !== undefined && knownSize > maxSizeBytes) {
@@ -184,7 +191,7 @@ export async function safeDownload(url: string, options: SafeDownloadOptions): P
   }
 
   try {
-    const response = await fetchUserRemoteUrl(url, { ...(requestInit ?? {}), signal: controller.signal });
+    const response = await fetchUserRemoteUrl(url, { ...(requestInit ?? {}), signal: controller.signal }, remotePolicy);
 
     if (!response.ok) {
       log.warn(`Download failed with HTTP ${response.status}`, {

@@ -327,11 +327,11 @@
   },
   "detail:upscaler": {
     "inputs": {
-      "model_name": "realesrganX4plusAnime_v1.pt"
+      "model_name": "RealESRGAN_x4plus_anime_6B.pth"
     },
     "class_type": "UpscaleModelLoader",
     "_meta": {
-      "title": "Tomori installed anime upscaler"
+      "title": "Model: anime upscaler"
     }
   },
   "detail:upscale4": {
@@ -348,11 +348,11 @@
     "inputs": {
       "image": ["detail:upscale4", 0],
       "upscale_method": "lanczos",
-      "scale_by": 0.375
+      "scale_by": 0.5
     },
     "class_type": "ImageScaleBy",
     "_meta": {
-      "title": "Final 1.5x enlargement; 0.5 for 2x instead"
+      "title": "Upscale: scale to 2x"
     }
   },
   "detail:encode": {
