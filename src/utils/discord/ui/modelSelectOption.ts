@@ -9,15 +9,21 @@ export interface ModelSelectChoice {
   description?: string | null;
   pricing?: ChoicePricing | null;
   isDefault?: boolean;
+  priceLabel?: string | null;
 }
 
 /** The price leads because Discord truncates option descriptions at 100 characters. */
 export function modelOptionDetail(
   locale: string,
   provider: string,
-  choice: Pick<ModelSelectChoice, "description" | "pricing">,
+  choice: Pick<ModelSelectChoice, "description" | "pricing" | "priceLabel">,
 ): string | undefined {
-  const price = choice.pricing ? formatModelPricing(locale, choice.pricing) : null;
+  const price =
+    choice.priceLabel !== undefined
+      ? choice.priceLabel
+      : choice.pricing
+        ? formatModelPricing(locale, choice.pricing)
+        : null;
   const description = choice.description || providerOptionModelDescription(locale, provider);
   return [price, description].filter(Boolean).join(" · ") || undefined;
 }

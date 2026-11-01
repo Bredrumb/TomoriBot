@@ -27,7 +27,12 @@ import {
   getStoredPersonalProviderForCapability,
 } from "@/utils/provider/personalProviderHelpers";
 import { loadUserSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
-import { findProviderOption, providerOptionOffersPersonalCapability } from "@/utils/provider/providerOptionRegistry";
+import {
+  describeProviderOptionModelChoices,
+  findProviderOption,
+  providerOptionCapabilityForPersonal,
+  providerOptionOffersPersonalCapability,
+} from "@/utils/provider/providerOptionRegistry";
 import { getProviderOptionFallbackRefOwner } from "@/utils/provider/providerOptionRegistry";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { resolveDescription } from "@/utils/text/localizer";
@@ -153,8 +158,22 @@ export async function loadAvailableModelsForCapability(
   if (option) {
     if (!providerOptionOffersPersonalCapability(option, capability)) return [];
     if (!(await option.availability({ kind: "personal", ownerId: userId })).eligible) return [];
-    provider = option.catalogProvider;
   }
+  const choices = await loadPersonalCatalogModels(userId, option?.catalogProvider ?? provider, capability, locale);
+  return describeProviderOptionModelChoices(provider, {
+    scope: { kind: "personal", ownerId: userId },
+    capability: providerOptionCapabilityForPersonal(capability),
+    locale,
+    choices,
+  });
+}
+
+async function loadPersonalCatalogModels(
+  userId: number,
+  provider: string,
+  capability: PersonalConfigManagedCapability,
+  locale: string,
+): Promise<ModelSelectChoice[]> {
   try {
     if (capability === "speech_design" || capability === "speech_clone") {
       const models = await llmModelRepo.loadAvailableSpeechModels(provider, { kind: "personal", ownerId: userId });

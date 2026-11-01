@@ -41,6 +41,7 @@ import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { resolveRowPricing } from "@/utils/provider/modelPricing";
 import { modelOptionDetail } from "@/utils/discord/ui/modelSelectOption";
 import {
+  describeProviderOptionModelChoices,
   findProviderOption,
   getProviderOptionFallbackRefOwner,
   findProviderOptionByActiveProvider,
@@ -454,18 +455,29 @@ export async function loadConfigFallbackOptions(
         ownerId: state.server_id,
       },
     )) ?? [];
-  // `other-model` is a migration placeholder rather than a routable model, so it never becomes a
-  // fallback the chain would try to call.
-  return models
-    .filter((model) => model.llm_codename !== "other-model")
-    .map((model) => ({
-      value: model.llm_codename,
-      label: model.llm_codename,
-      description: modelOptionDetail(locale, provider, {
+  const choices = await describeProviderOptionModelChoices(provider, {
+    scope: { kind: "server", ownerId: state.server_id },
+    capability: "text",
+    locale,
+    // `other-model` is a migration placeholder rather than a routable model, so it never becomes a
+    // fallback the chain would try to call.
+    choices: models
+      .filter(
+        (model): model is typeof model & { llm_id: number } =>
+          model.llm_codename !== "other-model" && typeof model.llm_id === "number",
+      )
+      .map((model) => ({
+        id: model.llm_id,
+        name: model.llm_codename,
         description: resolveDescription(model.descriptions, locale),
         pricing: resolveRowPricing(model),
-      }),
-    }));
+      })),
+  });
+  return choices.map((choice) => ({
+    value: choice.name,
+    label: choice.name,
+    description: modelOptionDetail(locale, provider, choice),
+  }));
 }
 
 export function loadConfigImageGenerationView(state: TomoriState, locale: string): ConfigImageGenerationView {
