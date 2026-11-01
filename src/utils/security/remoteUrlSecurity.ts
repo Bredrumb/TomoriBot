@@ -1,19 +1,6 @@
 /**
- * The single SSRF gate for user-supplied URLs.
- *
- * Guards guild MCP servers, guild and personal custom endpoints, and every
- * `safeDownload()` caller through `fetchUserRemoteUrl()`. `fetch_url` runs its own
- * parallel guard in `src/tools/fetchUrl/urlSafety.ts` because the Crawl4AI engine
- * dispatches out-of-process. Its in-process `safe_http` engine still reaches this gate, with
- * `strict` unless the operator set `FETCH_URL_ALLOW_PRIVATE_NETWORK`.
- *
- * Private targets are refused unless the caller passes `allowPrivateNetwork`. Endpoint callers pass
- * `getEndpointRemotePolicy()`, which admits them outside production when the operator sets
- * `ALLOW_PRIVATE_NETWORK=true`, or only the `host:port` origins it lists, so self-hosted local model servers work. Member-supplied media keeps the
- * default because any member can post a link to it. Production always refuses private endpoints
- * because the hosted instance serves untrusted communities.
- *
- * Add new user-URL entry points here rather than writing a third guard.
+ * The single SSRF gate for user-supplied URLs, so add new entry points here; `fetch_url` keeps its own
+ * guard in `src/tools/fetchUrl/urlSafety.ts` only because the Crawl4AI engine fetches out of process.
  */
 
 import { lookup } from "node:dns/promises";
