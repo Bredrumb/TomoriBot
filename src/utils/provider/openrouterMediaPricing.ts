@@ -7,12 +7,10 @@ import {
 } from "@/utils/cache/openrouterImageModelCache";
 import {
   getCachedOpenRouterSpeechModel,
-  getOrFetchOpenRouterSpeechModel,
+  refreshOpenRouterSpeechModelCacheIfStale,
 } from "@/utils/cache/openrouterSpeechModelCache";
-import {
-  getCachedOpenRouterVideoModelCapabilities,
-  getOrFetchOpenRouterVideoModelCapabilities,
-} from "@/utils/cache/openrouterVideoModelCache";
+import { getCachedOpenRouterVideoModelCapabilities } from "@/utils/cache/openrouterVideoModelCache";
+import { llmModelRepo } from "@/utils/db/repositories";
 import type { MediaRate } from "@/utils/provider/modelPricing";
 
 export type OpenRouterMediaKind = "image" | "video" | "speech";
@@ -35,36 +33,35 @@ const VIDEO_SECOND_SKUS = new Set([
 
 /**
  * Reads only what the OpenRouter caches already hold, because model pickers open as modals inside
- * Discord's 3-second acknowledgement window. A miss starts a background fetch so the next open can
- * show the price, and resolves null now.
+ * Discord's 3-second acknowledgement window; `warmOpenRouterMediaPricing` fills them off that path.
  */
 export function cachedOpenRouterMediaRates(kind: OpenRouterMediaKind, codename: string): MediaRate[] | null {
   switch (kind) {
     case "image": {
       const endpoints = getCachedOpenRouterImageEndpoints(codename);
-      if (!endpoints) {
-        void getOrFetchOpenRouterImageEndpoints(codename);
-        return null;
-      }
-      return openRouterImageRates(endpoints);
+      return endpoints ? openRouterImageRates(endpoints) : null;
     }
     case "video": {
       const model = getCachedOpenRouterVideoModelCapabilities(codename);
-      if (!model) {
-        void getOrFetchOpenRouterVideoModelCapabilities(codename);
-        return null;
-      }
-      return openRouterVideoRates(codename, model.pricing);
+      return model ? openRouterVideoRates(codename, model.pricing) : null;
     }
     case "speech": {
       const model = getCachedOpenRouterSpeechModel(codename);
-      if (!model) {
-        void getOrFetchOpenRouterSpeechModel(codename);
-        return null;
-      }
-      return openRouterSpeechRates(model.pricing);
+      return model ? openRouterSpeechRates(model.pricing) : null;
     }
   }
+}
+
+/**
+ * Warms catalog image prices and the speech list (video prices arrive with the video catalog);
+ * member-registered image models are skipped, so warm scoped rows too if their missing prices matter.
+ */
+export async function warmOpenRouterMediaPricing(): Promise<void> {
+  const images = (await llmModelRepo.loadAvailableDiffusionModels("openrouter")) ?? [];
+  await Promise.all([
+    refreshOpenRouterSpeechModelCacheIfStale(),
+    ...images.map((model) => getOrFetchOpenRouterImageEndpoints(model.codename)),
+  ]);
 }
 
 export function openRouterMediaRates(provider: string, kind: OpenRouterMediaKind, codename: string) {

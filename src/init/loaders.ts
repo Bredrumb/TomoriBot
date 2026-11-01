@@ -114,6 +114,8 @@ export async function initLoaders(client: Client): Promise<void> {
       initializeOpenRouterImageModelCache(),
       initializeOpenRouterEmbeddingModelCache(),
     ]);
+    const { warmOpenRouterMediaPricing } = await import("@/utils/provider/openrouterMediaPricing");
+    await warmOpenRouterMediaPricing();
   } catch (error) {
     log.warn("Failed to initialize OpenRouter modality catalogs (non-critical)", error);
   }
