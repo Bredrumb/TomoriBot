@@ -16,7 +16,7 @@ const ratesSchema = z.record(z.string(), priceSchema);
 // Gemini 3.1 Flash Image uses at most 2,520 image tokens through 4K; revisit this ceiling when its output sizes change.
 const GEMINI_FLASH_IMAGE_TOKENS = 2_520;
 // Nano Banana 2.1 bills 1,120 image tokens at 1K; revise this bound before enabling larger output sizes.
-const NANO_BANANA_1K_IMAGE_TOKENS = 1_120;
+export const NANO_BANANA_1K_IMAGE_TOKENS = 1_120;
 // GPT Image 2's high-quality 96x96 grid and 8,294,400-pixel ceiling bound output at 23,719 tokens; revisit when its size or quality limits change.
 const GPT_IMAGE_2_MAX_OUTPUT_TOKENS = 23_719;
 const GPT_IMAGE_2_MAX_GRID_SIDE = 96;

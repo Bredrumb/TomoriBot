@@ -8,6 +8,7 @@ import {
 } from "discord.js";
 import { z } from "zod";
 import { resolveSupporterNudgeKey } from "@/modules/supporter-billing/discord/conversionNudge";
+import { describeSupporterModelChoices } from "@/modules/supporter-billing/discord/modelCosts";
 import {
   isSupporterBillingEnabled,
   SUPPORTER_PROVIDER_VALUE,
@@ -431,6 +432,7 @@ export const supporterProviderOption: ProviderOptionDefinition = {
     modelDescriptionKey: "commands.providers.subscription_model_description",
   },
   contributeCopy: (context) => resolveSupporterNudgeKey(context),
+  describeModelChoices: describeSupporterModelChoices,
   availability: () =>
     billingAvailable() ? { eligible: true } : { eligible: false, reasonKey: "commands.providers.unavailable" },
   selection: {
