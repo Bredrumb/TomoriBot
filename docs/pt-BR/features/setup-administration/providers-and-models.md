@@ -2,7 +2,6 @@
 title: "Provedores & Modelos"
 sidebar:
   order: 1
-aiGenerated: true
 ---
 
 TomoriBot se conecta a provedores externos de IA em vez de hospedar um modelo integrado. Você pode conectar serviços hospedados como Google Gemini, OpenRouter e NovelAI ou apontá-los para endpoints auto-hospedados locais. Você precisa de pelo menos um provedor para começar a conversar.
@@ -77,6 +76,8 @@ Em `/config` > `Modelos` > Switch Models, você pode atribuir modelos e endpoint
 - **Vídeo**: geração de vídeo.
 - **Ponto final TTS**: ponto final de voz de conversão de texto em fala.
 - **Ponto final STT**: ponto final de transcrição de áudio de fala para texto.
+
+A lista de modelos marca o modelo padrão de cada provedor e exibe os preços em dólares americanos. Os modelos de Texto e de Decisão exibem o preço por milhão de tokens de entrada e de saída. Os modelos de imagem, vídeo e voz do OpenRouter mostram a unidade cobrada pelo OpenRouter: por imagem ou por milhão de tokens de imagem, por segundo de vídeo na resolução padrão do TomoriBot, e por milhão de caracteres ou por segundo de áudio. Modelos de imagem que você mesmo registrar não exibem preço. Um modelo sem preço listado não tem medição ou não está precificado no catálogo do TomoriBot, então consulte a página de preços do seu provedor antes de depender dele.
 
 Os primeiros seis slots escolhem registros de catálogo de modelos. Os slots TTS e STT escolhem terminais com escopo de servidor, ativando o terminal selecionado em vez de gravar uma coluna de modelo. Registre e edite esses endpoints em `/providers`. `/personal config` mantém seis slots de roteamento de modelo pessoal e não inclui seletores de endpoint TTS/STT pessoais.
 

@@ -36,7 +36,10 @@ export function formatUsdRate(value: number): string {
   return `$${value.toFixed(2)}`;
 }
 
-/** Token and character units are priced per million; the rest per single unit. */
+/**
+ * Token and character units are priced per million; the rest per single unit.
+ * @public Release-only `src/modules/supporter-billing/discord/modelCosts.ts` imports this.
+ */
 export type MediaPriceUnit = "image" | "image_token" | "video_second" | "video_token" | "character" | "audio_second";
 
 export interface MediaRate {

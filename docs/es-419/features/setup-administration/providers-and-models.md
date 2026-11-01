@@ -2,7 +2,6 @@
 title: "Proveedores y modelos"
 sidebar:
   order: 1
-aiGenerated: true
 ---
 
 TomoriBot se conecta a proveedores de IA externos en lugar de alojar un modelo integrado. Puede conectar servicios alojados como Google Gemini, OpenRouter y NovelAI, o dirigirla a puntos finales autohospedados locales. Necesitas al menos un proveedor para empezar a chatear.
@@ -77,6 +76,8 @@ En `/config` > `Modelos` > Modelos de conmutador, puede asignar modelos y puntos
 - **Video**: generación de video.
 - **Punto final TTS**: punto final de voz de texto a voz.
 - **Punto final STT**: punto final de transcripción de audio de voz a texto.
+
+La lista de modelos señala el modelo predeterminado de cada proveedor y muestra los precios en dólares estadounidenses. Los modelos de Texto y de Decisión muestran el precio por cada millón de tokens de entrada y salida. Los modelos de imagen, video y voz de OpenRouter muestran la unidad que factura OpenRouter: por imagen o por millón de tokens de imagen, por segundo de video en la resolución predeterminada de TomoriBot, y por millón de caracteres o por segundo de audio. Los modelos de imagen que registres tú mismo no muestran ningún precio. Un modelo sin precio indicado no tiene medición de uso o no tiene precio en el catálogo de TomoriBot, así que consulta la página de precios de tu proveedor antes de depender de él.
 
 Los primeros seis espacios eligen registros del catálogo de modelos. En su lugar, las ranuras TTS y STT eligen puntos finales con ámbito de servidor, activando el punto final seleccionado en lugar de escribir una columna de modelo. Registre y edite esos puntos finales en `/providers`. `/personal config` conserva seis ranuras de enrutamiento de modelos personales y no incluye selectores de puntos finales personales TTS/STT.
 

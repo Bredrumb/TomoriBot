@@ -2,7 +2,6 @@
 title: "Nhà cung cấp và model"
 sidebar:
   order: 1
-aiGenerated: true
 ---
 
 TomoriBot kết nối với các nhà cung cấp AI bên ngoài thay vì lưu trữ model tích hợp sẵn. Bạn có thể kết nối các dịch vụ được lưu trữ như Google Gemini, OpenRouter và NovelAI hoặc trỏ cô ấy đến các điểm cuối self-hosting cục bộ. Bạn cần ít nhất một nhà cung cấp để bắt đầu trò chuyện.
@@ -77,6 +76,8 @@ Trong `/config` > `Model` > `Chuyển đổi model`, bạn có thể chỉ đị
 - **Video**: tạo video.
 - **Điểm cuối TTS**: điểm cuối chuyển văn bản thành giọng nói.
 - **Điểm cuối STT**: điểm cuối chuyển âm thanh từ giọng nói thành văn bản.
+
+Danh sách model đánh dấu model mặc định của từng nhà cung cấp và hiển thị giá bằng đô la Mỹ. Các model Văn bản và Quyết định hiển thị giá trên mỗi 1 triệu token đầu vào và đầu ra. Các model hình ảnh, video và giọng nói của OpenRouter hiển thị đơn vị mà OpenRouter tính phí: theo từng ảnh hoặc mỗi 1 triệu token ảnh, theo từng giây video ở độ phân giải mặc định của TomoriBot, và mỗi 1 triệu ký tự hoặc từng giây âm thanh. Các model hình ảnh do bạn tự đăng ký sẽ không hiển thị giá. Model không có giá niêm yết là model không tính phí theo lượng dùng hoặc chưa có giá trong danh mục của TomoriBot, vì vậy hãy kiểm tra trang giá của nhà cung cấp trước khi dựa vào đó.
 
 Sáu vị trí đầu tiên chọn bản ghi danh mục model. Thay vào đó, các khe TTS và STT chọn điểm cuối trong phạm vi máy chủ, kích hoạt điểm cuối đã chọn thay vì ghi cột model. Đăng ký và chỉnh sửa các điểm cuối đó trong `/providers`. `/personal config` giữ lại sáu khe định tuyến model cá nhân và không bao gồm bộ chọn điểm cuối TTS/STT cá nhân.
 
