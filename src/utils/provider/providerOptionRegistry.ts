@@ -55,6 +55,7 @@ interface ProviderOptionCopy {
   addActionDescriptionKeys: { server: string; personal: string };
   removeImpactKey: string;
   modelDescriptionKey?: string;
+  modelSelectorGuidanceKey?: string;
 }
 
 /** @public Release-only `src/modules/supporter-billing/discord/providerOption.ts` imports this. */
