@@ -21,6 +21,9 @@ export default {
     not_setup: `这个服务器还没有设置好。请先运行 /setup。`,
     not_setup_dm: `这个私信还没有设置好。请先运行 /setup。`,
     capability_models_explanation: `这些模型可以通过这个提供方使用：`,
+    model_price_tokens: `输入 {input}，输出 {output}／每 100 万 token`,
+    model_price_free: `免费`,
+    model_default_label: `{model}（默认）`,
     entry_no_models: `这里还没有注册任何模型。`,
     model_selector_guidance: `用下面的下拉菜单添加或编辑一项模型能力：`,
     capabilities: {

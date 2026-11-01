@@ -17,6 +17,7 @@ import type { PanelReceipt } from "@/types/discord/panel";
 import type { UserPersonaNamingPreference } from "@/types/personaNaming";
 import type { PersonalSpotlightStatus } from "@/utils/db/repositories/UserRepository";
 import type { GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
+import type { ModelSelectChoice } from "@/utils/discord/ui/modelSelectOption";
 import {
   loadFallbackSelectionOptions,
   type PersonalConfigScope,
@@ -82,7 +83,7 @@ export interface PersonalConfigRouteDependencies {
     provider: string,
     capability: PersonalConfigManagedCapability,
     locale?: string,
-  ): Promise<Array<{ id: number; name: string; description?: string }>>;
+  ): Promise<ModelSelectChoice[]>;
   loadActiveSpotlights(serverId: number, userId: number): Promise<PersonalSpotlightStatus[]>;
   loadGuildPersonas(
     guildId: string,
@@ -150,7 +151,7 @@ export interface PersonalConfigRouteDependencies {
     nonce: string,
     capability: PersonalConfigManagedCapability,
     provider: string,
-    availableModels: Array<{ id: number; name: string; description?: string }>,
+    availableModels: ModelSelectChoice[],
     currentModelId: number | null,
   ): Promise<void>;
   showParameters1Modal(

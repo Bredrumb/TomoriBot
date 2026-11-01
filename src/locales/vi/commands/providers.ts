@@ -22,6 +22,9 @@ export default {
     not_setup: `Máy chủ này chưa được thiết lập. Hãy chạy /setup trước.`,
     not_setup_dm: `DM này chưa được thiết lập. Hãy chạy /setup trước.`,
     capability_models_explanation: `Các model sau khả dụng qua nhà cung cấp này:`,
+    model_price_tokens: `{input} đầu vào, {output} đầu ra mỗi 1M token`,
+    model_price_free: `Miễn phí`,
+    model_default_label: `{model} (Mặc định)`,
     entry_no_models: `Chưa có model nào được đăng ký tại đây.`,
     model_selector_guidance: `Dùng menu thả xuống bên dưới để thêm hoặc sửa tính năng model:`,
     capabilities: {

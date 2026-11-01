@@ -76,6 +76,11 @@ In `/config` > Models > Switch Models, you can assign models and endpoints acros
 - **TTS (Voice Clone)**: speaks using a reference sample or provider voice.
 - **STT Endpoint**: speech-to-text audio transcription endpoint.
 
+The model list marks each provider's default model and shows text and Decision prices in US dollars
+per million input and output tokens. OpenRouter prices refresh when TomoriBot starts. A model with no
+listed price is either unmetered or not priced in TomoriBot's catalog, so check your provider's
+pricing page before relying on it.
+
 :::tip
 `- No Model` in the Vision slot does not make a vision-capable chat model blind: it can still read
 images directly. The Vision slot provides a separate model for image analysis when the chat model

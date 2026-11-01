@@ -22,6 +22,9 @@ export default {
     not_setup: `Este servidor ainda não está configurado. Rode /setup primeiro.`,
     not_setup_dm: `Esta DM ainda não está configurada. Rode /setup primeiro.`,
     capability_models_explanation: `Esses modelos estão disponíveis através deste provedor:`,
+    model_price_tokens: `{input} entrada, {output} saída por 1M tokens`,
+    model_price_free: `Grátis`,
+    model_default_label: `{model} (Padrão)`,
     entry_no_models: `Nenhum modelo foi registrado aqui ainda.`,
     model_selector_guidance: `Use o menu abaixo para adicionar ou editar um modelo:`,
     capabilities: {

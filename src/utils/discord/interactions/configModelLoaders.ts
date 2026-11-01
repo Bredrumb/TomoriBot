@@ -38,6 +38,8 @@ import { resolveProviderEntryStart } from "@/utils/discord/ui/providerSelectWind
 import { resolveNaiImageParams } from "@/utils/image/naiImageParams";
 import { buildCustomProviderName, isCustomProvider, parseCustomProvider } from "@/utils/provider/customProviderUtils";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
+import { resolveRowPricing } from "@/utils/provider/modelPricing";
+import { modelOptionDetail } from "@/utils/discord/ui/modelSelectOption";
 import {
   findProviderOption,
   getProviderOptionFallbackRefOwner,
@@ -459,7 +461,10 @@ export async function loadConfigFallbackOptions(
     .map((model) => ({
       value: model.llm_codename,
       label: model.llm_codename,
-      description: resolveDescription(model.descriptions, locale) ?? undefined,
+      description: modelOptionDetail(locale, provider, {
+        description: resolveDescription(model.descriptions, locale),
+        pricing: resolveRowPricing(model),
+      }),
     }));
 }
 

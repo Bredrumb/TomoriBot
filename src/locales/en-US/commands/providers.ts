@@ -22,6 +22,9 @@ export default {
     not_setup: `This server is not set up yet. Run /setup first.`,
     not_setup_dm: `This DM is not set up yet. Run /setup first.`,
     capability_models_explanation: `These models are available through this provider:`,
+    model_price_tokens: `{input} in, {output} out per 1M tokens`,
+    model_price_free: `Free`,
+    model_default_label: `{model} (Default)`,
     entry_no_models: `No models are registered here yet.`,
     model_selector_guidance: `Use the dropdown below to add or edit a model capability:`,
     capabilities: {

@@ -10,6 +10,7 @@ import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import type { OpenRouterModelScope } from "@/utils/db/repositories/LlmModelRepository";
 import type { ConfigCatalogModelCapability } from "@/utils/discord/configPanelCatalog";
 import { isCustomProvider, parseCustomProvider } from "@/utils/provider/customProviderUtils";
+import { resolveRowPricing, type ModelPricing } from "@/utils/provider/modelPricing";
 import {
   findProviderOption,
   providerOptionOffersModelViewCapability,
@@ -22,6 +23,8 @@ export interface ProviderModelChoice {
   id: number;
   name: string;
   description: string | null;
+  pricing?: ModelPricing | null;
+  isDefault?: boolean;
 }
 
 export async function loadProviderModelChoices(
@@ -49,6 +52,8 @@ export async function loadProviderModelChoices(
           id: model.llm_id,
           name: model.llm_codename,
           description: resolveDescription(model.descriptions, locale),
+          pricing: resolveRowPricing(model),
+          isDefault: model.is_default,
         }));
     }
     case "embedding": {
@@ -62,6 +67,7 @@ export async function loadProviderModelChoices(
           id: model.embedding_model_id,
           name: model.codename,
           description: resolveDescription(model.descriptions, locale),
+          isDefault: model.is_default,
         }));
     }
     case "decision":
@@ -71,6 +77,8 @@ export async function loadProviderModelChoices(
           id: model.decision_model_id,
           name: model.codename,
           description: resolveDescription(model.descriptions, locale),
+          pricing: resolveRowPricing(model),
+          isDefault: model.is_default,
         }));
     case "image":
     case "nai-image": {
@@ -84,6 +92,7 @@ export async function loadProviderModelChoices(
           id: model.diffusion_model_id,
           name: model.codename,
           description: resolveDescription(model.descriptions, locale),
+          isDefault: model.is_default,
         }));
     }
     case "video": {
@@ -97,6 +106,7 @@ export async function loadProviderModelChoices(
           id: model.video_model_id,
           name: model.codename,
           description: resolveDescription(model.descriptions, locale),
+          isDefault: model.is_default,
         }));
     }
     case "tts-design":
@@ -124,6 +134,7 @@ export async function loadProviderModelChoices(
           id: model.speech_model_id,
           name: model.codename,
           description: resolveDescription(model.descriptions, locale),
+          isDefault: model.is_default,
         }));
     }
   }

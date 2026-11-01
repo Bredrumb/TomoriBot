@@ -21,6 +21,9 @@ export default {
     not_setup: `這個伺服器尚未設定。請先執行 /setup。`,
     not_setup_dm: `這個私訊尚未設定。請先執行 /setup。`,
     capability_models_explanation: `這個供應商提供以下模型：`,
+    model_price_tokens: `輸入 {input}，輸出 {output}／每 100 萬 token`,
+    model_price_free: `免費`,
+    model_default_label: `{model}（預設）`,
     entry_no_models: `這裡還沒有註冊任何模型。`,
     model_selector_guidance: `用下方的下拉選單新增或編輯模型功能：`,
     capabilities: {

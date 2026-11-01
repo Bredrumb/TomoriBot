@@ -31,7 +31,7 @@ import { resolveMediaForModel } from "@/utils/text/context/mediaResolver";
 import { getCachedChannelPrompt } from "@/utils/cache/channelPromptCache";
 import { getEmojiPenaltyDirective } from "@/utils/text/emojiPenalty";
 import { getOpenRouterPricing } from "@/utils/cache/openrouterCapabilityCache";
-import { resolveModelPricing } from "@/utils/provider/modelPricing";
+import { formatPricePerMillion, resolveModelPricing } from "@/utils/provider/modelPricing";
 import { applyProviderContextTruncation } from "@/utils/provider/contextBudget";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
@@ -579,12 +579,6 @@ function parseOpenRouterNativePromptTokens(payload: unknown): number | undefined
   }
 
   return undefined;
-}
-
-function formatPricePerMillion(value: number): string {
-  if (value < 0.01) return `$${value.toFixed(6)}`;
-  if (value < 1) return `$${value.toFixed(3)}`;
-  return `$${value.toFixed(2)}`;
 }
 
 function resolveProvider(providerName: string): LiveProvider | null {

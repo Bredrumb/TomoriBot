@@ -28,7 +28,7 @@ import {
   resolveSupportedLocale,
 } from "@/utils/text/localizer";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
-import { providerOptionModelDescription } from "@/utils/provider/providerOptionRegistry";
+import { buildModelSelectOption, type ModelSelectChoice } from "@/utils/discord/ui/modelSelectOption";
 import {
   getActivePersonalProviderForCapability,
   getStoredPersonalProviderForCapability,
@@ -525,18 +525,13 @@ export function buildModelSelectModal(
   nonce: string,
   capability: PersonalConfigManagedCapability,
   provider: string,
-  availableModels: Array<{ id: number; name: string; description?: string }>,
+  availableModels: ModelSelectChoice[],
   currentModelId: number | null,
 ): { custom_id: string; title: string; components: RawDiscordComponent[] } {
   const capName = localizer(locale, ROUTING_CAPABILITY_LOCALE_KEYS[capability]);
-  const options = availableModels.slice(0, PERSONAL_MODEL_PAGE_SIZE).map((m) => ({
-    value: String(m.id),
-    label: safeSelectOptionText(m.name, 100),
-    description: m.description
-      ? safeSelectOptionText(m.description, 100)
-      : providerOptionModelDescription(locale, provider),
-    default: m.id === currentModelId,
-  }));
+  const options = availableModels
+    .slice(0, PERSONAL_MODEL_PAGE_SIZE)
+    .map((model) => buildModelSelectOption(locale, provider, model, currentModelId));
 
   return {
     custom_id: buildPersonalConfigRouteId({
