@@ -59,7 +59,7 @@ function getFailureDescriptionVars(details?: SupporterFundingFailureDetails): Re
   };
 }
 
-export function getSupporterRequestFailureMessage(
+function getSupporterRequestFailureMessage(
   error: SupporterRequestDenialFacts,
   locale: string,
   forFallback = false,

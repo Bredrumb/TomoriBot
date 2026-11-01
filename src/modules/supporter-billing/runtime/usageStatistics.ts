@@ -5,16 +5,6 @@ import {
 import type { SupporterFundingContext } from "@/modules/supporter-billing/runtime/types";
 import { log } from "@/utils/misc/logger";
 import type { ProviderUsageReport } from "@/utils/provider/providerUsage";
-import type { TokenUsage } from "@/utils/text/tokenEstimate";
-
-export function createSupporterUsageRecorder(
-  funding: SupporterFundingContext | null | undefined,
-  modelCodename: string,
-): ((usage: TokenUsage) => void) | undefined {
-  return funding
-    ? (usage) => recordSupporterUsage(funding, { modelCodename, ...usage, costUsd: usage.costUsd })
-    : undefined;
-}
 
 export type SupporterUsageReport = ProviderUsageReport;
 
