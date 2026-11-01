@@ -1548,9 +1548,9 @@ ${localizer(locale, option?.copy.removeImpactKey ?? ENTRY_KIND_KEYS[entry.kind].
         input.enabledActions,
         routeNamespace,
       );
-      const guidance =
-        modelSelector.length > 0 ? `\n\n${localizer(locale, "commands.providers.model_selector_guidance")}` : "";
       const option = entry.kind === "provider" ? findProviderOption(entry.provider) : undefined;
+      const guidanceKey = option?.copy.modelSelectorGuidanceKey ?? "commands.providers.model_selector_guidance";
+      const guidance = modelSelector.length > 0 ? `\n\n${localizer(locale, guidanceKey)}` : "";
       const optionComponents = option?.panel?.entryComponents?.({
         locale,
         scope: providerOptionScopeForPanel(routeNamespace, input),
