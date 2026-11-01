@@ -35,15 +35,15 @@ const MAX_FIELD_VALUE_LENGTH = 1024;
 /**
  * Discord's maximum embed description length.
  */
-export const MAX_EMBED_DESCRIPTION_LENGTH = 4096;
+const MAX_EMBED_DESCRIPTION_LENGTH = 4096;
 
 /**
  * Tip-item locale key for the Official Support Server link, appended to every rendered tip modal.
  */
-export const SUPPORT_SERVER_TIP_KEY = "genai.tips.support_server";
-export const TIP_DETAILS_BUTTON_ID = "error_tip_details";
+const SUPPORT_SERVER_TIP_KEY = "genai.tips.support_server";
+const TIP_DETAILS_BUTTON_ID = "error_tip_details";
 const ERROR_DETAIL_BUTTON_ID = "error_full_detail";
-export const TIP_BUTTON_TIMEOUT_MS = 86_400_000;
+const TIP_BUTTON_TIMEOUT_MS = 86_400_000;
 
 /**
  * Truncates text so it fits within Discord's embed description limit, optionally reserving
@@ -127,7 +127,7 @@ export function createStandardEmbed(locale: string, options: StandardEmbedOption
 }
 
 /** Builds the localized markdown shown by a "What You Can Do" text modal. */
-export function createTipText(
+function createTipText(
   locale: string,
   tipKeys: string[],
   tipVars: Record<string, string | number | boolean> = {},
