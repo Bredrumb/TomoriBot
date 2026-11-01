@@ -1,6 +1,6 @@
 /**
  * OpenRouter Catalog Refresher
- * Keeps the four OpenRouter model catalogs from serving a boot-time snapshot for the life
+ * Keeps the OpenRouter model catalogs and media prices from serving a boot-time snapshot for the life
  * of a deployment.
  */
 
@@ -10,6 +10,7 @@ import { refreshOpenRouterEmbeddingModelCacheIfStale } from "@/utils/cache/openr
 import { refreshOpenRouterImageModelCacheIfStale } from "@/utils/cache/openrouterImageModelCache";
 import { refreshOpenRouterVideoModelCacheIfStale } from "@/utils/cache/openrouterVideoModelCache";
 import { log } from "@/utils/misc/logger";
+import { warmOpenRouterMediaPricing } from "@/utils/provider/openrouterMediaPricing";
 
 /**
  * Registration reaches the network on a cache miss, so it self-heals without this timer.
@@ -61,6 +62,7 @@ export class OpenRouterCatalogRefresher {
         refreshOpenRouterEmbeddingModelCacheIfStale(),
         refreshOpenRouterImageModelCacheIfStale(),
         refreshOpenRouterVideoModelCacheIfStale(),
+        warmOpenRouterMediaPricing(),
       ]);
     } catch (error) {
       log.error("Error during scheduled OpenRouter catalog refresh:", error);

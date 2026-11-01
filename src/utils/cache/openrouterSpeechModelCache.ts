@@ -64,3 +64,7 @@ export async function validateOpenRouterSpeechModel(codename: string, mode?: Voi
 export function getCachedOpenRouterSpeechModel(codename: string): { id: string; pricing?: unknown } | undefined {
   return speechCatalog.get(normalizeOpenRouterCodename(codename));
 }
+
+export function refreshOpenRouterSpeechModelCacheIfStale(): Promise<boolean> {
+  return speechCatalog.refreshIfStale();
+}

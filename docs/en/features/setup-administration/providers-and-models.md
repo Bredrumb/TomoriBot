@@ -79,10 +79,9 @@ In `/config` > Models > Switch Models, you can assign models and endpoints acros
 The model list marks each provider's default model and shows prices in US dollars. Text and Decision
 models show the price per million input and output tokens. OpenRouter image, video, and voice models
 show the unit OpenRouter bills: per image or per million image tokens, per second of video at
-TomoriBot's default resolution, and per million characters or per second of audio. A media price can
-be missing the first time you open the list and appears once TomoriBot has fetched it. A model with no
-listed price is either unmetered or not priced in TomoriBot's catalog, so check your provider's
-pricing page before relying on it.
+TomoriBot's default resolution, and per million characters or per second of audio. Image models you
+register yourself show no price. A model with no listed price is either unmetered or not priced in
+TomoriBot's catalog, so check your provider's pricing page before relying on it.
 
 :::tip
 `- No Model` in the Vision slot does not make a vision-capable chat model blind: it can still read

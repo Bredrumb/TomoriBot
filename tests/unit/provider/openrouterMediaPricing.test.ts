@@ -1,12 +1,14 @@
 import { afterEach, beforeAll, describe, expect, it, spyOn } from "bun:test";
 import { expectForEveryLocale, localizedCopy } from "../../helpers/localeCases";
-import { getOrFetchOpenRouterImageEndpoints } from "@/utils/cache/openrouterImageModelCache";
+import { llmModelRepo } from "@/utils/db/repositories";
+import { diffusionModelSchema } from "@/types/db/schema";
 import { formatModelPricing } from "@/utils/provider/modelPricing";
 import {
   cachedOpenRouterMediaRates,
   openRouterImageRates,
   openRouterSpeechRates,
   openRouterVideoRates,
+  warmOpenRouterMediaPricing,
 } from "@/utils/provider/openrouterMediaPricing";
 import { initializeLocalizer } from "@/utils/text/localizer";
 
@@ -109,12 +111,17 @@ describe("OpenRouter media rates", () => {
     });
   });
 
-  it("returns null on a cold image cache and serves the warmed price afterwards", async () => {
-    let requests = 0;
+  it("never fetches while a picker reads prices, and serves what the warm-up cached", async () => {
+    const requested: string[] = [];
     fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
       Object.assign(
-        async () => {
-          requests += 1;
+        async (input: Parameters<typeof fetch>[0]) => {
+          requested.push(String(input));
+          if (String(input).includes("output_modalities=speech")) {
+            return Response.json({
+              data: [{ id: "fish-audio/s2.1-pro", pricing: { prompt: "0.000015", completion: "0" } }],
+            });
+          }
           return Response.json({
             id: "test/cold-image",
             endpoints: [{ pricing: [{ billable: "output_image", unit: "image", cost_usd: 0.03 }] }],
@@ -123,9 +130,18 @@ describe("OpenRouter media rates", () => {
         { preconnect: () => undefined },
       ),
     );
-    expect(cachedOpenRouterMediaRates("image", "test/cold-image")).toBeNull();
-    await getOrFetchOpenRouterImageEndpoints("test/cold-image");
-    expect(cachedOpenRouterMediaRates("image", "test/cold-image")).toEqual([{ unit: "image", price: 0.03 }]);
-    expect(requests).toBe(1);
+    const diffusion = spyOn(llmModelRepo, "loadAvailableDiffusionModels").mockResolvedValue([
+      diffusionModelSchema.parse({ diffusion_model_id: 41, provider: "openrouter", codename: "test/cold-image" }),
+    ]);
+    try {
+      expect(cachedOpenRouterMediaRates("image", "test/cold-image")).toBeNull();
+      expect(cachedOpenRouterMediaRates("video", "test/cold-video")).toBeNull();
+      expect(requested).toEqual([]);
+
+      await warmOpenRouterMediaPricing();
+      expect(cachedOpenRouterMediaRates("image", "test/cold-image")).toEqual([{ unit: "image", price: 0.03 }]);
+    } finally {
+      diffusion.mockRestore();
+    }
   });
 });
