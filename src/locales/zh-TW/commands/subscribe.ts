@@ -8,8 +8,8 @@ export default {
       allowance_title: `配額不足`,
       minimum_balance_title: `模型配額要求`,
       model_unknown: `此模型`,
-      minimum_balance: `{model}需要更多剩餘配額才能開始生成圖像或影片。你仍可使用其他模型消耗剩餘配額。請在{config}中選擇一個。{fallback}`,
-      minimum_balance_reason: `{model}需要更多剩餘配額才能開始生成圖像或影片。請在{config}中選擇其他模型以使用你的剩餘配額。`,
+      minimum_balance: `剩餘配額不足以讓{model}開始生成圖像或影片。你仍可以用其他模型使用剩下的配額。請在{config}中選擇一個。{fallback}`,
+      minimum_balance_reason: `剩餘配額不足以讓{model}開始生成圖像或影片。請在{config}中選擇其他模型來使用剩下的配額。`,
       scope: {
         personal: `你的訂閱`,
         server: `此伺服器的訂閱`,
@@ -45,14 +45,14 @@ export default {
     description: `訂閱或連結你的Patreon會員資格以取得TomoriBot AI存取權限。`,
     sponsorship: {
       errors: {
-        title: `贊助者支援無法使用`,
-        billing_unavailable: `目前環境中不支援贊助者計費。`,
-        unlinked: `你的Discord帳號尚未連結到符合資格的贊助者身分。`,
-        inactive: `你的贊助者會員資格目前非處於有效狀態。`,
-        inconsistent: `本地贊助者帳單資料不完整，贊助功能已暫停直到資料修復。`,
-        unconfigured_tier: `你的贊助者方案未設定為支援伺服器贊助。`,
-        exhausted: `你目前的贊助者配額在此週期內已用盡。`,
-        missing_sponsorship: `此伺服器目前沒有有效的贊助者支援。`,
+        title: `無法使用伺服器贊助`,
+        billing_unavailable: `此機器人不提供訂閱。`,
+        unlinked: `你的Discord帳號尚未連結Patreon會員資格。請執行 /subscribe 進行連結。`,
+        inactive: `你的訂閱目前未啟用。`,
+        inconsistent: `你的訂閱資料有問題，因此贊助已暫停。請稍後再試或聯絡支援。`,
+        unconfigured_tier: `你的訂閱方案不包含伺服器贊助。如果你認為這有誤，請聯絡支援。`,
+        exhausted: `你的訂閱配額在本週期已用完。`,
+        missing_sponsorship: `此伺服器目前沒有訂閱贊助。`,
         model_not_allowed: `此模型不適用於訂閱存取。請在供應商設定中選擇其他模型。`,
         exhausted_generation: `此伺服器的訂閱配額已用完。配額將在{period_end}左右續期。贊助者可以透過/subscribe升級。等待期間你可以使用其他AI供應商：使用/providers管理伺服器供應商，或使用/personal providers管理個人供應商。`,
       },
@@ -93,15 +93,15 @@ export default {
       },
       wrong_campaign: {
         title: `錯誤的Patreon創作者專案`,
-        message: `此Patreon會員資格不屬於已設定的創作者專案。未授予贊助者存取權限。`,
+        message: `此Patreon會員資格不屬於TomoriBot的Patreon頁面。未授予訂閱存取權限。`,
       },
       inactive: {
         title: `未生效的Patreon會員資格`,
-        message: `此Patreon會員資格目前非處於有效或享有權益狀態。未授予贊助者存取權限。`,
+        message: `此Patreon會員資格目前未啟用。未授予訂閱存取權限。`,
       },
       unconfigured_tier: {
         title: `未設定的Patreon方案`,
-        message: `此Patreon方案未設定為支援贊助者存取。未授予贊助者存取權限。`,
+        message: `此Patreon方案不包含TomoriBot存取權限。未授予訂閱存取權限。`,
       },
       discord_mismatch: {
         title: `Patreon帳號不相符`,

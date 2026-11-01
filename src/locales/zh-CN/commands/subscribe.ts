@@ -8,8 +8,8 @@ export default {
       allowance_title: `配额不足`,
       minimum_balance_title: `模型配额要求`,
       model_unknown: `此模型`,
-      minimum_balance: `{model}需要更多剩余配额才能开始生成图像或视频。你仍可使用其他模型消耗剩余配额。请在{config}中选择一个。{fallback}`,
-      minimum_balance_reason: `{model}需要更多剩余配额才能开始生成图像或视频。请在{config}中选择其他模型以使用你的剩余配额。`,
+      minimum_balance: `剩余配额不足以让{model}开始生成图像或视频。你仍可以用其他模型使用剩下的配额。请在{config}中选择一个。{fallback}`,
+      minimum_balance_reason: `剩余配额不足以让{model}开始生成图像或视频。请在{config}中选择其他模型来使用剩下的配额。`,
       scope: {
         personal: `你的订阅`,
         server: `此服务器的订阅`,
@@ -45,14 +45,14 @@ export default {
     description: `订阅或关联你的Patreon会员资格以获取TomoriBot AI访问权限。`,
     sponsorship: {
       errors: {
-        title: `赞助者支持不可用`,
-        billing_unavailable: `当前环境中不支持赞助者结算。`,
-        unlinked: `你的Discord账号尚未关联到符合资格的赞助者身份。`,
-        inactive: `你的赞助者会员资格当前未处于有效状态。`,
-        inconsistent: `本地赞助者账单数据不完整，赞助功能已暂停直至数据修复。`,
-        unconfigured_tier: `你的赞助者等级未配置为支持服务器赞助。`,
-        exhausted: `你当前的赞助者配额在此周期内已耗尽。`,
-        missing_sponsorship: `此服务器当前没有有效的赞助者支持。`,
+        title: `服务器赞助不可用`,
+        billing_unavailable: `此机器人不提供订阅。`,
+        unlinked: `你的Discord账号尚未关联Patreon会员资格。请运行 /subscribe 进行关联。`,
+        inactive: `你的订阅当前未生效。`,
+        inconsistent: `你的订阅数据有问题，因此赞助已暂停。请稍后重试或联系支持。`,
+        unconfigured_tier: `你的订阅档位不包含服务器赞助。如果你认为有误，请联系支持。`,
+        exhausted: `你的订阅配额在本周期已用完。`,
+        missing_sponsorship: `此服务器当前没有订阅赞助。`,
         model_not_allowed: `此模型不适用于订阅访问。请在提供方设置中选择其他模型。`,
         exhausted_generation: `此服务器的订阅配额已用完。配额将在{period_end}左右续期。赞助者可以通过/subscribe升级。等待期间你可以使用其他AI提供方：使用/providers管理服务器提供方，或使用/personal providers管理个人提供方。`,
       },
@@ -93,15 +93,15 @@ export default {
       },
       wrong_campaign: {
         title: `错误的Patreon创作者项目`,
-        message: `此Patreon会员资格不属于已配置的创作者项目。未授予赞助者访问权限。`,
+        message: `此Patreon会员资格不属于TomoriBot的Patreon页面。未授予订阅访问权限。`,
       },
       inactive: {
         title: `未生效的Patreon会员资格`,
-        message: `此Patreon会员资格当前未处于有效或应享有权益状态。未授予赞助者访问权限。`,
+        message: `此Patreon会员资格当前未生效。未授予订阅访问权限。`,
       },
       unconfigured_tier: {
         title: `未配置的Patreon等级`,
-        message: `此Patreon等级未配置为支持赞助者访问。未授予赞助者访问权限。`,
+        message: `此Patreon档位不包含TomoriBot访问权限。未授予订阅访问权限。`,
       },
       discord_mismatch: {
         title: `Patreon账号不匹配`,

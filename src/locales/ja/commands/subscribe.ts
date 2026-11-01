@@ -11,8 +11,8 @@ export default {
       allowance_title: `利用枠が不足しています`,
       minimum_balance_title: `モデルの利用枠要件`,
       model_unknown: `このモデル`,
-      minimum_balance: `{model}で画像や動画の生成を開始するには、より多くの利用枠が残っている必要があります。別のモデルでは残りの利用枠を使用できます。{config}でモデルを変更してください。{fallback}`,
-      minimum_balance_reason: `{model}で画像や動画の生成を開始するには、より多くの利用枠が残っている必要があります。{config}で別のモデルを選択すると、残りの利用枠を使用できます。`,
+      minimum_balance: `残りの利用枠が足りないため、{model}で画像や動画の生成を開始できません。残りの利用枠は別のモデルで引き続き使用できます。{config}でモデルを選択してください。{fallback}`,
+      minimum_balance_reason: `残りの利用枠が足りないため、{model}で画像や動画の生成を開始できません。{config}で別のモデルを選択すると、残りの利用枠を使用できます。`,
       scope: {
         personal: `あなたのサブスクリプション`,
         server: `このサーバーのサブスクリプション`,
@@ -48,14 +48,14 @@ export default {
     description: `TomoriBotのAI利用のためにPatreonメンバーシップを契約または連携します。`,
     sponsorship: {
       errors: {
-        title: `サポータースポンサーを利用できません`,
-        billing_unavailable: `この環境ではサポーター請求を利用できません。`,
-        unlinked: `あなたのDiscordアカウントは、対象サポーターIDにまだリンクされていません。`,
-        inactive: `現在、サポーターメンバーシップはアクティブではありません。`,
-        inconsistent: `ローカルのサポーター請求データが不完全なため、データが修復されるまでスポンサーは停止されます。`,
-        unconfigured_tier: `あなたのサポーターティアはサーバースポンサー用に設定されていません。`,
-        exhausted: `現在のサポーター利用枠はこの期間ですでに使い切られています。`,
-        missing_sponsorship: `このサーバーには現在アクティブなサポータースポンサーがありません。`,
+        title: `サーバースポンサーを利用できません`,
+        billing_unavailable: `このボットではサブスクリプションを利用できません。`,
+        unlinked: `あなたのDiscordアカウントはまだPatreonメンバーシップにリンクされていません。/subscribe を実行してリンクしてください。`,
+        inactive: `現在、サブスクリプションはアクティブではありません。`,
+        inconsistent: `サブスクリプションデータに問題があるため、スポンサーは一時停止中です。後でもう一度試すか、サポートにお問い合わせください。`,
+        unconfigured_tier: `あなたのサブスクリプションティアにはサーバースポンサーが含まれていません。誤りと思われる場合はサポートにお問い合わせください。`,
+        exhausted: `この期間のサブスクリプション利用枠を使い切りました。`,
+        missing_sponsorship: `このサーバーは現在、サブスクリプションでスポンサーされていません。`,
         model_not_allowed: `このモデルはサブスクリプションでは利用できません。プロバイダー設定で別のモデルを選んでください。`,
         exhausted_generation: `このサーバーのサブスクリプション利用枠は使い切られました。{period_end}頃に更新されます。スポンサーは /subscribe からアップグレードできます。更新を待つ間は別のAIプロバイダーを利用できます：サーバープロバイダーは /providers、個人プロバイダーは /personal providers で管理してください。`,
       },
@@ -96,15 +96,15 @@ export default {
       },
       wrong_campaign: {
         title: `Patreonキャンペーンが違います`,
-        message: `このPatreonメンバーシップは設定済みのクリエイターキャンペーンのものではありません。サポーターアクセスは付与されませんでした。`,
+        message: `このPatreonメンバーシップはTomoriBotのPatreonページのものではありません。サブスクリプションの利用は付与されませんでした。`,
       },
       inactive: {
         title: `Patreonメンバーシップが非アクティブです`,
-        message: `このPatreonメンバーシップは現在アクティブではないか、対象ティアの権利がありません。サポーターアクセスは付与されませんでした。`,
+        message: `このPatreonメンバーシップは現在アクティブではありません。サブスクリプションの利用は付与されませんでした。`,
       },
       unconfigured_tier: {
         title: `Patreonティアが未設定です`,
-        message: `このPatreonティアはサポーターアクセス用に設定されていません。サポーターアクセスは付与されませんでした。`,
+        message: `このPatreonティアにはTomoriBotの利用が含まれていません。サブスクリプションの利用は付与されませんでした。`,
       },
       discord_mismatch: {
         title: `Patreonアカウントが一致しません`,

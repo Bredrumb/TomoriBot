@@ -8,8 +8,8 @@ export default {
       allowance_title: `Cuota insuficiente`,
       minimum_balance_title: `Requisito de cuota del modelo`,
       model_unknown: `Este modelo`,
-      minimum_balance: `{model} requiere más cuota restante para iniciar la generación de imágenes o video. Aún puedes usar tu cuota restante con otro modelo. Elige uno en {config}. {fallback}`,
-      minimum_balance_reason: `{model} requiere más cuota restante para iniciar la generación de imágenes o video. Elige otro modelo en {config} para usar tu cuota restante.`,
+      minimum_balance: `Tu cuota restante no alcanza para que {model} inicie la generación de imágenes o video. Aún puedes usar lo que te queda con otro modelo. Elige uno en {config}. {fallback}`,
+      minimum_balance_reason: `Tu cuota restante no alcanza para que {model} inicie la generación de imágenes o video. Elige otro modelo en {config} para usar lo que te queda.`,
       scope: {
         personal: `Tu suscripción`,
         server: `La suscripción de este servidor`,
@@ -45,14 +45,14 @@ export default {
     description: `Suscríbete o vincula tu membresía de Patreon para acceder a la IA de TomoriBot.`,
     sponsorship: {
       errors: {
-        title: `Patrocinio no disponible`,
-        billing_unavailable: `La facturación de patrocinadores no está disponible en este entorno.`,
-        unlinked: `Tu cuenta de Discord aún no está vinculada a una identidad de patrocinador válida.`,
-        inactive: `Tu membresía de patrocinador no está activa en este momento.`,
-        inconsistent: `Tus datos de facturación de patrocinador están incompletos localmente, por lo que el patrocinio está cerrado hasta que se reparen los datos.`,
-        unconfigured_tier: `Tu nivel de patrocinador no está configurado para patrocinar servidores.`,
-        exhausted: `Tu cuota actual de patrocinador se agotó para este período.`,
-        missing_sponsorship: `Este servidor no cuenta con un patrocinio activo en este momento.`,
+        title: `Patrocinio de servidor no disponible`,
+        billing_unavailable: `Las suscripciones no están disponibles en este bot.`,
+        unlinked: `Tu cuenta de Discord aún no está vinculada a una membresía de Patreon. Ejecuta /subscribe para vincularla.`,
+        inactive: `Tu suscripción no está activa en este momento.`,
+        inconsistent: `Hay un problema con los datos de tu suscripción, así que el patrocinio está en pausa. Inténtalo más tarde o contacta al soporte.`,
+        unconfigured_tier: `Tu nivel de suscripción no incluye patrocinio de servidores. Contacta al soporte si crees que es un error.`,
+        exhausted: `Tu cuota de suscripción se agotó para este período.`,
+        missing_sponsorship: `Este servidor no está patrocinado por una suscripción en este momento.`,
         model_not_allowed: `Este modelo no está disponible para acceso por suscripción. Elige otro modelo en la configuración de proveedores.`,
         exhausted_generation: `Se agotó la cuota de suscripción de este servidor. Se renueva alrededor de {period_end}. Quien patrocina puede mejorar el plan mediante /subscribe. Puedes usar otro proveedor de IA mientras esperas: administra proveedores del servidor con /providers o proveedores personales con /personal providers.`,
       },
@@ -93,15 +93,15 @@ export default {
       },
       wrong_campaign: {
         title: `Campaña de Patreon incorrecta`,
-        message: `Esta membresía de Patreon no pertenece a la campaña del creador configurada. No se otorgó acceso de patrocinador.`,
+        message: `Esta membresía de Patreon no pertenece a la página de Patreon de TomoriBot. No se otorgó acceso por suscripción.`,
       },
       inactive: {
         title: `Membresía de Patreon inactiva`,
-        message: `Esta membresía de Patreon no está activa ni habilitada actualmente. No se otorgó acceso de patrocinador.`,
+        message: `Esta membresía de Patreon no está activa en este momento. No se otorgó acceso por suscripción.`,
       },
       unconfigured_tier: {
         title: `Nivel de Patreon no configurado`,
-        message: `Este nivel de Patreon no está configurado para acceso de patrocinador. No se otorgó acceso de patrocinador.`,
+        message: `Este nivel de Patreon no incluye acceso a TomoriBot. No se otorgó acceso por suscripción.`,
       },
       discord_mismatch: {
         title: `Cuenta de Patreon no coincidente`,

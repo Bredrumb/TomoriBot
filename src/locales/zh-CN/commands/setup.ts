@@ -43,7 +43,7 @@ export default {
       provider_option_supporter: `TomoriBot订阅（推荐）`,
       provider_option_supporter_description: `包含所有功能（文本/图像/语音生成等）。通过Patreon付费，无需API密钥。`,
       provider_supporter_summary: `「完成设置」会与本服务器共享你的订阅配额，并配置包含的模型。`,
-      receipt_desc_supporter: `此服务器已设置为{persona}，并使用你的每月赞助者配额。此处的成员可以消耗该配额。`,
+      receipt_desc_supporter: `此服务器已设置为{persona}，并使用你的每月订阅配额。此处的成员共享该配额。`,
       title: `设置 TomoriBot`,
       intro: `完成下面每一项，然后结束设置。`,
       intro_ready: `需要的东西都准备好了。检查一遍，然后结束设置。`,

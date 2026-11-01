@@ -9,7 +9,7 @@ export default {
     remove_sponsorship: `Remove Sponsorship`,
     sponsorship_by: `Sponsorship by {name}`,
     unknown_sponsor: `a subscriber`,
-    subscription_model_description: `Uses your shared subscription allowance`,
+    subscription_model_description: `Uses your shared subscription allowance; pricier models use it faster`,
     subscription_label: `TomoriBot Subscription`,
     manage_subscription: `Manage Subscription`,
     remove_impact_subscription: `Stop using {name} for personal AI access. Your Patreon membership will stay linked and active.`,

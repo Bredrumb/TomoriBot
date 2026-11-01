@@ -43,7 +43,7 @@ Prueba con {model_text_command} para asignar un modelo funcional, o con {provide
       provider_option_supporter: `Suscripción de TomoriBot (recomendado)`,
       provider_option_supporter_description: `Todas las funciones (generación de texto, imagen y voz, etc.). Pago por Patreon; sin clave de API.`,
       provider_supporter_summary: `Finalizar configuración comparte tu cuota de suscripción con este servidor y configura los modelos incluidos.`,
-      receipt_desc_supporter: `Este servidor está configurado como {persona} y usa tu cuota mensual de patrocinador. Los miembros de aquí pueden consumir esa cuota.`,
+      receipt_desc_supporter: `Este servidor está configurado como {persona} y usa tu cuota mensual de suscripción. Los miembros de aquí comparten esa cuota.`,
       title: `Configurar TomoriBot`,
       intro: "Completa cada elemento a continuación y luego finaliza la configuración.",
       intro_ready: "Todo lo necesario está listo. Revísalo y luego finaliza la configuración.",

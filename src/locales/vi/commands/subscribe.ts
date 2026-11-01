@@ -8,8 +8,8 @@ export default {
       allowance_title: `Hạn mức không đủ`,
       minimum_balance_title: `Yêu cầu hạn mức model`,
       model_unknown: `Model này`,
-      minimum_balance: `{model} yêu cầu thêm hạn mức còn lại để bắt đầu tạo hình ảnh hoặc video. Bạn vẫn có thể dùng hạn mức còn lại với model khác. Hãy chọn một model trong {config}. {fallback}`,
-      minimum_balance_reason: `{model} yêu cầu thêm hạn mức còn lại để bắt đầu tạo hình ảnh hoặc video. Hãy chọn model khác trong {config} để dùng hạn mức còn lại của bạn.`,
+      minimum_balance: `Hạn mức còn lại của bạn không đủ để {model} bắt đầu tạo hình ảnh hoặc video. Bạn vẫn có thể dùng phần còn lại với model khác. Hãy chọn một model trong {config}. {fallback}`,
+      minimum_balance_reason: `Hạn mức còn lại của bạn không đủ để {model} bắt đầu tạo hình ảnh hoặc video. Hãy chọn model khác trong {config} để dùng phần còn lại.`,
       scope: {
         personal: `Gói đăng ký của bạn`,
         server: `Gói đăng ký của máy chủ này`,
@@ -45,14 +45,14 @@ export default {
     description: `Đăng ký hoặc liên kết tư cách thành viên Patreon để truy cập AI của TomoriBot.`,
     sponsorship: {
       errors: {
-        title: `Tài trợ người ủng hộ không khả dụng`,
-        billing_unavailable: `Thanh toán người ủng hộ không khả dụng trong môi trường này.`,
-        unlinked: `Tài khoản Discord của bạn chưa được liên kết với danh tính người ủng hộ hợp lệ.`,
-        inactive: `Tư cách thành viên người ủng hộ của bạn hiện không hoạt động.`,
-        inconsistent: `Dữ liệu thanh toán người ủng hộ của bạn không đầy đủ ở cục bộ, do đó việc tài trợ bị tạm dừng cho đến khi dữ liệu được khắc phục.`,
-        unconfigured_tier: `Gói người ủng hộ của bạn chưa được cấu hình để tài trợ máy chủ.`,
-        exhausted: `Hạn mức người ủng hộ hiện tại của bạn đã hết trong chu kỳ này.`,
-        missing_sponsorship: `Máy chủ này hiện không có tài trợ người ủng hộ đang hoạt động.`,
+        title: `Không thể tài trợ máy chủ`,
+        billing_unavailable: `Bot này không hỗ trợ gói đăng ký.`,
+        unlinked: `Tài khoản Discord của bạn chưa được liên kết với tư cách thành viên Patreon. Hãy chạy /subscribe để liên kết.`,
+        inactive: `Gói đăng ký của bạn hiện không hoạt động.`,
+        inconsistent: `Dữ liệu gói đăng ký của bạn đang gặp sự cố nên việc tài trợ tạm dừng. Hãy thử lại sau hoặc liên hệ hỗ trợ.`,
+        unconfigured_tier: `Gói đăng ký của bạn không bao gồm tài trợ máy chủ. Hãy liên hệ hỗ trợ nếu bạn thấy điều này không đúng.`,
+        exhausted: `Hạn mức gói đăng ký của bạn đã dùng hết trong chu kỳ này.`,
+        missing_sponsorship: `Máy chủ này hiện không được tài trợ bởi gói đăng ký nào.`,
         model_not_allowed: `Model này không khả dụng cho quyền truy cập đăng ký. Hãy chọn model khác trong cài đặt nhà cung cấp.`,
         exhausted_generation: `Hạn mức đăng ký của máy chủ này đã hết. Hạn mức sẽ làm mới vào khoảng {period_end}. Người tài trợ có thể nâng cấp qua /subscribe. Bạn có thể dùng nhà cung cấp AI khác trong khi chờ: quản lý nhà cung cấp máy chủ bằng /providers hoặc nhà cung cấp cá nhân bằng /personal providers.`,
       },
@@ -93,15 +93,15 @@ export default {
       },
       wrong_campaign: {
         title: `Sai chiến dịch Patreon`,
-        message: `Tư cách thành viên Patreon này không thuộc chiến dịch của người sáng tạo đã cấu hình. Chưa được cấp quyền truy cập người ủng hộ.`,
+        message: `Tư cách thành viên Patreon này không thuộc trang Patreon của TomoriBot. Chưa cấp quyền truy cập gói đăng ký.`,
       },
       inactive: {
         title: `Tư cách thành viên Patreon không hoạt động`,
-        message: `Tư cách thành viên Patreon này hiện không hoạt động hoặc chưa được hưởng quyền lợi. Chưa được cấp quyền truy cập người ủng hộ.`,
+        message: `Tư cách thành viên Patreon này hiện không hoạt động. Chưa cấp quyền truy cập gói đăng ký.`,
       },
       unconfigured_tier: {
         title: `Gói Patreon chưa được cấu hình`,
-        message: `Gói Patreon này chưa được cấu hình cho quyền truy cập người ủng hộ. Chưa được cấp quyền truy cập người ủng hộ.`,
+        message: `Gói Patreon này không bao gồm quyền truy cập TomoriBot. Chưa cấp quyền truy cập gói đăng ký.`,
       },
       discord_mismatch: {
         title: `Tài khoản Patreon không khớp`,

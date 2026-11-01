@@ -10,8 +10,8 @@ export default {
       allowance_title: `Not Enough Allowance`,
       minimum_balance_title: `Model Allowance Requirement`,
       model_unknown: `This model`,
-      minimum_balance: `{model} requires more remaining allowance to start image or video generation. You can still use your remaining allowance with another model. Choose one in {config}. {fallback}`,
-      minimum_balance_reason: `{model} requires more remaining allowance to start image or video generation. Choose another model in {config} to use your remaining allowance.`,
+      minimum_balance: `{model} needs more allowance left than you have to start an image or video generation. You can still use what's left with another model. Choose one in {config}. {fallback}`,
+      minimum_balance_reason: `{model} needs more allowance left than you have to start an image or video generation. Choose another model in {config} to use what's left.`,
       scope: {
         personal: `Your subscription`,
         server: `This server's subscription`,
@@ -47,14 +47,14 @@ export default {
     description: `Subscribe or link your Patreon membership for TomoriBot AI access.`,
     sponsorship: {
       errors: {
-        title: `Supporter Sponsorship Unavailable`,
-        billing_unavailable: `Supporter billing is not available in this environment.`,
-        unlinked: `Your Discord account is not linked to an eligible supporter identity yet.`,
-        inactive: `Your supporter membership is not active right now.`,
-        inconsistent: `Your supporter billing data is incomplete locally, so sponsorship is closed until the data is repaired.`,
-        unconfigured_tier: `Your supporter tier is not configured for server sponsorship.`,
-        exhausted: `Your current supporter allowance is exhausted for this period.`,
-        missing_sponsorship: `This server does not have an active supporter sponsorship right now.`,
+        title: `Server Sponsorship Unavailable`,
+        billing_unavailable: `Subscriptions are not available on this bot.`,
+        unlinked: `Your Discord account is not linked to a Patreon membership yet. Run /subscribe to link it.`,
+        inactive: `Your subscription is not active right now.`,
+        inconsistent: `Something is wrong with your subscription data, so sponsoring is paused. Try again later or contact support.`,
+        unconfigured_tier: `Your subscription tier does not include server sponsorship. Contact support if this seems wrong.`,
+        exhausted: `Your subscription allowance is used up for this period.`,
+        missing_sponsorship: `This server is not sponsored by a subscription right now.`,
         model_not_allowed: `This model is unavailable for subscription access. Choose another model in your provider settings.`,
         exhausted_generation: `This server's subscription allowance is used up. It renews around {period_end}. The sponsor can upgrade through /subscribe. You can use another AI provider while waiting: manage server providers with /providers or personal providers with /personal providers.`,
       },
@@ -95,15 +95,15 @@ export default {
       },
       wrong_campaign: {
         title: `Wrong Patreon campaign`,
-        message: `This Patreon membership is not for the configured creator campaign. No supporter access was granted.`,
+        message: `This Patreon membership is not for TomoriBot's Patreon page. No subscription access was granted.`,
       },
       inactive: {
         title: `Inactive Patreon membership`,
-        message: `This Patreon membership is not currently active or entitled. No supporter access was granted.`,
+        message: `This Patreon membership is not currently active. No subscription access was granted.`,
       },
       unconfigured_tier: {
         title: `Patreon tier not configured`,
-        message: `This Patreon tier is not configured for supporter access. No supporter access was granted.`,
+        message: `This Patreon tier does not include TomoriBot access. No subscription access was granted.`,
       },
       discord_mismatch: {
         title: `Patreon account mismatch`,
