@@ -184,7 +184,10 @@ export interface ProviderOptionModelChoicesInput {
   choices: ReadonlyArray<{ id: number; name: string; pricing?: ChoicePricing | null }>;
 }
 
-/** A null `priceLabel` hides the price; choices missing from the map keep their catalog price. */
+/**
+ * A null `priceLabel` hides the price; choices missing from the map keep their catalog price.
+ * @public Release-only `src/modules/supporter-billing/discord/modelCosts.ts` imports this.
+ */
 export interface ProviderOptionModelCost {
   priceLabel: string | null;
   isDefault: boolean;
