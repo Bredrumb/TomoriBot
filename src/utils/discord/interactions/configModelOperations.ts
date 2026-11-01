@@ -5,7 +5,7 @@ import {
   type ProviderRequestDeniedError,
 } from "@/utils/provider/providerUsage";
 import { loadDecisionModelsForScope } from "@/providers/utils/providerFeatureExecutors";
-import { loadProviderModelChoices } from "@/utils/provider/modelCatalog";
+import { loadProviderModelChoices, type ProviderModelChoice } from "@/utils/provider/modelCatalog";
 import { validateOpenRouterSpeechModel } from "@/utils/cache/openrouterSpeechModelCache";
 import { setHostedSpeechSelection, setSpeechEndpointSelection } from "@/utils/db/repositories/SpeechRepository";
 import { supportsSpeechMode, type VoiceSourceMode } from "@/utils/speech/voiceSourceCapabilities";
@@ -231,12 +231,7 @@ async function loadDecisionModelProviders(serverId: number): Promise<SavedProvid
 }
 
 /** One selectable model in a capability slot, flattened so the renderer needs no per-slot branch. */
-export interface ConfigModelChoice {
-  /** Primary key of the row this slot writes, which is what the route carries. */
-  id: number;
-  name: string;
-  description: string | null;
-}
+export type ConfigModelChoice = ProviderModelChoice;
 
 /** Text models one provider offers that can answer with structured output, grouped by provider. */
 export interface StructuredOutputModelGroup {

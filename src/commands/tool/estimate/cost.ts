@@ -31,7 +31,7 @@ import { resolveMediaForModel } from "@/utils/text/context/mediaResolver";
 import { getCachedChannelPrompt } from "@/utils/cache/channelPromptCache";
 import { getEmojiPenaltyDirective } from "@/utils/text/emojiPenalty";
 import { getOpenRouterPricing } from "@/utils/cache/openrouterCapabilityCache";
-import { resolveModelPricing } from "@/utils/provider/modelPricing";
+import { formatUsdRate, resolveModelPricing } from "@/utils/provider/modelPricing";
 import { applyProviderContextTruncation } from "@/utils/provider/contextBudget";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
@@ -579,12 +579,6 @@ function parseOpenRouterNativePromptTokens(payload: unknown): number | undefined
   }
 
   return undefined;
-}
-
-function formatPricePerMillion(value: number): string {
-  if (value < 0.01) return `$${value.toFixed(6)}`;
-  if (value < 1) return `$${value.toFixed(3)}`;
-  return `$${value.toFixed(2)}`;
 }
 
 function resolveProvider(providerName: string): LiveProvider | null {
@@ -1448,8 +1442,8 @@ async function sendLiveEstimateEmbed(
       descriptionVars: {
         provider: measurement.providerLabel,
         model: measurement.model,
-        inputPrice: formatPricePerMillion(measurement.inputPricePerMillion),
-        outputPrice: formatPricePerMillion(measurement.outputPricePerMillion),
+        inputPrice: formatUsdRate(measurement.inputPricePerMillion),
+        outputPrice: formatUsdRate(measurement.outputPricePerMillion),
       },
       color: ColorCode.INFO,
       fields,
@@ -1557,8 +1551,8 @@ async function sendLegacyEstimateEmbed(
       descriptionKey: "commands.tool.estimate.cost.embed_description",
       descriptionVars: {
         provider: exampleProvider,
-        inputPrice: formatPricePerMillion(inputPrice),
-        outputPrice: formatPricePerMillion(outputPrice),
+        inputPrice: formatUsdRate(inputPrice),
+        outputPrice: formatUsdRate(outputPrice),
       },
       color: ColorCode.INFO,
       fields,

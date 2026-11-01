@@ -238,20 +238,24 @@ class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExportShap
     try {
       const serverDiscId = scopeKind === "server" ? discId : null;
       const userDiscId = scopeKind === "user" ? discId : null;
-      const rows = await sql<{ persona_id: number }[]>`
-        SELECT persona_id
-        FROM short_term_memories
-        WHERE scope_kind = ${scopeKind}
-          AND COALESCE(server_disc_id, '') = COALESCE(${serverDiscId}, '')
-          AND COALESCE(user_disc_id, '')   = COALESCE(${userDiscId}, '')
-          AND channel_disc_id = ${channelId}
-          AND persona_id IS NOT NULL
-          AND persona_id > 0
-          AND (
-            (summary IS NOT NULL AND TRIM(summary) != '')
-            OR (categories IS NOT NULL AND categories != '{}'::jsonb)
-          )
-      `;
+      const rows = await withTransientDbRetry(
+        async () =>
+          await sql<{ persona_id: number }[]>`
+          SELECT persona_id
+          FROM short_term_memories
+          WHERE scope_kind = ${scopeKind}
+            AND COALESCE(server_disc_id, '') = COALESCE(${serverDiscId}, '')
+            AND COALESCE(user_disc_id, '')   = COALESCE(${userDiscId}, '')
+            AND channel_disc_id = ${channelId}
+            AND persona_id IS NOT NULL
+            AND persona_id > 0
+            AND (
+              (summary IS NOT NULL AND TRIM(summary) != '')
+              OR (categories IS NOT NULL AND categories != '{}'::jsonb)
+            )
+        `,
+        "list personas with short-term memory",
+      );
       return new Set(rows.map((r) => r.persona_id));
     } catch (error) {
       log.error("[STMRepo] Failed to resolve personaIdsWithStm", error);
@@ -267,11 +271,15 @@ class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExportShap
    */
   async getStmCategories(serverId: number): Promise<StmCategoryRow[]> {
     try {
-      const rows = await sql`
-        SELECT * FROM stm_categories
-        WHERE server_id = ${serverId}
-        ORDER BY position ASC
-      `;
+      const rows = await withTransientDbRetry(
+        async () =>
+          await sql`
+          SELECT * FROM stm_categories
+          WHERE server_id = ${serverId}
+          ORDER BY position ASC
+        `,
+        "load short-term memory categories",
+      );
 
       const categories: StmCategoryRow[] = [];
       for (const row of rows) {
@@ -405,7 +413,10 @@ class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExportShap
       const serverDiscId = String(ownerId);
 
       // Resolve internal server_id from Discord snowflake
-      const [serverRow] = await sql`SELECT server_id FROM servers WHERE server_disc_id = ${serverDiscId}`;
+      const [serverRow] = await withTransientDbRetry(
+        async () => await sql`SELECT server_id FROM servers WHERE server_disc_id = ${serverDiscId}`,
+        "resolve server for short-term memory export",
+      );
       if (!serverRow) return null;
       const serverId = serverRow.server_id as number;
 

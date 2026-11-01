@@ -33,6 +33,9 @@ import { findProviderOption, providerOptionOffersPersonalCapability } from "@/ut
 import { getProviderOptionFallbackRefOwner } from "@/utils/provider/providerOptionRegistry";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { resolveDescription } from "@/utils/text/localizer";
+import { resolveRowPricing } from "@/utils/provider/modelPricing";
+import { openRouterMediaRates } from "@/utils/provider/openrouterMediaPricing";
+import type { ModelSelectChoice } from "@/utils/discord/ui/modelSelectOption";
 import { messageProxyRepository } from "@/utils/db/repositories/MessageProxyRepository";
 import { formatManagedIdentityLabel } from "@/utils/discord/interactions/managedIdentityPanelRoutes";
 
@@ -147,7 +150,7 @@ export async function loadAvailableModelsForCapability(
   provider: string,
   capability: PersonalConfigManagedCapability,
   locale = "en-US",
-): Promise<Array<{ id: number; name: string; description?: string }>> {
+): Promise<ModelSelectChoice[]> {
   const option = findProviderOption(provider);
   if (option) {
     if (!providerOptionOffersPersonalCapability(option, capability)) return [];
@@ -163,6 +166,8 @@ export async function loadAvailableModelsForCapability(
         .map((model) => ({
           id: model.speech_model_id,
           name: model.codename,
+          pricing: openRouterMediaRates(provider, "speech", model.codename),
+          isDefault: model.is_default,
         }));
     }
     if (capability === "text") {
@@ -176,6 +181,8 @@ export async function loadAvailableModelsForCapability(
           id: m.llm_id as number,
           name: m.llm_codename,
           description: resolveDescription(m.descriptions, locale) ?? undefined,
+          pricing: resolveRowPricing(m),
+          isDefault: m.is_default,
         }));
     }
     if (capability === "vision") {
@@ -189,6 +196,8 @@ export async function loadAvailableModelsForCapability(
           id: m.llm_id as number,
           name: m.llm_codename,
           description: resolveDescription(m.descriptions, locale) ?? undefined,
+          pricing: resolveRowPricing(m),
+          isDefault: m.is_default,
         }));
     }
     if (capability === "embedding") {
@@ -202,6 +211,7 @@ export async function loadAvailableModelsForCapability(
           id: m.embedding_model_id as number,
           name: m.codename,
           description: resolveDescription(m.descriptions, locale) ?? undefined,
+          isDefault: m.is_default,
         }));
     }
     if (capability === "image") {
@@ -215,6 +225,8 @@ export async function loadAvailableModelsForCapability(
           id: m.diffusion_model_id as number,
           name: m.codename,
           description: resolveDescription(m.descriptions, locale) ?? undefined,
+          pricing: openRouterMediaRates(provider, "image", m.codename),
+          isDefault: m.is_default,
         }));
     }
     if (capability === "image_nai") {
@@ -228,6 +240,7 @@ export async function loadAvailableModelsForCapability(
           id: m.diffusion_model_id as number,
           name: m.codename,
           description: resolveDescription(m.descriptions, locale) ?? undefined,
+          isDefault: m.is_default,
         }));
     }
     if (capability === "video") {
@@ -241,6 +254,8 @@ export async function loadAvailableModelsForCapability(
           id: m.video_model_id as number,
           name: m.codename,
           description: resolveDescription(m.descriptions, locale) ?? undefined,
+          pricing: openRouterMediaRates(provider, "video", m.codename),
+          isDefault: m.is_default,
         }));
     }
   } catch (error) {

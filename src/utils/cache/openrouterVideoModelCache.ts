@@ -86,3 +86,9 @@ export function refreshOpenRouterVideoModelCacheIfStale(): Promise<boolean> {
 export function getOpenRouterVideoModelCacheSize(): number {
   return videoCatalog.size();
 }
+
+export function getCachedOpenRouterVideoModelCapabilities(
+  modelCodename: string,
+): OpenRouterVideoModelCapabilities | undefined {
+  return videoCatalog.get(modelCodename);
+}

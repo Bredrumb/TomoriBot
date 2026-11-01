@@ -60,3 +60,7 @@ export async function validateOpenRouterSpeechModel(codename: string, mode?: Voi
     return false;
   }
 }
+
+export function getCachedOpenRouterSpeechModel(codename: string): { id: string; pricing?: unknown } | undefined {
+  return speechCatalog.get(normalizeOpenRouterCodename(codename));
+}

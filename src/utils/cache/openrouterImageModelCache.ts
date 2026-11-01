@@ -75,3 +75,8 @@ export function refreshOpenRouterImageModelCacheIfStale(): Promise<boolean> {
 export function getOpenRouterImageModelCacheSize(): number {
   return imageCatalog.size();
 }
+
+export function getCachedOpenRouterImageEndpoints(modelCodename: string) {
+  const codename = normalizeOpenRouterCodename(modelCodename);
+  return endpointCatalogs.get(codename)?.get(codename)?.endpoints;
+}
