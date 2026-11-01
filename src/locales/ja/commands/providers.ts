@@ -10,6 +10,8 @@ export default {
     sponsorship_by: `{name}によるスポンサー`,
     unknown_sponsor: `あるサポーター`,
     subscription_model_description: `共有のサブスクリプション利用枠を使用します。高価なモデルほど早く消費します`,
+    subscription_model_selector_guidance:
+      "一覧にないモデルを使いたい場合は、[OpenRouterのモデルページ](https://openrouter.ai/models)で好きなモデルを探し、名前の下にあるID（`deepseek/deepseek-v4-flash` のような形式）をコピーしてください。次に下の **+ 新しいテキストモデルを追加**（画像や動画なども同様）を選び、IDを **コード名** に貼り付けます。高価なモデルほど利用枠を早く消費します。",
     subscription_model_allowance: `デフォルトの約{ratio}倍の利用枠`,
     subscription_label: `TomoriBotサブスクリプション`,
     manage_subscription: `サブスクリプションを管理`,

@@ -10,6 +10,8 @@ export default {
     sponsorship_by: `由{name}赞助`,
     unknown_sponsor: `一位订阅者`,
     subscription_model_description: `使用你的共享订阅配额；越贵的模型消耗越快`,
+    subscription_model_selector_guidance:
+      "想用列表里没有的模型吗？到 [OpenRouter 模型页面](https://openrouter.ai/models) 找一个喜欢的模型，复制名称下方的 ID（格式像 `deepseek/deepseek-v4-flash`）。然后在下方选择 **+ 添加新的文本模型**（图像、视频等同理），把 ID 粘贴到 **代号**。越贵的模型消耗配额越快。",
     subscription_model_allowance: `约为默认的 {ratio} 倍配额`,
     subscription_label: `TomoriBot订阅`,
     manage_subscription: `管理订阅`,

@@ -470,7 +470,9 @@ describe("subscription panels", () => {
         "\n",
       );
       expect(body).toContain(localizedCopy("en-US", "commands.subscription.remaining"));
-      expect(body).toContain("\n```\n█████████████░░░░░░░ 68.00%\n```\n> ");
+      expect(body).toContain(
+        `\n\`\`\`\n█████████████░░░░░░░ 68.00%\n\`\`\`\n${localizedCopy("en-US", "commands.subscription.generations", { count: "`5`" })}`,
+      );
     }
     fixture.allowance = {
       allowance: 1,
@@ -487,7 +489,7 @@ describe("subscription panels", () => {
     }
   });
 
-  it("keeps funding scopes disjoint, includes Other, and preserves unknown model token totals", () => {
+  it("keeps funding scopes disjoint and explains Other only when an Other row appears", () => {
     const fixture = input("usage");
     const body = collectTextDisplays(buildSubscribePanel(fixture)).join("\n");
     expect(body).toMatch(localizedProse("en-US", "commands.subscription.personal"));
@@ -495,67 +497,51 @@ describe("subscription panels", () => {
     expect(body).toContain("`16.00%`");
     expect(body).toMatch(localizedProse("en-US", "commands.subscription.generations", { count: "`5`" }));
     expect(body).toMatch(localizedProse("en-US", "commands.subscription.other"));
+    expect(body).toMatch(localizedProse("en-US", "commands.subscription.other_note"));
     const modelBody = collectTextDisplays(
       buildSubscribePanel({ ...fixture, route: { ...fixture.route, action: "models" } }),
     ).join("\n");
-    expect(modelBody).toMatch(localizedProse("en-US", "commands.subscription.unknown"));
     expect(modelBody).not.toContain(OWNER);
+
+    if (!fixture.allowance) throw new Error("Expected an allowance");
+    fixture.allowance.used = (fixture.aggregates ?? []).reduce((sum, row) => sum + row.cost_usd, 0);
+    const matchedBody = collectTextDisplays(buildSubscribePanel(fixture)).join("\n");
+    expect(matchedBody).toMatch(localizedProse("en-US", "commands.subscription.percent_note"));
+    expect(matchedBody).not.toMatch(localizedProse("en-US", "commands.subscription.other_note"));
   });
 
-  it("numbers models and Other and quotes their count details in every locale", () => {
+  it("numbers models and Other with each model's generations on its own line in every locale", () => {
     expectForEveryLocale((locale) => {
       const fixture = input("models");
       fixture.route.locale = locale;
-      const body = collectTextDisplays(buildSubscribePanel(fixture)).join("\n");
-      const details = localizedCopy(locale, "commands.subscription.model_counts", {
-        count: "`2`",
-        input: "`10`",
-        output: "`20`",
-      }).split("\n");
-      expect(details).toHaveLength(3);
-      for (const detail of details) expect(body).toContain(`> ${detail}`);
+      const unwrappedBody = collectTextDisplays(buildSubscribePanel(fixture)).join("\n").replace(/\s+/g, " ");
       const type = localizedCopy(locale, "commands.providers.capabilities.text");
-      const unwrappedBody = body.replace(/\s+/g, " ");
-      expect(unwrappedBody).toContain(`1. \`example/second\` (${type}): \`16.00%\``);
-      expect(unwrappedBody).toContain(`2. \`example/first\` (${type}): \`8.00%\``);
-      expect(body).toContain(`3. ${localizedCopy(locale, "commands.subscription.other")}: \`8.00%\``);
+      const generations = (count: number) =>
+        localizedCopy(locale, "commands.subscription.model_generations", { count: `\`${count}\`` }).replace(
+          /\s+/g,
+          " ",
+        );
+      expect(unwrappedBody).toContain(`1. \`example/second\` (${type}): \`16.00%\` · ${generations(3)}`);
+      expect(unwrappedBody).toContain(`2. \`example/first\` (${type}): \`8.00%\` · ${generations(2)}`);
+      expect(unwrappedBody).toContain(`3. ${localizedCopy(locale, "commands.subscription.other")}: \`8.00%\``);
     });
   });
 
-  it("sums available model token counts across scopes and preserves reported zeros", () => {
-    for (const counts of [
-      { personalInput: 10, personalOutput: null, serverInput: null, serverOutput: 20, input: 10, output: 20 },
-      { personalInput: 0, personalOutput: null, serverInput: null, serverOutput: 0, input: 0, output: 0 },
-      { personalInput: null, personalOutput: null, serverInput: null, serverOutput: null, input: null, output: null },
-    ]) {
-      const fixture = input("models");
-      const [personal, server] = fixture.aggregates ?? [];
-      if (!personal || !server) throw new Error("Expected both funding scopes");
-      fixture.aggregates = [
-        {
-          ...personal,
-          model_codename: "example/shared",
-          input_tokens: counts.personalInput,
-          output_tokens: counts.personalOutput,
-        },
-        {
-          ...server,
-          model_codename: "example/shared",
-          input_tokens: counts.serverInput,
-          output_tokens: counts.serverOutput,
-        },
-      ];
-      const body = collectTextDisplays(buildSubscribePanel(fixture)).join("\n");
-      expect(body).toMatch(
-        localizedProse("en-US", "commands.subscription.model_counts", {
-          count: `\`${personal.generations + server.generations}\``,
-          input:
-            counts.input === null ? localizedCopy("en-US", "commands.subscription.unknown") : `\`${counts.input}\``,
-          output:
-            counts.output === null ? localizedCopy("en-US", "commands.subscription.unknown") : `\`${counts.output}\``,
-        }),
-      );
-    }
+  it("sums one model's generations across funding scopes into a single row", () => {
+    const fixture = input("models");
+    const [personal, server] = fixture.aggregates ?? [];
+    if (!personal || !server) throw new Error("Expected both funding scopes");
+    fixture.aggregates = [
+      { ...personal, model_codename: "example/shared" },
+      { ...server, model_codename: "example/shared" },
+    ];
+    const body = collectTextDisplays(buildSubscribePanel(fixture)).join("\n");
+    expect(body.match(/`example\/shared`/g)).toHaveLength(1);
+    expect(body).toMatch(
+      localizedProse("en-US", "commands.subscription.model_generations", {
+        count: `\`${personal.generations + server.generations}\``,
+      }),
+    );
   });
 
   it("keeps different capability costs separate when one model handles text and vision", () => {
@@ -575,21 +561,25 @@ describe("subscription panels", () => {
     );
   });
 
-  it("shows the five highest-spending model entries and keeps the remaining entries on the next page", () => {
+  it("shows the eight highest-spending model entries and keeps the remaining entries on the next page", () => {
     const fixture = input("models");
     const template = fixture.aggregates?.[0];
     if (!template) throw new Error("Expected a usage row");
-    fixture.aggregates = Array.from({ length: 6 }, (_, index) => ({
+    fixture.aggregates = Array.from({ length: 9 }, (_, index) => ({
       ...template,
       model_codename: `example/model-${index}`,
       cost_usd: (index + 1) / 100,
       generations: 1,
     }));
+    if (!fixture.allowance) throw new Error("Expected an allowance");
+    fixture.allowance.used = 0.6;
     const first = buildSubscribePanel(fixture);
     const firstBody = collectTextDisplays(first).join("\n");
     const modelLines = firstBody.split("\n").filter((line) => /^\d+\. `example\//.test(line));
-    expect(modelLines).toHaveLength(5);
     expect(modelLines.map((line) => line.match(/`([^`]+)`/)?.[1])).toEqual([
+      "example/model-8",
+      "example/model-7",
+      "example/model-6",
       "example/model-5",
       "example/model-4",
       "example/model-3",
@@ -599,10 +589,10 @@ describe("subscription panels", () => {
     fixture.route.page = 1;
     const secondBody = collectTextDisplays(buildSubscribePanel(fixture)).join("\n");
     expect(secondBody).toContain("`example/model-0`");
-    expect(secondBody).not.toContain("`example/model-5`");
+    expect(secondBody).not.toContain("`example/model-8`");
     for (const body of [firstBody, secondBody]) {
-      expect(body).toMatch(localizedProse("en-US", "commands.subscription.generations", { count: "`6`" }));
-      expect(body).toContain(`${localizedCopy("en-US", "commands.subscription.other")}: \`11.00%\``);
+      expect(body).toMatch(localizedProse("en-US", "commands.subscription.generations", { count: "`9`" }));
+      expect(body).toContain(`${localizedCopy("en-US", "commands.subscription.other")}: \`15.00%\``);
     }
     expect(
       flatten(first).some((part) => typeof part.customId === "string" && part.customId.includes("models-page")),

@@ -10,6 +10,8 @@ export default {
     sponsorship_by: `Được tài trợ bởi {name}`,
     unknown_sponsor: `một người đăng ký`,
     subscription_model_description: `Sử dụng hạn mức gói đăng ký dùng chung của bạn; model càng đắt thì dùng hết càng nhanh`,
+    subscription_model_selector_guidance:
+      "Muốn dùng model không có trong danh sách? Tìm model bạn thích trên [trang model OpenRouter](https://openrouter.ai/models) và sao chép ID bên dưới tên của nó (trông như `deepseek/deepseek-v4-flash`). Sau đó chọn **+ Thêm model Văn bản mới** bên dưới (hoặc Hình ảnh, Video, v.v.) và dán ID vào **Mã tên model**. Model càng đắt thì dùng hết hạn mức càng nhanh.",
     subscription_model_allowance: `≈{ratio}x hạn mức của model mặc định`,
     subscription_label: `Gói đăng ký TomoriBot`,
     manage_subscription: `Quản lý gói đăng ký`,

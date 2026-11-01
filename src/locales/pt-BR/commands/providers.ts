@@ -10,6 +10,8 @@ export default {
     sponsorship_by: `Patrocínio de {name}`,
     unknown_sponsor: `um assinante`,
     subscription_model_description: `Usa sua cota de assinatura compartilhada; modelos mais caros a consomem mais rápido`,
+    subscription_model_selector_guidance:
+      "Quer um modelo que não está na lista? Encontre um que você goste na [página de modelos do OpenRouter](https://openrouter.ai/models) e copie o ID abaixo do nome dele (algo como `deepseek/deepseek-v4-flash`). Depois escolha **+ Adicionar Novo Modelo de Texto** abaixo (ou Imagem, Vídeo e assim por diante) e cole o ID em **Nome de Código**. Modelos mais caros consomem sua cota mais rápido.",
     subscription_model_allowance: `≈{ratio}x a cota do padrão`,
     subscription_label: `Assinatura do TomoriBot`,
     manage_subscription: `Gerenciar Assinatura`,

@@ -430,6 +430,7 @@ export const supporterProviderOption: ProviderOptionDefinition = {
     },
     removeImpactKey: "commands.providers.remove_impact_subscription",
     modelDescriptionKey: "commands.providers.subscription_model_description",
+    modelSelectorGuidanceKey: "commands.providers.subscription_model_selector_guidance",
   },
   contributeCopy: (context) => resolveSupporterNudgeKey(context),
   describeModelChoices: describeSupporterModelChoices,

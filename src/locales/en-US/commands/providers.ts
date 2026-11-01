@@ -10,6 +10,8 @@ export default {
     sponsorship_by: `Sponsorship by {name}`,
     unknown_sponsor: `a subscriber`,
     subscription_model_description: `Uses your shared subscription allowance; pricier models use it faster`,
+    subscription_model_selector_guidance:
+      "Want a model that isn't in the list? Find one you like on the [OpenRouter models page](https://openrouter.ai/models) and copy the ID under its name (it looks like `deepseek/deepseek-v4-flash`). Then choose **+ Add new Text Model** below (or Image, Video, and so on) and paste the ID into **Code Name**. Pricier models use your allowance faster.",
     subscription_model_allowance: `≈{ratio}x the default's allowance`,
     subscription_label: `TomoriBot Subscription`,
     manage_subscription: `Manage Subscription`,

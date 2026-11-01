@@ -28,13 +28,12 @@ import {
   buildPaginationRow,
   buildPanelContainer,
   buildPanelReceiptContainer,
-  withLinePrefix,
 } from "@/utils/discord/ui/panel";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { escapeDiscordMarkdown } from "@/utils/text/discordMarkdown";
 import { localizer } from "@/utils/text/localizer";
 
-const MODEL_USAGE_PAGE_SIZE = 5;
+const USAGE_PAGE_SIZE = 8;
 const CAPABILITY_LABEL_KEYS: Record<SupporterCapability, string> = {
   text: "commands.providers.capabilities.text",
   vision: "commands.personal.config.routing_vision",
@@ -168,7 +167,7 @@ export function buildSubscriptionOnboarding(input: {
             }),
           ]
         : []),
-    text(`3. **${localizer(locale, "commands.subscription.continue")}**`),
+    text(`3. **${localizer(locale, "commands.subscription.continue_step")}**`),
     actions({
       type: ComponentType.Button,
       style: ButtonStyle.Secondary,
@@ -374,7 +373,7 @@ function servers(input: SubscriptionPanelInput): ComponentInContainerData[] {
       buildOptionalThumbnailSection(
         {
           type: ComponentType.TextDisplay,
-          content: `> ${localizer(locale, "commands.subscription.server", { server: escapeDiscordMarkdown(selected.label) })}\n> ${localizer(locale, "commands.subscription.server_access")}${usageLine}`,
+          content: `> ${localizer(locale, "commands.subscription.server", { server: escapeDiscordMarkdown(selected.label) })}${usageLine}`,
         },
         selected.iconUrl,
       ),
@@ -398,8 +397,6 @@ function usage(input: SubscriptionPanelInput): ComponentInContainerData[] {
       capability: SupporterCapability;
       cost: number;
       count: number;
-      input: number | null;
-      output: number | null;
     }
   >();
   for (const row of aggregates) {
@@ -413,13 +410,9 @@ function usage(input: SubscriptionPanelInput): ComponentInContainerData[] {
       capability: row.capability,
       cost: 0,
       count: 0,
-      input: null,
-      output: null,
     };
     current.cost += row.cost_usd;
     current.count += row.generations;
-    if (row.input_tokens !== null) current.input = (current.input ?? 0) + row.input_tokens;
-    if (row.output_tokens !== null) current.output = (current.output ?? 0) + row.output_tokens;
     grouped.set(id, current);
   }
   const rows = [...grouped].sort(([a, left], [b, right]) =>
@@ -427,10 +420,10 @@ function usage(input: SubscriptionPanelInput): ComponentInContainerData[] {
   );
   const logged = aggregates.reduce((sum, row) => sum + row.cost_usd, 0);
   const other = Math.max(0, allowance.used - logged);
-  const selection = resolveRangeSelection(rows, route.page, modelView ? MODEL_USAGE_PAGE_SIZE : 8);
+  const selection = resolveRangeSelection(rows, route.page, USAGE_PAGE_SIZE);
   const components: ComponentInContainerData[] = [
     text(
-      `### ${localizer(locale, "commands.subscription.usage")}\n${localizer(locale, "commands.subscription.period", { start: `<t:${Math.floor(allowance.start.getTime() / 1000)}:D>`, end: `<t:${Math.floor(allowance.end.getTime() / 1000)}:D>` })}\n${localizer(locale, "commands.subscription.remaining")}\n${allowanceBar(allowance.remaining, allowance.allowance)}\n> ${localizer(locale, "commands.subscription.generations", { count: `\`${aggregates.reduce((sum, row) => sum + row.generations, 0)}\`` })}`,
+      `### ${localizer(locale, "commands.subscription.usage")}\n${localizer(locale, "commands.subscription.period", { start: `<t:${Math.floor(allowance.start.getTime() / 1000)}:D>`, end: `<t:${Math.floor(allowance.end.getTime() / 1000)}:D>` })}\n${localizer(locale, "commands.subscription.remaining")}\n${allowanceBar(allowance.remaining, allowance.allowance)}\n${localizer(locale, "commands.subscription.generations", { count: `\`${aggregates.reduce((sum, row) => sum + row.generations, 0)}\`` })}\n-# ${localizer(locale, "commands.subscription.generations_note")}`,
     ),
     {
       type: ComponentType.ActionRow,
@@ -461,7 +454,7 @@ function usage(input: SubscriptionPanelInput): ComponentInContainerData[] {
           );
     const line = `${modelView ? `${index + 1}. ` : "> "}${label}: \`${percent(row.cost, allowance.allowance)}\``;
     return modelView
-      ? `${line}\n${withLinePrefix("> ", localizer(locale, "commands.subscription.model_counts", { count: `\`${row.count}\``, input: row.input === null ? localizer(locale, "commands.subscription.unknown") : `\`${row.input}\``, output: row.output === null ? localizer(locale, "commands.subscription.unknown") : `\`${row.output}\`` }))}`
+      ? `${line} · ${localizer(locale, "commands.subscription.model_generations", { count: `\`${row.count}\`` })}`
       : line;
   });
   if (other > 0)
@@ -480,7 +473,14 @@ function usage(input: SubscriptionPanelInput): ComponentInContainerData[] {
     },
   });
   if (pagination) components.push(pagination);
-  components.push(text(`-# ${localizer(locale, "commands.subscription.percent_note")}`));
+  components.push(
+    text(
+      [
+        `-# ${localizer(locale, "commands.subscription.percent_note")}`,
+        ...(other > 0 ? [`-# ${localizer(locale, "commands.subscription.other_note")}`] : []),
+      ].join("\n"),
+    ),
+  );
   return components;
 }
 

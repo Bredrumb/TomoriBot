@@ -10,6 +10,8 @@ export default {
     sponsorship_by: `Patrocinio de {name}`,
     unknown_sponsor: `un suscriptor`,
     subscription_model_description: `Usa tu cuota de suscripción compartida; los modelos más caros la consumen más rápido`,
+    subscription_model_selector_guidance:
+      "¿Quieres un modelo que no está en la lista? Busca uno que te guste en la [página de modelos de OpenRouter](https://openrouter.ai/models) y copia el ID que aparece bajo su nombre (se ve como `deepseek/deepseek-v4-flash`). Luego elige **+ Agregar nuevo modelo de Texto** abajo (o Imagen, Video, etc.) y pega el ID en **Nombre de código**. Los modelos más caros consumen tu cuota más rápido.",
     subscription_model_allowance: `≈{ratio}x la cuota del predeterminado`,
     subscription_label: `Suscripción de TomoriBot`,
     manage_subscription: `Administrar suscripción`,
