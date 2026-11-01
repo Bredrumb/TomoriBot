@@ -38,7 +38,7 @@ describe("subscription model cost ratios", () => {
     });
     expect(costs.get(1)).toEqual({ priceLabel: null, isDefault: true });
     expect(costs.get(2)).toEqual({
-      priceLabel: localizedCopy("en-US", "commands.providers.subscription_model_cost", { ratio: "3" }),
+      priceLabel: localizedCopy("en-US", "commands.providers.subscription_model_allowance", { ratio: "3" }),
       isDefault: false,
     });
     expect(costs.get(3)?.priceLabel).toBe(localizedCopy("en-US", "commands.providers.model_price_free"));
@@ -83,7 +83,7 @@ describe("subscription model cost ratios", () => {
     });
     expect(costs.get(7)?.isDefault).toBe(true);
     expect(costs.get(8)?.priceLabel).toBe(
-      localizedCopy("en-US", "commands.providers.subscription_model_cost", { ratio: "0.1" }),
+      localizedCopy("en-US", "commands.providers.subscription_model_allowance", { ratio: "0.1" }),
     );
   });
 

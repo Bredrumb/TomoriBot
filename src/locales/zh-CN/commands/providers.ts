@@ -10,7 +10,7 @@ export default {
     sponsorship_by: `由{name}赞助`,
     unknown_sponsor: `一位订阅者`,
     subscription_model_description: `使用你的共享订阅配额；越贵的模型消耗越快`,
-    subscription_model_cost: `费用约为默认的 {ratio} 倍`,
+    subscription_model_allowance: `约为默认的 {ratio} 倍配额`,
     subscription_label: `TomoriBot订阅`,
     manage_subscription: `管理订阅`,
     remove_impact_subscription: `停止使用{name}的个人AI访问权限。你的Patreon会员资格仍将保持关联与有效状态。`,

@@ -10,7 +10,7 @@ export default {
     sponsorship_by: `{name}によるスポンサー`,
     unknown_sponsor: `あるサポーター`,
     subscription_model_description: `共有のサブスクリプション利用枠を使用します。高価なモデルほど早く消費します`,
-    subscription_model_cost: `デフォルトの約{ratio}倍のコスト`,
+    subscription_model_allowance: `デフォルトの約{ratio}倍の利用枠`,
     subscription_label: `TomoriBotサブスクリプション`,
     manage_subscription: `サブスクリプションを管理`,
     remove_impact_subscription: `個人のAIで{name}を使わないようにします。Patreonメンバーシップの連携と有効状態は変わりません。`,

@@ -10,7 +10,7 @@ export default {
     sponsorship_by: `Patrocínio de {name}`,
     unknown_sponsor: `um assinante`,
     subscription_model_description: `Usa sua cota de assinatura compartilhada; modelos mais caros a consomem mais rápido`,
-    subscription_model_cost: `≈{ratio}x o custo padrão`,
+    subscription_model_allowance: `≈{ratio}x a cota do padrão`,
     subscription_label: `Assinatura do TomoriBot`,
     manage_subscription: `Gerenciar Assinatura`,
     remove_impact_subscription: `Deixar de usar {name} para acesso pessoal à IA. Sua assinatura do Patreon continuará vinculada e ativa.`,

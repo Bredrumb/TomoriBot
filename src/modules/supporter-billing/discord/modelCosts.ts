@@ -50,7 +50,7 @@ export async function describeSupporterModelChoices(
     if (!isDefault && cost?.value === 0) {
       priceLabel = localizer(input.locale, "commands.providers.model_price_free");
     } else if (!isDefault && cost && baselineCost && cost.unit === baselineCost.unit && baselineCost.value > 0) {
-      priceLabel = localizer(input.locale, "commands.providers.subscription_model_cost", {
+      priceLabel = localizer(input.locale, "commands.providers.subscription_model_allowance", {
         ratio: formatRatio(input.locale, cost.value / baselineCost.value),
       });
     }
