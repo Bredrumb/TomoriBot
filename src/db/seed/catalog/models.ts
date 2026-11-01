@@ -2325,6 +2325,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "openrouter",
         codename: "other-model",
+        isDeprecated: true,
         hasTools: true,
         seesImages: true,
         seesVideos: true,
