@@ -10,7 +10,8 @@ import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import type { OpenRouterModelScope } from "@/utils/db/repositories/LlmModelRepository";
 import type { ConfigCatalogModelCapability } from "@/utils/discord/configPanelCatalog";
 import { isCustomProvider, parseCustomProvider } from "@/utils/provider/customProviderUtils";
-import { resolveRowPricing, type ModelPricing } from "@/utils/provider/modelPricing";
+import { resolveRowPricing, type ChoicePricing } from "@/utils/provider/modelPricing";
+import { openRouterMediaRates } from "@/utils/provider/openrouterMediaPricing";
 import {
   findProviderOption,
   providerOptionOffersModelViewCapability,
@@ -23,7 +24,7 @@ export interface ProviderModelChoice {
   id: number;
   name: string;
   description: string | null;
-  pricing?: ModelPricing | null;
+  pricing?: ChoicePricing | null;
   isDefault?: boolean;
 }
 
@@ -92,6 +93,7 @@ export async function loadProviderModelChoices(
           id: model.diffusion_model_id,
           name: model.codename,
           description: resolveDescription(model.descriptions, locale),
+          pricing: openRouterMediaRates(provider, "image", model.codename),
           isDefault: model.is_default,
         }));
     }
@@ -106,6 +108,7 @@ export async function loadProviderModelChoices(
           id: model.video_model_id,
           name: model.codename,
           description: resolveDescription(model.descriptions, locale),
+          pricing: openRouterMediaRates(provider, "video", model.codename),
           isDefault: model.is_default,
         }));
     }
@@ -134,6 +137,7 @@ export async function loadProviderModelChoices(
           id: model.speech_model_id,
           name: model.codename,
           description: resolveDescription(model.descriptions, locale),
+          pricing: openRouterMediaRates(provider, "speech", model.codename),
           isDefault: model.is_default,
         }));
     }

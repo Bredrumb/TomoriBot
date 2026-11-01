@@ -30,18 +30,48 @@ export function resolveModelPricing(tomoriState: TomoriState): ModelPricing | nu
   return resolveRowPricing(tomoriState.llm);
 }
 
-export function formatPricePerMillion(value: number): string {
+export function formatUsdRate(value: number): string {
   if (value < 0.01) return `$${value.toFixed(6)}`;
   if (value < 1) return `$${value.toFixed(3)}`;
   return `$${value.toFixed(2)}`;
 }
 
-export function formatModelPricing(locale: string, pricing: ModelPricing): string {
+/** Token and character units are priced per million; the rest per single unit. */
+export type MediaPriceUnit = "image" | "image_token" | "video_second" | "video_token" | "character" | "audio_second";
+
+export interface MediaRate {
+  unit: MediaPriceUnit;
+  price: number;
+}
+
+export type ChoicePricing = ModelPricing | readonly MediaRate[];
+
+const MEDIA_RATE_KEYS: Record<MediaPriceUnit, string> = {
+  image: "commands.providers.model_price_per_image",
+  image_token: "commands.providers.model_price_image_tokens",
+  video_second: "commands.providers.model_price_per_video_second",
+  video_token: "commands.providers.model_price_video_tokens",
+  character: "commands.providers.model_price_characters",
+  audio_second: "commands.providers.model_price_per_audio_second",
+};
+
+export function formatModelPricing(locale: string, pricing: ChoicePricing): string {
+  if (isMediaRates(pricing)) {
+    const billed = pricing.filter((rate) => rate.price > 0);
+    if (billed.length === 0) return localizer(locale, "commands.providers.model_price_free");
+    return billed
+      .map((rate) => localizer(locale, MEDIA_RATE_KEYS[rate.unit], { price: formatUsdRate(rate.price) }))
+      .join(", ");
+  }
   if (pricing.input === 0 && pricing.output === 0) {
     return localizer(locale, "commands.providers.model_price_free");
   }
   return localizer(locale, "commands.providers.model_price_tokens", {
-    input: formatPricePerMillion(pricing.input),
-    output: formatPricePerMillion(pricing.output),
+    input: formatUsdRate(pricing.input),
+    output: formatUsdRate(pricing.output),
   });
+}
+
+function isMediaRates(pricing: ChoicePricing): pricing is readonly MediaRate[] {
+  return Array.isArray(pricing);
 }

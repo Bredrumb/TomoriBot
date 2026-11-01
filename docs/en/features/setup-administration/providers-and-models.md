@@ -76,8 +76,11 @@ In `/config` > Models > Switch Models, you can assign models and endpoints acros
 - **TTS (Voice Clone)**: speaks using a reference sample or provider voice.
 - **STT Endpoint**: speech-to-text audio transcription endpoint.
 
-The model list marks each provider's default model and shows text and Decision prices in US dollars
-per million input and output tokens. OpenRouter prices refresh when TomoriBot starts. A model with no
+The model list marks each provider's default model and shows prices in US dollars. Text and Decision
+models show the price per million input and output tokens. OpenRouter image, video, and voice models
+show the unit OpenRouter bills: per image or per million image tokens, per second of video at
+TomoriBot's default resolution, and per million characters or per second of audio. A media price can
+be missing the first time you open the list and appears once TomoriBot has fetched it. A model with no
 listed price is either unmetered or not priced in TomoriBot's catalog, so check your provider's
 pricing page before relying on it.
 

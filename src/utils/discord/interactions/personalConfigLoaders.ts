@@ -32,6 +32,7 @@ import { getProviderOptionFallbackRefOwner } from "@/utils/provider/providerOpti
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { resolveDescription } from "@/utils/text/localizer";
 import { resolveRowPricing } from "@/utils/provider/modelPricing";
+import { openRouterMediaRates } from "@/utils/provider/openrouterMediaPricing";
 import type { ModelSelectChoice } from "@/utils/discord/ui/modelSelectOption";
 import { messageProxyRepository } from "@/utils/db/repositories/MessageProxyRepository";
 import { formatManagedIdentityLabel } from "@/utils/discord/interactions/managedIdentityPanelRoutes";
@@ -163,6 +164,7 @@ export async function loadAvailableModelsForCapability(
         .map((model) => ({
           id: model.speech_model_id,
           name: model.codename,
+          pricing: openRouterMediaRates(provider, "speech", model.codename),
           isDefault: model.is_default,
         }));
     }
@@ -221,6 +223,7 @@ export async function loadAvailableModelsForCapability(
           id: m.diffusion_model_id as number,
           name: m.codename,
           description: resolveDescription(m.descriptions, locale) ?? undefined,
+          pricing: openRouterMediaRates(provider, "image", m.codename),
           isDefault: m.is_default,
         }));
     }
@@ -249,6 +252,7 @@ export async function loadAvailableModelsForCapability(
           id: m.video_model_id as number,
           name: m.codename,
           description: resolveDescription(m.descriptions, locale) ?? undefined,
+          pricing: openRouterMediaRates(provider, "video", m.codename),
           isDefault: m.is_default,
         }));
     }

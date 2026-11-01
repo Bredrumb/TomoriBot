@@ -1,5 +1,5 @@
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
-import { formatModelPricing, type ModelPricing } from "@/utils/provider/modelPricing";
+import { formatModelPricing, type ChoicePricing } from "@/utils/provider/modelPricing";
 import { providerOptionModelDescription } from "@/utils/provider/providerOptionRegistry";
 import { localizer } from "@/utils/text/localizer";
 
@@ -7,7 +7,7 @@ export interface ModelSelectChoice {
   id: number;
   name: string;
   description?: string | null;
-  pricing?: ModelPricing | null;
+  pricing?: ChoicePricing | null;
   isDefault?: boolean;
 }
 
