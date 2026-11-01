@@ -56,6 +56,7 @@ import { loadDecisionModelsForScope } from "@/providers/utils/providerFeatureExe
 import {
   claimProviderModelSelection,
   clearProviderModelSelection,
+  describeProviderOptionModelChoices,
   findProviderOption,
 } from "@/utils/provider/providerOptionRegistry";
 
@@ -157,7 +158,16 @@ async function loadCheckerDecisionModels(serverId: number, locale: string): Prom
         pricing: resolveRowPricing(model),
         isDefault: model.is_default,
       }));
-    if (models.length > 0) groups.set(provider, models);
+    if (models.length > 0)
+      groups.set(
+        provider,
+        await describeProviderOptionModelChoices(provider, {
+          scope: { kind: "server", ownerId: serverId },
+          capability: "decision",
+          locale,
+          choices: models,
+        }),
+      );
   }
   return [...groups].map(([provider, models]) => ({ provider, models }));
 }

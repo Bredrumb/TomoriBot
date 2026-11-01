@@ -13,7 +13,9 @@ import { isCustomProvider, parseCustomProvider } from "@/utils/provider/customPr
 import { resolveRowPricing, type ChoicePricing } from "@/utils/provider/modelPricing";
 import { openRouterMediaRates } from "@/utils/provider/openrouterMediaPricing";
 import {
+  describeProviderOptionModelChoices,
   findProviderOption,
+  providerOptionCapabilityForModelView,
   providerOptionOffersModelViewCapability,
   type ProviderOptionModelViewCapability,
 } from "@/utils/provider/providerOptionRegistry";
@@ -26,6 +28,7 @@ export interface ProviderModelChoice {
   description: string | null;
   pricing?: ChoicePricing | null;
   isDefault?: boolean;
+  priceLabel?: string | null;
 }
 
 export async function loadProviderModelChoices(
@@ -39,8 +42,31 @@ export async function loadProviderModelChoices(
   if (option) {
     if (!providerOptionOffersModelViewCapability(option, capability as ProviderOptionModelViewCapability)) return [];
     if (!(await option.availability(owner)).eligible) return [];
-    provider = option.catalogProvider;
   }
+  const choices = await loadCatalogModelChoices(
+    owner,
+    capability,
+    option?.catalogProvider ?? provider,
+    locale,
+    textModelFilter,
+    option?.value,
+  );
+  return describeProviderOptionModelChoices(provider, {
+    scope: owner,
+    capability: providerOptionCapabilityForModelView(capability as ProviderOptionModelViewCapability),
+    locale,
+    choices,
+  });
+}
+
+async function loadCatalogModelChoices(
+  owner: OpenRouterModelScope,
+  capability: ConfigCatalogModelCapability,
+  provider: string,
+  locale: string,
+  textModelFilter: ((model: LlmRow) => boolean) | undefined,
+  optionValue: string | undefined,
+): Promise<ProviderModelChoice[]> {
   switch (capability) {
     case "text":
     case "vision": {
@@ -72,7 +98,7 @@ export async function loadProviderModelChoices(
         }));
     }
     case "decision":
-      return (await loadDecisionModelsForScope(owner, option?.value))
+      return (await loadDecisionModelsForScope(owner, optionValue))
         .filter(({ model }) => model.provider === provider)
         .map(({ model }) => ({
           id: model.decision_model_id,

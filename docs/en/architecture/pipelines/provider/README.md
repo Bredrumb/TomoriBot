@@ -313,6 +313,7 @@ Deployment behavior maps onto these fields:
 | Panel select action and its copy | `copy.addActionLabelKey`, `copy.addActionDescriptionKeys`, `panel.handleAction` |
 | Panel entry buttons and extra components | `panel.entryActions`, `panel.entryComponents`, `panel.entryOwned` |
 | Model option description | `copy.modelDescriptionKey` |
+| Model picker price label and default marker, replacing catalog prices | `describeModelChoices` |
 | Setup option, summary, receipt, onboarding, and commit | `setup.optionLabelKey`, `setup.optionDescriptionKey`, `setup.summaryKey`, `setup.receiptDescriptionKey`, `setup.available`, `setup.ready`, `setup.components`, `setup.committed`, `setup.handleAction` |
 
 One deployment-managed behavior stays outside the registry because main has no field for it: a
