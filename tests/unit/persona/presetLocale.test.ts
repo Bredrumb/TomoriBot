@@ -36,12 +36,12 @@ const names = (rows: TomoriPresetRow[]) => rows.map((row) => row.persona_preset_
 describe("selectPresetsForLocale", () => {
   it("falls back to English only when the locale has no presets on that NSFW side", () => {
     expect(names(selectPresetsForLocale(catalog, "ja", { nsfw: true }))).toEqual(["Locke"]);
-    expect(names(selectPresetsForLocale(catalog, "fr", { nsfw: false }))).toEqual(["Tomori-chan", "Tomori-kun"]);
+    expect(names(selectPresetsForLocale(catalog, "fr", { nsfw: false }))).toEqual(["Tomori-kun", "Tomori-chan"]);
   });
 
   it("serves only the locale's own presets when the locale has at least one", () => {
-    expect(names(selectPresetsForLocale(catalog, "ja", { nsfw: false }))).toEqual(["オボニャ", "ともりくん"]);
-    expect(names(selectPresetsForLocale(catalog, "en-US", { nsfw: false }))).toEqual(["Tomori-chan", "Tomori-kun"]);
+    expect(names(selectPresetsForLocale(catalog, "ja", { nsfw: false }))).toEqual(["ともりくん", "オボニャ"]);
+    expect(names(selectPresetsForLocale(catalog, "en-US", { nsfw: false }))).toEqual(["Tomori-kun", "Tomori-chan"]);
   });
 
   it("serves the aliased Spanish catalog to an es-ES user", () => {
@@ -53,5 +53,30 @@ describe("selectPresetsForLocale", () => {
 
   it("keeps SFW and NSFW listings disjoint", () => {
     expect(names(selectPresetsForLocale(catalog, "en-US", { nsfw: true }))).toEqual(["Locke"]);
+  });
+
+  it("orders every locale by lineage rather than by its localized names", () => {
+    const rows = [
+      preset("ツンデレトモリ", 716, "ja"),
+      preset("デフォルトのトモリ", 4, "ja"),
+      preset("Alpha", 716, "en-US"),
+      preset("Zeta", 4, "en-US"),
+    ];
+
+    expect(names(selectPresetsForLocale(rows, "en-US", { nsfw: false }))).toEqual(["Zeta", "Alpha"]);
+    expect(names(selectPresetsForLocale(rows, "ja", { nsfw: false }))).toEqual([
+      "デフォルトのトモリ",
+      "ツンデレトモリ",
+    ]);
+  });
+
+  it("sorts presets without a lineage after the catalog", () => {
+    const junoEn = preset("Juno", null, "en-US");
+
+    expect(names(selectPresetsForLocale([junoEn, brattyEn, tomoriEn], "en-US", { nsfw: false }))).toEqual([
+      "Tomori-kun",
+      "Tomori-chan",
+      "Juno",
+    ]);
   });
 });

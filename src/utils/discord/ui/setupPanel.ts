@@ -50,7 +50,6 @@ import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { localizer, resolveDescription, resolvePresetDisplayName } from "@/utils/text/localizer";
 import { formatUTCOffset, formatUtcOffsetInput, parseUtcOffsetInput } from "@/utils/text/timezoneHelper";
 import { buildLegalDocUrl } from "@/utils/misc/docsUrl";
-import { orderPersonaPresetChoices } from "@/utils/persona/presetOrdering";
 import type { ComponentsV2MessagePayload } from "@/utils/discord/ui/componentsV2Limits";
 
 const SETUP_ENDPOINT_STYLE_KEYS: Record<
@@ -245,10 +244,8 @@ export function toSetupSettingsCatalogs(
   if (personaPresets.some((preset) => preset.persona_preset_name.length > SETUP_OPTION_VALUE_LIMIT)) return null;
   if (promptPresets.some((preset) => preset.system_prompt_preset_name.length > SETUP_OPTION_VALUE_LIMIT)) return null;
 
-  const sortedPersonas = orderPersonaPresetChoices(personaPresets);
-
   return {
-    personas: sortedPersonas.map((preset) => ({
+    personas: personaPresets.map((preset) => ({
       id: preset.persona_preset_id,
       name: preset.persona_preset_name,
       description: preset.persona_preset_desc,

@@ -15,7 +15,8 @@ export function presetFallbackLanguages(locale: string): string[] {
  * Picks the presets in the most preferred language from {@link presetFallbackLanguages} that has at
  * least one row for the requested NSFW side, falling back to English only when the locale has none.
  * `nsfw` selects one side of the flag: SFW routes never offer NSFW presets because only the
- * age-restricted `/nsfw` routes may, and the `/nsfw` listing offers nothing else.
+ * age-restricted `/nsfw` routes may, and the `/nsfw` listing offers nothing else. Rows come back in
+ * ascending `preset_lineage_id` order, so the selector sequence is the same in every locale.
  *
  * @param rows - Candidate rows in any of {@link presetFallbackLanguages}
  */
@@ -31,5 +32,9 @@ export function selectPresetsForLocale(
 
   return candidates
     .filter((row) => row.preset_language === selectedLanguage)
-    .sort((left, right) => left.persona_preset_name.localeCompare(right.persona_preset_name));
+    .sort((left, right) => lineageOrder(left) - lineageOrder(right));
+}
+
+function lineageOrder(preset: TomoriPresetRow): number {
+  return preset.preset_lineage_id ?? Number.MAX_SAFE_INTEGER;
 }
