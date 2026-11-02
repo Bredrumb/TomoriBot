@@ -24,6 +24,7 @@ export default {
     capability_models_explanation: `このプロバイダーでは以下のモデルを利用できます：`,
     model_price_tokens: `{input}（入力）、{output}（出力）／100万トークン`,
     model_price_free: `無料`,
+    model_price_free_tier: `無料枠`,
     model_price_per_image: `1枚あたり{price}`,
     model_price_image_tokens: `100万画像トークンあたり{price}`,
     model_price_per_video_second: `動画1秒あたり{price}`,

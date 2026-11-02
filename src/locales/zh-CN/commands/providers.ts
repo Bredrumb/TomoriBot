@@ -23,6 +23,7 @@ export default {
     capability_models_explanation: `这些模型可以通过这个提供方使用：`,
     model_price_tokens: `输入 {input}，输出 {output}／每 100 万 token`,
     model_price_free: `免费`,
+    model_price_free_tier: `免费档位`,
     model_price_per_image: `每张图片 {price}`,
     model_price_image_tokens: `每 100 万图片 token {price}`,
     model_price_per_video_second: `每秒视频 {price}`,

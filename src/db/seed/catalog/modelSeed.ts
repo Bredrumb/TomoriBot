@@ -371,8 +371,8 @@ const PRICING_PENDING_CODENAMES = new Set<string>();
  * `/tool estimate cost`, so this invariant catches the next added model that forgets its catalog price.
  *
  * Excluded: deprecated rows (may predate verified pricing), Gemma codenames (open model, no first-party
- * paid tier), isFree endpoint variants (not billed), and {@link PRICING_PENDING_CODENAMES} (provider has
- * not published a rate yet).
+ * paid tier), and {@link PRICING_PENDING_CODENAMES} (provider has not published a rate yet). A free-tier
+ * row of a metered provider keeps its paid rates for cost reads, so is_free does not exempt it.
  *
  * Pure and exported so the invariant can be unit-tested with crafted rows.
  * @returns A list of violation messages (empty when valid).
@@ -381,7 +381,7 @@ function collectMeteredPriceViolations(rows: LlmInput[]): string[] {
   const errors: string[] = [];
   for (const row of rows) {
     if (!METERED_FIRST_PARTY_PROVIDERS.has(row.provider)) continue;
-    if (row.isDeprecated || row.isFree) continue;
+    if (row.isDeprecated) continue;
     if (row.codename.includes("gemma")) continue;
     if (PRICING_PENDING_CODENAMES.has(row.codename)) continue;
     const hasInput = typeof row.inputPricePerMillion === "number";

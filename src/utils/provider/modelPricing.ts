@@ -75,6 +75,21 @@ export function formatModelPricing(locale: string, pricing: ChoicePricing): stri
   });
 }
 
+/**
+ * NVIDIA and custom free endpoints also set is_free, so the labels are scoped to Gemini AI, where an
+ * unpriced free row is Gemma and has no paid tier.
+ */
+export function freeModelPriceLabel(
+  locale: string,
+  provider: string,
+  isFree: boolean,
+  pricing: ChoicePricing | null,
+): string | undefined {
+  if (!isFree || provider.toLowerCase() !== "google") return undefined;
+  const key = pricing ? "commands.providers.model_price_free_tier" : "commands.providers.model_price_free";
+  return localizer(locale, key);
+}
+
 function isMediaRates(pricing: ChoicePricing): pricing is readonly MediaRate[] {
   return Array.isArray(pricing);
 }

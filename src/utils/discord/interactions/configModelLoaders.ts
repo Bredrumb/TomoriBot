@@ -38,7 +38,7 @@ import { resolveProviderEntryStart } from "@/utils/discord/ui/providerSelectWind
 import { resolveNaiImageParams } from "@/utils/image/naiImageParams";
 import { buildCustomProviderName, isCustomProvider, parseCustomProvider } from "@/utils/provider/customProviderUtils";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
-import { resolveRowPricing } from "@/utils/provider/modelPricing";
+import { freeModelPriceLabel, resolveRowPricing } from "@/utils/provider/modelPricing";
 import { modelOptionDetail } from "@/utils/discord/ui/modelSelectOption";
 import {
   describeProviderOptionModelChoices,
@@ -466,12 +466,16 @@ export async function loadConfigFallbackOptions(
         (model): model is typeof model & { llm_id: number } =>
           model.llm_codename !== "other-model" && typeof model.llm_id === "number",
       )
-      .map((model) => ({
-        id: model.llm_id,
-        name: model.llm_codename,
-        description: resolveDescription(model.descriptions, locale),
-        pricing: resolveRowPricing(model),
-      })),
+      .map((model) => {
+        const pricing = resolveRowPricing(model);
+        return {
+          id: model.llm_id,
+          name: model.llm_codename,
+          description: resolveDescription(model.descriptions, locale),
+          pricing,
+          priceLabel: freeModelPriceLabel(locale, provider, model.is_free, pricing),
+        };
+      }),
   });
   return choices.map((choice) => ({
     value: choice.name,

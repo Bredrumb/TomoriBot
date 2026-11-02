@@ -23,6 +23,7 @@ export default {
     capability_models_explanation: `這個供應商提供以下模型：`,
     model_price_tokens: `輸入 {input}，輸出 {output}／每 100 萬 token`,
     model_price_free: `免費`,
+    model_price_free_tier: `免費方案`,
     model_price_per_image: `每張圖片 {price}`,
     model_price_image_tokens: `每 100 萬圖片 token {price}`,
     model_price_per_video_second: `每秒影片 {price}`,

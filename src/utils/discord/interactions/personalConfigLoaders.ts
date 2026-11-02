@@ -36,7 +36,7 @@ import {
 import { getProviderOptionFallbackRefOwner } from "@/utils/provider/providerOptionRegistry";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { resolveDescription } from "@/utils/text/localizer";
-import { resolveRowPricing } from "@/utils/provider/modelPricing";
+import { freeModelPriceLabel, resolveRowPricing } from "@/utils/provider/modelPricing";
 import { openRouterMediaRates } from "@/utils/provider/openrouterMediaPricing";
 import type { ModelSelectChoice } from "@/utils/discord/ui/modelSelectOption";
 import { messageProxyRepository } from "@/utils/db/repositories/MessageProxyRepository";
@@ -194,13 +194,17 @@ async function loadPersonalCatalogModels(
       });
       return (models ?? [])
         .filter((m) => typeof m.llm_id === "number")
-        .map((m) => ({
-          id: m.llm_id as number,
-          name: m.llm_codename,
-          description: resolveDescription(m.descriptions, locale) ?? undefined,
-          pricing: resolveRowPricing(m),
-          isDefault: m.is_default,
-        }));
+        .map((m) => {
+          const pricing = resolveRowPricing(m);
+          return {
+            id: m.llm_id as number,
+            name: m.llm_codename,
+            description: resolveDescription(m.descriptions, locale) ?? undefined,
+            pricing,
+            priceLabel: freeModelPriceLabel(locale, provider, m.is_free, pricing),
+            isDefault: m.is_default,
+          };
+        });
     }
     if (capability === "vision") {
       const models = await llmModelRepo.loadAvailableModelsForProvider(provider, false, {
@@ -209,13 +213,17 @@ async function loadPersonalCatalogModels(
       });
       return (models ?? [])
         .filter((m) => typeof m.llm_id === "number" && m.sees_images)
-        .map((m) => ({
-          id: m.llm_id as number,
-          name: m.llm_codename,
-          description: resolveDescription(m.descriptions, locale) ?? undefined,
-          pricing: resolveRowPricing(m),
-          isDefault: m.is_default,
-        }));
+        .map((m) => {
+          const pricing = resolveRowPricing(m);
+          return {
+            id: m.llm_id as number,
+            name: m.llm_codename,
+            description: resolveDescription(m.descriptions, locale) ?? undefined,
+            pricing,
+            priceLabel: freeModelPriceLabel(locale, provider, m.is_free, pricing),
+            isDefault: m.is_default,
+          };
+        });
     }
     if (capability === "embedding") {
       const models = await llmModelRepo.loadAvailableEmbeddingModels(provider, false, {

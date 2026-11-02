@@ -46,6 +46,24 @@ describe("buildModelSelectOption", () => {
     expect(option.label).toBe("free-model");
   });
 
+  it("shows an explicit price label in place of the catalog rate", () => {
+    const label = localizedCopy("en-US", "commands.providers.model_price_free_tier");
+    const option = buildModelSelectOption(
+      "en-US",
+      "google",
+      {
+        id: 3,
+        name: "gemini-3.8-flash",
+        description: "Fast model",
+        pricing: { input: 0.75, output: 3.75 },
+        priceLabel: label,
+      },
+      null,
+    );
+    expect(option.description?.startsWith(label)).toBe(true);
+    expect(option.description?.endsWith("Fast model")).toBe(true);
+  });
+
   it("omits the description when a model has neither a price nor a description", () => {
     const option = buildModelSelectOption("en-US", "google", { id: 2, name: "unpriced", description: null }, null);
     expect(option.description).toBeUndefined();

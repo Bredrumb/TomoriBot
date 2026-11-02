@@ -868,7 +868,7 @@ async function main() {
       "Every `NNN_*.sql` up-migration needs a paired `NNN_*.down.sql`, and no two may share an `NNN` prefix. If another PR already merged your number, rename yours to the next free number.",
     "DB Lifecycle Validation": "Check the detailed logs above. Your migration might be invalid or nuke-db failed.",
     "Localization Keys":
-      "Missing keys (red/blocking) mean a source file references a key that exists in no locale; this must be fixed. Missing Japanese equivalents (orange/advisory) are safe to push — run `bun run prune-locales` to clean up orphaned keys, or add the missing `ja` entries.",
+      "Missing keys (red/blocking) mean a source file references a key that exists in no locale; this must be fixed. Missing local equivalents (orange/advisory) are safe to push — run `bun run prune-locales` to clean up orphaned keys, or add the missing `ja` entries.",
     "Localization Discord Limits":
       "A failure is a traced locale string over its Discord cap with no truncation, which rejects the whole payload: shorten it or wrap the call in `safeSelectOptionText`. A warning is a traced string the code already truncates, so it ships clipped; shorten it in the listed locale. Dynamic keys and separately declared builder arguments can be missed, so zero warnings does not prove every label fits.",
     "Command Reference":
