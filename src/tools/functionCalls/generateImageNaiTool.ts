@@ -227,7 +227,7 @@ export class GenerateImageNaiTool extends BaseTool {
             spoken_text: {
               type: "string",
               description:
-                "Optional speech/dialogue text this character is saying (e.g. 'Hello there!'). Only use this if user explicitly asks for it. Only English is available.",
+                "Optional exact dialogue rendered in the image (e.g. 'Hello there!'). Use only if the user requests visible speech. V4/V4.5 support English; V5 also supports Japanese and Chinese. This is placed in the base prompt\'s final Text: section automatically.",
             },
             x: {
               type: "string",
@@ -1051,8 +1051,7 @@ export class GenerateImageNaiTool extends BaseTool {
       const normalizedTags = [...specialPrefixTags, ...trustedTags, ...resolvedModelTags];
 
       // Build spoken text section for the base prompt when characters have dialogue.
-      // NAI expects "text, english text" tags, a natural-language attribution line per
-      // speaking character, and a trailing "Text: ..." line (newline-separated if multiple).
+      // Spoken lines use a final Text: block, with English-only tagging on V4/V4.5.
       const spokenEntries: { index: number; text: string }[] = [];
       for (let i = 0; i < characters.length; i++) {
         const raw = characters[i].spoken_text;
@@ -1063,7 +1062,13 @@ export class GenerateImageNaiTool extends BaseTool {
       }
 
       if (spokenEntries.length > 0) {
-        normalizedTags.push("text", "english text");
+        normalizedTags.push("text");
+        const containsCjkText = spokenEntries.some(({ text }) =>
+          /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(text),
+        );
+        if (!/nai-diffusion-5/.test(baseModelCodename) || !containsCjkText) {
+          normalizedTags.push("english text");
+        }
       }
 
       let normalizedPrompt = normalizedTags.join(", ");
@@ -1086,7 +1091,7 @@ export class GenerateImageNaiTool extends BaseTool {
             characters.length === 1 ? "The character" : `The ${ordinals[index] ?? `#${index + 1}`} character`;
           return `${label} is saying "${text}"`;
         });
-        const combinedDialogue = spokenEntries.map(({ text }) => text).join(" ");
+        const combinedDialogue = spokenEntries.map(({ text }) => text).join("\n\n");
 
         normalizedPrompt += `. ${attributions.join(", and ")}. Text: ${combinedDialogue}`;
       }
