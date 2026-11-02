@@ -45,6 +45,36 @@ describe("official persona naming catalog", () => {
         suffixes: {},
         addressTerms: { masculine: "mon chéri", feminine: "ma chérie", neutral: "mon amour" },
       },
+      "666:ja": {
+        prefixes: {},
+        suffixes: {},
+        addressTerms: { masculine: "mon chéri", feminine: "ma chérie", neutral: "mon amour" },
+      },
+      "666:pt-BR": {
+        prefixes: {},
+        suffixes: {},
+        addressTerms: { masculine: "mon chéri", feminine: "ma chérie", neutral: "mon amour" },
+      },
+      "666:es-419": {
+        prefixes: {},
+        suffixes: {},
+        addressTerms: { masculine: "mon chéri", feminine: "ma chérie", neutral: "mon amour" },
+      },
+      "666:zh-TW": {
+        prefixes: {},
+        suffixes: {},
+        addressTerms: { masculine: "mon chéri", feminine: "ma chérie", neutral: "mon amour" },
+      },
+      "666:vi": {
+        prefixes: {},
+        suffixes: {},
+        addressTerms: { masculine: "mon chéri", feminine: "ma chérie", neutral: "mon amour" },
+      },
+      "666:zh-CN": {
+        prefixes: {},
+        suffixes: {},
+        addressTerms: { masculine: "mon chéri", feminine: "ma chérie", neutral: "mon amour" },
+      },
       "50:en-US": {
         prefixes: { masculine: "Master", feminine: "Mistress", neutral: "Master" },
         suffixes: {},
