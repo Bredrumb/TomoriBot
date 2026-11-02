@@ -1,29 +1,76 @@
-import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
+import {
+  MessageFlags,
+  type ChatInputCommandInteraction,
+  type Client,
+  type SlashCommandSubcommandBuilder,
+} from "discord.js";
 import type { UserRow } from "@/types/db/schema";
-import { createNonce } from "@/utils/discord/panelRouteTokens";
-import { showRoutedRawModal } from "@/utils/discord/ui/modals";
-import { buildLanguageModal } from "@/utils/discord/ui/personalConfigModals";
-import { localizer } from "@/utils/text/localizer";
+import { personalConfigOperations } from "@/utils/discord/interactions/personalConfigOperations";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { ColorCode } from "@/utils/misc/logger";
+import { getLocaleEndonym, getSupportedLocales, localizer } from "@/utils/text/localizer";
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
-  subcommand.setName("language").setDescription(localizer("en-US", "commands.personal.language.description"));
+  subcommand
+    .setName("language")
+    .setDescription(localizer("en-US", "commands.personal.language.description"))
+    .addStringOption((option) =>
+      option
+        .setName("language")
+        .setDescription(localizer("en-US", "commands.personal.language.language_description"))
+        .setRequired(true)
+        .addChoices(...getSupportedLocales().map((code) => ({ name: getLocaleEndonym(code), value: code }))),
+    );
 
-/**
- * Opens the language picker on its own, which is the same modal the Language button in
- * `/personal config` shows.
- *
- * The modal is raised directly from the command rather than through a panel, so the interaction is
- * never deferred: Discord rejects a modal on an acknowledged interaction. Its submit carries the
- * standalone route, which replies with a receipt instead of repainting a panel that is not there.
- */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  await showRoutedRawModal(
-    interaction,
-    buildLanguageModal(locale, createNonce(), userData.language_pref ?? "en-US", true),
-  );
+  const userId = userData.user_id;
+  if (userId === undefined) {
+    await replyInfoEmbed(interaction, locale, {
+      titleKey: "general.errors.update_failed_title",
+      descriptionKey: "general.errors.update_failed_description",
+      color: ColorCode.ERROR,
+    });
+    return;
+  }
+
+  const language = interaction.options.getString("language", true);
+  if (!getSupportedLocales().includes(language)) {
+    await replyInfoEmbed(interaction, locale, {
+      titleKey: "general.errors.invalid_option_title",
+      descriptionKey: "general.errors.invalid_option_description",
+      color: ColorCode.ERROR,
+    });
+    return;
+  }
+
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  const result = await personalConfigOperations.setLanguage({
+    userId,
+    userDiscId: userData.user_disc_id,
+    language,
+  });
+
+  if (result.status !== "success") {
+    await replyInfoEmbed(interaction, locale, {
+      titleKey: "general.errors.update_failed_title",
+      descriptionKey: "general.errors.update_failed_description",
+      color: ColorCode.ERROR,
+    });
+    return;
+  }
+
+  // A confirmation in the old language reads as a failed change, so the receipt uses the language
+  // just written.
+  await replyInfoEmbed(interaction, language, {
+    titleKey: "commands.personal.config.language_updated_heading",
+    descriptionKey: "commands.personal.config.language_updated_detail",
+    descriptionVars: { language: getLocaleEndonym(language) },
+    color: ColorCode.SUCCESS,
+  });
 }
