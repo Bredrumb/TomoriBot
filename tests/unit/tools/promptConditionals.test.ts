@@ -353,6 +353,26 @@ describe("prompt macro resolver condition integration", () => {
     expect(expanded).not.toMatch(/\n[^\S\n]*\n[^\S\n]*\n/);
   });
 
+  it("renders NovelAI image instructions only when its tool is available", async () => {
+    const preset = systemPromptSections
+      .flatMap((section) => section.rows)
+      .find((row) => row.name === "Default + Image Generation Expert");
+    const resolver = createToolPromptMacroResolver({
+      provider: "google",
+      stateForContext: TOOL_STATE,
+      capabilities: ENABLED_CAPABILITIES,
+      availableToolNames: new Set(["generate_image_nai"]),
+    });
+
+    const expanded = await resolver.expand(preset?.promptText ?? "");
+
+    expect(expanded).toContain("`generate_image_nai`");
+    expect(expanded).toContain("`spoken_text`");
+    expect(expanded).toContain("`Text:`");
+    expect(expanded).not.toContain("`generate_image`");
+    expect(expanded).not.toContain("{{");
+  });
+
   it("does not infer URL-fetch availability from unrelated read tools", async () => {
     const resolver = createToolPromptMacroResolver({
       provider: "google",
