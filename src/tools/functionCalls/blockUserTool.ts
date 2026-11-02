@@ -6,7 +6,7 @@ import {
   missingBlockNoticePermission,
   parseBlockUserArgs,
   resolveDiscordBlockTarget,
-  sendUserBlockedEmbed,
+  sendUserBlockedNotice,
   upsertPersonaUserBlock,
 } from "@/tools/functionCalls/userBlockToolShared";
 
@@ -99,22 +99,14 @@ export class BlockUserTool extends BaseTool {
       return buildFailureResult("user_block_failed_db_error", "Database operation failed to save the user block.");
     }
 
-    try {
-      await sendUserBlockedEmbed({
-        context,
-        targetDisplayName: target.displayLabel,
-        blockType: parsed.blockType,
-        durationHours: parsed.durationHours,
-        reason: parsed.reason,
-        expiresAt,
-      });
-    } catch {
-      return {
-        success: true,
-        message: localizer(context.locale, "tools.user_block.notice_failed"),
-        data: { status: "user_block_created_notice_failed", user_disc_id: target.userDiscId },
-      };
-    }
+    await sendUserBlockedNotice({
+      context,
+      targetDisplayName: target.displayLabel,
+      blockType: parsed.blockType,
+      durationHours: parsed.durationHours,
+      reason: parsed.reason,
+      expiresAt,
+    });
 
     return {
       success: true,

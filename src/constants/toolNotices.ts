@@ -19,6 +19,7 @@ export const TOOL_NOTICE_KEYS = [
   "task_update",
   "user_info_update",
   "danbooru_tags",
+  "user_block",
 ] as const;
 
 /** The one footer line every hideable notice shares, pointing at the toggle that hides it. */
@@ -153,5 +154,10 @@ export const TOOL_NOTICE_DEFINITIONS: ToolNoticeDefinition[] = [
     key: "danbooru_tags",
     labelKey: "commands.config.notice-embeds.visibility.notice_danbooru_tags_label",
     descriptionKey: "commands.config.notice-embeds.visibility.notice_danbooru_tags_description",
+  },
+  {
+    key: "user_block",
+    labelKey: "commands.config.notice-embeds.visibility.notice_user_block_label",
+    descriptionKey: "commands.config.notice-embeds.visibility.notice_user_block_description",
   },
 ];

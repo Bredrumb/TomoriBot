@@ -1425,6 +1425,8 @@ Exaggeration: **{exaggeration}**`,
         notice_user_info_update_description: `Show notices when a user's stored profile is updated.`,
         notice_danbooru_tags_label: `Danbooru Tag Lookups`,
         notice_danbooru_tags_description: `Show the tags found when a character or tag is looked up on Danbooru.`,
+        notice_user_block_label: `Persona User Blocking`,
+        notice_user_block_description: `Show notices when a persona mutes, blocks, or unblocks a user.`,
       },
     },
     humanizer: {

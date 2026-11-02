@@ -79,7 +79,6 @@ export default {
     },
     user_block: {
       error_missing_permission: `I need the {permission} permission in this channel to announce a block. Ask a server administrator to grant it, then try again.`,
-      notice_failed: `The block was saved, but I could not post the confirmation in this channel. Ask a server administrator to check my channel permissions.`,
       type_mute: `mute`,
       type_block: `block`,
       effect_mute: `The target cannot trigger this persona.`,

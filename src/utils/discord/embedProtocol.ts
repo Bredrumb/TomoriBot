@@ -113,7 +113,12 @@ const knownKinds = new Set<ProtocolKind>([...targetKinds, "diagnostic", "reply_c
  * emoji-free: reward and punish titles share text across commands ("Snack Time!") and are told apart
  * by that emoji alone.
  */
-const MINIMAL_TITLE_KINDS = new Set<ProtocolKind>(["memory_learning", "reminder_set", "user_info_update"]);
+const MINIMAL_TITLE_KINDS = new Set<ProtocolKind>([
+  "memory_learning",
+  "reminder_set",
+  "user_info_update",
+  "user_moderation",
+]);
 
 /** Whether a notice of this kind may arrive as a bare title, because it renders Minimal. */
 export function isMinimalTitleKind(kind: ProtocolKind | null): boolean {
