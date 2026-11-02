@@ -1013,7 +1013,10 @@ export class GenerateImageNaiTool extends BaseTool {
         log.info("[NAI] Server negative tags are empty; using fallback negative prompt from env");
       }
 
-      const modelTags = prompt
+      const textBlockIndex = prompt.indexOf("Text:");
+      const scenePrompt = textBlockIndex === -1 ? prompt : prompt.slice(0, textBlockIndex);
+      const manualTextBlock = textBlockIndex === -1 ? null : prompt.slice(textBlockIndex + "Text:".length).trim();
+      const modelTags = scenePrompt
         .split(/[,\u3001]/)
         .map((t) => t.trim())
         .filter((t) => t.length > 0);
@@ -1061,11 +1064,10 @@ export class GenerateImageNaiTool extends BaseTool {
         }
       }
 
-      if (spokenEntries.length > 0) {
+      if (spokenEntries.length > 0 || manualTextBlock !== null) {
         normalizedTags.push("text");
-        const containsCjkText = spokenEntries.some(({ text }) =>
-          /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(text),
-        );
+        const requestedText = [manualTextBlock ?? "", ...spokenEntries.map(({ text }) => text)].join(" ");
+        const containsCjkText = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(requestedText);
         if (!/nai-diffusion-5/.test(baseModelCodename) || !containsCjkText) {
           normalizedTags.push("english text");
         }
@@ -1091,9 +1093,13 @@ export class GenerateImageNaiTool extends BaseTool {
             characters.length === 1 ? "The character" : `The ${ordinals[index] ?? `#${index + 1}`} character`;
           return `${label} is saying "${text}"`;
         });
-        const combinedDialogue = spokenEntries.map(({ text }) => text).join("\n\n");
+        normalizedPrompt += `. ${attributions.join(", and ")}.`;
+      }
 
-        normalizedPrompt += `. ${attributions.join(", and ")}. Text: ${combinedDialogue}`;
+      const renderedText = [manualTextBlock, ...spokenEntries.map(({ text }) => text)]
+        .filter((text): text is string => text !== null && text.length > 0);
+      if (renderedText.length > 0) {
+        normalizedPrompt += ` Text: ${renderedText.join("\n\n")}`;
       }
       log.info(
         `[NAI] Normalized prompt: "${normalizedPrompt.substring(0, 200)}${normalizedPrompt.length > 200 ? "..." : ""}"`,
