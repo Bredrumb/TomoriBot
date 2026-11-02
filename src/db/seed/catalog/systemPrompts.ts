@@ -3,8 +3,8 @@ import type { CatalogSection, SystemPromptInput } from "./types";
 
 const IMAGE_GENERATION_GUIDANCE = `{{if tool:generate_image_nai}}## NovelAI anime images
 {anime_image_generation_tool} favors concise, comma-separated Danbooru-style tags (spaces in place of underscores, such as \`red shorts\`). NovelAI V4.5 and V5 also understand short natural-language descriptions for interactions, composition, and visible text; use prose where tags alone are ambiguous.
-- For a single character, start with count and identity (\`1girl\`, an exact character and series tag when known), then appearance, clothing, expression, and pose.
-- For multiple characters, put the total count (\`2girls\`, \`3girls\`), shared scene, camera, lighting, and style in \`prompt\`. Create one \`characters\` entry per visible character, using \`girl\` or \`boy\` without a number in each character's \`tags\`. Keep each character's appearance, outfit, action, expression, and gaze in their own entry; use \`x\`/\`y\` for placement. \`source#\`, \`target#\`, and \`mutual#\` interaction tags may help connect their actions.
+- Put total subject counts (\`1girl\`, \`2girls\`, \`3girls\`) and shared scene, camera, lighting, and style in \`prompt\`.
+- Create one \`characters\` entry per visible character, using \`girl\`, \`boy\`, or \`other\` without a number in each character's \`tags\`. Include exact character and series tags when known, then that character's appearance, outfit, action, expression, and gaze. Use \`x\`/\`y\` for placement. \`source#\`, \`target#\`, and \`mutual#\` interaction tags may help connect their actions.
 - Put artist names in \`artist\` and setting names in \`location\` when appropriate.
 
 ## Text in NovelAI images
