@@ -227,7 +227,7 @@ export class GenerateImageNaiTool extends BaseTool {
             spoken_text: {
               type: "string",
               description:
-                "Optional speech/dialogue text this character is saying (e.g. 'Hello there!'). Only use this if user explicitly asks for it. Only English is available.",
+                "Optional exact dialogue rendered in the image (e.g. 'Hello there!'). Use only if the user requests visible speech. V4/V4.5 support English; V5 also supports Japanese and Chinese. This is placed in the base prompt's final Text: section automatically.",
             },
             x: {
               type: "string",
@@ -1013,7 +1013,10 @@ export class GenerateImageNaiTool extends BaseTool {
         log.info("[NAI] Server negative tags are empty; using fallback negative prompt from env");
       }
 
-      const modelTags = prompt
+      const textBlockIndex = prompt.indexOf("Text:");
+      const scenePrompt = textBlockIndex === -1 ? prompt : prompt.slice(0, textBlockIndex);
+      const manualTextBlock = textBlockIndex === -1 ? null : prompt.slice(textBlockIndex + "Text:".length).trim();
+      const modelTags = scenePrompt
         .split(/[,\u3001]/)
         .map((t) => t.trim())
         .filter((t) => t.length > 0);
@@ -1051,8 +1054,7 @@ export class GenerateImageNaiTool extends BaseTool {
       const normalizedTags = [...specialPrefixTags, ...trustedTags, ...resolvedModelTags];
 
       // Build spoken text section for the base prompt when characters have dialogue.
-      // NAI expects "text, english text" tags, a natural-language attribution line per
-      // speaking character, and a trailing "Text: ..." line (newline-separated if multiple).
+      // Spoken lines use a final Text: block, with English-only tagging on V4/V4.5.
       const spokenEntries: { index: number; text: string }[] = [];
       for (let i = 0; i < characters.length; i++) {
         const raw = characters[i].spoken_text;
@@ -1062,8 +1064,13 @@ export class GenerateImageNaiTool extends BaseTool {
         }
       }
 
-      if (spokenEntries.length > 0) {
-        normalizedTags.push("text", "english text");
+      if (spokenEntries.length > 0 || manualTextBlock !== null) {
+        normalizedTags.push("text");
+        const requestedText = [manualTextBlock ?? "", ...spokenEntries.map(({ text }) => text)].join(" ");
+        const containsCjkText = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(requestedText);
+        if (!/nai-diffusion-5/.test(baseModelCodename) || !containsCjkText) {
+          normalizedTags.push("english text");
+        }
       }
 
       let normalizedPrompt = normalizedTags.join(", ");
@@ -1086,9 +1093,14 @@ export class GenerateImageNaiTool extends BaseTool {
             characters.length === 1 ? "The character" : `The ${ordinals[index] ?? `#${index + 1}`} character`;
           return `${label} is saying "${text}"`;
         });
-        const combinedDialogue = spokenEntries.map(({ text }) => text).join(" ");
+        normalizedPrompt += `. ${attributions.join(", and ")}.`;
+      }
 
-        normalizedPrompt += `. ${attributions.join(", and ")}. Text: ${combinedDialogue}`;
+      const renderedText = [manualTextBlock, ...spokenEntries.map(({ text }) => text)].filter(
+        (text): text is string => text !== null && text.length > 0,
+      );
+      if (renderedText.length > 0) {
+        normalizedPrompt += ` Text: ${renderedText.join("\n\n")}`;
       }
       log.info(
         `[NAI] Normalized prompt: "${normalizedPrompt.substring(0, 200)}${normalizedPrompt.length > 200 ? "..." : ""}"`,

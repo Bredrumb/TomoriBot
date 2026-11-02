@@ -1,14 +1,17 @@
 import { DEFAULT_SYSTEM_PROMPT } from "@/utils/text/context/defaultSystemPrompt";
 import type { CatalogSection, SystemPromptInput } from "./types";
 
-const IMAGE_GENERATION_GUIDANCE = `{{if tool:generate_image_nai}}## Anime images
-{anime_image_generation_tool} takes Danbooru tags rather than sentences. {bot} writes them separated by commas, with spaces in place of underscores (\`red shorts\` for \`red_shorts\`), and orders each character's tags this way:
-1. Count and identity: \`1girl\` or \`1boy\`, then the exact character tag and its series when the character exists (\`reisalin stout, atelier ryza\`).
-2. Body: hair, eyes, skin, build.
-3. Outfit from head to feet, then accessories.
-4. Expression, pose, and action.
+const IMAGE_GENERATION_GUIDANCE = `{{if tool:generate_image_nai}}## NovelAI anime images
+{anime_image_generation_tool} favors concise, comma-separated Danbooru-style tags (spaces in place of underscores, such as \`red shorts\`). NovelAI V4.5 and V5 also understand short natural-language descriptions for interactions, composition, and visible text; use prose where tags alone are ambiguous.
+- Put total subject counts (\`1girl\`, \`2girls\`, \`3girls\`) and shared scene, camera, lighting, and style in \`prompt\`.
+- Create one \`characters\` entry per visible character, using \`girl\`, \`boy\`, or \`other\` without a number in each character's \`tags\`. Include exact character and series tags when known, then that character's appearance, outfit, action, expression, and gaze. Use \`x\`/\`y\` for placement. \`source#\`, \`target#\`, and \`mutual#\` interaction tags may help connect their actions.
+- Put artist names in \`artist\` and setting names in \`location\` when appropriate.
 
-Scene tags (background, camera angle, lighting) go in \`prompt\`, artist names in \`artist\`, and places in \`location\`.{{/if}}
+## Text in NovelAI images
+Only add visible text when the user requests it. Preserve their exact wording, spelling, and language. V4 and V4.5 support English; V5 also supports Japanese and Chinese. Keep dialogue short enough to fit its speech bubble.
+- For spoken dialogue, put the exact words in the speaking character's \`spoken_text\` and use \`speech bubble\` and brief placement guidance in the scene/character tags. \`{anime_image_generation_tool}\` automatically adds the text tags and a final \`Text:\` section, so do not also put that dialogue in \`prompt\`.
+- For text on signs, posters, or screens instead of dialogue, include \`text\` (and \`english text\` for English), describe where the text appears, then put \`Text: <exact wording>\` at the very end of \`prompt\`. Put nothing after that line; separate multiple distinct text passages with a blank line. If both speech and other text are needed, put all text in the final \`Text:\` section of \`prompt\` instead of also using \`spoken_text\`.
+- Avoid \`no text\` in positive tags when rendering writing. For vertical Japanese manga text, describe the reading direction and layout; request rotated Latin words or upright short abbreviations when needed, but exact typography is not guaranteed.{{/if}}
 
 {{if tool:generate_image}}## Other images
 {image_generation_tool} takes plain sentences. {bot} describes the subject first, then outfit, pose, setting, lighting, and art style, in concrete visual words. {bot} rewrites tags found on Danbooru as prose ("short red shorts and a white beret").{{/if}}
