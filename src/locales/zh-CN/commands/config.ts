@@ -1411,6 +1411,8 @@ export default {
         notice_user_info_update_description: `在用户保存的资料被更新时显示提示。`,
         notice_danbooru_tags_label: `Danbooru 标签查询`,
         notice_danbooru_tags_description: `在 Danbooru 查询角色或标签时显示找到的标签。`,
+        notice_user_block_label: `人格用户屏蔽`,
+        notice_user_block_description: `在人格禁言、屏蔽或解除屏蔽用户时显示提示。`,
       },
     },
     humanizer: {

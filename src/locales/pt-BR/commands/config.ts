@@ -1453,6 +1453,8 @@ Exagero: **{exaggeration}**`,
         notice_user_info_update_description: `Mostra avisos quando o perfil salvo de um usuário é atualizado.`,
         notice_danbooru_tags_label: `Buscas de Tags no Danbooru`,
         notice_danbooru_tags_description: `Mostra as tags encontradas ao buscar um personagem ou tag no Danbooru.`,
+        notice_user_block_label: `Bloqueio de Usuários por Persona`,
+        notice_user_block_description: `Mostra avisos quando uma persona silencia, bloqueia ou desbloqueia um usuário.`,
       },
     },
     humanizer: {

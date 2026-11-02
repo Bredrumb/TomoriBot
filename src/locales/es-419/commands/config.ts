@@ -1467,6 +1467,8 @@ Exageración: **{exaggeration}**`,
         notice_user_info_update_description: `Muestra avisos cuando se actualiza el perfil guardado de un usuario.`,
         notice_danbooru_tags_label: `Búsquedas de etiquetas en Danbooru`,
         notice_danbooru_tags_description: `Muestra las etiquetas encontradas al buscar un personaje o etiqueta en Danbooru.`,
+        notice_user_block_label: `Bloqueo de usuarios por personas`,
+        notice_user_block_description: `Muestra avisos cuando una persona silencia, bloquea o desbloquea a un usuario.`,
       },
     },
     humanizer: {

@@ -1416,6 +1416,8 @@ CFG 權重：**{cfg_weight}**
         notice_user_info_update_description: `在使用者儲存的個人資料被更新時顯示通知。`,
         notice_danbooru_tags_label: `Danbooru 標籤查詢`,
         notice_danbooru_tags_description: `在 Danbooru 查詢角色或標籤時顯示找到的標籤。`,
+        notice_user_block_label: `人格使用者封鎖`,
+        notice_user_block_description: `在人格禁言、封鎖或解除封鎖使用者時顯示通知。`,
       },
     },
     humanizer: {

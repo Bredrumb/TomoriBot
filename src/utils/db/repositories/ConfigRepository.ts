@@ -203,8 +203,8 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   }
 
   /**
-   * Loads one preset per lineage in the locale's best available language (see `selectPresetsForLocale`).
-   * `nsfw` is required so every caller picks a side; only the age-restricted `/nsfw` routes pass true.
+   * Loads the preset rows for one locale in the most preferred fallback language that has a preset
+   * on the requested NSFW side, so a locale with any preset on that side never sees its untranslated ones.
    */
   async loadPresetRowsByLocale(locale: string, options: { nsfw: boolean }): Promise<TomoriPresetRow[] | null> {
     try {

@@ -1,6 +1,7 @@
 export default {
   genai: {
     tool_failure: {
+      endpoint_blocked: `Máy chủ này không cho phép gửi yêu cầu đến địa chỉ của endpoint này.`,
       content_blocked: `Nhà cung cấp đã từ chối yêu cầu công cụ này qua bộ lọc nội dung.`,
       authentication: `Nhà cung cấp đã từ chối thông tin xác thực dùng cho yêu cầu công cụ này.`,
       quota: `Nhà cung cấp đã từ chối yêu cầu công cụ này vì đã chạm hạn mức sử dụng hoặc thanh toán.`,
@@ -100,6 +101,7 @@ export default {
       context_length_title: `🔴 Tin nhắn quá dài cho model này`,
       credit_limit_title: `🔴 Không đủ tín dụng nhà cung cấp`,
       balance_exhausted_title: `🔴 Tài khoản nhà cung cấp hết số dư`,
+      endpoint_blocked_title: `Endpoint không được phép`,
       flush_limit_title: `🟡️ Đã đạt giới hạn độ dài phản hồi`,
       flush_limit_description: `Phản hồi này đã đạt giới hạn độ dài tin nhắn tối đa và đã bị dừng. Bạn có thể dùng \`/respond\` để tiếp tục phản hồi theo cách thủ công nếu cần.`,
       inactivity_timeout_title: `🟡️ Phản hồi đã hết thời gian`,
@@ -133,6 +135,8 @@ export default {
       choose_supported_model_personal: `Chọn ID model được hỗ trợ bằng \`/personal config\` hoặc cài đặt endpoint tùy chỉnh của bạn.`,
       verify_api_key: `Kiểm tra kỹ lại API key của máy chủ này, sau đó thử lại.`,
       verify_api_key_personal: `Kiểm tra kỹ lại API key cá nhân của bạn bằng \`/personal providers\`, sau đó thử lại.`,
+      endpoint_not_allowed: `Chuyển sang một endpoint HTTPS công khai bằng \`/providers\`, hoặc hỏi người vận hành máy chủ này xem có thể cho phép máy chủ cục bộ hay không.`,
+      endpoint_not_allowed_personal: `Chuyển sang một endpoint HTTPS công khai bằng \`/personal providers\`, hoặc hỏi người vận hành máy chủ này xem có thể cho phép máy chủ cục bộ hay không.`,
       verify_api_key_expiry: `API key NVIDIA NIM có hạn dùng, và NVIDIA từ chối key đã hết hạn bằng đúng lỗi như khi key bị gõ sai. Hãy kiểm tra ngày hết hạn tại [build.nvidia.com](https://build.nvidia.com) và tạo key mới nếu key đã hết hạn.`,
       nvidia_register_free_model: `NVIDIA thường xuyên ngừng cung cấp các model được host. Hãy chọn một model mà NVIDIA hiện đang phục vụ trong [các endpoint miễn phí của NVIDIA](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview), sao chép ID model (ví dụ \`deepseek-ai/deepseek-v4.1-flash\`), rồi thêm trong \`/providers\` > NVIDIA NIM > **+ Thêm model văn bản mới**.`,
       nvidia_register_free_model_personal: `NVIDIA thường xuyên ngừng cung cấp các model được host. Hãy chọn một model mà NVIDIA hiện đang phục vụ trong [các endpoint miễn phí của NVIDIA](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview), sao chép ID model (ví dụ \`deepseek-ai/deepseek-v4.1-flash\`), rồi thêm trong \`/personal providers\` > NVIDIA NIM > **+ Thêm model văn bản mới**.`,
@@ -218,6 +222,7 @@ Model đã chọn yêu cầu cấp quyền dữ liệu để huấn luyện tr�
     },
     custom: {
       "402_default_message": `Tài khoản của bạn với endpoint này không đủ số dư`,
+      PRIVATE_NETWORK_BLOCKED_default_message: `Máy chủ này không cho phép gửi yêu cầu đến địa chỉ của endpoint này.`,
       REDIRECT_CREDENTIALS_WITHHELD_default_message: `Endpoint này đã chuyển hướng sang địa chỉ khác, vì vậy TomoriBot không gửi API key đến đó. Người quản lý endpoint này trong \`/providers\` có thể khắc phục bằng cách đổi URL thành địa chỉ chuyển hướng cuối cùng của máy chủ.`,
       unknown_default_message: `Đã xảy ra lỗi ngoài dự kiến`,
     },

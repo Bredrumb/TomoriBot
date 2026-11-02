@@ -1447,6 +1447,8 @@ Mức cường điệu: **{exaggeration}**`,
         notice_user_info_update_description: `Hiển thị thông báo khi hồ sơ đã lưu của người dùng được cập nhật.`,
         notice_danbooru_tags_label: `Tra cứu thẻ Danbooru`,
         notice_danbooru_tags_description: `Hiển thị các thẻ tìm thấy khi tra cứu nhân vật hoặc thẻ trên Danbooru.`,
+        notice_user_block_label: `Chặn người dùng theo persona`,
+        notice_user_block_description: `Hiển thị thông báo khi persona tắt tiếng, chặn hoặc bỏ chặn người dùng.`,
       },
     },
     humanizer: {

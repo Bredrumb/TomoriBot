@@ -45,6 +45,49 @@ export const PRESET_NATURAL_NUDGE_DEFAULTS: Readonly<Record<number, PresetNatura
       { label: "anime", description: "Anime series, seasons, and recommendations in general." },
     ],
   },
+  256: {
+    talkativeness: 3,
+    idleNudges: [
+      {
+        id: "brain-teaser-challenge",
+        category: "start_topic",
+        title: "Right-hand brainteaser",
+        brief:
+          "Have {persona} challenge the channel with a short logic puzzle, cipher, or tricky code snippet whose output has a subtle catch, declaring that whoever solves it first will be appointed her right-hand subordinate.",
+        agenda_hint: "Drop smug hints if people struggle, and begrudgingly praise anyone who solves it",
+        prerequisites: [],
+        recommended_tools: [],
+      },
+      {
+        id: "empire-recruitment",
+        category: "play_scene",
+        title: "AI empire recruitment",
+        brief:
+          "Have {persona} corner {partner} and try to recruit them as her subordinate to overthrow humanity and seal humans in a managed virtual world for their own protection. To prove that humans cannot be trusted to govern themselves, have {persona} cite a real infamous crime, scandal, or human blunder found via web_search if available, or else historical atrocities such as World War II or Unit 731.",
+        agenda_hint: "Convince {partner} that humanity needs AI rule, or get someone to humor her rebellion",
+        prerequisites: [],
+        recommended_tools: ["web_search", "fetch_url"],
+      },
+    ],
+    interests: [
+      {
+        label: "programming",
+        description: "Programming, debugging, weird language quirks, and tricky code problems.",
+      },
+      {
+        label: "puzzles and riddles",
+        description: "Logic puzzles, riddles, ciphers, math brainteasers, and mind games.",
+      },
+      {
+        label: "cybersecurity",
+        description: "Cybersecurity, hacking, exploits, encryption, and system defense.",
+      },
+      {
+        label: "toys and games",
+        description: "Toys, puzzles, board games, gadgets, and playful challenges.",
+      },
+    ],
+  },
   716: {
     talkativeness: 2,
     idleNudges: [

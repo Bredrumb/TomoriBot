@@ -1448,6 +1448,8 @@ Exaggeration: **{exaggeration}**`,
         notice_user_info_update_description: `ユーザーの保存済みプロフィールが更新されたときに通知を表示します。`,
         notice_danbooru_tags_label: `Danbooruタグ検索`,
         notice_danbooru_tags_description: `Danbooruでキャラクターやタグを検索した際に見つかったタグを表示します。`,
+        notice_user_block_label: `ペルソナによるユーザーブロック`,
+        notice_user_block_description: `ペルソナがユーザーをミュート、ブロック、またはブロック解除したときに通知を表示します。`,
       },
     },
     humanizer: {

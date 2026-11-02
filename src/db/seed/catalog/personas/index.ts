@@ -9,6 +9,7 @@ import { persona as brattyJa } from "./bratty/ja";
 import { persona as brattyPtBr } from "./bratty/pt-BR";
 import { persona as brattyEs419 } from "./bratty/es-419";
 import { persona as brattyZhTw } from "./bratty/zh-TW";
+import { persona as mesugakiJa } from "./mesugaki/ja";
 import { persona as gloomyEn } from "./gloomy/en-US";
 import { persona as gloomyJa } from "./gloomy/ja";
 import { persona as gloomyPtBr } from "./gloomy/pt-BR";
@@ -50,7 +51,10 @@ export const personaSections: CatalogSection<PersonaInput>[] = [
   { comment: "Nerine (Discontinued Model)", rows: [nerineEn] },
   { comment: "Unhinged Tomori (Locke)", rows: [lockeEn] },
   { comment: "Tomori-kun (Japanese)", rows: [defaultJa] },
+  // The メスガキトモリ label moves from 716/ja to 256/ja, so the renamed row must seed first:
+  // persona_preset_name is globally unique and rows apply in this order.
   { comment: "Tomori-chan (Japanese)", rows: [brattyJa] },
+  { comment: "オボニャ (Japanese)", rows: [mesugakiJa] },
   { comment: "Tomori-san (Japanese)", rows: [gloomyJa] },
   { comment: "Shy Tomori (Lilya) Japanese Version", rows: [shyJa] },
   { comment: "ネリネ（廃盤モデル）(Japanese)", rows: [nerineJa] },

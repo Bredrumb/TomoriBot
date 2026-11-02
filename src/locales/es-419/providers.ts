@@ -1,6 +1,7 @@
 export default {
   genai: {
     tool_failure: {
+      endpoint_blocked: `Este host no permite solicitudes a la dirección de este punto final.`,
       content_blocked: `El proveedor rechazó esta solicitud de herramienta mediante su filtro de contenido.`,
       authentication: `El proveedor rechazó las credenciales utilizadas para esta solicitud de herramienta.`,
       quota: `El proveedor rechazó esta solicitud de herramienta porque se alcanzó una cuota o límite de facturación.`,
@@ -100,6 +101,7 @@ export default {
       context_length_title: `🔴 Mensaje demasiado largo para este modelo`,
       credit_limit_title: `🔴 Sin suficientes créditos de proveedor`,
       balance_exhausted_title: `🔴 Cuenta de proveedor sin crédito`,
+      endpoint_blocked_title: `Punto final no permitido`,
       flush_limit_title: `🟡️ Límite de longitud de respuesta alcanzado`,
       flush_limit_description: `Esta respuesta ha alcanzado el límite de longitud máxima del mensaje y se ha detenido. Puedes usar \`/respond\` para continuar manualmente la respuesta si es necesario.`,
       inactivity_timeout_title: `🟡️ Tiempo de espera de respuesta agotado`,
@@ -130,6 +132,8 @@ export default {
       choose_supported_model_personal: `Elige una identificación de modelo compatible con \`/personal config\` o tu configuración de punto final personalizado.`,
       verify_api_key: `Verifica la clave de API de este servidor y luego inténtalo de nuevo.`,
       verify_api_key_personal: `Verifica tu clave de API personal con \`/personal providers\` y luego inténtalo de nuevo.`,
+      endpoint_not_allowed: `Cambia a un punto final HTTPS público con \`/providers\`, o pregunta a quien administre este host si se puede permitir un servidor local.`,
+      endpoint_not_allowed_personal: `Cambia a un punto final HTTPS público con \`/personal providers\`, o pregunta a quien administre este host si se puede permitir un servidor local.`,
       verify_api_key_expiry: `Las claves de NVIDIA NIM caducan, y NVIDIA rechaza una clave caducada con el mismo error que una escrita incorrectamente. Revisa su fecha de vencimiento en [build.nvidia.com](https://build.nvidia.com) y genera una clave nueva si ya venció.`,
       nvidia_register_free_model: `NVIDIA retira modelos alojados con frecuencia. Elige uno que sirva actualmente en los [puntos finales gratuitos de NVIDIA](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview), copia su ID de modelo (como \`deepseek-ai/deepseek-v4.1-flash\`) y luego añádelo en \`/providers\` > NVIDIA NIM > **+ Añadir nuevo modelo de texto**.`,
       nvidia_register_free_model_personal: `NVIDIA retira modelos alojados con frecuencia. Elige uno que sirva actualmente en los [puntos finales gratuitos de NVIDIA](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview), copia su ID de modelo (como \`deepseek-ai/deepseek-v4.1-flash\`) y luego añádelo en \`/personal providers\` > NVIDIA NIM > **+ Añadir nuevo modelo de texto**.`,
@@ -214,6 +218,7 @@ El modelo seleccionado requiere permitir datos para el entrenamiento del modelo 
     },
     custom: {
       "402_default_message": `Tu cuenta con este punto final no tiene saldo suficiente`,
+      PRIVATE_NETWORK_BLOCKED_default_message: `Este host no permite solicitudes a la dirección de este punto final.`,
       REDIRECT_CREDENTIALS_WITHHELD_default_message: `Este endpoint redirigió a una dirección diferente, por lo que TomoriBot no envió su clave de API allí. Quien administre este endpoint en \`/providers\` puede solucionarlo cambiando su URL a la dirección final a la que redirige el servidor.`,
       unknown_default_message: `Ocurrió un error inesperado`,
     },

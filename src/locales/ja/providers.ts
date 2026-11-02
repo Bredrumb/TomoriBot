@@ -1,6 +1,7 @@
 export default {
   genai: {
     tool_failure: {
+      endpoint_blocked: `このホストは、このエンドポイントのアドレスへのリクエストを許可していません。`,
       content_blocked: `プロバイダーのコンテンツフィルターにより、このツールリクエストが拒否されました。`,
       authentication: `このツールリクエストで使用された認証情報がプロバイダーによって拒否されました。`,
       quota: `クォータまたは請求の上限に達したため、プロバイダーがこのツールリクエストを拒否しました。`,
@@ -100,6 +101,7 @@ export default {
       context_length_title: `🔴 このモデルにはメッセージが長すぎます`,
       credit_limit_title: `🔴 プロバイダーのクレジットが不足しています`,
       balance_exhausted_title: `🔴 プロバイダーアカウントの残高がありません`,
+      endpoint_blocked_title: `許可されていないエンドポイント`,
       flush_limit_title: `🟡️ 応答の長さ制限に達しました`,
       flush_limit_description: `この応答はメッセージの最大長制限に達したため停止されました。必要に応じて \`/respond\` を使用して手動で応答を続けることができます。`,
       inactivity_timeout_title: `🟡️ 応答がタイムアウトしました`,
@@ -133,6 +135,8 @@ export default {
       choose_supported_model_personal: `サポートされているモデルIDを \`/personal config\` またはカスタムエンドポイント設定で選択してください。`,
       verify_api_key: `このサーバーのAPIキーをもう一度確認してから、再試行してください。`,
       verify_api_key_personal: `\`/personal providers\` で個人APIキーをもう一度確認してから、再試行してください。`,
+      endpoint_not_allowed: `\`/providers\` で公開HTTPSエンドポイントに切り替えるか、ローカルサーバーを許可できるかをこのホストの管理者に確認してください。`,
+      endpoint_not_allowed_personal: `\`/personal providers\` で公開HTTPSエンドポイントに切り替えるか、ローカルサーバーを許可できるかをこのホストの管理者に確認してください。`,
       verify_api_key_expiry: `NVIDIA NIMのキーには有効期限があり、期限切れのキーは入力ミスのキーと同じエラーでNVIDIAに拒否されます。[build.nvidia.com](https://build.nvidia.com) で有効期限を確認し、期限が切れていれば新しいキーを生成してください。`,
       nvidia_register_free_model: `NVIDIAはホスト型モデルを頻繁に終了します。[NVIDIAの無料エンドポイント](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview)から現在提供されているモデルを選び、モデルID（例：\`deepseek-ai/deepseek-v4.1-flash\`）をコピーして、\`/providers\` > NVIDIA NIM > **+ 新しいテキストモデルを追加** から追加してください。`,
       nvidia_register_free_model_personal: `NVIDIAはホスト型モデルを頻繁に終了します。[NVIDIAの無料エンドポイント](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview)から現在提供されているモデルを選び、モデルID（例：\`deepseek-ai/deepseek-v4.1-flash\`）をコピーして、\`/personal providers\` > NVIDIA NIM > **+ 新しいテキストモデルを追加** から追加してください。`,
@@ -217,6 +221,7 @@ export default {
     },
     custom: {
       "402_default_message": `このエンドポイントのアカウント残高が不足しています`,
+      PRIVATE_NETWORK_BLOCKED_default_message: `このホストは、このエンドポイントのアドレスへのリクエストを許可していません。`,
       REDIRECT_CREDENTIALS_WITHHELD_default_message: `このエンドポイントは別のアドレスにリダイレクトされたため、TomoriBotはAPIキーを送信しませんでした。\`/providers\` でこのエンドポイントを管理している人は、URLをサーバーのリダイレクト先の最終アドレスに変更することで修正できます。`,
       unknown_default_message: `予期しないエラーが発生しました`,
     },

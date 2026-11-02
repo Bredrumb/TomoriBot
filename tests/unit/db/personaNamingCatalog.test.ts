@@ -106,6 +106,7 @@ describe("official persona naming catalog", () => {
         suffixes: {},
         addressTerms: {},
       },
+      "256:ja": { prefixes: {}, suffixes: {}, addressTerms: {} },
       "716:en-US": { prefixes: {}, suffixes: {}, addressTerms: {} },
       "716:ja": { prefixes: {}, suffixes: {}, addressTerms: {} },
       "716:pt-BR": { prefixes: {}, suffixes: {}, addressTerms: {} },

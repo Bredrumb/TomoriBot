@@ -1,6 +1,7 @@
 export default {
   genai: {
     tool_failure: {
+      endpoint_blocked: `当前主机不允许向该端点的地址发送请求。`,
       content_blocked: `提供方的内容过滤器拒绝了此工具请求。`,
       authentication: `提供方拒绝了此工具请求所使用的凭据。`,
       quota: `因达到配额或计费上限，提供方拒绝了此工具请求。`,
@@ -100,6 +101,7 @@ export default {
       context_length_title: `🔴 消息对这个模型来说太长`,
       credit_limit_title: `🔴 提供方额度不足`,
       balance_exhausted_title: `🔴 提供方账户余额用尽`,
+      endpoint_blocked_title: `不允许访问该端点`,
       flush_limit_title: `🟡️ 已达回复长度上限`,
       flush_limit_description: `这条回复已经达到最大消息长度上限，所以被中断了。如果需要，你可以用 \`/respond\` 手动继续生成。`,
       inactivity_timeout_title: `🟡️ 回复超时`,
@@ -133,6 +135,8 @@ export default {
       choose_supported_model_personal: `用 \`/personal config\` 或者你的自定义端点设置，选择一个受支持的模型 ID。`,
       verify_api_key: `请再核对一次这个服务器的 API 密钥，然后重试。`,
       verify_api_key_personal: `用 \`/personal providers\` 再核对一次你的个人 API 密钥，然后重试。`,
+      endpoint_not_allowed: `用 \`/providers\` 切换到一个公开的 HTTPS 端点，或者向当前主机的管理员询问是否允许使用本地服务器。`,
+      endpoint_not_allowed_personal: `用 \`/personal providers\` 切换到一个公开的 HTTPS 端点，或者向当前主机的管理员询问是否允许使用本地服务器。`,
       verify_api_key_expiry: `NVIDIA NIM 密钥会过期，而 NVIDIA 对过期密钥返回的错误和输错的密钥一样。请到 [build.nvidia.com](https://build.nvidia.com) 查看它的有效期，如果已经失效就重新生成一个。`,
       nvidia_register_free_model: `NVIDIA 经常下线托管的模型。请从 [NVIDIA 的免费端点](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview)里选一个它当前提供的模型，复制模型 ID（例如 \`deepseek-ai/deepseek-v4.1-flash\`），然后在 \`/providers\` > NVIDIA NIM > **+ 添加新文本模型** 里添加。`,
       nvidia_register_free_model_personal: `NVIDIA 经常下线托管的模型。请从 [NVIDIA 的免费端点](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview)里选一个它当前提供的模型，复制模型 ID（例如 \`deepseek-ai/deepseek-v4.1-flash\`），然后在 \`/personal providers\` > NVIDIA NIM > **+ 添加新文本模型** 里添加。`,
@@ -218,6 +222,7 @@ export default {
     },
     custom: {
       "402_default_message": `你在这个端点上的账户余额不足`,
+      PRIVATE_NETWORK_BLOCKED_default_message: `当前主机不允许向该端点的地址发送请求。`,
       REDIRECT_CREDENTIALS_WITHHELD_default_message: `该端点重定向到了另一个地址，因此 TomoriBot 没有向其发送 API 密钥。在 \`/providers\` 中管理此端点的人可以通过将其 URL 改为服务器重定向到的最终地址来修复此问题。`,
       unknown_default_message: `发生了意料之外的错误`,
     },

@@ -1,6 +1,7 @@
 export default {
   genai: {
     tool_failure: {
+      endpoint_blocked: `目前主機不允許向該端點的位址發送請求。`,
       content_blocked: `供應商的內容過濾機制拒絕了此工具請求。`,
       authentication: `供應商拒絕了此工具請求所使用的憑證。`,
       quota: `因達到配額或計費上限，供應商拒絕了此工具請求。`,
@@ -100,6 +101,7 @@ export default {
       context_length_title: `🔴 訊息對這個模型來說太長`,
       credit_limit_title: `🔴 供應商額度不足`,
       balance_exhausted_title: `🔴 供應商帳號餘額不足`,
+      endpoint_blocked_title: `不允許存取該端點`,
       flush_limit_title: `🟡️ 已達回覆長度上限`,
       flush_limit_description: `這則回覆已達到訊息長度上限並停止。需要的話，你可以用 \`/respond\` 手動繼續回覆。`,
       inactivity_timeout_title: `🟡️ 回覆逾時`,
@@ -133,6 +135,8 @@ export default {
       choose_supported_model_personal: `用 \`/personal config\` 或你的自訂端點設定，選擇支援的模型 ID。`,
       verify_api_key: `請再次確認這個伺服器的 API 金鑰，然後再試一次。`,
       verify_api_key_personal: `請用 \`/personal providers\` 再次確認你的個人 API 金鑰，然後再試一次。`,
+      endpoint_not_allowed: `用 \`/providers\` 切換到公開的 HTTPS 端點，或向目前主機的管理者詢問是否允許使用本機伺服器。`,
+      endpoint_not_allowed_personal: `用 \`/personal providers\` 切換到公開的 HTTPS 端點，或向目前主機的管理者詢問是否允許使用本機伺服器。`,
       verify_api_key_expiry: `NVIDIA NIM 金鑰會過期，而 NVIDIA 對過期金鑰回傳的錯誤和輸錯的金鑰一樣。請到 [build.nvidia.com](https://build.nvidia.com) 查看它的有效期限，如果已經失效就重新產生一組。`,
       nvidia_register_free_model: `NVIDIA 經常下架託管的模型。請從 [NVIDIA 的免費端點](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview)選一個它目前提供的模型，複製模型 ID（例如 \`deepseek-ai/deepseek-v4.1-flash\`），再到 \`/providers\` > NVIDIA NIM > **+ 新增文字模型** 新增。`,
       nvidia_register_free_model_personal: `NVIDIA 經常下架託管的模型。請從 [NVIDIA 的免費端點](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview)選一個它目前提供的模型，複製模型 ID（例如 \`deepseek-ai/deepseek-v4.1-flash\`），再到 \`/personal providers\` > NVIDIA NIM > **+ 新增文字模型** 新增。`,
@@ -218,6 +222,7 @@ export default {
     },
     custom: {
       "402_default_message": `你在這個端點的帳號餘額不足`,
+      PRIVATE_NETWORK_BLOCKED_default_message: `目前主機不允許向該端點的位址發送請求。`,
       REDIRECT_CREDENTIALS_WITHHELD_default_message: `該端點重新導向到了另一個位址，因此 TomoriBot 沒有向其傳送 API 金鑰。在 \`/providers\` 中管理此端點的人可以將其 URL 改為伺服器最終重新導向的位址來修正此問題。`,
       unknown_default_message: `發生未預期的錯誤`,
     },

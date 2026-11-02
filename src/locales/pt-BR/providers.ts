@@ -1,6 +1,7 @@
 export default {
   genai: {
     tool_failure: {
+      endpoint_blocked: `Este host não permite solicitações para o endereço deste endpoint.`,
       content_blocked: `O provedor rejeitou esta solicitação de ferramenta pelo filtro de conteúdo.`,
       authentication: `O provedor rejeitou as credenciais usadas para esta solicitação de ferramenta.`,
       quota: `O provedor recusou esta solicitação de ferramenta porque uma cota ou limite de faturamento foi atingido.`,
@@ -100,6 +101,7 @@ export default {
       context_length_title: `🔴 Mensagem Muito Longa para Este Modelo`,
       credit_limit_title: `🔴 Créditos do Provedor Insuficientes`,
       balance_exhausted_title: `🔴 Conta do Provedor Sem Saldo`,
+      endpoint_blocked_title: `Endpoint Não Permitido`,
       flush_limit_title: `🟡️ Limite de Comprimento da Resposta Atingido`,
       flush_limit_description: `Esta resposta atingiu o limite máximo de comprimento de mensagem e foi interrompida. Você pode usar \`/respond\` para continuar manualmente a resposta, se necessário.`,
       inactivity_timeout_title: `🟡️ Tempo Limite da Resposta Esgotado`,
@@ -133,6 +135,8 @@ export default {
       choose_supported_model_personal: `Escolha um ID de modelo suportado com \`/personal config\` ou nas configurações do seu endpoint personalizado.`,
       verify_api_key: `Verifique novamente a chave de API deste servidor e tente novamente.`,
       verify_api_key_personal: `Verifique novamente sua chave de API pessoal com \`/personal providers\` e tente novamente.`,
+      endpoint_not_allowed: `Mude para um endpoint HTTPS público com \`/providers\`, ou pergunte a quem administra este host se um servidor local pode ser permitido.`,
+      endpoint_not_allowed_personal: `Mude para um endpoint HTTPS público com \`/personal providers\`, ou pergunte a quem administra este host se um servidor local pode ser permitido.`,
       verify_api_key_expiry: `As chaves do NVIDIA NIM expiram, e a NVIDIA recusa uma chave expirada com o mesmo erro de uma chave digitada errado. Confira a validade em [build.nvidia.com](https://build.nvidia.com) e gere uma nova chave se ela tiver vencido.`,
       nvidia_register_free_model: `A NVIDIA aposenta modelos hospedados com frequência. Escolha um que ela esteja servindo no momento nos [endpoints gratuitos da NVIDIA](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview), copie o ID do modelo (como \`deepseek-ai/deepseek-v4.1-flash\`) e depois adicione em \`/providers\` > NVIDIA NIM > **+ Adicionar novo Modelo de Texto**.`,
       nvidia_register_free_model_personal: `A NVIDIA aposenta modelos hospedados com frequência. Escolha um que ela esteja servindo no momento nos [endpoints gratuitos da NVIDIA](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview), copie o ID do modelo (como \`deepseek-ai/deepseek-v4.1-flash\`) e depois adicione em \`/personal providers\` > NVIDIA NIM > **+ Adicionar novo Modelo de Texto**.`,
@@ -218,6 +222,7 @@ O modelo selecionado requer a permissão de dados para treinamento de modelo pag
     },
     custom: {
       "402_default_message": `Sua conta com este endpoint tem saldo insuficiente`,
+      PRIVATE_NETWORK_BLOCKED_default_message: `Este host não permite solicitações para o endereço deste endpoint.`,
       REDIRECT_CREDENTIALS_WITHHELD_default_message: `Este endpoint redirecionou para um endereço diferente, por isso o TomoriBot não enviou sua chave de API para lá. Quem gerencia este endpoint em \`/providers\` pode corrigir isso alterando sua URL para o endereço final para o qual o servidor redireciona.`,
       unknown_default_message: `Ocorreu um erro inesperado`,
     },
