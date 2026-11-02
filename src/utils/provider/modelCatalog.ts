@@ -10,7 +10,7 @@ import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import type { OpenRouterModelScope } from "@/utils/db/repositories/LlmModelRepository";
 import type { ConfigCatalogModelCapability } from "@/utils/discord/configPanelCatalog";
 import { isCustomProvider, parseCustomProvider } from "@/utils/provider/customProviderUtils";
-import { resolveRowPricing, type ChoicePricing } from "@/utils/provider/modelPricing";
+import { freeModelPriceLabel, resolveRowPricing, type ChoicePricing } from "@/utils/provider/modelPricing";
 import { openRouterMediaRates } from "@/utils/provider/openrouterMediaPricing";
 import {
   describeProviderOptionModelChoices,
@@ -75,13 +75,17 @@ async function loadCatalogModelChoices(
       return eligible
         .filter((model) => !textModelFilter || textModelFilter(model))
         .filter((model): model is LlmRow & { llm_id: number } => model.llm_id !== undefined)
-        .map((model) => ({
-          id: model.llm_id,
-          name: model.llm_codename,
-          description: resolveDescription(model.descriptions, locale),
-          pricing: resolveRowPricing(model),
-          isDefault: model.is_default,
-        }));
+        .map((model) => {
+          const pricing = resolveRowPricing(model);
+          return {
+            id: model.llm_id,
+            name: model.llm_codename,
+            description: resolveDescription(model.descriptions, locale),
+            pricing,
+            priceLabel: freeModelPriceLabel(locale, provider, model.is_free, pricing),
+            isDefault: model.is_default,
+          };
+        });
     }
     case "embedding": {
       const models = (await llmModelRepo.loadAvailableEmbeddingModels(provider, false, owner)) ?? [];

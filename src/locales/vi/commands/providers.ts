@@ -40,6 +40,7 @@ export default {
     capability_models_explanation: `Các model sau khả dụng qua nhà cung cấp này:`,
     model_price_tokens: `{input} đầu vào, {output} đầu ra mỗi 1M token`,
     model_price_free: `Miễn phí`,
+    model_price_free_tier: `Gói miễn phí`,
     model_price_per_image: `{price} mỗi ảnh`,
     model_price_image_tokens: `{price} mỗi 1M token ảnh`,
     model_price_per_video_second: `{price} mỗi giây video`,

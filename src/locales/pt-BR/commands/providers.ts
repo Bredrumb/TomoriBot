@@ -40,6 +40,7 @@ export default {
     capability_models_explanation: `Esses modelos estão disponíveis através deste provedor:`,
     model_price_tokens: `{input} entrada, {output} saída por 1M tokens`,
     model_price_free: `Grátis`,
+    model_price_free_tier: `Nível gratuito`,
     model_price_per_image: `{price} por imagem`,
     model_price_image_tokens: `{price} por 1M tokens de imagem`,
     model_price_per_video_second: `{price} por segundo de vídeo`,
