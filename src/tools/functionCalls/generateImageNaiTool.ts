@@ -227,7 +227,7 @@ export class GenerateImageNaiTool extends BaseTool {
             spoken_text: {
               type: "string",
               description:
-                "Optional exact dialogue rendered in the image (e.g. 'Hello there!'). Use only if the user requests visible speech. V4/V4.5 support English; V5 also supports Japanese and Chinese. This is placed in the base prompt\'s final Text: section automatically.",
+                "Optional exact dialogue rendered in the image (e.g. 'Hello there!'). Use only if the user requests visible speech. V4/V4.5 support English; V5 also supports Japanese and Chinese. This is placed in the base prompt's final Text: section automatically.",
             },
             x: {
               type: "string",
