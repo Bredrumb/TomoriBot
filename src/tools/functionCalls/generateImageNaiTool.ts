@@ -1096,8 +1096,9 @@ export class GenerateImageNaiTool extends BaseTool {
         normalizedPrompt += `. ${attributions.join(", and ")}.`;
       }
 
-      const renderedText = [manualTextBlock, ...spokenEntries.map(({ text }) => text)]
-        .filter((text): text is string => text !== null && text.length > 0);
+      const renderedText = [manualTextBlock, ...spokenEntries.map(({ text }) => text)].filter(
+        (text): text is string => text !== null && text.length > 0,
+      );
       if (renderedText.length > 0) {
         normalizedPrompt += ` Text: ${renderedText.join("\n\n")}`;
       }
