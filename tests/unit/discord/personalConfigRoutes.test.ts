@@ -2217,7 +2217,7 @@ describe("Models panel rendering", () => {
         });
         expectSafePanelPayload(payload, `${locale} text=${textProvider}`);
         const text = collectTextDisplays(payload).join("\n");
-        const note = localizedProse("en-US", "commands.config.panel.novelai_context_note");
+        const note = localizedProse(locale, "commands.config.panel.novelai_context_note");
         if (textProvider === "novelai") expect(text).toMatch(note);
         else expect(text).not.toMatch(note);
       }
