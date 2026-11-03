@@ -3,12 +3,6 @@
   "exceptions": [
     {
       "file": "src/providers/novelai/novelaiStreamAdapter.ts",
-      "reason": "Documents the literal em-dash character recognized as a sentence boundary.",
-      "rule": "prose-dash",
-      "text": "* formatting (* ~), em dash (—), and newlines."
-    },
-    {
-      "file": "src/providers/novelai/novelaiStreamAdapter.ts",
       "reason": "Labels the literal Unicode character checked by the adjacent condition.",
       "rule": "prose-dash",
       "text": "// —"

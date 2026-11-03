@@ -29,12 +29,14 @@ export function processEmbedsFromMessage(args: {
   /** Body restored from `resolveMinimalNoticeBodies` for a Minimal notice that rendered its title alone. */
   minimalNoticeBody?: string;
   content: string;
+  completionContent?: string;
   imageAttachments: SimplifiedMessageForContext["imageAttachments"];
   isTomoriAuthoredMessage: boolean;
   selfDebugEnabled: boolean;
   tomoriNickname: string | null | undefined;
-}): { content: string; processedSystemEmbed: boolean } {
+}): { content: string; completionContent: string; processedSystemEmbed: boolean } {
   let content = args.content;
+  const completionSegments = [args.completionContent ?? args.content];
   let processedSystemEmbed = false;
 
   for (const embed of args.embeds) {
@@ -47,6 +49,7 @@ export function processEmbedsFromMessage(args: {
         args.tomoriNickname,
       );
       content = content ? `${content}\n${embedContent}` : embedContent;
+      completionSegments.push(formatTargetEmbedForCompletion(embed.description, embedCheck.type));
       processedSystemEmbed = true;
       continue;
     }
@@ -91,11 +94,31 @@ export function processEmbedsFromMessage(args: {
         args.tomoriNickname,
       );
       content = content ? `${content}\n${noticeContent}` : noticeContent;
+      completionSegments.push(formatTargetEmbedForCompletion(notice.description ?? "", noticeCheck.type));
       processedSystemEmbed = true;
     }
   }
 
-  return { content, processedSystemEmbed };
+  return { content, completionContent: completionSegments.filter(Boolean).join("\n"), processedSystemEmbed };
+}
+
+export function formatTargetEmbedForCompletion(
+  description: string,
+  embedType: ReturnType<typeof checkTargetEmbedTitle>["type"],
+): string {
+  switch (embedType) {
+    case "reward":
+    case "punish":
+      return description ? `_${description}_` : "";
+    case "system_injection":
+    case "scene_directive":
+    case "compact_summary":
+    case "compact_refresh":
+    case "dice_roll":
+      return description;
+    default:
+      return "";
+  }
 }
 
 /**

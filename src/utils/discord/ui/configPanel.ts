@@ -128,7 +128,7 @@ import { DEFAULT_SYSTEM_PROMPT } from "@/utils/text/contextBuilder";
 import { formatUTCOffset } from "@/utils/text/timezoneHelper";
 import { getCapabilitiesManagePermissionDefinitions } from "@/utils/discord/manageConfigMapping";
 import { buildDocsUrl, DOCS_PATHS } from "@/utils/discord/docsLinks";
-import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
+import { getProviderDisplayName, providerUsesApiFamily } from "@/utils/provider/providerInfoRegistry";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
 import {
   buildConfigVoiceBody,
@@ -2309,13 +2309,15 @@ function buildBehaviorGeneralBody(input: ConfigPanelRenderInput): ComponentInCon
   const { locale } = input;
   const view = input.behaviorView?.general;
   const writesDisabled = input.readStatus !== "fresh";
-  const components: ComponentInContainerData[] = [
-    behaviorHeading(
-      locale,
-      "commands.config.panel.behavior_general_title",
-      "commands.config.panel.behavior_general_description",
-    ),
-  ];
+  const textModel = input.personas[0]?.llm;
+  const isNovelAI = textModel && providerUsesApiFamily(textModel.llm_provider, "novelai");
+  const heading = behaviorHeading(
+    locale,
+    "commands.config.panel.behavior_general_title",
+    "commands.config.panel.behavior_general_description",
+    isNovelAI ? `\n\n> ${localizer(locale, "commands.config.panel.behavior_novelai_notice")}` : "",
+  );
+  const components: ComponentInContainerData[] = [heading];
 
   if (input.actor.workspaceKind === "guild" && !input.actor.isManager) {
     components.push({
@@ -2330,9 +2332,15 @@ function buildBehaviorGeneralBody(input: ConfigPanelRenderInput): ComponentInCon
   const promptLocked = Boolean(stPresetName);
   const prompt = view.systemPrompt?.trim() || DEFAULT_SYSTEM_PROMPT.trim();
   const promptLockNotice = stPresetName
-    ? `> ${localizer(locale, "commands.config.panel.system_prompt_st_preset_active", {
-        preset: escapeDiscordMarkdown(stPresetName),
-      })}`
+    ? `> ${localizer(
+        locale,
+        isNovelAI
+          ? "commands.config.panel.system_prompt_st_preset_novelai"
+          : "commands.config.panel.system_prompt_st_preset_active",
+        {
+          preset: escapeDiscordMarkdown(stPresetName),
+        },
+      )}`
     : "";
   const contextNote = view.contextNote?.trim() ?? "";
   const responsePrefill = view.responsePrefill?.trim() ?? "";

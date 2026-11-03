@@ -162,7 +162,7 @@ export interface SystemPromptInput {
   promptText: string;
 }
 
-export type NaiModelTarget = "kayra" | "erato";
+export type NaiModelTarget = "kayra" | "erato" | "xialong";
 
 type NaiPhraseRepPen = "off" | "light" | "medium" | "aggressive" | "very_aggressive";
 

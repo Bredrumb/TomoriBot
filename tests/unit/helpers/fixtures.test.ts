@@ -5,13 +5,20 @@
  */
 
 import { describe, expect, it } from "bun:test";
-import { PrivacyLevel, assembledServerConfigSchema, tomoriStateSchema, userSchema } from "@/types/db/schema";
+import {
+  PrivacyLevel,
+  assembledServerConfigSchema,
+  naiPresetSchema,
+  tomoriStateSchema,
+  userSchema,
+} from "@/types/db/schema";
 import {
   createLlmRow,
   createPersona,
   createServerConfig,
   createUserRow,
   createCustomExpression,
+  createNaiPreset,
 } from "../../helpers/fixtures";
 
 /** As `loadServerState` reads them after setup with nothing changed. */
@@ -32,6 +39,14 @@ function schemaConfigDefaults() {
 }
 
 describe("shared fixture factories", () => {
+  it("builds model-matched NovelAI preset rows and isolates mutable parameters", () => {
+    const kayra = createNaiPreset();
+    expect(naiPresetSchema.safeParse(kayra).success).toBe(true);
+    const erato = createNaiPreset({ model_target: "erato", nai_preset_id: 9 });
+    expect(erato).toMatchObject({ nai_preset_id: 9, preset_name: "Erato-Shosetsu", model_target: "erato" });
+    kayra.parameters.temperature = 0.5;
+    expect(createNaiPreset().parameters.temperature).not.toBe(kayra.parameters.temperature);
+  });
   it("keeps custom expression overrides scoped and validates the stored media shape", () => {
     expect(createCustomExpression({ restricted: true, persona_ids: [3] })).toMatchObject({
       restricted: true,

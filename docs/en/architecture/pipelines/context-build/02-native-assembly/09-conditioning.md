@@ -53,6 +53,11 @@ the gesture. The receiving turn resolves `{conditioning_interaction_tool}` insid
 allowlist. When unavailable, the event appears without the hint. The hint exists only for this
 reaction turn; later history contains the posted gesture without it.
 
+NovelAI uses the event's separate `completionText` action without a system wrapper or tool hint.
+The native context retained during preset reassembly receives the same event, including when the
+delivered message is outside fetched history. Later classified gesture notices retain their
+localized descriptions as action text. The stored conditioning block remains excluded for NovelAI.
+
 The interaction tool remains available to the receiving persona and allows one call per turn.
 No runtime limit bounds the number of reciprocal turns. Persona-triggered replies also skip human
 engagement counters and short-term memory writes, so persona reactions cannot sustain Natural Nudges

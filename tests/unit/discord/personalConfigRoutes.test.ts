@@ -75,7 +75,8 @@ import { dispatchGlobalInteraction } from "@/utils/discord/interactions/router";
 import { getRegisterableLocales, initializeLocalizer, localizer } from "@/utils/text/localizer";
 import { loadCommandData } from "@/utils/discord/commandLoader";
 import type { UserPersonaNamingPreference } from "@/types/personaNaming";
-import { localizedProse, localizedCopy } from "../../helpers/localeCases";
+import { localizedProse, localizedCopy, expectForEveryLocale } from "../../helpers/localeCases";
+import { expectSafePanelPayload, collectTextDisplays } from "../../helpers/panelLimits";
 import { createPersona, createUserRow } from "../../helpers/fixtures";
 import {
   createRouteInteraction,
@@ -2183,6 +2184,46 @@ describe("personal config Appearance character reference", () => {
 });
 
 describe("Models panel rendering", () => {
+  it("shows the NovelAI context guide for personal text overrides without treating image generation as text", () => {
+    expectForEveryLocale((locale) => {
+      for (const textProvider of ["novelai", "openrouter", null]) {
+        const payload = buildPersonalConfigPanelPayload({
+          locale,
+          category: "models",
+          page: "switch",
+          user: makeUser(),
+          resolvedNickname: "Juno",
+          personas: [],
+          guildId: "guild-123",
+          memoryCount: 0,
+          stmCount: 0,
+          readStatus: "fresh",
+          modelDisplayInfo: makeModelDisplayInfo({
+            routingRows: {
+              text: {
+                capability: "text",
+                storedProvider: textProvider,
+                activeModelName: textProvider ? "text-model" : null,
+                storedModelName: textProvider ? "text-model" : null,
+              },
+              image_nai: {
+                capability: "image_nai",
+                storedProvider: "novelai",
+                activeModelName: "image-model",
+                storedModelName: "image-model",
+              },
+            },
+          }),
+        });
+        expectSafePanelPayload(payload, `${locale} text=${textProvider}`);
+        const text = collectTextDisplays(payload).join("\n");
+        const note = localizedProse("en-US", "commands.config.panel.novelai_context_note");
+        if (textProvider === "novelai") expect(text).toMatch(note);
+        else expect(text).not.toMatch(note);
+      }
+    });
+  });
+
   it("renders independent routing controls with bounded placeholders and no cursor or duplicate buttons", () => {
     const user = makeUser();
     const payload = buildPersonalConfigPanelPayload({
@@ -2607,6 +2648,35 @@ describe("Models panel rendering", () => {
 });
 
 describe("Model assignment writes on modal submit", () => {
+  it("renders a rejected personal Xialong selection by locale key", async () => {
+    const { dependencies } = makeDependencies([]);
+    const loadProviders = dependencies.loadUserSavedProviders;
+    dependencies.loadUserSavedProviders = async (userId) =>
+      (await loadProviders(userId)).map((row) => ({ ...row, provider: "novelai" }));
+    dependencies.loadAvailableModelsForCapability = async () => [{ id: 102, name: "xialong-v1" }];
+    dependencies.operations.setCapabilityModel = async () => ({
+      status: "novelai-unavailable",
+      descriptionKey: "genai.novelai.xialong_opus",
+    });
+    const route = createPersonalConfigInteractionRoute(dependencies);
+    const customId = buildPersonalConfigRouteId({
+      action: "model-modal-submit",
+      locale: "en-US",
+      capability: "text",
+      provider: "novelai",
+      nonce: "nonce123456",
+    });
+    const interaction = makePersonalInteraction({ kind: "modal", customId });
+    const modalsModule = await import("@/utils/discord/ui/modals");
+    const take = spyOn(modalsModule, "takeRawModalSelectValue").mockReturnValue("102");
+    try {
+      await route.execute({} as Client, interaction, requireRoute(customId));
+      expect(JSON.stringify(interaction.edits.at(-1))).toMatch(localizedProse("en-US", "genai.novelai.xialong_opus"));
+    } finally {
+      take.mockRestore();
+    }
+  });
+
   it("writes on submit even when the assignment newly activates a cross-server override", async () => {
     const calls: string[] = [];
 

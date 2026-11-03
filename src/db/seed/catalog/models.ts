@@ -1317,7 +1317,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         codename: "glm-4-6",
         isDefault: true,
         isSmartest: true,
-        hasTools: true,
+        hasTools: false,
         desc: "Latest NovelAI roleplay model with enhanced creativity and character consistency",
         i18n: {
           ja: "創造性とキャラクター一貫性を強化した最新のNovelAIロールプレイモデル",
@@ -1326,6 +1326,20 @@ export const llmSections: ModelSection<LlmInput>[] = [
           "zh-TW": "創造力與角色一致性全面強化的最新 NovelAI 角色扮演模型",
           vi: "Model nhập vai mới nhất của NovelAI với độ sáng tạo và nhất quán nhân vật cao",
           "zh-CN": "创造力和角色一致性全面强化的最新 NovelAI 角色扮演模型",
+        },
+      },
+      {
+        provider: "novelai",
+        codename: "xialong-v1",
+        hasTools: false,
+        desc: "Xialong creative writing and roleplay model, requires an active NovelAI Opus subscription",
+        i18n: {
+          ja: "創作とロールプレイ向けのXialongモデル。有効なNovelAI Opusサブスクリプションが必要です",
+          "pt-BR": "Modelo Xialong para escrita criativa e roleplay, exige uma assinatura NovelAI Opus ativa",
+          "es-419": "Modelo Xialong para escritura creativa y rol, requiere una suscripción activa a NovelAI Opus",
+          "zh-TW": "Xialong 創作與角色扮演模型，需要有效的 NovelAI Opus 訂閱",
+          vi: "Model Xialong cho sáng tác và nhập vai, yêu cầu gói NovelAI Opus đang hoạt động",
+          "zh-CN": "Xialong 创作与角色扮演模型，需要有效的 NovelAI Opus 订阅",
         },
       },
       {

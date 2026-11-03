@@ -4,7 +4,12 @@ import type {
   UserSavedProviderConfigRow,
   UserSavedProviderConfigUpsert,
 } from "@/types/db/schema";
-import { llmProviderRepo } from "@/utils/db/repositories";
+import { configRepository, llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
+import {
+  getNovelAIProfile,
+  getNovelAISamplerConfig,
+  enableNovelAIPresetSamplers,
+} from "@/providers/novelai/modelProfiles";
 import { prunePrimaryFallbackRefs } from "@/utils/provider/fallbackModelIdentity";
 import { writeProviderSpeechSelection } from "@/utils/provider/providerOptionRegistry";
 import { setHostedSpeechSelection } from "@/utils/db/repositories/SpeechRepository";
@@ -107,8 +112,18 @@ export async function setPersonalTextPrimary(
   llmId: number,
   endpoints: Iterable<FallbackIdentityEndpoint> = [],
 ): Promise<boolean> {
+  const model = provider.toLowerCase() === "novelai" ? await llmModelRepo.loadById(llmId) : null;
+  if (provider.toLowerCase() === "novelai" && !model) return false;
+  const preset = model ? await configRepository.resolveNaiPreset(model.llm_codename) : undefined;
+  if (model && getNovelAIProfile(model.llm_codename).samplingPresetTarget && !preset) return false;
   const assigned = await assignPersonalCapabilityToProvider(userId, provider, "text", (row) => ({
     ...row,
+    ...(model && row.llm_id !== llmId
+      ? {
+          ...getNovelAISamplerConfig(model.llm_codename, preset),
+          llm_disabled_params: enableNovelAIPresetSamplers(row.llm_disabled_params),
+        }
+      : {}),
     llm_id: llmId,
   }));
   return assigned && (await prunePersonalFallbackChain(userId, llmId, endpoints));

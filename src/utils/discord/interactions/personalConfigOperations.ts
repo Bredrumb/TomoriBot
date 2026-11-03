@@ -1,4 +1,6 @@
 import { validateOpenRouterSpeechModel } from "@/utils/cache/openrouterSpeechModelCache";
+import { getNovelAIModelAccessError } from "@/providers/novelai/modelAccess";
+import { decryptApiKey } from "@/utils/security/crypto";
 import { DEFAULT_THINKING_LEVEL, isThinkingLevelValue } from "@/constants/thinkingLevels";
 import { getRegisterableLocales } from "@/utils/text/localizer";
 import type { APIAttachment } from "discord.js";
@@ -115,7 +117,11 @@ export interface PersonalConfigOperations {
     capability: PersonalConfigManagedCapability;
     provider: string;
     modelId: number;
-  }): Promise<{ status: "success" } | { status: "no-changes" | "write-failed" }>;
+  }): Promise<
+    | { status: "success" }
+    | { status: "no-changes" | "write-failed" }
+    | { status: "novelai-unavailable"; descriptionKey: string }
+  >;
   setCapabilityEnabled(input: {
     userId: number;
     userDiscId: string;
@@ -392,6 +398,14 @@ export const personalConfigOperations: PersonalConfigOperations = {
     }
 
     if (capability === "text") {
+      const selected = availableModels.find((model) => model.id === modelId);
+      if (provider.toLowerCase() === "novelai" && selected?.name === "xialong-v1") {
+        const descriptionKey = await getNovelAIModelAccessError(
+          selected.name,
+          targetRow.api_key ? await decryptApiKey(targetRow.api_key, targetRow.key_version) : null,
+        );
+        if (descriptionKey) return { status: "novelai-unavailable", descriptionKey };
+      }
       const endpoints = await llmProviderRepo.loadCustomEndpointsForUser(userId);
       return (await setPersonalTextPrimary(userId, provider, modelId, endpoints))
         ? { status: "success" }

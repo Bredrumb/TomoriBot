@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, spyOn } from "bun:test";
 import type { FallbackModelRef, PersonalProviderCapability, UserSavedProviderConfigRow } from "@/types/db/schema";
-import { llmProviderRepo } from "@/utils/db/repositories";
+import { configRepository, llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
+import { userSavedProviderConfigSchema } from "@/types/db/schema";
+import { createLlmRow, createNaiPreset } from "../../helpers/fixtures";
 import {
   assignPersonalCapabilityToProvider,
   getActivePersonalProviderForCapability,
@@ -73,6 +75,8 @@ afterEach(() => {
   spyOn(llmProviderRepo, "upsertUserSavedProviderConfig").mockRestore();
   spyOn(llmProviderRepo, "loadPersonalFallbackSettings").mockRestore();
   spyOn(llmProviderRepo, "updatePersonalFallbackModelRefs").mockRestore();
+  spyOn(llmModelRepo, "loadById").mockRestore();
+  spyOn(configRepository, "resolveNaiPreset").mockRestore();
 });
 
 describe("withCapabilityEnabled", () => {
@@ -279,6 +283,52 @@ describe("assignPersonalCapabilityToProvider", () => {
 });
 
 describe("setPersonalTextPrimary", () => {
+  it("resets NovelAI model switches to matching presets while preserving reply caps and later edits", async () => {
+    const row = userSavedProviderConfigSchema.parse({
+      user_id: 1,
+      provider: "novelai",
+      api_key: null,
+      llm_id: 5,
+      diffusion_model_id: null,
+      embedding_model_id: null,
+      nai_diffusion_model_id: null,
+      nai_preset_name: null,
+      llm_temperature: 1.035,
+      llm_max_output_tokens: 512,
+      llm_disabled_params: ["temperature", "topK"],
+      llm_logit_biases: [],
+      assigned_capabilities: ["text"],
+      enabled_capabilities: ["text"],
+    });
+    const state = stubRepo([row]);
+    const loadModel = spyOn(llmModelRepo, "loadById");
+    const loadPreset = spyOn(configRepository, "resolveNaiPreset");
+    spyOn(llmProviderRepo, "loadPersonalFallbackSettings").mockResolvedValue({
+      fallback_model_refs: [],
+      model_randomizer_enabled: false,
+    });
+    for (const [index, model, target] of [
+      [6, "kayra-v1", "kayra"],
+      [7, "llama-3-erato-v1", "erato"],
+      [8, "xialong-v1", "xialong"],
+      [9, "glm-4-6", null],
+    ] as const) {
+      const preset = target ? createNaiPreset({ model_target: target }) : undefined;
+      loadModel.mockResolvedValue(createLlmRow({ llm_id: index, llm_provider: "novelai", llm_codename: model }));
+      loadPreset.mockResolvedValue(preset);
+      expect(await setPersonalTextPrimary(1, "novelai", index)).toBe(true);
+      const result = state.rows[0];
+      expect(result.nai_preset_name).toBe(preset?.preset_name ?? null);
+      const expectedTemperature = preset?.parameters.temperature ?? 1;
+      if (typeof expectedTemperature !== "number") throw new Error("Invalid preset fixture temperature");
+      expect(result.llm_temperature).toBe(expectedTemperature);
+      expect(result.llm_max_output_tokens).toBe(512);
+      expect(result.llm_disabled_params).toEqual([]);
+      result.llm_temperature = 1.17;
+      expect(await setPersonalTextPrimary(1, "novelai", index)).toBe(true);
+      expect(state.rows[0].llm_temperature).toBe(1.17);
+    }
+  });
   it("keeps the user-level chain across a provider switch and prunes only the new primary", async () => {
     const state = stubRepo(makeAccount());
     const chain: FallbackModelRef[] = [

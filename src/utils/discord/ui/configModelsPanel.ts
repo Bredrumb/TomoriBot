@@ -68,7 +68,7 @@ export type { ConfigVoicesView };
 const CONFIG_NAI_PRESET_DISPLAY_HEADROOM = 256;
 
 interface ConfigNaiPresetView {
-  target: "kayra" | "erato" | null;
+  target: "kayra" | "erato" | "xialong" | null;
   compatibility: "eligible" | "not-novelai" | "unsupported";
   presets: NaiPresetRow[];
   activePresetName: string | null;
@@ -254,6 +254,10 @@ function buildCapabilityNoticeLine(
   const warnings: ConfigNote[] = userByokMode ? [buildByokNote(locale)] : [];
   const off = (key: string): ConfigNote => ({ tone: "warning", text: localizer(locale, key) });
   const broken = (key: string): ConfigNote => ({ tone: "error", text: localizer(locale, key) });
+
+  if (view.slots.some((slot) => slot.capability === "text" && slot.currentProvider === "novelai")) {
+    warnings.push({ tone: "warning", text: localizer(locale, "commands.config.panel.novelai_context_note") });
+  }
 
   if (!view.imageGenerationEnabled) {
     warnings.push(off("commands.config.panel.image_generation_disabled_direction"));

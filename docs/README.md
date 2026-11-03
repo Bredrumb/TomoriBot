@@ -48,6 +48,7 @@ Pages are bucketed into task-based sub-categories:
   - [`message-proxy-support.md`](./en/features/integrations/message-proxy-support/)
   - [`matrix-bridge.md`](./en/features/integrations/matrix-bridge/)
   - [`sillytavern-support.md`](./en/features/integrations/sillytavern-support/)
+  - [`novelai-text.md`](./en/features/integrations/novelai-text/)
 - [`features/command-reference.md`](./en/features/command-reference/): generated from command locales (Phase 3)
 
 ## Self-Hosting (order 3)
@@ -141,7 +142,7 @@ Supporting services that pipelines depend on.
 ### Integrations
 
 - [`architecture/integrations/`](./en/architecture/integrations/README.md): Discord platform, Matrix bridge,
-  NovelAI, SillyTavern, and voice pipeline internals
+  NovelAI text limitations and inpainting, SillyTavern, and voice pipeline internals
 - [`architecture/integrations/message-proxy.md`](./en/architecture/integrations/message-proxy/): proxy routing and identity contract
 - [`architecture/integrations/pluralkit.md`](./en/architecture/integrations/pluralkit/): PluralKit adapter behavior
 

@@ -29,7 +29,6 @@ import * as speechRepository from "@/utils/db/repositories/SpeechRepository";
 // loaded later. Spreading the real namespace keeps each mock full-surface.
 import * as realChannelLlmCache from "@/utils/cache/channelLlmCache";
 import * as realAdmissionGuards from "@/utils/chat/admissionGuards";
-import * as realNovelaiCapabilityCache from "@/utils/cache/novelaiCapabilityCache";
 import * as realNovelaiSubscriptionCache from "@/utils/cache/novelaiSubscriptionCache";
 import * as realOpenrouterCapabilityCache from "@/utils/cache/openrouterCapabilityCache";
 import * as realToolLoop from "@/utils/chat/toolLoop";
@@ -53,12 +52,16 @@ const queuedDeliveries: Array<Array<{ messageId: string; channelId: string; webh
   [];
 const toolLoopCalls: Array<{
   model: string;
+  outputPrefill: string | undefined;
   suppressUserErrors: boolean | undefined;
   contextItems: ToolLoopParams["context"]["contextItems"];
   numCtx: number | null | undefined;
   apiKey: string;
   credentialSource: ChatTurnContext["textCredentialSource"];
 }> = [];
+const rotationKeyQueue: realKeyRotation.SelectedKeyResult[] = [];
+const subscriptionLimits = new Map<string, number>();
+const subscriptionReads: string[] = [];
 const providerConfigCalls: Array<{ model: string; apiKey: string }> = [];
 const fallbackNoticeCalls: Array<{
   failures: FallbackNoticeAttempt[];
@@ -107,7 +110,6 @@ type TestStopContext = {
 const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/cache/channelLlmCache": realChannelLlmCache,
   "@/utils/chat/admissionGuards": realAdmissionGuards,
-  "@/utils/cache/novelaiCapabilityCache": realNovelaiCapabilityCache,
   "@/utils/cache/novelaiSubscriptionCache": realNovelaiSubscriptionCache,
   "@/utils/cache/openrouterCapabilityCache": realOpenrouterCapabilityCache,
   "@/utils/db/repositories": realRepositories,
@@ -134,14 +136,12 @@ scopedMock.module("@/utils/cache/channelLlmCache", () => ({
   getCachedChannelLlm: async () => null,
 }));
 
-scopedMock.module("@/utils/cache/novelaiCapabilityCache", () => ({
-  ...realNovelaiCapabilityCache,
-  getNovelAITokenLimits: () => undefined,
-}));
-
 scopedMock.module("@/utils/cache/novelaiSubscriptionCache", () => ({
   ...realNovelaiSubscriptionCache,
-  getCachedContextTokens: () => undefined,
+  getCachedNovelAISubscription: (apiKey: string) => {
+    subscriptionReads.push(apiKey);
+    return { tier: subscriptionLimits.get(apiKey) === 4096 ? 1 : 3, active: true };
+  },
   refreshNovelAISubscription: async () => undefined,
 }));
 
@@ -313,12 +313,13 @@ scopedMock.module("@/utils/security/keyRotation", () => ({
   MAX_KEY_ATTEMPTS: 3,
   hasAvailableRotationKey: async (state: TomoriState, excluded: number[] = []) => {
     rotationChecks.push(state.llm.llm_codename);
-    return rotationEnabled && !excluded.includes(42);
+    return rotationKeyQueue.length > 0 || (rotationEnabled && !excluded.includes(42));
   },
   recordKeyError: async () => undefined,
   recordKeySuccess: async () => undefined,
   selectApiKey: async (state: TomoriState, excluded: number[] = []) => {
     rotationSelections.push(state.llm.llm_codename);
+    if (rotationKeyQueue.length > 0) return rotationKeyQueue.shift() ?? null;
     if (!rotationEnabled) return null;
     const rotationKeyId = excluded.includes(41) ? 42 : 41;
     return { apiKey: `server-pool-${rotationKeyId}`, rotationKeyId, isMainKey: false };
@@ -379,6 +380,7 @@ async function runToolLoopMock(params: ToolLoopParams): Promise<GenerationTurnRe
     params.context.streamingContext.deferredTimeoutNotice = undefined;
     toolLoopCalls.push({
       model: params.tomoriState.llm.llm_codename,
+      outputPrefill: params.context.streamingContext.outputPrefill,
       suppressUserErrors: params.context.streamingContext.suppressUserErrors,
       contextItems: params.context.contextItems,
       numCtx: params.tomoriState.config.custom_num_ctx,
@@ -795,6 +797,9 @@ describe("runGenerationTurn fallback behavior", () => {
   });
 
   beforeEach(async () => {
+    rotationKeyQueue.length = 0;
+    subscriptionLimits.clear();
+    subscriptionReads.length = 0;
     fetchStub = stubGlobalFetch(() => Response.json({ data: [] }));
     queuedResults.length = 0;
     queuedDeliveries.length = 0;
@@ -828,6 +833,103 @@ describe("runGenerationTurn fallback behavior", () => {
     const { StreamOrchestrator } = await import("@/utils/discord/streamOrchestrator");
     StreamOrchestrator.clearStopRequest("channel_1");
     StreamOrchestrator.getAndClearStopContext("channel_1");
+  });
+
+  it.each([
+    [4096, 8192],
+    [8192, 4096],
+  ])("passes original NovelAI history and one prefill to each rotated credential (%i to %i)", async (firstLimit, nextLimit) => {
+    const model = { ...makeLlm(1, "kayra-v1"), llm_provider: "novelai" };
+    const context = makeContext(model, makeLlm(2, "unused"));
+    context.tomoriState.fallback_chain = [];
+    context.assistantPrefill = { text: "continue this fragment", source: "manual" };
+    context.contextItems = Array.from({ length: 6 }, (_, pair) => [
+      {
+        role: "user" as const,
+        metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+        messageId: `user-${pair}`,
+        parts: [{ type: "text" as const, text: `Mirri: ${"x".repeat(1500)}` }],
+      },
+      {
+        role: "model" as const,
+        metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+        messageId: `model-${pair}`,
+        parts: [{ type: "text" as const, text: `Tomori: ${"y".repeat(1500)}` }],
+      },
+    ]).flat();
+    const originalItems = [...context.contextItems];
+    rotationKeyQueue.push(
+      { apiKey: "first-key", rotationKeyId: 11, isMainKey: false },
+      { apiKey: "next-key", rotationKeyId: 12, isMainKey: false },
+    );
+    subscriptionLimits.set("first-key", firstLimit);
+    subscriptionLimits.set("next-key", nextLimit);
+    queuedResults.push(personalRouteFailure(), successfulReply());
+    const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+    await runGenerationTurn(context, collectingSink());
+    expect(toolLoopCalls.map((call) => call.apiKey)).toEqual(["first-key", "next-key"]);
+    expect(subscriptionReads).toEqual([]);
+    for (const call of toolLoopCalls) expect(call.contextItems.filter((item) => item.messageId)).toEqual(originalItems);
+    for (const call of toolLoopCalls) {
+      expect(call.outputPrefill).toBe("Tomori: continue this fragment");
+      expect(
+        call.contextItems.filter((item) =>
+          item.parts.some((part) => part.type === "text" && part.text.includes("continue this fragment")),
+        ),
+      ).toHaveLength(1);
+      expect(call.contextItems.at(-1)?.role).toBe("model");
+    }
+  });
+
+  it("budgets personal and DM NovelAI turns with the selected personal credential", async () => {
+    const nai = { ...makeLlm(3, "kayra-v1"), llm_provider: "novelai" };
+    for (const isDMChannel of [false, true]) {
+      const context = makePersonalContext(makeLlm(1, "server"), makeLlm(2, "fallback"), nai);
+      context.personalTextProvider = "novelai";
+      context.isDMChannel = isDMChannel;
+      subscriptionLimits.set("personal-key", 4096);
+      queuedResults.push(successfulReply());
+      const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+      await runGenerationTurn(context, collectingSink());
+      expect(toolLoopCalls.at(-1)?.apiKey).toBe("personal-key");
+      expect(subscriptionReads).toEqual([]);
+    }
+    expect(subscriptionReads).not.toContain("server-key");
+  });
+
+  it("selects native context for NovelAI primary, personal, and fallback attempts while preserving preset context for other providers", async () => {
+    const nai = { ...makeLlm(3, "kayra-v1"), llm_provider: "novelai" };
+    const ordinary = makeLlm(1, "ordinary-model");
+    const contexts = [
+      makeContext(nai, ordinary),
+      makeContext(ordinary, nai),
+      makePersonalContext(ordinary, ordinary, nai),
+    ];
+    const presetItem = {
+      role: "user" as const,
+      metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+      parts: [{ type: "text" as const, text: "preset-marker" }],
+    };
+    const nativeItem = {
+      role: "user" as const,
+      metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+      messageId: "trigger",
+      completionText: "Mirri: native-marker",
+      parts: [{ type: "text" as const, text: "Mirri: native-marker" }],
+    };
+    for (const [index, context] of contexts.entries()) {
+      const firstCall = toolLoopCalls.length;
+      context.contextItems = [presetItem];
+      context.nativeContextItems = [nativeItem];
+      if (index === 2) context.personalTextProvider = "novelai";
+      queuedResults.push(personalRouteFailure(), successfulReply());
+      const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+      await runGenerationTurn(context, collectingSink());
+      for (const call of toolLoopCalls.slice(firstCall)) {
+        expect(call.contextItems).toContainEqual(call.model === "kayra-v1" ? nativeItem : presetItem);
+        expect(call.contextItems).not.toContainEqual(call.model === "kayra-v1" ? presetItem : nativeItem);
+      }
+    }
   });
 
   it("suppresses primary errors and posts compact fallback notice when a fallback succeeds", async () => {

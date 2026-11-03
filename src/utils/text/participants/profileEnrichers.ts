@@ -1,3 +1,4 @@
+import type { ContextMemoryEntry } from "@/types/misc/context";
 import {
   aggregateContributionDiagnostics,
   createContributionRegistry,
@@ -25,6 +26,7 @@ interface ParticipantProfileFieldContribution {
     reason: ParticipantFieldVisibilityReason;
   };
   lines: readonly string[];
+  memoryEntries?: readonly ContextMemoryEntry[];
   order?: number;
 }
 
@@ -149,6 +151,9 @@ function coreFieldContribution(field: ParticipantProfileField): ParticipantProfi
     kind: field.kind,
     visibility: Object.freeze({ ...field.visibility }),
     lines: Object.freeze([...field.lines]),
+    ...(field.memoryEntries && {
+      memoryEntries: Object.freeze(field.memoryEntries.map((entry) => Object.freeze({ ...entry }))),
+    }),
     order: field.order,
   });
 }
@@ -200,6 +205,9 @@ export async function applyParticipantProfileEnrichers(params: {
               : nextExtensionOrder++,
           visibility: { ...contribution.visibility },
           lines: [...contribution.lines],
+          ...(contribution.memoryEntries && {
+            memoryEntries: contribution.memoryEntries.map((entry) => ({ ...entry })),
+          }),
         });
       }
     }

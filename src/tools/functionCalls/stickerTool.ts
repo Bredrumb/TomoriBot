@@ -52,11 +52,6 @@ export class StickerTool extends BaseTool {
     return 1 - StickerTool.levenshteinDistance(query, candidate) / Math.max(query.length, candidate.length);
   }
 
-  isAvailableFor(provider: string): boolean {
-    // NovelAI cannot reliably emit CJK sticker names as tool arguments.
-    return provider !== "novelai";
-  }
-
   protected isEnabled(context: ToolContext): boolean {
     return context.tomoriState.config.sticker_usage_enabled;
   }

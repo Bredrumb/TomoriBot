@@ -157,6 +157,8 @@ describe("buildForwardContext", () => {
     expect(result.mediaSourceMessageIds).toEqual([]);
     expect(result.remoteMediaSourceKind).toBeUndefined();
     expect(result.content).toContain("hello from another channel");
+    expect(result.completionContent).toBe(message.messageSnapshots.first()?.content ?? "");
+    expect(result.completionContent).not.toContain("System:");
   });
 
   test("recovers media from a forward of a forward", async () => {

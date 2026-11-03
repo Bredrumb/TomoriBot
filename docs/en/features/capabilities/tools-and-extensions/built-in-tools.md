@@ -8,6 +8,9 @@ Tools depend on the active provider and model supporting tool calling. Many are 
 a feature flag (`/config` > Permissions), a Discord permission, a model capability, or an
 optional API key.
 
+NovelAI text models do not call tools. Slash commands and separately configured image generation
+remain available.
+
 :::tip
 If a capability seems unavailable, ask her why. She can report the server's feature flags and
 whether the active model supports tool calling, which usually names the setting to fix.
@@ -17,9 +20,9 @@ whether the active model supports tool calling, which usually names the setting 
 |---|---|---|---|
 | Review capabilities | `{capabilities_tool}` | - | Check current chat abilities, commands, or settings before answering. |
 | Create / update long-term memory | `{memory_tool}` / `{memory_update_tool}` | `self_teaching_enabled` | Save or replace a stable server fact or user preference. |
-| Update short-term memory | `{short_term_memory_tool}` | (not on NovelAI) | Save temporary working memory for the current channel or story arc. |
+| Update short-term memory | `{short_term_memory_tool}` | - | Save temporary working memory for the current channel or story arc. |
 | Create / update task | `{task_tool}` / `{task_update_tool}` | - | Schedule or edit reminders and self-tasks (see [Scheduled Tasks](/features/capabilities/scheduled-tasks/)). |
-| Cross-channel message | `{cross_channel_tool}` | (not on NovelAI) | Act in another channel or thread, with an optional report-back. |
+| Cross-channel message | `{cross_channel_tool}` | - | Act in another channel or thread, with an optional report-back. |
 | Create thread | `{create_thread_tool}` | `thread_creation_enabled` + thread perms | Open a public thread and post its starter message. |
 | Roll dice | - | `dice_rolling_enabled` | Roll dice publicly and use the returned result in roleplay. |
 | Select sticker | `{sticker_tool}` | `sticker_usage_enabled` | Add a matching server sticker or custom expression to a reply. |
