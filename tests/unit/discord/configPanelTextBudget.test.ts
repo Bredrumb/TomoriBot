@@ -1314,7 +1314,7 @@ describe("Switch Models capability notice budgeting", () => {
             });
             expect(validateComponentsV2MessageLimits(payload).valid).toBe(true);
             const text = getTextDisplays(payload).join("\n");
-            const note = localizedProse("en-US", "commands.config.panel.novelai_context_note");
+            const note = localizedProse(locale, "commands.config.panel.novelai_context_note");
             if (textProvider === "novelai") expect(text).toMatch(note);
             else expect(text).not.toMatch(note);
           });
