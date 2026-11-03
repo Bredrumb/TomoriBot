@@ -1,6 +1,7 @@
 export default {
   genai: {
     tool_failure: {
+      endpoint_blocked: `このホストは、このエンドポイントのアドレスへのリクエストを許可していません。`,
       content_blocked: `プロバイダーのコンテンツフィルターにより、このツールリクエストが拒否されました。`,
       authentication: `このツールリクエストで使用された認証情報がプロバイダーによって拒否されました。`,
       quota: `クォータまたは請求の上限に達したため、プロバイダーがこのツールリクエストを拒否しました。`,
@@ -31,8 +32,6 @@ export default {
     max_iterations_streaming_description: `思考ループに陥り、リクエストを完了できませんでした。この問題が解決しない場合は、\`/refresh\`を使用してください。`,
     still_working_title: `まだ作業中...`,
     still_working_description: `このタスクは通常より多くのステップが必要です。もし止まっていると思ったら、\`/kill\` を使用してください。`,
-    nai_tool_retry_exhausted_title: `ツールエラー`,
-    nai_tool_retry_exhausted_description: `ツールが複数回失敗し、リクエストを完了できませんでした。もう一度お試しいただくか、問題が解決しない場合は \`/refresh\` を使用してください。`,
     tool_error_loop_title: `ツールエラーループ`,
     tool_error_loop_description: `ツールエラーが続いたため、リクエストを完了できませんでした。言い回しを変えるか、問題が解決しない場合は \`/refresh\` を使用してください。`,
     fallback_used_title: `フォールバックモデルを使用しました`,
@@ -100,6 +99,7 @@ export default {
       context_length_title: `🔴 このモデルにはメッセージが長すぎます`,
       credit_limit_title: `🔴 プロバイダーのクレジットが不足しています`,
       balance_exhausted_title: `🔴 プロバイダーアカウントの残高がありません`,
+      endpoint_blocked_title: `許可されていないエンドポイント`,
       flush_limit_title: `🟡️ 応答の長さ制限に達しました`,
       flush_limit_description: `この応答はメッセージの最大長制限に達したため停止されました。必要に応じて \`/respond\` を使用して手動で応答を続けることができます。`,
       inactivity_timeout_title: `🟡️ 応答がタイムアウトしました`,
@@ -133,6 +133,8 @@ export default {
       choose_supported_model_personal: `サポートされているモデルIDを \`/personal config\` またはカスタムエンドポイント設定で選択してください。`,
       verify_api_key: `このサーバーのAPIキーをもう一度確認してから、再試行してください。`,
       verify_api_key_personal: `\`/personal providers\` で個人APIキーをもう一度確認してから、再試行してください。`,
+      endpoint_not_allowed: `\`/providers\` で公開HTTPSエンドポイントに切り替えるか、ローカルサーバーを許可できるかをこのホストの管理者に確認してください。`,
+      endpoint_not_allowed_personal: `\`/personal providers\` で公開HTTPSエンドポイントに切り替えるか、ローカルサーバーを許可できるかをこのホストの管理者に確認してください。`,
       verify_api_key_expiry: `NVIDIA NIMのキーには有効期限があり、期限切れのキーは入力ミスのキーと同じエラーでNVIDIAに拒否されます。[build.nvidia.com](https://build.nvidia.com) で有効期限を確認し、期限が切れていれば新しいキーを生成してください。`,
       nvidia_register_free_model: `NVIDIAはホスト型モデルを頻繁に終了します。[NVIDIAの無料エンドポイント](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview)から現在提供されているモデルを選び、モデルID（例：\`deepseek-ai/deepseek-v4.1-flash\`）をコピーして、\`/providers\` > NVIDIA NIM > **+ 新しいテキストモデルを追加** から追加してください。`,
       nvidia_register_free_model_personal: `NVIDIAはホスト型モデルを頻繁に終了します。[NVIDIAの無料エンドポイント](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview)から現在提供されているモデルを選び、モデルID（例：\`deepseek-ai/deepseek-v4.1-flash\`）をコピーして、\`/personal providers\` > NVIDIA NIM > **+ 新しいテキストモデルを追加** から追加してください。`,
@@ -179,6 +181,20 @@ export default {
       "403_predict_permission_message": `このキーでは Vertex AI Express モデルを呼び出せません。Express Mode のキーを使うか、フル Google Cloud プロジェクトなら別プロバイダーの \`vertex\` を使ってください。`,
     },
     novelai: {
+      tokenizer_setup:
+        "NovelAIのトークナイザーが見つからないか無効です。ボットのホストに `bun run setup:tokenizers` を実行してTomoriBotを再起動するよう依頼してください。",
+      input_complexity:
+        "このプロンプトにはテキストが多すぎるか、異常に長い単語が含まれています。短くしてもう一度お試しください。",
+      context_overflow:
+        "ペルソナ、最小限の例、直近の会話がこのモデルのコンテキストウィンドウを超えています。これらを短くするか、より大きなウィンドウを持つモデルを選択してください。",
+      subscription_unavailable:
+        "NovelAIのサブスクリプション情報を読み込めませんでした。しばらくしてからもう一度お試しください。",
+      subscription_inactive: "このNovelAIキーには有効なサブスクリプションがありません。",
+      model_tier: "このNovelAIサブスクリプションには、選択されたテキストモデルが含まれていません。",
+      xialong_opus:
+        "Xialongには有効なNovelAI Opusサブスクリプションが必要です。Opusキーを使用するか、別のテキストモデルを選択してください。",
+      continuation_exhausted:
+        "出力バジェット内で完全な返答を生成する前にNovelAIが終了しました。もう一度お試しいただくか、設定された出力長を増やしてください。",
       "400_default_message": `無効なリクエスト形式またはパラメータです。正しいAPIキーを入力したか確認してください。`,
       "400_trial_message": `トライアルアカウントでは生成にrecaptcha認証が必要です。API経由のアクセスには有料のNovelAIサブスクリプションが必要です。https://novelai.net/ でアカウントをアップグレードしてください`,
       "401_default_message": `NovelAIのAPIキーが無効または期限切れです`,
@@ -217,6 +233,7 @@ export default {
     },
     custom: {
       "402_default_message": `このエンドポイントのアカウント残高が不足しています`,
+      PRIVATE_NETWORK_BLOCKED_default_message: `このホストは、このエンドポイントのアドレスへのリクエストを許可していません。`,
       REDIRECT_CREDENTIALS_WITHHELD_default_message: `このエンドポイントは別のアドレスにリダイレクトされたため、TomoriBotはAPIキーを送信しませんでした。\`/providers\` でこのエンドポイントを管理している人は、URLをサーバーのリダイレクト先の最終アドレスに変更することで修正できます。`,
       unknown_default_message: `予期しないエラーが発生しました`,
     },

@@ -41,15 +41,10 @@ export function buildPersonalConfigModalFieldId(field: string, nonce: string): s
   return `${field}_${nonce}`;
 }
 
-/**
- * @param standalone `/personal language` shows this modal with no panel behind it, so its submit
- * routes to the action that answers with a receipt instead of repainting a message.
- */
 export function buildLanguageModal(
   locale: string,
   nonce: string,
   currentLanguage: string,
-  standalone = false,
 ): { custom_id: string; title: string; components: RawDiscordComponent[] } {
   const selectedLanguage = getRegisterableLocales().some((code) => code === currentLanguage)
     ? resolveSupportedLocale(currentLanguage)
@@ -57,7 +52,7 @@ export function buildLanguageModal(
 
   return {
     custom_id: buildPersonalConfigRouteId({
-      action: standalone ? "language-only-submit" : "language-submit",
+      action: "language-submit",
       locale,
       nonce,
     }),

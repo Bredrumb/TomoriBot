@@ -63,6 +63,11 @@ The renderer groups participant names, safe mention handles, recalled personal m
 - **Downstream target index**: The contributor attaches `participantTargetIndex` and a compatibility `conversationUsers` projection to the context item alongside text output. Downstream tool execution uses this index to resolve user parameters back to Discord snowflakes.
 - **Preset reassembly**: Tagged as `KNOWLEDGE_USERS_IN_CONVERSATION`, which SillyTavern preset reassembly flushes before the first dialogue anchor (`dialogueExamples` or `chatHistory`).
 
+The contributor also attaches a memory-only projection for NovelAI. It uses the hydrated visible
+`personal_memories` entries, preserving resolved contents, internal memory identities, and recency.
+NovelAI receives plain memory contents without added owner labels, tool IDs, or tag prefixes.
+Other providers receive their existing participant text without a second memory block.
+
 ## Source pointers
 
 - `src/utils/text/context/participants.ts`: `buildParticipantContextItem`.

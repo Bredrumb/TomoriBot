@@ -196,7 +196,9 @@ async function runGenerationAttempts(
       const hasPendingModelFallback = index < attempts.length - 1 || plan.extendWithServerRoute !== null;
       context.tomoriState = attempt.tomoriState;
       const attemptContextItems = await prepareProviderContextItems({
-        contextItems: baseContextItems,
+        contextItems: providerIsApiFamily(attempt.tomoriState.llm.llm_provider, "novelai")
+          ? (context.nativeContextItems ?? baseContextItems)
+          : baseContextItems,
         isUserImpersonation: context.isUserImpersonation,
         tomoriState: attempt.tomoriState,
         deliberateToolAllowedNames: context.streamingContext.deliberateToolAllowedNames,
@@ -247,7 +249,6 @@ async function runGenerationAttempts(
             contextItems: attemptContextItems,
             reservedTailItems: prefillItems,
             tomoriState: attempt.tomoriState,
-            serverDiscId: context.serverDiscId,
             emptyResponseFinishReason: context.turn.lockedTurn.admission.incoming.emptyResponseFinishReason,
             retryCount: context.turn.lockedTurn.admission.incoming.retryCount,
           })),
@@ -842,11 +843,7 @@ function isUnreachableDestinationResult(result: GenerationTurnResult): boolean {
 function isRetryableEmptyResponse(result: GenerationTurnResult): boolean {
   const streamResult = result.streamResults.at(-1);
   const data = streamResult?.data as { finishReason?: unknown; emptyResponseReason?: unknown } | undefined;
-  return (
-    Boolean(streamResult?.naiContinuationPrefill) ||
-    data?.finishReason === "length" ||
-    data?.emptyResponseReason === "speaker_guard"
-  );
+  return data?.finishReason === "length" || data?.emptyResponseReason === "speaker_guard";
 }
 
 async function emitStreamErrors(responseSink: ChatResponseSink, streamResults: StreamResult[]): Promise<void> {
@@ -1303,16 +1300,10 @@ async function fitProviderContextBudget(args: {
   contextItems: StructuredContextItem[];
   reservedTailItems: StructuredContextItem[];
   tomoriState: TomoriState;
-  serverDiscId: string;
   emptyResponseFinishReason: string | null | undefined;
   retryCount: number;
 }): Promise<StructuredContextItem[]> {
-  let contextItems = await applyProviderContextTruncation(
-    args.contextItems,
-    args.tomoriState,
-    args.serverDiscId,
-    args.reservedTailItems,
-  );
+  let contextItems = await applyProviderContextTruncation(args.contextItems, args.tomoriState, args.reservedTailItems);
   if (
     shouldApplyLengthEmptyRetryTrim(args.tomoriState.llm.llm_provider, args.emptyResponseFinishReason, args.retryCount)
   ) {

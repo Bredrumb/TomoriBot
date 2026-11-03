@@ -35,8 +35,8 @@ A note on a persona (under `/config` > `Persona` > `Advanced`) or on a channel (
 note and a channel note are set, both are sent.
 :::
 
-When a [SillyTavern preset](/features/integrations/sillytavern-support/) is active, the built-in
-fallback system prompt is replaced, but a custom one you set here is still sent.
+When a [SillyTavern preset](/features/integrations/sillytavern-support/) is active, it controls the
+system prompt. Turn the preset off to edit the saved server prompt again.
 
 ## Generation Tuning
 <!-- anchor: generation-tuning -->

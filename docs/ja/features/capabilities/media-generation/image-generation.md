@@ -5,7 +5,7 @@ sidebar:
 aiGenerated: true
 ---
 
-TomoriBotは、テキストプロンプトから、または参照画像を編集することによって画像を生成できます。`/generate image`を使用するか、チャットで希望する内容を説明します (「コーヒーを飲むレッサー パンダを描く」)。
+TomoriBotは、説明から画像を生成したり、参照画像を編集したりできます。チャットで彼女に頼むか、`/generate image`を使用します。手動での[NovelAI](/features/integrations/novelai/#image-generation)生成には、`/novelai generate image`を使用します。
 
 ## できること
 
@@ -20,7 +20,7 @@ TomoriBotは、テキストプロンプトから、または参照画像を編�
 
 どちらのモードでも、`nsfw` を `true` に設定すると、生成された画像をDiscordのスポイラーで隠すことができます。これはDiscord上での画像の表示方法のみを変更し、生成処理やプロバイダーのコンテンツフィルターには影響しません。
 
-手動でのNovelAI生成には `/novelai generate image` を使用し、同様の `model` と `nsfw` オプションを備えています。そのモデル選択には、個人のNovelAIプロバイダーとサーバーの保存済みまたは任意のNovelAIキーが含まれます。
+手動での[NovelAI](/features/integrations/novelai/#image-generation)生成には `/novelai generate image` を使用し、同様の `model` と `nsfw` オプションを備えています。そのモデル選択には、個人のNovelAIプロバイダーとサーバーの保存済みまたは任意のNovelAIキーが含まれます。
 
 どの編集モードが使用できるかは、アクティブなバックエンドによって異なります。テキストから画像への変換と画像から画像への変換は、クラウドプロバイダー (Google、Vertex、OpenRouter) で機能します。インペイントとアウトペイントはローカルの [ComfyUI](/ja/self-hosting/local-endpoints/setup-comfyui/) カスタムエンドポイントでサポートされており、そのエンドポイントの宣言された機能に依存します。セットアップがサポートしていないモードは、モデルから自動的に非表示になります。
 

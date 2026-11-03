@@ -138,9 +138,9 @@ Khởi động lại PostgreSQL, sau đó:
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 ```
 
-### Tokenizer asset: logit bias theo model
+### Tokenizer asset
 
-Logit bias (phạt lặp lại emoji/từ ngữ) yêu cầu các tokenizer asset cục bộ:
+Tạo văn bản NovelAI và logit bias theo model yêu cầu các tokenizer asset cục bộ:
 
 ```sh
 bun run setup:tokenizers
@@ -156,7 +156,15 @@ $env:HF_TOKEN="hf_xxx"; bun run setup:tokenizers
 HF_TOKEN=hf_xxx bun run setup:tokenizers
 ```
 
-Nếu không có bước này, logit bias sẽ tự động bị tắt trong im lặng và mọi thứ khác vẫn hoạt động bình thường.
+Việc thiếu asset sẽ vô hiệu hóa logit bias tùy chọn. Việc tạo văn bản NovelAI yêu cầu ba họ tokenizer của nó và trả về lỗi thiết lập nếu chúng bị thiếu hoặc không hợp lệ. Các họ này sử dụng các định nghĩa MIT công khai được ghim và không cần Hugging Face token. Để chỉ cài đặt các họ đó:
+
+```sh
+bun run setup:tokenizers --family novelai_nerdstash_v2
+bun run setup:tokenizers --family novelai_llama3
+bun run setup:tokenizers --family novelai_glm
+```
+
+Trình tải xuống sẽ ghi vào thư mục `tokenizers/` của kho lưu trữ. Nếu `TOKENIZER_ASSET_DIR` trỏ đến nơi khác, hãy sao chép các thư mục họ đã tải xuống vào đó. Khởi động lại TomoriBot sau khi cài đặt hoặc sửa chữa asset, vì runtime lưu vào bộ nhớ cache các lỗi tải.
 
 Phương án dự phòng `fetch_url` an toàn và phương án dự phòng `web_search` của DuckDuckGo đều chạy trong tiến trình, vì vậy cả hai đều không cần cài đặt thêm.
 

@@ -50,7 +50,7 @@ bun run setup
 |---|---|
 | `pgvector` | 用于文档与 RAG 记忆的向量检索。 |
 | `pg_cron` | 可选的冷却与提醒数据行定时清理。 |
-| 分词器资源 | 用于感知模型的词元偏置的本地分词器资源。 |
+| 分词器资源 | 用于 NovelAI 文本生成与感知模型的词元偏置的本地分词器资源。 |
 
 如需手动安装其中任何一项，请参见
 [手动安装附加项](/self-hosting/manual-setup/#optional-extras-the-manual-full-install)。

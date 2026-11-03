@@ -148,9 +148,9 @@ PostgreSQLを再起動した後、以下を実行します。
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 ```
 
-### トークナイザーアセット：モデルを意識したロジットバイアス
+### トークナイザーアセット
 
-ロジットバイアス（絵文字/単語の繰り返しペナルティ）にはローカルのトークナイザーアセットが必要です。
+NovelAIのテキスト生成およびモデルを意識したロジットバイアスには、ローカルのトークナイザーアセットが必要です。
 
 ```sh
 bun run setup:tokenizers
@@ -166,7 +166,15 @@ $env:HF_TOKEN="hf_xxx"; bun run setup:tokenizers
 HF_TOKEN=hf_xxx bun run setup:tokenizers
 ```
 
-この手順を行わないとロジットバイアスは暗黙のうちに無効化されますが、その他のすべては正常に動作します。
+アセットが見つからない場合、オプションのロジットバイアスは無効になります。NovelAIのテキスト生成には3つのトークナイザーファミリーが必要であり、それらが不足しているか無効な場合はセットアップエラーが返されます。これらのファミリーは固定された公開MIT定義を使用しており、Hugging Faceトークンは不要です。それらのファミリーのみをインストールするには：
+
+```sh
+bun run setup:tokenizers --family novelai_nerdstash_v2
+bun run setup:tokenizers --family novelai_llama3
+bun run setup:tokenizers --family novelai_glm
+```
+
+ダウンローダーはリポジトリの `tokenizers/` ディレクトリに書き込みます。`TOKENIZER_ASSET_DIR` が別の場所を指している場合は、ダウンロードしたファミリーディレクトリをそこへコピーしてください。ランタイムがロード失敗をキャッシュするため、アセットのインストールや修復後はTomoriBotを再起動してください。
 
 安全な `fetch_url` フォールバックと DuckDuckGo の `web_search` フォールバックはどちらもプロセス内で実行されるため、どちらも追加のインストールは不要です。
 

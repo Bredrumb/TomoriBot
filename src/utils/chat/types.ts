@@ -117,7 +117,6 @@ export interface TomoriChatInput {
   textQuotaUserDiscId?: string;
   manualSystemPrompt?: string;
   manualPrefill?: string;
-  naiContinuationPrefill?: string;
   emptyResponseFinishReason?: string;
   shouldSurfaceUserErrors?: boolean;
   injectedContextItems?: StructuredContextItem[];
@@ -165,7 +164,6 @@ export interface ChatIncoming {
   textQuotaUserDiscId?: string;
   manualSystemPrompt?: string;
   manualPrefill?: string;
-  naiContinuationPrefill?: string;
   emptyResponseFinishReason?: string;
   shouldSurfaceUserErrors?: boolean;
   injectedContextItems?: StructuredContextItem[];
@@ -307,6 +305,7 @@ export interface ChatTurnContext {
   tomoriState: TomoriState;
   requestSnapshot: RequestSnapshot;
   contextItems: StructuredContextItem[];
+  nativeContextItems?: StructuredContextItem[];
   /** Kept out of `contextItems` because each attempt decides how its own model takes it. */
   assistantPrefill: TurnPrefill | null;
   /** Shared by every attempt of this persona turn; see {@link ExpressionDeliveryState}. */

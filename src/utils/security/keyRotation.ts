@@ -14,6 +14,7 @@
  */
 
 import { sql } from "@/utils/db/client";
+import { invalidateNovelAISubscription } from "@/utils/cache/novelaiSubscriptionCache";
 import { log } from "../misc/logger";
 import { encryptApiKey, decryptApiKey } from "./crypto";
 import { type ApiKeyRotationErrorType, type TomoriState, apiKeyRotationSchema } from "@/types/db/schema";
@@ -359,6 +360,7 @@ export async function addRotationKey(serverId: number, provider: string, apiKey:
       `;
     }
 
+    if (keyId && normalizedProvider === "novelai") invalidateNovelAISubscription(apiKey);
     log.success(`Added rotation key for server ${serverId} (provider: ${normalizedProvider})`);
     return true;
   } catch (error) {

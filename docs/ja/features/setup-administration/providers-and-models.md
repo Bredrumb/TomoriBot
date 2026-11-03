@@ -72,7 +72,7 @@ Brave SearchはAIプロバイダーとは別のもので、画像、ビデオ、
 - **埋め込み**: [ドキュメントナレッジベース](/ja/features/knowledge/memory/#document-knowledge-base-rag) を強化します。
 - **判定**: 登録済みの [判定モデル](#decision-models)。[Natural Nudges](/features/chatting-personality/natural-nudges/#active-nudges) が会話に参加するタイミングを決定するために使用します。
 - **標準イメージ**: 標準イメージの生成 ([イメージ生成](/ja/features/capabilities/media-generation/image-generation/) を参照)。
-- **NovelAIイメージ**: NovelAIイメージの生成。
+- **NovelAIイメージ**: [NovelAIイメージの生成](/features/integrations/novelai/#image-generation)。
 - **ビデオ**: ビデオの生成。
 - **TTSエンドポイント**: テキスト読み上げ音声エンドポイント。
 - **STTエンドポイント**: speech-to-textオーディオトランスクリプションエンドポイント。
@@ -141,7 +141,7 @@ OpenCode Go (`https://opencode.ai/zen/go/v1`) とOpenCode Zen (`https://opencode
 | Googleジェミニ | ✅ | ✅ | ✅ | ✅ | 無料モデルが利用可能 |
 | OpenRouter | ✅ | ✅ | ✅ | ✅ | OpenRouterクレジットを使用 |
 | 人間性 (API) | ✅ | ✅ | ✅ | - | クロード・コードではない |
-| NovelAI | ✅ | ✅ | - | - | GLM 4.6のみがツールを使用できます |
+| NovelAI | ✅ | - | - | - | テキストモデルはツールを使用できません。[NovelAI](/features/integrations/novelai/) を参照 |
 | NVIDIA NIM | ✅ | ✅ | ✅ | ✅ | 無料モデルが利用可能 |
 | ディープシーク | ✅ | ✅ | - | - | - |
 | Z.ai | ✅ | ✅ | ✅ | - | 無料モデル。🟡 ToS = コーディングとエージェントのみの使用 |

@@ -71,9 +71,10 @@ inverts the same map into `DOCS_LOCALE_ALIASES`.
 
 - **Picker order**: pickers follow `LOCALE_DISPLAY_ORDER`, derived from the row order of `DOCS_LOCALES`
 in `src/constants/docsLocales.ts`. Insert the new row where it should appear; that one move reorders
-the docs switcher, the README switcher, and the bot's picker. The picker in `/personal config` >
-Profile > General (also `/personal language`) is a String Select capped at 25 options
-(`MAX_SELECT_OPTIONS`), so a 26th locale needs a paginated picker first.
+the docs switcher, the README switcher, and the bot's language picker. `/personal config` picks from a
+String Select capped by `DISCORD_SELECT_OPTIONS_MAX` and `/personal language` from a slash choice
+list capped by Discord at 25 choices. A 26th locale therefore needs a paged panel picker and
+autocomplete on the command before either surface can offer it.
 
 Do not add a `DEFAULT_BOTNAME_{CODE}` variable. `general.defaults.bot_name` and
 `general.defaults.base_trigger_words` in the locale tree are the localized defaults; the environment

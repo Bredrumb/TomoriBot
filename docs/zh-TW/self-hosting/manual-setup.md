@@ -144,26 +144,33 @@ cron.database_name = 'your_dbname'
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 ```
 
-### Tokenizer資產：依模型調整的logit偏權值
+### Tokenizer 資產
 
-Logit偏權值（表情符號與詞彙重複懲罰）需要本機的tokenizer資產：
+NovelAI 文字生成與依模型調整的 logit 偏權值需要本機的 tokenizer 資產：
 
 ```sh
 bun run setup:tokenizers
 ```
 
-有些模型家族（例如Gemma）有使用門檻，在你接受授權之後需要一組
-[HuggingFace權杖](https://huggingface.co/settings/tokens)：
+如果 Hugging Face 存取失敗，請先設定存取權杖：
 
 ```sh
-# Windows (PowerShell)
+# PowerShell
 $env:HF_TOKEN="hf_xxx"; bun run setup:tokenizers
 
-# macOS/Linux
+# Linux / macOS
 HF_TOKEN=hf_xxx bun run setup:tokenizers
 ```
 
-沒有這一步，logit偏權值會默默停用，其他一切照常運作。
+缺少資產會停用選用的 logit 偏權值。NovelAI 文字生成需要其三個 tokenizer 家族，如果缺少或無效則會傳回設定錯誤。這些家族使用固定的公開 MIT 定義，不需要 Hugging Face 權杖。若要僅安裝這些家族：
+
+```sh
+bun run setup:tokenizers --family novelai_nerdstash_v2
+bun run setup:tokenizers --family novelai_llama3
+bun run setup:tokenizers --family novelai_glm
+```
+
+下載器會寫入存放庫的 `tokenizers/` 目錄。如果 `TOKENIZER_ASSET_DIR` 指向其他位置，請將下載的家族目錄複製到該處。安裝或修復資產後請重新啟動 TomoriBot，因為執行階段會快取載入失敗的狀態。
 
 安全的 `fetch_url` 後備與 DuckDuckGo 的 `web_search` 後備均在處理程序內執行，因此兩者都不需要額外安裝。
 

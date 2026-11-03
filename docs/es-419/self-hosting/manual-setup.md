@@ -161,9 +161,9 @@ Reinicia PostgreSQL y luego:
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 ```
 
-### Recursos del tokenizador : sesgo de logit según el modelo
+### Recursos del tokenizador
 
-El sesgo de logit (penalizaciones de repetición de emojis/palabras) necesita recursos de tokenizador
+La generación de texto de NovelAI y el sesgo de logit según el modelo necesitan recursos de tokenizador
 locales:
 
 ```sh
@@ -181,8 +181,15 @@ $env:HF_TOKEN="hf_xxx"; bun run setup:tokenizers
 HF_TOKEN=hf_xxx bun run setup:tokenizers
 ```
 
-Sin este paso, el sesgo de logit se deshabilita silenciosamente y todo lo demás funciona con
-normalidad.
+La falta de recursos desactiva el sesgo de logit opcional. La generación de texto de NovelAI requiere sus tres familias de tokenizadores y devuelve un error de configuración si faltan o no son válidas. Estas familias utilizan definiciones públicas MIT fijadas y no necesitan un token de Hugging Face. Para instalar únicamente esas familias:
+
+```sh
+bun run setup:tokenizers --family novelai_nerdstash_v2
+bun run setup:tokenizers --family novelai_llama3
+bun run setup:tokenizers --family novelai_glm
+```
+
+El descargador escribe en el directorio `tokenizers/` del repositorio. Si `TOKENIZER_ASSET_DIR` apunta a otro lugar, copia allí los directorios de familias descargados. Reinicia TomoriBot después de instalar o reparar recursos, porque el tiempo de ejecución almacena en caché los errores de carga.
 
 El respaldo seguro de `fetch_url` y el respaldo de `web_search` de DuckDuckGo se ejecutan dentro del proceso, por lo que ninguno necesita una instalación adicional.
 

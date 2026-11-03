@@ -749,27 +749,29 @@ async function handleSwitchModels(context: ConfigModelRouteContext): Promise<boo
 
   await baseRepaint(context, "switch", {
     receipt:
-      result.status === "provider-denied"
-        ? providerDeniedReceipt(locale, result.denied)
-        : result.status === "already-selected"
-          ? noChangesReceipt(locale, "commands.config.panel.model_already_selected_detail")
-          : result.status === "openrouter-moved"
-            ? receipt(
-                locale,
-                "warning",
-                "commands.config.panel.model_moved_heading",
-                "commands.config.panel.model_moved_detail",
-              )
-            : result.status === "no-models"
+      result.status === "novelai-unavailable"
+        ? receipt(locale, "error", "commands.providers.change_failed", result.descriptionKey)
+        : result.status === "provider-denied"
+          ? providerDeniedReceipt(locale, result.denied)
+          : result.status === "already-selected"
+            ? noChangesReceipt(locale, "commands.config.panel.model_already_selected_detail")
+            : result.status === "openrouter-moved"
               ? receipt(
                   locale,
-                  "error",
-                  "commands.model.text.no_models_title",
-                  "commands.model.text.no_models_description",
+                  "warning",
+                  "commands.config.panel.model_moved_heading",
+                  "commands.config.panel.model_moved_detail",
                 )
-              : result.status === "not-found"
-                ? staleReceipt(locale)
-                : writeFailedReceipt(locale),
+              : result.status === "no-models"
+                ? receipt(
+                    locale,
+                    "error",
+                    "commands.model.text.no_models_title",
+                    "commands.model.text.no_models_description",
+                  )
+                : result.status === "not-found"
+                  ? staleReceipt(locale)
+                  : writeFailedReceipt(locale),
   });
   return true;
 }

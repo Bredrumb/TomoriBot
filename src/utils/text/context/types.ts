@@ -30,6 +30,8 @@ export type SimplifiedMessageForContext = {
   authorPersonaId?: number | null;
   authorPersonaLineageId?: number | null;
   content: string | null;
+  completionContent?: string;
+  completionSpeaker?: false;
   createdAt?: number;
   mediaSourceMessageIds?: string[];
   remoteMediaSourceKind?: "reply" | "forwarded";
@@ -146,6 +148,7 @@ export interface BuildContextParams {
 
 /** Return type for both buildContext variants. */
 export type BuildContextResult = {
+  nativeContextItems?: StructuredContextItem[];
   contextItems: StructuredContextItem[];
   tailDirectives: string[];
   lowerPriorityTailDirectives: string[];

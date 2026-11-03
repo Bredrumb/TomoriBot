@@ -1,6 +1,7 @@
 export default {
   genai: {
     tool_failure: {
+      endpoint_blocked: `Este host não permite solicitações para o endereço deste endpoint.`,
       content_blocked: `O provedor rejeitou esta solicitação de ferramenta pelo filtro de conteúdo.`,
       authentication: `O provedor rejeitou as credenciais usadas para esta solicitação de ferramenta.`,
       quota: `O provedor recusou esta solicitação de ferramenta porque uma cota ou limite de faturamento foi atingido.`,
@@ -31,8 +32,6 @@ export default {
     max_iterations_streaming_description: `Fiquei presa em um ciclo de pensamento e não consegui concluir a solicitação, use \`/refresh\` se este problema persistir.`,
     still_working_title: `Ainda Trabalhando...`,
     still_working_description: `Esta tarefa está levando mais etapas do que o normal. Use \`/kill\` se você achar que estou travada.`,
-    nai_tool_retry_exhausted_title: `Erro de Ferramenta`,
-    nai_tool_retry_exhausted_description: `Uma ferramenta falhou várias vezes e não conseguiu concluir a solicitação. Por favor, tente novamente ou use \`/refresh\` se este problema persistir.`,
     tool_error_loop_title: `Ciclo de Erros de Ferramenta`,
     tool_error_loop_description: `Continuei encontrando erros de ferramenta e não consegui concluir a solicitação. Tente reformular ou use \`/refresh\` se este problema persistir.`,
     fallback_used_title: `Modelo Secundário Usado`,
@@ -100,6 +99,7 @@ export default {
       context_length_title: `🔴 Mensagem Muito Longa para Este Modelo`,
       credit_limit_title: `🔴 Créditos do Provedor Insuficientes`,
       balance_exhausted_title: `🔴 Conta do Provedor Sem Saldo`,
+      endpoint_blocked_title: `Endpoint Não Permitido`,
       flush_limit_title: `🟡️ Limite de Comprimento da Resposta Atingido`,
       flush_limit_description: `Esta resposta atingiu o limite máximo de comprimento de mensagem e foi interrompida. Você pode usar \`/respond\` para continuar manualmente a resposta, se necessário.`,
       inactivity_timeout_title: `🟡️ Tempo Limite da Resposta Esgotado`,
@@ -133,6 +133,8 @@ export default {
       choose_supported_model_personal: `Escolha um ID de modelo suportado com \`/personal config\` ou nas configurações do seu endpoint personalizado.`,
       verify_api_key: `Verifique novamente a chave de API deste servidor e tente novamente.`,
       verify_api_key_personal: `Verifique novamente sua chave de API pessoal com \`/personal providers\` e tente novamente.`,
+      endpoint_not_allowed: `Mude para um endpoint HTTPS público com \`/providers\`, ou pergunte a quem administra este host se um servidor local pode ser permitido.`,
+      endpoint_not_allowed_personal: `Mude para um endpoint HTTPS público com \`/personal providers\`, ou pergunte a quem administra este host se um servidor local pode ser permitido.`,
       verify_api_key_expiry: `As chaves do NVIDIA NIM expiram, e a NVIDIA recusa uma chave expirada com o mesmo erro de uma chave digitada errado. Confira a validade em [build.nvidia.com](https://build.nvidia.com) e gere uma nova chave se ela tiver vencido.`,
       nvidia_register_free_model: `A NVIDIA aposenta modelos hospedados com frequência. Escolha um que ela esteja servindo no momento nos [endpoints gratuitos da NVIDIA](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview), copie o ID do modelo (como \`deepseek-ai/deepseek-v4.1-flash\`) e depois adicione em \`/providers\` > NVIDIA NIM > **+ Adicionar novo Modelo de Texto**.`,
       nvidia_register_free_model_personal: `A NVIDIA aposenta modelos hospedados com frequência. Escolha um que ela esteja servindo no momento nos [endpoints gratuitos da NVIDIA](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview), copie o ID do modelo (como \`deepseek-ai/deepseek-v4.1-flash\`) e depois adicione em \`/personal providers\` > NVIDIA NIM > **+ Adicionar novo Modelo de Texto**.`,
@@ -180,6 +182,20 @@ export default {
       "403_predict_permission_message": `Esta chave não pode chamar modelos do Vertex AI Express. Use uma chave do modo Express, ou use o provedor \`vertex\` separado para projetos completos do Google Cloud.`,
     },
     novelai: {
+      tokenizer_setup:
+        "Os tokenizadores do NovelAI estão ausentes ou são inválidos. Peça ao host do bot para executar `bun run setup:tokenizers` e reiniciar o TomoriBot.",
+      input_complexity:
+        "Este prompt contém texto demais ou uma palavra contínua anormalmente longa. Encurte-o e tente novamente.",
+      context_overflow:
+        "A persona, os exemplos mínimos e a conversa recente excedem a janela de contexto deste modelo. Encurte-os ou escolha um modelo com uma janela maior.",
+      subscription_unavailable:
+        "Não foi possível carregar as informações de assinatura do NovelAI. Tente novamente em breve.",
+      subscription_inactive: "Esta chave do NovelAI não possui uma assinatura ativa.",
+      model_tier: "Esta assinatura do NovelAI não inclui o modelo de texto selecionado.",
+      xialong_opus:
+        "O Xialong requer uma assinatura ativa do NovelAI Opus. Use uma chave Opus ou selecione outro modelo de texto.",
+      continuation_exhausted:
+        "O NovelAI terminou antes de produzir uma resposta completa dentro do limite de saída. Tente novamente ou aumente o tamanho de saída configurado.",
       "400_default_message": `Formato ou parâmetros de solicitação inválidos. Por favor, certifique-se de ter inserido a chave de API correta.`,
       "400_trial_message": `Sua conta de teste requer verificação do recaptcha para gerações. O acesso à API requer uma assinatura paga do NovelAI. Por favor, atualize sua conta em https://novelai.net/`,
       "401_default_message": `Sua chave de API do NovelAI é inválida ou expirou`,
@@ -218,6 +234,7 @@ O modelo selecionado requer a permissão de dados para treinamento de modelo pag
     },
     custom: {
       "402_default_message": `Sua conta com este endpoint tem saldo insuficiente`,
+      PRIVATE_NETWORK_BLOCKED_default_message: `Este host não permite solicitações para o endereço deste endpoint.`,
       REDIRECT_CREDENTIALS_WITHHELD_default_message: `Este endpoint redirecionou para um endereço diferente, por isso o TomoriBot não enviou sua chave de API para lá. Quem gerencia este endpoint em \`/providers\` pode corrigir isso alterando sua URL para o endereço final para o qual o servidor redireciona.`,
       unknown_default_message: `Ocorreu um erro inesperado`,
     },

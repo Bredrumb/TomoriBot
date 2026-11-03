@@ -15,6 +15,7 @@ import type {
   SubscriptionCapability,
   AssembledServerConfig,
   NaiPresetRow,
+  LlmRow,
   ServerModelConfigRow,
   ServerChatConfigRow,
   ServerMemberPermissionsConfigRow,
@@ -39,6 +40,12 @@ import type { SqlParameterArray } from "@/types/db/sqlOperations";
 import { sql, withTransientDbRetry } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 import type { IRepository } from "./IRepository";
+import {
+  getNovelAIProfile,
+  getNovelAISamplerConfig,
+  enableNovelAIPresetSamplers,
+} from "@/providers/novelai/modelProfiles";
+import { llmProviderRepo } from "@/utils/db/repositories";
 
 const TEXT_ARRAY_CONFIG_COLUMNS = new Set([
   "subscription_capabilities",
@@ -135,12 +142,17 @@ export type ConfigExportShape = {
 };
 
 export class ConfigRepository implements IRepository<ConfigExportShape> {
+  async resolveNaiPreset(model: string, presetName?: string | null): Promise<NaiPresetRow | undefined> {
+    const target = getNovelAIProfile(model).samplingPresetTarget;
+    if (!target) return undefined;
+    const presets = await this.loadNaiPresets(target);
+    return presets.find((preset) => preset.preset_name === presetName) ?? presets.find((preset) => preset.is_default);
+  }
   /**
    * Loads NAI sampling presets available for a given NAI model target.
    *
-   * @param target - "kayra" or "erato"
    */
-  async loadNaiPresets(target: "kayra" | "erato"): Promise<NaiPresetRow[]> {
+  async loadNaiPresets(target: "kayra" | "erato" | "xialong"): Promise<NaiPresetRow[]> {
     try {
       const rows = await sql`
         SELECT * FROM nai_presets
@@ -205,8 +217,8 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   }
 
   /**
-   * Loads one preset per lineage in the locale's best available language (see `selectPresetsForLocale`).
-   * `nsfw` is required so every caller picks a side; only the age-restricted `/nsfw` routes pass true.
+   * Loads the preset rows for one locale in the most preferred fallback language that has a preset
+   * on the requested NSFW side, so a locale with any preset on that side never sees its untranslated ones.
    */
   async loadPresetRowsByLocale(locale: string, options: { nsfw: boolean }): Promise<TomoriPresetRow[] | null> {
     try {
@@ -377,27 +389,48 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
    *
    * @param serverId     - Internal server DB ID
    * @param preset       - NaiPresetRow to apply
-   * @param model        - LLM codename for temperature conversion
    * @param serverDiscId - Discord server snowflake used for cache invalidation
    * @returns true on success, false if any write failed
    */
-  async applyNaiPreset(serverId: number, preset: NaiPresetRow, model: string, serverDiscId: string): Promise<boolean> {
-    const params = preset.parameters;
-    const naiTemp = typeof params.temperature === "number" ? params.temperature : 1.35;
-    const llm_temperature = this.invertNaiTemperature(naiTemp, model);
-    const llm_top_k = typeof params.top_k === "number" ? Math.round(params.top_k) : 0;
-    const llm_top_p = typeof params.top_p === "number" ? params.top_p : 1.0;
-    const llm_min_p = typeof params.min_p === "number" ? params.min_p : 0.05;
+  async applyNaiPreset(
+    serverId: number,
+    preset: NaiPresetRow | null,
+    model: LlmRow,
+    serverDiscId: string,
+  ): Promise<boolean> {
+    if (!model.llm_id || model.llm_provider !== "novelai") return false;
+    if (preset && preset.model_target !== getNovelAIProfile(model.llm_codename).samplingPresetTarget) return false;
+    const saved = await llmProviderRepo.loadSavedProviderConfig(serverId, "novelai");
+    if (!saved) return false;
+    const { nai_preset_name, llm_temperature, llm_top_k, llm_top_p, llm_min_p } = getNovelAISamplerConfig(
+      model.llm_codename,
+      preset,
+    );
+    const llm_disabled_params = enableNovelAIPresetSamplers(saved.llm_disabled_params);
 
     // Write sampling params across their owning split tables in parallel.
-    const [modelOk, chatOk, naiOk] = await Promise.all([
-      this.updateModelConfig(serverId, { llm_temperature }),
+    const [modelOk, chatOk, naiOk, savedOk] = await Promise.all([
+      this.updateModelConfig(serverId, { llm_temperature, llm_disabled_params }),
       this.updateChatConfig(serverId, { llm_top_p, llm_top_k, llm_min_p }),
-      this.updateNovelaiImagegenConfig(serverId, { nai_preset_name: preset.preset_name }),
+      this.updateNovelaiImagegenConfig(serverId, { nai_preset_name }),
+      llmProviderRepo.upsertSavedProviderConfig(
+        serverId,
+        {
+          ...saved,
+          llm_id: model.llm_id,
+          nai_preset_name,
+          llm_temperature,
+          llm_top_k,
+          llm_top_p,
+          llm_min_p,
+          llm_disabled_params,
+        },
+        { serverDiscId },
+      ),
     ]);
 
-    const ok = modelOk && chatOk && naiOk;
-    if (modelOk || chatOk || naiOk) invalidateTomoriStateCache(serverDiscId);
+    const ok = modelOk && chatOk && naiOk && savedOk;
+    if (modelOk || chatOk || naiOk || savedOk) invalidateTomoriStateCache(serverDiscId);
     return ok;
   }
 
@@ -1251,10 +1284,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
         user_byok_mode = EXCLUDED.user_byok_mode,
         updated_at     = NOW()
     `;
-  }
-
-  private invertNaiTemperature(naiTemp: number, _model: string): number {
-    return Math.min(2.0, Math.max(0.0, naiTemp));
   }
 
   private rollAutochatTarget(minThreshold: number, maxThreshold: number): number {

@@ -820,7 +820,7 @@ async function buildRuntimeParityContext(
 
   // Character-estimate fallback passes provider=null (no live counting) → skip truncation.
   if (provider) {
-    contextSegments = await applyProviderContextTruncation(contextSegments, tomoriState, serverDiscId);
+    contextSegments = await applyProviderContextTruncation(contextSegments, tomoriState);
   }
 
   const lowerPriorityTailDirectives = [...contextBuild.lowerPriorityTailDirectives];

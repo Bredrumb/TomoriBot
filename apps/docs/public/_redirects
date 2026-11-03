@@ -138,6 +138,10 @@
 /en/features/integrations/pluralkit-support/ /en/features/integrations/message-proxy-support/#pluralkit 301
 /en/features/integrations/pluralbuddy-support /en/features/integrations/message-proxy-support/#pluralbuddy 301
 /en/features/integrations/pluralbuddy-support/ /en/features/integrations/message-proxy-support/#pluralbuddy 301
+/features/integrations/novelai-text /en/features/integrations/novelai/ 301
+/features/integrations/novelai-text/ /en/features/integrations/novelai/ 301
+/en/features/integrations/novelai-text /en/features/integrations/novelai/ 301
+/en/features/integrations/novelai-text/ /en/features/integrations/novelai/ 301
 # Cloud deployment pages moved to the release branch (docs/en/wiki/cloud/azure/), so the whole
 # subtree is absent from the built site. A splat rather than paired entries because this removes a
 # subtree rather than moving pages one-to-one, and it also covers the old

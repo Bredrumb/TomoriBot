@@ -20,6 +20,7 @@ export default {
     segment_tools: `Ferramentas`,
     segment_free: `Espaço livre`,
     segment_reserved: `Reservado para a resposta`,
+    novelai_measurement_note: `O total de tokens de entrada é contado localmente a partir do prompt renderizado do NovelAI. As proporções dos segmentos são aproximadas.`,
     estimate_note: `Estimado em cerca de 4 caracteres por token.`,
     not_counted_note: `Imagens, vídeos e formatação de mensagens do provedor não são contabilizados.`,
     truncated_note: `O histórico do chat excedeu o limite, então as {count} trocas mais antigas já foram omitidas.`,

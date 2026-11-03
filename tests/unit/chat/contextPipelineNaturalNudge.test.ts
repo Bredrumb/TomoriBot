@@ -33,6 +33,7 @@ async function buildTurnContext(
     includeInteractionHistory?: boolean;
     gestureHistory?: boolean;
     borrowsTriggerMessage?: boolean;
+    nativeContext?: boolean;
   } = {},
 ): Promise<{
   context: ChatTurnContext;
@@ -148,8 +149,8 @@ async function buildTurnContext(
     spyOn(userCache, "getCachedBlacklistStatus").mockResolvedValue(false),
     spyOn(blockCache, "getCachedActiveBlocksForPersona").mockResolvedValue([]),
     spyOn(naturalNudgeRepository, "loadAgendas").mockResolvedValue(new Map()),
-    spyOn(contextBuilder, "buildContext").mockImplementation(async (params) => ({
-      contextItems:
+    spyOn(contextBuilder, "buildContext").mockImplementation(async (params) => {
+      const contextItems =
         options.conditioningInteraction || options.gestureHistory
           ? params.simplifiedMessageHistory
               .filter((item) => options.includeInteractionHistory !== false || item.id !== trigger.id)
@@ -158,15 +159,20 @@ async function buildTurnContext(
                   role: "user",
                   metadataTag: ContextItemTag.DIALOGUE_HISTORY,
                   messageId: item.id,
+                  completionText: item.completionContent,
                   parts: [{ type: "text", text: item.content ?? "" }],
                 }),
               )
-          : [],
-      tailDirectives: [],
-      lowerPriorityTailDirectives: [],
-      nudgeInjectionDepth: 0,
-      messageIdMap: new MessageIdMap(),
-    })),
+          : [];
+      return {
+        contextItems,
+        nativeContextItems: options.nativeContext ? [...contextItems] : undefined,
+        tailDirectives: [],
+        lowerPriorityTailDirectives: [],
+        nudgeInjectionDepth: 0,
+        messageIdMap: new MessageIdMap(),
+      };
+    }),
   ];
   const reunion = spyOn(reunionPresence, "resolveReunionNote").mockResolvedValue({ note: null, presence: null });
   try {
@@ -284,6 +290,22 @@ describe("conditioning turn context", () => {
       }),
     );
     expect(text).not.toContain("`interact_with_target`");
+  });
+
+  it("retains one semantic gesture event in native context with or without fetched history", async () => {
+    for (const includeInteractionHistory of [true, false]) {
+      const { context, interactionEvent } = await buildTurnContext(undefined, {
+        conditioningInteraction: { actorType: "user", type: "reward" },
+        nativeContext: true,
+        includeInteractionHistory,
+      });
+      for (const items of [context.contextItems, context.nativeContextItems ?? []]) {
+        const events = items.filter((item) => item.messageId === interactionEvent?.messageId);
+        expect(events).toHaveLength(1);
+        expect(events[0].completionText).toBe(interactionEvent?.completionText);
+        expect(events[0].completionText).not.toMatch(/System:|interact_with_target/u);
+      }
+    }
   });
 });
 

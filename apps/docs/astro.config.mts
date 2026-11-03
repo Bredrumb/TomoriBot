@@ -514,7 +514,7 @@ export default defineConfig({
     "/architecture/integrations/matrix/bridge/": "/en/architecture/integrations/matrix/bridge/",
     "/architecture/integrations/novelai/inpainting/": "/en/architecture/integrations/novelai/inpainting/",
     "/architecture/integrations/novelai/limitations/": "/en/architecture/integrations/novelai/limitations/",
-    "/architecture/integrations/novelai/tool-calling/": "/en/architecture/integrations/novelai/tool-calling/",
+    "/architecture/integrations/novelai/tool-calling/": "/en/architecture/integrations/novelai/limitations/",
     "/architecture/integrations/sillytavern/card-support/": "/en/architecture/integrations/sillytavern/card-support/",
     "/architecture/integrations/sillytavern/preset-system/": "/en/architecture/integrations/sillytavern/preset-system/",
     "/architecture/pipelines/chat/01-normalize-invocation/": "/en/architecture/pipelines/chat/01-normalize-invocation/",
@@ -708,6 +708,8 @@ export default defineConfig({
     "/features/integrations/pluralbuddy-support/": "/en/features/integrations/message-proxy-support/#pluralbuddy",
     "/en/features/integrations/pluralkit-support/": "/en/features/integrations/message-proxy-support/#pluralkit",
     "/en/features/integrations/pluralbuddy-support/": "/en/features/integrations/message-proxy-support/#pluralbuddy",
+    "/features/integrations/novelai-text/": "/en/features/integrations/novelai/",
+    "/en/features/integrations/novelai-text/": "/en/features/integrations/novelai/",
   },
 
   // Docs content lives at repo-root `docs/`, surfaced via a junction at `src/content/docs`

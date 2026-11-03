@@ -72,7 +72,7 @@ En `/config` > `Modelos` > Modelos de conmutador, puede asignar modelos y puntos
 - **Incrustaciones**: potencia la [base de conocimiento de documentos](/es-419/features/knowledge/memory/#document-knowledge-base-rag).
 - **Decisión**: un [modelo de decisión](#decision-models) registrado. [Natural Nudges](/features/chatting-personality/natural-nudges/#active-nudges) lo utiliza para decidir cuándo unirse a una conversación.
 - **Imagen estándar**: generación de imágenes estándar (consulte [Generación de imágenes](/es-419/features/capabilities/media-generation/image-generation/)).
-- **Imagen NovelAI**: Generación de imágenes NovelAI.
+- **Imagen NovelAI**: [generación de imágenes de NovelAI](/features/integrations/novelai/#image-generation).
 - **Video**: generación de video.
 - **Punto final TTS**: punto final de voz de texto a voz.
 - **Punto final STT**: punto final de transcripción de audio de voz a texto.
@@ -141,7 +141,7 @@ Si no tiene el hardware para alojar sus propios modelos, TomoriBot admite una am
 | Google Géminis | ✅ | ✅ | ✅ | ✅ | Modelos gratuitos disponibles |
 | OpenRouter | ✅ | ✅ | ✅ | ✅ | Usa créditos de OpenRouter |
 | Antrópico (API) | ✅ | ✅ | ✅ | - | No código Claude |
-| NovelAI | ✅ | ✅ | - | - | Sólo GLM 4.6 puede utilizar herramientas |
+| NovelAI | ✅ | - | - | - | Los modelos de texto no pueden usar herramientas; consulta [NovelAI](/features/integrations/novelai/) |
 | NVIDIA NIM | ✅ | ✅ | ✅ | ✅ | Modelos gratuitos disponibles |
 | búsqueda profunda | ✅ | ✅ | - | - | - |
 | Z.ai | ✅ | ✅ | ✅ | - | Modelos gratuitos; 🟡 ToS = codificación y uso exclusivo del agente |

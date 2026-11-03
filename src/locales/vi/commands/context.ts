@@ -20,6 +20,7 @@ export default {
     segment_tools: `Công cụ`,
     segment_free: `Dung lượng trống`,
     segment_reserved: `Dành riêng cho câu trả lời`,
+    novelai_measurement_note: `Tổng số token đầu vào được đếm cục bộ từ prompt NovelAI đã kết xuất. Tỷ lệ giữa các phần chỉ là ước tính.`,
     estimate_note: `Ước tính khoảng 4 ký tự mỗi token.`,
     not_counted_note: `Hình ảnh, video và định dạng tin nhắn của nhà cung cấp không được tính.`,
     truncated_note: `Lịch sử trò chuyện vượt quá giới hạn, nên {count} lượt trao đổi cũ nhất đã được lược bỏ.`,

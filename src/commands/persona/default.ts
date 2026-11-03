@@ -22,7 +22,6 @@ import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { deletePersonaAvatarFromStorage, deletePersonaSpriteFromStorage } from "../../utils/storage/avatarStorage";
 import { deleteCharRef } from "@/utils/storage/charrefStorage";
 import { dedupeTriggerWords, normalizeTriggerWord, selectUnclaimedTriggerWords } from "@/utils/text/triggerWords";
-import { orderPersonaPresetChoices } from "@/utils/persona/presetOrdering";
 import { localizedStatusTitle, statusNote } from "@/utils/discord/ui/statusTitle";
 
 function isUniqueViolation(error: unknown): boolean {
@@ -248,9 +247,7 @@ export async function applyPresetDefault(
       return;
     }
 
-    const sortedPresets = orderPersonaPresetChoices(presets);
-
-    const presetSelectOptions: SelectOption[] = sortedPresets.map((preset: TomoriPresetRow) => ({
+    const presetSelectOptions: SelectOption[] = presets.map((preset: TomoriPresetRow) => ({
       label: safeSelectOptionText(preset.persona_preset_name),
       value: safeSelectOptionText(preset.persona_preset_name),
       description: safeSelectOptionText(preset.persona_preset_desc),

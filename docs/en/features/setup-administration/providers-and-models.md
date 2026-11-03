@@ -82,7 +82,7 @@ In `/config` > Models > Switch Models, you can assign models and endpoints acros
 - **Embeddings**: powers the [document knowledge base](/features/knowledge/memory/#document-knowledge-base-rag).
 - **Decision**: a registered [Decision model](#decision-models). [Natural Nudges](/features/chatting-personality/natural-nudges/#active-nudges) uses it to decide when to join a conversation.
 - **Standard Image**: standard image generation (see [Image Generation](/features/capabilities/media-generation/image-generation/)).
-- **NovelAI Image**: NovelAI image generation.
+- **NovelAI Image**: [NovelAI image generation](/features/integrations/novelai/#image-generation).
 - **Video**: video generation.
 - **TTS (Voice Design)**: speaks using a saved voice description.
 - **TTS (Voice Clone)**: speaks using a reference sample or provider voice.
@@ -144,7 +144,7 @@ cloud services. Not every feature is available on every provider.
 | Google Gemini | ✅ | ✅ | ✅ | ✅ | Free models available |
 | OpenRouter | ✅ | ✅ | ✅ | ✅ | Uses OpenRouter credits |
 | Anthropic (API) | ✅ | ✅ | ✅ | - | Not Claude Code |
-| NovelAI | ✅ | ✅ | - | - | Only GLM 4.6 can use tools |
+| NovelAI | ✅ | - | - | - | Text models cannot use tools; see [NovelAI](/features/integrations/novelai/) |
 | NVIDIA NIM | ✅ | ✅ | ✅ | ✅ | Free models available |
 | DeepSeek | ✅ | ✅ | - | - | - |
 | Z.ai | ✅ | ✅ | ✅ | - | Free models; 🟡 ToS = coding and agent use only |

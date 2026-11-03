@@ -72,7 +72,7 @@ Em `/config` > `Modelos` > Switch Models, você pode atribuir modelos e endpoint
 - **Incorporações**: alimenta a [base de conhecimento de documentos](/pt-BR/features/knowledge/memory/#document-knowledge-base-rag).
 - **Decisão**: um [modelo de Decisão](#decision-models) registrado. O [Natural Nudges](/features/chatting-personality/natural-nudges/#active-nudges) o utiliza para decidir quando entrar em uma conversa.
 - **Imagem padrão**: geração de imagem padrão (consulte [Geração de imagem](/pt-BR/features/capabilities/media-generation/image-generation/)).
-- **Imagem NovelAI**: geração de imagem NovelAI.
+- **Imagem NovelAI**: [geração de imagem NovelAI](/features/integrations/novelai/#image-generation).
 - **Vídeo**: geração de vídeo.
 - **Ponto final TTS**: ponto final de voz de conversão de texto em fala.
 - **Ponto final STT**: ponto final de transcrição de áudio de fala para texto.
@@ -141,7 +141,7 @@ Se você não possui hardware para hospedar seus próprios modelos, o TomoriBot 
 | Google Gêmeos | ✅ | ✅ | ✅ | ✅ | Modelos gratuitos disponíveis |
 | OpenRouter | ✅ | ✅ | ✅ | ✅ | Usa créditos do OpenRouter |
 | Antrópico (API) | ✅ | ✅ | ✅ | - | Não é o Código Claude |
-| NovelAI | ✅ | ✅ | - | - | Somente GLM 4.6 pode usar ferramentas |
+| NovelAI | ✅ | - | - | - | Modelos de texto não podem usar ferramentas; consulte [NovelAI](/features/integrations/novelai/) |
 | NVIDIA NIM | ✅ | ✅ | ✅ | ✅ | Modelos gratuitos disponíveis |
 | DeepSeek | ✅ | ✅ | - | - | - |
 | Z.ai | ✅ | ✅ | ✅ | - | Modelos gratuitos; 🟡 ToS = apenas codificação e uso do agente |

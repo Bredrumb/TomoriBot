@@ -231,9 +231,6 @@ export type PersonalConfigPanelRoute =
   | { action: "persona-page"; locale: string; lineageId: number; chooserPage: number }
   | { action: "language-open"; locale: string }
   | { action: "language-submit"; locale: string; nonce: string }
-  // Submitted by the modal `/personal language` shows directly. The panel's own submit repaints a
-  // message this one does not have, so the two actions cannot share a handler.
-  | { action: "language-only-submit"; locale: string; nonce: string }
   | { action: "timezone-open"; locale: string }
   | { action: "timezone-submit"; locale: string; nonce: string }
   | { action: "timezone-server"; locale: string }
@@ -588,10 +585,6 @@ export const PERSONAL_CONFIG_ROUTE_CODECS: PersonalConfigRouteCodecs = {
   },
   "language-submit": {
     wireToken: "language-submit",
-    fields: [nonceField],
-  },
-  "language-only-submit": {
-    wireToken: "language-only-submit",
     fields: [nonceField],
   },
   "timezone-open": {

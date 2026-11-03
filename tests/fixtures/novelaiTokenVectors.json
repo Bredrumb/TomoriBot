@@ -1,0 +1,232 @@
+[
+  {
+    "name": "plain-english",
+    "family": "novelai_nerdstash_v2",
+    "text": "The quick brown fox jumps over the goblin.",
+    "tokens": [541, 1939, 6573, 22820, 22734, 712, 336, 34477, 49230]
+  },
+  {
+    "name": "plain-english",
+    "family": "novelai_llama3",
+    "text": "The quick brown fox jumps over the goblin.",
+    "tokens": [791, 4062, 14198, 39935, 35308, 927, 279, 342, 48161, 13]
+  },
+  {
+    "name": "plain-english",
+    "family": "novelai_glm",
+    "text": "The quick brown fox jumps over the goblin.",
+    "tokens": [785, 3974, 13867, 38627, 34041, 916, 279, 342, 46771, 13]
+  },
+  {
+    "name": "whitespace",
+    "family": "novelai_nerdstash_v2",
+    "text": "  hello\tthere\n\nnext line\r\n    indented space end ",
+    "tokens": [14, 332, 20464, 84, 10748, 85, 85, 20976, 1929, 88, 85, 15, 573, 7292, 19, 11629, 20, 809, 49209]
+  },
+  {
+    "name": "whitespace",
+    "family": "novelai_llama3",
+    "text": "  hello\tthere\n\nnext line\r\n    indented space end ",
+    "tokens": [220, 24748, 197, 19041, 271, 3684, 1584, 319, 262, 1280, 16243, 128039, 8920, 128040, 408, 220]
+  },
+  {
+    "name": "whitespace",
+    "family": "novelai_glm",
+    "text": "  hello\tthere\n\nnext line\r\n    indented space end ",
+    "tokens": [220, 23745, 197, 18501, 271, 3600, 1555, 319, 262, 1257, 15852, 103245, 8745, 117950, 408, 220]
+  },
+  {
+    "name": "unicode",
+    "family": "novelai_nerdstash_v2",
+    "text": "Tiếng Việt: thử đi nhé. 中文：今晚一起玩嗎？ 日本語：こんばんは。 😄👩🏽‍💻",
+    "tokens": [
+      49247, 49214, 52650, 941, 30484, 52780, 49211, 49287, 370, 54374, 34272, 49214, 374, 49218, 49812, 49230, 12126,
+      49567, 49479, 49445, 55542, 49345, 49726, 51784, 56251, 49336, 49209, 10785, 49479, 12010, 13879, 49244, 49237,
+      49209, 53466, 51989, 55655, 51047, 53005
+    ]
+  },
+  {
+    "name": "unicode",
+    "family": "novelai_llama3",
+    "text": "Tiếng Việt: thử đi nhé. 中文：今晚一起玩嗎？ 日本語：こんばんは。 😄👩🏽‍💻",
+    "tokens": [
+      46451, 27160, 983, 101798, 25, 110832, 74686, 111591, 13, 73958, 17161, 5232, 37271, 107130, 109277, 106738,
+      127639, 11571, 105180, 102158, 5232, 69847, 81219, 25827, 15682, 1811, 27623, 226, 9468, 239, 102, 9468, 237, 121,
+      102470, 93273, 119
+    ]
+  },
+  {
+    "name": "unicode",
+    "family": "novelai_glm",
+    "text": "Tiếng Việt: thử đi nhé. 中文：今晚一起玩嗎？ 日本語：こんばんは。 😄👩🏽‍💻",
+    "tokens": [
+      45083, 25987, 968, 129549, 25, 144607, 73014, 137839, 13, 117604, 5122, 109758, 99306, 99346, 100551, 236, 11314,
+      108478, 131513, 5122, 68248, 79474, 24715, 15310, 1773, 26440, 226, 9281, 239, 102, 9281, 237, 121, 124564, 91399,
+      119
+    ]
+  },
+  {
+    "name": "code-url-mention",
+    "family": "novelai_nerdstash_v2",
+    "text": "Mirri: ```ts\nconst value = `hello`;\n```\nJuno: `a_b` https://example.com/a?q=1 <@123456789012345678> <:wave:123456789012345678>",
+    "tokens": [
+      29058, 445, 49287, 7595, 12434, 1111, 85, 8019, 2804, 1081, 7595, 332, 20464, 49969, 49360, 85, 35929, 85, 49320,
+      19216, 49287, 7595, 49212, 49313, 49229, 49969, 11951, 1970, 30042, 49230, 879, 49300, 49212, 49335, 49311, 49302,
+      124, 3252, 49810, 124, 125, 126, 127, 128, 129, 130, 131, 132, 123, 124, 125, 126, 127, 128, 129, 130, 131, 49405,
+      3252, 49287, 24082, 49287, 124, 125, 126, 127, 128, 129, 130, 131, 132, 123, 124, 125, 126, 127, 128, 129, 130,
+      131, 49405
+    ]
+  },
+  {
+    "name": "code-url-mention",
+    "family": "novelai_llama3",
+    "text": "Mirri: ```ts\nconst value = `hello`;\n```\nJuno: `a_b` https://example.com/a?q=1 <@123456789012345678> <:wave:123456789012345678>",
+    "tokens": [
+      59561, 462, 25, 55375, 2641, 198, 1040, 907, 284, 1595, 15339, 17338, 14196, 4077, 41, 16711, 25, 1595, 64, 890,
+      63, 3788, 1129, 8858, 916, 14520, 44882, 28, 16, 366, 31, 4513, 10961, 16474, 11531, 12901, 17458, 29, 49026,
+      31498, 25, 4513, 10961, 16474, 11531, 12901, 17458, 29
+    ]
+  },
+  {
+    "name": "code-url-mention",
+    "family": "novelai_glm",
+    "text": "Mirri: ```ts\nconst value = `hello`;\n```\nJuno: `a_b` https://example.com/a?q=1 <@123456789012345678> <:wave:123456789012345678>",
+    "tokens": [
+      58060, 461, 25, 53913, 2576, 198, 1024, 897, 284, 1565, 14978, 16890, 13865, 3989, 41, 16297, 25, 1565, 64, 880,
+      63, 3703, 1110, 8686, 905, 14177, 43532, 28, 16, 366, 31, 108714, 100461, 21, 100928, 24, 15, 98886, 18, 100461,
+      21, 100928, 29, 47625, 30281, 25, 108714, 100461, 21, 100928, 24, 15, 98886, 18, 100461, 21, 100928, 29
+    ]
+  },
+  {
+    "name": "story-markers",
+    "family": "novelai_nerdstash_v2",
+    "text": "[ Tags: dragons; Genre: fantasy ][ S: 4 ]\n***\n----\nMirri: hello\nJuno:",
+    "tokens": [
+      49356, 28, 49287, 12014, 49360, 29, 49287, 15052, 7794, 49356, 394, 49287, 49209, 127, 7794, 85, 23, 85, 24, 85,
+      29058, 445, 49287, 35535, 85, 49320, 19216, 49287
+    ]
+  },
+  {
+    "name": "story-markers",
+    "family": "novelai_llama3",
+    "text": "[ Tags: dragons; Genre: fantasy ][ S: 4 ]\n***\n----\nMirri: hello\nJuno:",
+    "tokens": [
+      58, 28783, 25, 51536, 26, 41395, 25, 18884, 36740, 328, 25, 220, 19, 5243, 34184, 33709, 59561, 462, 25, 24748,
+      198, 41, 16711, 25
+    ]
+  },
+  {
+    "name": "story-markers",
+    "family": "novelai_glm",
+    "text": "[ Tags: dragons; Genre: fantasy ][ S: 4 ]\n***\n----\nMirri: hello\nJuno:",
+    "tokens": [
+      58, 27590, 25, 50106, 26, 40074, 25, 18349, 35462, 328, 25, 220, 19, 5133, 32926, 32460, 58060, 461, 25, 23745,
+      198, 41, 16297, 25
+    ]
+  },
+  {
+    "name": "glm-template",
+    "family": "novelai_nerdstash_v2",
+    "text": "[gMASK]<sop><|system|>\nYou are Xialong (夏龍), an AI model finetuned by Anlatan. You follow the user's instructions precisely while bringing creativity, nuance, and depth to every response. Adapt your voice and style to match what the task demands.<|user|>\nMirri: hello\nJuno: hi!<|assistant|>\n<think></think>\n",
+    "tokens": [
+      49356, 49224, 38089, 49329, 49352, 49438, 49216, 495, 3538, 49376, 19093, 49376, 49405, 85, 1225, 462, 2018, 608,
+      577, 428, 50300, 50418, 859, 432, 13564, 3401, 1026, 393, 44012, 500, 1253, 26541, 355, 49230, 948, 1193, 336,
+      4171, 5, 10606, 18063, 1094, 8242, 21087, 49231, 23240, 652, 49231, 363, 9599, 357, 876, 4571, 49230, 1886, 2717,
+      549, 2438, 363, 3780, 357, 3762, 719, 336, 6549, 14033, 37653, 49376, 14034, 49376, 49405, 85, 29058, 445, 49287,
+      35535, 85, 49320, 19216, 49287, 26268, 49338, 49438, 49376, 628, 13603, 49376, 49405, 85, 49438, 24181, 6494,
+      24181, 49405, 85
+    ]
+  },
+  {
+    "name": "glm-template",
+    "family": "novelai_llama3",
+    "text": "[gMASK]<sop><|system|>\nYou are Xialong (夏龍), an AI model finetuned by Anlatan. You follow the user's instructions precisely while bringing creativity, nuance, and depth to every response. Adapt your voice and style to match what the task demands.<|user|>\nMirri: hello\nJuno: hi!<|assistant|>\n<think></think>\n",
+    "tokens": [
+      33612, 50963, 35239, 82, 454, 1822, 91, 9125, 91, 397, 2675, 527, 1630, 532, 647, 320, 105140, 108777, 705, 459,
+      15592, 1646, 1913, 295, 49983, 555, 1556, 5641, 276, 13, 1472, 1833, 279, 1217, 596, 11470, 24559, 1418, 12967,
+      28697, 11, 11148, 685, 11, 323, 8149, 311, 1475, 2077, 13, 59531, 701, 7899, 323, 1742, 311, 2489, 1148, 279,
+      3465, 18651, 16134, 91, 882, 91, 397, 59561, 462, 25, 24748, 198, 41, 16711, 25, 15960, 88032, 91, 78191, 91, 397,
+      14023, 771, 1500, 27963, 397
+    ]
+  },
+  {
+    "name": "glm-template",
+    "family": "novelai_glm",
+    "text": "[gMASK]<sop><|system|>\nYou are Xialong (夏龍), an AI model finetuned by Anlatan. You follow the user's instructions precisely while bringing creativity, nuance, and depth to every response. Adapt your voice and style to match what the task demands.<|user|>\nMirri: hello\nJuno: hi!<|assistant|>\n<think></think>\n",
+    "tokens": [
+      151331, 151333, 151335, 198, 2610, 525, 1599, 530, 644, 320, 99650, 82225, 235, 701, 458, 15223, 1614, 1875, 295,
+      48576, 553, 1527, 5524, 276, 13, 1446, 1795, 279, 1196, 594, 11216, 23573, 1393, 12672, 27505, 11, 10903, 681, 11,
+      323, 7989, 311, 1449, 2033, 13, 58030, 697, 7743, 323, 1707, 311, 2432, 1128, 279, 3383, 18126, 13, 151336, 198,
+      58060, 461, 25, 23745, 198, 41, 16297, 25, 15576, 0, 151337, 198, 151350, 151351, 198
+    ]
+  },
+  {
+    "name": "native-specials",
+    "family": "novelai_nerdstash_v2",
+    "text": "<|endoftext|><|startoftext|><|eot_id|><|start_header_id|>assistant<|end_header_id|>",
+    "tokens": [
+      3, 2, 49438, 49376, 49210, 388, 49313, 389, 49376, 3538, 49376, 13740, 49313, 33204, 49313, 389, 49376, 49405,
+      628, 13603, 49438, 49376, 809, 49313, 33204, 49313, 389, 49376, 49405
+    ]
+  },
+  {
+    "name": "native-specials",
+    "family": "novelai_llama3",
+    "text": "<|endoftext|><|startoftext|><|eot_id|><|start_header_id|>assistant<|end_header_id|>",
+    "tokens": [128001, 128000, 128009, 128006, 78191, 128007]
+  },
+  {
+    "name": "native-specials",
+    "family": "novelai_glm",
+    "text": "<|endoftext|><|startoftext|><|eot_id|><|start_header_id|>assistant<|end_header_id|>",
+    "tokens": [
+      151329, 27, 91, 2468, 14109, 427, 91, 1784, 91, 68, 354, 842, 91, 1784, 91, 2468, 8756, 842, 91, 29, 76478, 27,
+      91, 408, 8756, 842, 91, 29
+    ]
+  },
+  {
+    "name": "contractions",
+    "family": "novelai_nerdstash_v2",
+    "text": "don't can't we're I'LL it's I'm 0123456789 123456789 0.125",
+    "tokens": [
+      10966, 6, 539, 6, 429, 11, 378, 49256, 4025, 416, 5, 378, 12, 49209, 123, 124, 125, 126, 127, 128, 129, 130, 131,
+      132, 49209, 124, 125, 126, 127, 128, 129, 130, 131, 132, 49209, 123, 49230, 124, 125, 128
+    ]
+  },
+  {
+    "name": "contractions",
+    "family": "novelai_llama3",
+    "text": "don't can't we're I'LL it's I'm 0123456789 123456789 0.125",
+    "tokens": [
+      15357, 956, 649, 956, 584, 2351, 358, 6, 4178, 433, 596, 358, 2846, 220, 11531, 12901, 17458, 24, 220, 4513,
+      10961, 16474, 220, 15, 13, 6549
+    ]
+  },
+  {
+    "name": "contractions",
+    "family": "novelai_glm",
+    "text": "don't can't we're I'LL it's I'm 0123456789 123456789 0.125",
+    "tokens": [
+      14995, 944, 646, 944, 582, 2299, 358, 6, 4086, 432, 594, 358, 2776, 220, 15, 98886, 18, 100461, 21, 100928, 24,
+      220, 108714, 100461, 21, 100928, 24, 220, 15, 13, 109641
+    ]
+  },
+  {
+    "name": "empty",
+    "family": "novelai_nerdstash_v2",
+    "text": "",
+    "tokens": []
+  },
+  {
+    "name": "empty",
+    "family": "novelai_llama3",
+    "text": "",
+    "tokens": []
+  },
+  {
+    "name": "empty",
+    "family": "novelai_glm",
+    "text": "",
+    "tokens": []
+  }
+]

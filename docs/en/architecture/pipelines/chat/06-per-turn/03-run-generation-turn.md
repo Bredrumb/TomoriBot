@@ -66,6 +66,12 @@ Personal Text attempts apply the active provider's saved sampler settings before
 and history truncation. An explicit personal output-token limit overrides the server limit for both;
 an unset personal limit inherits the server setting. Both paths clamp the limit to the model's ceiling.
 
+NovelAI receives the original native context and one assistant prefill for each attempt. Its own
+fitter uses the key in the attempt's provider config to resolve the subscription window and count
+the final rendered prompt. Generic history truncation returns no budget for NovelAI. A rotated
+credential therefore prepares its request from the original source instead of an already-trimmed
+list. Other providers retain the preset-assembled context and generic truncation.
+
 ### Fallback text continuation
 
 Messages a failed attempt already posted stay in the channel. The next key-rotation or fallback
@@ -87,8 +93,8 @@ attempt continues the reply from where the failed one stopped:
   it first. Unhumanized replies aggregate into one final send, so their failed attempts post nothing
   and the next attempt starts fresh.
 - An empty continuation completes the turn with the carried text, unless the emptiness is a failure
-  the empty-response retry handles specifically: an output-token cap, a speaker-guard discard, or a
-  held NovelAI fragment.
+  the empty-response retry handles specifically: an output-token cap or a speaker-guard discard. NovelAI handles held fragments within its own
+  streaming session and reports an exhausted empty continuation as a provider error.
 - `prependDeliveredOutput()` adds the carried text to the final result, including a terminal failure,
   so short-term memory records everything posted.
 - After an SDK timeout, the tool loop awaits the abandoned stream for up to

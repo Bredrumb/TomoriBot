@@ -10,7 +10,7 @@ import {
   personaAuthoredIdleNudgesSchema,
 } from "@/modules/natural-nudges/db/types";
 
-const OFFICIAL_LINEAGE_IDS = new Set<number>([4, 716, 1770, 3585, 50, 666]); // 1337 (Zaya) pending
+const OFFICIAL_LINEAGE_IDS = new Set<number>([4, 256, 716, 1770, 3585, 50, 666]); // 1337 (Zaya) pending
 
 const PERSONA_COLUMNS =
   "persona_preset_name, persona_preset_desc, preset_attribute_list, preset_sample_dialogues_in, preset_sample_dialogues_out, preset_language, preset_avatar_path, preset_trigger_words, preset_lineage_id, preset_naming_config, is_nsfw, natural_nudge_interests, natural_nudge_talkativeness, natural_nudge_idle_nudges";

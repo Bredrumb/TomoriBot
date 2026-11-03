@@ -5,7 +5,8 @@ sidebar:
 ---
 
 TomoriBot can generate images from a description or edit a reference image. Ask her in chat or use
-`/generate image`. For manual NovelAI generation, use `/novelai generate image`.
+`/generate image`. For manual [NovelAI](/features/integrations/novelai/#image-generation)
+generation, use `/novelai generate image`.
 
 :::tip
 If a chat request does not produce an image, try `/generate image`. It calls the image model directly,

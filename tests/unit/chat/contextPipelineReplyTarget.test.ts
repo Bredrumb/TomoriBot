@@ -26,6 +26,8 @@ describe("history reply context", () => {
     "reused",
     "queued-missing",
     "queued-deleted",
+    "literal-system",
+    "merged",
   ])("resolves history references: %s", async (scenario) => {
     const prefetch = scenario.startsWith("prefetch");
     const fail = scenario === "prefetch-failure";
@@ -114,6 +116,11 @@ describe("history reply context", () => {
         reference: null,
       },
     ] as unknown as Message[];
+    const replyBody = scenario === "literal-system" ? "[System: a literal quotation]" : messages[0].content;
+    messages[0].content = replyBody;
+    if (scenario === "merged") {
+      messages.unshift({ ...messages[0], id: "followup", content: "and another thing", reference: null } as Message);
+    }
     if (prefetch) {
       const reply = messages[0];
       const target = messages[1];
@@ -285,9 +292,10 @@ describe("history reply context", () => {
         expect(reply?.remoteMediaSourceKind).toBe("reply");
         return;
       }
-      expect(target?.content).toContain(messages[1].content);
-      expect(reply?.content).toContain(messages[0].content);
-      if (!channelEvicted) expect(reply?.content).toContain(messages[1].content);
+      expect(target?.content).toContain(messages.find((message) => message.id === "target")?.content ?? "");
+      expect(reply?.content).toContain(replyBody);
+      expect(reply?.completionContent).toBe(scenario === "merged" ? `${replyBody}\nand another thing` : replyBody);
+      if (!channelEvicted && scenario !== "merged") expect(reply?.content).toContain(messages[1].content);
     } finally {
       if (windowScenario) channelLocks.delete(channel.id);
       release.resolve();

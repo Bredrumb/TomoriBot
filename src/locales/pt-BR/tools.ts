@@ -79,7 +79,6 @@ export default {
     },
     user_block: {
       error_missing_permission: `Preciso da permissão {permission} neste canal para anunciar um bloqueio. Peça a um administrador do servidor que a conceda e tente novamente.`,
-      notice_failed: `O bloqueio foi salvo, mas não consegui publicar a confirmação neste canal. Peça a um administrador para verificar minhas permissões.`,
       type_mute: `silenciamento`,
       type_block: `bloqueio`,
       effect_mute: `O alvo não pode acionar esta persona.`,

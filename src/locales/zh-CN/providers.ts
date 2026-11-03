@@ -1,6 +1,7 @@
 export default {
   genai: {
     tool_failure: {
+      endpoint_blocked: `当前主机不允许向该端点的地址发送请求。`,
       content_blocked: `提供方的内容过滤器拒绝了此工具请求。`,
       authentication: `提供方拒绝了此工具请求所使用的凭据。`,
       quota: `因达到配额或计费上限，提供方拒绝了此工具请求。`,
@@ -31,8 +32,6 @@ export default {
     max_iterations_streaming_description: `我陷进了思考循环，没能完成这次请求，如果一直这样请用 \`/refresh\`。`,
     still_working_title: `还在处理……`,
     still_working_description: `这次任务比平常多花了几步。觉得我卡住了就用 \`/kill\`。`,
-    nai_tool_retry_exhausted_title: `工具出错`,
-    nai_tool_retry_exhausted_description: `有个工具连续失败了好几次，没能完成这次请求。请再试一次，如果一直这样请用 \`/refresh\`。`,
     tool_error_loop_title: `工具错误循环`,
     tool_error_loop_description: `我反复遇到工具错误，没能完成这次请求。试着换个说法，如果一直这样请用 \`/refresh\`。`,
     fallback_used_title: `已使用备用模型`,
@@ -100,6 +99,7 @@ export default {
       context_length_title: `🔴 消息对这个模型来说太长`,
       credit_limit_title: `🔴 提供方额度不足`,
       balance_exhausted_title: `🔴 提供方账户余额用尽`,
+      endpoint_blocked_title: `不允许访问该端点`,
       flush_limit_title: `🟡️ 已达回复长度上限`,
       flush_limit_description: `这条回复已经达到最大消息长度上限，所以被中断了。如果需要，你可以用 \`/respond\` 手动继续生成。`,
       inactivity_timeout_title: `🟡️ 回复超时`,
@@ -133,6 +133,8 @@ export default {
       choose_supported_model_personal: `用 \`/personal config\` 或者你的自定义端点设置，选择一个受支持的模型 ID。`,
       verify_api_key: `请再核对一次这个服务器的 API 密钥，然后重试。`,
       verify_api_key_personal: `用 \`/personal providers\` 再核对一次你的个人 API 密钥，然后重试。`,
+      endpoint_not_allowed: `用 \`/providers\` 切换到一个公开的 HTTPS 端点，或者向当前主机的管理员询问是否允许使用本地服务器。`,
+      endpoint_not_allowed_personal: `用 \`/personal providers\` 切换到一个公开的 HTTPS 端点，或者向当前主机的管理员询问是否允许使用本地服务器。`,
       verify_api_key_expiry: `NVIDIA NIM 密钥会过期，而 NVIDIA 对过期密钥返回的错误和输错的密钥一样。请到 [build.nvidia.com](https://build.nvidia.com) 查看它的有效期，如果已经失效就重新生成一个。`,
       nvidia_register_free_model: `NVIDIA 经常下线托管的模型。请从 [NVIDIA 的免费端点](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview)里选一个它当前提供的模型，复制模型 ID（例如 \`deepseek-ai/deepseek-v4.1-flash\`），然后在 \`/providers\` > NVIDIA NIM > **+ 添加新文本模型** 里添加。`,
       nvidia_register_free_model_personal: `NVIDIA 经常下线托管的模型。请从 [NVIDIA 的免费端点](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview)里选一个它当前提供的模型，复制模型 ID（例如 \`deepseek-ai/deepseek-v4.1-flash\`），然后在 \`/personal providers\` > NVIDIA NIM > **+ 添加新文本模型** 里添加。`,
@@ -180,6 +182,14 @@ export default {
       "403_predict_permission_message": `这把密钥没法调用 Vertex AI Express 模型。请改用 Express 模式的密钥，或者改用独立的 \`vertex\` 提供方来跑完整的 Google Cloud 项目。`,
     },
     novelai: {
+      tokenizer_setup: "NovelAI 分词器缺失或无效。请联系 bot 管理员运行 `bun run setup:tokenizers` 并重启 TomoriBot。",
+      input_complexity: "此提示词包含过多文本或过长的不间断单词。请缩短后重试。",
+      context_overflow: "人格、最少示例和最近对话超出了此模型的上下文窗口。请缩短它们或选择具有更大窗口的模型。",
+      subscription_unavailable: "无法加载 NovelAI 订阅信息。请稍后重试。",
+      subscription_inactive: "此 NovelAI 密钥没有有效的订阅。",
+      model_tier: "此 NovelAI 订阅不包含所选的文本模型。",
+      xialong_opus: "Xialong 需要有效的 NovelAI Opus 订阅。请使用 Opus 密钥或选择其他文本模型。",
+      continuation_exhausted: "NovelAI 在输出配额内未能生成完整的回复就已结束。请重试或增加配置的输出长度。",
       "400_default_message": `请求格式或参数无效。请确认你输入了正确的 API 密钥。`,
       "400_trial_message": `你的试用账号生成时需要 recaptcha 验证。API 访问需要付费的 NovelAI 订阅。请到 https://novelai.net/ 升级账号`,
       "401_default_message": `你的 NovelAI API 密钥无效或已过期`,
@@ -218,6 +228,7 @@ export default {
     },
     custom: {
       "402_default_message": `你在这个端点上的账户余额不足`,
+      PRIVATE_NETWORK_BLOCKED_default_message: `当前主机不允许向该端点的地址发送请求。`,
       REDIRECT_CREDENTIALS_WITHHELD_default_message: `该端点重定向到了另一个地址，因此 TomoriBot 没有向其发送 API 密钥。在 \`/providers\` 中管理此端点的人可以通过将其 URL 改为服务器重定向到的最终地址来修复此问题。`,
       unknown_default_message: `发生了意料之外的错误`,
     },

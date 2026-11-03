@@ -77,7 +77,6 @@ export default {
     },
     user_block: {
       error_missing_permission: `我需要此頻道的 {permission} 權限才能發布封鎖通知。請讓伺服器管理員授予該權限後重試。`,
-      notice_failed: `封鎖已儲存，但我無法在此頻道發布確認訊息。請讓管理員檢查我的頻道權限。`,
       type_mute: `禁言`,
       type_block: `封鎖`,
       effect_mute: `對方無法觸發這個人格。`,

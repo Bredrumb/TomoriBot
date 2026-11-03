@@ -26,15 +26,16 @@ export function resolvePrefillPrompt(persona: TomoriState): string | null {
 }
 
 /**
- * Prefers the Personality attribute and falls back to the first attribute, so hand-written personas
- * without labelled attributes still get a select menu description.
+ * Prefers the Persona Prompt, then the Personality attribute, then the first attribute, so every
+ * persona that has displayed text gets a select menu description.
  */
 export function resolvePersonaSnippet(
-  persona: Pick<TomoriState, "persona_nickname" | "attribute_list">,
+  persona: Pick<TomoriState, "persona_nickname" | "persona_prompt" | "attribute_list">,
   maxLength: number,
 ): string | null {
   const source =
-    persona.attribute_list.find((attribute) => PERSONALITY_ATTRIBUTE_LABEL.test(attribute)) ??
+    persona.persona_prompt?.trim() ||
+    persona.attribute_list.find((attribute) => PERSONALITY_ATTRIBUTE_LABEL.test(attribute)) ||
     persona.attribute_list[0];
   if (!source) return null;
 

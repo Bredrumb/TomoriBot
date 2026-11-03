@@ -11,7 +11,7 @@ Official persona presets are seeded from typed catalog definitions under `src/db
 
 The canonical preset catalog stores character definitions keyed by `(preset_lineage_id, preset_language)`:
 
-- `preset_lineage_id`: Identifies the official character family across localized variants. Display names (`persona_preset_name`) can change in the catalog without altering lineage or requiring schema migrations.
+- `preset_lineage_id`: Identifies the official character family across localized variants. Display names (`persona_preset_name`) can change in the catalog without altering lineage or requiring schema migrations. When listing presets for a user locale, `selectPresetsForLocale()` picks the highest-priority fallback language that has at least one preset on the requested NSFW side and returns only that language's rows, falling back to `en-US` only when the locale has none. A locale that has at least one preset on a side therefore never sees presets that exist only in a later fallback language. The selected rows come back in ascending `preset_lineage_id` order, so `/setup` and `/persona default` offer the same sequence in every locale.
 - `preset_attribute_public_flags`: Boolean array indicating which attributes are shared publicly in conversation participant profiles. Official presets mark their appearance attributes public; other seeded attributes stay private.
 - `preset_avatar_shared_url` and `preset_avatar_hash`: Object storage reference and content hash for the bundled character avatar.
 - `preset_char_ref_shared_url`: Object storage reference for the bundled character reference image, used by reference-based image generation.

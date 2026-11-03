@@ -5,65 +5,58 @@ sidebar:
 aiGenerated: false
 ---
 
-每次觸發TomoriBot時，都會按以下順序組裝以下內容並將其發送到你配置的文字模型作為主要提示/上下文：
+TomoriBot 通常依序傳送這些提示詞區塊。
+[NovelAI](/features/integrations/novelai/) 涵蓋了其例外情況。
 
-| 堵塞 | 選修的？ | 命令 | 它是什麼 |
+| 區塊 | 選用？ | 指令 | 說明 |
 |---|---|---|---|
-| [系統提示](/zh-TW/features/chatting-personality/behavior-tweaking/#system-prompt) |  | `/config` > 行為 > 一般行為 | 上下文最頂部的基本說明。|
+| [系統提示詞](/features/chatting-personality/behavior-tweaking/#system-prompt) | | `/config` > 行為 > 一般行為 | 脈絡最頂部的基本說明。 |
+| 頻道提示詞（追加） | *(選用)* | `/config` > 頻道 > 頻道覆寫 | 每個頻道有所不同，在系統提示詞後立即分層。同一頁面的 *替換* 模式接管上面的系統提示詞槽位，而不是新增新的提示詞槽位。 |
+| 人格提示詞 | *(選用)* | `/config` > 人格 > 進階 | 專為使用中人格所寫的提示詞，與系統提示詞分開。 |
+| [人格屬性](/features/chatting-personality/multiple-personas/#attributes) | | `/config` > 人格 > 身分與個性 | 使用中人格的性格特徵與言語模式。 |
+| 伺服器資訊 | | *(無，來自 Discord)* | 伺服器名稱、說明與她所在的頻道，直接從 Discord 本身提取。 |
+| [人格-使用者封鎖](/features/capabilities/tools-and-extensions/built-in-tools/) | *(選用)* | `/moderation` 審核/清除；由 `/config` > 權限（使用者封鎖）控制 | 此人格針對特定使用者設定的主動靜音/封鎖限制。 |
+| [伺服器記憶](/features/knowledge/memory/#personal-vs-server-memories) | | `/memories` | 為此伺服器儲存的長期事實。 |
+| [伺服器表情符號](/features/chatting-personality/behavior-tweaking/#capabilities-what-shes-allowed-to-do) | *(選用)* | `/config` > 外掛 > 脈絡附加（`表情符號與反應`）（僅切換），使用 `/expressions initialize` 初始化 | 伺服器中存在的自訂表情符號。 |
+| [伺服器貼圖](/features/chatting-personality/behavior-tweaking/#expressions) | *(選用)* | `/config` > 外掛 > 可用工具（貼圖使用），使用 `/expressions initialize` 將原生資產分類，使用 `/expressions manage` 進行管理 | 可傳送的原生貼圖和符合回應人格的每個自訂表情，包括名稱、說明與情緒。媒體來源與人格存取規則位於提示詞之外。 |
+| [人格立繪](/features/chatting-personality/multiple-personas/#sprites-emotion-avatars) | *(選用)* | `/config` > 人格 > 立繪 | 為人格設定的具名表情立繪（如果有）。 |
+| [對話參與者](/features/knowledge/memory/#personal-vs-server-memories) | *(選用)* | `/personal memories`（由 `/config` > 權限（個人化）控制） | 對話中的人、他們的暱稱與提及名稱，以及為每個人儲存的個人記憶。當此人在脈絡中擁有訊息或提及其姓名/別名時載入。也使用 `/config` > 行為 > 一般行為將目前頻道與本地時間作為頁尾。 |
+| [短期記憶](/features/knowledge/memory/#short-term-memory-stm) | | `/config` > 人格 > 記憶；`/memories` 清除項目；由 `/config` > 權限（短期記憶）控制 | 包含不同頻道的摘要與近期訊息。 |
+| [文件](/features/knowledge/memory/#document-knowledge-base-rag) | *(選用)* | `/memories` | 使用 RAG 從知識庫中提取的相關區塊。 |
+| [世界書](/features/knowledge/lorebooks/) | *(選用)* | `/memories` > 世界書 | 關鍵字出現在近期訊息中的世界觀設定，加上一律啟用的項目。在文件之後傳送。 |
+| [獎勵與懲罰](/features/knowledge/memory/#conditioning) | *(選用)* | `/reward <feed\|headpat\|hug\|kiss\|tickle>`, `/punish <bite\|bonk\|pinch\|spank\|squeeze>`, 使用 `/conditioning remove` 管理 | 此人格在這個伺服器中累積的行為偏好。 |
+| [範例對話](/features/chatting-personality/multiple-personas/#sample-dialogues) | *(選用)* | `/config` > 人格 > 身分與個性 | 此人格如何說話的範例（若有設定）。 |
+| [近期訊息](/features/chatting-personality/behavior-tweaking/#generation-tuning) | | `/config` > 行為 > 一般行為 | 實際對話，最多這麼多則訊息（預設 80 則）。 |
+| 脈絡備忘 | *(選用)* | `/config` > 行為 > 一般行為；人格 > 進階；或 頻道 > 頻道覆寫 | 在距離最新訊息指定深度處，插入到近期訊息中的指示。 |
 
-> **預設系統提示文字**：僅在未設定伺服器系統提示時使用。>
-> *「你是 {bot}。{bot} 確保預設情況下做出簡短而簡潔的回應。{bot} 僅在情況允許的情況下才會做出冗長的回應。>
-> 每當有人分享某個細節或 {bot} 注意到對話中確實值得記住的細節（例如偏好、興趣或重要事實）時，{{if tool:create_long_term_memory}}{bot} 就會主動使用可用的 {memory_tool}，更願意記住一些事情，即使這些事情很小，只要它不與 {bot} 已經知道的內容重複即可。{{/if}}{{if tool:update_long_term_memory}}{bot} 當新資訊變更或新增至 {bot} 已記住的內容時，會使用 {memory_update_tool}，而不是儲存重複資訊。{{/if}} >
-> {{if tool:review_capabilities}}當有人詢問 {bot} 可以做什麼或為什麼某些內容不可用時，{bot} 在回答之前會檢查 {capabilities_tool}。{{/if}}{{if tool_family:url_fetch}}當需要更多詳細資訊時，{bot} 在`https://docs.tomoribot.app/llms.txt`上使用 {url_fetch_tool} 來取得資訊。{{/if}}"*
+選用的區塊在為空時不消耗 token。
 
-| 堵塞 | 選修的？ | 命令 | 它是什麼 |
-|---|---|---|---|
-| 頻道提示（追加） | *（選修的）* | `/config` > `頻道` > 頻道覆蓋 | 每個通道有所不同，在系統提示後立即分層。同一頁面的「替換」模式接管上面的系統提示槽，而不是新增新的提示槽。|
-| 人格提示 | *（選修的）* | `/config` > `人格` > 高級 | 專為活動人格所寫的提示，與系統提示分開。|
-| [人格屬性](/zh-TW/features/chatting-personality/multiple-personas/#attributes) |  | `/config` > `人格` > `身分與個性` | 活躍人格的性格特徵和言語模式。|
-| 伺服器資訊 |  | *（無，來自Discord）* | 伺服器名稱、描述和她所在的頻道均從Discord本身提取。|
-| [人格-使用者區塊](/zh-TW/features/capabilities/tools-and-extensions/#built-in-tools) | *（選修的）* | `/moderation`審核/清除；由`/config` > `權限`（使用者封鎖）門控 | 此人格針對特定使用者設定的主動靜音/封鎖限制。|
-| [伺服器記憶體](/zh-TW/features/knowledge/memory/#personal-vs-server-memories) |  | `/memories` | 為此伺服器保存的長期事實。|
-| [伺服器表情符號](/zh-TW/features/chatting-personality/behavior-tweaking/#capabilities-what-shes-allowed-to-do) | *（選修的）* | `/config` > `外掛` > 上下文新增（回復中的表情符號）（僅切換），使用`/expressions initialize`初始化 | 伺服器中存在的自訂表情符號。|
-| [伺服器貼圖](/zh-TW/features/chatting-personality/behavior-tweaking/#expressions) | *（選修的）* | `/config` > `外掛` > `可用工具`（`貼圖使用`），使用`/expressions initialize`將原生資產分類，使用`/expressions manage`進行管理 | 可傳送的原生貼圖和符合回應人格的每個自訂表情，包括名稱、描述和情緒。媒體來源和人格存取規則位於提示之外。|
-| [人格人格精靈](/zh-TW/features/chatting-personality/multiple-personas/#sprites-emotion-avatars) | *（選修的）* | `/config` > `人格` > 精靈 | 為人格配置的命名表情精靈（如果有）。|
-| [對話參加者](/zh-TW/features/knowledge/memory/#personal-vs-server-memories) | *（選修的）* | `/personal memories`（由`/config` > `權限`（個人化）閘控） | 對話中的人、他們的暱稱和提及句柄，以及保存的關於他們每個人的個人記憶。當此人在上下文中擁有某則訊息或提及其姓名/別名時載入。也使用`/config` > 行為 > 一般行為將目前頻道和本地時間作為頁腳。|
-| [短期記憶](/zh-TW/features/knowledge/memory/#short-term-memory-stm) |  | `/config` > `人格` > 回想；`/memories`清除條目；由`/config` > `權限`（短期記憶）閘控 | 包含不同管道的摘要和最新消息 |
-| [`文件`](/zh-TW/features/knowledge/memory/#document-knowledge-base-rag) | *（選修的）* | `/memories` | 使用RAG從知識庫中提取相關區塊。|
-| [獎勵與懲罰](/zh-TW/features/knowledge/memory/#conditioning) | *(選用)* | `/reward <feed\|headpat\|hug\|kiss\|tickle>`, `/punish <bite\|bonk\|pinch\|spank\|squeeze>`; 使用`/conditioning remove`管理 | 此人格在這個伺服器中累積的行為偏好。 |
-| [對話範例](/zh-TW/features/chatting-personality/multiple-personas/#sample-dialogues) | *（選修的）* | `/config` > `人格` > `身分與個性` | 此人格如何說話的範例（如果有）已配置。|
-| [最近訊息](/zh-TW/features/chatting-personality/behavior-tweaking/#generation-tuning) | | `/config` > 行為 > 一般行為 | 實際對話，最多這麼多則訊息（預設 80 則）。 |
-| 上下文備忘 | *(選填)* | `/config` > 行為 > 一般行為、人格 > 進階，或 頻道 > 頻道覆寫 | 在距離最新訊息指定深度處，插入到最近訊息中的指示。 |
+近期訊息形成一個滑動視窗。其他區塊則是根據已儲存的設定與記憶重建。
 
-當沒有什麼可說的時，標記為 *(可選)* 的行不貢獻任何內容（並且不花費任何代幣），例如沒有匹配的文件，或者伺服器沒有自訂表情符號。
+:::tip
+某些模型利用長提示詞開頭或結尾資訊的可靠程度，高於提示詞中間的資訊。對於使用脈絡備忘的供應商，請嘗試將指示放在靠近最新訊息的位置。效果取決於模型與任務。請參閱 [Lost in the Middle](https://aclanthology.org/2024.tacl-1.9/) 與 [Lost in the Haystack](https://arxiv.org/abs/2505.18148)。
+:::
 
-最近的消息是最大也是最脆弱的部分，它是一個隨著人們談話而向前滑動的視窗。它們之上的所有內容都是根據已儲存的設定重建的並且穩定。
+### 檢視提示詞
 
-`/tool prompt snapshot`將人格的確切包轉儲到檔案中。它是當前記憶活躍的基本事實、文件是否匹配以及對話的實際內容有多少。
-
-`/context`繪製與模型上下文視窗的彩色網格相同的束，上面每組塊一種顏色，因此你可以一目了然地看到它填充了什麼以及剩餘多少空間。圓圈標記小於一個正方形的組。它還顯示每個回應的估計輸入成本以及供應商為最後一個真實回覆報告的輸入令牌數量。
-
-`/tool estimate cost`按大小分解同一個包，這對於在提高任何限制之前確定是什麼正在消耗你的上下文很有用。
+- `/tool prompt snapshot` 將組裝好的提示詞儲存至檔案，包括使用中的記憶、文件與世界書。
+- `/context` 顯示脈絡使用量與預估輸入成本的視覺化解析。
+- `/tool estimate cost` 按大小與成本分解提示詞。
 
 ### 工具是在哪裡定義的？
 
-對於本機支援的每個供應商TomoriBot，工具模式透過供應商自己的`tools`欄位發送，因此它取決於供應商/配置的推理引擎。
+對於支援工具呼叫的供應商，TomoriBot 會透過供應商支援的介面傳送工具定義。
 
-### 為什麼TomoriBot會忘記？
+### 為什麼 TomoriBot 會忘記？
 
-這個順序幾乎解釋了每一個「她為什麼不記得？」的問題。問題：
-
-| 發生了什麼事 | 為什麼 |
+| 發生了什麼事 | 原因 |
 |---|---|
-| 她忘記了今天早些時候的一些事情 | 它滾動超過了訊息限制。只存在於最近的消息中，如果Tomori不將其保存為長期記憶，那麼一旦到達訊息視窗之外就會被遺忘。|
-| 她在另一個頻道忘記了一些東西 | 最近的消息是每個頻道的。僅伺服器記憶、對話參與者和短期記憶跨渠道。短期記憶透過從不同管道載入最近的訊息來解決這個問題，但它不會轉儲所有內容。|
-| `/refresh`讓她忘了 | 刷新會切斷最近的訊息並清除該頻道的短期記憶，但不應刪除長期記憶。刪除刷新嵌入以消除截止。|
-| 重啟後她忘了什麼 | 最近的消息永遠不會在重新啟動後保存 |
+| 她忘記了今天稍早的一些事情 | 內容已滾動超過訊息限制，且未儲存為長期記憶。 |
+| 她在另一個頻道忘記了某些事情 | 近期訊息是各頻道獨立的。伺服器記憶、參與者記憶與短期記憶會提供來自其他頻道的精選資訊。 |
+| `/refresh` 讓她忘記了 | 重新整理會截斷近期訊息並清除該頻道的短期記憶，但不會刪除長期記憶。刪除重新整理的嵌入訊息即可解除截斷。 |
 
-如果你想讓某個東西在上述所有情況下倖存下來，它就必須成為長期記憶。请参见[内存](/zh-TW/features/knowledge/memory/#long-term-memory)。
+如果你希望某項內容在上述所有情況下都能留存，它就必須成為長期記憶。請參閱[記憶](/features/knowledge/memory/#long-term-memory)。
 
-## 提示與技巧
-
-- `/config` > 行為 > 一般行為可以加寬對話視窗（20到100則訊息）。脈絡越多，每次回覆的token也越多。
-- `/config` > 行為 > 一般行為會在選定的深度注入一則簡短提醒。因為它位於組合中較低的位置、接近最近的訊息，她更可能照著做，而不是理會系統提示詞裡的內容。這裡是提醒她更常儲存記憶的最佳位置。
-- `/personal memories`與`/memories`會直接寫入`伺服器記憶`與對話參與者，這是讓知識在TomoriBot的脈絡中永久留存的保證方法之一。
+:::tip
+較大的訊息限制並不保證有更多歷史記錄會送達模型。當提示詞對於模型的脈絡視窗而言過大時，最舊的對話會在傳送前被捨棄；`/context` 會顯示剩餘的空間。
+:::

@@ -17,6 +17,7 @@ const selectedModel = createLlmRow({
   llm_codename: "provider-b-primary",
   llm_provider: "provider-b",
 });
+let modelToLoad = selectedModel;
 
 const tomoriState = createPersona({
   server_id: 7,
@@ -63,7 +64,7 @@ scopedMock.module("@/utils/cache/tomoriStateCache", () => ({
 scopedMock.module("@/utils/db/repositories", () => ({
   ...realRepositories,
   llmModelRepo: overrideMembers(realRepositories.llmModelRepo, {
-    loadById: async () => selectedModel,
+    loadById: async () => modelToLoad,
   }),
   configRepository: overrideMembers(realRepositories.configRepository, {
     updateModelConfig: async (_serverId: number, patch: Record<string, unknown>) => {
@@ -88,9 +89,29 @@ beforeEach(() => {
   invalidatedServers.length = 0;
   updatedModel = true;
   updatedChat = true;
+  modelToLoad = selectedModel;
 });
 
 describe("server provider activation fallback persistence", () => {
+  it("keeps sampler edits when replacing a NovelAI key without changing the model", async () => {
+    const { activateServerTextModelFromSavedConfig } = await import("@/utils/provider/providerActivation");
+    modelToLoad = createLlmRow({ llm_id: 44, llm_provider: "novelai", llm_codename: "kayra-v1" });
+    const result = await activateServerTextModelFromSavedConfig({
+      serverDiscId: "fixture-guild",
+      tomoriState: createPersona({ llm: modelToLoad, config: { llm_id: 44 } }),
+      savedConfig: {
+        ...savedConfig,
+        provider: "novelai",
+        llm_id: 44,
+        nai_preset_name: "Carefree-Kayra",
+        llm_temperature: 1.17,
+        llm_top_k: 33,
+      },
+    });
+    expect(result.status).toBe("activated");
+    expect(modelConfigPatches[0]).toMatchObject({ llm_temperature: 1.17 });
+    expect(chatConfigPatches[0]).toMatchObject({ llm_top_k: 33 });
+  });
   it.each([
     { model: true, chat: false },
     { model: false, chat: true },

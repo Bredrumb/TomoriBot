@@ -75,7 +75,8 @@ import { dispatchGlobalInteraction } from "@/utils/discord/interactions/router";
 import { getRegisterableLocales, initializeLocalizer, localizer } from "@/utils/text/localizer";
 import { loadCommandData } from "@/utils/discord/commandLoader";
 import type { UserPersonaNamingPreference } from "@/types/personaNaming";
-import { localizedProse, localizedCopy } from "../../helpers/localeCases";
+import { localizedProse, localizedCopy, expectForEveryLocale } from "../../helpers/localeCases";
+import { expectSafePanelPayload, collectTextDisplays } from "../../helpers/panelLimits";
 import { createPersona, createUserRow } from "../../helpers/fixtures";
 import {
   createRouteInteraction,
@@ -789,10 +790,6 @@ describe("personalConfigPanelCatalog", () => {
       { action: "language-submit", locale: "en-US", nonce: "nonce1234567" },
     ],
     [
-      "personal-config:v2:language-only-submit:en-US:nonce1234567",
-      { action: "language-only-submit", locale: "en-US", nonce: "nonce1234567" },
-    ],
-    [
       "personal-config:v2:timezone-submit:en-US:nonce1234567",
       { action: "timezone-submit", locale: "en-US", nonce: "nonce1234567" },
     ],
@@ -1043,7 +1040,7 @@ describe("personalConfigPanelCatalog", () => {
     // The codec table's mapped type requires one key per member of the action union, so its keys
     // are the declared actions without reading the union's source text.
     const declared = Object.keys(PERSONAL_CONFIG_ROUTE_CODECS);
-    expect(declared.length).toBe(67);
+    expect(declared.length).toBe(66);
     expect(declared.filter((action) => !pinned.has(action))).toEqual([]);
   });
 
@@ -1129,7 +1126,6 @@ describe("personalConfigPanelCatalog", () => {
       case "spotlight-remove-cancel":
         return [{ action, locale }];
       case "language-submit":
-      case "language-only-submit":
       case "timezone-submit":
       case "naming-submit":
       case "about-submit":
@@ -1207,7 +1203,7 @@ describe("personalConfigPanelCatalog", () => {
 
   it("round-trips every action in the codec table", () => {
     const actions = Object.keys(PERSONAL_CONFIG_ROUTE_CODECS) as PersonalConfigAction[];
-    expect(actions.length).toBe(67);
+    expect(actions.length).toBe(66);
 
     for (const action of actions) {
       const routes = buildRoutesForAction(action, false);
@@ -1243,7 +1239,7 @@ describe("personalConfigPanelCatalog", () => {
     // - page: "response-modes" (14 chars) is the longest PersonalConfigPage.
     // - mode: "follow" (6 chars) is the longest deliberate trigger/tool mode.
     const actions = Object.keys(PERSONAL_CONFIG_ROUTE_CODECS) as PersonalConfigAction[];
-    expect(actions.length).toBe(67);
+    expect(actions.length).toBe(66);
 
     for (const action of actions) {
       const routes = buildRoutesForAction(action, true);
@@ -1266,15 +1262,15 @@ describe("personalConfigPanelCatalog", () => {
       handlerSources.flatMap((source) => [...source.matchAll(/route\.action === "([a-z0-9-]+)"/g)].map((m) => m[1])),
     );
 
-    expect(tableActions.size).toBe(67);
-    expect(handlerActions.size).toBe(67);
+    expect(tableActions.size).toBe(66);
+    expect(handlerActions.size).toBe(66);
     expect([...tableActions].filter((a) => !handlerActions.has(a))).toEqual([]);
     expect([...handlerActions].filter((a) => !tableActions.has(a))).toEqual([]);
   });
 
   it("fails closed when dropping or appending a segment for every action in the table", () => {
     const actions = Object.keys(PERSONAL_CONFIG_ROUTE_CODECS) as PersonalConfigAction[];
-    expect(actions.length).toBe(67);
+    expect(actions.length).toBe(66);
 
     for (const action of actions) {
       const routes = buildRoutesForAction(action, false);
@@ -2188,6 +2184,46 @@ describe("personal config Appearance character reference", () => {
 });
 
 describe("Models panel rendering", () => {
+  it("shows the NovelAI context guide for personal text overrides without treating image generation as text", () => {
+    expectForEveryLocale((locale) => {
+      for (const textProvider of ["novelai", "openrouter", null]) {
+        const payload = buildPersonalConfigPanelPayload({
+          locale,
+          category: "models",
+          page: "switch",
+          user: makeUser(),
+          resolvedNickname: "Juno",
+          personas: [],
+          guildId: "guild-123",
+          memoryCount: 0,
+          stmCount: 0,
+          readStatus: "fresh",
+          modelDisplayInfo: makeModelDisplayInfo({
+            routingRows: {
+              text: {
+                capability: "text",
+                storedProvider: textProvider,
+                activeModelName: textProvider ? "text-model" : null,
+                storedModelName: textProvider ? "text-model" : null,
+              },
+              image_nai: {
+                capability: "image_nai",
+                storedProvider: "novelai",
+                activeModelName: "image-model",
+                storedModelName: "image-model",
+              },
+            },
+          }),
+        });
+        expectSafePanelPayload(payload, `${locale} text=${textProvider}`);
+        const text = collectTextDisplays(payload).join("\n");
+        const note = localizedProse("en-US", "commands.config.panel.novelai_context_note");
+        if (textProvider === "novelai") expect(text).toMatch(note);
+        else expect(text).not.toMatch(note);
+      }
+    });
+  });
+
   it("renders independent routing controls with bounded placeholders and no cursor or duplicate buttons", () => {
     const user = makeUser();
     const payload = buildPersonalConfigPanelPayload({
@@ -2612,6 +2648,35 @@ describe("Models panel rendering", () => {
 });
 
 describe("Model assignment writes on modal submit", () => {
+  it("renders a rejected personal Xialong selection by locale key", async () => {
+    const { dependencies } = makeDependencies([]);
+    const loadProviders = dependencies.loadUserSavedProviders;
+    dependencies.loadUserSavedProviders = async (userId) =>
+      (await loadProviders(userId)).map((row) => ({ ...row, provider: "novelai" }));
+    dependencies.loadAvailableModelsForCapability = async () => [{ id: 102, name: "xialong-v1" }];
+    dependencies.operations.setCapabilityModel = async () => ({
+      status: "novelai-unavailable",
+      descriptionKey: "genai.novelai.xialong_opus",
+    });
+    const route = createPersonalConfigInteractionRoute(dependencies);
+    const customId = buildPersonalConfigRouteId({
+      action: "model-modal-submit",
+      locale: "en-US",
+      capability: "text",
+      provider: "novelai",
+      nonce: "nonce123456",
+    });
+    const interaction = makePersonalInteraction({ kind: "modal", customId });
+    const modalsModule = await import("@/utils/discord/ui/modals");
+    const take = spyOn(modalsModule, "takeRawModalSelectValue").mockReturnValue("102");
+    try {
+      await route.execute({} as Client, interaction, requireRoute(customId));
+      expect(JSON.stringify(interaction.edits.at(-1))).toMatch(localizedProse("en-US", "genai.novelai.xialong_opus"));
+    } finally {
+      take.mockRestore();
+    }
+  });
+
   it("writes on submit even when the assignment newly activates a cross-server override", async () => {
     const calls: string[] = [];
 
@@ -2660,40 +2725,6 @@ describe("Model assignment writes on modal submit", () => {
     const json = JSON.stringify(interaction.edits.at(-1));
     expect(json).not.toContain("model-act-confirm");
     expect(json).toContain("Text now routes to OpenRouter using Claude 3 Opus");
-  });
-
-  it("answers the standalone language submit with a reply instead of repainting a panel", async () => {
-    const calls: string[] = [];
-
-    const { dependencies, telemetry } = makeDependencies(calls);
-    const route = createPersonalConfigInteractionRoute(dependencies);
-    const customId = buildPersonalConfigRouteId({
-      action: "language-only-submit",
-      locale: "en-US",
-      nonce: "nonce123456",
-    });
-
-    const interaction = makePersonalInteraction({
-      kind: "modal",
-      customId,
-      overrides: { id: "modal-lang-1" },
-    });
-
-    const modalsModule = await import("@/utils/discord/ui/modals");
-    const takeSpy = spyOn(modalsModule, "takeRawModalSelectValue").mockReturnValue("ja");
-
-    await route.execute({} as Client, interaction, requireRoute(customId));
-
-    takeSpy.mockRestore();
-
-    expect(calls).toContain("setLanguage:ja");
-    expect(telemetry).toContain("personal-config.personal.language.set");
-    // A slash-command modal has no message, so deferring an update would fail outright and the
-    // repaint the panel route ends with would have nothing to edit.
-    expect(interaction.calls.filter((call) => call.method === "deferUpdate")).toHaveLength(0);
-    const replied = interaction.replies.at(-1) as { content?: string } | undefined;
-    expect(replied).not.toBeNull();
-    expect(replied?.content).toContain("日本語");
   });
 
   it("writes immediately without confirmation when capability is already an active override", async () => {

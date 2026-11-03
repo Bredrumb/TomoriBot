@@ -887,5 +887,61 @@
     "codename": "nace-ai/drex-max",
     "releaseDate": null,
     "offeredAt": "2026-10-26"
+  },
+  {
+    "provider": "google",
+    "table": "videoSections",
+    "codename": "gemini-omni-flash-preview",
+    "releaseDate": "2026-06-30",
+    "offeredAt": "2026-11-02"
+  },
+  {
+    "provider": "openrouter",
+    "table": "llmSections",
+    "codename": "openai/gpt-6.1-terra-pro",
+    "releaseDate": "2026-10-26",
+    "offeredAt": "2026-11-02"
+  },
+  {
+    "provider": "openrouter",
+    "table": "decisionSections",
+    "codename": "baseten/joey-1",
+    "releaseDate": null,
+    "offeredAt": "2026-11-02"
+  },
+  {
+    "provider": "openrouter",
+    "table": "decisionSections",
+    "codename": "liquid/d1.1",
+    "releaseDate": null,
+    "offeredAt": "2026-11-02"
+  },
+  {
+    "provider": "openrouter",
+    "table": "decisionSections",
+    "codename": "~liquid/d1-ultra-latest",
+    "releaseDate": null,
+    "offeredAt": "2026-11-02"
+  },
+  {
+    "provider": "openrouter",
+    "table": "decisionSections",
+    "codename": "~liquid/d1-latest",
+    "releaseDate": null,
+    "offeredAt": "2026-11-02"
+  },
+  {
+    "provider": "openrouter",
+    "table": "decisionSections",
+    "codename": "baseten/mammoth-1",
+    "releaseDate": null,
+    "offeredAt": "2026-11-02"
+  },
+  {
+    "provider": "openrouter",
+    "table": "decisionSections",
+    "codename": "baseten/elephant-1",
+    "releaseDate": null,
+    "offeredAt": "2026-11-02"
   }
 ]

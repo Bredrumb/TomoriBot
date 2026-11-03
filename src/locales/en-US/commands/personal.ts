@@ -3,6 +3,7 @@ export default {
     description: `Manage your personal settings`,
     language: {
       description: `Choose the language TomoriBot speaks to you in.`,
+      language_description: `The language TomoriBot speaks to you in, in every server and DM.`,
     },
     providers: {
       description: `Manage your personal provider credentials, endpoints, and model catalogs.`,

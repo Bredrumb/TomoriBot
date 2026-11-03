@@ -85,7 +85,7 @@ TomoriBotに許可する操作や返答の生成方法は、`/config`の設定�
 - `/config` > `動作` > `一般的な動作`: プリセットのシステムプロンプトから選択します。`Default + Image Generation Expert` は、デフォルトのプロンプトに正確なアニメタグとキャラクター衣装のガイダンスを追加します（[タグ検索](/features/capabilities/media-generation/image-generation/#tag-lookup) を参照）。
 - `/config` > `動作` > `一般的な動作`: デフォルトにリセットします。確認には前のプロンプトが表示されるため、誤ってクリアした場合でも復元できます。
 
-[SillyTavernプリセット](/ja/features/integrations/sillytavern-support/) がアクティブな場合、組み込みのフォールバックシステムプロンプトは置き換えられますが、ここで設定したカスタムプロンプトは引き続き送信されます。
+[SillyTavernプリセット](/features/integrations/sillytavern-support/) がアクティブな場合、それがシステムプロンプトを制御します。保存されたサーバープロンプトを再度編集するには、プリセットをオフにしてください。
 
 ## 検閲なしの出力
 <!-- anchor: uncensored-output -->

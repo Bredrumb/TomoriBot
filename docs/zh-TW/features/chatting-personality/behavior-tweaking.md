@@ -84,7 +84,7 @@ aiGenerated: true
 - `/config` > `行為` > `一般行為`：從系統提示詞預設集中選擇。`Default + Image Generation Expert` 會在預設提示詞基礎上增加關於準確動漫標籤與角色服裝的指引（請參閱 [標籤查詢](/features/capabilities/media-generation/image-generation/#tag-lookup)）。
 - `/config` > `行為` > `一般行為`：重設為預設值。確認會顯示先前的提示，因此如果意外清除，你可以恢復它。
 
-當 [SillyTavern預設](/zh-TW/features/integrations/sillytavern-support/) 處於活動狀態時，內建回退系統提示將會被替換，但仍會傳送你在此處設定的自訂提示。
+當 [SillyTavern 預設集](/features/integrations/sillytavern-support/) 處於啟用狀態時，它會控制系統提示詞。關閉該預設集即可再次編輯已儲存的伺服器提示詞。
 
 ## 無審查輸出
 <!-- anchor: uncensored-output -->

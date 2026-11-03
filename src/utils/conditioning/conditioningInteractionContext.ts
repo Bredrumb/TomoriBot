@@ -24,6 +24,7 @@ export function buildConditioningInteractionEvent(params: {
     role: "user",
     metadataTag: ContextItemTag.DIALOGUE_HISTORY,
     messageId: params.messageId,
+    completionText: `*${params.actorName} just ${action} ${params.targetName}${food}${reason}.*`,
     parts: [
       {
         type: "text",

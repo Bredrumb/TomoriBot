@@ -8,7 +8,14 @@ import { getSupportedLocales, hasLocaleKey, initializeLocalizer, localizer } fro
 
 beforeAll(async () => initializeLocalizer());
 
-const TITLE_VARS = { persona_nickname: "Mirri", user_nickname: "Bau", target_user: "Bau" };
+const TITLE_VARS = {
+  persona_nickname: "Mirri",
+  user_nickname: "Bau",
+  target_user: "Bau",
+  persona_name: "Mirri",
+  user_name: "Bau",
+  duration_hours: 72,
+};
 
 describe("Minimal notice titles", () => {
   it("classify as the same kind as their Verbose title in every locale", () => {

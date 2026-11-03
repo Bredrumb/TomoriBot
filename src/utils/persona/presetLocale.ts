@@ -12,15 +12,11 @@ export function presetFallbackLanguages(locale: string): string[] {
 }
 
 /**
- * Picks one variant per preset lineage in the most preferred language that exists, so a preset that is
- * only partly translated stays reachable instead of disappearing behind the locale's other presets.
+ * Picks the presets in the most preferred language from {@link presetFallbackLanguages} that has at
+ * least one row for the requested NSFW side, falling back to English only when the locale has none.
  * `nsfw` selects one side of the flag: SFW routes never offer NSFW presets because only the
- * age-restricted `/nsfw` routes may, and the `/nsfw` listing offers nothing else.
- *
- * Rows without a lineage cannot be matched across languages, so they keep the whole-locale rule: they
- * appear only when their language is the most preferred one among the lineage-less rows. Linked rows
- * do not count toward that choice, or a translated official preset would hide every untranslated
- * custom one.
+ * age-restricted `/nsfw` routes may, and the `/nsfw` listing offers nothing else. Rows come back in
+ * ascending `preset_lineage_id` order, so the selector sequence is the same in every locale.
  *
  * @param rows - Candidate rows in any of {@link presetFallbackLanguages}
  */
@@ -30,23 +26,15 @@ export function selectPresetsForLocale(
   options: { nsfw: boolean },
 ): TomoriPresetRow[] {
   const languages = presetFallbackLanguages(locale);
-  const rank = (row: TomoriPresetRow) => languages.indexOf(row.preset_language);
-  const candidates = rows.filter((row) => rank(row) !== -1 && row.is_nsfw === options.nsfw);
+  const candidates = rows.filter((row) => row.is_nsfw === options.nsfw);
+  const selectedLanguage = languages.find((language) => candidates.some((row) => row.preset_language === language));
+  if (!selectedLanguage) return [];
 
-  const bestByLineage = new Map<number, TomoriPresetRow>();
-  const unlinked: TomoriPresetRow[] = [];
-  for (const row of candidates) {
-    if (row.preset_lineage_id === null || row.preset_lineage_id === undefined) {
-      unlinked.push(row);
-      continue;
-    }
-    // Bun returns BIGINT columns as strings at runtime despite the row type, so normalize the key.
-    const lineageId = Number(row.preset_lineage_id);
-    const current = bestByLineage.get(lineageId);
-    if (!current || rank(row) < rank(current)) bestByLineage.set(lineageId, row);
-  }
+  return candidates
+    .filter((row) => row.preset_language === selectedLanguage)
+    .sort((left, right) => lineageOrder(left) - lineageOrder(right));
+}
 
-  const unlinkedLanguage = languages.find((language) => unlinked.some((row) => row.preset_language === language));
-  const selected = [...bestByLineage.values(), ...unlinked.filter((row) => row.preset_language === unlinkedLanguage)];
-  return selected.sort((left, right) => left.persona_preset_name.localeCompare(right.persona_preset_name));
+function lineageOrder(preset: TomoriPresetRow): number {
+  return preset.preset_lineage_id ?? Number.MAX_SAFE_INTEGER;
 }

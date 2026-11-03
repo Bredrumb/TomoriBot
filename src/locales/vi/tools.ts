@@ -79,7 +79,6 @@ export default {
     },
     user_block: {
       error_missing_permission: `Tôi cần quyền {permission} trong kênh này để thông báo việc chặn. Hãy nhờ quản trị viên cấp quyền rồi thử lại.`,
-      notice_failed: `Đã lưu lệnh chặn nhưng tôi không thể gửi thông báo xác nhận trong kênh này. Hãy nhờ quản trị viên kiểm tra quyền của tôi.`,
       type_mute: `tắt tiếng`,
       type_block: `chặn`,
       effect_mute: `Đối tượng không thể kích hoạt persona này.`,

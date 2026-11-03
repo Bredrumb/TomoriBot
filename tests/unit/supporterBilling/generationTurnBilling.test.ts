@@ -12,7 +12,6 @@ import type { TextQuotaTriggerState } from "@/utils/chat/textQuotaState";
 import * as realRepositories from "@/utils/db/repositories";
 import * as realChannelLlmCache from "@/utils/cache/channelLlmCache";
 import * as realAdmissionGuards from "@/utils/chat/admissionGuards";
-import * as realNovelaiCapabilityCache from "@/utils/cache/novelaiCapabilityCache";
 import * as realNovelaiSubscriptionCache from "@/utils/cache/novelaiSubscriptionCache";
 import * as realOpenrouterCapabilityCache from "@/utils/cache/openrouterCapabilityCache";
 import * as realToolLoop from "@/utils/chat/toolLoop";
@@ -96,7 +95,6 @@ type TestStopContext = {
 const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/cache/channelLlmCache": realChannelLlmCache,
   "@/utils/chat/admissionGuards": realAdmissionGuards,
-  "@/utils/cache/novelaiCapabilityCache": realNovelaiCapabilityCache,
   "@/utils/cache/novelaiSubscriptionCache": realNovelaiSubscriptionCache,
   "@/utils/cache/openrouterCapabilityCache": realOpenrouterCapabilityCache,
   "@/utils/db/repositories": realRepositories,
@@ -125,14 +123,9 @@ scopedMock.module("@/utils/cache/channelLlmCache", () => ({
   getCachedChannelLlm: async () => channelModel,
 }));
 
-scopedMock.module("@/utils/cache/novelaiCapabilityCache", () => ({
-  ...realNovelaiCapabilityCache,
-  getNovelAITokenLimits: () => undefined,
-}));
-
 scopedMock.module("@/utils/cache/novelaiSubscriptionCache", () => ({
   ...realNovelaiSubscriptionCache,
-  getCachedContextTokens: () => undefined,
+  getCachedNovelAISubscription: () => undefined,
   refreshNovelAISubscription: async () => undefined,
 }));
 

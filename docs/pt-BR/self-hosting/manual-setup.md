@@ -155,9 +155,9 @@ Reinicie o PostgreSQL, depois:
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 ```
 
-### Ativos do tokenizador : logit bias compatível com o modelo
+### Ativos do tokenizador
 
-Logit bias (penalidades de repetição de emoji/palavra) precisa de ativos de tokenizador locais:
+A geração de texto do NovelAI e o logit bias compatível com o modelo precisam de ativos de tokenizador locais:
 
 ```sh
 bun run setup:tokenizers
@@ -174,7 +174,15 @@ $env:HF_TOKEN="hf_xxx"; bun run setup:tokenizers
 HF_TOKEN=hf_xxx bun run setup:tokenizers
 ```
 
-Sem esta etapa, o logit bias é silenciosamente desativado e tudo mais funciona normalmente.
+A falta de ativos desativa o logit bias opcional. A geração de texto do NovelAI requer suas três famílias de tokenizadores e retorna um erro de configuração se estiverem ausentes ou inválidas. Essas famílias usam definições públicas MIT fixadas e não necessitam de token do Hugging Face. Para instalar apenas essas famílias:
+
+```sh
+bun run setup:tokenizers --family novelai_nerdstash_v2
+bun run setup:tokenizers --family novelai_llama3
+bun run setup:tokenizers --family novelai_glm
+```
+
+O baixador grava no diretório `tokenizers/` do repositório. Se `TOKENIZER_ASSET_DIR` apontar para outro local, copie os diretórios de famílias baixados para lá. Reinicie o TomoriBot após instalar ou reparar ativos, pois o runtime armazena falhas de carregamento em cache.
 
 O fallback seguro do `fetch_url` e o fallback do `web_search` do DuckDuckGo são executados dentro do processo, portanto, nenhum deles precisa de instalação extra.
 

@@ -5,7 +5,8 @@ sidebar:
 aiGenerated: false
 ---
 
-Cada vez que activa TomoriBot, lo siguiente se ensambla y envía a su modelo de texto configurado como mensaje/contexto principal, en este orden:
+TomoriBot normalmente envía estos bloques de prompt en orden.
+[NovelAI](/features/integrations/novelai/) cubre sus excepciones.
 
 | Bloquear | ¿Opcional? | Comandos | que es |
 |---|---|---|---|
@@ -35,9 +36,13 @@ Cada vez que activa TomoriBot, lo siguiente se ensambla y envía a su modelo de 
 | [Mensajes recientes](/es-419/features/chatting-personality/behavior-tweaking/#generation-tuning) | | `/config` > Comportamiento > Comportamiento general | La conversación real, hasta esta cantidad de mensajes (80 por defecto). |
 | Nota de contexto | *(Opcional)* | `/config` > Comportamiento > Comportamiento general; Persona > Avanzado; o Canales > Anulación de canales | Una instrucción insertada entre los mensajes recientes a una profundidad elegida desde el último mensaje. |
 
-Las filas marcadas *(Opcional)* no aportan nada (y no cuestan tokens) cuando no hay nada que decir, p. no hay documentos que coincidan o el servidor no tiene emojis personalizados.
+Los bloques opcionales no cuestan tokens cuando están vacíos.
 
-Los mensajes recientes son la parte más grande y frágil, es una ventana que se desliza hacia adelante a medida que la gente habla. Todo lo que está encima de ellos se reconstruye a partir de la configuración guardada y es estable.
+Los mensajes recientes forman una ventana móvil. Los demás bloques se reconstruyen a partir de las configuraciones guardadas y las memorias.
+
+:::tip
+Algunos modelos usan la información cerca del principio o del final de un prompt largo de manera más confiable que la información en el medio. Para los proveedores que usan notas de contexto, prueba colocar una instrucción cerca del mensaje más reciente. El efecto depende del modelo y de la tarea. Consulta [Lost in the Middle](https://aclanthology.org/2024.tacl-1.9/) y [Lost in the Haystack](https://arxiv.org/abs/2505.18148).
+:::
 
 `/tool prompt snapshot` vuelca el paquete exacto de una persona en un archivo. Es la verdad fundamental sobre qué recuerdos están actualmente activos, si un documento coincide y qué parte de la conversación realmente encaja.
 
@@ -47,17 +52,15 @@ Los mensajes recientes son la parte más grande y frágil, es una ventana que se
 
 ### ¿Dónde se definen las herramientas?
 
-Para cada proveedor que TomoriBot admite de forma nativa, los esquemas de herramientas se envían a través del propio campo `tools` del proveedor, por lo que depende del proveedor/motor de inferencia configurado.
+Para los proveedores que admiten llamadas a herramientas, TomoriBot envía las definiciones de herramientas a través de la interfaz compatible del proveedor.
 
 ### ¿Por qué TomoriBot olvida?
 
-Este orden explica casi todos los "¿por qué no se acuerda?" pregunta:
-
 | Qué pasó | Por qué |
 |---|---|
-| Ella olvidó algo de hoy | Pasó el límite de mensajes. Solo estuvo en Mensajes recientes, si Tomori no lo guarda como memoria a largo plazo, se olvidará una vez que salga de la ventana del mensaje. |
-| Se le olvidó algo en otro canal. | Los mensajes recientes son por canal. Sólo las memorias del servidor, los participantes de la conversación y la memoria a corto plazo cruzan canales. La memoria a corto plazo soluciona esto cargando mensajes recientes de diferentes canales, pero no lo descarta todo. |
-| `/refresh` la hizo olvidar | Actualizar corta los mensajes recientes y borra la memoria a corto plazo de este canal, pero no debería eliminar la memoria a largo plazo. Elimina la inserción de actualización para eliminar el corte. |
+| Olvidó algo de hoy | Pasó el límite de mensajes sin haberse guardado como memoria a largo plazo. |
+| Olvidó algo en otro canal | Los mensajes recientes son específicos de cada canal. Las memorias del servidor, las memorias de participantes y la memoria a corto plazo proporcionan información seleccionada de otros canales. |
+| `/refresh` la hizo olvidar | Refresh corta los mensajes recientes y borra la memoria a corto plazo de este canal, pero no debería eliminar la memoria a largo plazo. Elimina el embed de refresh para quitar el corte. |
 | Olvidó algo después de reiniciar | Los mensajes recientes nunca sobreviven a los reinicios |
 
 Si quieres que algo sobreviva a todo lo anterior, tiene que convertirse en una memoria a largo plazo. Consulta [Memoria](/es-419/features/knowledge/memory/#long-term-memory).

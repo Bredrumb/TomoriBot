@@ -12,6 +12,7 @@ import { NOTICE_CONFIG_HINT_KEY, type NoticeVerbosity, type ToolNoticeKey } from
 import type { ToolContext } from "@/types/tool/interfaces";
 import { UpdateLongTermMemoryTool } from "@/tools/functionCalls/updateLongTermMemoryTool";
 import { UpdateUserInfoTool } from "@/tools/functionCalls/updateUserInfoTool";
+import { sendUserBlockedNotice } from "@/tools/functionCalls/userBlockToolShared";
 import { serverMemoryRepository, userNamingRepository, userRepository } from "@/utils/db/repositories";
 import { minimalNoticeRefRepository } from "@/utils/db/repositories/MinimalNoticeRefRepository";
 import { clearPersonaAppearances, commitPersonaAppearance } from "@/utils/cache/personaAppearanceCacheStore";
@@ -115,6 +116,20 @@ const memoryNotice = {
   descriptionVars: { memory_content: "likes tea" },
   footerKey: "genai.self_teach.server_memory_footer",
 };
+
+const BLOCK_TITLE_VARS = { persona_name: "Mirri", user_name: "Bau", duration_hours: 72 };
+
+/** Delivers the block confirmation the `block_user` tool posts after saving a row. */
+function sendBlockNotice(context: ToolContext): Promise<void> {
+  return sendUserBlockedNotice({
+    context,
+    targetDisplayName: "Bau",
+    blockType: "block",
+    durationHours: 72,
+    reason: "Asked the persona to stop answering.",
+    expiresAt: new Date("2026-11-05T04:44:00.000Z"),
+  });
+}
 
 // JSON-encoded payloads escape backticks and quotes the same way, so compare in that encoding.
 const encoded = (text: string) => JSON.stringify(text).slice(1, -1);
@@ -225,6 +240,32 @@ describe("hideable tool notices", () => {
     );
 
     expect(conversation.sent[0]).toContain("memory_notice_expand");
+  });
+
+  it("renders a Minimal block confirmation as its title alone and mirrors the full card to the thought log", async () => {
+    const conversation = fakeChannel("200");
+    const thoughtLog = fakeChannel("900");
+    await sendBlockNotice(buildContext({ hidden: [], conversation, thoughtLog }));
+
+    const title = localizedCopy("en-US", "tools.user_block.block_block_title", BLOCK_TITLE_VARS);
+    const footer = encoded(localizedCopy("en-US", "tools.user_block.block_footer"));
+    expect(conversation.sent).toHaveLength(1);
+    expect(conversation.sent[0]).toContain(`### ${encoded(title)}`);
+    expect(conversation.sent[0]).not.toContain(footer);
+    expect(thoughtLog.sent).toHaveLength(1);
+    expect(thoughtLog.sent[0]).toContain(footer);
+    expect(thoughtLog.sent[0]).toContain(SOURCE_URL);
+  });
+
+  it("keeps a Verbose block confirmation in the conversation alone", async () => {
+    const conversation = fakeChannel("200");
+    const thoughtLog = fakeChannel("900");
+    await sendBlockNotice(buildContext({ hidden: [], conversation, thoughtLog, verbosity: "verbose" }));
+
+    const footer = encoded(localizedCopy("en-US", "tools.user_block.block_footer"));
+    expect(thoughtLog.sent).toHaveLength(0);
+    expect(conversation.sent).toHaveLength(1);
+    expect(conversation.sent[0]).toContain(footer);
   });
 
   it("shrinks a visible progress notice to its title and drops the /kill hint", async () => {

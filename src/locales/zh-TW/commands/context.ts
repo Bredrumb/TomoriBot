@@ -20,6 +20,7 @@ export default {
     segment_tools: `工具`,
     segment_free: `可用空間`,
     segment_reserved: `為回覆保留`,
+    novelai_measurement_note: `總輸入 token 數是在本機根據算繪後的 NovelAI 提示詞統計的。各分段佔比為估算值。`,
     estimate_note: `以約每 4 個字元 1 個 token 估算。`,
     not_counted_note: `圖片、影片與供應商訊息格式未計入。`,
     truncated_note: `對話紀錄超出上限，因此最早的 {count} 輪對話已被略過。`,

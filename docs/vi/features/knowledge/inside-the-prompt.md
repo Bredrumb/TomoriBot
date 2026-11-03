@@ -5,7 +5,8 @@ sidebar:
 aiGenerated: false
 ---
 
-Mỗi khi bạn kích hoạt TomoriBot, nội dung sau sẽ được tập hợp và gửi đến model văn bản đã định cấu hình của bạn dưới dạng lời nhắc/ngữ cảnh chính, theo thứ tự sau:
+TomoriBot thông thường gửi các khối prompt này theo thứ tự.
+[NovelAI](/features/integrations/novelai/) giải thích các trường hợp ngoại lệ của nó.
 
 | Khối | Không bắt buộc? | Lệnh | Nó là gì |
 |---|---|---|---|
@@ -35,9 +36,13 @@ Mỗi khi bạn kích hoạt TomoriBot, nội dung sau sẽ được tập hợp
 | [Tin nhắn gần đây](/vi/features/chatting-personality/behavior-tweaking/#generation-tuning) | | `/config` > Hành vi > Hành vi chung | Cuộc trò chuyện thực tế, tối đa số tin nhắn này (mặc định 80). |
 | Ghi chú ngữ cảnh | *(Tùy chọn)* | `/config` > Hành vi > Hành vi chung; Persona > Nâng cao; hoặc Kênh > Ghi đè kênh | Hướng dẫn được chèn vào giữa các tin nhắn gần đây ở độ sâu đã chọn tính từ tin nhắn mới nhất. |
 
-Các hàng được đánh dấu *(Tùy chọn)* không đóng góp gì (và không tốn mã thông báo) khi không có gì để nói, ví dụ: không có tài liệu nào khớp hoặc máy chủ không có biểu tượng cảm xúc tùy chỉnh.
+Các khối tùy chọn không tốn token khi trống.
 
-Những tin nhắn gần đây là phần lớn nhất và dễ vỡ nhất, nó là một cửa sổ trượt về phía trước khi mọi người nói chuyện. Mọi thứ phía trên chúng đều được xây dựng lại từ các cài đặt đã lưu và ổn định.
+Tin nhắn gần đây tạo thành một cửa sổ di chuyển. Các khối khác được xây dựng lại từ cài đặt và bộ nhớ đã lưu.
+
+:::tip
+Một số model sử dụng thông tin ở gần đầu hoặc cuối của một prompt dài đáng tin cậy hơn thông tin ở giữa. Đối với các nhà cung cấp sử dụng ghi chú ngữ cảnh, hãy thử đặt hướng dẫn gần tin nhắn mới nhất. Hiệu quả phụ thuộc vào model và tác vụ. Xem [Lost in the Middle](https://aclanthology.org/2024.tacl-1.9/) và [Lost in the Haystack](https://arxiv.org/abs/2505.18148).
+:::
 
 `/tool prompt snapshot` đưa gói chính xác của một cá nhân vào một tệp. Đó là sự thật cơ bản mà ký ức hiện đang hoạt động, liệu tài liệu có trùng khớp hay không và mức độ thực sự phù hợp của cuộc trò chuyện.
 
@@ -47,20 +52,17 @@ Những tin nhắn gần đây là phần lớn nhất và dễ vỡ nhất, nó
 
 ### Công cụ được định nghĩa ở đâu?
 
-Đối với mọi nhà cung cấp mà TomoriBot hỗ trợ nguyên bản, các lược đồ công cụ sẽ được gửi qua trường `tools` của chính nhà cung cấp, do đó, điều này phụ thuộc vào công cụ suy luận được định cấu hình/nhà cung cấp.
+Đối với các nhà cung cấp hỗ trợ gọi công cụ, TomoriBot gửi các định nghĩa công cụ thông qua giao diện được hỗ trợ của nhà cung cấp.
 
 ### Tại sao TomoriBot quên?
 
-Thứ tự này giải thích hầu hết mọi câu hỏi "tại sao cô ấy không nhớ?" câu hỏi:
-
-| Chuyện gì đã xảy ra thế | Tại sao |
+| Chuyện gì đã xảy ra | Tại sao |
 |---|---|
-| Cô ấy đã quên một điều gì đó từ đầu ngày hôm nay | Nó đã vượt quá giới hạn tin nhắn. Nó chỉ có trong các tin nhắn Gần đây, nếu Tomori không lưu nó làm bộ nhớ dài hạn thì nó sẽ bị lãng quên khi ra ngoài cửa sổ tin nhắn. |
-| Cô ấy quên cái gì đó ở kênh khác | Tin nhắn gần đây là trên mỗi kênh. Chỉ có bộ nhớ Máy chủ, Người tham gia cuộc hội thoại và các kênh chéo bộ nhớ ngắn hạn. Bộ nhớ ngắn hạn khắc phục điều này bằng cách tải các tin nhắn gần đây từ các kênh khác nhau, nhưng nó không loại bỏ mọi thứ. |
-| `/refresh` khiến cô quên mất | Làm mới sẽ cắt các tin nhắn gần đây và xóa bộ nhớ ngắn hạn của kênh này nhưng không xóa bộ nhớ dài hạn. Xóa phần nhúng làm mới để loại bỏ phần giới hạn. |
-| Cô ấy quên thứ gì đó sau khi khởi động lại | Tin nhắn gần đây không bao giờ tồn tại khi khởi động lại |
+| Cô ấy đã quên một điều gì đó từ đầu ngày hôm nay | Nó đã cuộn qua giới hạn tin nhắn mà không được lưu làm bộ nhớ dài hạn. |
+| Cô ấy quên cái gì đó ở kênh khác | Tin nhắn gần đây là riêng cho từng kênh. Bộ nhớ máy chủ, bộ nhớ người tham gia và bộ nhớ ngắn hạn cung cấp thông tin được chọn từ các kênh khác. |
+| `/refresh` khiến cô ấy quên mất | Làm mới sẽ cắt các tin nhắn gần đây và xóa bộ nhớ ngắn hạn của kênh này, nhưng không nên xóa bộ nhớ dài hạn. Xóa phần nhúng làm mới để loại bỏ phần giới hạn. |
 
-Nếu bạn muốn thứ gì đó tồn tại được sau tất cả những điều trên thì nó phải trở thành trí nhớ lâu dài. Xem [Bộ nhớ](/vi/features/knowledge/memory/#long-term-memory).
+Nếu bạn muốn thứ gì đó tồn tại được sau tất cả những điều trên thì nó phải trở thành trí nhớ lâu dài. Xem [Bộ nhớ](/features/knowledge/memory/#long-term-memory).
 
 ## Mẹo và thủ thuật
 

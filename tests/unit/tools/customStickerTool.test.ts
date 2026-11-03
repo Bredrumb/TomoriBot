@@ -48,7 +48,6 @@ describe("custom sticker selection", () => {
     expect(JSON.stringify(result.data)).not.toContain("https://");
     expect(JSON.stringify(result.data)).not.toContain("storage_reference");
     for (const overrides of [
-      { provider: "novelai" },
       { isUserImpersonation: true },
       { tomoriState: createPersona({ config: { sticker_usage_enabled: false } }) },
     ]) {

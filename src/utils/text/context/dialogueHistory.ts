@@ -166,6 +166,7 @@ export async function appendDialogueHistoryContext(params: {
     }
 
     const parts: ContextPart[] = [];
+    const completionParts: ContextPart[] = [];
     const detachedSystemParts: ContextPart[] = [];
     const mediaDescriptors: MediaDescriptor[] = [];
     const isWithinMediaWindow = index >= mediaWindowCutoff;
@@ -198,10 +199,12 @@ export async function appendDialogueHistoryContext(params: {
       role,
       parts,
       detachedSystemParts,
+      completionParts,
       hasMediaDescriptors: mediaDescriptors.length > 0,
       mediaAttributionHint,
     });
     appendDocumentHintParts({ ...params, msg, parts });
+    const firstItemIndex = params.contextItems.length;
 
     if (role === "user" && (parts.length > 0 || detachedSystemParts.length > 0 || mediaDescriptors.length > 0)) {
       pushDialogueHistoryContextItem(
@@ -235,6 +238,11 @@ export async function appendDialogueHistoryContext(params: {
         mediaDescriptors,
         msg.combinedMessageIds,
       );
+    }
+    for (const item of params.contextItems.slice(firstItemIndex)) {
+      if (item.parts === parts || item.role === role) {
+        item.completionText = completionParts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n");
+      }
     }
   }
 
@@ -461,6 +469,7 @@ async function appendTextParts(
     role: "user" | "model";
     parts: ContextPart[];
     detachedSystemParts: ContextPart[];
+    completionParts: ContextPart[];
     hasMediaDescriptors: boolean;
     mediaAttributionHint: string | null;
   },
@@ -475,8 +484,12 @@ async function appendTextParts(
 
   if (params.msg.content) {
     let normalizedContent = normalizeCustomEmojisForLlm(params.msg.content);
+    let completionContent = normalizeCustomEmojisForLlm(params.msg.completionContent ?? params.msg.content);
     if (params.msg.authorPersonaLineageId != null && params.historyPersonaMentionLabels) {
       normalizedContent = normalizedContent.replace(/<@!?(\d+)>/gu, (mention, targetId: string) => {
+        return params.historyPersonaMentionLabels?.get(`${params.msg.authorPersonaLineageId}:${targetId}`) ?? mention;
+      });
+      completionContent = completionContent.replace(/<@!?(\d+)>/gu, (mention, targetId: string) => {
         return params.historyPersonaMentionLabels?.get(`${params.msg.authorPersonaLineageId}:${targetId}`) ?? mention;
       });
     }
@@ -531,6 +544,21 @@ async function appendTextParts(
     if (!processedContent.startsWith("[System:")) {
       processedContent = applyUncensorInputTransforms(processedContent, params.uncensorInputOptions);
     }
+    const completionText = await params.convertMentions(
+      completionContent
+        ? params.msg.completionSpeaker === false
+          ? completionContent
+          : `${resolvedAuthorLabel}: ${completionContent}`
+        : "",
+      params.client,
+      params.guildId,
+      params.msg.authorName,
+      params.botName,
+      params.tomoriConfig.personal_memories_enabled,
+      undefined,
+      "preserve",
+    );
+    params.completionParts.push({ type: "text", text: completionText });
     if (params.mediaAttributionHint) processedContent += `\n${params.mediaAttributionHint}`;
     params.parts.push({ type: "text", text: processedContent });
     if (params.includeTimestamps && params.msg.createdAt) {

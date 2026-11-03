@@ -49,7 +49,7 @@ bun run setup
 |---|---|
 | `pgvector` | 文件/RAG 記憶的向量搜尋。 |
 | `pg_cron` | 選用的排程冷卻/提醒資料列清理。 |
-| Tokenizer 資產 | 本機 tokenizer 資產，用於依模型調整的 logit 偏權值。 |
+| Tokenizer 資產 | 本機 tokenizer 資產，用於 NovelAI 文字生成與依模型調整的 logit 偏權值。 |
 
 若要手動安裝其中任何一項，請參閱
 [手動設定的額外項目](/self-hosting/manual-setup/#optional-extras-the-manual-full-install)。

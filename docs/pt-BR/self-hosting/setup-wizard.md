@@ -56,7 +56,7 @@ exibe o comando ou guia para concluir manualmente e continua:
 |---|---|
 | `pgvector` | Busca vetorial para memória de documentos/RAG. |
 | `pg_cron` | Limpeza opcional agendada de linhas de tempo de recarga e lembretes. |
-| Ativos do tokenizador | Ativos locais de tokenizador para viés de logit com base no modelo. |
+| Ativos do tokenizador | Ativos locais de tokenizador para geração de texto do NovelAI e viés de logit com base no modelo. |
 
 Para instalar qualquer um deles manualmente, veja os
 [Extras da Configuração Manual](/self-hosting/manual-setup/#optional-extras-the-manual-full-install).

@@ -2,8 +2,7 @@ import type { GuildMember } from "discord.js";
 import type { PersonaUserBlockRow, PersonaUserBlockType } from "@/types/db/schema";
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { invalidatePersonaUserBlockCache } from "@/utils/cache/personaUserBlockCache";
-import { sendStandardEmbed } from "@/utils/discord/embedHelper";
-import { buildToolPersonaPostContext } from "@/utils/discord/webhook/toolPersonaDelivery";
+import { sendToolNoticeContainer } from "@/utils/discord/expandableEmbedNotice";
 import { resolveUserTarget } from "@/utils/discord/targetResolver";
 import { personaUserBlockRepository } from "@/utils/db/repositories";
 import { ColorCode, log } from "@/utils/misc/logger";
@@ -242,7 +241,7 @@ export function getBlockEffectText(locale: string, blockType: PersonaUserBlockTy
   return localizer(locale, BLOCK_EFFECT_KEYS[blockType]);
 }
 
-export async function sendUserBlockedEmbed(params: {
+export async function sendUserBlockedNotice(params: {
   context: ToolContext;
   targetDisplayName: string;
   blockType: PersonaUserBlockType;
@@ -258,37 +257,31 @@ export async function sendUserBlockedEmbed(params: {
   const timezoneOffset = params.context.tomoriState.config.timezone_offset ?? 0;
   const locale = params.context.locale;
 
-  await sendStandardEmbed(
-    params.context.channel,
-    locale,
-    {
-      titleKey:
-        params.blockType === "mute" ? "tools.user_block.block_mute_title" : "tools.user_block.block_block_title",
-      titleVars: {
-        persona_name: personaName,
-        user_name: params.targetDisplayName,
-        duration_hours: params.durationHours,
-      },
-      descriptionKey:
-        params.blockType === "mute"
-          ? "tools.user_block.mute_success_description"
-          : "tools.user_block.block_success_description",
-      descriptionVars: {
-        user_name: params.targetDisplayName,
-        persona_name: personaName,
-        block_type: getBlockTypeLabel(locale, params.blockType),
-        effect: getBlockEffectText(locale, params.blockType),
-        duration_hours: params.durationHours,
-        expires_at: formatExpiry(params.expiresAt, timezoneOffset, locale),
-      },
-      footerKey: "tools.user_block.block_footer",
-      color: params.blockType === "mute" ? ColorCode.WARN : ColorCode.ERROR,
+  await sendToolNoticeContainer(params.context, "user_block", {
+    titleKey: params.blockType === "mute" ? "tools.user_block.block_mute_title" : "tools.user_block.block_block_title",
+    titleVars: {
+      persona_name: personaName,
+      user_name: params.targetDisplayName,
+      duration_hours: params.durationHours,
     },
-    buildToolPersonaPostContext(params.context, params.context.tomoriState),
-  );
+    descriptionKey:
+      params.blockType === "mute"
+        ? "tools.user_block.mute_success_description"
+        : "tools.user_block.block_success_description",
+    descriptionVars: {
+      user_name: params.targetDisplayName,
+      persona_name: personaName,
+      block_type: getBlockTypeLabel(locale, params.blockType),
+      effect: getBlockEffectText(locale, params.blockType),
+      duration_hours: params.durationHours,
+      expires_at: formatExpiry(params.expiresAt, timezoneOffset, locale),
+    },
+    footerKey: "tools.user_block.block_footer",
+    color: params.blockType === "mute" ? ColorCode.WARN : ColorCode.ERROR,
+  });
 }
 
-export async function sendUserUnblockedEmbed(params: {
+export async function sendUserUnblockedNotice(params: {
   context: ToolContext;
   targetDisplayName: string;
   removedBlock: PersonaUserBlockRow;
@@ -300,28 +293,23 @@ export async function sendUserUnblockedEmbed(params: {
     "TomoriBot";
   const locale = params.context.locale;
 
-  await sendStandardEmbed(
-    params.context.channel,
-    locale,
-    {
-      titleKey:
-        params.removedBlock.block_type === "mute"
-          ? "tools.user_block.unmute_success_title"
-          : "tools.user_block.unblock_success_title",
-      titleVars: {
-        persona_name: personaName,
-        user_name: params.targetDisplayName,
-      },
-      descriptionKey: "tools.user_block.unblock_success_description",
-      descriptionVars: {
-        user_name: params.targetDisplayName,
-        persona_name: personaName,
-        block_type: getBlockTypeLabel(locale, params.removedBlock.block_type),
-      },
-      color: ColorCode.SUCCESS,
+  await sendToolNoticeContainer(params.context, "user_block", {
+    titleKey:
+      params.removedBlock.block_type === "mute"
+        ? "tools.user_block.unmute_success_title"
+        : "tools.user_block.unblock_success_title",
+    titleVars: {
+      persona_name: personaName,
+      user_name: params.targetDisplayName,
     },
-    buildToolPersonaPostContext(params.context, params.context.tomoriState),
-  );
+    descriptionKey: "tools.user_block.unblock_success_description",
+    descriptionVars: {
+      user_name: params.targetDisplayName,
+      persona_name: personaName,
+      block_type: getBlockTypeLabel(locale, params.removedBlock.block_type),
+    },
+    color: ColorCode.SUCCESS,
+  });
 }
 
 export async function upsertPersonaUserBlock(params: {
