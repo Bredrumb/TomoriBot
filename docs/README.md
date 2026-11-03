@@ -48,7 +48,7 @@ Pages are bucketed into task-based sub-categories:
   - [`message-proxy-support.md`](./en/features/integrations/message-proxy-support/)
   - [`matrix-bridge.md`](./en/features/integrations/matrix-bridge/)
   - [`sillytavern-support.md`](./en/features/integrations/sillytavern-support/)
-  - [`novelai-text.md`](./en/features/integrations/novelai-text/)
+  - [`novelai.md`](./en/features/integrations/novelai/)
 - [`features/command-reference.md`](./en/features/command-reference/): generated from command locales (Phase 3)
 
 ## Self-Hosting (order 3)

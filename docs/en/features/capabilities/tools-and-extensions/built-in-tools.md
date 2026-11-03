@@ -8,9 +8,6 @@ Tools depend on the active provider and model supporting tool calling. Many are 
 a feature flag (`/config` > Permissions), a Discord permission, a model capability, or an
 optional API key.
 
-NovelAI text models do not call tools. Slash commands and separately configured image generation
-remain available.
-
 :::tip
 If a capability seems unavailable, ask her why. She can report the server's feature flags and
 whether the active model supports tool calling, which usually names the setting to fix.

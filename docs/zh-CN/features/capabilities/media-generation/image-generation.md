@@ -5,7 +5,11 @@ sidebar:
 aiGenerated: true
 ---
 
-TomoriBot可以根据文本提示或编辑参考图像来生成图像。使用`/generate image`，或在聊天中描述你想要的内容（“画一只喝咖啡的小熊猫”）。
+TomoriBot 可以根据描述生成图像，或编辑参考图像。在聊天中向她提出请求，或使用 `/generate image`。如需手动使用 [NovelAI](/features/integrations/novelai/#image-generation) 生成，请使用 `/novelai generate image`。
+
+:::tip
+如果聊天请求没有生成图像，请尝试 `/generate image`。即使聊天模型无法使用工具，它也会直接调用图像模型。
+:::
 
 ## 她能做什么
 
@@ -19,8 +23,6 @@ TomoriBot可以根据文本提示或编辑参考图像来生成图像。使用`/
 可选的 `model` 参数可为当前图像选择模型，而不会更改你的默认设置。自动补全选项包含来自服务器已保存提供方和你的个人提供方中的兼容模型；个人条目会显示 `（通过个人提供方）`。留空则使用常用模型。在自动模式下，这会选择图像模型，而规划提示词的模型保持不变。
 
 在任一模式下，将 `nsfw` 设置为 `true` 即可将生成的图像隐藏在 Discord 防剧透遮罩后。这只会更改 Discord 显示图像的方式；不会更改生成内容或提供方的内容过滤器。
-
-手动 NovelAI 生成使用 `/novelai generate image`，它具有相同的 `model` 和 `nsfw` 选项。其模型选择器包含你的个人 NovelAI 提供方以及服务器已保存或可选的 NovelAI 密钥。
 
 可用的编辑模式取决于活动后端。文本到图像和图像到图像在云提供商（Google、Vertex、OpenRouter）上工作。本地 [ComfyUI](/zh-CN/self-hosting/local-endpoints/setup-comfyui/) 自定义端点支持修复和修复，并且取决于该端点声明的功能。你的设置不支持的模式会自动从模型中隐藏。
 

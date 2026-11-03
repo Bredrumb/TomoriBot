@@ -5,7 +5,8 @@ sidebar:
 ---
 
 TomoriBot can generate images from a description or edit a reference image. Ask her in chat or use
-`/generate image`. For manual NovelAI generation, use `/novelai generate image`.
+`/generate image`. For manual [NovelAI](/features/integrations/novelai/#image-generation)
+generation, use `/novelai generate image`.
 
 :::tip
 If a chat request does not produce an image, try `/generate image`. It calls the image model directly,
@@ -52,20 +53,6 @@ both of you in the image.
 find a character's appearance or outfit tags before generating an image, including cosplay requests.
 The `Default + Image Generation Expert` system prompt preset encourages her to look up tags and choose
 the appropriate prompt style.
-
-## NovelAI prompts and text
-
-The `Default + Image Generation Expert` preset uses imageboard-style tags for NovelAI, with
-short descriptions when needed for interactions or text placement. For scenes with multiple
-characters, TomoriBot keeps shared scenery and camera directions separate from each
-character's appearance and actions.
-
-For readable speech, ask TomoriBot to include the exact dialogue. The NovelAI image tool
-places character dialogue in a trailing `Text:` section automatically. V4 and V4.5 support
-English text; V5 also supports Japanese and Chinese. Text on signs or screens can be
-described in the shared scene prompt. Keep requested text short and avoid `no text`
-among positive tags. Placement and typography (including vertical Japanese writing)
-are suggestions rather than guarantees.
 
 ## Setup and providers
 

@@ -2,10 +2,10 @@
 title: "Geração de Imagens"
 sidebar:
   order: 1
-aiGenerated: true
 ---
 
-TomoriBot pode gerar imagens a partir de um prompt de texto ou editando uma imagem de referência. Use `/generate image`, ou descreva o que deseja no chat (“desenhe um panda vermelho tomando café”).
+TomoriBot pode gerar imagens a partir de uma descrição ou editar uma imagem de referência. Peça a ela no chat ou use
+`/generate image`. Para geração manual com o [NovelAI](/features/integrations/novelai/#image-generation), use `/novelai generate image`.
 
 ## O Que Ela Pode Fazer
 
@@ -23,9 +23,6 @@ isso seleciona o modelo de imagem enquanto o modelo que planeja o prompt permane
 
 Defina `nsfw` como `true` para ocultar a imagem gerada atrás de um spoiler do Discord, em qualquer um dos modos. Isso apenas
 altera como o Discord exibe a imagem; não altera a geração nem os filtros de conteúdo do provedor.
-
-A geração manual com o NovelAI usa `/novelai generate image`, que possui as mesmas opções `model` e `nsfw`.
-Seu seletor de modelos inclui seus provedores pessoais do NovelAI e a chave do NovelAI salva ou opcional do servidor.
 
 Os modos de edição disponíveis dependem do back-end ativo. Trabalho de texto para imagem e imagem para imagem em provedores de nuvem (Google, Vertex, OpenRouter). Inpainting e outpainting são suportados por endpoints personalizados locais [ComfyUI](/pt-BR/self-hosting/local-endpoints/setup-comfyui/) e dependem dos recursos declarados desse endpoint. Os modos que sua configuração não suporta são ocultados automaticamente do modelo.
 

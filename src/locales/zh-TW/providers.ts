@@ -182,6 +182,15 @@ export default {
       "403_predict_permission_message": `這組金鑰無法呼叫 Vertex AI Express 模型。請使用 Express 模式的金鑰，或改用獨立的 \`vertex\` 供應商來連接完整的 Google Cloud 專案。`,
     },
     novelai: {
+      tokenizer_setup:
+        "NovelAI 的 tokenizer 遺失或無效。請聯繫 bot 管理員執行 `bun run setup:tokenizers` 並重新啟動 TomoriBot。",
+      input_complexity: "此提示詞包含過多文字或異常長的不中斷單字。請縮短後重試。",
+      context_overflow: "人格、最少範例與近期對話超出了此模型的脈絡視窗。請縮短它們或選擇具有更大視窗的模型。",
+      subscription_unavailable: "無法載入 NovelAI 訂閱資訊。請稍後重試。",
+      subscription_inactive: "此 NovelAI 金鑰沒有有效的訂閱。",
+      model_tier: "此 NovelAI 訂閱不包含所選的文字模型。",
+      xialong_opus: "Xialong 需要有效的 NovelAI Opus 訂閱。請使用 Opus 金鑰或選擇其他文字模型。",
+      continuation_exhausted: "NovelAI 在輸出額度內未能產生完整的回覆就已結束。請重試或增加設定的輸出長度。",
       "400_default_message": `要求格式或參數無效。請確認你輸入的 API 金鑰正確。`,
       "400_trial_message": `你的試用帳號需要通過 recaptcha 驗證才能生成。API 存取需要付費的 NovelAI 訂閱。請到 https://novelai.net/ 升級帳號`,
       "401_default_message": `你的 NovelAI API 金鑰無效或已過期`,

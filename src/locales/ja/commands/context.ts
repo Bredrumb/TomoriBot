@@ -20,6 +20,7 @@ export default {
     segment_tools: `ツール`,
     segment_free: `空きスペース`,
     segment_reserved: `返信用に予約`,
+    novelai_measurement_note: `総入力トークン数はレンダリングされたNovelAIプロンプトからローカルでカウントされます。セグメントの割合は概算です。`,
     estimate_note: `1トークンあたり約4文字として概算。`,
     not_counted_note: `画像、動画、プロバイダー固有のメッセージ形式は含まれません。`,
     truncated_note: `会話履歴が上限を超えたため、古い会話 {count} 件分が省略されています。`,

@@ -708,6 +708,8 @@ export default defineConfig({
     "/features/integrations/pluralbuddy-support/": "/en/features/integrations/message-proxy-support/#pluralbuddy",
     "/en/features/integrations/pluralkit-support/": "/en/features/integrations/message-proxy-support/#pluralkit",
     "/en/features/integrations/pluralbuddy-support/": "/en/features/integrations/message-proxy-support/#pluralbuddy",
+    "/features/integrations/novelai-text/": "/en/features/integrations/novelai/",
+    "/en/features/integrations/novelai-text/": "/en/features/integrations/novelai/",
   },
 
   // Docs content lives at repo-root `docs/`, surfaced via a junction at `src/content/docs`

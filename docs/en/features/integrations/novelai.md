@@ -1,25 +1,38 @@
 ---
-title: "NovelAI Text Models"
+title: "NovelAI"
 sidebar:
   order: 4
 aiGenerated: true
 ---
 
-NovelAI image models work out of the box once configured. Text models need special handling and
-context formatting to keep background information separate from dialogue. NovelAI's
-[Chat Format guide](https://docs.novelai.net/en/text/chatformat/) describes the story-style approach
-used for Kayra and Erato; GLM and Xialong use separate chat templates. The filtering and polishing
-below are TomoriBot's adaptations.
+NovelAI connects text models (`GLM 4.6`, `Xialong`, `Kayra`, `Erato`) and anime image generation.
+You can use NovelAI for both, or pair its image generation with another chat provider.
+
+## Text models and subscription
+<!-- anchor: text-models-and-subscription -->
+
+`GLM 4.6` is the default text model. `Xialong` and `Erato` require an active Opus subscription.
+Selecting `Xialong` checks your saved server or personal key; if you select it before adding a key,
+the check runs when you add the key. The serving key's subscription determines the context
+allowance. Server managers can check Opus generation allowance with `/novelai usage`.
+
+NovelAI's [Chat Format guide](https://docs.novelai.net/en/text/chatformat/) describes the
+story-style approach used for `Kayra` and `Erato`; `GLM 4.6` and `Xialong` use separate chat
+templates. The filtering and polishing below are TomoriBot's adaptations.
 
 ## Sampling presets
+<!-- anchor: sampling-presets -->
 
-Switching text models applies matching defaults. Change presets for Kayra, Erato, or Xialong in
-`/config` > `Models` > `Text Samplers & Parameters`; GLM uses model defaults. Later sampler edits
-remain active.
+Switching text models loads `Carefree-Kayra`, `Erato-Shosetsu`, or `Default-Xialong` for the
+selected model; `GLM 4.6` uses its own defaults. Switching resets temperature, top-k, top-p, and
+min-p and enables those samplers for both server and personal model switches. Change presets or
+samplers in `/config` > `Models` > `Text Samplers & Parameters`; later edits stay active, and
+replacing a key on the same model preserves them.
 
 ## Context and settings
+<!-- anchor: context-and-settings -->
 
-Omitted settings stay saved for other providers.
+Omitted settings stay saved in `/config` > `Behavior` > `General Behavior` for other providers.
 
 | Content or setting | NovelAI handling |
 |---|---|
@@ -29,7 +42,7 @@ Omitted settings stay saved for other providers.
 | Memory-tool nudges | Omitted, including nudges built before a personal override or fallback. |
 | ATTG metadata and quality stars | ATTG means Author, Title, Tags, and Genre. Xialong puts metadata first in its persistent information and defaults to 4 stars. Erato uses configured stars; Kayra omits stars. |
 | Response prefills | Kept when allowed by the prefill controls. |
-| Tools and media | No text-model tool calls or image/video input. Separate image-generation commands remain available. |
+| Tools and media | No text-model tool calls or image/video input. Slash commands and separate image-generation commands remain available. |
 | Token limits | Counted locally with room reserved for replies. Configured reply length takes priority over preset length and may be reduced to fit. |
 
 Known foreign speaker labels and standalone `---` or `***` lines stop output, even with the shared
@@ -37,6 +50,7 @@ speaker-stop setting off. The responding persona's names, aliases, and sprite la
 The local guard preserves code; literal API stops can still match inside generated code.
 
 ## Context trimming
+<!-- anchor: context-trimming -->
 
 Memories use up to 20% of the context window, with older entries removed first. If the prompt still
 does not fit, TomoriBot trims it in this order:
@@ -53,6 +67,7 @@ protected context cannot fit. Trimming leaves saved memories and messages unchan
 `/tool prompt snapshot` shows the final prompt, token counts, reply cap, and trimming report.
 
 ## Text polishing and Discord delivery
+<!-- anchor: text-polishing-and-discord-delivery -->
 
 Polishing changes only the copy of history, memories, and sample dialogue sent to all four NovelAI
 models, before token counting. Saved text and other providers are unchanged; grammar is not rewritten.
@@ -76,3 +91,21 @@ models, before token counting. Saved text and other providers are unchanged; gra
 - **Prefills stay exact**: Explicit response prefills and continuation fragments are unchanged.
 - **Discord delivery follows your settings**: The humanizer still controls casing, punctuation,
   and message splitting. Later history is polished again; lost punctuation cannot be recovered exactly.
+
+## Image generation
+<!-- anchor: image-generation -->
+
+Assign a model to the `NovelAI Image` slot under `/config` > `Models` > `Switch Models`. Members
+can generate images directly with `/novelai generate image`, or ask in chat when the active text
+provider supports tool calling.
+
+The `Default + Image Generation Expert` preset uses imageboard-style tags for NovelAI, with short
+descriptions when needed for interactions or text placement. For scenes with multiple characters,
+TomoriBot keeps shared scenery and camera directions separate from each character's appearance and
+actions.
+
+For readable speech, ask TomoriBot to include the exact dialogue. The NovelAI image tool places
+character dialogue in a trailing `Text:` section automatically. V4 and V4.5 support English text;
+V5 also supports Japanese and Chinese. Text on signs or screens can be described in the shared
+scene prompt. Keep requested text short and avoid `no text` among positive tags. Placement and
+typography (including vertical Japanese writing) are suggestions rather than guarantees.

@@ -70,7 +70,7 @@ In `/config` > Models > Switch Models, you can assign models and endpoints acros
 - **Embeddings**: powers the [document knowledge base](/features/knowledge/memory/#document-knowledge-base-rag).
 - **Decision**: a registered [Decision model](#decision-models). [Natural Nudges](/features/chatting-personality/natural-nudges/#active-nudges) uses it to decide when to join a conversation.
 - **Standard Image**: standard image generation (see [Image Generation](/features/capabilities/media-generation/image-generation/)).
-- **NovelAI Image**: NovelAI image generation.
+- **NovelAI Image**: [NovelAI image generation](/features/integrations/novelai/#image-generation).
 - **Video**: video generation.
 - **TTS (Voice Design)**: speaks using a saved voice description.
 - **TTS (Voice Clone)**: speaks using a reference sample or provider voice.
@@ -86,23 +86,6 @@ cannot see images.
 Speech has separate voice design and voice clone slots. See
 [Voice: TTS & STT](/features/capabilities/media-generation/tts-and-stt/) for setup and provider
 support. You can also manage backup keys in `/providers`.
-
-### NovelAI text models
-
-NovelAI offers GLM 4.6, Xialong, Kayra, and Erato. GLM 4.6 is the default. Xialong and Erato require
-an active Opus subscription. Xialong selection checks your saved server or personal key; if you
-select it before adding a key, the check runs when you add the key.
-
-NovelAI uses its own prompt templates. Saved system prompts, context notes, humanizer rules,
-conditioning, and SillyTavern preset instructions are inactive. Persona attributes, sample dialogue,
-and eligible memories still apply. The `General Behavior` panel shows a notice, and the settings
-stay saved for switching providers. See
-[NovelAI special handling](/features/integrations/novelai-text/#context-and-settings) for
-content selection, model exceptions, and memory trimming.
-
-NovelAI text models cannot call tools or read images and videos. You can still manage memories
-with commands and use separate image-generation commands. The serving key's subscription determines
-the context allowance; configured reply length is fitted within that allowance.
 
 :::tip
 Adding one backup key to an AI provider turns on rotation for that provider. Requests rotate across
@@ -149,7 +132,7 @@ cloud services. Not every feature is available on every provider.
 | Google Gemini | ✅ | ✅ | ✅ | ✅ | Free models available |
 | OpenRouter | ✅ | ✅ | ✅ | ✅ | Uses OpenRouter credits |
 | Anthropic (API) | ✅ | ✅ | ✅ | - | Not Claude Code |
-| NovelAI | ✅ | - | - | - | Text models cannot use tools |
+| NovelAI | ✅ | - | - | - | Text models cannot use tools; see [NovelAI](/features/integrations/novelai/) |
 | NVIDIA NIM | ✅ | ✅ | ✅ | ✅ | Free models available |
 | DeepSeek | ✅ | ✅ | - | - | - |
 | Z.ai | ✅ | ✅ | ✅ | - | Free models; 🟡 ToS = coding and agent use only |

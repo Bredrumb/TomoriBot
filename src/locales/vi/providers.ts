@@ -182,6 +182,19 @@ export default {
       "403_predict_permission_message": `Key này không thể gọi các model Vertex AI Express. Hãy dùng key ở chế độ Express, hoặc dùng nhà cung cấp \`vertex\` riêng cho các dự án Google Cloud đầy đủ.`,
     },
     novelai: {
+      tokenizer_setup:
+        "Tokenizer của NovelAI bị thiếu hoặc không hợp lệ. Hãy nhờ người quản lý bot chạy `bun run setup:tokenizers` và khởi động lại TomoriBot.",
+      input_complexity:
+        "Prompt này chứa quá nhiều văn bản hoặc một từ viết liền dài bất thường. Hãy rút ngắn lại và thử lại.",
+      context_overflow:
+        "Persona, các ví dụ tối thiểu và cuộc trò chuyện gần đây vượt quá cửa sổ ngữ cảnh của model này. Hãy rút ngắn chúng hoặc chọn một model có cửa sổ lớn hơn.",
+      subscription_unavailable: "Không thể tải thông tin gói thuê bao NovelAI. Vui lòng thử lại sau giây lát.",
+      subscription_inactive: "Key NovelAI này không có gói thuê bao đang hoạt động.",
+      model_tier: "Gói thuê bao NovelAI này không bao gồm model văn bản đã chọn.",
+      xialong_opus:
+        "Xialong yêu cầu gói thuê bao NovelAI Opus đang hoạt động. Hãy dùng key Opus hoặc chọn một model văn bản khác.",
+      continuation_exhausted:
+        "NovelAI đã dừng trước khi tạo ra câu trả lời hoàn chỉnh trong giới hạn đầu ra. Hãy thử lại hoặc tăng độ dài đầu ra đã cấu hình.",
       "400_default_message": `Định dạng yêu cầu hoặc tham số không hợp lệ. Vui lòng đảm bảo bạn đã nhập đúng API key.`,
       "400_trial_message": `Tài khoản dùng thử của bạn cần xác minh recaptcha để tạo nội dung. Quyền truy cập API yêu cầu gói đăng ký NovelAI trả phí. Vui lòng nâng cấp tài khoản tại https://novelai.net/`,
       "401_default_message": `NovelAI API key của bạn không hợp lệ hoặc đã hết hạn`,

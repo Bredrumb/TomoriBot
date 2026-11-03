@@ -49,7 +49,7 @@ Full Install sẽ chạy Base Install trước, sau đó thử cài đặt các 
 |---|---|
 | `pgvector` | Tìm kiếm vector cho bộ nhớ tài liệu/RAG. |
 | `pg_cron` | Tùy chọn dọn dẹp theo lịch trình cho các hàng cooldown/lời nhắc. |
-| Tokenizer asset | Tokenizer asset cục bộ để xử lý logit bias theo model. |
+| Tokenizer asset | Tokenizer asset cục bộ để tạo văn bản NovelAI và xử lý logit bias theo model. |
 
 Để cài đặt thủ công bất kỳ tiện ích nào trong số này, hãy xem
 [tiện ích bổ sung trong Cài đặt thủ công](/self-hosting/manual-setup/#optional-extras-the-manual-full-install).

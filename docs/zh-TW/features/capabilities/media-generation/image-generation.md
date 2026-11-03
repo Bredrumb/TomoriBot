@@ -5,7 +5,11 @@ sidebar:
 aiGenerated: true
 ---
 
-TomoriBot可以根據文字提示或編輯參考圖像來產生圖像。使用`/generate image`，或在聊天中描述你想要的內容（「畫一隻喝咖啡的小熊貓」）。
+TomoriBot 可以根據描述產生圖片或編輯參考圖片。在聊天中詢問她，或使用 `/generate image`。手動 [NovelAI](/features/integrations/novelai/#image-generation) 生成請使用 `/novelai generate image`。
+
+:::tip
+如果聊天請求沒有產生圖片，請嘗試 `/generate image`。即使聊天模型無法使用工具，它也會直接呼叫圖片模型。
+:::
 
 ## 她可以做什麼
 
@@ -19,8 +23,6 @@ TomoriBot可以根據文字提示或編輯參考圖像來產生圖像。使用`/
 可選的 `model` 參數可為此圖片選擇模型，而不會變更你的預設設定。自動完成選項包含來自伺服器已儲存供應商與你的個人供應商中相容的模型；個人項目會顯示 `（透過個人供應商）`。留空則使用平常的模型。在自動模式下，這會選擇圖片模型，而規劃提示詞的模型維持不變。
 
 在任一模式下，將 `nsfw` 設為 `true` 即可將生成的圖片隱藏在 Discord 防雷標記後方。這只會改變 Discord 顯示圖片的方式；不會改變生成內容或供應商的內容篩選器。
-
-手動 NovelAI 生成使用 `/novelai generate image`，該指令具有相同的 `model` 與 `nsfw` 選項。其模型選擇器包含你的個人 NovelAI 供應商以及伺服器已儲存或可選的 NovelAI 金鑰。
 
 可用的編輯模式取決於活動後端。文字到圖像和圖像到圖像在雲端供應商（Google、Vertex、OpenRouter）上運作。本地 [ComfyUI](/zh-TW/self-hosting/local-endpoints/setup-comfyui/) 自訂端點支援修復和修復，並且取決於該端點聲明的功能。你的設定不支援的模式會自動從模型中隱藏。
 
@@ -38,7 +40,7 @@ TomoriBot可以根據文字提示或編輯參考圖像來產生圖像。使用`/
 ## 標籤查詢
 <!-- anchor: tag-lookup -->
 
-開啟 **Danbooru 搜尋** 後（`/config` > `外掛` > `可用工具`），她可以在作畫前查詢角色的準確標籤與服裝，例如「我的 OC 穿著萊莎的衣服」就能讓你的 OC 穿上萊莎的服裝。請參閱 [Danbooru 標籤查詢](/features/capabilities/tools-and-extensions/#danbooru-tag-lookup)。
+開啟 **Danbooru 搜尋** 後（`/config` > `外掛` > `可用工具`），她可以在作畫前查詢角色的準確標籤與服裝，例如「我的 OC 穿著萊莎的衣服」就能讓你的 OC 穿上萊莎的服裝。請參閱 [Danbooru 標籤查詢](/features/capabilities/tools-and-extensions/danbooru/)。
 
 使用 `Default + Image Generation Expert` 系統提示詞預設集（`/config` > `行為` > `一般行為`）時，她查詢標籤會更加穩定，該預設集也會指導她如何排列動漫標籤以及何時改用自然語言描述。在 Auto 模式下執行 `/generate image` 也能查詢標籤。
 

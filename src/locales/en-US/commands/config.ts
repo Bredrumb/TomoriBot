@@ -1051,7 +1051,7 @@ export default {
       capability_tts_clone: `TTS (Voice Clone)`,
       capability_stt: `Speech to Text`,
       capability_notice_title: `Notes:`,
-      novelai_context_note: `NovelAI text models handle context differently. See the [NovelAI guide](https://docs.tomoribot.app/en/features/integrations/novelai-text/).`,
+      novelai_context_note: `NovelAI text models handle context differently. See the [NovelAI guide](https://docs.tomoribot.app/en/features/integrations/novelai/).`,
       byok_models_notice: `This server requires members to use their own providers, so the server-wide model settings here are not used. To use them, open \`/moderation\`, go to Member Access, and choose Server Models Allowed.`,
       image_generation_disabled_direction: "Image generation is disabled. Enable it under Plugins > Available Tools.",
       image_generation_missing_model: `No usable model is configured for Image generation.`,

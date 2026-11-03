@@ -6,7 +6,7 @@ aiGenerated: false
 ---
 
 TomoriBot normally sends these prompt blocks in order.
-[NovelAI](/features/integrations/novelai-text/) covers its exceptions.
+[NovelAI](/features/integrations/novelai/) covers its exceptions.
 
 | Block | Optional? | Commands | What it is |
 |---|---|---|---|
@@ -49,7 +49,7 @@ and [Lost in the Haystack](https://arxiv.org/abs/2505.18148).
 ### Where are Tools defined?
 
 For providers with tool calling, TomoriBot sends tool definitions through the provider's supported
-interface. NovelAI text models receive no tool definitions.
+interface.
 
 ### Why does TomoriBot forget?
 

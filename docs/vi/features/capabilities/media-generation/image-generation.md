@@ -5,7 +5,8 @@ sidebar:
 aiGenerated: true
 ---
 
-TomoriBot có thể tạo hình ảnh từ lời nhắc văn bản hoặc bằng cách chỉnh sửa hình ảnh tham chiếu. Sử dụng `/generate image` hoặc mô tả những gì bạn muốn trong cuộc trò chuyện ("vẽ gấu trúc đỏ uống cà phê").
+TomoriBot có thể tạo hình ảnh từ mô tả hoặc chỉnh sửa hình ảnh tham chiếu. Hãy hỏi cô ấy trong cuộc trò chuyện hoặc sử dụng
+`/generate image`. Để tạo ảnh thủ công bằng [NovelAI](/features/integrations/novelai/#image-generation), hãy sử dụng `/novelai generate image`.
 
 ## Những việc bot có thể làm
 
@@ -23,9 +24,6 @@ tùy chọn này chọn model tạo ảnh trong khi model lập kế hoạch pro
 
 Đặt `nsfw` thành `true` để ẩn hình ảnh đã tạo sau spoiler Discord, trong cả hai chế độ. Điều này chỉ
 thay đổi cách Discord hiển thị ảnh; nó không thay đổi việc tạo ảnh hay bộ lọc nội dung của nhà cung cấp.
-
-Tạo ảnh thủ công bằng NovelAI sử dụng `/novelai generate image`, có cùng các tùy chọn `model` và `nsfw`.
-Trình chọn model của lệnh này bao gồm các nhà cung cấp NovelAI cá nhân của bạn và API key NovelAI đã lưu hoặc tùy chọn của máy chủ.
 
 Chế độ chỉnh sửa nào khả dụng tùy thuộc vào chương trình phụ trợ đang hoạt động. Tính năng chuyển văn bản thành hình ảnh và hình ảnh thành hình ảnh hoạt động trên các nhà cung cấp đám mây (Google, Vertex, OpenRouter). Inpainting và outpainting được hỗ trợ bởi các điểm cuối tùy chỉnh [ComfyUI](/vi/self-hosting/local-endpoints/setup-comfyui/) cục bộ và phụ thuộc vào khả năng được khai báo của điểm cuối đó. Các chế độ mà thiết lập của bạn không hỗ trợ sẽ tự động bị ẩn khỏi model.
 

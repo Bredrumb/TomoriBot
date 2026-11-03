@@ -181,6 +181,20 @@ export default {
       "403_predict_permission_message": `このキーでは Vertex AI Express モデルを呼び出せません。Express Mode のキーを使うか、フル Google Cloud プロジェクトなら別プロバイダーの \`vertex\` を使ってください。`,
     },
     novelai: {
+      tokenizer_setup:
+        "NovelAIのトークナイザーが見つからないか無効です。ボットのホストに `bun run setup:tokenizers` を実行してTomoriBotを再起動するよう依頼してください。",
+      input_complexity:
+        "このプロンプトにはテキストが多すぎるか、異常に長い単語が含まれています。短くしてもう一度お試しください。",
+      context_overflow:
+        "ペルソナ、最小限の例、直近の会話がこのモデルのコンテキストウィンドウを超えています。これらを短くするか、より大きなウィンドウを持つモデルを選択してください。",
+      subscription_unavailable:
+        "NovelAIのサブスクリプション情報を読み込めませんでした。しばらくしてからもう一度お試しください。",
+      subscription_inactive: "このNovelAIキーには有効なサブスクリプションがありません。",
+      model_tier: "このNovelAIサブスクリプションには、選択されたテキストモデルが含まれていません。",
+      xialong_opus:
+        "Xialongには有効なNovelAI Opusサブスクリプションが必要です。Opusキーを使用するか、別のテキストモデルを選択してください。",
+      continuation_exhausted:
+        "出力バジェット内で完全な返答を生成する前にNovelAIが終了しました。もう一度お試しいただくか、設定された出力長を増やしてください。",
       "400_default_message": `無効なリクエスト形式またはパラメータです。正しいAPIキーを入力したか確認してください。`,
       "400_trial_message": `トライアルアカウントでは生成にrecaptcha認証が必要です。API経由のアクセスには有料のNovelAIサブスクリプションが必要です。https://novelai.net/ でアカウントをアップグレードしてください`,
       "401_default_message": `NovelAIのAPIキーが無効または期限切れです`,

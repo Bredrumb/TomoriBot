@@ -143,16 +143,16 @@ cron.database_name = 'your_dbname'
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 ```
 
-### 分词器资源：按模型处理的词元偏置
+### 分词器资源
 
-词元偏置（表情与词语重复惩罚）需要本地的分词器资源：
+NovelAI 文本生成与感知模型的词元偏置需要本地分词器资源：
 
 ```sh
 bun run setup:tokenizers
 ```
 
-有些模型家族（例如Gemma）是受限的，需要你先接受它们的许可，再用一个
-[HuggingFace令牌](https://huggingface.co/settings/tokens)：
+有些模型家族（例如 Gemma）是受限的，需要你先接受它们的许可，再使用一个
+[Hugging Face 令牌](https://huggingface.co/settings/tokens)：
 
 ```sh
 # Windows (PowerShell)
@@ -162,7 +162,15 @@ $env:HF_TOKEN="hf_xxx"; bun run setup:tokenizers
 HF_TOKEN=hf_xxx bun run setup:tokenizers
 ```
 
-不做这一步，词元偏置会被静默禁用，其他一切照常工作。
+缺失资源会禁用可选的词元偏置。NovelAI 文本生成需要其三个分词器家族，如果缺失或无效将返回设置错误。这些家族使用固定的公开 MIT 定义，无需 Hugging Face 令牌。如需仅安装这些家族：
+
+```sh
+bun run setup:tokenizers --family novelai_nerdstash_v2
+bun run setup:tokenizers --family novelai_llama3
+bun run setup:tokenizers --family novelai_glm
+```
+
+下载器会将文件写入仓库的 `tokenizers/` 目录。如果 `TOKENIZER_ASSET_DIR` 指向其他位置，请将下载的家族目录复制到该处。在安装或修复资源后请重启 TomoriBot，因为运行时会缓存加载失败状态。
 
 安全的 `fetch_url` 回退和 DuckDuckGo 的 `web_search` 回退均在进程内运行，因此两者都不需要额外安装。
 

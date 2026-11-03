@@ -67,7 +67,7 @@ Brave Search与你的AI提供商分开，并通过图像、视频和新闻结果
 - **嵌入**：为[文档知识库](/zh-CN/features/knowledge/memory/#document-knowledge-base-rag)提供支持。
 - **判定**：已注册的[判定模型](#decision-models)。[Natural Nudges](/features/chatting-personality/natural-nudges/#active-nudges)使用它来决定何时加入对话。
 - **标准图像**：标准图像生成（参见[图像生成](/zh-CN/features/capabilities/media-generation/image-generation/)）。
-- **NovelAI图像**：NovelAI图像生成。
+- **NovelAI 图像**：[NovelAI 图像生成](/features/integrations/novelai/#image-generation)。
 - **视频**：视频生成。
 - **TTS端点**：文本转语音语音端点。
 - **STT端点**：语音到文本的音频转录端点。
@@ -136,7 +136,7 @@ OpenCode Go (`https://opencode.ai/zen/go/v1`) 和OpenCode Zen (`https://opencode
 | Google双子座 | ✅ | ✅ | ✅ | ✅ | 提供免费模型 |
 | OpenRouter | ✅ | ✅ | ✅ | ✅ | 消耗 OpenRouter 积分 |
 | 人择 (API) | ✅ | ✅ | ✅ | - | 不是克劳德·代码 |
-| NovelAI | ✅ | ✅ | - | - | 只有GLM 4.6可以使用工具 |
+| NovelAI | ✅ | - | - | - | 文本模型无法使用工具；参见 [NovelAI](/features/integrations/novelai/) |
 | NVIDIA NIM | ✅ | ✅ | ✅ | ✅ | 提供免费模型 |
 | 深度搜索 | ✅ | ✅ | - | - | - |
 | Z.ai | ✅ | ✅ | ✅ | - | 免费模型； 🟡 ToS = 仅限编码和代理使用 |

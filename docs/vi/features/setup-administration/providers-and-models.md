@@ -67,7 +67,7 @@ Trong `/config` > `Model` > `Chuyển đổi model`, bạn có thể chỉ đị
 - **Phần nhúng**: hỗ trợ [cơ sở kiến thức tài liệu](/vi/features/knowledge/memory/#document-knowledge-base-rag).
 - **Quyết định**: một [model quyết định](#decision-models) đã đăng ký. [Natural Nudges](/features/chatting-personality/natural-nudges/#active-nudges) sử dụng nó để quyết định thời điểm tham gia cuộc trò chuyện.
 - **Hình ảnh tiêu chuẩn**: tạo hình ảnh tiêu chuẩn (xem [Tạo hình ảnh](/vi/features/capabilities/media-generation/image-generation/)).
-- **Hình ảnh NovelAI**: Tạo hình ảnh NovelAI.
+- **Hình ảnh NovelAI**: [Tạo hình ảnh NovelAI](/features/integrations/novelai/#image-generation).
 - **Video**: tạo video.
 - **Điểm cuối TTS**: điểm cuối chuyển văn bản thành giọng nói.
 - **Điểm cuối STT**: điểm cuối chuyển âm thanh từ giọng nói thành văn bản.
@@ -136,7 +136,7 @@ Nếu bạn không có phần cứng để lưu trữ các model của riêng m�
 | Google Song Tử | ✅ | ✅ | ✅ | ✅ | Có sẵn các mẫu miễn phí |
 | OpenRouter | ✅ | ✅ | ✅ | ✅ | Dùng tín dụng OpenRouter |
 | Nhân loại (API) | ✅ | ✅ | ✅ | - | Không phải mã Claude |
-| NovelAI | ✅ | ✅ | - | - | Chỉ GLM 4.6 mới có thể sử dụng công cụ |
+| NovelAI | ✅ | - | - | - | Model văn bản không thể sử dụng công cụ; xem [NovelAI](/features/integrations/novelai/) |
 | NVIDIA NIM | ✅ | ✅ | ✅ | ✅ | Có sẵn các mẫu miễn phí |
 | tìm kiếm sâu | ✅ | ✅ | - | - | - |
 | Z.ai | ✅ | ✅ | ✅ | - | Model miễn phí; 🟡 ToS = chỉ sử dụng mã hóa và tác nhân |

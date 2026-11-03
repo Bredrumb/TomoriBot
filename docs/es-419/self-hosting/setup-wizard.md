@@ -49,7 +49,7 @@ La instalación completa ejecuta primero la instalación base y luego intenta in
 |---|---|
 | `pgvector` | Búsqueda vectorial para la memoria de documentos/RAG. |
 | `pg_cron` | Limpieza programada opcional de filas de enfriamiento y recordatorios. |
-| Recursos del tokenizador | Recursos de tokenizador locales para el sesgo de logit según el modelo. |
+| Recursos del tokenizador | Recursos de tokenizador locales para la generación de texto de NovelAI y el sesgo de logit según el modelo. |
 
 Para instalar cualquiera de estos manualmente, consulta los [extras de la instalación manual](/self-hosting/manual-setup/#optional-extras-the-manual-full-install).
 

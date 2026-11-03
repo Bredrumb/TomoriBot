@@ -182,6 +182,20 @@ export default {
       "403_predict_permission_message": `Esta chave não pode chamar modelos do Vertex AI Express. Use uma chave do modo Express, ou use o provedor \`vertex\` separado para projetos completos do Google Cloud.`,
     },
     novelai: {
+      tokenizer_setup:
+        "Os tokenizadores do NovelAI estão ausentes ou são inválidos. Peça ao host do bot para executar `bun run setup:tokenizers` e reiniciar o TomoriBot.",
+      input_complexity:
+        "Este prompt contém texto demais ou uma palavra contínua anormalmente longa. Encurte-o e tente novamente.",
+      context_overflow:
+        "A persona, os exemplos mínimos e a conversa recente excedem a janela de contexto deste modelo. Encurte-os ou escolha um modelo com uma janela maior.",
+      subscription_unavailable:
+        "Não foi possível carregar as informações de assinatura do NovelAI. Tente novamente em breve.",
+      subscription_inactive: "Esta chave do NovelAI não possui uma assinatura ativa.",
+      model_tier: "Esta assinatura do NovelAI não inclui o modelo de texto selecionado.",
+      xialong_opus:
+        "O Xialong requer uma assinatura ativa do NovelAI Opus. Use uma chave Opus ou selecione outro modelo de texto.",
+      continuation_exhausted:
+        "O NovelAI terminou antes de produzir uma resposta completa dentro do limite de saída. Tente novamente ou aumente o tamanho de saída configurado.",
       "400_default_message": `Formato ou parâmetros de solicitação inválidos. Por favor, certifique-se de ter inserido a chave de API correta.`,
       "400_trial_message": `Sua conta de teste requer verificação do recaptcha para gerações. O acesso à API requer uma assinatura paga do NovelAI. Por favor, atualize sua conta em https://novelai.net/`,
       "401_default_message": `Sua chave de API do NovelAI é inválida ou expirou`,

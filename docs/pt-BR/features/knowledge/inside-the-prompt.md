@@ -5,7 +5,8 @@ sidebar:
 aiGenerated: false
 ---
 
-Cada vez que você aciona TomoriBot, o seguinte é montado e enviado ao seu modelo de texto configurado como prompt/contexto principal, nesta ordem:
+O TomoriBot normalmente envia esses blocos de prompt em ordem.
+O [NovelAI](/features/integrations/novelai/) aborda suas exceções.
 
 | Bloquear | Opcional? | Comandos | O que é isso |
 |---|---|---|---|
@@ -35,9 +36,13 @@ Cada vez que você aciona TomoriBot, o seguinte é montado e enviado ao seu mode
 | [Mensagens recentes](/pt-BR/features/chatting-personality/behavior-tweaking/#generation-tuning) | | `/config` > Comportamento > Comportamento Geral | A conversa real, até esse número de mensagens (padrão 80). |
 | Nota de contexto | *(Opcional)* | `/config` > Comportamento > Comportamento Geral; Persona > Avançado; ou Canais > Substituições de canal | Uma instrução inserida entre as mensagens recentes em uma profundidade escolhida a partir da mensagem mais recente. |
 
-As linhas marcadas com *(Opcional)* não contribuem com nada (e não custam tokens) quando não há nada a dizer, por exemplo. nenhum documento corresponde ou o servidor não possui emojis personalizados.
+Blocos opcionais não consomem tokens quando vazios.
 
-As mensagens recentes são a parte maior e mais frágil, são uma janela que desliza à medida que as pessoas falam. Tudo acima deles é reconstruído a partir das configurações salvas e é estável.
+Mensagens recentes formam uma janela móvel. Os outros blocos são reconstruídos a partir das configurações salvas e memórias.
+
+:::tip
+Alguns modelos usam informações próximas ao início ou final de um prompt longo de forma mais confiável do que informações no meio. Para provedores que usam notas de contexto, tente colocar uma instrução perto da mensagem mais recente. O efeito depende do modelo e da tarefa. Consulte [Lost in the Middle](https://aclanthology.org/2024.tacl-1.9/) e [Lost in the Haystack](https://arxiv.org/abs/2505.18148).
+:::
 
 `/tool prompt snapshot` despeja o pacote exato de uma persona em um arquivo. É a verdade básica para quais memórias estão atualmente ativas, se um documento corresponde e quanto da conversa realmente cabe.
 
@@ -47,18 +52,15 @@ As mensagens recentes são a parte maior e mais frágil, são uma janela que des
 
 ### Onde as Ferramentas são definidas?
 
-Para cada provedor que TomoriBot suporta nativamente, os esquemas de ferramentas são enviados por meio do próprio campo `tools` do provedor, portanto, depende do mecanismo de inferência configurado/provedor.
+Para provedores com suporte a chamadas de ferramentas, o TomoriBot envia as definições de ferramentas pela interface compatível do provedor.
 
 ### Por que a TomoriBot esquece?
 
-Essa ordem explica quase todos os "por que ela não se lembra?" pergunta:
-
 | O que aconteceu | Por que |
 |---|---|
-| Ela esqueceu algo de hoje cedo | Ele ultrapassou o limite de mensagens. Estava apenas nas mensagens recentes, se Tomori não salvá-lo como uma memória de longo prazo, ele será esquecido quando chegar fora da janela de mensagens. |
-| Ela esqueceu algo em outro canal | As mensagens recentes são por canal. Somente memórias de servidor, participantes de conversa e canais cruzados de memória de curto prazo. A memória de curto prazo resolve isso carregando mensagens recentes de canais diferentes, mas não descarta tudo. |
-| `/refresh` a fez esquecer | A atualização corta as mensagens recentes e limpa a memória de curto prazo deste canal, mas não deve remover a memória de longo prazo. Exclua a incorporação de atualização para remover o corte. |
-| Ela esqueceu algo depois de reiniciar | Mensagens recentes nunca sobrevivem a reinicializações |
+| Ela esqueceu algo de hoje cedo | Ultrapassou o limite de mensagens sem ser salvo como memória de longo prazo. |
+| Ela esqueceu algo em outro canal | Mensagens recentes são específicas por canal. Memórias do servidor, memórias de participantes e memória de curto prazo fornecem informações selecionadas de outros canais. |
+| `/refresh` a fez esquecer | O refresh interrompe as mensagens recentes e limpa a memória de curto prazo deste canal, mas não deve remover a memória de longo prazo. Exclua o embed de refresh para remover o corte. |
 
 Se você deseja que algo sobreviva a todos os itens acima, isso deve se tornar uma memória de longo prazo. Consulte [Memória](/pt-BR/features/knowledge/memory/#long-term-memory).
 
