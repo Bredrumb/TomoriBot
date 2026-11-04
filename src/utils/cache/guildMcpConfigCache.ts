@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { broadcastInvalidation, registerInvalidation, invalidationDatabaseId } from "@/utils/cache/invalidationBus";
 import type { GuildMcpServerRow } from "@/types/db/schema";
 import { log } from "@/utils/misc/logger";
 import { mcpRepository, type McpConfigRepositoryReadResult } from "@/utils/db/repositories/McpRepository";
@@ -133,6 +135,7 @@ export async function getCachedEnabledGuildMcpConfigs(serverId: number): Promise
  */
 export function invalidateGuildMcpConfigCache(serverId: number): void {
   guildMcpConfigCache.invalidate(serverId);
+  broadcastInvalidation("guildMcpConfig", [[String(serverId)]]);
 }
 
 /**
@@ -149,3 +152,10 @@ export function clearGuildMcpConfigCache(): void {
 export function getGuildMcpConfigCacheStats(): GuildMcpConfigCacheStats {
   return guildMcpConfigCache.getStats();
 }
+
+registerInvalidation(
+  "guildMcpConfig",
+  z.tuple([invalidationDatabaseId]),
+  ([server]) => invalidateGuildMcpConfigCache(server),
+  clearGuildMcpConfigCache,
+);

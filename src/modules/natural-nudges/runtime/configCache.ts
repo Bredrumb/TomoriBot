@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { broadcastInvalidation, registerInvalidation, invalidationDatabaseId } from "@/utils/cache/invalidationBus";
 import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
 import type { ServerNaturalNudgeConfig } from "@/modules/natural-nudges/db/types";
 import { resolveEffectiveChannelIds } from "@/modules/natural-nudges/runtime/channels";
@@ -125,10 +127,33 @@ export function invalidateNaturalNudgeConfigCache(serverId: number): void {
   for (const [guildId, entry] of entries) {
     if (entry.serverId === serverId || entry.serverId === null) entries.delete(guildId);
   }
+  broadcastInvalidation("naturalNudgeConfig", [[String(serverId)]]);
 }
 
 export function invalidateInactiveNaturalNudgeGates(serverId: number): void {
   for (const [guildId, entry] of entries) {
     if (!entry.eligible && (entry.serverId === serverId || entry.serverId === null)) entries.delete(guildId);
   }
+  broadcastInvalidation("naturalNudgeInactive", [[String(serverId)]]);
 }
+
+function clearNaturalNudgeConfigCache(): void {
+  entries.clear();
+  activityEntries.clear();
+}
+
+registerInvalidation(
+  "naturalNudgeConfig",
+  z.tuple([invalidationDatabaseId]),
+  ([server]) => invalidateNaturalNudgeConfigCache(server),
+  clearNaturalNudgeConfigCache,
+);
+registerInvalidation(
+  "naturalNudgeInactive",
+  z.tuple([invalidationDatabaseId]),
+  ([server]) => {
+    activityEntries.delete(server);
+    invalidateInactiveNaturalNudgeGates(server);
+  },
+  clearNaturalNudgeConfigCache,
+);
