@@ -1,3 +1,4 @@
+import { messageProxyRepository } from "@/utils/db/repositories/MessageProxyRepository";
 import { beforeAll, describe, expect, it, spyOn } from "bun:test";
 import { withTransientDbRetry } from "@/utils/db/client";
 import * as dbClient from "@/utils/db/client";
@@ -25,6 +26,40 @@ it("recovers saved short-term memory settings after a connection lifetime timeou
     expect(thunk.calls()).toBe(2);
   } finally {
     query.mockRestore();
+  }
+});
+
+it.each(["ERR_POSTGRES_LIFETIME_TIMEOUT", "23505"])("classifies proxy lookup failures: %s", async (code) => {
+  const rows = [
+    {
+      service_id: "pluralkit",
+      instance_id: "pluralkit:official",
+      user_disc_id: "pk:11111111-2222-4333-8444-555555555555",
+      display_name: "Mirri",
+      user_nickname: null,
+    },
+  ];
+  const thunk = failOnceThen(code, rows);
+  const array = dbClient.sql.array.bind(dbClient.sql);
+  const query = spyOn(dbClient, "sql").mockImplementation(thunk.run as unknown as typeof dbClient.sql);
+  Object.assign(dbClient.sql, { array });
+  const logged = spyOn(log, "error").mockResolvedValue(undefined);
+  try {
+    const result = await messageProxyRepository.loadContextReferenceIdentities({
+      hostUserDiscIds: ["123456789012345678"],
+      normalizedHistoryText: "Mirri",
+    });
+    if (code === "ERR_POSTGRES_LIFETIME_TIMEOUT") {
+      expect(result.map((entry) => entry.userDiscId)).toEqual([rows[0].user_disc_id]);
+      expect(thunk.calls()).toBe(2);
+    } else {
+      expect(result).toEqual([]);
+      expect(thunk.calls()).toBe(1);
+      expect(logged).toHaveBeenCalled();
+    }
+  } finally {
+    query.mockRestore();
+    logged.mockRestore();
   }
 });
 
