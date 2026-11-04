@@ -8,6 +8,8 @@ import {
 } from "discord.js";
 import { log, ColorCode } from "../utils/misc/logger";
 import { serverScheduleRepository } from "@/utils/db/repositories";
+import type { ShardTopology } from "@/utils/discord/shardOwnership";
+import { isDraining } from "@/utils/misc/shutdownState";
 
 import type { ReminderRow } from "../types/db/schema";
 import { calculateLateness } from "@/utils/text/processors/timeUtils";
@@ -104,13 +106,17 @@ export class ReminderProcessor {
   private readonly client: Client;
   private readonly activeReminderIds = new Set<number>();
 
-  constructor(client: Client) {
+  constructor(
+    client: Client,
+    private readonly topology?: ShardTopology,
+  ) {
     this.client = client;
   }
 
   public async processDueReminders(): Promise<void> {
+    if (isDraining()) return;
     try {
-      const dueReminders = await serverScheduleRepository.getDueReminders();
+      const dueReminders = await serverScheduleRepository.getDueReminders(this.topology);
 
       if (!dueReminders || dueReminders.length === 0) {
         return;
@@ -119,6 +125,7 @@ export class ReminderProcessor {
       log.info(`Processing ${dueReminders.length} due reminder(s)`);
 
       for (const reminder of dueReminders) {
+        if (isDraining()) return;
         await this.executeReminder(reminder);
       }
     } catch (error) {

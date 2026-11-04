@@ -1,4 +1,6 @@
 import type { Client, Message } from "discord.js";
+import type { ShardTopology } from "@/utils/discord/shardOwnership";
+import { isDraining } from "@/utils/misc/shutdownState";
 import type { TomoriState } from "@/types/db/schema";
 import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
 import type {
@@ -123,21 +125,25 @@ export class NaturalNudgeProcessor {
   private readonly plannerBudget = new NudgeRequestBudget();
   private lastPruneAt = 0;
 
-  constructor(client: Client) {
+  constructor(
+    client: Client,
+    private readonly topology?: ShardTopology,
+  ) {
     this.client = client;
   }
 
   public async processDueIdleNudges(): Promise<void> {
-    if (!this.client.isReady()) return;
+    if (isDraining() || !this.client.isReady()) return;
     await this.pruneIfDue();
     let servers: EnabledIdleNudgeServer[];
     try {
-      servers = await naturalNudgeRepository.listEnabledIdleNudgeServers(new Date());
+      servers = await naturalNudgeRepository.listEnabledIdleNudgeServers(new Date(), this.topology);
     } catch (error) {
       log.error("Natural Nudges: failed to list enabled servers", error);
       return;
     }
     for (const server of servers) {
+      if (isDraining()) return;
       if (isNudgeServerBusy(server.server_id)) continue;
       try {
         await runWithErrorContext({ source: "natural_nudge", serverId: server.server_id }, () =>

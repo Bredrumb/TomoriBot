@@ -1,4 +1,5 @@
 import type { Client } from "discord.js";
+import { getShardTopology, type ShardTopology } from "@/utils/discord/shardOwnership";
 import { log } from "../utils/misc/logger";
 import { serverScheduleRepository } from "@/utils/db/repositories";
 import { RandomTriggerProcessor } from "./randomTriggerProcessor";
@@ -34,11 +35,15 @@ export class ScheduledWorkCoordinator {
   private nextWakeAt: Date | null = null;
   private lastRunAt: Date | null = null;
 
-  constructor(client: Client, reconcileIntervalMs = SCHEDULED_WORK_RECONCILE_INTERVAL_MS) {
+  constructor(
+    client: Client,
+    reconcileIntervalMs = SCHEDULED_WORK_RECONCILE_INTERVAL_MS,
+    private readonly topology: ShardTopology = getShardTopology(),
+  ) {
     this.reconcileIntervalMs = reconcileIntervalMs;
-    this.reminderProcessor = new ReminderProcessor(client);
-    this.randomTriggerProcessor = new RandomTriggerProcessor(client);
-    this.naturalNudgeProcessor = new NaturalNudgeProcessor(client);
+    this.reminderProcessor = new ReminderProcessor(client, topology);
+    this.randomTriggerProcessor = new RandomTriggerProcessor(client, topology);
+    this.naturalNudgeProcessor = new NaturalNudgeProcessor(client, topology);
   }
 
   public start(): void {
@@ -146,7 +151,9 @@ export class ScheduledWorkCoordinator {
           log.info(`Running scheduled work cycle (${reason})`);
         }
         await this.reminderProcessor.processDueReminders();
+        if (!this.isRunning) return;
         await this.randomTriggerProcessor.processDueRandomTriggers();
+        if (!this.isRunning) return;
         // Natural Nudges has no due-time column to wake on, so the 60 s reconcile is its only clock.
         await this.naturalNudgeProcessor.processDueIdleNudges();
         this.lastRunAt = new Date();
@@ -166,8 +173,9 @@ export class ScheduledWorkCoordinator {
 
     this.clearWakeTimeout();
 
-    const nextReminderTime = await serverScheduleRepository.getNextReminderTime();
-    const nextRandomTriggerTime = await serverScheduleRepository.getNextTriggerTime();
+    const nextReminderTime = await serverScheduleRepository.getNextReminderTime(this.topology);
+    const nextRandomTriggerTime = await serverScheduleRepository.getNextTriggerTime(this.topology);
+    if (!this.isRunning) return;
     const nextDueTime = this.getEarliestDate(nextReminderTime, nextRandomTriggerTime);
 
     if (!nextDueTime) {

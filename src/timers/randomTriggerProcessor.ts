@@ -3,6 +3,8 @@ import type { Client, Message } from "discord.js";
 import { ChannelType } from "discord.js";
 import { log } from "../utils/misc/logger";
 import { serverScheduleRepository } from "@/utils/db/repositories";
+import type { ShardTopology } from "@/utils/discord/shardOwnership";
+import { isDraining } from "@/utils/misc/shutdownState";
 
 import type { RandomTriggerRow, TomoriState } from "../types/db/schema";
 import { tomoriChat, suppressNextSelfReply } from "../events/messageCreate/tomoriChat";
@@ -14,13 +16,17 @@ import { seedTurnAnchor } from "@/utils/discord/turnAnchor";
 export class RandomTriggerProcessor {
   private readonly client: Client;
 
-  constructor(client: Client) {
+  constructor(
+    client: Client,
+    private readonly topology?: ShardTopology,
+  ) {
     this.client = client;
   }
 
   public async processDueRandomTriggers(): Promise<void> {
+    if (isDraining()) return;
     try {
-      const dueTriggers = await serverScheduleRepository.getDueTriggers();
+      const dueTriggers = await serverScheduleRepository.getDueTriggers(this.topology);
 
       if (!dueTriggers || dueTriggers.length === 0) {
         return;
@@ -29,6 +35,7 @@ export class RandomTriggerProcessor {
       log.info(`Processing ${dueTriggers.length} due random trigger(s)`);
 
       for (const trigger of dueTriggers) {
+        if (isDraining()) return;
         await this.executeTrigger(trigger);
       }
     } catch (error) {
