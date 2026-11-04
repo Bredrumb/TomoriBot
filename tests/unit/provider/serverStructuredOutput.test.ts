@@ -103,6 +103,51 @@ function registerPayingOption(input: { owned: ProviderOptionCapability[]; eligib
 const persona = () => createPersona({ server_id: SERVER_ID });
 
 describe("Server-pinned structured model payer", () => {
+  it.each([
+    "missing_model",
+    "deprecated_model",
+    "unsupported_model",
+    "unavailable_model",
+    "unsupported_provider",
+    "missing_credentials",
+    "unavailable_option",
+  ] as const)("retains safe resolution diagnostics for %s", async (category) => {
+    stubCatalog();
+    const model = createLlmRow({
+      llm_id: MODEL_ID,
+      llm_provider: "openrouter",
+      supports_structoutput: category !== "unsupported_model",
+      is_deprecated: category === "deprecated_model",
+    });
+    const spies: Array<{ mockRestore(): void }> = [
+      spyOn(llmModelRepo, "loadById").mockResolvedValue(category === "missing_model" ? null : model),
+    ];
+    if (category === "unavailable_model")
+      spies.push(spyOn(llmModelRepo, "loadAvailableModelsForProvider").mockResolvedValue([]));
+    if (category === "unsupported_provider")
+      spies.push(spyOn(capabilityResolver, "resolveStructuredOutputCapability").mockResolvedValue(null));
+    if (category === "missing_credentials")
+      spies.push(spyOn(llmProviderRepo, "loadSavedProviderConfig").mockResolvedValue(null));
+    if (category === "unavailable_option") registerPayingOption({ owned: ["reviewer"], eligible: false });
+    const failures: unknown[] = [];
+    try {
+      expect(
+        await resolveServerStructuredModel(persona(), MODEL_ID, {}, "reviewer", (failure) => failures.push(failure)),
+      ).toBeNull();
+      expect(failures).toEqual([
+        {
+          category,
+          modelId: MODEL_ID,
+          model: category === "missing_model" ? undefined : model.llm_codename,
+          provider: category === "missing_model" ? undefined : model.llm_provider,
+        },
+      ]);
+      expect(JSON.stringify(failures)).not.toContain("key");
+    } finally {
+      for (const spy of spies.reverse()) spy.mockRestore();
+    }
+  });
+
   it("bills the option that owns the slot, mirroring its saved row and carrying its usage context", async () => {
     const { savedLookups } = stubCatalog();
     const { requests } = registerPayingOption({ owned: ["nudge-planner"] });

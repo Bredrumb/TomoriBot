@@ -180,3 +180,7 @@ refusals, timeouts and upstream outages produce a metric plus a retained warning
 - `src/utils/security/keyRotation.ts`: API key selection and rotation tracking.
 - `src/utils/chat/responseReview.ts`: shared state, admitted evidence and reviewer lifecycle.
 - `src/utils/chat/responseRuleCheck.ts`: internal checker validation and bounded evidence.
+
+Reviewer resolution diagnostics distinguish missing, deprecated, unavailable, or unsupported models,
+unsupported providers, unavailable provider options, and missing credentials. They include the model
+ID, codename, and provider when available, without credentials or draft content.

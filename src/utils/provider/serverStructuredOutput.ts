@@ -31,6 +31,20 @@ export interface ResolvedServerStructuredModel {
   usageContext?: ProviderUsageContext;
 }
 
+export interface StructuredModelResolutionFailure {
+  category:
+    | "missing_model"
+    | "deprecated_model"
+    | "unsupported_model"
+    | "unavailable_model"
+    | "unsupported_provider"
+    | "unavailable_option"
+    | "missing_credentials";
+  modelId: number | undefined;
+  model?: string;
+  provider?: string;
+}
+
 /**
  * The provider option owning `slot` pays for this out-of-turn structured call, else the server's
  * saved key does, so a personal key never pays; an option's refusal throws `ProviderRequestDeniedError`.
@@ -40,27 +54,35 @@ export async function resolveServerStructuredModel(
   llmId: number,
   failureContext: ErrorContext,
   slot: ProviderOptionCapability,
+  onUnavailable?: (failure: StructuredModelResolutionFailure) => void,
 ): Promise<ResolvedServerStructuredModel | { errorLogged: true } | null> {
   const model = await llmModelRepo.loadById(llmId);
-  if (!model?.llm_id || model.is_deprecated || !model.supports_structoutput) return null;
+  const unavailable = (category: StructuredModelResolutionFailure["category"]): null => {
+    onUnavailable?.({ category, modelId: llmId, model: model?.llm_codename, provider: model?.llm_provider });
+    return null;
+  };
+  if (!model?.llm_id) return unavailable("missing_model");
+  if (model.is_deprecated) return unavailable("deprecated_model");
+  if (!model.supports_structoutput) return unavailable("unsupported_model");
   const available = await llmModelRepo.loadAvailableModelsForProvider(model.llm_provider, false, {
     kind: "server",
     ownerId: baseState.server_id,
   });
-  if (!available?.some((entry) => entry.llm_id === model.llm_id)) return null;
+  if (!available?.some((entry) => entry.llm_id === model.llm_id)) return unavailable("unavailable_model");
   const capability = await resolveStructuredOutputCapability(model.llm_provider);
-  if (!capability) return null;
+  if (!capability) return unavailable("unsupported_provider");
 
   const scope = { kind: "server", ownerId: baseState.server_id, state: baseState } as const;
   const option = findProviderOptionByActiveProvider(model.llm_provider, scope, slot);
   if (option) {
-    if (!(await option.availability(scope)).eligible || !option.selection.resolveCredentials) return null;
+    if (!(await option.availability(scope)).eligible || !option.selection.resolveCredentials)
+      return unavailable("unavailable_option");
     const credentials = await option.selection.resolveCredentials({
       scope,
       capability: slot,
       modelId: model.llm_id,
     });
-    if (!credentials) return null;
+    if (!credentials) return unavailable("missing_credentials");
     const saved = credentials.savedProvider
       ? await llmProviderRepo.loadSavedProviderConfig(baseState.server_id, credentials.savedProvider)
       : null;
@@ -73,7 +95,7 @@ export async function resolveServerStructuredModel(
   }
 
   const saved = await llmProviderRepo.loadSavedProviderConfig(baseState.server_id, model.llm_provider);
-  if (!saved?.api_key) return null;
+  if (!saved?.api_key) return unavailable("missing_credentials");
   try {
     return {
       capability,
