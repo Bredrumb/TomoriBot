@@ -48,7 +48,7 @@ the trigger, so a later message or embed cannot redirect the reaction. The recei
 delivered embed's history text when present and replaces that history entry with one recent `user`
 item formatted as `[System: <gesture> <tool hint>]`. The trigger stays separate from adjacent notices
 during history merging. If the message is outside the fetched history, the injected event supplies
-the gesture. The receiving turn resolves `{conditioning_interaction_tool}` inside
+the gesture. For hugs and kisses, the receiving turn resolves `{conditioning_interaction_tool}` inside
 `{{if tool:interact_with_target}}` against its own model capabilities and Deliberate Tool Mode
 allowlist. When unavailable, the event appears without the hint. The hint exists only for this
 reaction turn; later history contains the posted gesture without it.

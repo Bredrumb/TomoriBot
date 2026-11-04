@@ -1,3 +1,4 @@
+import type { ConditioningActionKey } from "@/utils/conditioning/conditioning";
 import type { GenerationModelSelection } from "@/types/provider/generationModels";
 import type { ProviderUsageContext } from "@/utils/provider/providerUsage";
 import type { BaseGuildTextChannel, Client, Guild, GuildMember, Message, Webhook } from "discord.js";
@@ -125,7 +126,7 @@ export interface TomoriChatInput {
   sceneTurn?: SceneTurnMetadata;
   /** Unprompted Natural Nudges turn: never queues and never feeds engagement stats. */
   naturalNudge?: NaturalNudgeTurn;
-  conditioningInteraction?: { actorType: "user" | "persona"; type: ConditioningType };
+  conditioningInteraction?: { actorType: "user" | "persona"; type: ConditioningType; action: ConditioningActionKey };
   /** A member's message that interrupted a Natural Nudges scene, answered by the persona about to speak. */
   nudgeSceneCatcherPersonaId?: number;
   /**
@@ -172,7 +173,7 @@ export interface ChatIncoming {
   sceneTurn?: SceneTurnMetadata;
   /** Unprompted Natural Nudges turn: never queues and never feeds engagement stats. */
   naturalNudge?: NaturalNudgeTurn;
-  conditioningInteraction?: { actorType: "user" | "persona"; type: ConditioningType };
+  conditioningInteraction?: { actorType: "user" | "persona"; type: ConditioningType; action: ConditioningActionKey };
   /** A member's message that interrupted a Natural Nudges scene, answered by the persona about to speak. */
   nudgeSceneCatcherPersonaId?: number;
   /**

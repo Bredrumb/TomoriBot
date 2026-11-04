@@ -17,6 +17,7 @@ import { compactWhitespace, normalizeTailDirective } from "@/utils/chat/contextD
 import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
 import { formatTimestampInline } from "@/utils/text/contextBuilder";
 import { matchesProtocolTemplateKey, classifyProtocolEmbed } from "@/utils/discord/embedProtocol";
+import { processEmbedsFromMessage } from "@/utils/chat/contextEmbeds";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
 import { normalizeTriggerWord } from "@/utils/text/triggerWords";
@@ -412,7 +413,16 @@ export async function buildReplyReferenceContextAnnotation(params: {
 
   const replyRef = params.messageIdMap.register(params.replyMessage.id, "ref");
   const referencedRef = params.messageIdMap.register(params.referencedMessage.id, "ref");
-  const referencedSummary = `${formatInlineSystemContent(params.referencedMessage.content)}${buildReplyReferenceAttachmentInfo(params.referencedMessage)}`;
+  const referencedContent = processEmbedsFromMessage({
+    embeds: params.referencedMessage.embeds.filter((embed) => classifyProtocolEmbed(embed) !== "diagnostic"),
+    components: params.referencedMessage.components,
+    content: params.referencedMessage.content,
+    imageAttachments: [],
+    isTomoriAuthoredMessage: false,
+    selfDebugEnabled: false,
+    tomoriNickname: null,
+  }).content;
+  const referencedSummary = `${formatInlineSystemContent(referencedContent)}${buildReplyReferenceAttachmentInfo(params.referencedMessage)}`;
 
   if (params.replyMessage.type === MessageType.ChannelPinnedMessage) {
     return `[System: ${replyAuthorName} pinned a previous message (ID: ${referencedRef}) by ${referencedAuthorName} saying: ${referencedSummary}]`;
@@ -641,7 +651,8 @@ export function formatInlineSystemContent(content: string | null | undefined): s
 // later turn re-renders against a different messageIdMap: risking mis-targeted
 // manage_message / interact_with_recent_message actions. Strip them before storing.
 const INJECTED_CONTEXT_ANNOTATION_PATTERNS: RegExp[] = [
-  // Reply-reference annotation AND media/GIF notices: "[System: This message (ID: …) …]"
+  /^\[System: This message \(ID: [^)]*\) by .* is referring to a previous message \(ID: [^)]*\) by .* saying: .*\]$/gm,
+  // Media/GIF notices: "[System: This message (ID: …) …]"
   /\[System: This message \(ID: [^)]*\)[^\]]*\]/g,
   // Recent-message metadata: "[System: Message metadata: ref=… | …]"
   /\[System: Message metadata:[^\]]*\]/g,

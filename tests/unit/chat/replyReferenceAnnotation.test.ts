@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it, mock } from "bun:test";
-import { Collection, type Message, MessageType } from "discord.js";
+import { Collection, type Embed, type Message, MessageType } from "discord.js";
 import type { UserRow } from "@/types/db/schema";
 import * as realUserCache from "@/utils/cache/userCache";
 import {
@@ -9,6 +9,8 @@ import {
 } from "@/utils/messageProxy/historyAttribution";
 import type { MessageProxyIndexedMessageIdentity } from "@/utils/messageProxy/types";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
+import { initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { localizedCopy } from "../../helpers/localeCases";
 import { createScopedModuleMocker } from "../../helpers/mockSurface";
 
 /**
@@ -41,9 +43,13 @@ cacheMocker.module("@/utils/cache/userCache", () => ({
 }));
 
 let buildReplyReferenceContextAnnotation: typeof import("@/utils/chat/contextAnnotations").buildReplyReferenceContextAnnotation;
+let stripInjectedContextAnnotations: typeof import("@/utils/chat/contextAnnotations").stripInjectedContextAnnotations;
 
 beforeAll(async () => {
-  ({ buildReplyReferenceContextAnnotation } = await import("@/utils/chat/contextAnnotations"));
+  await initializeLocalizer();
+  ({ buildReplyReferenceContextAnnotation, stripInjectedContextAnnotations } = await import(
+    "@/utils/chat/contextAnnotations"
+  ));
 });
 
 beforeEach(() => {
@@ -58,6 +64,8 @@ function webhookMessage(params: { id: string; webhookName: string; content?: str
     member: null,
     content: params.content ?? "field notes",
     attachments: new Collection(),
+    embeds: [],
+    components: [],
     type: MessageType.Default,
   } as unknown as Message;
 }
@@ -70,6 +78,8 @@ function humanMessage(params: { id: string; authorId?: string; displayName: stri
     member: { displayName: params.displayName },
     content: "morning",
     attachments: new Collection(),
+    embeds: [],
+    components: [],
     type: MessageType.Default,
   } as unknown as Message;
 }
@@ -202,5 +212,60 @@ describe("reply reference annotations for verified proxy messages", () => {
 
     expect(annotation).toContain("by Mirri is referring");
     expect(annotation).toContain("by Mirri saying");
+  });
+});
+
+describe("reply reference content", () => {
+  it("includes a playful interaction and other visible embed text alongside message content", async () => {
+    const referenced = webhookMessage({ id: "gesture", webhookName: "Tomori", content: "" });
+    const gesture = localizedCopy("en-US", "commands.reward.hug.embed_description_with_reason", {
+      user: "Mirri",
+      bot: "Juno",
+      reason: "kindness",
+    });
+    referenced.embeds = [
+      { title: localizer("en-US", "commands.reward.hug.embed_title"), description: gesture, fields: [] },
+      { title: "Result", description: "A result", fields: [{ name: "Value", value: "42" }] },
+    ] as unknown as Embed[];
+    const result = await annotate({ reply: humanMessage({ id: "reply", displayName: "Juno" }), referenced });
+    expect(result).toContain(gesture);
+    expect(result).toContain("Value: 42");
+    expect(result).not.toContain("No text content was included");
+    expect(stripInjectedContextAnnotations(`Earlier message\n${result}\nReply with [brackets]`)).toBe(
+      "Earlier message\nReply with [brackets]",
+    );
+    referenced.embeds = referenced.embeds.slice(0, 1);
+    const singleEmbed = await annotate({ reply: humanMessage({ id: "reply", displayName: "Juno" }), referenced });
+    expect(stripInjectedContextAnnotations(singleEmbed)).toBe("");
+  });
+
+  it("strips reply annotations with literal brackets and empty referenced content", async () => {
+    for (const content of ["An unmatched ] and [ bracket", ""]) {
+      const referenced = webhookMessage({ id: "reference", webhookName: "Tomori", content });
+      const result = await annotate({ reply: humanMessage({ id: "reply", displayName: "Juno" }), referenced });
+      expect(stripInjectedContextAnnotations(`${result}\nReply with [brackets]`)).toBe("Reply with [brackets]");
+    }
+  });
+
+  it("strips inline media notices without removing surrounding content", () => {
+    const content = "Before [System: This message (ID: ref_1) contains a GIF.] after [brackets]";
+    expect(stripInjectedContextAnnotations(content)).toBe("Before  after [brackets]");
+  });
+
+  it("keeps unshared dice and diagnostic embeds out of reply context", async () => {
+    const referenced = webhookMessage({ id: "private", webhookName: "Tomori", content: "" });
+    referenced.embeds = [
+      {
+        title: localizer("en-US", "commands.roll.title"),
+        description: "private roll",
+        footer: { text: localizer("en-US", "commands.roll.footer_hidden") },
+        fields: [],
+      },
+      { title: localizer("en-US", "genai.empty_response_title"), description: "diagnostic detail", fields: [] },
+    ] as unknown as Embed[];
+    const result = await annotate({ reply: humanMessage({ id: "reply", displayName: "Juno" }), referenced });
+    expect(result).not.toContain("private roll");
+    expect(result).not.toContain("diagnostic detail");
+    expect(result).toContain("No text content was included");
   });
 });

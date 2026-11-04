@@ -291,7 +291,7 @@ it("saves persona-attributed feedback and queues the target with the exact inter
       selectedPersonaId: 2,
       isManuallyTriggered: true,
       textQuotaSource: "system",
-      conditioningInteraction: { actorType: "persona", type: "reward" },
+      conditioningInteraction: { actorType: "persona", type: "reward", action: "feed" },
     }),
   );
   const event = queuedEvent(f.queued, 0);

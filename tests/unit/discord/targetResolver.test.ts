@@ -6,7 +6,7 @@ import { EMPTY_PERSONA_NAMING_CONFIG, type PersonaNamingConfig } from "@/types/p
 import type { ToolContext } from "@/types/tool/interfaces";
 import { userNamingRepository, userRepository } from "@/utils/db/repositories";
 import { createParticipantAlias } from "@/utils/text/participants/aliases";
-import { createDiscordUserKey, serializeParticipantKey } from "@/utils/text/participants/identity";
+import { createDiscordUserKey, createPersonaKey, serializeParticipantKey } from "@/utils/text/participants/identity";
 
 /**
  * Builds a minimal ToolContext carrying only the conversation-user metadata that
@@ -79,6 +79,55 @@ it("distinguishes persona and user targets and requires clarification for a cros
   expect(
     await resolveIdentityTarget(" @mirri ", { contextItems: [] } as unknown as ToolContext, [persona]),
   ).toMatchObject({ status: "resolved", targetType: "persona", persona: { persona_id: 7 } });
+});
+
+it("resolves a persona in conversation without treating it as a separate user", async () => {
+  const persona = createPersona({ persona_id: 7, persona_nickname: "Mirri" });
+  const key = createPersonaKey(7);
+  const alias = createParticipantAlias({
+    owner: key,
+    value: "Mirri",
+    source: "persona_nickname",
+    purposes: ["tool_target"],
+    exposure: "visible",
+    priority: 10,
+  });
+  if (!alias) throw new Error("Persona alias is missing");
+  const reference = { targetId: "persona:7", displayLabel: "Mirri", aliases: ["Mirri"], mentionable: false };
+  const indexed = buildContext([reference]);
+  const indexedItem = indexed.contextItems?.[0];
+  if (!indexedItem) throw new Error("Participant context is missing");
+  indexedItem.participantTargetIndex = {
+    targets: [
+      {
+        key,
+        serializedKey: serializeParticipantKey(key),
+        displayLabel: "Mirri",
+        primaryAlias: "Mirri",
+        targetId: "persona:7",
+        mentionable: false,
+        inParticipantContext: true,
+        aliases: [alias],
+      },
+    ],
+  };
+
+  for (const context of [indexed, buildContext([reference])]) {
+    expect(await resolveIdentityTarget("Mirri", context, [persona])).toMatchObject({
+      status: "resolved",
+      targetType: "persona",
+      persona: { persona_id: 7 },
+    });
+    expect((await resolveUserTarget("Mirri", context)).status).toBe("not_found");
+  }
+
+  const userContext = buildIndexedContext([
+    { targetId: "223456789012345678", displayLabel: "Mirri", aliases: ["Mirri"], mentionable: true },
+  ]);
+  const userTargets = userContext.contextItems?.[0]?.participantTargetIndex?.targets;
+  if (!userTargets) throw new Error("User targets are missing");
+  indexedItem.participantTargetIndex.targets = [...indexedItem.participantTargetIndex.targets, ...userTargets];
+  expect((await resolveIdentityTarget("Mirri", indexed, [persona])).status).toBe("ambiguous");
 });
 
 describe("resolveUserTarget — conversation stage primary-name precedence", () => {

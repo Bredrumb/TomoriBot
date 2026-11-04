@@ -227,7 +227,7 @@ describe("conditioning turn context", () => {
         [true, false],
       ]) {
         const { context, interactionEvent } = await buildTurnContext(undefined, {
-          conditioningInteraction: { actorType, type: "reward" },
+          conditioningInteraction: { actorType, type: "reward", action: "hug" },
           interactionEnabled,
           hasTools,
         });
@@ -263,9 +263,30 @@ describe("conditioning turn context", () => {
     }
   });
 
+  it("offers reciprocation only for hugs and kisses", async () => {
+    for (const action of [
+      "hug",
+      "kiss",
+      "headpat",
+      "tickle",
+      "feed",
+      "spank",
+      "pinch",
+      "bite",
+      "squeeze",
+      "bonk",
+    ] as const) {
+      const { context, interactionEvent } = await buildTurnContext(undefined, {
+        conditioningInteraction: { actorType: "user", type: "reward", action },
+      });
+      const event = context.contextItems.find((item) => item.messageId === interactionEvent?.messageId);
+      expect(JSON.stringify(event).includes("`interact_with_target`")).toBe(action === "hug" || action === "kiss");
+    }
+  });
+
   it("keeps the reaction event when the delivered message is outside the fetched history", async () => {
     const { context, interactionEvent } = await buildTurnContext(undefined, {
-      conditioningInteraction: { actorType: "persona", type: "reward" },
+      conditioningInteraction: { actorType: "persona", type: "reward", action: "hug" },
       includeInteractionHistory: false,
     });
     const event = context.contextItems.find((item) => item.messageId === interactionEvent?.messageId);
@@ -295,7 +316,7 @@ describe("conditioning turn context", () => {
   it("retains one semantic gesture event in native context with or without fetched history", async () => {
     for (const includeInteractionHistory of [true, false]) {
       const { context, interactionEvent } = await buildTurnContext(undefined, {
-        conditioningInteraction: { actorType: "user", type: "reward" },
+        conditioningInteraction: { actorType: "user", type: "reward", action: "hug" },
         nativeContext: true,
         includeInteractionHistory,
       });

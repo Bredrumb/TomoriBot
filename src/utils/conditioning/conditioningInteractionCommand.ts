@@ -309,7 +309,7 @@ export function createConditioningInteractionCommand(
         isFromQueue: false,
         isManuallyTriggered: true,
         selectedPersonaId: selectedPersona.persona_id,
-        conditioningInteraction: { actorType: "user", type },
+        conditioningInteraction: { actorType: "user", type, action: actionKey },
         injectedContextItems: [
           buildConditioningInteractionEvent({
             actorName: `<@${interaction.user.id}>`,

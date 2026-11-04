@@ -614,7 +614,9 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
       effectivePersona,
       streamingContext.deliberateToolAllowedNames,
     );
-    const hint = await resolver.expand(CONDITIONING_INTERACTION_RESPONSE_TEMPLATE);
+    const hint = ["hug", "kiss"].includes(incoming.conditioningInteraction.action)
+      ? await resolver.expand(CONDITIONING_INTERACTION_RESPONSE_TEMPLATE)
+      : "";
     injectedContextItems = await Promise.all(
       (injectedContextItems ?? []).map(async (item) => {
         if (item.messageId !== message.id) return item;

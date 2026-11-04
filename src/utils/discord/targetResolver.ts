@@ -312,14 +312,19 @@ function getConversationUserReferences(contextItems?: StructuredContextItem[]): 
   }
 
   const targetIndex = collectParticipantTargetIndex(contextItems);
-  if (targetIndex.targets.length > 0) return projectConversationUserReferences(targetIndex);
+  if (targetIndex.targets.length > 0) {
+    return projectConversationUserReferences({
+      ...targetIndex,
+      targets: targetIndex.targets.filter((target) => target.key.kind !== "persona"),
+    });
+  }
 
   const collected: ConversationUserReference[] = [];
   for (const item of contextItems) {
     if (item.metadataTag !== ContextItemTag.KNOWLEDGE_USERS_IN_CONVERSATION || !item.conversationUsers?.length) {
       continue;
     }
-    collected.push(...item.conversationUsers);
+    collected.push(...item.conversationUsers.filter((reference) => !reference.targetId.startsWith("persona:")));
   }
 
   return collected;
