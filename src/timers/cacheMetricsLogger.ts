@@ -34,7 +34,8 @@ import { getTomoriStateCacheStats } from "@/utils/cache/tomoriStateCache";
 import { getUserCacheStats } from "@/utils/cache/userCache";
 import { getWebhookIdentityCacheSize } from "@/utils/chat/webhookIdentity";
 import { drainPoolEventCounters } from "@/utils/db/poolEvents";
-import { metricSampleRepository } from "@/utils/db/repositories/MetricSampleRepository";
+import { metricSampleRepository, type MetricFields } from "@/utils/db/repositories/MetricSampleRepository";
+import { getShardTopology } from "@/utils/discord/shardOwnership";
 import { getWebhookCacheSizes } from "@/utils/discord/webhook/cache";
 import { getPresetAvatarCacheSize } from "@/utils/image/avatarHelper";
 import { eventLoopMonitor } from "@/utils/misc/eventLoopMonitor";
@@ -128,7 +129,12 @@ function collectDiscordCacheSizes(client: Client): Record<string, number> {
  * Build a flat metric payload from every cache plus process RSS.
  * Exported so a future slash command or HTTP endpoint could call it on-demand.
  */
-export function collectCacheMetricsSnapshot(client: Client): Record<string, number> {
+export function collectCacheMetricsSnapshot(client: Client): MetricFields {
+  const topology = getShardTopology();
+  if (Array.isArray(client.options.shards) && client.options.shardCount !== undefined) {
+    topology.resolveGatewayShardCount(client.options.shardCount);
+  }
+  const { totalShardCount, ownedShardIds } = topology.getResolvedTopology();
   const stm = getShortTermMemoryCacheStats();
   const tomoriState = getTomoriStateCacheStats();
   const user = getUserCacheStats();
@@ -142,6 +148,10 @@ export function collectCacheMetricsSnapshot(client: Client): Record<string, numb
   const processMemory = collectProcessMemorySnapshot();
 
   return {
+    process_label: topology.processLabel,
+    // Shard IDs use ascending comma-separated decimal integers because metric fields are scalar.
+    shard_ids: ownedShardIds.join(","),
+    shard_count: totalShardCount,
     // Tomori application-level caches
     shortTermMemory: stm.size,
     tomoriState: tomoriState.cacheSize,

@@ -69,7 +69,12 @@ describe("health server route dispatch", () => {
       }
       const probe = await fetch(`${base}/healthz`);
       expect([200, 503]).toContain(probe.status);
-      expect(await probe.json()).toHaveProperty("eventLoop");
+      const body = await probe.json();
+      expect(body).toHaveProperty("eventLoop");
+      expect(body).toHaveProperty("discord.shards");
+      expect(body).toHaveProperty("discord.shardCount");
+      expect(body).toHaveProperty("discord.gatewayFailureCount");
+      expect(body).toHaveProperty("discord.lastGatewayFailureAt");
       for (const path of ["/fixture-failure", "/fixture-sync-failure"]) {
         const failure = await fetch(`${base}${path}`);
         expect(failure.status).toBe(500);
