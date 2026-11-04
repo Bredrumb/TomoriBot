@@ -22,6 +22,7 @@ import { resolvePreferredDiscordDisplayName } from "../../utils/discord/displayN
 import { dispatchGlobalInteraction, isGlobalRoutableInteraction } from "@/utils/discord/interactions/router";
 import { getCachedBlacklistStatusOrThrow } from "@/utils/cache/userCache";
 import { isBlacklistGatedCommand } from "@/utils/moderation/serverBlacklist";
+import { rejectInteractionDuringShutdown } from "@/utils/discord/ui/interactionCore";
 
 // Cooldown for any command whose category is listed below, in milliseconds.
 const DEFAULT_COOLDOWN_MS = 1_600;
@@ -86,6 +87,7 @@ async function setCooldown(userId: string, category: string, duration: number): 
 }
 
 const handler = async (client: Client, interaction: Interaction): Promise<void> => {
+  if (await rejectInteractionDuringShutdown(interaction)) return;
   if (interaction.isAutocomplete()) {
     await runWithErrorContext(
       {
