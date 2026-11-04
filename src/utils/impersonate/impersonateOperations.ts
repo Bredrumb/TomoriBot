@@ -38,7 +38,10 @@ import { getCachedWhitelistStatus } from "@/utils/cache/channelWhitelistCache";
 import { getCachedUserRow } from "@/utils/cache/userCache";
 import { getCachedPersonalSpotlightStatus } from "@/utils/cache/personalSpotlightCache";
 import { filterPersonasForTrigger, isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
-import { UserImpersonationGenerationSkippedError } from "@/utils/chat/userImpersonationCompletion";
+import {
+  UserImpersonationGenerationSkippedError,
+  UserImpersonationReportedProviderError,
+} from "@/utils/chat/userImpersonationCompletion";
 import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
 
 type ImpersonationInteraction = ChatInputCommandInteraction;
@@ -549,12 +552,12 @@ export async function executeUserImpersonation(
       ],
     });
   } catch (error) {
-    // The error goes in the error slot, not a metadata object: only a real Error gets its fields
-    // filtered, so a wrapped discord.js error carried its whole request body (a data URI avatar).
-    await log.error("Failed to handle user impersonation", error, {
-      errorType: "UserImpersonationError",
-      metadata: { userId: interaction.user.id, impersonatedUserId, guildId: interaction.guildId },
-    });
+    if (!(error instanceof UserImpersonationReportedProviderError)) {
+      await log.error("Failed to handle user impersonation", error, {
+        errorType: "UserImpersonationError",
+        metadata: { userId: interaction.user.id, impersonatedUserId, guildId: interaction.guildId },
+      });
+    }
 
     if (interaction.deferred || interaction.replied) {
       const isTimeoutError = error instanceof Error && /timed?\s*out|timeout/i.test(error.message);

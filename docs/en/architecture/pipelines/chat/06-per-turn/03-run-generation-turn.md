@@ -98,6 +98,9 @@ attempt continues the reply from where the failed one stopped:
   renders a compact Discord button notice informing users that a fallback model answered the turn.
   Each failed attempt is listed by error type and display-safe code only, because context assembly
   reads the notice back for the model; the upstream message stays in the operator log.
+- **Impersonation completion**: provider error results carry `providerFailureReported` after the stream
+  handler schedules their report. The impersonation command keeps its safe error reply and skips a
+  duplicate report; failures outside that stream path retain command-level error logging.
 - **Final emission**: if all attempts fail, only the terminal error is emitted to the response sink.
 
 ## Constraints and rationale

@@ -1,3 +1,7 @@
+import {
+  getUserImpersonationGenerationError,
+  UserImpersonationReportedProviderError,
+} from "@/utils/chat/userImpersonationCompletion";
 import { DiscordAPIError, REST } from "discord.js";
 import { ProviderRequestDeniedError, type ProviderUsageContext } from "@/utils/provider/providerUsage";
 import { localizer } from "@/utils/text/localizer";
@@ -144,9 +148,11 @@ describe("StreamOrchestrator failed-stream delivery", () => {
         errors.mockClear();
         warnings.mockClear();
         const retried = fixture([{ type: "error", error: malformed }], true);
-        expect((await new StreamOrchestrator().streamToDiscord(retried.provider, config, retried.context)).status).toBe(
-          "error",
-        );
+        const failed = await new StreamOrchestrator().streamToDiscord(retried.provider, config, retried.context);
+        expect(failed.status).toBe("error");
+        expect(
+          getUserImpersonationGenerationError({ status: "error", streamResults: [failed], personaResponses: [] }),
+        ).toBeInstanceOf(UserImpersonationReportedProviderError);
         expect(retried.send).not.toHaveBeenCalled();
 
         const final = fixture(
@@ -163,6 +169,9 @@ describe("StreamOrchestrator failed-stream delivery", () => {
         expect(incidents[0]?.[2]).toMatchObject({ metadata: { surfaced: false, providerErrorCode: "400" } });
         expect(retained).toHaveLength(finalAttempt === "failure" ? 1 : 0);
         if (finalAttempt === "failure") {
+          expect(
+            getUserImpersonationGenerationError({ status: "error", streamResults: [result], personaResponses: [] }),
+          ).toBeInstanceOf(UserImpersonationReportedProviderError);
           expect(retained[0]?.[2]).toMatchObject({
             metadata: { surfaced: true, providerErrorCode: "PROHIBITED_CONTENT" },
           });
