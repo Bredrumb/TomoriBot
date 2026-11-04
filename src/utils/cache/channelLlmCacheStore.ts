@@ -1,3 +1,10 @@
+import { z } from "zod";
+import {
+  broadcastInvalidation,
+  registerInvalidation,
+  invalidationKey,
+  invalidationDatabaseId,
+} from "@/utils/cache/invalidationBus";
 import type { LlmRow } from "@/types/db/schema";
 import { TOMORI_STATE_CACHE_TTL_MS } from "@/constants/cacheTtl";
 
@@ -29,6 +36,7 @@ export function setChannelLlmCache(serverId: number, channelDiscId: string, llm:
 
 export function invalidateChannelLlmCache(serverId: number, channelDiscId: string): void {
   channelLlmCache.delete(getCacheKey(serverId, channelDiscId));
+  broadcastInvalidation("channelLlm", [[String(serverId), channelDiscId]]);
 }
 
 export function getChannelLlmCacheSize(): number {
@@ -46,4 +54,15 @@ export function invalidateAllChannelLlmCacheForServer(serverId: number): void {
       channelLlmCache.delete(key);
     }
   }
+  broadcastInvalidation("channelLlm", [[String(serverId)]]);
 }
+
+registerInvalidation(
+  "channelLlm",
+  z.union([z.tuple([invalidationDatabaseId]), z.tuple([invalidationDatabaseId, invalidationKey])]),
+  ([server, channel]) => {
+    if (channel === undefined) invalidateAllChannelLlmCacheForServer(server);
+    else invalidateChannelLlmCache(server, channel);
+  },
+  clearChannelLlmCache,
+);

@@ -46,10 +46,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Cache invalidation — regression", () => 
     const newLevel = originalPrivacy === PrivacyLevel.MINIMAL ? PrivacyLevel.PARTIAL : PrivacyLevel.MINIMAL;
     await userRepository.setPrivacyLevel(FIXTURE_IDS.userDiscId, newLevel);
 
-    // Step 3: Manually ensure cache is cleared (the write should have done this,
-    // but the explicit invalidation here proves the harness can detect if it was NOT cleared)
-    invalidateUserCache(FIXTURE_IDS.userDiscId);
-
     const fresh = await getCachedUserRow(FIXTURE_IDS.userDiscId);
     expect(fresh?.privacy_level).toBe(newLevel);
   });
@@ -76,11 +72,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Cache invalidation — regression", () => 
     const { getCachedAllPersonas } = await import("@/utils/cache/tomoriStateCache");
     await getCachedAllPersonas(FIXTURE_IDS.serverDiscId);
 
-    // Write a nickname change (which invalidates the cache in the real write path)
-    await personaRepository.update(refs.personaId, { persona_nickname: "_rt_cache_renamed" });
-
-    // Invalidate (updateTomori should do this; we do it explicitly to prove the harness works)
-    invalidateTomoriStateCache(FIXTURE_IDS.serverDiscId);
+    await personaRepository.update(refs.personaId, { persona_nickname: "_rt_cache_renamed" }, FIXTURE_IDS.serverDiscId);
 
     const personas = await getCachedAllPersonas(FIXTURE_IDS.serverDiscId);
     const main = personas.find((p) => p.persona_id === refs.personaId);
@@ -99,15 +91,5 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Cache invalidation — regression", () => 
 
     const fresh = await getCachedMainPersona(FIXTURE_IDS.serverDiscId);
     expect(fresh?.config.message_fetch_limit).toBe(42);
-  });
-
-  // To verify the harness catches a cache invalidation regression:
-  // Remove the `invalidateUserCache(userDiscId)` call from `UserRepository.register`
-  // Run this test: it should fail because getCachedUserRow returns stale data
-  it.skip("[REGRESSION PROBE] harness detects missing cache invalidation", async () => {
-    await userRepository.register("_rt_probe_user", "_rt_probe", "en");
-    // If invalidation were missing, a cached null entry would persist and loadUserRow would still return null
-    const user = await userRepository.loadByDiscordId("_rt_probe_user");
-    expect(user).not.toBeNull();
   });
 });

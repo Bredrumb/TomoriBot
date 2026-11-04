@@ -1,3 +1,10 @@
+import { z } from "zod";
+import {
+  broadcastInvalidation,
+  registerInvalidation,
+  invalidationKey,
+  invalidationDatabaseId,
+} from "@/utils/cache/invalidationBus";
 import type { ChannelPromptMode } from "@/types/db/schema";
 import { TOMORI_STATE_CACHE_TTL_MS } from "@/constants/cacheTtl";
 
@@ -48,6 +55,7 @@ export function setChannelPromptCache(
 
 export function invalidateChannelPromptCache(serverId: number, channelDiscId: string): void {
   channelPromptCache.delete(getCacheKey(serverId, channelDiscId));
+  broadcastInvalidation("channelPrompt", [[String(serverId), channelDiscId]]);
 }
 
 export function getChannelPromptCacheSize(): number {
@@ -65,4 +73,15 @@ export function invalidateAllChannelPromptCacheForServer(serverId: number): void
       channelPromptCache.delete(key);
     }
   }
+  broadcastInvalidation("channelPrompt", [[String(serverId)]]);
 }
+
+registerInvalidation(
+  "channelPrompt",
+  z.union([z.tuple([invalidationDatabaseId]), z.tuple([invalidationDatabaseId, invalidationKey])]),
+  ([server, channel]) => {
+    if (channel === undefined) invalidateAllChannelPromptCacheForServer(server);
+    else invalidateChannelPromptCache(server, channel);
+  },
+  clearChannelPromptCache,
+);

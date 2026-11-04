@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { broadcastInvalidation, registerInvalidation, invalidationDatabaseId } from "@/utils/cache/invalidationBus";
 /**
  * SillyTavern Preset Cache
  *
@@ -100,6 +102,7 @@ export async function getCachedActivePreset(serverId: number): Promise<CachedPre
  */
 export function invalidateStPresetCache(serverId: number): void {
   cache.delete(serverId);
+  broadcastInvalidation("stPreset", [[String(serverId)]]);
 }
 
 export function clearStPresetCache(): void {
@@ -116,3 +119,10 @@ export function getStPresetCacheStats(): {
 } {
   return { hits: cacheHits, misses: cacheMisses, size: cache.size };
 }
+
+registerInvalidation(
+  "stPreset",
+  z.tuple([invalidationDatabaseId]),
+  ([server]) => invalidateStPresetCache(server),
+  clearStPresetCache,
+);

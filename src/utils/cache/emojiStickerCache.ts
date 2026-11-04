@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { broadcastInvalidation, registerInvalidation, invalidationDatabaseId } from "@/utils/cache/invalidationBus";
 import type { Guild } from "discord.js";
 import type { CustomExpressionRow, ServerEmojiRow, ServerStickerRow } from "@/types/db/schema";
 import { serverRepository } from "@/utils/db/repositories";
@@ -148,6 +150,7 @@ export async function loadEmojiStickerCache(
  */
 export function invalidateEmojiStickerCache(serverId: number): void {
   cache.delete(serverId);
+  broadcastInvalidation("emojiSticker", [[String(serverId)]]);
 }
 
 /**
@@ -181,3 +184,10 @@ export function getEmojiStickerCacheStats(): {
     cacheSize: cache.size,
   };
 }
+
+registerInvalidation(
+  "emojiSticker",
+  z.tuple([invalidationDatabaseId]),
+  ([server]) => invalidateEmojiStickerCache(server),
+  clearEmojiStickerCache,
+);

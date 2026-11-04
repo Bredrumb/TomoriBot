@@ -1,3 +1,10 @@
+import { z } from "zod";
+import {
+  broadcastInvalidation,
+  registerInvalidation,
+  invalidationKey,
+  invalidationDatabaseId,
+} from "@/utils/cache/invalidationBus";
 import { TOMORI_STATE_CACHE_TTL_MS } from "@/constants/cacheTtl";
 
 /**
@@ -50,6 +57,7 @@ export function setChannelContextNoteCache(
 
 export function invalidateChannelContextNoteCache(serverId: number, channelDiscId: string): void {
   channelContextNoteCache.delete(getCacheKey(serverId, channelDiscId));
+  broadcastInvalidation("channelContextNote", [[String(serverId), channelDiscId]]);
 }
 
 /** Removes every cached context-note result for one server without flushing other servers. */
@@ -60,4 +68,19 @@ export function invalidateAllChannelContextNoteCacheForServer(serverId: number):
       channelContextNoteCache.delete(key);
     }
   }
+  broadcastInvalidation("channelContextNote", [[String(serverId)]]);
 }
+
+function clearChannelContextNoteCache(): void {
+  channelContextNoteCache.clear();
+}
+
+registerInvalidation(
+  "channelContextNote",
+  z.union([z.tuple([invalidationDatabaseId]), z.tuple([invalidationDatabaseId, invalidationKey])]),
+  ([server, channel]) => {
+    if (channel === undefined) invalidateAllChannelContextNoteCacheForServer(server);
+    else invalidateChannelContextNoteCache(server, channel);
+  },
+  clearChannelContextNoteCache,
+);
