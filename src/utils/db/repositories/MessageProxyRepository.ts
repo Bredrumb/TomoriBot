@@ -412,7 +412,11 @@ class MessageProxyRepository {
     normalizedHistoryText: string;
   }): Promise<MessageProxyIdentityReference[]> {
     const hostUserDiscIds = [...new Set(params.hostUserDiscIds)];
-    const normalizedHistoryText = params.normalizedHistoryText.trim().toLowerCase().replace(/\s+/g, " ");
+    const normalizedHistoryText = params.normalizedHistoryText
+      .replaceAll("\u0000", " ")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, " ");
     if (hostUserDiscIds.length === 0 || !normalizedHistoryText) return [];
     try {
       const rows = await sql<MessageProxyIdentityReferenceRow[]>`

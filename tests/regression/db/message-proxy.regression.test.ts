@@ -93,6 +93,32 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("message-proxy persistence regression", () 
     expect((await getCachedUserRow(`pk:${PRIMARY_KEY}`))?.user_nickname).toBeNull();
   });
 
+  it("resolves human and proxy aliases in ordinary history and history containing NUL", async () => {
+    const host = await userRepository.register("_rt_message_proxy_settings", "Juno", "en-US");
+    expect(host?.user_id).toBeDefined();
+    await testSql`INSERT INTO user_personalization_configs (user_id, user_nickname)
+      VALUES (${host?.user_id}, ${"Juno"})
+      ON CONFLICT (user_id) DO UPDATE SET user_nickname = EXCLUDED.user_nickname`;
+    await messageProxyRepository.persistAttestedIdentity({
+      input: identityInput(),
+      messageDiscId: "_rt_proxy_message_1",
+      senderDiscId: "_rt_proxy_host_1",
+    });
+    for (const normalizedHistoryText of ["Juno Mirri", "Juno\u0000Mirri"]) {
+      const humans = await userRepository.loadContextReferenceCandidates({
+        serverDiscId: "_rt_proxy_server",
+        candidateDiscordIds: [],
+        normalizedHistoryText,
+      });
+      expect(humans.some((entry) => entry.userRow.user_disc_id === host?.user_disc_id)).toBe(true);
+      const proxies = await messageProxyRepository.loadContextReferenceIdentities({
+        hostUserDiscIds: ["_rt_proxy_host_1"],
+        normalizedHistoryText,
+      });
+      expect(proxies.some((entry) => entry.userDiscId === `pk:${PRIMARY_KEY}`)).toBe(true);
+    }
+  });
+
   it("keeps public identity, host link, and message attribution through rollback and reapplication", async () => {
     const migrations = [
       "088_message_proxy_instances",

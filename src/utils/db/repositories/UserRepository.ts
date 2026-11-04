@@ -226,7 +226,11 @@ class UserRepository implements IRepository<UserExportShape> {
     try {
       return await withTransientDbRetry(async () => {
         const candidateDiscordIds = Array.from(new Set(params.candidateDiscordIds));
-        const normalizedHistoryText = params.normalizedHistoryText.trim().toLowerCase().replace(/\s+/g, " ");
+        const normalizedHistoryText = params.normalizedHistoryText
+          .replaceAll("\u0000", " ")
+          .trim()
+          .toLowerCase()
+          .replace(/\s+/g, " ");
         const rows = await sql`
             WITH context_reference_candidates AS (
               SELECT
