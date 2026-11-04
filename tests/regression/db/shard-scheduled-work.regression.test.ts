@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, spyOn } from "bun:test";
 import { Client, ShardClientUtil } from "discord.js";
 import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
 import { ScheduledWorkCoordinator } from "@/timers/scheduledWorkCoordinator";
+import { ReminderProcessor } from "@/timers/reminderProcessor";
 import { serverScheduleRepository } from "@/utils/db/repositories/ServerScheduleRepository";
 import { statRepository } from "@/utils/db/repositories/StatRepository";
 import { parseShardTopology } from "@/utils/discord/shardOwnership";
@@ -265,7 +266,10 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("shard-owned scheduled work", () => {
       delays.push(delay ?? 0);
       return nativeTimeout(callback, 86_400_000).unref();
     }) as typeof setTimeout);
-    const coordinator = new ScheduledWorkCoordinator(client, 60_000, topology);
+    const coordinator = new ScheduledWorkCoordinator(client, 60_000, topology, {
+      hasOwnership: () => true,
+      getWorkSignal: () => undefined,
+    });
     try {
       expect((await serverScheduleRepository.getDueReminders())?.length).toBeGreaterThan(0);
       expect((await serverScheduleRepository.getDueTriggers()).length).toBeGreaterThan(0);
@@ -309,6 +313,41 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("shard-owned scheduled work", () => {
     } finally {
       coordinator.stop();
       timeout.mockRestore();
+      fetch.mockRestore();
+      await client.destroy();
+    }
+  });
+  it("preserves the stored occurrence and retry budget when owner cancellation interrupts delivery", async () => {
+    let discId = 1700000000000000001n;
+    while (ShardClientUtil.shardIdForGuildId(String(discId), 32) !== 17) discId += 4194304n;
+    const server = await addServer(String(discId));
+    const reminder = await addReminder(server.server_id);
+    const topology = owner(32, [17]);
+    const client = new Client({ intents: [] });
+    const reached = Promise.withResolvers<void>();
+    const pending = Promise.withResolvers<never>();
+    const fetch = spyOn(client.channels, "fetch").mockImplementation(() => {
+      reached.resolve();
+      return pending.promise;
+    });
+    const controller = new AbortController();
+    const processor = new ReminderProcessor(client, topology);
+    const work = processor.processDueReminders({ signal: controller.signal, hasOwnership: () => true });
+    try {
+      await reached.promise;
+      controller.abort();
+      pending.reject(new Error("Controlled lookup failure after cancellation"));
+      await work;
+      expect(fetch).toHaveBeenCalledTimes(1);
+      if (!reminder.reminder_id) throw new Error("Missing reminder ID");
+      expect(await serverScheduleRepository.getReminderById(reminder.reminder_id)).toMatchObject({
+        reminder_time: reminder.reminder_time,
+        next_attempt_at: null,
+        delivery_retry_count: 0,
+        failed_occurrence_count: 0,
+        repetition_interval_months: 1,
+      });
+    } finally {
       fetch.mockRestore();
       await client.destroy();
     }

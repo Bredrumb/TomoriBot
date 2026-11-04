@@ -1,6 +1,6 @@
 import type { Client, Message } from "discord.js";
 import type { ShardTopology } from "@/utils/discord/shardOwnership";
-import { isDraining } from "@/utils/misc/shutdownState";
+import { canRunScheduledWork, type ScheduledWorkContext } from "@/timers/scheduledWorkContext";
 import type { TomoriState } from "@/types/db/schema";
 import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
 import type {
@@ -132,8 +132,8 @@ export class NaturalNudgeProcessor {
     this.client = client;
   }
 
-  public async processDueIdleNudges(): Promise<void> {
-    if (isDraining() || !this.client.isReady()) return;
+  public async processDueIdleNudges(work?: ScheduledWorkContext): Promise<void> {
+    if (!canRunScheduledWork(work) || !this.client.isReady()) return;
     await this.pruneIfDue();
     let servers: EnabledIdleNudgeServer[];
     try {
@@ -143,11 +143,11 @@ export class NaturalNudgeProcessor {
       return;
     }
     for (const server of servers) {
-      if (isDraining()) return;
+      if (!canRunScheduledWork(work)) return;
       if (isNudgeServerBusy(server.server_id)) continue;
       try {
         await runWithErrorContext({ source: "natural_nudge", serverId: server.server_id }, () =>
-          this.evaluateServer(server),
+          this.evaluateServer(server, work),
         );
       } catch (error) {
         await log.error("Natural Nudges: idle nudge evaluation failed", error, { serverId: server.server_id });
@@ -212,7 +212,7 @@ export class NaturalNudgeProcessor {
       await naturalNudgeRepository.setFireAnswered(fire.fire_id, false);
   }
 
-  private async evaluateServer(server: EnabledIdleNudgeServer): Promise<void> {
+  private async evaluateServer(server: EnabledIdleNudgeServer, work?: ScheduledWorkContext): Promise<void> {
     const now = new Date();
     const serverId = server.server_id;
     const gate = await readNaturalNudgeGate(server.server_disc_id);
@@ -301,9 +301,10 @@ export class NaturalNudgeProcessor {
       return;
     }
 
-    if (!claimNudgeServer(serverId)) return;
-    void runIdleNudgeAttempt(attempt)
+    if (!canRunScheduledWork(work) || !claimNudgeServer(serverId)) return;
+    void runIdleNudgeAttempt({ ...attempt, work })
       .then((result) => {
+        if (!canRunScheduledWork(work)) return;
         if (result === "fired") {
           this.lullHours.delete(serverId);
           this.notBefore.delete(serverId);
@@ -312,6 +313,7 @@ export class NaturalNudgeProcessor {
         this.deferRetry(serverId, new Date());
       })
       .catch(async (error) => {
+        if (!canRunScheduledWork(work)) return;
         this.deferRetry(serverId, new Date());
         await log.error("Natural Nudges: idle nudge attempt failed", error, { serverId });
       })

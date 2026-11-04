@@ -4,6 +4,7 @@ import type { ForcedMention } from "@/types/discord/mentions";
 import { getCachedUserRow } from "@/utils/cache/userCache";
 import type { SendableChannel } from "@/utils/discord/resolveSendableChannel";
 import { recordPersonaDelivery, sendPersonaPost } from "@/utils/discord/webhook/personaPost";
+import type { PersonaPostContext } from "@/utils/discord/webhook/personaPost";
 import { isExternalUserId } from "@/utils/externalIdentityUserId";
 import { log } from "@/utils/misc/logger";
 
@@ -58,6 +59,7 @@ export async function sendPersonaMention(
   persona: TomoriState,
   targetUserId: string,
   content: string,
+  execution?: Pick<PersonaPostContext, "abortSignal" | "isExecutionCancelled">,
 ): Promise<boolean> {
   if (!("guild" in channel) || !channel.guild) return false;
   const supportsWebhooks =
@@ -75,6 +77,7 @@ export async function sendPersonaMention(
         channel: channel as SendableChannel,
         persona,
         deliveryMode: "persona",
+        ...execution,
       },
       {
         content,
@@ -112,8 +115,19 @@ export async function ensureDiscordUserMention(params: {
   triggerStartTime: number;
   contextLabel: string;
   fallbackSender?: (content: string) => Promise<boolean>;
+  isExecutionCancelled?: () => boolean;
 }): Promise<void> {
-  const { client, channel, targetUserId, afterMessageId, triggerStartTime, contextLabel, fallbackSender } = params;
+  const {
+    client,
+    channel,
+    targetUserId,
+    afterMessageId,
+    triggerStartTime,
+    contextLabel,
+    fallbackSender,
+    isExecutionCancelled,
+  } = params;
+  if (isExecutionCancelled?.()) return;
   if (isExternalUserId(targetUserId)) {
     log.warn(`Skipping fallback mention for ${contextLabel}: ${targetUserId} is not a Discord user snowflake`);
     return;
@@ -135,6 +149,7 @@ export async function ensureDiscordUserMention(params: {
       after: afterMessageId,
       limit: 100,
     });
+    if (isExecutionCancelled?.()) return;
 
     const relevantMessages = recentMessages.filter(
       (message) =>
@@ -153,6 +168,7 @@ export async function ensureDiscordUserMention(params: {
       const sentViaFallback = fallbackSender ? await fallbackSender(mentionToken) : false;
 
       if (!sentViaFallback) {
+        if (isExecutionCancelled?.()) return;
         await sendBotMention(channel as SendableChannel, mentionToken, targetUserId);
       }
 
@@ -179,6 +195,7 @@ export async function ensureDiscordUserMention(params: {
     const sentViaFallback = fallbackSender ? await fallbackSender(mentionToken) : false;
 
     if (!sentViaFallback) {
+      if (isExecutionCancelled?.()) return;
       await sendBotMention(channel as SendableChannel, mentionToken, targetUserId);
     }
 
