@@ -1,3 +1,4 @@
+import { isDraining } from "@/utils/misc/shutdownState";
 import { config } from "dotenv";
 import { initializeOAuthCallbackRoute } from "@/utils/oauth/callbackRoute";
 import { getOAuthPublicBaseUrl } from "@/utils/oauth/settings";
@@ -84,6 +85,18 @@ initMediaProcessing();
 // gateway handshake and no manual env change.
 const includePresences = await resolvePresenceIntentEnabled(environment);
 const client = createDiscordClient(includePresences);
+const { registerShutdown } = await import("@/init/shutdown");
+const { stopScheduledWorkCoordinator } = await import("@/timers/scheduledWorkCoordinator");
+const { initializeShutdownInteractionAdmission } = await import("@/utils/discord/ui/interactionCore");
+initializeShutdownInteractionAdmission(client);
+registerShutdown(client, {
+  stopScheduledWork: stopScheduledWorkCoordinator,
+  flushStats: () => statRepository.shutdown(),
+  cleanupMcp: async () => {
+    const { getGuildMcpManager } = await import("@/utils/mcp/guildMcpManager");
+    await getGuildMcpManager().cleanup();
+  },
+});
 
 await initDatabase(environment);
 
@@ -98,7 +111,7 @@ await initLoaders(client);
 
 await initBridges(client);
 
-initTimers(client);
+if (!isDraining()) initTimers(client);
 
 // Login triggers clientReady, which starts the deferred timers.
 //
@@ -111,7 +124,7 @@ initTimers(client);
 //
 // Exiting also keeps a transient gateway failure distinguishable from a misconfiguration.
 try {
-  await client.login(process.env.DISCORD_TOKEN);
+  if (!isDraining()) await client.login(process.env.DISCORD_TOKEN);
 } catch (error) {
   if (isDisallowedIntentsError(error)) {
     log.error(
