@@ -96,7 +96,9 @@ export async function sendMatrixReminderMention(
   afterMessageId: string,
   reminderStartTime: number,
   botUserId: string,
+  isExecutionCancelled?: () => boolean,
 ): Promise<void> {
+  if (isExecutionCancelled?.()) return;
   const matrixRoomId = await getLinkedMatrixRoom(reminder.channel_disc_id);
   if (!matrixRoomId || !botUserId || !("messages" in channel)) return;
   if (!(await ensureRoomRelayable(matrixRoomId, channel.client))) return;
@@ -120,6 +122,7 @@ export async function sendMatrixReminderMention(
     }
 
     const matrixId = reminder.user_discord_id;
+    if (isExecutionCancelled?.()) return;
     const safeName = reminder.user_nickname.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     await sendToMatrixRoom(
       matrixRoomId,
@@ -128,6 +131,7 @@ export async function sendMatrixReminderMention(
       undefined,
       `<a href="https://matrix.to/#/${matrixId}">${safeName}</a>`,
       [matrixId],
+      isExecutionCancelled,
     );
 
     log.info(`Matrix: Added fallback mention for reminder ${reminder.reminder_id} to ensure recipient is pinged`);

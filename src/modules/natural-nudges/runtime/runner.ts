@@ -1,4 +1,5 @@
 import type { Client, GuildTextBasedChannel, Message } from "discord.js";
+import { canRunScheduledWork, type ScheduledWorkContext } from "@/timers/scheduledWorkContext";
 import type { TomoriState } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
@@ -46,6 +47,7 @@ const OPENER_LOOKUP_LIMIT = 10;
 const LATEST_IDLE_NUDGE_ROWS = 1;
 
 export interface IdleNudgeAttempt {
+  work?: ScheduledWorkContext;
   client: Client;
   serverId: number;
   serverDiscId: string;
@@ -311,7 +313,10 @@ function idleNudgeAgendas(
  * Last message to borrow as the turn's trigger; only a channel read as empty gets the placeholder
  * reminders use, so a failed read never posts a stray one.
  */
-async function resolveAnchorMessage(channel: GuildTextBasedChannel): Promise<Message | null> {
+async function resolveAnchorMessage(
+  channel: GuildTextBasedChannel,
+  work?: ScheduledWorkContext,
+): Promise<Message | null> {
   let latest: Message | null;
   try {
     latest = (await channel.messages.fetch({ limit: 1 })).first() ?? null;
@@ -319,7 +324,7 @@ async function resolveAnchorMessage(channel: GuildTextBasedChannel): Promise<Mes
     return null;
   }
   if (latest) return latest;
-  return seedTurnAnchor(channel, "a Natural Nudges idle nudge");
+  return seedTurnAnchor(channel, "a Natural Nudges idle nudge", () => canRunScheduledWork(work));
 }
 
 async function findOpenerAfter(
@@ -348,7 +353,9 @@ export function isGenerationFailure(result: GenerationTurnResult): boolean {
  * delay reminders; a restart mid-flight loses only this attempt, and the idle nudge stays due.
  */
 export async function runIdleNudgeAttempt(input: IdleNudgeAttempt): Promise<AttemptResult> {
+  if (!canRunScheduledWork(input.work)) return "aborted";
   if (!(await readNaturalNudgeGate(input.serverDiscId))) return "aborted";
+  if (!canRunScheduledWork(input.work)) return "aborted";
   const planned = await planIdleNudge({
     persona: input.persona,
     interests: input.interests,
@@ -360,9 +367,11 @@ export async function runIdleNudgeAttempt(input: IdleNudgeAttempt): Promise<Atte
       transcript: channel.transcript,
     })),
     plannerModel: input.plannerModel,
-    admitRequest: input.admitRequest,
+    admitRequest: () => canRunScheduledWork(input.work) && input.admitRequest(),
+    abortSignal: input.work?.signal,
     target: input.target,
   });
+  if (!canRunScheduledWork(input.work)) return "aborted";
   const usage =
     "usage" in planned && planned.usage
       ? { plannerInputTokens: planned.usage.inputTokens, plannerOutputTokens: planned.usage.outputTokens }
@@ -390,13 +399,15 @@ export async function runIdleNudgeAttempt(input: IdleNudgeAttempt): Promise<Atte
   };
   const target = attempt.plannerChannels[planned.plan.channelIndex];
   const blocked = await recheckBeforeSend(attempt, target, new Date());
+  if (!canRunScheduledWork(input.work)) return "aborted";
   if (blocked) {
     sample(attempt, { outcome: "aborted", phase: "c", reason: blocked, plannerModel, ...usage });
     return "aborted";
   }
   if (!idleNudgeNeedsTarget(candidate.idleNudge)) attempt.target = null;
 
-  const anchor = await resolveAnchorMessage(target.channel);
+  const anchor = await resolveAnchorMessage(target.channel, input.work);
+  if (!canRunScheduledWork(input.work)) return "aborted";
   if (!anchor) {
     sample(attempt, { outcome: "aborted", phase: "c", reason: "anchor_unavailable", plannerModel, ...usage });
     return "aborted";
@@ -406,6 +417,10 @@ export async function runIdleNudgeAttempt(input: IdleNudgeAttempt): Promise<Atte
   const personaId = attempt.persona.persona_id as number;
   let outcome: AttemptResult | null = null;
   const settle = async (result: GenerationTurnResult): Promise<void> => {
+    if (!canRunScheduledWork(input.work)) {
+      outcome = "aborted";
+      return;
+    }
     if (!isDeliveredTurnResult(result)) {
       if (isGenerationFailure(result)) {
         await naturalNudgeRepository.recordFailure(attempt.serverId);
@@ -418,6 +433,7 @@ export async function runIdleNudgeAttempt(input: IdleNudgeAttempt): Promise<Atte
     }
     const openerId =
       result.firstDeliveredMessageId ?? (await findOpenerAfter(attempt.client, target.channel, anchor.id));
+    if (!canRunScheduledWork(input.work)) return;
     const recorded = await naturalNudgeRepository.recordIdleNudgeFire(
       {
         serverId: attempt.serverId,
@@ -474,8 +490,12 @@ export async function runIdleNudgeAttempt(input: IdleNudgeAttempt): Promise<Atte
       afterMessageId: anchor.id,
       triggerStartTime,
       contextLabel: `Ping User nudge in server ${attempt.serverId}`,
+      isExecutionCancelled: () => !canRunScheduledWork(input.work),
       fallbackSender: (content) =>
-        sendPersonaMention(target.channel, attempt.persona, pingUserTarget.userDiscId, content),
+        sendPersonaMention(target.channel, attempt.persona, pingUserTarget.userDiscId, content, {
+          abortSignal: input.work?.signal,
+          isExecutionCancelled: () => !canRunScheduledWork(input.work),
+        }),
     });
   }
   if (outcome) return outcome;

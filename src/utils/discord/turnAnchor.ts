@@ -10,7 +10,12 @@ const seededAnchors = new WeakSet<Message>();
  * Posts then deletes a placeholder for a system turn to borrow as its trigger, since a turn cannot
  * run in a channel with no messages and Discord rejects an empty body.
  */
-export async function seedTurnAnchor(channel: SendableChannels, contextLabel: string): Promise<Message | null> {
+export async function seedTurnAnchor(
+  channel: SendableChannels,
+  contextLabel: string,
+  canSend: () => boolean = () => true,
+): Promise<Message | null> {
+  if (!canSend()) return null;
   try {
     const placeholder = await channel.send({ content: PLACEHOLDER_CONTENT });
     seededAnchors.add(placeholder);

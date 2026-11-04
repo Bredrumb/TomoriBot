@@ -30,7 +30,10 @@ beforeEach(() => {
   spies.push(spyOn(ReminderProcessor.prototype, "processDueReminders").mockResolvedValue());
   spies.push(spyOn(RandomTriggerProcessor.prototype, "processDueRandomTriggers").mockResolvedValue());
   spies.push(spyOn(NaturalNudgeProcessor.prototype, "processDueIdleNudges").mockResolvedValue());
-  coordinator = new ScheduledWorkCoordinator(client, 60_000, topology);
+  coordinator = new ScheduledWorkCoordinator(client, 60_000, topology, {
+    hasOwnership: () => true,
+    getWorkSignal: () => undefined,
+  });
 });
 
 afterEach(async () => {
