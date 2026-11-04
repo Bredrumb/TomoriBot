@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { TomoriState } from "@/types/db/schema";
 import type { ToolContext } from "@/types/tool/interfaces";
-import { resolveUserTarget } from "@/utils/discord/targetResolver";
+import { resolveIdentityTarget, resolveUserTarget } from "@/utils/discord/targetResolver";
 import {
   buildPreparedParticipantContext,
   createParticipantContextFixture,
@@ -88,13 +88,13 @@ describe("participant adversarial review regressions", () => {
         aliases: ["Kiyo"],
         mentionable: false,
       });
-      await expect(
-        resolveUserTarget("Kiyo", { contextItems: [item] } as unknown as ToolContext),
-      ).resolves.toMatchObject({
+      const context = { contextItems: [item] } as unknown as ToolContext;
+      await expect(resolveIdentityTarget("Kiyo", context, fixture.personas)).resolves.toMatchObject({
         status: "resolved",
-        targetId: "persona:9",
-        source: "conversation",
+        targetType: "persona",
+        persona: { persona_id: referencedPersonaId },
       });
+      await expect(resolveUserTarget("Kiyo", context)).resolves.toMatchObject({ status: "not_found" });
     } finally {
       fixture.restoreRepositories();
     }
