@@ -65,6 +65,8 @@ export function startHealthServer(port: number): void {
             connected: healthStatus.details.clientReady,
             websocketPing: healthStatus.details.websocketPing,
             timeSinceLastActivity: healthStatus.details.timeSinceLastActivity,
+            shards: healthStatus.details.shards,
+            shardCount: healthStatus.details.shardCount,
             ...healthTracker.getConnectionState(),
           },
           eventLoop: eventLoopMonitor.getSnapshot(),
