@@ -2,6 +2,42 @@ import type { Client } from "discord.js";
 import { measurePresetArtPhase, seedStorageBackedCatalogs } from "@/init/database";
 import { log } from "@/utils/misc/logger";
 import { healthTracker } from "@/utils/misc/healthTracker";
+import { hasShardLeaseOwnership, isPrimaryProcess } from "@/utils/cluster/shardLeases";
+import { isDraining } from "@/utils/misc/shutdownState";
+
+const PRESET_ART_RECONCILE_INTERVAL_MS = 5 * 60 * 1000;
+let presetArtInterval: ReturnType<typeof setInterval> | null = null;
+
+export function initializePresetArtReconciliation(client: Client): void {
+  if (presetArtInterval) return;
+  let running = false;
+  let seeded = false;
+  const reconcile = async (): Promise<void> => {
+    if (running || !presetArtInterval || isDraining() || !hasShardLeaseOwnership()) return;
+    running = true;
+    try {
+      if (!seeded && isPrimaryProcess()) {
+        await seedStorageBackedCatalogs();
+        seeded = true;
+      }
+      if (!presetArtInterval || isDraining() || !hasShardLeaseOwnership()) return;
+      const { reconcilePresetMainAvatars } = await import("@/utils/persona/presetAvatarReconciler");
+      await measurePresetArtPhase("fanout", () => reconcilePresetMainAvatars(client));
+    } catch (error) {
+      log.error("Preset art seed or avatar fan-out failed", error);
+    } finally {
+      running = false;
+    }
+  };
+  presetArtInterval = setInterval(() => void reconcile(), PRESET_ART_RECONCILE_INTERVAL_MS);
+  presetArtInterval.unref();
+  void reconcile();
+}
+
+export function stopPresetArtReconciliation(): void {
+  if (presetArtInterval) clearInterval(presetArtInterval);
+  presetArtInterval = null;
+}
 
 /**
  * Registers all post-ready timers and background monitors.
@@ -69,18 +105,7 @@ export function initTimers(client: Client): void {
 
   log.section("Scheduling Preset Art Seed and Avatar Fan-out...");
   try {
-    // Storage uploads run after clientReady so a slow upload cannot delay login.
-    // Guild avatar updates wait for the seed's new content hashes.
-    client.once("clientReady", () => {
-      void seedStorageBackedCatalogs()
-        .then(() => import("@/utils/persona/presetAvatarReconciler"))
-        .then(({ reconcilePresetMainAvatars }) => {
-          return measurePresetArtPhase("fanout", () => reconcilePresetMainAvatars(client));
-        })
-        .catch((error: Error) => {
-          log.error("Preset art seed or avatar fan-out failed", error);
-        });
-    });
+    client.once("clientReady", () => initializePresetArtReconciliation(client));
   } catch (error) {
     log.error("Failed to schedule preset art seed and avatar fan-out", error as Error);
   }

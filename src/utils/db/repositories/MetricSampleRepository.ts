@@ -1,10 +1,20 @@
 import { sql } from "@/utils/db/client";
+import { z } from "zod";
+import { isPrimaryProcess } from "@/utils/cluster/shardLeases";
+import type { ShardTopology } from "@/utils/discord/shardOwnership";
 
 /** Flat numeric snapshot as produced by `collectCacheMetricsSnapshot()`. */
 export type MetricFields = Record<string, number | string>;
 
 const DEFAULT_RETENTION_DAYS = 30;
 const DEFAULT_PRUNE_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const DEFAULT_CACHE_SAMPLE_INTERVAL_MS = 5 * 60 * 1000;
+const clusterSampleSchema = z.object({
+  process_label: z.string(),
+  shard_count: z.number().int().positive().safe(),
+  shard_ids: z.string().regex(/^\d+(,\d+)*$/),
+  discord_guilds: z.number().int().nonnegative().safe(),
+});
 
 /**
  * Reads a positive integer from the environment, falling back when unset or unparseable.
@@ -24,6 +34,44 @@ function positiveIntFromEnv(name: string, fallback: number): number {
  */
 export class MetricSampleRepository {
   private lastPruneAt = 0;
+
+  async getClusterGuildCount(topology: ShardTopology): Promise<number | null> {
+    const run = this.executor;
+    const { totalShardCount, ownedShardIds } = topology.getResolvedTopology();
+    const freshnessMs = 2 * positiveIntFromEnv("CACHE_METRICS_INTERVAL_MS", DEFAULT_CACHE_SAMPLE_INTERVAL_MS);
+    try {
+      const rows = await run<{ fields: unknown }[]>`
+        SELECT DISTINCT ON (fields->>'process_label') fields
+        FROM metric_samples
+        WHERE metric_name = 'cache_sizes'
+          AND created_at >= clock_timestamp() - ${freshnessMs} * INTERVAL '1 millisecond'
+          AND created_at <= clock_timestamp()
+        ORDER BY fields->>'process_label', created_at DESC, metric_sample_id DESC
+      `;
+      const covered = new Set<number>();
+      let guildCount = 0;
+      let hasLocalSample = false;
+      for (const row of rows) {
+        const parsed = clusterSampleSchema.safeParse(row.fields);
+        if (!parsed.success || parsed.data.shard_count !== totalShardCount) continue;
+        const sample = parsed.data;
+        const ids = sample.shard_ids.split(",").map(Number);
+        if (ids.some((id, index) => id >= totalShardCount || (index > 0 && id <= ids[index - 1]))) continue;
+        const label = ids.length === totalShardCount ? "all" : `shards:${totalShardCount}:${ids.join(",")}`;
+        if (sample.process_label !== label || sample.shard_ids !== ids.join(",")) continue;
+        const local = sample.process_label === topology.processLabel;
+        if (!local && ids.some((id) => ownedShardIds.includes(id))) continue;
+        if (ids.some((id) => covered.has(id))) return null;
+        for (const id of ids) covered.add(id);
+        hasLocalSample ||= local;
+        guildCount += sample.discord_guilds;
+      }
+      return hasLocalSample && covered.size === totalShardCount && Number.isSafeInteger(guildCount) ? guildCount : null;
+    } catch (error) {
+      await this.reportOnce("Failed to read cluster guild count", error);
+      return null;
+    }
+  }
 
   /**
    * The executor is injected rather than module-mocked in tests. `mock.module` is registered
@@ -81,6 +129,7 @@ export class MetricSampleRepository {
    * sweep-on-write approach in `personaSpriteMessageCache.ts`.
    */
   private async pruneIfDue(): Promise<void> {
+    if (!isPrimaryProcess()) return;
     const intervalMs = positiveIntFromEnv("METRIC_SAMPLE_PRUNE_INTERVAL_MS", DEFAULT_PRUNE_INTERVAL_MS);
     const now = Date.now();
     if (now - this.lastPruneAt < intervalMs) {

@@ -2,6 +2,7 @@ import type { Client } from "discord.js";
 import { log } from "@/utils/misc/logger";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import eventHandler from "@/handlers/eventHandler";
+import { isPrimaryProcess } from "@/utils/cluster/shardLeases";
 
 /**
  * Mirrors the live OpenRouter rates into the llms catalog so SQL-computed cost surfaces
@@ -13,6 +14,7 @@ import eventHandler from "@/handlers/eventHandler";
  * because that cache was loaded from the pre-sync catalog earlier in startup.
  */
 async function syncOpenrouterCatalogPricing(): Promise<void> {
+  if (!isPrimaryProcess()) return;
   try {
     const { getAllOpenRouterPricing } = await import("@/utils/cache/openrouterCapabilityCache");
     const { llmModelRepo } = await import("@/utils/db/repositories");
@@ -31,6 +33,7 @@ async function syncOpenrouterCatalogPricing(): Promise<void> {
       });
     }
 
+    if (!isPrimaryProcess()) return;
     const updated = await llmModelRepo.syncOpenrouterPrices(prices);
     if (updated === null) {
       log.warn("OpenRouter pricing sync failed (non-critical) - cost surfaces keep their stored rates");
