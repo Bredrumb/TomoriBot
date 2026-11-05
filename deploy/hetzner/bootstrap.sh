@@ -14,7 +14,7 @@ openssl rand -hex 32 > postgres/superuser-password
 chown 999:999 postgres/superuser-password
 chmod 0400 postgres/superuser-password
 docker compose build postgres
-docker compose pull searxng
+docker compose pull --policy missing searxng
 docker compose up -d --wait postgres searxng
 export ADMIN_PW RUNTIME_PW BACKUP_PW
 ADMIN_PW=$(openssl rand -hex 32)
