@@ -5,7 +5,7 @@ sidebar:
   hidden: true
 ---
 
-`deploy/hetzner/` prepares an 8 GB amd64 host with four vCPUs. A single bot process owns four
+`deploy/hetzner/` prepares an 8 GB ARM64 or AMD64 host with four vCPUs. A single bot process owns four
 gateway shards. PostgreSQL 16 accepts Unix-socket connections only. SearXNG and the bot share
 an outbound network; Caddy exposes the OAuth and Patreon routes over HTTPS.
 
@@ -36,7 +36,8 @@ leaves both timers disabled. Do not replace the extraction with a second copy of
 Create the account and complete verification before ordering resources. [Cloud servers accrue
 charges while stopped; deleting a rehearsal server stops its server charges. Retained IPs,
 snapshots, and storage have separate charges](https://docs.hetzner.com/cloud/billing/faq/).
-Confirm the live price and availability in the console before ordering. CX33 has the target resources; CPX32 is another amd64 option.
+Confirm the live price and availability in the console before ordering. CAX21 provides the target
+resources on ARM64; CX33 and CPX32 provide them on AMD64. Images must match the chosen architecture.
 
 1. Choose Ubuntu 24.04 and fill in the operator SSH key and `OPERATOR_CIDRS` in a private copy of
    `deploy/hetzner/cloud-init.yaml`. Create a Cloud Firewall that permits TCP 22 from those CIDRs,
@@ -53,10 +54,37 @@ Confirm the live price and availability in the console before ordering. CX33 has
 The installer writes files under `/etc/tomoribot` and installs backup and alert units. It does
 not start the bot, reverse proxy, or timers. Database credentials remain outside Git.
 
+## Build images for the host
+
+The Azure release workflow builds AMD64 images. For ARM64, build the bot and SearXNG from the
+same release commit using the existing Dockerfiles. Prepare tokenizer assets as the release
+workflow does before building the bot. Authenticate to your registry and replace the example
+repository names below:
+
+```bash
+docker buildx build --platform linux/arm64 --push \
+  --tag registry.example.com/project/tomoribot:rehearsal .
+docker buildx build --platform linux/arm64 --push \
+  --tag registry.example.com/project/tomoribot-searxng:rehearsal servers/searxng
+```
+
+Record the pushed digest for each image and inspect its platform with
+`docker buildx imagetools inspect`. Put the immutable references in the host's `.env`; the
+existing Azure image digests identify AMD64 builds. The pinned Bun, PostgreSQL, Caddy, and
+SearXNG base images support ARM64. PostgreSQL builds on the host's native architecture.
+
+Verify native image conversion, font rendering, audio conversion, tokenizers, schema initialization,
+and search on the chosen architecture before production use. Local emulation can check compatibility;
+measure memory and latency on the real host during rehearsal.
+
+An ARM host can rescale within the ARM family. Moving to AMD64 requires a new host and a logical
+database restore, since Hetzner does not rescale across CPU architectures. Keep the same PostgreSQL
+major version and verify extensions and encrypted data during that restore.
+
 ## Initialize the empty host
 
 Copy `.env.example` to `/etc/tomoribot/.env` with mode 0600. Set the two image references to
-immutable digests from the running Azure containers, generate `SEARXNG_SECRET` with
+immutable digests for the chosen host architecture, generate `SEARXNG_SECRET` with
 `openssl rand -hex 32`, and set `TOMORI_PUBLIC_HOST` to the callback hostname. Use the existing
 public hostname at production cutover so registered OAuth redirects remain valid.
 
