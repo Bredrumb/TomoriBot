@@ -7,6 +7,7 @@ import {
   relocateAssistantMediaToUserTurns,
 } from "@/providers/utils/strictChatCompat";
 import { inlineToolResponseImage } from "@/providers/utils/toolImageContent";
+import { resolveToolCallId } from "@/providers/utils/toolCallIds";
 import { log } from "@/utils/misc/logger";
 import { fetchAndOptimizeImage } from "@/utils/image/imageProcessor";
 
@@ -168,8 +169,9 @@ export async function buildOpenAICompatibleMessages(
   }
 
   if (options.functionInteractionHistory && options.functionInteractionHistory.length > 0) {
-    for (const interaction of options.functionInteractionHistory) {
-      const toolCallId = `call_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const usedToolCallIds = new Set<string>();
+    for (const [index, interaction] of options.functionInteractionHistory.entries()) {
+      const toolCallId = resolveToolCallId(interaction.functionCall.id, index, "call", usedToolCallIds);
       const preToolCallContent = (interaction.preToolCallTextParts ?? [])
         .map((part) => part.text)
         .filter((text): text is string => typeof text === "string" && text.length > 0)

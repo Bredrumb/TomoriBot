@@ -170,6 +170,7 @@ export interface ProviderInfo {
  * Function call representation (provider-agnostic)
  */
 export interface FunctionCall {
+  id?: string;
   name: string;
   args?: Record<string, unknown>;
   /**
