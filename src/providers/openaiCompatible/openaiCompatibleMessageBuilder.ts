@@ -1,6 +1,7 @@
+import { isPromptSystemItem } from "@/utils/text/context/promptLayout";
 import { mapWithConcurrency } from "@/utils/async/bounded";
 import type { FunctionCall, FunctionResponseImageMetadata } from "@/types/provider/interfaces";
-import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
+import type { StructuredContextItem } from "@/types/misc/context";
 import {
   relocateAssistantMediaContextItems,
   relocateAssistantMediaToUserTurns,
@@ -8,16 +9,6 @@ import {
 import { inlineToolResponseImage } from "@/providers/utils/toolImageContent";
 import { log } from "@/utils/misc/logger";
 import { fetchAndOptimizeImage } from "@/utils/image/imageProcessor";
-
-const SYSTEM_INSTRUCTION_TAGS: ContextItemTag[] = [
-  ContextItemTag.SYSTEM_HUMANIZER_RULES,
-  ContextItemTag.SYSTEM_PERSONA_PROMPT,
-  ContextItemTag.SYSTEM_PERSONALITY,
-  ContextItemTag.KNOWLEDGE_SERVER_INFO,
-  ContextItemTag.KNOWLEDGE_SERVER_EMOJIS,
-  ContextItemTag.KNOWLEDGE_SERVER_STICKERS,
-  ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
-];
 
 interface BuildOpenAICompatibleMessagesOptions {
   adapterName: string;
@@ -59,10 +50,7 @@ export async function buildOpenAICompatibleMessages(
       .map((part) => part.text)
       .join("\n");
 
-    if (
-      item.role === "system" ||
-      (item.role === "user" && item.metadataTag && SYSTEM_INSTRUCTION_TAGS.includes(item.metadataTag))
-    ) {
+    if (isPromptSystemItem(item)) {
       if (itemTextContent) {
         systemInstructionParts.push(itemTextContent);
       }

@@ -1,3 +1,4 @@
+import { isPromptSystemItem } from "@/utils/text/context/promptLayout";
 import { getNovelAIProfile } from "@/providers/novelai/modelProfiles";
 import type { PreparedNovelAIRequest } from "@/providers/novelai/promptFitting";
 import { convertToOpenAIParams, usesOpenAIEndpoint } from "@/providers/novelai/novelaiService";
@@ -301,7 +302,7 @@ export async function buildJsonSnapshot(
     const systemTextChunks: string[] = [];
     const nonSystemItems: StructuredContextItem[] = [];
     for (const item of contextItems) {
-      if (item.role === "system") {
+      if (isPromptSystemItem(item)) {
         const text = item.parts
           .filter((p): p is { type: "text"; text: string } => p.type === "text")
           .map((p) => p.text)
