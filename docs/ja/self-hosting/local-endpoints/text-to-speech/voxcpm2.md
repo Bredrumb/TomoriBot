@@ -38,7 +38,9 @@ OpenBMBはいくつかの中国語方言についても文書化しています�
 - GPUアクセラレーション用の最新のNVIDIAドライバーとCUDA対応のPyTorchビルド
 - CPUはフォールバックとしてサポートされていますが、大幅に低速です
 
-公式パッケージはCPUとApple MPSのデバイス選択にも対応しています。Windows上のTomoriBotでは、標準のPythonパッケージがネイティブに動作するため、WSLは不要です。Windows PowerShell用インストーラーは、デフォルトでCUDA対応のPyTorchビルド（`cu124`）をインストールします。
+公式パッケージはCPUとApple MPSのデバイス選択にも対応しています。Windows上のTomoriBotでは、標準のPythonパッケージがネイティブに動作するため、WSLは不要です。Windows PowerShell用インストーラーは、CUDA対応のPyTorch 2.10（`cu128`）と `triton-windows` をインストールします。これらは、デフォルトの `VOXCPM2_OPTIMIZE=1` でモデルをコンパイルするために必要です。
+
+コンパイルを有効にすると、PyTorchがモデルをコンパイルする間、初回の起動に約2〜3分かかりますが、コンパイル済みカーネルがキャッシュされるため、2回目以降の起動は1分未満になります。その結果、合成速度は未コンパイル時よりも約2.5〜3倍高速になります。また、コンパイルによりシステムメモリの消費量が約2 GB増加します。Tritonが見つからないというメッセージでサーバーが停止した場合は、インストーラーを再実行するか、`VOXCPM2_OPTIMIZE=0` を設定して未コンパイルで実行してください。
 
 CPU専用マシンに明示的にインストールするには、`-Cpu` スイッチを渡します：
 
@@ -49,7 +51,8 @@ CPU専用マシンに明示的にインストールするには、`-Cpu` スイ�
 ネイティブWindowsのPyTorchインストールを手動で再インストールしたり、ドライバーとの整合を取り直したりする必要が生じた場合は、サーバーの仮想環境に直接CUDA対応のPyTorchビルドをインストールしてください：
 
 ```powershell
-.\servers\tts\voxcpm2\.venv\Scripts\pip.exe install --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+.\servers\tts\voxcpm2\.venv\Scripts\pip.exe install --force-reinstall torch==2.10.0 torchaudio==2.10.0 --index-url https://download.pytorch.org/whl/cu128
+.\servers\tts\voxcpm2\.venv\Scripts\pip.exe install "triton-windows>=3.6,<3.7"
 ```
 
 ## インストール
@@ -133,7 +136,7 @@ $env:VOXCPM2_PREFETCH = "0"
 |---|---|---|
 | `VOXCPM2_MODEL_ID` | `openbmb/VoxCPM2` | Hugging FaceモデルIDまたはローカルモデルディレクトリ |
 | `VOXCPM2_DEVICE` | `auto` | ランタイムデバイス：`auto`、`cuda`、`cuda:N`、`cpu`、または `mps` |
-| `VOXCPM2_OPTIMIZE` | `1` | 公式ランタイムの最適化/コンパイルパスを有効化 |
+| `VOXCPM2_OPTIMIZE` | `1` | CUDA上で `torch.compile` を使用してモデルをコンパイル。Tritonが必要であり、ない場合は起動時にサーバーが停止します |
 | `VOXCPM2_LOAD_DENOISER` | `0` | オプションのアップストリームデノイザーをロード。メモリ節約のためデフォルトは無効 |
 | `VOXCPM2_CFG_VALUE` | `2.0` | ガイダンス強度 |
 | `VOXCPM2_INFERENCE_TIMESTEPS` | `10` | フローマッチング推論ステップ数。増やすと速度と引き換えに品質が向上する可能性あり |

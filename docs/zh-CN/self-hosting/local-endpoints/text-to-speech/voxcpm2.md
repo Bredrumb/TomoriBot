@@ -38,7 +38,9 @@ OpenBMB 还记载了若干中文方言。为了兼容通用的 TTS 规范，Tomo
 - 最新的 NVIDIA 驱动，以及支持 CUDA 的 PyTorch 构建版本用于 GPU 加速
 - 也支持 CPU 作为后备方案，但运行速度会慢很多
 
-官方包还提供了 CPU 与 Apple MPS 设备选项。在 Windows 上，TomoriBot 可以直接原生运行标准 Python 包，不需要 WSL。Windows PowerShell 安装脚本默认安装支持 CUDA 的 PyTorch 构建（`cu124`）。
+官方包还提供了 CPU 与 Apple MPS 设备选项。在 Windows 上，TomoriBot 可以直接原生运行标准 Python 包，不需要 WSL。Windows PowerShell 安装脚本默认安装支持 CUDA 的 PyTorch 2.10（`cu128`）和 `triton-windows`，默认的 `VOXCPM2_OPTIMIZE=1` 需要借此编译模型。
+
+启用编译后，首次启动大约需要 2 到 3 分钟来让 PyTorch 编译模型；由于编译后的内核会被缓存，后续启动耗时不到一分钟。此时合成速度大约比未编译快 2.5 到 3 倍。编译还会多占用约 2 GB 系统内存。如果服务器启动时因提示缺少 Triton 而停止，请重新运行安装脚本，或者设置 `VOXCPM2_OPTIMIZE=0` 以未编译方式运行。
 
 若要在纯 CPU 设备上显式安装，请传入 `-Cpu` 开关：
 
@@ -49,7 +51,8 @@ OpenBMB 还记载了若干中文方言。为了兼容通用的 TTS 规范，Tomo
 如果你的原生 Windows PyTorch 安装需要手动重装或重新对齐驱动，请将支持 CUDA 的 PyTorch 构建直接安装到服务器的虚拟环境中：
 
 ```powershell
-.\servers\tts\voxcpm2\.venv\Scripts\pip.exe install --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+.\servers\tts\voxcpm2\.venv\Scripts\pip.exe install --force-reinstall torch==2.10.0 torchaudio==2.10.0 --index-url https://download.pytorch.org/whl/cu128
+.\servers\tts\voxcpm2\.venv\Scripts\pip.exe install "triton-windows>=3.6,<3.7"
 ```
 
 ## 安装
@@ -133,7 +136,7 @@ $env:VOXCPM2_PREFETCH = "0"
 |---|---|---|
 | `VOXCPM2_MODEL_ID` | `openbmb/VoxCPM2` | Hugging Face 模型 ID 或本地模型目录 |
 | `VOXCPM2_DEVICE` | `auto` | 运行时设备：`auto`、`cuda`、`cuda:N`、`cpu` 或 `mps` |
-| `VOXCPM2_OPTIMIZE` | `1` | 启用官方运行时的优化 / 编译路径 |
+| `VOXCPM2_OPTIMIZE` | `1` | 在 CUDA 上使用 `torch.compile` 编译模型；需要 Triton，缺少时服务器会在启动时停止 |
 | `VOXCPM2_LOAD_DENOISER` | `0` | 加载可选的上游降噪器；默认禁用以节省内存 |
 | `VOXCPM2_CFG_VALUE` | `2.0` | 引导强度 |
 | `VOXCPM2_INFERENCE_TIMESTEPS` | `10` | 流匹配推理步数；增加步数可提高质量但会牺牲速度 |

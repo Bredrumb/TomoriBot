@@ -39,6 +39,17 @@ python servers\tts\qwen3tts\server.py --mode auto
 
 自動モードは各 `/synthesize` リクエストを検査します。`ref_audio` を持つリクエストはクローンモデルを使用し、`instruct` を持つリクエストはVoiceDesignモデルを使用します。一度にロードされるモデルは1つだけであり、リクエストの種類が変わるとモデルが入れ替えられるため、入れ替え後の最初のリクエストは遅くなる可能性があります。
 
+## オプション：高速なCUDAバックエンド
+
+NVIDIA GPUでは、サーバーを起動する前に `QWEN3TTS_BACKEND=cuda-graphs` を設定することで、requirementsで既にインストールされている [faster-qwen3-tts](https://github.com/andimarafioti/faster-qwen3-tts) を使用できます。合成は約6倍高速になり、実時間の約2倍遅かった状態からリアルタイムよりも速く動作するようになります。同一の入力に対する出力は、デフォルトのバックエンドとビット単位で一致しません。
+
+このバックエンドは、リクエストごとに一定量の音声領域を確保し、参照クリップと生成された音声の間で共有します（合計約170秒）。10〜20秒のクリップを使用した場合、2分を優に超える音声の余裕が残ります。リクエストが収まらない場合、サーバーは音声を途中で切り詰めるのではなくエラーを返します。より短いクリップやテキストを使用するか、デフォルトの `transformers` バックエンドを使用してください。
+
+```powershell
+$env:QWEN3TTS_BACKEND = "cuda-graphs"
+python servers\tts\qwen3tts\server.py
+```
+
 ## TomoriBotへの登録
 
 ほとんどのユーザーは、1つのエンドポイントで音声クローンとVoiceDesignの両方のペルソナをサポートできるように、自動モードサーバーを登録します。
