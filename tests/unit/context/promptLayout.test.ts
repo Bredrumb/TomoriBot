@@ -57,7 +57,7 @@ describe("prompt layout registry", () => {
     const history = Array.from({ length: 4 }, () => item(ContextItemTag.DIALOGUE_HISTORY));
     const lower = item(ContextItemTag.DIALOGUE_HISTORY);
     const memory = item(ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY);
-    const nudge = item(ContextItemTag.CONTEXT_NOTE_INJECTION);
+    const nudge = { ...item(ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY), completionText: "" };
     const tail = item(ContextItemTag.DIALOGUE_HISTORY);
     const queue = item(ContextItemTag.DIALOGUE_HISTORY);
     const uncensor = item(ContextItemTag.DIALOGUE_HISTORY);
@@ -109,7 +109,7 @@ describe("prompt layout registry", () => {
   it("clamps emitted-history depths and keeps negative-depth STM inline", () => {
     const sample = item(ContextItemTag.DIALOGUE_SAMPLE);
     const memory = item(ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY);
-    const nudge = item(ContextItemTag.CONTEXT_NOTE_INJECTION);
+    const nudge = { ...item(ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY), completionText: "" };
     const history = item(ContextItemTag.DIALOGUE_HISTORY);
     const blocks = [sample, history];
     applyPromptLayoutInserts(blocks, [
