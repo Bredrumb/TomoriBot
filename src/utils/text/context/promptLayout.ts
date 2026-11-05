@@ -97,7 +97,7 @@ export const PROMPT_LAYOUT: readonly PromptLayoutEntry[] = [
     tag: ContextItemTag.KNOWLEDGE_USER_MEMORIES,
     zone: "system",
     roleZones: { user: "reference" },
-    volatility: "slow",
+    volatility: "turn",
     anchor: { kind: "block" },
     novelai: "memory",
   },
@@ -130,7 +130,7 @@ export const PROMPT_LAYOUT: readonly PromptLayoutEntry[] = [
   {
     tag: ContextItemTag.DIALOGUE_SAMPLE,
     zone: "history",
-    volatility: "static",
+    volatility: "turn",
     anchor: { kind: "block" },
     novelai: "sample",
   },
