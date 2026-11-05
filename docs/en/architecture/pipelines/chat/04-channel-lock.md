@@ -84,6 +84,22 @@ When the turn completes or throws, `releaseChannelLockAndReplayQueue()` executes
    The stop callback is scheduled first, but the callbacks are not awaited in sequence. Scheduling
    order alone does not guarantee that the stop confirmation finishes before queue replay.
 
+## Shard ownership and shutdown
+
+The mutex and its live Discord messages and callbacks stay in the guild's
+[shard owner process](/architecture/subsystems/sharding/). Admission, queue replay, persona queues,
+stop responses, and follow-up requests require configured ownership and safe live leases. DMs map
+to shard 0. Re-entry must still belong to the active outer turn.
+
+Lease uncertainty aborts turns and clears pending replay. Captured owner signals stay aborted after
+lease recovery, so an old continuation cannot dispatch as a new owner. Delivery paths check again
+after awaited preparation and before sending; already dispatched requests cannot be recalled.
+
+Shutdown rejects new turns and discards pending replays while allowing active turns, including valid
+re-entry, up to 25 seconds to finish. It then aborts remaining turns through the existing terminal
+stream-stop path, suppressing cancellation retries and timeout notices. Stats and connection cleanup
+follow the drain; the Discord client remains connected until those phases finish.
+
 ## Constraints and rationale
 
 - **Single active turn per channel**: serializing turns prevents race conditions across message sends,

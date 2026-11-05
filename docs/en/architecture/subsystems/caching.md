@@ -32,7 +32,7 @@ hands that instance to every later reader, history reads use `fetch`, and histor
 look up their target in the fetched window before the cache.
 
 Presence caching admits only guild-user pairs with a successful chat turn in that guild. Startup
-loads these pairs from persisted `message_sent` and `presence_seen` counters before gateway login;
+loads owned guild pairs from persisted `message_sent` and `presence_seen` counters before gateway login;
 successful text or tool-only turns admit new pairs immediately. The index is process-local and
 survives cache clearing, while PostgreSQL restores its history after a restart. Presence events
 still arrive for every member allowed by the intent, so this limits retained objects rather than
@@ -134,6 +134,29 @@ records an existing notification-ordering limitation. Domain invalidators includ
 - NovelAI credential add/replacement: saved-config repository upserts invalidate the old and new credentials after successful writes. Adding a rotation key invalidates that key after insertion. Unchanged stored credentials retain their entries.
 
 Invalidating before write success is forbidden: a rolled-back transaction would leave the cache empty, prompting an immediate refetch of the pre-write database state.
+
+## Cross-process invalidation
+
+In [subset mode](/architecture/subsystems/sharding/), `src/utils/cache/invalidationBus.ts` uses
+PostgreSQL LISTEN/NOTIFY for derived-cache eviction. Startup acquires shard leases, subscribes,
+and flushes registered caches before presence restoration, warming, or Discord login. Subscription
+failure or a failed initial flush prevents startup. Bun's subscription callback flushes registered
+caches again after reconnection because notifications missed while disconnected cannot be replayed.
+All-owner mode opens no listener and publishes nothing.
+
+Write owners keep local eviction immediately after database success. Registered invalidators also
+publish bounded batches of identifiers; peer handlers validate the envelope and arguments, ignore
+self echoes, and evict without rebroadcasting. Payloads contain no cached values or credentials.
+Publish and handler failures emit metrics and warnings; notification delivery is best effort and
+does not roll back an already successful write. Existing cache expiry remains a recovery path.
+
+Registrations live beside their domain invalidators: server/persona state, users and blacklists,
+whitelists, emoji/stickers, channel prompt/model/context overrides, sprite and appearance state,
+persona blocks, spotlights, SillyTavern presets, guild MCP configuration, and Natural Nudge settings.
+New cross-owner database-derived caches must register eviction and reconnect flushing with the bus.
+Active channel queues, webhook slots, and conversation runtime state stay in their owner process;
+notifications do not transfer live work. Shutdown stops publishing, unsubscribes, and settles pending
+publishes within the shared coordination cleanup bound.
 
 ## Emergency memory cleanup
 <!-- anchor: emergency-memory-cleanup -->

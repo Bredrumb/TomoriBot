@@ -9,6 +9,35 @@ Detailed operational rationale, container sizing, and incident tuning for Tier 7
 variables. These settings govern dedicated 24/7 production hosts, virtual private servers (VPS),
 and cloud provider environments (such as Azure VM and AWS EC2).
 
+## Shards, process sizing, and health
+
+Use [shard configuration](/self-hosting/docker-compose/) to select gateway topology. One process
+can own four shards without distributing its state. Splitting into processes adds another runtime,
+catalog, and locale baseline; it does not reduce the total guild cache or create host memory.
+Measure per-process RSS, heap, native buffers, swap, active turns, and event-loop delay before
+choosing a split. Assign each process its own measured memory budget and leave host capacity for
+PostgreSQL, helper services, the kernel, and page cache.
+
+`cache_sizes` samples carry `process_label`, `shard_ids`, and resolved `shard_count`. The all-owner
+label is `all`; subsets use `shards:<total>:<sorted IDs>`. Preserve stable groups across restarts
+so latest-per-label queries do not count an old process twice. Cluster guild totals require fresh,
+valid samples covering every shard without overlap; incomplete evidence suppresses the displayed
+count and delays Top.gg posting. See `src/utils/db/repositories/MetricSampleRepository.ts`.
+
+Inspect every expected shard in each process's `/health` or `/healthz` response. Readiness requires
+all owned shards ready with acceptable ping, and scalar `websocketPing` reports the maximum
+available shard ping. Event-loop and activity diagnostics do not change the HTTP verdict, and a
+healthy gateway does not prove database or lease safety. A shard continuously not ready for five
+minutes triggers process shutdown. Configure supervisor restart with backoff and verify it after
+an exit; an HTTP health response alone does not establish restart behavior.
+
+Set deployment stop grace to at least 40 seconds and reconcile explicit stop-command timeouts.
+The application allows 25 seconds for turns, bounds cleanup, and enforces a 38-second deadline.
+Before activating subsets, decide whether per-process user/upload limits are acceptable and resolve
+release-only supporter-billing shared spend admission and reconcile coordination. Internal sharding
+within one process does not multiply those process-local limits. Runtime ownership and failure
+contracts are in [sharding](/architecture/subsystems/sharding/).
+
 ## Container Sizing and Swap Dynamics
 
 Production Compose files apply cgroup resource constraints to limit container memory use. The Azure
