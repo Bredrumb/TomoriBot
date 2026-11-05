@@ -1,3 +1,5 @@
+import { stubAllShardOwnership } from "../../helpers/shardOwnership";
+stubAllShardOwnership();
 import {
   getUserImpersonationGenerationError,
   UserImpersonationReportedProviderError,
@@ -26,6 +28,7 @@ import { createPersona } from "../../helpers/fixtures";
 import { makeFakeInteraction } from "../../helpers/fakeInteraction";
 import { log } from "@/utils/misc/logger";
 import { createChatResponseSink } from "@/utils/chat/responseEmitter";
+import { STREAM_INTERRUPTED_CODE } from "@/utils/provider/providerErrorClassification";
 import type { ChatTurnContext } from "@/utils/chat/types";
 
 const config: StreamConfig = {
@@ -290,6 +293,33 @@ describe("StreamOrchestrator failed-stream delivery", () => {
       expect(result.status).toBe("error");
       expect(result.accumulatedText).toContain(POSTED_LINE.trim());
       expect(result.accumulatedText?.includes(UNFINISHED_CLAUSE)).toBe(!suppressUserErrors);
+    }
+  });
+
+  it("withholds only an interrupted stream's error notice when the turn will retry it", async () => {
+    const interruption: ProviderError = {
+      type: "provider_overloaded",
+      message: "Stream interrupted: Incomplete JSON segment at the end",
+      code: STREAM_INTERRUPTED_CODE,
+      retryable: true,
+    };
+    const cases = [
+      { error: interruption, retryStreamInterruption: true, sends: 0 },
+      { error: interruption, retryStreamInterruption: false, sends: 1 },
+      { error: providerError, retryStreamInterruption: true, sends: 1 },
+    ];
+    for (const { error, retryStreamInterruption, sends } of cases) {
+      const { context, provider, send } = fixture([{ type: "error", error }], false);
+      context.retryStreamInterruption = retryStreamInterruption;
+
+      const result = await new StreamOrchestrator().streamToDiscord(provider, config, context);
+
+      expect(result.status).toBe("error");
+      expect({ code: error.code, retryStreamInterruption, sends: send.mock.calls.length }).toEqual({
+        code: error.code,
+        retryStreamInterruption,
+        sends,
+      });
     }
   });
 

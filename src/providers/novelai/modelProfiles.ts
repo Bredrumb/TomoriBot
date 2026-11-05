@@ -151,8 +151,13 @@ const profiles: Readonly<Record<string, NovelAIModelProfile>> = {
   },
 };
 
+/** `Object.hasOwn` because codenames are user input, and `constructor` or `__proto__` would match an inherited key. */
+export function isNovelAITextModel(codename: string): boolean {
+  return Object.hasOwn(profiles, codename);
+}
+
 export function getNovelAIProfile(codename: string): NovelAIModelProfile {
-  const profile = profiles[codename];
+  const profile = isNovelAITextModel(codename) ? profiles[codename] : undefined;
   if (!profile) throw new Error(`Unknown NovelAI model: ${codename}`);
   return profile;
 }

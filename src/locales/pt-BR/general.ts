@@ -1,5 +1,6 @@
 export default {
   general: {
+    restarting: `O TomoriBot está reiniciando. Por favor, tente novamente em breve.`,
     oauth: {
       invalid_callback: `Este link de login é inválido ou expirou. Inicie o login novamente pelo TomoriBot.`,
       server_error: `O TomoriBot não conseguiu concluir o login devido a um erro de serviço. Tente novamente mais tarde.`,

@@ -8,6 +8,8 @@ export default {
       punish_footer: `💀 {bot} vai se lembrar disso. Use /conditioning para gerenciar.`,
       persona_access_blocked_title: `Nenhuma Persona Disponível`,
       persona_access_blocked_description: `Suas permissões atuais de lista de permissões e configurações de destaque pessoal não deixam nenhuma persona disponível para esta interação neste canal.`,
+      ignored_title: `{bot} está ignorando você`,
+      ignored_until: `{bot} para de ignorar você {time}.`,
       marker_reward: `❤️`,
       marker_punish: `💀`,
       option_reason_description: `{count} total • devido a: "{reason}"`,

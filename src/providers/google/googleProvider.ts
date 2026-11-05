@@ -6,7 +6,8 @@
  * and GoogleStreamAdapter for better code organization and maintainability.
  */
 
-import { GoogleGenAI, type HarmBlockThreshold, type HarmCategory } from "@google/genai";
+import { ApiError, GoogleGenAI, type HarmBlockThreshold, type HarmCategory } from "@google/genai";
+import { MODEL_LOOKUP_TIMEOUT_MS, reportModelLookupFailure } from "@/utils/provider/modelCatalogLookup";
 import type {
   BaseGuildTextChannel,
   BaseGuildVoiceChannel,
@@ -233,6 +234,19 @@ export class GoogleProvider
    */
   getInfo(): ProviderInfo {
     return googleProviderInfo;
+  }
+
+  async checkTextModel(apiKey: string, codename: string): Promise<boolean | null> {
+    try {
+      await new GoogleGenAI({ apiKey, httpOptions: { timeout: MODEL_LOOKUP_TIMEOUT_MS } }).models.get({
+        model: codename,
+      });
+      return true;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) return false;
+      await reportModelLookupFailure("google", error, apiKey);
+      return null;
+    }
   }
 
   /**

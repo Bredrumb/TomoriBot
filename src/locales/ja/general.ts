@@ -1,5 +1,6 @@
 export default {
   general: {
+    restarting: `TomoriBotは再起動中です。しばらくしてからもう一度お試しください。`,
     oauth: {
       invalid_callback: `このサインインリンクは無効か、有効期限が切れています。TomoriBotからもう一度サインインしてください。`,
       server_error: `サービスエラーのため、TomoriBotはサインインを完了できませんでした。しばらくしてから再度お試しください。`,

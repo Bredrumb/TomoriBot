@@ -208,12 +208,24 @@ describe("public provider error descriptions", () => {
     JSON.stringify({ error: { code, message, status } });
   it.each([
     {
-      name: "a Google 429 that reports an exhausted quota",
+      name: "a Gemini 429 for the free-tier daily request limit",
+      error: new Error(
+        googleBody(
+          429,
+          "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits.\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 500, model: gemini-3.5-flash-lite, description: Generate content requests per day limit exceeded on Free Tier.",
+          "RESOURCE_EXHAUSTED",
+        ),
+      ),
+      reason: "rate_limit",
+      tip: "google_free_tier_daily",
+    },
+    {
+      name: "an OpenAI-style 429 that reports an empty balance",
       error: new Error(
         googleBody(
           429,
           "You exceeded your current quota, please check your plan and billing details.",
-          "RESOURCE_EXHAUSTED",
+          "insufficient_quota",
         ),
       ),
       reason: "balance_exhausted",

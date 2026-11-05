@@ -4,6 +4,7 @@ import { ColorCode } from "@/utils/misc/logger";
 import {
   isAccountBalanceExhaustedError,
   isContextLengthError,
+  getGeminiFreeTierQuotaWindow,
   isCreditAffordabilityError,
   isNvidiaCredentialRejected,
   isProviderModelError,
@@ -137,13 +138,18 @@ export function resolveProviderErrorPresentation(
   }
 
   switch (providerError.type) {
-    case "rate_limit":
+    case "rate_limit": {
+      const freeTierWindow = getGeminiFreeTierQuotaWindow(providerError);
       return {
         titleKey: context.rotationKeyRetriesUsed
           ? "genai.stream.rate_limit_title_all_rotation_keys"
           : "genai.stream.rate_limit_title",
         tipKeys: [
-          "genai.tips.wait_and_retry",
+          freeTierWindow === "day"
+            ? "genai.tips.google_free_tier_daily"
+            : freeTierWindow === "minute"
+              ? "genai.tips.google_free_tier_minute"
+              : "genai.tips.wait_and_retry",
           ...(isPersonal ? [] : ["genai.tips.api_key_rotation"]),
           ...modelFallbackTip,
           ...(isOpenRouter ? [scoped("genai.tips.openrouter_free_models")] : []),
@@ -154,6 +160,7 @@ export function resolveProviderErrorPresentation(
         ],
         color: ColorCode.WARN,
       };
+    }
     case "content_blocked":
       return {
         titleKey: "genai.stream.content_blocked_title",

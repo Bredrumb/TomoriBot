@@ -446,7 +446,7 @@ describe("provider option registry", () => {
           receivedContexts.push(received);
           return received.managedProvider ? null : ADD_LABEL_KEY;
         };
-        expect(await withProviderOptionCopy(keys, input)).toEqual([...keys, ADD_LABEL_KEY]);
+        expect(await withProviderOptionCopy(keys, input)).toEqual([ADD_LABEL_KEY, ...keys]);
         const managed = { ...input, managedProvider: TEST_VALUE };
         expect(await withProviderOptionCopy(keys, managed)).toBe(keys);
         expect(receivedContexts).toEqual([input, managed]);

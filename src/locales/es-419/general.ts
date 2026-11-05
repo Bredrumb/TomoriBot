@@ -1,5 +1,6 @@
 export default {
   general: {
+    restarting: `TomoriBot se está reiniciando. Por favor, intenta de nuevo en breve.`,
     oauth: {
       invalid_callback: `Este enlace de inicio de sesión no es válido o caducó. Inicia sesión de nuevo desde TomoriBot.`,
       server_error: `TomoriBot no pudo completar el inicio de sesión debido a un error del servicio. Inténtalo de nuevo más tarde.`,

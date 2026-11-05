@@ -8,6 +8,8 @@ export default {
       punish_footer: `💀 {bot} will remember this. Use /conditioning to manage.`,
       persona_access_blocked_title: `No Available Personas`,
       persona_access_blocked_description: `Your current whitelist permissions and personal spotlight settings do not leave any personas available for this interaction in this channel.`,
+      ignored_title: `{bot} is ignoring you`,
+      ignored_until: `{bot} stops ignoring you {time}.`,
       marker_reward: `❤️`,
       marker_punish: `💀`,
       option_reason_description: `{count} total • due to: "{reason}"`,

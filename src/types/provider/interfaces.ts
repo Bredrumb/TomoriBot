@@ -235,6 +235,13 @@ export interface LLMProvider {
   validateApiKey(apiKey: string): Promise<ApiKeyValidationResult>;
 
   /**
+   * Looks a text model up in the provider's own catalog before it is registered.
+   * @returns False only when the provider answered that it does not serve `codename`; null when
+   *          the lookup could not answer, which registration treats as unchecked.
+   */
+  checkTextModel?(apiKey: string, codename: string): Promise<boolean | null>;
+
+  /**
    * Create a localized provider-specific error description for user-facing embeds.
    * This keeps formatting logic inside the provider abstraction instead of command switches.
    */

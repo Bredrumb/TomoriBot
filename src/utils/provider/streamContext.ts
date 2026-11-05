@@ -89,6 +89,7 @@ export function buildStreamContext(params: BuildStreamContextParams): StreamCont
     holdResponseText: streamingContext?.holdResponseText,
     pendingResponseLimit: streamingContext?.pendingResponseLimit,
     rotationKeyRetriesUsed: streamingContext?.rotationKeyRetriesUsed,
+    retryStreamInterruption: streamingContext?.retryStreamInterruption,
     outputPrefill: streamingContext?.outputPrefill,
     triggerMessageId: streamingContext?.triggerMessageId,
     replyNoticeState: streamingContext?.replyNoticeState,

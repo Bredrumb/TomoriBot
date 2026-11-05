@@ -1,5 +1,6 @@
 export const NVIDIA_CHAT_COMPLETIONS_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
 export const NVIDIA_EMBEDDINGS_URL = "https://integrate.api.nvidia.com/v1/embeddings";
+export const NVIDIA_MODELS_URL = "https://integrate.api.nvidia.com/v1/models";
 /**
  * Image generation stayed on the older per-function NVCF gateway when chat and embeddings moved to
  * the OpenAI-compatible `integrate.api.nvidia.com` surface. The full URL is `{base}/{codename}`,

@@ -43,6 +43,7 @@ import { createScopedModuleMocker, overrideMembers, stubLogMembers } from "../..
 import { VERBATIM_TOOL_CALLING_NUDGE } from "@/utils/tools/verbatimToolCalling";
 import { computeSafeInputBudget } from "@/utils/text/contextTruncator";
 import { sumTurnUsage } from "@/utils/text/tokenEstimate";
+import { STREAM_INTERRUPTED_CODE } from "@/utils/provider/providerErrorClassification";
 
 const queuedResults: GenerationTurnResult[] = [];
 // Parallel to queuedResults: the delivered-message refs each runToolLoop call should push into the
@@ -54,6 +55,7 @@ const toolLoopCalls: Array<{
   model: string;
   outputPrefill: string | undefined;
   suppressUserErrors: boolean | undefined;
+  retryStreamInterruption: boolean | undefined;
   contextItems: ToolLoopParams["context"]["contextItems"];
   numCtx: number | null | undefined;
   apiKey: string;
@@ -382,6 +384,7 @@ async function runToolLoopMock(params: ToolLoopParams): Promise<GenerationTurnRe
       model: params.tomoriState.llm.llm_codename,
       outputPrefill: params.context.streamingContext.outputPrefill,
       suppressUserErrors: params.context.streamingContext.suppressUserErrors,
+      retryStreamInterruption: params.context.streamingContext.retryStreamInterruption,
       contextItems: params.context.contextItems,
       numCtx: params.tomoriState.config.custom_num_ctx,
       apiKey: params.providerConfig.apiKey,
@@ -717,6 +720,26 @@ function partialFailure(status: "error" | "timeout", text: string): GenerationTu
   };
 }
 
+/** An attempt whose stream Google ended partway through after `text` was posted. */
+function interruptedStream(text: string): GenerationTurnResult {
+  return {
+    status: "error",
+    streamResults: [
+      {
+        status: "error",
+        data: {
+          type: "provider_overloaded",
+          code: STREAM_INTERRUPTED_CODE,
+          message: "Stream interrupted: Incomplete JSON segment at the end",
+          retryable: true,
+        },
+        accumulatedText: text,
+      },
+    ],
+    personaResponses: [{ personaName: "Tomori", text, personaId: 10, personaLineageId: 100 }],
+  };
+}
+
 function successfulReply(text = "ok"): GenerationTurnResult {
   return {
     status: "completed",
@@ -993,6 +1016,45 @@ describe("runGenerationTurn fallback behavior", () => {
     expect(fallbackNoticeCalls[0]?.successModel.llm_codename).toBe("fallback-model");
     expect(context.streamingContext.suppressUserErrors).toBe(false);
     expect(context.streamingContext.forceModelFallback).toBe(false);
+  });
+
+  it("retries an interrupted stream once on the same key, continuing the posted text", async () => {
+    const context = makeContext(makeLlm(1, "primary-model"), makeLlm(2, "unused"));
+    context.tomoriState.fallback_chain = [];
+    queuedResults.push(interruptedStream("First half."), successfulReply("second half."));
+
+    const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+    const result = await runGenerationTurn(context, collectingSink());
+
+    expect(result.status).toBe("completed");
+    expect(result.personaResponses[0]?.text).toBe("First half.\nsecond half.");
+    expect(toolLoopCalls.map(({ apiKey, retryStreamInterruption }) => ({ apiKey, retryStreamInterruption }))).toEqual([
+      { apiKey: "server-key", retryStreamInterruption: true },
+      { apiKey: "server-key", retryStreamInterruption: false },
+    ]);
+    const continuationText = (call: (typeof toolLoopCalls)[number] | undefined) =>
+      call?.contextItems
+        .at(-1)
+        ?.parts.map((part) => (part.type === "text" ? part.text : ""))
+        .join("") ?? "";
+    expect(continuationText(toolLoopCalls[0])).not.toContain("First half.");
+    expect(continuationText(toolLoopCalls[1])).toContain("First half.");
+    expect(context.streamingContext.retryStreamInterruption).toBe(false);
+  });
+
+  it("surfaces a second interruption instead of retrying it again", async () => {
+    const context = makeContext(makeLlm(1, "primary-model"), makeLlm(2, "unused"));
+    context.tomoriState.fallback_chain = [];
+    const second = interruptedStream("");
+    queuedResults.push(interruptedStream(""), second);
+
+    const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+    const result = await runGenerationTurn(context, collectingSink());
+
+    expect(result.status).toBe("error");
+    expect(result.streamResults.at(-1)).toBe(second.streamResults[0]);
+    expect(toolLoopCalls).toHaveLength(2);
+    expect(toolLoopCalls[1]?.retryStreamInterruption).toBe(false);
   });
 
   it("does not rotate keys, try another model, or emit a notice after uncertain delivery", async () => {

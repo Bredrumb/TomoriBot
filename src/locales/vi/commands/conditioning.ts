@@ -8,6 +8,8 @@ export default {
       punish_footer: `💀 {bot} sẽ ghi nhớ điều này. Dùng /conditioning để quản lý.`,
       persona_access_blocked_title: `Không có persona khả dụng`,
       persona_access_blocked_description: `Quyền danh sách cho phép hiện tại và cài đặt tâm điểm cá nhân của bạn không còn persona nào khả dụng cho tương tác này trong kênh này.`,
+      ignored_title: `{bot} đang phớt lờ bạn`,
+      ignored_until: `{bot} sẽ ngừng phớt lờ bạn {time}.`,
       marker_reward: `❤️`,
       marker_punish: `💀`,
       option_reason_description: `Tổng cộng {count} • do: "{reason}"`,

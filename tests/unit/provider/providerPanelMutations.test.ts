@@ -1,6 +1,6 @@
 import { createLlmRow, createPersona } from "../../helpers/fixtures";
 import * as dbClient from "@/utils/db/client";
-import { describe, expect, it, spyOn } from "bun:test";
+import { describe, expect, it, mock, spyOn } from "bun:test";
 import type {
   LlmRow,
   SavedProviderConfigUpsert,
@@ -25,6 +25,7 @@ import * as crypto from "@/utils/security/crypto";
 import * as openrouterModelRegistry from "@/utils/provider/openrouterModelRegistry";
 import { configRepository } from "@/utils/db/repositories/ConfigRepository";
 import { normalizeOpenAICompatibleProviderError } from "@/providers/openaiCompatible/openaiCompatibleErrorFormatter";
+import { ProviderFactory } from "@/utils/provider/providerFactory";
 
 function state(): TomoriState {
   return createPersona({ server_id: 7, llm: createLlmRow({ llm_provider: "google" }) });
@@ -386,6 +387,95 @@ describe("provider panel mutations", () => {
         numCtx: 128,
       }),
     ).toEqual({ status: "invalid-model" });
+  });
+
+  // Regression: an OpenRouter codename saved under NovelAI wrote a model row, then every later
+  // selection of it threw on the missing NovelAI profile.
+  it("rejects a NovelAI text model with no NovelAI profile before writing any row", async () => {
+    const upsert = spyOn(llmModelRepo, "upsertScopedLlm").mockResolvedValue(900 as never);
+    try {
+      for (const codeName of ["deepseek/deepseek-v3.2", "constructor"]) {
+        expect(
+          await saveProviderModel({
+            serverDiscId: "guild",
+            state: state(),
+            entryId: "provider:novelai",
+            capability: "text",
+            codeName,
+          }),
+        ).toEqual({ status: "invalid-model" });
+      }
+      expect(upsert).not.toHaveBeenCalled();
+    } finally {
+      upsert.mockRestore();
+    }
+  });
+
+  it("refuses a text model only when the provider's catalog confirms it is absent", async () => {
+    for (const { verdict, expected } of [
+      { verdict: false, expected: "invalid-model" },
+      { verdict: null, expected: "write-failed" },
+    ] as const) {
+      const checkTextModel = async (apiKey: string, codename: string) => {
+        expect({ apiKey, codename }).toEqual({ apiKey: "decrypted-key", codename: "deepseek-typo" });
+        return verdict;
+      };
+      const spies = [
+        spyOn(ProviderFactory, "getProviderByName").mockResolvedValue({ checkTextModel } as never),
+        spyOn(llmProviderRepo, "loadSavedProviderConfig").mockResolvedValue({
+          api_key: Buffer.from("encrypted"),
+          key_version: 1,
+        } as never),
+        spyOn(crypto, "decryptApiKey").mockResolvedValue("decrypted-key"),
+        spyOn(llmModelRepo, "loadByProviderAndCodename").mockResolvedValue(null as never),
+      ];
+      const upsert = spyOn(llmModelRepo, "upsertScopedLlm").mockResolvedValue(null as never);
+      try {
+        const result = await saveProviderModel({
+          serverDiscId: "guild",
+          state: state(),
+          entryId: "provider:deepseek",
+          capability: "text",
+          codeName: "deepseek-typo",
+        });
+        expect({ verdict, status: result.status, upserts: upsert.mock.calls.length }).toEqual({
+          verdict,
+          status: expected,
+          upserts: verdict === false ? 0 : 1,
+        });
+      } finally {
+        for (const spy of [...spies, upsert]) spy.mockRestore();
+      }
+    }
+  });
+
+  // Regression: decryption is a database query, and its failure turned a model save into a command error.
+  it("saves a text model unchecked when the catalog lookup cannot be prepared", async () => {
+    const checkTextModel = mock(async () => false);
+    const spies = [
+      spyOn(ProviderFactory, "getProviderByName").mockResolvedValue({ checkTextModel } as never),
+      spyOn(llmProviderRepo, "loadSavedProviderConfig").mockResolvedValue({
+        api_key: Buffer.from("encrypted"),
+        key_version: 1,
+      } as never),
+      spyOn(crypto, "decryptApiKey").mockRejectedValue(new Error("API key decryption failed")),
+      spyOn(llmModelRepo, "loadByProviderAndCodename").mockResolvedValue(null as never),
+    ];
+    const upsert = spyOn(llmModelRepo, "upsertScopedLlm").mockResolvedValue(null as never);
+    try {
+      const result = await saveProviderModel({
+        serverDiscId: "guild",
+        state: state(),
+        entryId: "provider:deepseek",
+        capability: "text",
+        codeName: "deepseek-flash",
+      });
+      expect(result.status).toBe("write-failed");
+      expect(upsert).toHaveBeenCalledTimes(1);
+      expect(checkTextModel).not.toHaveBeenCalled();
+    } finally {
+      for (const spy of [...spies, upsert]) spy.mockRestore();
+    }
   });
 
   it("persists declared image capabilities on the endpoint row", async () => {

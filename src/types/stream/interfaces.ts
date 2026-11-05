@@ -131,6 +131,8 @@ export interface StreamContext {
   /** Whose credentials answered this turn; selects server- or personal-scoped provider error tips. */
   textCredentialSource?: "server" | "personal";
   rotationKeyRetriesUsed?: boolean; // True if one or more rotation-key retries were attempted
+  /** The generation turn will retry an interrupted stream on the same key, so its error stays unsurfaced. */
+  retryStreamInterruption?: boolean;
   replyNoticeState?: { attempted: boolean; sent: boolean }; // Tracks the standalone alter reply notice across tool-call stream retries
 
   disableYouTubeProcessing?: boolean; // Temporarily disable YouTube function during enhanced context restart

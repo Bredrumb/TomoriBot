@@ -30,6 +30,7 @@ import { log } from "../../utils/misc/logger";
 import {
   formatProviderErrorCodeForDisplay,
   isProviderTimeoutMessage,
+  STREAM_INTERRUPTED_CODE,
 } from "@/utils/provider/providerErrorClassification";
 import { localizer } from "../../utils/text/localizer";
 import { truncateBeforeGenericSpeakerLine } from "@/utils/text/processors/llmOutputProcessor";
@@ -70,6 +71,23 @@ const VIDEO_CONTEXT_MAX_INLINE_MB = Math.max(
 // metadata, so a bare `includes("rate")` matched every error payload and filed unmapped
 // status codes such as 401 as rate limits.
 const GOOGLE_RATE_LIMIT_MESSAGE_PATTERN = /\brate[-\s]?limit|\bquota/i;
+
+// `@google/genai` (1.x through 2.32) only recognizes Google's unframed mid-stream error object when
+// it arrives in a single read, so one split across reads ends the body with this and its status lost.
+const GENAI_INCOMPLETE_STREAM_MESSAGE = "Incomplete JSON segment at the end";
+
+/** Classifies the SDK's incomplete-stream failure as an interrupted stream, or returns null for any other error. */
+export function classifyGenAIStreamInterruption(error: unknown): ProviderError | null {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  if (errorMessage !== GENAI_INCOMPLETE_STREAM_MESSAGE) return null;
+  return {
+    type: "provider_overloaded",
+    message: `Stream interrupted: ${errorMessage}`,
+    code: STREAM_INTERRUPTED_CODE,
+    retryable: true,
+    originalError: error,
+  };
+}
 
 /**
  * Localized headline for a Gemini or Vertex API error. Upstream text stays in the operator log
@@ -863,6 +881,8 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
    * Handle Google-specific errors using official error codes and localized messages
    */
   handleProviderError(error: unknown): ProviderError {
+    const interruption = classifyGenAIStreamInterruption(error);
+    if (interruption) return interruption;
     const errorMessage = error instanceof Error ? error.message : String(error);
 
     let googleApiError: {

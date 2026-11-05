@@ -138,6 +138,8 @@ export default {
       verify_api_key_expiry: `NVIDIA NIM 密钥会过期，而 NVIDIA 对过期密钥返回的错误和输错的密钥一样。请到 [build.nvidia.com](https://build.nvidia.com) 查看它的有效期，如果已经失效就重新生成一个。`,
       nvidia_register_free_model: `NVIDIA 经常下线托管的模型。请从 [NVIDIA 的免费端点](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview)里选一个它当前提供的模型，复制模型 ID（例如 \`deepseek-ai/deepseek-v4.1-flash\`），然后在 \`/providers\` > NVIDIA NIM > **+ 添加新文本模型** 里添加。`,
       nvidia_register_free_model_personal: `NVIDIA 经常下线托管的模型。请从 [NVIDIA 的免费端点](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview)里选一个它当前提供的模型，复制模型 ID（例如 \`deepseek-ai/deepseek-v4.1-flash\`），然后在 \`/personal providers\` > NVIDIA NIM > **+ 添加新文本模型** 里添加。`,
+      google_free_tier_daily: `此 API 密钥已用完 Gemini 今天的免费请求次数。额度会在太平洋时间午夜重置。`,
+      google_free_tier_minute: `此 API 密钥发送请求的频率超出了 Gemini 免费方案的允许范围。请等一分钟后再试。`,
       google_credential_type: `这看起来像 OAuth 或服务账号令牌。\`google\` 提供方需要来自 [Google AI Studio](https://aistudio.google.com/apikey) 的普通 API 密钥；Google Cloud 凭据请改用 \`vertex\` 提供方。`,
       openrouter_privacy_settings: `到 [OpenRouter 隐私设置](https://openrouter.ai/settings/privacy)调整你的「Data Policy」，允许这个模型，或者换一个模型。`,
       openrouter_fund_account: `往你的 OpenRouter 账户充值至少 10 美元额度，才能解锁每天 1000 次免费模型请求。`,

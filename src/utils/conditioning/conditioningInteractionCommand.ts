@@ -8,6 +8,7 @@ import type { ConditioningType, TomoriState, UserRow } from "@/types/db/schema";
 import { personaRepository } from "@/utils/db/repositories";
 import { getCachedWhitelistStatus } from "@/utils/cache/channelWhitelistCache";
 import { getCachedPersonalSpotlightStatus } from "@/utils/cache/personalSpotlightCache";
+import { getCachedActiveBlocksForUser } from "@/utils/cache/personaUserBlockCache";
 import { tomoriChat } from "@/events/messageCreate/tomoriChat";
 import {
   CONDITIONING_REASON_MAX_LENGTH,
@@ -19,7 +20,10 @@ import { filterPersonasForTrigger, isPersonaAllowedForTrigger } from "@/utils/pe
 import { handlePersonaAutocomplete } from "@/utils/discord/autocomplete/personaAutocomplete";
 import { resolveFallbackPersona } from "@/utils/discord/personaTurnDetectionResolver";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
-import { buildConditioningInteractionEmbed } from "@/utils/conditioning/conditioningEmbed";
+import {
+  buildConditioningIgnoredEmbed,
+  buildConditioningInteractionEmbed,
+} from "@/utils/conditioning/conditioningEmbed";
 import { buildConditioningInteractionEvent } from "@/utils/conditioning/conditioningInteractionContext";
 
 interface ConditioningCommandOptions {
@@ -240,6 +244,24 @@ export function createConditioningInteractionCommand(
         return;
       }
       selectedPersona = fallbackPersona;
+    }
+
+    const activeBlocks = await getCachedActiveBlocksForUser(tomoriState.server_id, interaction.user.id);
+    const personaBlock = activeBlocks.find((block) => block.persona_id === selectedPersona.persona_id);
+    if (personaBlock) {
+      await interaction.reply({
+        embeds: [
+          buildConditioningIgnoredEmbed({
+            locale,
+            type,
+            actionKey,
+            targetName: selectedPersona.persona_nickname,
+            expiresAt: personaBlock.expires_at,
+          }),
+        ],
+        flags: MessageFlags.SuppressNotifications,
+      });
+      return;
     }
 
     if (!userData.user_id) {

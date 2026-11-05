@@ -1,5 +1,6 @@
 export default {
   general: {
+    restarting: `TomoriBot 正在重新啟動。請稍後再試。`,
     oauth: {
       invalid_callback: `此登入連結無效或已過期。請從TomoriBot重新發起登入。`,
       server_error: `由於服務錯誤，TomoriBot無法完成登入。請稍後再試。`,

@@ -56,6 +56,8 @@ import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 import { getActiveTemperature, isParamDisabled, omitGeminiSampling } from "@/utils/provider/samplingControl";
 import type { VertexStreamConfig } from "@/providers/vertex/vertexStreamAdapter";
 import { createVertexexpressClient } from "@/providers/vertexexpress/vertexexpressClient";
+import { checkVertexTextModel } from "@/providers/vertex/vertexClient";
+import { reportModelLookupFailure } from "@/utils/provider/modelCatalogLookup";
 import { vertexexpressProviderInfo } from "@/providers/vertexexpress/providerInfo";
 import { VertexexpressStreamAdapter } from "@/providers/vertexexpress/vertexexpressStreamAdapter";
 import { getVertexexpressToolAdapter } from "@/providers/vertexexpress/vertexexpressToolAdapter";
@@ -124,6 +126,17 @@ export class VertexexpressProvider
 {
   getInfo() {
     return vertexexpressProviderInfo;
+  }
+
+  async checkTextModel(apiKey: string, codename: string): Promise<boolean | null> {
+    let client: GoogleGenAI;
+    try {
+      client = createVertexexpressClient(apiKey);
+    } catch (error) {
+      await reportModelLookupFailure("vertexexpress", error, apiKey);
+      return null;
+    }
+    return await checkVertexTextModel("vertexexpress", client, codename, apiKey);
   }
 
   private buildClient(apiKey: string): GoogleGenAI {

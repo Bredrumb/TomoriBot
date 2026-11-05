@@ -3,6 +3,7 @@ export default {
     description: `あなたの個人設定を管理します`,
     language: {
       description: `TomoriBotがあなたに話しかける言語を選びます。`,
+      language_description: `すべてのサーバーとDMで、TomoriBotがあなたに話しかける言語。`,
     },
     providers: {
       description: `個人のプロバイダー認証情報、エンドポイント、モデルカタログを管理します。`,

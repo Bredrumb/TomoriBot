@@ -8,6 +8,8 @@ export default {
       punish_footer: `💀 {bot} 会记住这件事。用 /conditioning 管理。`,
       persona_access_blocked_title: `没有可用的人格`,
       persona_access_blocked_description: `按你当前的白名单权限和个人聚焦设置，这个频道里没有可用于这次互动的人格。`,
+      ignored_title: `{bot} 正在无视你`,
+      ignored_until: `{bot} 会在 {time} 停止无视你。`,
       marker_reward: `❤️`,
       marker_punish: `💀`,
       option_reason_description: `共 {count} 次 • 原因：「{reason}」`,

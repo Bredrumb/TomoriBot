@@ -3,6 +3,7 @@ export default {
     description: `Quản lý cài đặt cá nhân của bạn`,
     language: {
       description: `Chọn ngôn ngữ TomoriBot dùng để nói chuyện với bạn.`,
+      language_description: `Ngôn ngữ TomoriBot dùng để nói chuyện với bạn trên mọi máy chủ và DM.`,
     },
     providers: {
       description: `Quản lý thông tin xác thực, endpoint và danh mục model cá nhân.`,

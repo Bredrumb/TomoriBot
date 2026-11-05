@@ -8,6 +8,8 @@ export default {
       punish_footer: `💀 {bot} recordará esto. Usa /conditioning para administrar.`,
       persona_access_blocked_title: `No hay personas disponibles`,
       persona_access_blocked_description: `Tus permisos actuales de lista blanca y tu configuración personal de spotlight no dejan ninguna persona disponible para esta interacción en este canal.`,
+      ignored_title: `{bot} te está ignorando`,
+      ignored_until: `{bot} dejará de ignorarte {time}.`,
       marker_reward: `❤️`,
       marker_punish: `💀`,
       option_reason_description: `{count} en total • motivo: "{reason}"`,

@@ -64,6 +64,24 @@ Para inícios posteriores, apenas `docker compose up` é suficiente, a menos que
 
 Componha os pinos `RUN_ENV=development` em sua definição de serviço para que os segredos `.env` e os terminais HTTP locais funcionem. A verificação de integridade do contêiner informa se o processo do bot está em execução; ele não testa a conectividade do gateway Discord. Para diferenças no modo de produção (`RUN_ENV=production`) (gerenciadores secretos, restrições de rede e métricas), consulte [Arquitetura de segurança](/en/architecture/subsystems/security/).
 
+## Configuração opcional de shards em um único host
+
+Deixe `SHARD_COUNT` e `SHARD_IDS` indefinidos para o comportamento padrão: um único processo assume todos os shards recomendados pelo Discord na inicialização. Instalações pequenas normalmente recebem um shard. Este modo não usa concessões de shards (leases) nem ouvinte de invalidação de cache. Vários shards podem compartilhar o mesmo processo.
+
+Para executar quatro shards no serviço existente, adicione `SHARD_COUNT=4` ao `.env` e deixe `SHARD_IDS` indefinido. Adicione esta sobreposição de serviço no `compose.override.yaml` para permitir que o encerramento ordenado termine:
+
+```yaml
+services:
+  tomoribot:
+    stop_grace_period: 40s
+```
+
+Recrie o serviço com `docker compose up -d --build tomoribot`. Se um script chamar `docker stop` ou definir seu próprio tempo limite de parada do Compose, permita pelo menos 40 segundos lá também. A seleção automática não altera o número de shards durante a execução; alterar o total exige uma reinicialização coordenada.
+
+Subconjuntos estáticos opcionais exigem um serviço separado por grupo com o mesmo `SHARD_COUNT` explícito e `SHARD_IDS` disjuntos, por exemplo `0,1` e `2,3` com um total de `4`. Dê aos serviços nomes estáveis distintos, nomes de contêiner e quaisquer portas de integridade publicadas. O aplicativo deriva rótulos de métricas estáveis a partir de cada grupo. Mantenha um único banco de dados, execute a inicialização única existente `bun run src/db/initializeCli.ts` com credenciais de gerenciamento de esquema antes da inicialização do gateway e configure `DATABASE_SCHEMA_MANAGEMENT_ENABLED=false` em cada processo do gateway. Não inicie o serviço original com todos os shards junto a esses grupos. Interrompa os processos antigos antes de alterar o total ou a partição.
+
+O modo de subconjunto recusa uma ponte Matrix totalmente configurada. Os limites de turnos e envios por usuário permanecem por processo; portanto, avalie se esse limite multiplicado é aceitável antes de ativar um segundo processo. Instalações que utilizam a cobrança de apoiadores exclusiva da versão de release também exigem admissão de gastos compartilhada e coordenação de conciliação antes de atender a solicitações financiadas a partir de múltiplos processos. Consulte [sharding e propriedade de processos](/architecture/subsystems/sharding/) para conhecer os limites de segurança e integridade.
+
 ## 4. Servidores locais opcionais (Perfis do Compose)
 
 Execute servidores auxiliares locais opcionais com perfis do Compose para iniciar apenas o que precisa:

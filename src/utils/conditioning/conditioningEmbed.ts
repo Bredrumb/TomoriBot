@@ -5,6 +5,33 @@ import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
 import { ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
+/** Darker shades of the interaction colors, so an ignored attempt reads as the same action falling flat. */
+const IGNORED_COLORS: Record<ConditioningType, `#${string}`> = {
+  reward: "#8C0A70",
+  punish: "#7B241C",
+};
+
+/** The public reply when the targeted persona is blocking the actor, so no reaction or memory follows. */
+export function buildConditioningIgnoredEmbed(params: {
+  locale: string;
+  type: ConditioningType;
+  actionKey: ConditioningActionKey;
+  targetName: string;
+  expiresAt: Date;
+}): EmbedBuilder {
+  const vars = { bot: params.targetName };
+  const until = localizer(params.locale, "commands.conditioning.shared.ignored_until", {
+    ...vars,
+    time: `<t:${Math.floor(params.expiresAt.getTime() / 1000)}:R>`,
+  });
+  return new EmbedBuilder()
+    .setTitle(localizer(params.locale, "commands.conditioning.shared.ignored_title", vars))
+    .setColor(IGNORED_COLORS[params.type])
+    .setDescription(
+      `${localizer(params.locale, CONDITIONING_ACTION_LOCALE_KEYS[params.actionKey].ignored_description, vars)}\n-# ${until}`,
+    );
+}
+
 export function buildConditioningInteractionEmbed(params: {
   locale: string;
   type: ConditioningType;

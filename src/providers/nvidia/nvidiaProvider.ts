@@ -20,7 +20,9 @@ import {
   NVIDIA_DEFAULT_TEXT_MODEL,
   NVIDIA_EMBEDDINGS_URL,
   NVIDIA_MIN_P_UNSUPPORTED_MODELS,
+  NVIDIA_MODELS_URL,
 } from "@/providers/nvidia/nvidiaConstants";
+import { isListedInOpenAIModelCatalog } from "@/utils/provider/modelCatalogLookup";
 import {
   createOpenAICompatibleHttpError,
   reportOpenAICompatibleKeyValidationFailure,
@@ -173,6 +175,10 @@ export class NvidiaProvider
 {
   getInfo(): ProviderInfo {
     return nvidiaProviderInfo;
+  }
+
+  async checkTextModel(_apiKey: string, codename: string): Promise<boolean | null> {
+    return await isListedInOpenAIModelCatalog({ provider: "nvidia", url: NVIDIA_MODELS_URL, modelId: codename });
   }
 
   /**

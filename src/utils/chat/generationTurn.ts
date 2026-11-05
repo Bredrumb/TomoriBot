@@ -15,7 +15,7 @@ import { classifySendFailure } from "@/utils/discord/stream/sendFailureCache";
 import { log } from "@/utils/misc/logger";
 import { buildCustomProviderName } from "@/utils/provider/customProviderUtils";
 import { getProviderForTomori, ProviderFactory } from "@/utils/provider/providerFactory";
-import { formatProviderErrorCodeForDisplay } from "@/utils/provider/providerErrorClassification";
+import { formatProviderErrorCodeForDisplay, isStreamInterruption } from "@/utils/provider/providerErrorClassification";
 import { applyProviderContextTruncation } from "@/utils/provider/contextBudget";
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { withSavedProviderConfig } from "@/utils/provider/savedProviderConfig";
@@ -138,6 +138,7 @@ async function runGenerationAttempts(
     // Index the server route's attempts start at, null until that route contributes any. Only the
     // receipt needs it: a success on the server route of a personal turn has an opt-out to name.
     let serverRouteStartIndex: number | null = null;
+    let streamInterruptionRetried = false;
 
     for (let index = 0; index < attempts.length; index++) {
       const attempt = attempts[index];
@@ -183,6 +184,10 @@ async function runGenerationAttempts(
           (await hasAvailableRotationKey(attempt.tomoriState, retryExcludedKeyIds));
         setStreamUserErrorSuppression(context, hasFallbackKey || hasPendingModelFallback);
         context.streamingContext.forceModelFallback = hasPendingModelFallback;
+        // The state machine withholds an interruption's error on this flag, so the retry below must
+        // read the same value: one held back with no retry left would leave the user with silence.
+        context.streamingContext.retryStreamInterruption =
+          !streamInterruptionRetried && keyAttemptCount < MAX_KEY_ATTEMPTS;
 
         if (context.responseReview) {
           context.responseReview.pending = [];
@@ -237,6 +242,16 @@ async function runGenerationAttempts(
           // Don't credit a timed-out key as successful : a timeout is not a clean completion.
           if (result.status !== "timeout" && rotationKeyId != null) await recordKeySuccess(rotationKeyId);
           break;
+        }
+
+        // Stays on the same key because rotating would record a backend fault against a healthy key.
+        if (
+          context.streamingContext.retryStreamInterruption &&
+          isStreamInterruption(result.streamResults.at(-1)?.data)
+        ) {
+          streamInterruptionRetried = true;
+          log.warn(`Stream interrupted: retrying ${attempt.label} once on the same key.`);
+          continue;
         }
 
         if (!hasFallbackKey) break;
@@ -313,6 +328,7 @@ async function runGenerationAttempts(
         }
         setStreamUserErrorSuppression(context, false);
         context.streamingContext.forceModelFallback = false;
+        context.streamingContext.retryStreamInterruption = false;
 
         // A timeout notice is normally sent while its attempt is still running, and it is held back
         // when a later model may still answer. If the server route then contributed nothing, this is
@@ -346,12 +362,14 @@ async function runGenerationAttempts(
     };
     setStreamUserErrorSuppression(context, false);
     context.streamingContext.forceModelFallback = false;
+    context.streamingContext.retryStreamInterruption = false;
     if (context.responseReview) skipped.usageEntries = context.responseReview.usage;
     await responseSink.finalize(skipped);
     return skipped;
   } catch (error) {
     setStreamUserErrorSuppression(context, false);
     context.streamingContext.forceModelFallback = false;
+    context.streamingContext.retryStreamInterruption = false;
     await responseSink.emitError(error);
     const result: GenerationTurnResult = {
       status: "error",

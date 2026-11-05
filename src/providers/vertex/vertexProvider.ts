@@ -65,7 +65,8 @@ import type {
   SupportsStructuredOutput,
 } from "../../types/provider/featureInterfaces";
 import { getVertexToolAdapter } from "./vertexToolAdapter";
-import { parseVertexCompositeKey, createVertexClient } from "./vertexClient";
+import { checkVertexTextModel, parseVertexCompositeKey, createVertexClient } from "./vertexClient";
+import { reportModelLookupFailure } from "@/utils/provider/modelCatalogLookup";
 import { getCachedDefaultLLM, isLLMCacheReady } from "../../utils/cache/llmCache";
 import { llmModelRepo } from "@/utils/db/repositories";
 import { vertexProviderInfo } from "./providerInfo";
@@ -160,6 +161,17 @@ export class VertexProvider
    */
   getInfo() {
     return vertexProviderInfo;
+  }
+
+  async checkTextModel(compositeKey: string, codename: string): Promise<boolean | null> {
+    let client: GoogleGenAI;
+    try {
+      client = createVertexClient(parseVertexCompositeKey(compositeKey));
+    } catch (error) {
+      await reportModelLookupFailure("vertex", error, compositeKey);
+      return null;
+    }
+    return await checkVertexTextModel("vertex", client, codename, compositeKey);
   }
 
   /**

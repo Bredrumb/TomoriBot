@@ -18,6 +18,7 @@ import { personaRepository } from "@/utils/db/repositories";
 import { conditioningMemoryRepository } from "@/utils/db/repositories/ConditioningMemoryRepository";
 import * as whitelistCache from "@/utils/cache/channelWhitelistCache";
 import * as spotlightCache from "@/utils/cache/personalSpotlightCache";
+import * as blockCache from "@/utils/cache/personaUserBlockCache";
 import * as tomoriChatModule from "@/events/messageCreate/tomoriChat";
 import { createConditioningInteractionCommand } from "@/utils/conditioning/conditioningInteractionCommand";
 import { initializeLocalizer } from "@/utils/text/localizer";
@@ -283,7 +284,7 @@ function createInteraction(personaOption: string | null) {
  * `restrictedPersonaIds` is the exclusion list: anything absent from it is allowed, and anything
  * present is allowed only when it also appears in `whitelistedPersonaIds`.
  */
-function stubWorkspace(available: TomoriState[]): ReturnType<typeof spyOn> {
+function stubWorkspace(available: TomoriState[], blockedPersonaIds: number[] = []): ReturnType<typeof spyOn> {
   const availableIds = new Set(available.map((persona) => persona.persona_id));
   const restricted = [MAIN, ALTER, HIDDEN]
     .map((persona) => persona.persona_id)
@@ -302,6 +303,18 @@ function stubWorkspace(available: TomoriState[]): ReturnType<typeof spyOn> {
   track(
     spyOn(spotlightCache, "getCachedPersonalSpotlightStatus").mockResolvedValue(
       null as unknown as Awaited<ReturnType<typeof spotlightCache.getCachedPersonalSpotlightStatus>>,
+    ),
+  );
+  track(
+    spyOn(blockCache, "getCachedActiveBlocksForUser").mockResolvedValue(
+      blockedPersonaIds.map((personaId) => ({
+        server_id: 7,
+        persona_id: personaId,
+        user_disc_id: "user-1",
+        block_type: "block",
+        reason: "fixture",
+        expires_at: new Date(Date.now() + 60 * 60 * 1000),
+      })),
     ),
   );
   track(spyOn(tomoriChatModule, "tomoriChat").mockResolvedValue("run"));
@@ -393,5 +406,31 @@ describe("conditioning persona resolution", () => {
 
     expect(recordSpy).toHaveBeenCalledTimes(1);
     expect(recordSpy.mock.calls[0][0]).toMatchObject({ personaLineageId: 101, conditioningType: "reward" });
+  });
+
+  it("answers a blocked user publicly with the persona ignoring them until the block ends, recording and triggering nothing", async () => {
+    const recordSpy = stubWorkspace([MAIN, ALTER], [ALTER.persona_id as number]);
+    const chatSpy = track(spyOn(tomoriChatModule, "tomoriChat").mockResolvedValue("run"));
+    const blocks = await blockCache.getCachedActiveBlocksForUser(7, "user-1");
+    const expiresAt = Math.floor(blocks[0].expires_at.getTime() / 1000);
+    const { interaction, replies } = createInteraction("2");
+
+    await createConditioningInteractionCommand("reward", "headpat").execute(client, interaction, userData, "en-US");
+
+    expect(replies).toHaveLength(1);
+    const payload = replies[0] as { embeds: EmbedBuilder[]; flags: number };
+    const embed = payload.embeds[0].toJSON();
+    const bot = ALTER.persona_nickname;
+    expect(embed.title).toBe(localizedCopy("en-US", "commands.conditioning.shared.ignored_title", { bot }));
+    expect(embed.description).toBe(
+      `${localizedCopy("en-US", CONDITIONING_ACTION_LOCALE_KEYS.headpat.ignored_description, { bot })}\n-# ${localizedCopy(
+        "en-US",
+        "commands.conditioning.shared.ignored_until",
+        { bot, time: `<t:${expiresAt}:R>` },
+      )}`,
+    );
+    expect(payload.flags).toBe(MessageFlags.SuppressNotifications);
+    expect(recordSpy).not.toHaveBeenCalled();
+    expect(chatSpy).not.toHaveBeenCalled();
   });
 });

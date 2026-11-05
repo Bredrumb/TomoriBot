@@ -1574,6 +1574,11 @@ function getBlockComparableAuthorId(
       (isManagedWebhookMessage(msg) ? getCachedImpersonatedUserIdForWebhook(msg.webhookId) : null) ?? msg.author.id
     );
   }
+  // A slash-command reply is authored by the bot but speaks for its invoker, so a blocked user's
+  // /reward or /punish embed would otherwise reach the persona that blocked them.
+  if (msg.author.bot && msg.interactionMetadata) {
+    return msg.interactionMetadata.user.id;
+  }
   return msg.author.id;
 }
 
@@ -1591,8 +1596,8 @@ function getBlacklistCandidateAuthorId(msg: Message): string | null {
 /**
  * Resolves the name a persona knows a blocked user by, for use in the block
  * notice. Prefers the cached bot-facing nickname, then Discord display/global/
- * username; for webhook-impersonated authors whose underlying user differs, falls
- * back to a mention of the impersonated Discord ID.
+ * username; when the message speaks for someone other than its author (a webhook
+ * impersonation or a slash-command reply), falls back to a mention of that user.
  *
  * @param msg - The original (blocked) Discord message.
  * @param comparableId - The block-comparable author ID from getBlockComparableAuthorId.
@@ -1602,7 +1607,7 @@ async function resolveBlockedAuthorLabel(msg: Message, comparableId: string): Pr
   if (row?.user_nickname) {
     return row.user_nickname;
   }
-  if (!msg.webhookId) {
+  if (comparableId === msg.author.id) {
     return msg.member?.displayName || msg.author.globalName || msg.author.username;
   }
   return `<@${comparableId}>`;

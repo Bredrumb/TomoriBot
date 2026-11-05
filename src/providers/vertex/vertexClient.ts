@@ -14,8 +14,9 @@
  * so streaming, validation, and any future v2 helpers share the same logic.
  */
 
-import { GoogleGenAI } from "@google/genai";
+import { ApiError, GoogleGenAI } from "@google/genai";
 import { log } from "../../utils/misc/logger";
+import { MODEL_LOOKUP_TIMEOUT_MS, reportModelLookupFailure } from "@/utils/provider/modelCatalogLookup";
 
 export interface VertexConfig {
   /** GCP project ID */
@@ -79,6 +80,29 @@ export function parseVertexCompositeKey(compositeKey: string): VertexConfig {
 class VertexClient extends GoogleGenAI {
   getAuthHeaders(): Promise<Headers> {
     return this.apiClient.getAuthHeaders();
+  }
+}
+
+// A codename with a slash maps to a partner publisher route that Vertex answers with an HTML 404
+// even for real partner models, so only its structured publisher-model 404 means the model is absent.
+const VERTEX_PUBLISHER_MODEL_NOT_FOUND = /Publisher Model `[^`]+` is not found/;
+
+/** Looks a text model up for registration on either Vertex provider; see `LLMProvider.checkTextModel`. */
+export async function checkVertexTextModel(
+  provider: "vertex" | "vertexexpress",
+  client: GoogleGenAI,
+  codename: string,
+  credential: string,
+): Promise<boolean | null> {
+  try {
+    await client.models.get({ model: codename, config: { httpOptions: { timeout: MODEL_LOOKUP_TIMEOUT_MS } } });
+    return true;
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404 && VERTEX_PUBLISHER_MODEL_NOT_FOUND.test(error.message)) {
+      return false;
+    }
+    await reportModelLookupFailure(provider, error, credential);
+    return null;
   }
 }
 

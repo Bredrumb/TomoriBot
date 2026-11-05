@@ -21,6 +21,7 @@ export const CONDITIONING_ACTION_LOCALE_KEYS: Record<
     embed_titles: readonly string[];
     embed_description: string;
     embed_description_with_reason: string;
+    ignored_description: string;
     history_label: string;
     history_label_plural: string;
   }
@@ -40,6 +41,7 @@ export const CONDITIONING_ACTION_LOCALE_KEYS: Record<
     ],
     embed_description: "commands.reward.headpat.embed_description",
     embed_description_with_reason: "commands.reward.headpat.embed_description_with_reason",
+    ignored_description: "commands.reward.headpat.ignored_description",
     history_label: "commands.reward.headpat.history_label",
     history_label_plural: "commands.reward.headpat.history_label_plural",
   },
@@ -58,6 +60,7 @@ export const CONDITIONING_ACTION_LOCALE_KEYS: Record<
     ],
     embed_description: "commands.reward.hug.embed_description",
     embed_description_with_reason: "commands.reward.hug.embed_description_with_reason",
+    ignored_description: "commands.reward.hug.ignored_description",
     history_label: "commands.reward.hug.history_label",
     history_label_plural: "commands.reward.hug.history_label_plural",
   },
@@ -76,6 +79,7 @@ export const CONDITIONING_ACTION_LOCALE_KEYS: Record<
     ],
     embed_description: "commands.reward.kiss.embed_description",
     embed_description_with_reason: "commands.reward.kiss.embed_description_with_reason",
+    ignored_description: "commands.reward.kiss.ignored_description",
     history_label: "commands.reward.kiss.history_label",
     history_label_plural: "commands.reward.kiss.history_label_plural",
   },
@@ -92,6 +96,7 @@ export const CONDITIONING_ACTION_LOCALE_KEYS: Record<
     ],
     embed_description: "commands.reward.tickle.embed_description",
     embed_description_with_reason: "commands.reward.tickle.embed_description_with_reason",
+    ignored_description: "commands.reward.tickle.ignored_description",
     history_label: "commands.reward.tickle.history_label",
     history_label_plural: "commands.reward.tickle.history_label_plural",
   },
@@ -110,6 +115,7 @@ export const CONDITIONING_ACTION_LOCALE_KEYS: Record<
     ],
     embed_description: "commands.reward.feed.embed_description",
     embed_description_with_reason: "commands.reward.feed.embed_description_with_reason",
+    ignored_description: "commands.reward.feed.ignored_description",
     history_label: "commands.reward.feed.history_label",
     history_label_plural: "commands.reward.feed.history_label_plural",
   },
@@ -126,6 +132,7 @@ export const CONDITIONING_ACTION_LOCALE_KEYS: Record<
     ],
     embed_description: "commands.punish.spank.embed_description",
     embed_description_with_reason: "commands.punish.spank.embed_description_with_reason",
+    ignored_description: "commands.punish.spank.ignored_description",
     history_label: "commands.punish.spank.history_label",
     history_label_plural: "commands.punish.spank.history_label_plural",
   },
@@ -142,6 +149,7 @@ export const CONDITIONING_ACTION_LOCALE_KEYS: Record<
     ],
     embed_description: "commands.punish.pinch.embed_description",
     embed_description_with_reason: "commands.punish.pinch.embed_description_with_reason",
+    ignored_description: "commands.punish.pinch.ignored_description",
     history_label: "commands.punish.pinch.history_label",
     history_label_plural: "commands.punish.pinch.history_label_plural",
   },
@@ -160,6 +168,7 @@ export const CONDITIONING_ACTION_LOCALE_KEYS: Record<
     ],
     embed_description: "commands.punish.bite.embed_description",
     embed_description_with_reason: "commands.punish.bite.embed_description_with_reason",
+    ignored_description: "commands.punish.bite.ignored_description",
     history_label: "commands.punish.bite.history_label",
     history_label_plural: "commands.punish.bite.history_label_plural",
   },
@@ -177,6 +186,7 @@ export const CONDITIONING_ACTION_LOCALE_KEYS: Record<
     ],
     embed_description: "commands.punish.squeeze.embed_description",
     embed_description_with_reason: "commands.punish.squeeze.embed_description_with_reason",
+    ignored_description: "commands.punish.squeeze.ignored_description",
     history_label: "commands.punish.squeeze.history_label",
     history_label_plural: "commands.punish.squeeze.history_label_plural",
   },
@@ -195,6 +205,7 @@ export const CONDITIONING_ACTION_LOCALE_KEYS: Record<
     ],
     embed_description: "commands.punish.bonk.embed_description",
     embed_description_with_reason: "commands.punish.bonk.embed_description_with_reason",
+    ignored_description: "commands.punish.bonk.ignored_description",
     history_label: "commands.punish.bonk.history_label",
     history_label_plural: "commands.punish.bonk.history_label_plural",
   },
