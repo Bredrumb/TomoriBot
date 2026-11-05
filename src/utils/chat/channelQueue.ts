@@ -1,5 +1,7 @@
 import type { Client, Message } from "discord.js";
 import { isDraining } from "@/utils/misc/shutdownState";
+import { getShardTopology } from "@/utils/discord/shardOwnership";
+import { getOwnerWorkSignal, hasShardLeaseOwnership } from "@/utils/cluster/shardLeases";
 import type { ForcedMention } from "@/types/discord/mentions";
 import type { TomoriState } from "@/types/db/schema";
 import type { StructuredContextItem } from "@/types/misc/context";
@@ -114,6 +116,12 @@ export const selfReplySuppressionUntil = new Map<string, number>();
 /** A nudge turn's last message can reach the gateway after its lock releases, so its output stays ignored briefly. */
 const nudgeOutputQuietUntil = new Map<string, number>();
 
+function ownsMessage(message: Message): boolean {
+  return (
+    hasShardLeaseOwnership() && getShardTopology().ownsServer(message.guildId ?? message.channelId, !message.guildId)
+  );
+}
+
 export async function runWithChannelLock<T>(
   admission: RunnableChatAdmission,
   callback: (lockedTurn: LockedChatTurn, startTyping: () => Promise<void>) => Promise<T>,
@@ -123,6 +131,10 @@ export async function runWithChannelLock<T>(
   },
 ): Promise<T | undefined> {
   const channelId = admission.message.channel.id;
+  if (!ownsMessage(admission.message)) {
+    discardQueuedMessages([admission.incoming], "admission_rejected");
+    return;
+  }
   if (isDraining()) {
     const signal = admission.incoming.skipLock ? getChannelTurnAbortSignal(channelId) : undefined;
     if (!signal || signal.aborted) {
@@ -135,6 +147,7 @@ export async function runWithChannelLock<T>(
   // Retry/internal re-entries (skipLock) reuse the outer turn's lock and typing keepalive : no new typing start
   if (skipLock) {
     const lockEntry = channelLocks.get(channelId);
+    if (!lockEntry?.activeTurnAbortController || lockEntry.activeTurnAbortController.signal.aborted) return;
     return await callback(
       {
         admission,
@@ -168,7 +181,16 @@ export async function runWithChannelLock<T>(
   // The quiet window only bridges to the next nudge turn; any other turn's persona output is real.
   if (!admission.incoming.naturalNudge) nudgeOutputQuietUntil.delete(channelId);
 
+  const turnController = lockEntry.activeTurnAbortController;
+  const ownerSignal = getShardTopology().ownsAllShards() ? undefined : getOwnerWorkSignal();
+  const abortOwnerTurn = () => {
+    if (lockEntry.activeTurnAbortController === turnController) abortChannelTurn(channelId, lockEntry);
+  };
+  ownerSignal?.addEventListener("abort", abortOwnerTurn, { once: true });
+  if (ownerSignal?.aborted) abortOwnerTurn();
+
   try {
+    if (turnController?.signal.aborted) return;
     return await callback(
       {
         admission,
@@ -180,6 +202,7 @@ export async function runWithChannelLock<T>(
       () => startDiscordTypingKeepalive(admission.message.channel, lockEntry, admission.message.id),
     );
   } finally {
+    ownerSignal?.removeEventListener("abort", abortOwnerTurn);
     releaseChannelLockAndReplayQueue({
       channelId,
       lockEntry,
@@ -405,7 +428,7 @@ export function queuePersonaJobsAtFront(args: {
   borrowsTriggerMessage?: boolean;
   manualSystemPrompt?: string;
 }): void {
-  if (isDraining()) return;
+  if (isDraining() || !ownsMessage(args.message)) return;
   for (let i = args.personaJobs.length - 1; i >= 0; i--) {
     const queuedPersona = args.personaJobs[i];
     args.lockEntry.messageQueue.unshift({
@@ -460,7 +483,7 @@ export function queueScenePersonaJobsAtFront(args: {
   naturalNudge?: NaturalNudgeTurn;
   borrowsTriggerMessage?: boolean;
 }): void {
-  if (isDraining()) return;
+  if (isDraining() || !ownsMessage(args.message)) return;
   for (let i = args.sceneJobs.length - 1; i >= 0; i--) {
     const queuedSceneJob = args.sceneJobs[i];
     args.lockEntry.messageQueue.unshift({
@@ -502,7 +525,7 @@ export function queueStopResponseAtFront(args: {
   textQuotaTriggerKey: string;
   shouldSurfaceUserErrors?: boolean;
 }): void {
-  if (isDraining()) return;
+  if (isDraining() || !ownsMessage(args.message)) return;
   const lockEntry = channelLocks.get(args.channelId);
   if (!lockEntry) {
     return;
@@ -532,6 +555,8 @@ export async function requestNaturalStopForLockedTurn(args: {
   message: Message;
   client: Client;
 }): Promise<void> {
+  if (isDraining() || !ownsMessage(args.message)) return;
+  const signal = args.lockEntry.activeTurnAbortController?.signal;
   let clearedPersonaJobCount = 0;
   let clearedSelfTriggerCount = 0;
 
@@ -548,6 +573,7 @@ export async function requestNaturalStopForLockedTurn(args: {
       `(personaJobs=${clearedPersonaJobCount}, selfTriggers=${clearedSelfTriggerCount}).`,
   );
 
+  if (signal?.aborted || isDraining() || !ownsMessage(args.message)) return;
   StreamOrchestrator.requestStop(args.channelId, args.message.author.id, {
     originalStopMessage: args.message,
     client: args.client,
@@ -581,7 +607,8 @@ export function queueFollowUpForLockedTurn(args: {
   onGenerationResult?: ChatGenerationResultHandler;
   onQueueDiscard?: QueuedMessageDiscardHandler;
 }): boolean {
-  if (isDraining()) return false;
+  if (isDraining() || !ownsMessage(args.message) || args.lockEntry.activeTurnAbortController?.signal.aborted)
+    return false;
   const isVerifiedProxyRepost = args.verifiedProxySenderDiscId === args.userDiscId;
   const incomingProxyIdentityUserDiscId = isVerifiedProxyRepost
     ? getMessageProxyMessageRecord(args.message.id)?.identityUserDiscId
@@ -652,7 +679,7 @@ export function enqueueBusyChannelMessage(args: {
   queuedMessage: QueuedMessage;
   simulatedAutochatCounterReset: boolean;
 }): void {
-  if (isDraining()) {
+  if (isDraining() || !ownsMessage(args.queuedMessage.message)) {
     discardQueuedMessages([args.queuedMessage], "channel_queue_cleared");
     return;
   }
@@ -699,7 +726,7 @@ export function releaseChannelLockAndReplayQueue(args: {
 
   for (const notify of channelTurnWaiters) notify();
   const stopContext = StreamOrchestrator.getAndClearStopContext(args.channelId);
-  if (isDraining()) {
+  if (isDraining() || !hasShardLeaseOwnership()) {
     StreamOrchestrator.clearStopRequest(args.channelId);
     clearChannelProcessingQueue(args.channelId);
     return;
@@ -708,7 +735,7 @@ export function releaseChannelLockAndReplayQueue(args: {
     log.info(`Found stop context for channel ${args.channelId}. Triggering stop response after lock release.`);
 
     setImmediate(async () => {
-      if (isDraining()) return;
+      if (isDraining() || !ownsMessage(stopContext.originalStopMessage)) return;
       try {
         await args.handleStopResponse(stopContext.originalStopMessage, stopContext.client);
       } catch (error) {
@@ -735,7 +762,7 @@ export function releaseChannelLockAndReplayQueue(args: {
   );
 
   setImmediate(() => {
-    if (isDraining()) {
+    if (isDraining() || !ownsMessage(nextMessageData.message)) {
       args.lockEntry.pendingHistoryReplay = undefined;
       args.lockEntry.historyWindow = undefined;
       discardQueuedMessages([nextMessageData], "channel_queue_cleared");
@@ -792,7 +819,9 @@ export async function startDiscordTypingKeepalive(
     lockEntry.isLocked &&
     lockEntry.currentMessageId === messageId &&
     lockEntry.activeTurnAbortController === controller &&
+    hasShardLeaseOwnership() &&
     !controller?.signal.aborted;
+  if (!ownsTurn()) return;
   await refreshDiscordTypingIndicator(channel, "lock_scope_start");
   if (!ownsTurn()) {
     return;
@@ -1059,15 +1088,21 @@ export function waitForChannelTurns(signal: AbortSignal): Promise<void> {
 
 export function abortChannelTurns(): void {
   for (const [channelId, entry] of channelLocks) {
-    const kill = entry.activeStreamKill;
-    entry.activeStreamKill = null;
-    entry.activeTurnAbortController?.abort();
-    stopDiscordTypingKeepalive(channelId, entry, "shutdown");
-    clearChannelProcessingQueue(channelId);
-    try {
-      kill?.(new Error("SDK_CALL_TIMEOUT: process shutting down"));
-    } catch (error) {
-      log.warn("Failed to abort a channel stream during shutdown", error);
-    }
+    abortChannelTurn(channelId, entry);
+  }
+}
+
+function abortChannelTurn(channelId: string, entry: ChannelLockEntry): void {
+  // The terminal stop path suppresses timeout notices and retries after owner cancellation.
+  if (entry.isLocked) StreamOrchestrator.requestStop(channelId);
+  const kill = entry.activeStreamKill;
+  entry.activeStreamKill = null;
+  entry.activeTurnAbortController?.abort();
+  stopDiscordTypingKeepalive(channelId, entry, "shutdown");
+  clearChannelProcessingQueue(channelId);
+  try {
+    kill?.(new Error("SDK_CALL_TIMEOUT: owner work cancelled"));
+  } catch (error) {
+    log.warn("Failed to abort a channel stream during shutdown", error);
   }
 }

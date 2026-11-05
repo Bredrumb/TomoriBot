@@ -1,4 +1,5 @@
 import type { SendableChannel } from "@/utils/discord/resolveSendableChannel";
+import { stubAllShardOwnership } from "../../helpers/shardOwnership";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import { createHash } from "node:crypto";
 import {
@@ -64,6 +65,8 @@ import * as matrixMedia from "@/utils/bridges/matrix/media";
 import * as matrixState from "@/utils/bridges/matrix/state";
 import type { Request as BridgeRequest, WeakEvent } from "matrix-appservice-bridge";
 
+const applyOwnership = stubAllShardOwnership();
+
 const avatarA =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jG5kAAAAASUVORK5CYII=";
 const avatarB =
@@ -92,6 +95,7 @@ function deferredPatch() {
 }
 
 function makePool() {
+  applyOwnership();
   const rows: ManagedDiscordWebhookRow[] = [];
   const webhooks = new Map<string, Webhook>();
   const delivered: {

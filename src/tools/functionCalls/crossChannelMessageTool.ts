@@ -19,6 +19,8 @@ import { convertMentions } from "@/utils/text/contextBuilder";
 import { PrivacyLevel } from "@/types/db/schema";
 import { getCachedPrivacyLevel } from "@/utils/cache/userCache";
 import { resolveMessageProxyMessageIdentitiesForHistory } from "@/utils/messageProxy/historyAttribution";
+import { captureDiscordOwnership } from "@/utils/discord/webhook/webhookCore";
+import { sendChannelMessageOnce } from "@/utils/discord/webhook/singleAttemptMessage";
 
 // Stores pending boomerang data keyed by source channel ID.
 // After tomoriChat() completes in the target channel, the source channel
@@ -294,6 +296,12 @@ export class CrossChannelMessageTool extends BaseTool {
       };
     }
 
+    const assertOwned = captureDiscordOwnership(context.guildId);
+    const assertActive = () => {
+      context.abortSignal?.throwIfAborted();
+      assertOwned();
+    };
+    assertActive();
     const guild = await context.client.guilds.fetch(context.guildId).catch(() => null);
     if (!guild) {
       return {
@@ -505,13 +513,13 @@ export class CrossChannelMessageTool extends BaseTool {
     }
 
     // A placeholder message provides the anchor that later updates require.
+    assertActive();
     if (!lastMessage && "send" in targetChannel) {
       try {
-        lastMessage = await targetChannel.send({
-          content: "\u2800",
-        });
+        lastMessage = await sendChannelMessageOnce(targetChannel, { content: "\u2800" }, assertActive);
         log.info(`Cross-channel tool: Seeded placeholder message in #${targetChannel.name}`);
       } catch (sendError) {
+        assertActive();
         log.warn(`Cross-channel tool: Failed to seed placeholder in #${targetChannel.name}:`, sendError);
       }
     }
@@ -557,6 +565,7 @@ export class CrossChannelMessageTool extends BaseTool {
       : undefined;
 
     try {
+      assertActive();
       await tomoriChat({
         client: context.client,
         message: lastMessage,
@@ -600,6 +609,7 @@ export class CrossChannelMessageTool extends BaseTool {
           log.warn(`Cross-channel tool: Failed to fetch target channel messages for boomerang:`, msgFetchError);
         }
 
+        assertActive();
         pendingBoomerangs.set(context.channel.id, {
           sourceChannelId: context.channel.id,
           targetChannelName: targetChannel.name,
@@ -644,6 +654,7 @@ export class CrossChannelMessageTool extends BaseTool {
         },
       };
     } catch (error) {
+      assertActive();
       log.error(`Cross-channel tool: Failed to dispatch to #${targetChannel.name}:`, error as Error);
 
       // Store failed boomerang if requested

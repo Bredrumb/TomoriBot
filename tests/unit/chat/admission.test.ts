@@ -1,3 +1,5 @@
+import { stubAllShardOwnership } from "../../helpers/shardOwnership";
+stubAllShardOwnership();
 import { afterEach, beforeEach, afterAll, describe, expect, it, mock, spyOn } from "bun:test";
 import * as shutdownState from "@/utils/misc/shutdownState";
 import type { Message } from "discord.js";

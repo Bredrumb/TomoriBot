@@ -1,14 +1,16 @@
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
 import { isDraining } from "@/utils/misc/shutdownState";
 import { toolRepository } from "@/utils/db/repositories/ToolRepository";
-import { log } from "../../utils/misc/logger";
-import type { ErrorContext } from "../../types/db/schema";
+import { log } from "@/utils/misc/logger";
+import type { ErrorContext } from "@/types/db/schema";
+import { getShardTopology } from "@/utils/discord/shardOwnership";
+import { hasShardLeaseOwnership } from "@/utils/cluster/shardLeases";
 
 /**
  * Guild MCP servers are remote and administrator-registered; the bot starts no local MCP process.
  */
 export default async (): Promise<void> => {
-  if (isDraining()) return;
+  if (isDraining() || !hasShardLeaseOwnership()) return;
   try {
     log.section("Preparing guild MCP connections");
 
@@ -17,8 +19,8 @@ export default async (): Promise<void> => {
     const runEnv = process.env.RUN_ENV || "development";
     if (runEnv !== "production") {
       try {
-        const allEnabled = await toolRepository.loadAllEnabledMcpServers();
-        if (isDraining()) return;
+        const allEnabled = await toolRepository.loadAllEnabledMcpServers(getShardTopology());
+        if (isDraining() || !hasShardLeaseOwnership()) return;
         if (allEnabled.length > 0) {
           log.info(`[GuildMCP] Dev mode: eager-connecting ${allEnabled.length} enabled guild MCP server(s)...`);
           // Non-blocking, so failures are logged but don't prevent startup

@@ -1,3 +1,5 @@
+import { stubAllShardOwnership } from "../../helpers/shardOwnership";
+stubAllShardOwnership();
 import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
 import {
   ChannelType,

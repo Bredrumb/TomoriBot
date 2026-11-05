@@ -1,4 +1,5 @@
-import { afterEach, beforeAll, describe, expect, it, spyOn } from "bun:test";
+import { afterEach, beforeAll, describe, expect, it, mock, spyOn } from "bun:test";
+import { stubAllShardOwnership } from "../../helpers/shardOwnership";
 import { Collection, EmbedBuilder, type Client, type GuildTextBasedChannel, type Message } from "discord.js";
 import { CrossChannelMessageTool, consumePendingBoomerang } from "@/tools/functionCalls/crossChannelMessageTool";
 import { PrivacyLevel } from "@/types/db/schema";
@@ -14,6 +15,7 @@ import { createPersona } from "../../helpers/fixtures";
 
 const restores: Array<() => void> = [];
 const sourceId = "source-channel";
+stubAllShardOwnership();
 
 beforeAll(initializeLocalizer);
 afterEach(() => {
@@ -32,16 +34,18 @@ function message(id: string, authorId: string, webhookId: string | null = null):
   } as unknown as Message;
 }
 
-function fixture(history: Message[]) {
+function fixture(history: Message[], anchorLookup?: () => Promise<Collection<string, Message>>) {
   const fetches: number[] = [];
   const target = {
     id: "target-channel",
     name: "garden",
     isThread: () => false,
     permissionsFor: () => ({ has: () => true }),
+    send: mock(async () => message("seed", "bot")),
     messages: {
       fetch: async ({ limit }: { limit: number }) => {
         fetches.push(limit);
+        if (limit === 1 && anchorLookup) return anchorLookup();
         const messages = limit === 1 ? [message("anchor", "bot")] : history;
         return new Collection(messages.map((entry) => [entry.id, entry]));
       },
@@ -91,10 +95,33 @@ function fixture(history: Message[]) {
   for (const spy of [privacy, proxies, labels, mentions, resolve, dispatch, suppress]) {
     restores.push(() => spy.mockRestore());
   }
-  return { context, privacy, proxies, labels, mentions, dispatch, fetches };
+  return { context, target, privacy, proxies, labels, mentions, dispatch, fetches };
 }
 
 describe("cross-channel full privacy", () => {
+  it.each([true, false])("cancels pending target lookup before placeholder or dispatch (empty: %s)", async (empty) => {
+    const reached = Promise.withResolvers<void>();
+    const lookup = Promise.withResolvers<Collection<string, Message>>();
+    const f = fixture([], async () => {
+      reached.resolve();
+      return lookup.promise;
+    });
+    const controller = new AbortController();
+    f.context.abortSignal = controller.signal;
+    const result = new CrossChannelMessageTool()
+      .execute({ target_channel: "garden", task: "Check the conversation", boomerang: true }, f.context)
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+    await reached.promise;
+    controller.abort();
+    lookup.resolve(empty ? new Collection() : new Collection([["anchor", message("anchor", "bot")]]));
+    expect(await result).toBeInstanceOf(DOMException);
+    expect(f.target.send).not.toHaveBeenCalled();
+    expect(f.dispatch).not.toHaveBeenCalled();
+    expect(consumePendingBoomerang(sourceId)).toBeUndefined();
+  });
   for (const mode of ["peek", "boomerang"] as const) {
     it(`${mode} excludes full-private direct and proxy authors while preserving visible history and refresh boundaries`, async () => {
       const marker = message("refresh", "hidden");

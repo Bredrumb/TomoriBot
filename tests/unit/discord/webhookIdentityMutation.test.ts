@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { stubAllShardOwnership } from "../../helpers/shardOwnership";
 import type { Webhook } from "discord.js";
 import { clearWebhookCache, runWithWebhookIdentity } from "@/utils/discord/webhook/webhookCore";
+
+stubAllShardOwnership();
 
 function makeWebhook(edit: Webhook["edit"]): Webhook {
   return {

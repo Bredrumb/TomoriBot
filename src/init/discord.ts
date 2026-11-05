@@ -6,6 +6,7 @@ import type { AppEnvironment } from "@/types/config";
 import { shouldRejectWebhookRateLimit } from "@/utils/discord/webhook/avatarEditRateLimit";
 import { discordPresenceRetention, type DiscordPresenceRetention } from "@/utils/cache/discordPresenceRetention";
 import { initializeShardTopology, type ShardTopology } from "@/utils/discord/shardOwnership";
+import { buildIdentifyThrottler } from "@/utils/cluster/identifyThrottler";
 
 /**
  * Whether a Discord connection failure is one the bot can recover from on its own.
@@ -114,6 +115,7 @@ export function createDiscordClient(
   includePresences: boolean,
   presenceRetention: DiscordPresenceRetention = discordPresenceRetention,
   topology: ShardTopology = initializeShardTopology(),
+  shutdownSignal: AbortSignal = new AbortController().signal,
 ): Client {
   const intents = [
     GatewayIntentBits.Guilds,
@@ -134,6 +136,7 @@ export function createDiscordClient(
 
   const client: Client = new Client({
     ...topology.getClientShardOptions(),
+    ...(!topology.ownsAllShards() ? { ws: { buildIdentifyThrottler: buildIdentifyThrottler(shutdownSignal) } } : {}),
     intents,
     partials: [Partials.Channel, Partials.Message],
     rest: { rejectOnRateLimit: shouldRejectWebhookRateLimit },
