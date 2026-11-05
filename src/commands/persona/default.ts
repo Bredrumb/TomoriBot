@@ -288,8 +288,10 @@ export async function applyPresetDefault(
     const selectedPreset = presets.find((preset) => preset.persona_preset_name === selectedPresetName);
 
     if (!selectedPreset) {
-      await modalSubmitInteraction.editReply({
-        content: localizer(locale, "commands.persona.default.preset_not_found"),
+      await replyInfoEmbed(modalSubmitInteraction, locale, {
+        titleKey: "general.panel_notice.invalid_heading",
+        descriptionKey: "commands.persona.default.preset_not_found",
+        color: ColorCode.ERROR,
       });
       return;
     }

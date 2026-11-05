@@ -8,7 +8,7 @@ import {
   type ModalSubmitInteraction,
 } from "discord.js";
 import type { CustomExpressionMedia, CustomExpressionRow } from "@/types/db/schema";
-import type { PanelReceipt } from "@/types/discord/panel";
+import type { PanelReceipt, PanelReceiptTone } from "@/types/discord/panel";
 import { serverRepository, ExpressionWriteError } from "@/utils/db/repositories/ServerRepository";
 import { personaRepository } from "@/utils/db/repositories/PersonaRepository";
 import { statRepository } from "@/utils/db/repositories/StatRepository";
@@ -45,7 +45,7 @@ import { deleteExpressionMedia, loadExpressionMedia } from "@/utils/storage/expr
 import { validateRemoteUrl } from "@/utils/security/remoteUrlSecurity";
 import { DISCORD_BUTTON_URL_MAX } from "@/utils/discord/ui/componentsV2Limits";
 import { recordPanelActionStat } from "@/utils/stats/panelActionMetrics";
-import { buildPanelReceiptContainer } from "@/utils/discord/ui/panel";
+import { buildPanelReceiptContainer, replyPanelReceipt } from "@/utils/discord/ui/panel";
 import type { PanelAction } from "@/constants/panelActions";
 import { localizer } from "@/utils/text/localizer";
 import { log } from "@/utils/misc/logger";
@@ -321,13 +321,31 @@ async function repaint(
   }
 }
 
-async function deny(interaction: ExpressionInteraction, locale: string, key: string): Promise<void> {
+const DENY_RECEIPTS = {
+  "general.errors.permission_denied_description": ["error", "general.errors.permission_denied_title"],
+  "general.errors.tomori_not_setup_description": ["error", "general.errors.tomori_not_setup_title"],
+  "commands.expressions.manage.unavailable": ["warning", "general.panel_notice.unavailable_heading"],
+  "commands.expressions.manage.error_stale": ["warning", "commands.config.panel.stale_heading"],
+} as const satisfies Record<string, readonly [PanelReceiptTone, string]>;
+
+async function deny(
+  interaction: ExpressionInteraction,
+  locale: string,
+  key: keyof typeof DENY_RECEIPTS,
+): Promise<void> {
   if (interaction.deferred || interaction.replied) {
     await deliverGuardedPanel(interaction, buildExpressionsTerminalPayload(locale, key), {
       method: "editReply",
       locale,
     });
-  } else await interaction.reply({ content: localizer(locale, key), flags: MessageFlags.Ephemeral });
+    return;
+  }
+  const [tone, headingKey] = DENY_RECEIPTS[key];
+  await replyPanelReceipt(interaction, {
+    tone,
+    heading: localizer(locale, headingKey),
+    detail: localizer(locale, key),
+  });
 }
 
 export function createExpressionsInteractionRoute(
@@ -389,11 +407,12 @@ export function createExpressionsInteractionRoute(
       if (opensModal) {
         if (route.action === "select") {
           if (data.customs.length >= MAX_CUSTOM_EXPRESSIONS_PER_SERVER) {
-            await interaction.reply({
-              content: localizer(route.locale, "commands.expressions.manage.error_limit", {
+            await replyPanelReceipt(interaction, {
+              tone: "warning",
+              heading: localizer(route.locale, "general.panel_notice.limit_heading"),
+              detail: localizer(route.locale, "commands.expressions.manage.error_limit", {
                 limit: MAX_CUSTOM_EXPRESSIONS_PER_SERVER,
               }),
-              flags: MessageFlags.Ephemeral,
             });
             return;
           }

@@ -3,6 +3,8 @@ export default {
     description: `Gerencie memórias persistentes de condicionamento de recompensa e punição.`,
     shared: {
       target_conflict_description: `Escolha um usuário ou uma persona para esta interação.`,
+      sent_title: `Enviado`,
+      sent_description: `Publicado neste canal com o seu nome.`,
       user_footer: `{bot} vai se lembrar disso.`,
       reward_footer: `❤️ {bot} vai se lembrar disso. Use /conditioning para gerenciar.`,
       punish_footer: `💀 {bot} vai se lembrar disso. Use /conditioning para gerenciar.`,

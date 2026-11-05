@@ -95,7 +95,13 @@ export async function rejectInteractionDuringShutdown(interaction: Interaction):
     } else if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
       if (!rawModalAcknowledged.has(interaction)) {
         await interaction.reply({
-          content: localizer(interaction.locale, "general.restarting"),
+          embeds: [
+            createStandardEmbed(interaction.locale, {
+              titleKey: "general.restarting_title",
+              descriptionKey: "general.restarting",
+              color: ColorCode.WARN,
+            }),
+          ],
           flags: MessageFlags.Ephemeral,
         });
       }

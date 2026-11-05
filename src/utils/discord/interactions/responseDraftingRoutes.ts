@@ -1,5 +1,5 @@
 import { responseReviewItemsSchema } from "@/types/db/schema";
-import { MessageFlags, type ModalSubmitInteraction } from "discord.js";
+import type { ModalSubmitInteraction } from "discord.js";
 import type { PanelAction } from "@/constants/panelActions";
 import { CONFIG_MODEL_PAGE_SIZE, type ConfigPanelRoute } from "@/utils/discord/configPanelCatalog";
 import {
@@ -7,7 +7,13 @@ import {
   decodeConfigProviderRangeValue,
 } from "@/utils/discord/interactions/configModelLoaders";
 import { isConfigRouteAuthorized, type ConfigActor } from "@/utils/discord/interactions/configPermissionPolicy";
-import { repaint, staleReceipt, type ConfigRouteDependencies } from "@/utils/discord/interactions/configRouteContext";
+import {
+  deniedReceipt,
+  repaint,
+  staleReceipt,
+  type ConfigRouteDependencies,
+} from "@/utils/discord/interactions/configRouteContext";
+import type { PanelReceipt } from "@/types/discord/panel";
 import type { ConfigModelRouteContext } from "@/utils/discord/interactions/configModelRoutes";
 import type { GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
 import { performPanelAction } from "@/utils/discord/interactions/panelController";
@@ -24,6 +30,7 @@ import { buildConfigModalFieldId } from "@/utils/discord/ui/configModals";
 import { CONFIG_MODEL_SELECT_FIELD } from "@/utils/discord/ui/configModelModals";
 import { checkerFingerprint, type DraftWriteResult } from "@/utils/discord/interactions/responseDraftingOperations";
 import { localizer } from "@/utils/text/localizer";
+import { replyPanelReceipt } from "@/utils/discord/ui/panel";
 
 export async function handleDraftModalOpen(
   interaction: GlobalRoutableInteraction,
@@ -40,16 +47,15 @@ export async function handleDraftModalOpen(
   )
     return false;
   const locale = route.locale;
-  const deny = async (key: string) =>
-    interaction.reply({ content: localizer(locale, key), flags: MessageFlags.Ephemeral });
+  const deny = (receipt: PanelReceipt) => replyPanelReceipt(interaction, receipt);
   if (!isConfigRouteAuthorized(route, actor)) {
-    await deny("commands.config.panel.denied_detail");
+    await deny(deniedReceipt(locale));
     return true;
   }
   const scope = await dependencies.resolveScope(interaction, false);
   const state = scope?.personas[0];
   if (!scope || !state || scope.readStatus !== "fresh") {
-    await deny("commands.config.panel.stale_detail");
+    await deny(staleReceipt(locale));
     return true;
   }
   if (route.action === "draft-items-open") {
@@ -65,7 +71,7 @@ export async function handleDraftModalOpen(
     (candidate) => candidate.provider === (slice?.provider ?? selected),
   );
   if (!group) {
-    await deny("commands.config.panel.stale_detail");
+    await deny(staleReceipt(locale));
     return true;
   }
   if (!slice && group.models.length > CONFIG_MODEL_PAGE_SIZE) {
@@ -91,7 +97,7 @@ export async function handleDraftModalOpen(
   }
   const start = slice?.start ?? 0;
   if (start % CONFIG_MODEL_PAGE_SIZE !== 0 || start >= group.models.length) {
-    await deny("commands.config.panel.stale_detail");
+    await deny(staleReceipt(locale));
     return true;
   }
   await dependencies.showModal(

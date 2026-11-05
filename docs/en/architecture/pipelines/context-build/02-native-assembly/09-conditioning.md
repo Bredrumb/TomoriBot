@@ -43,8 +43,11 @@ through the existing conditioning panel.
 After a successful post, persona targets enter the normal chat admission and channel queue with the
 selected target and the initiating member's access identity. The queued turn receives an injected
 context item that names the actor, the selected target, the action, and the reason, with the delivered
-message ID in metadata. `/reward` and `/punish` use the same event builder and fetch their own reply as
-the trigger, so a later message or embed cannot redirect the reaction. The receiving turn uses the
+message ID in metadata. `/reward` and `/punish` use the same event builder and take the message they
+posted as the trigger, so a later message or embed cannot redirect the reaction. That message comes
+from a single-use webhook named after the member and registered to them, so history, reply targeting,
+and block checks credit it to that member. Where the bot cannot manage webhooks in the channel, or the
+webhook send fails, the command posts the embed as its own interaction reply instead. The receiving turn uses the
 delivered embed's history text when present and replaces that history entry with one recent `user`
 item formatted as `[System: <gesture> <tool hint>]`. The trigger stays separate from adjacent notices
 during history merging. If the message is outside the fetched history, the injected event supplies

@@ -1,4 +1,4 @@
-import { MessageFlags, type Client, type Interaction } from "discord.js";
+import type { Client, Interaction } from "discord.js";
 import { compactInteractionRoute } from "@/utils/discord/interactions/compactRoutes";
 import { conditioningInteractionRoute } from "@/utils/discord/interactions/conditioningRoutes";
 import { expressionsInteractionRoute } from "@/utils/discord/interactions/expressionsRoutes";
@@ -27,6 +27,7 @@ import { modelOverrideInteractionRoute } from "@/utils/discord/interactions/mode
 import { transferInteractionRoute } from "@/utils/discord/interactions/transferRoutes";
 import { InteractionRouteRegistry, type GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
 import { resolveUserLocale } from "@/utils/discord/interactionLocale";
+import { replyPanelReceipt } from "@/utils/discord/ui/panel";
 import { log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
@@ -98,9 +99,11 @@ export async function dispatchGlobalInteraction(
                     : namespace === "transfer"
                       ? "/import"
                       : `/${namespace}`;
-      await interaction.reply({
-        content: localizer(await resolveUserLocale(interaction), key, { command }),
-        flags: MessageFlags.Ephemeral,
+      const locale = await resolveUserLocale(interaction);
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(locale, "general.panel_notice.outdated_heading"),
+        detail: localizer(locale, key, { command }),
       });
     }
     return true;
@@ -115,12 +118,12 @@ export async function dispatchGlobalInteraction(
     });
 
     try {
-      const content = localizer(await resolveUserLocale(interaction), "general.errors.unknown_error_description");
-      if (!interaction.replied && !interaction.deferred) {
-        await interaction.reply({ content, flags: MessageFlags.Ephemeral });
-      } else {
-        await interaction.followUp({ content, flags: MessageFlags.Ephemeral });
-      }
+      const locale = await resolveUserLocale(interaction);
+      await replyPanelReceipt(interaction, {
+        tone: "error",
+        heading: localizer(locale, "general.errors.unknown_error_title"),
+        detail: localizer(locale, "general.errors.unknown_error_description"),
+      });
     } catch (replyError) {
       log.warn("Global interaction route error reply failed", replyError);
     }

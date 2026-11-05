@@ -1,9 +1,9 @@
 import { resolveProviderErrorPresentation } from "@/utils/provider/providerErrorPresentation";
 import { findProviderRequestDeniedError, getProviderRequestFailureCopy } from "@/utils/provider/providerUsage";
-import { MessageFlags, PermissionFlagsBits, type ButtonInteraction } from "discord.js";
+import { MessageFlags, PermissionFlagsBits, type ButtonInteraction, type EmbedBuilder } from "discord.js";
 import type { RestrictedDetailModal } from "@/types/discord/embed";
 import type { ProviderError, StreamProvider, StreamContext } from "@/types/stream/interfaces";
-import { sendStandardEmbed } from "@/utils/discord/embedHelper";
+import { createStandardEmbed, sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { ColorCode, log, redactLogString } from "@/utils/misc/logger";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { getProviderErrorDetail, isProviderModelError } from "@/utils/provider/providerErrorClassification";
@@ -32,6 +32,17 @@ export function resolveProviderErrorFooter(args: {
     return { footerKey: "genai.stream.error_footer_dm_provider", footerVars };
   }
   return { footerKey: "genai.stream.error_footer_server_provider", footerVars };
+}
+
+async function sendInitialInteractionError(
+  interaction: NonNullable<StreamContext["initialInteraction"]>,
+  embed: EmbedBuilder,
+): Promise<void> {
+  const payload = { embeds: [embed], flags: MessageFlags.Ephemeral } as const;
+  await (interaction.replied || interaction.deferred
+    ? interaction.followUp(payload)
+    : interaction.reply(payload)
+  ).catch((error) => log.warn("Stream: Failed to send error to the initial interaction", error));
 }
 
 /** Guild channels carry their guild; a DM channel has none, and test doubles need not implement `isDMBased`. */
@@ -82,15 +93,14 @@ export class StreamErrorUi {
     const providerDetail = rawDetail ? redactProviderDetail(rawDetail, requestApiKey) : null;
 
     if (context.initialInteraction) {
-      if (!context.initialInteraction.replied && !context.initialInteraction.deferred) {
-        await context.initialInteraction
-          .reply({ content: errorMessage, flags: MessageFlags.Ephemeral })
-          .catch((e) => log.warn("Stream: Failed to reply to initial interaction with error", e));
-      } else {
-        await context.initialInteraction
-          .followUp({ content: errorMessage, flags: MessageFlags.Ephemeral })
-          .catch((e) => log.warn("Stream: Failed to followUp initial interaction with error", e));
-      }
+      await sendInitialInteractionError(
+        context.initialInteraction,
+        createStandardEmbed(locale, {
+          titleKey: denialCopy?.titleKey ?? "genai.generic_error_title",
+          description: errorMessage,
+          color: ColorCode.ERROR,
+        }),
+      );
       return;
     }
 
@@ -143,12 +153,10 @@ export class StreamErrorUi {
     if (denied) {
       const copy = getProviderRequestFailureCopy(denied, context.locale);
       if (context.initialInteraction) {
-        const payload = { content: copy.description, flags: MessageFlags.Ephemeral } as const;
-        const interaction = context.initialInteraction;
-        await (interaction.replied || interaction.deferred
-          ? interaction.followUp(payload)
-          : interaction.reply(payload)
-        ).catch((sendError) => log.warn("Failed to send provider request denial", sendError));
+        await sendInitialInteractionError(
+          context.initialInteraction,
+          createStandardEmbed(context.locale, { ...copy, color: ColorCode.ERROR }),
+        );
       } else {
         await sendStandardEmbed(context.channel, context.locale, { ...copy, color: ColorCode.ERROR }).catch(
           (sendError) => log.warn("Failed to send provider request denial", sendError),
@@ -160,15 +168,14 @@ export class StreamErrorUi {
     const errorMessage = localizer(context.locale, "genai.stream.streaming_failed_description");
 
     if (context.initialInteraction) {
-      if (!context.initialInteraction.replied && !context.initialInteraction.deferred) {
-        await context.initialInteraction
-          .reply({ content: errorMessage, flags: MessageFlags.Ephemeral })
-          .catch((e) => log.warn("Stream: Failed to reply to initial interaction with error", e));
-      } else {
-        await context.initialInteraction
-          .followUp({ content: errorMessage, flags: MessageFlags.Ephemeral })
-          .catch((e) => log.warn("Stream: Failed to followUp initial interaction with error", e));
-      }
+      await sendInitialInteractionError(
+        context.initialInteraction,
+        createStandardEmbed(context.locale, {
+          titleKey: "genai.generic_error_title",
+          description: errorMessage,
+          color: ColorCode.ERROR,
+        }),
+      );
       return;
     }
 

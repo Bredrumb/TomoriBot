@@ -42,6 +42,7 @@ export default {
     fallback_used_personal_opt_out_footer: `用 \`/personal config\` > 模型 > 備援停止讓伺服器模型代為處理你個人供應商的失敗`,
     markdown_table: {
       show_button: `顯示 Markdown`,
+      source_expired_title: `表格來源已過期`,
       source_expired: `那張表格的 Markdown 已經不在快取中，所以我沒辦法再顯示原始碼。`,
       source_attached: `這張表格太長，無法直接顯示，所以改用檔案附上：`,
     },

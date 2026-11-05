@@ -42,6 +42,7 @@ export default {
     fallback_used_personal_opt_out_footer: `用 \`/personal config\` > 模型 > 备用模型 关掉服务器模型替你个人提供方兜底`,
     markdown_table: {
       show_button: `显示 Markdown`,
+      source_expired_title: `表格源已过期`,
       source_expired: `那张表格的 Markdown 已经不在缓存里了，所以我没办法再显示源码。`,
       source_attached: `这张表格太长，没法直接显示，所以用文件发给你：`,
     },

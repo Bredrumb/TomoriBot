@@ -42,6 +42,7 @@ export default {
     fallback_used_personal_opt_out_footer: `Evita que el modelo del servidor cubra las fallas de tu proveedor personal en \`/personal config\` > Modelos > Alternativas`,
     markdown_table: {
       show_button: `Mostrar Markdown`,
+      source_expired_title: `Origen de la tabla expirado`,
       source_expired: `El markdown de esa tabla ya no está en caché, así que ya no puedo mostrar la fuente.`,
       source_attached: `Esta tabla es demasiado larga para mostrarse en línea, así que aquí está como archivo:`,
     },

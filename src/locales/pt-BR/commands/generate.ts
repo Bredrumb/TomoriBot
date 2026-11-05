@@ -34,6 +34,7 @@ export default {
       field_model: `Modelo`,
       field_generation_time: `Tempo de Geração`,
       field_aspect_ratio: `Proporção da Tela`,
+      reference_images_ignored_title: `Imagens de referência ignoradas`,
       zai_no_img2img_warning: `Z.ai não suporta geração de imagem-para-imagem. Suas imagens de referência foram ignoradas, mas a imagem ainda será gerada a partir do seu prompt de texto.`,
       nvidia_no_img2img_warning: `NVIDIA NIM não suporta geração de imagem-para-imagem. Suas imagens de referência foram ignoradas, mas a imagem ainda será gerada a partir do seu prompt de texto.`,
       disabled_title: `🔴 Geração de Imagem Desativada`,

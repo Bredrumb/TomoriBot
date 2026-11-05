@@ -167,14 +167,6 @@ export async function execute(
     };
     await log.error("Error in /nuke command", error as Error, context);
 
-    // Error reply: use editReply if we already deferred, else replyInfoEmbed
-    if (interaction.deferred || interaction.replied) {
-      await interaction.editReply({
-        content: localizer(locale, "general.errors.unknown_error_description"),
-      });
-      return;
-    }
-
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",
       descriptionKey: "general.errors.unknown_error_description",

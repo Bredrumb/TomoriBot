@@ -12,6 +12,8 @@ import {
   type ConditioningPanelRoute,
 } from "@/utils/discord/conditioningPanelCatalog";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { collectTextDisplays } from "../../helpers/panelLimits";
+import { localizedProse } from "../../helpers/localeCases";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -131,10 +133,11 @@ describe("conditioning panel routes", () => {
 
     expect(deleteCalled).toBe(false);
     expect(modalShown).toBe(false);
-    expect(nonManagerInteraction.getRepliedMessage()).toEqual({
-      content: localizer("en-US", "general.errors.permission_denied_description"),
-      flags: 64,
-    });
+    const reply = nonManagerInteraction.getRepliedMessage() as { flags: number };
+    expect(reply.flags).toBe(MessageFlags.Ephemeral | MessageFlags.IsComponentsV2);
+    expect(collectTextDisplays(reply).join("\n")).toMatch(
+      localizedProse("en-US", "general.errors.permission_denied_description"),
+    );
   });
 
   it("opens modal directly when page button is clicked without deferUpdate", async () => {

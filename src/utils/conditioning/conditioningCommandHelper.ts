@@ -1,6 +1,7 @@
 import { MessageFlags, type ChatInputCommandInteraction, type Client } from "discord.js";
 import type { UserRow } from "@/types/db/schema";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { createStandardEmbed } from "@/utils/discord/embedHelper";
 import { ColorCode } from "@/utils/misc/logger";
 import { personaRepository } from "@/utils/db/repositories";
 import {
@@ -80,14 +81,19 @@ export async function executeConditioningRemovalCommand(
   const pageRows = buildConditioningPageSelectRows(locale, entries.length);
   const capped = entries.length > CONDITIONING_PAGE_SELECT_MAX_ENTRIES;
   await interaction.reply({
-    content: capped
-      ? localizer(locale, "commands.conditioning.remove.page_select_prompt_capped", {
-          total: String(entries.length),
-          shown: String(CONDITIONING_PAGE_SELECT_MAX_ENTRIES),
-        })
-      : localizer(locale, "commands.conditioning.remove.page_select_prompt", {
-          total: String(entries.length),
-        }),
+    embeds: [
+      createStandardEmbed(locale, {
+        titleKey: "commands.conditioning.panel.remove_modal_title",
+        description: capped
+          ? localizer(locale, "commands.conditioning.remove.page_select_prompt_capped", {
+              total: String(entries.length),
+              shown: String(CONDITIONING_PAGE_SELECT_MAX_ENTRIES),
+            })
+          : localizer(locale, "commands.conditioning.remove.page_select_prompt", {
+              total: String(entries.length),
+            }),
+      }),
+    ],
     components: pageRows,
     flags: MessageFlags.Ephemeral,
   });

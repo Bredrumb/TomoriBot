@@ -34,6 +34,7 @@ export default {
       field_model: `Model`,
       field_generation_time: `Thời gian tạo`,
       field_aspect_ratio: `Tỷ lệ khung hình`,
+      reference_images_ignored_title: `Ảnh tham chiếu bị bỏ qua`,
       zai_no_img2img_warning: `Z.ai không hỗ trợ tạo ảnh từ ảnh tham chiếu. Ảnh tham chiếu của bạn đã bị bỏ qua, nhưng ảnh vẫn sẽ được tạo từ prompt văn bản.`,
       nvidia_no_img2img_warning: `NVIDIA NIM không hỗ trợ tạo ảnh từ ảnh tham chiếu. Ảnh tham chiếu của bạn đã bị bỏ qua, nhưng ảnh vẫn sẽ được tạo từ prompt văn bản.`,
       disabled_title: `🔴 Tính năng tạo ảnh đã tắt`,

@@ -3,6 +3,8 @@ export default {
     description: `管理持久化的奖励与惩罚偏好记忆。`,
     shared: {
       target_conflict_description: `请选择用户或人格其中一个作为互动对象。`,
+      sent_title: `已发送`,
+      sent_description: `已在此频道以你的名义发布。`,
       user_footer: `{bot}会记住这件事。`,
       reward_footer: `❤️ {bot} 会记住这件事。用 /conditioning 管理。`,
       punish_footer: `💀 {bot} 会记住这件事。用 /conditioning 管理。`,

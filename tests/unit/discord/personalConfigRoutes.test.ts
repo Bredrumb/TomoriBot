@@ -1543,9 +1543,11 @@ describe("personalConfigRoutes interaction handling and telemetry", () => {
 
     const handled = await dispatchGlobalInteraction({} as Client, staleInteraction);
     expect(handled).toBe(true);
-    const replyPayload = staleInteraction.replies.at(-1) as unknown as { content: string };
+    const replyPayload = staleInteraction.replies.at(-1);
     expect(replyPayload).toBeDefined();
-    expect(replyPayload.content).toContain("/personal config");
+    expect(collectTextDisplays(replyPayload).join("\n")).toMatch(
+      localizedProse("en-US", "commands.personal.config.outdated_panel", { command: "/personal config" }),
+    );
   });
 });
 

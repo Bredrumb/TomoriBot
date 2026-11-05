@@ -1,4 +1,4 @@
-import type { Client, Guild, Message } from "discord.js";
+import type { BaseGuildTextChannel, Client, Guild, Message, TextChannel, Webhook } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import { extractBridgeUserId, stripBridgePrefix } from "@/utils/bridges";
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
@@ -267,6 +267,29 @@ export async function resolveImpersonatedIdentity(
     displayName,
     avatarUrl,
   };
+}
+
+/**
+ * Creates a single-use webhook named and pictured as a member, registered so history, reply
+ * targeting, and block checks credit its messages to that member; the caller deletes it.
+ */
+export async function createUserImpersonationWebhook(
+  client: Client,
+  webhookTargetChannel: TextChannel | BaseGuildTextChannel,
+  userId: string,
+  reason: string,
+): Promise<{ webhook: Webhook; displayName: string; avatarUrl?: string }> {
+  const identity = await resolveImpersonatedIdentity(client, webhookTargetChannel.guild, userId, undefined);
+  // A whitespace-only display name is truthy, so it would reach Discord as the webhook name.
+  const displayName = identity.displayName.trim() || "User";
+  const webhook = await webhookTargetChannel.createWebhook({
+    name: displayName,
+    avatar: identity.avatarUrl || undefined,
+    reason,
+  });
+
+  cacheUserImpersonationWebhook(webhook.id, userId, webhookTargetChannel.guildId, webhookTargetChannel.id);
+  return { webhook, displayName, avatarUrl: identity.avatarUrl };
 }
 
 export function resolveReferencedWebhookTarget(

@@ -1,4 +1,4 @@
-import { MessageFlags, type ChatInputCommandInteraction, type InteractionEditReplyOptions } from "discord.js";
+import type { ChatInputCommandInteraction, InteractionEditReplyOptions } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { resolvePersonaSnippet } from "@/utils/text/personaPrompt";
@@ -69,6 +69,7 @@ import { handlePersonalConfigProfileWrites } from "@/utils/discord/interactions/
 import { handlePersonalConfigModelRoutes } from "@/utils/discord/interactions/personalConfigModelRoutes";
 import { handlePersonalConfigResponseRoutes } from "@/utils/discord/interactions/personalConfigResponseRoutes";
 import { handlePersonalConfigSpotlightRoutes } from "@/utils/discord/interactions/personalConfigSpotlightRoutes";
+import { replyPanelReceipt } from "@/utils/discord/ui/panel";
 
 const defaultDependencies: PersonalConfigRouteDependencies = {
   resolveScope,
@@ -264,9 +265,10 @@ export const identityConfigInteractionRoute: GlobalInteractionRoute = {
         (!interaction.isStringSelectMenu() ||
           !["general", "persona", "appearance"].includes(interaction.values[0] ?? "")))
     ) {
-      await interaction.reply({
-        content: localizer(interaction.locale, "commands.personal.config.unavailable"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(interaction.locale, "general.panel_notice.unavailable_heading"),
+        detail: localizer(interaction.locale, "commands.personal.config.unavailable"),
       });
       return;
     }

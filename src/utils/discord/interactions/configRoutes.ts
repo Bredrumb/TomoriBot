@@ -160,7 +160,6 @@ import {
 import {
   deniedReceipt,
   missingScopeMessageKey,
-  outdatedConfigPanelMessage,
   repaint,
   resolveSelectedPersona,
   staleReceipt,
@@ -176,6 +175,8 @@ import {
   type ConfigPersonaMemoryView,
   type ConfigRouteDependencies,
   type ConfigScope,
+  missingScopeReceipt,
+  outdatedConfigPanelReceipt,
 } from "@/utils/discord/interactions/configRouteContext";
 import type { GlobalInteractionRoute, GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
 import type { ConfigPanelView } from "@/utils/discord/ui/configPanel";
@@ -271,6 +272,7 @@ import { mcpConfigOperations } from "@/utils/mcp/mcpConfigOperations";
 import { startMcpSignIn } from "@/utils/mcp/oauth/signIn";
 import { handleConfigMcpModalOpen, handleConfigMcpRoutes } from "@/utils/discord/interactions/configMcpRoutes";
 import { handleConfigStPresetsRoute } from "@/utils/discord/interactions/configStPresetsRoutes";
+import { replyPanelReceipt } from "@/utils/discord/ui/panel";
 
 const MODAL_OPEN_ACTIONS = new Set<ConfigPanelRoute["action"]>([
   "avatar-open",
@@ -845,39 +847,31 @@ async function handleModalOpen(
   actor: ConfigActor,
 ): Promise<void> {
   if (!isConfigRouteAuthorized(route, actor)) {
-    await interaction.reply({
-      content: localizer(route.locale, "commands.config.panel.denied_detail"),
-      flags: MessageFlags.Ephemeral,
+    await replyPanelReceipt(interaction, {
+      tone: "error",
+      heading: localizer(route.locale, "commands.config.panel.denied_heading"),
+      detail: localizer(route.locale, "commands.config.panel.denied_detail"),
     });
     return;
   }
 
   const scope = await dependencies.resolveScope(interaction, false);
   if (!scope) {
-    await interaction.reply({
-      content: localizer(route.locale, missingScopeMessageKey(interaction, dependencies)),
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyPanelReceipt(interaction, missingScopeReceipt(route.locale, interaction, dependencies));
     return;
   }
 
   const { personaId } = personaLocation(route);
   const persona = findExactPersona(scope.personas, personaId);
   if (!persona?.persona_id) {
-    await interaction.reply({
-      content: outdatedConfigPanelMessage(route.locale),
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyPanelReceipt(interaction, outdatedConfigPanelReceipt(route.locale));
     return;
   }
 
   const locale = route.locale;
   if (!(await authorizeCollectionOperation(interaction, scope, collectionOperationForRoute(route)))) {
     const denied = deniedReceipt(locale);
-    await interaction.reply({
-      content: `${denied.heading}\n${denied.detail}`,
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyPanelReceipt(interaction, denied);
     return;
   }
 
@@ -887,9 +881,10 @@ async function handleModalOpen(
     case "stm-edit-open": {
       const memoryView = await dependencies.loadPersonaMemoryView(interaction, scope, persona);
       if (!memoryView.channelId) {
-        await interaction.reply({
-          content: localizer(locale, "commands.config.panel.stm_no_channel"),
-          flags: MessageFlags.Ephemeral,
+        await replyPanelReceipt(interaction, {
+          tone: "info",
+          heading: localizer(locale, "general.panel_notice.empty_heading"),
+          detail: localizer(locale, "commands.config.panel.stm_no_channel"),
         });
         return;
       }
@@ -905,9 +900,10 @@ async function handleModalOpen(
         .filter(hasManageableReason)
         .slice(0, CONFIG_CONDITIONING_CHECKBOX_CAPACITY);
       if (presentedGroups.length === 0) {
-        await interaction.reply({
-          content: localizer(locale, "commands.config.panel.conditioning_no_groups_detail"),
-          flags: MessageFlags.Ephemeral,
+        await replyPanelReceipt(interaction, {
+          tone: "info",
+          heading: localizer(locale, "general.panel_notice.empty_heading"),
+          detail: localizer(locale, "commands.config.panel.conditioning_no_groups_detail"),
         });
         return;
       }
@@ -968,7 +964,7 @@ async function handleModalOpen(
       const sprite = resolveSpriteAtIndex(sprites, persona.persona_id, route.index, route.fp);
       if (!sprite) {
         const stale = staleReceipt(locale);
-        await interaction.reply({ content: `${stale.heading}\n${stale.detail}`, flags: MessageFlags.Ephemeral });
+        await replyPanelReceipt(interaction, stale);
         return;
       }
       await dependencies.showModal(
@@ -999,9 +995,10 @@ async function handleModalOpen(
     case "trigger-remove-open": {
       const triggerWords = persona.trigger_words ?? [];
       if (triggerWords.length === 0) {
-        await interaction.reply({
-          content: localizer(locale, "commands.config.panel.trigger_remove_none_detail"),
-          flags: MessageFlags.Ephemeral,
+        await replyPanelReceipt(interaction, {
+          tone: "info",
+          heading: localizer(locale, "general.panel_notice.no_changes_heading"),
+          detail: localizer(locale, "commands.config.panel.trigger_remove_none_detail"),
         });
         return;
       }
@@ -1027,7 +1024,7 @@ async function handleModalOpen(
         computeAttributeFingerprint(persona.persona_id, route.index, attribute, isPublic) !== route.fp
       ) {
         const stale = staleReceipt(locale);
-        await interaction.reply({ content: `${stale.heading}\n${stale.detail}`, flags: MessageFlags.Ephemeral });
+        await replyPanelReceipt(interaction, stale);
         return;
       }
       await dependencies.showModal(
@@ -1039,7 +1036,7 @@ async function handleModalOpen(
     case "dialogue-edit-open": {
       if (!(await repairDialogueState(scope, persona, dependencies))) {
         const stale = staleReceipt(locale);
-        await interaction.reply({ content: `${stale.heading}\n${stale.detail}`, flags: MessageFlags.Ephemeral });
+        await replyPanelReceipt(interaction, stale);
         return;
       }
       const input = persona.sample_dialogues_in?.[route.index];
@@ -1050,7 +1047,7 @@ async function handleModalOpen(
         computeDialogueFingerprint(persona.persona_id, route.index, input, output) !== route.fp
       ) {
         const stale = staleReceipt(locale);
-        await interaction.reply({ content: `${stale.heading}\n${stale.detail}`, flags: MessageFlags.Ephemeral });
+        await replyPanelReceipt(interaction, stale);
         return;
       }
       await dependencies.showModal(
@@ -1069,34 +1066,29 @@ async function handleCollectionAddSelection(
   actor: ConfigActor,
 ): Promise<void> {
   if (!isConfigRouteAuthorized(route, actor)) {
-    await interaction.reply({
-      content: localizer(route.locale, "commands.config.panel.denied_detail"),
-      flags: MessageFlags.Ephemeral,
+    await replyPanelReceipt(interaction, {
+      tone: "error",
+      heading: localizer(route.locale, "commands.config.panel.denied_heading"),
+      detail: localizer(route.locale, "commands.config.panel.denied_detail"),
     });
     return;
   }
 
   const scope = await dependencies.resolveScope(interaction, false);
   if (!scope) {
-    await interaction.reply({
-      content: localizer(route.locale, missingScopeMessageKey(interaction, dependencies)),
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyPanelReceipt(interaction, missingScopeReceipt(route.locale, interaction, dependencies));
     return;
   }
   const operation = collectionOperationForRoute(route, "add");
   if (!(await authorizeCollectionOperation(interaction, scope, operation))) {
     const denied = deniedReceipt(route.locale);
-    await interaction.reply({ content: `${denied.heading}\n${denied.detail}`, flags: MessageFlags.Ephemeral });
+    await replyPanelReceipt(interaction, denied);
     return;
   }
 
   const persona = findExactPersona(scope.personas, personaLocation(route).personaId);
   if (!persona?.persona_id) {
-    await interaction.reply({
-      content: outdatedConfigPanelMessage(route.locale),
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyPanelReceipt(interaction, outdatedConfigPanelReceipt(route.locale));
     return;
   }
 
@@ -1116,28 +1108,23 @@ async function handleSpriteAddSelection(
   actor: ConfigActor,
 ): Promise<void> {
   if (resolvePersonaSpritesActionState("add", actor) !== "enabled") {
-    await interaction.reply({
-      content: localizer(route.locale, "commands.config.panel.denied_detail"),
-      flags: MessageFlags.Ephemeral,
+    await replyPanelReceipt(interaction, {
+      tone: "error",
+      heading: localizer(route.locale, "commands.config.panel.denied_heading"),
+      detail: localizer(route.locale, "commands.config.panel.denied_detail"),
     });
     return;
   }
 
   const scope = await dependencies.resolveScope(interaction, false);
   if (!scope) {
-    await interaction.reply({
-      content: localizer(route.locale, missingScopeMessageKey(interaction, dependencies)),
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyPanelReceipt(interaction, missingScopeReceipt(route.locale, interaction, dependencies));
     return;
   }
 
   const persona = findExactPersona(scope.personas, personaLocation(route).personaId);
   if (!persona?.persona_id) {
-    await interaction.reply({
-      content: outdatedConfigPanelMessage(route.locale),
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyPanelReceipt(interaction, outdatedConfigPanelReceipt(route.locale));
     return;
   }
 
@@ -1262,28 +1249,23 @@ async function handleTextOverrideModelModalOpen(
   actor: ConfigActor,
 ): Promise<void> {
   if (!isConfigRouteAuthorized(route, actor)) {
-    await interaction.reply({
-      content: localizer(route.locale, "commands.config.panel.denied_detail"),
-      flags: MessageFlags.Ephemeral,
+    await replyPanelReceipt(interaction, {
+      tone: "error",
+      heading: localizer(route.locale, "commands.config.panel.denied_heading"),
+      detail: localizer(route.locale, "commands.config.panel.denied_detail"),
     });
     return;
   }
 
   const scope = await dependencies.resolveScope(interaction, false);
   if (!scope) {
-    await interaction.reply({
-      content: localizer(route.locale, missingScopeMessageKey(interaction, dependencies)),
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyPanelReceipt(interaction, missingScopeReceipt(route.locale, interaction, dependencies));
     return;
   }
 
   const persona = findExactPersona(scope.personas, route.personaId);
   if (!persona?.persona_id) {
-    await interaction.reply({
-      content: outdatedConfigPanelMessage(route.locale),
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyPanelReceipt(interaction, outdatedConfigPanelReceipt(route.locale));
     return;
   }
 
@@ -1311,18 +1293,20 @@ async function handleTextOverrideModelModalOpen(
     (saved) => saved.provider.toLowerCase() === selectedProvider?.toLowerCase(),
   )?.provider;
   if (!provider) {
-    await interaction.reply({
-      content: localizer(route.locale, "commands.config.panel.stale_detail"),
-      flags: MessageFlags.Ephemeral,
+    await replyPanelReceipt(interaction, {
+      tone: "warning",
+      heading: localizer(route.locale, "commands.config.panel.stale_heading"),
+      detail: localizer(route.locale, "commands.config.panel.stale_detail"),
     });
     return;
   }
 
   const models = await dependencies.loadPersonaTextModels(provider, persona.server_id);
   if (models.length === 0) {
-    await interaction.reply({
-      content: localizer(route.locale, "commands.model.text.no_models_description"),
-      flags: MessageFlags.Ephemeral,
+    await replyPanelReceipt(interaction, {
+      tone: "error",
+      heading: localizer(route.locale, "commands.model.text.no_models_title"),
+      detail: localizer(route.locale, "commands.model.text.no_models_description"),
     });
     return;
   }

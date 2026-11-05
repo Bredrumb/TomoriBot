@@ -26,7 +26,7 @@ import { BUILTIN_IDLE_NUDGES, customIdleNudgeDefinition } from "@/modules/natura
 import { parseInteractionRoute, type GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { createCustomIdleNudge, createLlmRow, createPersona } from "../../helpers/fixtures";
-import { localizedCopy, localizedProse } from "../../helpers/localeCases";
+import { localizedProse } from "../../helpers/localeCases";
 import { collectTextDisplays } from "../../helpers/panelLimits";
 import { createRouteInteraction } from "../../helpers/routeInteraction";
 
@@ -133,8 +133,8 @@ describe("Nudge Studio routes", () => {
     const h = harness();
     const interaction = await h.dispatch({ ...base, action: "remove-open" }, "button", { isManager: false });
     expect(h.showModal).not.toHaveBeenCalled();
-    expect(JSON.stringify(interaction.replies)).toContain(
-      localizedCopy("en-US", "general.errors.permission_denied_description"),
+    expect(collectTextDisplays(interaction.replies).join("\n")).toMatch(
+      localizedProse("en-US", "general.errors.permission_denied_description"),
     );
   });
 

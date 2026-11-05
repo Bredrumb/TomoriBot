@@ -1,4 +1,5 @@
-import { ChannelType, MessageFlags, type ModalSubmitInteraction } from "discord.js";
+import type { PanelReceipt } from "@/types/discord/panel";
+import { ChannelType, type ModalSubmitInteraction } from "discord.js";
 import type { PanelAction } from "@/constants/panelActions";
 import {
   computeAutoTriggerFingerprint,
@@ -18,12 +19,12 @@ import {
 import {
   repaint,
   staleReceipt,
-  missingScopeMessageKey,
-  outdatedConfigPanelMessage,
   type ConfigRepaintOptions,
   type ConfigChannelsView,
   type ConfigRouteDependencies,
   type ConfigScope,
+  missingScopeReceipt,
+  outdatedConfigPanelReceipt,
 } from "@/utils/discord/interactions/configRouteContext";
 import type { GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
 import {
@@ -65,6 +66,7 @@ import type { AutochatPersonaOverride, ChannelPromptMode, TomoriState } from "@/
 import { combineModalPromptParts } from "@/utils/text/modalPromptParts";
 import type { ConfigPanelView } from "@/utils/discord/ui/configPanel";
 import { CONTEXT_NOTE_DEPTH_MAX, CONTEXT_NOTE_MAX_LENGTH } from "@/utils/discord/contextNoteOptions";
+import { replyPanelReceipt } from "@/utils/discord/ui/panel";
 
 export const CONFIG_CHANNEL_MODAL_OPEN_ACTIONS = new Set<ConfigPanelRoute["action"]>([
   "channels-log-open",
@@ -162,7 +164,7 @@ function receipt(
   tone: "success" | "info" | "warning" | "error",
   headingKey: string,
   detailKey: string,
-): ConfigRepaintOptions["receipt"] {
+): PanelReceipt {
   return {
     tone,
     heading: localizer(locale, headingKey),
@@ -170,7 +172,7 @@ function receipt(
   };
 }
 
-function invalid(locale: string, detailKey: string): ConfigRepaintOptions["receipt"] {
+function invalid(locale: string, detailKey: string): PanelReceipt {
   return receipt(locale, "error", "commands.config.panel.channels_invalid_input_heading", detailKey);
 }
 
@@ -358,11 +360,6 @@ function modalTextValue(submitted: ModalSubmitInteraction, fieldId: string): str
   return submitted.fields.fields.has(fieldId) ? submitted.fields.getTextInputValue(fieldId) : "";
 }
 
-function overridesInvalidReply(locale: string, detailKey: string) {
-  const value = invalid(locale, detailKey);
-  return `${value?.heading ?? ""}\n${value?.detail ?? ""}`;
-}
-
 type ChannelWriteOutcome = {
   receipt: ConfigRepaintOptions["receipt"];
   telemetry?: PanelAction;
@@ -487,13 +484,16 @@ async function openChannelRulesModal(
   const collection = channelRulesCollection(route.action);
   const availableChannels = channelRulesAvailable(view, collection);
   if (availableChannels.length === 0) {
-    const content =
+    const detailKey =
       collection === "private"
-        ? localizer(route.locale, "commands.config.panel.channels_rules_private_no_channels")
+        ? "commands.config.panel.channels_rules_private_no_channels"
         : collection === "roleplay"
-          ? localizer(route.locale, "commands.config.panel.channels_rules_roleplay_no_channels")
-          : localizer(route.locale, "commands.config.panel.channels_rules_blocklist_no_channels");
-    await interaction.reply({ content, flags: MessageFlags.Ephemeral });
+          ? "commands.config.panel.channels_rules_roleplay_no_channels"
+          : "commands.config.panel.channels_rules_blocklist_no_channels";
+    await replyPanelReceipt(
+      interaction,
+      receipt(route.locale, "info", "general.panel_notice.empty_heading", detailKey),
+    );
     return;
   }
 
@@ -1551,27 +1551,22 @@ export async function handleConfigChannelModalOpen(
 ): Promise<boolean> {
   if (!CONFIG_CHANNEL_MODAL_OPEN_ACTIONS.has(route.action)) return false;
   if (!isConfigRouteAuthorized(route, actor)) {
-    await interaction.reply({
-      content: localizer(route.locale, "commands.config.panel.denied_detail"),
-      flags: MessageFlags.Ephemeral,
+    await replyPanelReceipt(interaction, {
+      tone: "error",
+      heading: localizer(route.locale, "commands.config.panel.denied_heading"),
+      detail: localizer(route.locale, "commands.config.panel.denied_detail"),
     });
     return true;
   }
 
   const scope = await dependencies.resolveScope(interaction, false);
   if (!scope) {
-    await interaction.reply({
-      content: localizer(route.locale, missingScopeMessageKey(interaction, dependencies)),
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyPanelReceipt(interaction, missingScopeReceipt(route.locale, interaction, dependencies));
     return true;
   }
   const state = stateFromScope(scope);
   if (!state) {
-    await interaction.reply({
-      content: outdatedConfigPanelMessage(route.locale),
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyPanelReceipt(interaction, outdatedConfigPanelReceipt(route.locale));
     return true;
   }
 
@@ -1583,17 +1578,18 @@ export async function handleConfigChannelModalOpen(
     const view = await dependencies.loadChannelsView(interaction, route.channelId);
     const target = channelOverrideTarget(view, route.channelId, CHANNEL_OVERRIDE_TYPES);
     if (!target) {
-      await interaction.reply({
-        content: overridesInvalidReply(route.locale, "commands.config.panel.channels_overrides_invalid_channel_detail"),
-        flags: MessageFlags.Ephemeral,
-      });
+      await replyPanelReceipt(
+        interaction,
+        invalid(route.locale, "commands.config.panel.channels_overrides_invalid_channel_detail"),
+      );
       return true;
     }
     const fp = channelOverridesFingerprint(state, target.id, view);
     if (route.fp !== fp) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.config.panel.stale_detail"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "commands.config.panel.stale_heading"),
+        detail: localizer(route.locale, "commands.config.panel.stale_detail"),
       });
       return true;
     }
@@ -1609,18 +1605,20 @@ export async function handleConfigChannelModalOpen(
       (saved) => saved.provider.toLowerCase() === submittedProvider.toLowerCase(),
     )?.provider;
     if (!provider) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.config.panel.stale_detail"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "commands.config.panel.stale_heading"),
+        detail: localizer(route.locale, "commands.config.panel.stale_detail"),
       });
       return true;
     }
 
     const models = await dependencies.loadPersonaTextModels(provider, state.server_id);
     if (models.length === 0) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.model.text.no_models_description"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "error",
+        heading: localizer(route.locale, "commands.model.text.no_models_title"),
+        detail: localizer(route.locale, "commands.model.text.no_models_description"),
       });
       return true;
     }
@@ -1646,9 +1644,10 @@ export async function handleConfigChannelModalOpen(
       const pageCount = Math.ceil(models.length / CONFIG_MODEL_PAGE_SIZE);
       const rangePageIndex = Number.parseInt(selectedRangeValue.slice("__range__".length), 10);
       if (!Number.isInteger(rangePageIndex) || rangePageIndex < 0 || rangePageIndex >= pageCount) {
-        await interaction.reply({
-          content: localizer(route.locale, "commands.config.panel.stale_detail"),
-          flags: MessageFlags.Ephemeral,
+        await replyPanelReceipt(interaction, {
+          tone: "warning",
+          heading: localizer(route.locale, "commands.config.panel.stale_heading"),
+          detail: localizer(route.locale, "commands.config.panel.stale_detail"),
         });
         return true;
       }
@@ -1669,9 +1668,10 @@ export async function handleConfigChannelModalOpen(
       requestedStart % CONFIG_MODEL_PAGE_SIZE !== 0 ||
       requestedStart >= models.length
     ) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.config.panel.stale_detail"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "commands.config.panel.stale_heading"),
+        detail: localizer(route.locale, "commands.config.panel.stale_detail"),
       });
       return true;
     }
@@ -1695,10 +1695,10 @@ export async function handleConfigChannelModalOpen(
     const view = await dependencies.loadChannelsView(interaction, route.channelId);
     const target = channelOverrideTarget(view, route.channelId, CHANNEL_OVERRIDE_TYPES);
     if (!target) {
-      await interaction.reply({
-        content: overridesInvalidReply(route.locale, "commands.config.panel.channels_overrides_invalid_channel_detail"),
-        flags: MessageFlags.Ephemeral,
-      });
+      await replyPanelReceipt(
+        interaction,
+        invalid(route.locale, "commands.config.panel.channels_overrides_invalid_channel_detail"),
+      );
       return true;
     }
     const fp = channelOverridesFingerprint(state, target.id, view);
@@ -1745,9 +1745,10 @@ export async function handleConfigChannelModalOpen(
     const channelsView = await dependencies.loadChannelsView(interaction);
     const availableChannels = channelsView.availableTextChannels;
     if (availableChannels.length === 0) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.config.panel.channels_auto_trigger_no_channels"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "info",
+        heading: localizer(route.locale, "general.panel_notice.empty_heading"),
+        detail: localizer(route.locale, "commands.config.panel.channels_auto_trigger_no_channels"),
       });
       return true;
     }
@@ -1771,18 +1772,20 @@ export async function handleConfigChannelModalOpen(
   } else if (route.action === "channels-autoch-configure-open" || route.action === "channels-autoch-range-select") {
     const channelsView = await dependencies.loadChannelsView(interaction);
     if (channelsView.availableTextChannels.length === 0) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.config.panel.channels_auto_trigger_no_channels"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "info",
+        heading: localizer(route.locale, "general.panel_notice.empty_heading"),
+        detail: localizer(route.locale, "commands.config.panel.channels_auto_trigger_no_channels"),
       });
       return true;
     }
     // Its persona select carries no Random entry, so an empty roster would build a zero-option
     // select and Discord would reject the whole modal rather than the one control.
     if (scope.personas.length === 0) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.config.panel.no_personas"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "info",
+        heading: localizer(route.locale, "general.panel_notice.empty_heading"),
+        detail: localizer(route.locale, "commands.config.panel.no_personas"),
       });
       return true;
     }

@@ -47,7 +47,7 @@ import {
   withPersonaPanelAvatar,
 } from "@/utils/discord/personaPanelAvatar";
 import { showRoutedRawModal, takeRawModalFileUpload } from "@/utils/discord/ui/modals";
-import { buildPanelContainer } from "@/utils/discord/ui/panel";
+import { buildPanelContainer, replyPanelReceipt } from "@/utils/discord/ui/panel";
 import { getMemoryLimits, validateMemoryContent } from "@/utils/misc/memoryLimits";
 import {
   dedupeCaseInsensitive,
@@ -609,9 +609,10 @@ export function createPersonalMemoriesInteractionRoute(
         if (selectedValue === "action:add") {
           const cachedScope = await dependencies.resolveScope(interaction, false);
           if (cachedScope && cachedScope.privacyLevel === PrivacyLevel.FULL) {
-            await interaction.reply({
-              content: localizer(route.locale, "commands.personal.memories.privacy_blocked_error_detail"),
-              flags: MessageFlags.Ephemeral,
+            await replyPanelReceipt(interaction, {
+              tone: "error",
+              heading: localizer(route.locale, "commands.personal.memories.privacy_blocked_error_heading"),
+              detail: localizer(route.locale, "commands.personal.memories.privacy_blocked_error_detail"),
             });
             return;
           }
@@ -627,16 +628,18 @@ export function createPersonalMemoriesInteractionRoute(
         }
         const cachedScope = await dependencies.resolveScope(interaction, false);
         if (cachedScope && cachedScope.privacyLevel === PrivacyLevel.FULL) {
-          await interaction.reply({
-            content: localizer(route.locale, "commands.personal.memories.privacy_blocked_error_detail"),
-            flags: MessageFlags.Ephemeral,
+          await replyPanelReceipt(interaction, {
+            tone: "error",
+            heading: localizer(route.locale, "commands.personal.memories.privacy_blocked_error_heading"),
+            detail: localizer(route.locale, "commands.personal.memories.privacy_blocked_error_detail"),
           });
           return;
         }
         if (!cachedScope) {
-          await interaction.reply({
-            content: localizer(route.locale, "commands.personal.memories.unavailable"),
-            flags: MessageFlags.Ephemeral,
+          await replyPanelReceipt(interaction, {
+            tone: "warning",
+            heading: localizer(route.locale, "general.panel_notice.unavailable_heading"),
+            detail: localizer(route.locale, "commands.personal.memories.unavailable"),
           });
           return;
         }
@@ -1170,18 +1173,20 @@ export const identityMemoriesInteractionRoute: GlobalInteractionRoute = {
     const managedRoute = parseManagedIdentityRoute(parsed, PERSONAL_MEMORIES_ROUTE_VERSION);
     const route = managedRoute && parsePersonalMemoriesPanelRoute(managedRoute.original);
     if (!managedRoute || !route || route.action === "stm-clear") {
-      await interaction.reply({
-        content: localizer(interaction.locale, "commands.personal.memories.unavailable"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(interaction.locale, "general.panel_notice.unavailable_heading"),
+        detail: localizer(interaction.locale, "commands.personal.memories.unavailable"),
       });
       return;
     }
     const identityId = managedRoute.identityId;
     const managed = await messageProxyRepository.getManagedIdentity(interaction.user.id, identityId);
     if (!managed) {
-      await interaction.reply({
-        content: localizer(interaction.locale, "commands.personal.memories.unavailable"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(interaction.locale, "general.panel_notice.unavailable_heading"),
+        detail: localizer(interaction.locale, "commands.personal.memories.unavailable"),
       });
       return;
     }
@@ -1189,9 +1194,10 @@ export const identityMemoriesInteractionRoute: GlobalInteractionRoute = {
       (route.action === "add-submit" || route.action === "edit-submit") &&
       (await userRepository.getPrivacyLevel(interaction.user.id)) === PrivacyLevel.FULL
     ) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.memories.privacy_blocked_error_detail"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "error",
+        heading: localizer(route.locale, "commands.personal.memories.privacy_blocked_error_heading"),
+        detail: localizer(route.locale, "commands.personal.memories.privacy_blocked_error_detail"),
       });
       return;
     }

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
-import { MessageFlags, type ButtonInteraction, type Message, type ModalBuilder } from "discord.js";
+import { MessageFlags, type ButtonInteraction, type EmbedBuilder, type Message, type ModalBuilder } from "discord.js";
 import * as userCache from "@/utils/cache/userCache";
 import {
   attachTextDisplayModalCollector,
@@ -56,10 +56,11 @@ describe("text display modal", () => {
     await collect({ locale: "en-US", user: { id: "viewer-1" }, reply, showModal } as unknown as ButtonInteraction);
 
     expect(showModal).not.toHaveBeenCalled();
-    expect(reply.mock.calls[0]?.[0]).toEqual({
-      content: localizedCopy("en-US", "genai.error_detail.manage_server_only"),
-      flags: MessageFlags.Ephemeral,
-    });
+    const payload = reply.mock.calls[0]?.[0] as { embeds: EmbedBuilder[]; flags: number };
+    expect(payload.flags).toBe(MessageFlags.Ephemeral);
+    expect(payload.embeds[0].toJSON().description).toBe(
+      localizedCopy("en-US", "genai.error_detail.manage_server_only"),
+    );
   });
 
   it("renders the modal in the presser's saved language rather than their Discord language", async () => {

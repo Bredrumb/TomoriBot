@@ -1,6 +1,16 @@
 export default {
   general: {
+    restarting_title: `正在重新啟動`,
     restarting: `TomoriBot 正在重新啟動。請稍後再試。`,
+    panel_notice: {
+      outdated_heading: `面板已過期`,
+      unavailable_heading: `無法使用`,
+      empty_heading: `目前無內容`,
+      no_changes_heading: `無變更`,
+      limit_heading: `已達上限`,
+      not_available_heading: `無法使用`,
+      invalid_heading: `無效的選項`,
+    },
     oauth: {
       invalid_callback: `此登入連結無效或已過期。請從TomoriBot重新發起登入。`,
       server_error: `由於服務錯誤，TomoriBot無法完成登入。請稍後再試。`,

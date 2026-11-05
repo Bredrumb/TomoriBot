@@ -55,6 +55,7 @@ import {
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 import { TOOL_NOTICE_DEFINITIONS } from "@/constants/toolNotices";
 import { localizedCopy, localizedProse } from "../../helpers/localeCases";
+import { collectTextDisplays } from "../../helpers/panelLimits";
 import {
   createInteractionRecorder,
   createRouteInteraction,
@@ -378,7 +379,9 @@ describe("config Behavior routes", () => {
     await dispatchGlobalInteraction(CLIENT, staleInteraction as unknown as GlobalRoutableInteraction);
 
     expect(harness.replies).toHaveLength(1);
-    expect((harness.replies[0] as { content?: string }).content).toContain("out of date");
+    expect(collectTextDisplays(harness.replies[0]).join("\n")).toMatch(
+      localizedProse("en-US", "commands.config.panel.outdated_panel", { command: "/config" }),
+    );
   });
 
   it("writes Self-Debug through the real route and repaints Context Additions", async () => {
@@ -646,8 +649,8 @@ describe("config Behavior routes", () => {
     for (const action of ["behavior-prompt-open", "behavior-preset-open"] as const) {
       const interaction = makeInteraction(harness, buildConfigRouteId({ action, locale: "en-US" }));
       await dispatch(harness, interaction);
-      expect(JSON.stringify(harness.replies.at(-1))).toContain(
-        localizedCopy("en-US", "commands.config.panel.system_prompt_st_preset_locked_detail"),
+      expect(collectTextDisplays(harness.replies.at(-1)).join("\n")).toMatch(
+        localizedProse("en-US", "commands.config.panel.system_prompt_st_preset_locked_detail"),
       );
     }
     await dispatch(

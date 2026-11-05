@@ -3,6 +3,7 @@ import {
   ButtonBuilder,
   ButtonStyle,
   ComponentType,
+  EmbedBuilder,
   MessageFlags,
   ModalBuilder,
   TextDisplayBuilder,
@@ -11,7 +12,8 @@ import {
 } from "discord.js";
 import type { TextDisplayModalAccess } from "@/types/discord/embed";
 import { resolveUserLocale } from "@/utils/discord/interactionLocale";
-import { log } from "@/utils/misc/logger";
+import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
+import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
 const MODAL_TITLE_LIMIT = 45;
@@ -101,7 +103,12 @@ export function attachTextDisplayModalCollector({
       const locale = await resolveUserLocale(interaction);
       if (access && !access.canOpen(interaction)) {
         await interaction.reply({
-          content: localizer(locale, access.deniedKey),
+          embeds: [
+            new EmbedBuilder()
+              .setTitle(localizedStatusTitle(locale, "general.errors.permission_denied_title", ColorCode.ERROR))
+              .setDescription(localizer(locale, access.deniedKey))
+              .setColor(ColorCode.ERROR),
+          ],
           flags: MessageFlags.Ephemeral,
         });
         return;

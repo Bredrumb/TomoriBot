@@ -112,6 +112,7 @@ import { escapeDiscordMarkdown } from "@/utils/text/discordMarkdown";
 import { recordPanelActionStat } from "@/utils/stats/panelActionMetrics";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed, replySummaryEmbed } from "@/utils/discord/interactionHelper";
+import { buildPanelReceiptMessage, replyPanelReceipt } from "@/utils/discord/ui/panel";
 
 function parseNumCtxField(value: string | undefined): number | null {
   if (!value) return null;
@@ -1286,9 +1287,13 @@ export async function startSetupWizard(
     : !interaction.guildId || (interaction.memberPermissions?.has(PermissionsBitField.Flags.ManageGuild) ?? false);
 
   if (!isAuthorized) {
-    await interaction.editReply({
-      content: localizer(locale, "commands.setup.wizard.permission_denied"),
-    });
+    await interaction.editReply(
+      buildPanelReceiptMessage({
+        tone: "error",
+        heading: localizer(locale, "commands.config.panel.denied_heading"),
+        detail: localizer(locale, "commands.setup.wizard.permission_denied"),
+      }),
+    );
     return;
   }
 
@@ -1348,9 +1353,10 @@ export const setupInteractionRoute: GlobalInteractionRoute = {
 
     if (readResult.status === "forbidden") {
       if (!interaction.replied && !interaction.deferred) {
-        await interaction.reply({
-          content: localizer(locale, "commands.setup.wizard.forbidden"),
-          flags: MessageFlags.Ephemeral,
+        await replyPanelReceipt(interaction, {
+          tone: "error",
+          heading: localizer(locale, "commands.config.panel.denied_heading"),
+          detail: localizer(locale, "commands.setup.wizard.forbidden"),
         });
       }
       return;
@@ -1374,9 +1380,10 @@ export const setupInteractionRoute: GlobalInteractionRoute = {
       const isAuthorized = interaction.memberPermissions?.has(PermissionsBitField.Flags.ManageGuild) ?? false;
       if (!isAuthorized) {
         if (!interaction.replied && !interaction.deferred) {
-          await interaction.reply({
-            content: localizer(locale, "commands.setup.wizard.permission_denied"),
-            flags: MessageFlags.Ephemeral,
+          await replyPanelReceipt(interaction, {
+            tone: "error",
+            heading: localizer(locale, "commands.config.panel.denied_heading"),
+            detail: localizer(locale, "commands.setup.wizard.permission_denied"),
           });
         }
         return;
@@ -1385,9 +1392,10 @@ export const setupInteractionRoute: GlobalInteractionRoute = {
 
     if (isHostedPolicyEnvironment() !== draft.requiresPolicies) {
       if (!interaction.replied && !interaction.deferred) {
-        await interaction.reply({
-          content: localizer(locale, "commands.setup.wizard.env_mismatch"),
-          flags: MessageFlags.Ephemeral,
+        await replyPanelReceipt(interaction, {
+          tone: "warning",
+          heading: localizer(locale, "commands.config.panel.stale_heading"),
+          detail: localizer(locale, "commands.setup.wizard.env_mismatch"),
         });
       }
       return;
@@ -1411,9 +1419,10 @@ export const setupInteractionRoute: GlobalInteractionRoute = {
         // interaction surfaces as a failed interaction in the client.
         if (!draft.requiresPolicies) {
           if (!interaction.replied && !interaction.deferred) {
-            await interaction.reply({
-              content: localizer(locale, "commands.setup.wizard.policies_denied"),
-              flags: MessageFlags.Ephemeral,
+            await replyPanelReceipt(interaction, {
+              tone: "warning",
+              heading: localizer(locale, "general.panel_notice.not_available_heading"),
+              detail: localizer(locale, "commands.setup.wizard.policies_denied"),
             });
           }
           return;
@@ -1600,9 +1609,10 @@ export const setupInteractionRoute: GlobalInteractionRoute = {
           const setup = selectedOption.setup;
           if (!setup || (setup.available && !setup.available({ context }))) {
             if (!interaction.replied && !interaction.deferred) {
-              await interaction.reply({
-                content: localizer(locale, "commands.setup.wizard.provider_invalid"),
-                flags: MessageFlags.Ephemeral,
+              await replyPanelReceipt(interaction, {
+                tone: "warning",
+                heading: localizer(locale, "general.panel_notice.invalid_heading"),
+                detail: localizer(locale, "commands.setup.wizard.provider_invalid"),
               });
             }
             return;
@@ -1644,9 +1654,10 @@ export const setupInteractionRoute: GlobalInteractionRoute = {
         if (selectedMode === "user-byok") {
           if (context === "dm") {
             if (!interaction.replied && !interaction.deferred) {
-              await interaction.reply({
-                content: localizer(locale, "commands.setup.wizard.provider_byok_guild_only"),
-                flags: MessageFlags.Ephemeral,
+              await replyPanelReceipt(interaction, {
+                tone: "warning",
+                heading: localizer(locale, "general.panel_notice.not_available_heading"),
+                detail: localizer(locale, "commands.setup.wizard.provider_byok_guild_only"),
               });
             }
             return;
@@ -1656,9 +1667,10 @@ export const setupInteractionRoute: GlobalInteractionRoute = {
           return;
         }
         if (!interaction.replied && !interaction.deferred) {
-          await interaction.reply({
-            content: localizer(locale, "commands.setup.wizard.provider_invalid"),
-            flags: MessageFlags.Ephemeral,
+          await replyPanelReceipt(interaction, {
+            tone: "warning",
+            heading: localizer(locale, "general.panel_notice.invalid_heading"),
+            detail: localizer(locale, "commands.setup.wizard.provider_invalid"),
           });
         }
         break;
@@ -1972,9 +1984,10 @@ export const setupInteractionRoute: GlobalInteractionRoute = {
         // permission, and captured environment, so this arm owns only the final-action gates.
         if (!isSetupDraftComplete(draft)) {
           if (!interaction.replied && !interaction.deferred) {
-            await interaction.reply({
-              content: localizer(locale, "commands.setup.wizard.finish_incomplete"),
-              flags: MessageFlags.Ephemeral,
+            await replyPanelReceipt(interaction, {
+              tone: "warning",
+              heading: localizer(locale, "general.panel_notice.not_available_heading"),
+              detail: localizer(locale, "commands.setup.wizard.finish_incomplete"),
             });
           }
           return;

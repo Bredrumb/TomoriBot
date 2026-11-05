@@ -3,6 +3,8 @@ export default {
     description: `Administra las memorias persistentes de recompensa y castigo.`,
     shared: {
       target_conflict_description: `Elige un usuario o una persona para esta interacción.`,
+      sent_title: `Enviado`,
+      sent_description: `Publicado en este canal con tu nombre.`,
       user_footer: `{bot} recordará esto.`,
       reward_footer: `❤️ {bot} recordará esto. Usa /conditioning para administrar.`,
       punish_footer: `💀 {bot} recordará esto. Usa /conditioning para administrar.`,

@@ -122,6 +122,8 @@ Sử dụng `/providers` để đăng ký endpoint và thiết lập model. Sau 
 
 Irodori mặc định giới hạn tham chiếu 120 giây và cắt ngắn các clip dài hơn. Đặt `IRODORI_MAX_REF_SECONDS` để thay đổi giới hạn này.
 
+Máy chủ mã hóa mỗi đoạn tham chiếu một lần và lưu kết quả trong `servers/tts/irodoritts/reference-cache/`, nhờ đó các yêu cầu lặp lại sẽ bỏ qua bước này. Việc thay thế clip của persona sẽ tạo một mục mới, và các mục cũ vẫn được giữ lại cho đến khi bạn xóa thư mục này.
+
 ### VoiceDesign
 
 1. Mở `/config` trong Persona > Voice.
@@ -154,6 +156,40 @@ $env:IRODORI_SWAY_COEFF = "-1.0"
 
 Đây là sự đánh đổi giữa chất lượng suy luận và tốc độ, vì vậy hãy thử nghiệm với checkpoint và giọng nói đã chọn trước khi thiết lập cố định.
 
+## Chế độ độ trễ thấp (NVIDIA)
+<!-- anchor: low-latency-mode-nvidia -->
+
+Chế độ độ trễ thấp giúp xử lý mỗi câu nhanh hơn khoảng 3-4 lần trên GPU NVIDIA với cùng 40 bước và cài đặt giọng nói, vì vậy chế độ này không phải đánh đổi chất lượng như Sway Sampling. Hãy bật tính năng này trong `.env`:
+
+```dotenv
+IRODORI_COMPILE_MODE="cudagraphs"
+```
+
+`cudagraphs` là chế độ nhanh nhất. `compile` nhanh hơn khoảng 2 lần so với mặc định; hãy thử chế độ này nếu `cudagraphs` hoạt động không ổn định trên GPU của bạn. Cả hai chế độ đều yêu cầu backend `cu128`, và máy chủ sẽ từ chối khởi động với một trong hai chế độ này trên các backend khác.
+
+Những điều cần lưu ý:
+
+- Máy chủ sẽ làm nóng (warm up) trước khi báo trạng thái sẵn sàng. Lần khởi động đầu tiên mất khoảng 2-4 phút; các lần khởi động sau mất khoảng 1-2 phút vì các kernel đã biên dịch được lưu đệm trên đĩa. `bun run launch --irodoritts` sẽ chờ tối đa 5 phút; trên GPU chậm hơn, hãy tăng giới hạn đó bằng `TOMORI_TTS_STARTUP_TIMEOUT_MS` (tính bằng mili-giây).
+- Yêu cầu đầu tiên với độ dài câu mới hoặc đoạn âm thanh giọng nói mới sẽ tốn thêm một phần nhỏ của giây, chỉ một lần duy nhất.
+- Lượng VRAM sử dụng giảm nhẹ.
+- Âm thanh không giống hệt từng bit so với chế độ mặc định đối với cùng một seed. Khi kiểm thử, âm thanh nghe tương đương, vì vậy hãy nghe thử vài câu với giọng nói của riêng bạn trước khi sử dụng chính thức.
+
+Trên Windows, chế độ này cũng cần trình biên dịch Microsoft C++:
+
+1. Cài đặt [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) cùng khối lượng công việc **Desktop development with C++**.
+2. Chạy lại `.\servers\tts\irodoritts\install-irodori.ps1 cu128` để gói Windows Triton được cài đặt.
+3. Khởi động máy chủ (hoặc `bun run launch --irodoritts`) từ **Developer PowerShell for VS**, hoặc tải trình biên dịch vào PowerShell thông thường trước:
+
+```powershell
+$vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+$vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+cmd /c "`"$vs\VC\Auxiliary\Build\vcvars64.bat`" >nul && set" | ForEach-Object {
+  if ($_ -match "^([^=]+)=(.*)$") { Set-Item -Path "Env:$($Matches[1])" -Value $Matches[2] }
+}
+```
+
+Nếu thiếu trình biên dịch hoặc Triton, máy chủ sẽ dừng khi khởi động và thông báo thành phần bị thiếu.
+
 ## Các biến môi trường
 
 | Biến | Mặc định | Mục đích |
@@ -166,8 +202,7 @@ $env:IRODORI_SWAY_COEFF = "-1.0"
 | `IRODORI_CODEC_DEVICE` | `auto` | Thiết bị codec |
 | `IRODORI_MODEL_PRECISION` | `bf16` trên CUDA, nếu không thì `fp32` | Độ chính xác của model |
 | `IRODORI_CODEC_PRECISION` | `fp32` | Độ chính xác của codec |
-| `IRODORI_COMPILE_MODEL` | `false` | Bật `torch.compile` cho model Irodori |
-| `IRODORI_COMPILE_DYNAMIC` | `false` | Bật hình dạng động khi biên dịch |
+| `IRODORI_COMPILE_MODE` | `off` | `off`, `compile`, hoặc `cudagraphs`; xem [Chế độ độ trễ thấp](#low-latency-mode-nvidia) |
 | `IRODORI_NUM_STEPS` | `40` | Các bước lấy mẫu Euler |
 | `IRODORI_T_SCHEDULE_MODE` | `linear` | Lịch lấy mẫu (`linear` hoặc `sway`) |
 | `IRODORI_SWAY_COEFF` | `-1.0` | Hệ số sway khi sử dụng lịch `sway` |

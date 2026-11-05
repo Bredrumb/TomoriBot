@@ -42,6 +42,7 @@ export default {
     fallback_used_personal_opt_out_footer: `Stop the server's model from covering your personal provider's failures in \`/personal config\` > Models > Fallbacks`,
     markdown_table: {
       show_button: `Show Markdown`,
+      source_expired_title: `Table Source Expired`,
       source_expired: `That table's markdown is no longer cached, so I can't show the source anymore.`,
       source_attached: `This table is too long to show inline, so here it is as a file:`,
     },

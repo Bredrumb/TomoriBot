@@ -1,9 +1,10 @@
-import { MessageFlags } from "discord.js";
 import type { ChatInputCommandInteraction, Client, SlashCommandBuilder } from "discord.js";
 import type { UserRow } from "@/types/db/schema";
 import { getLocaleEndonym, getSupportedLocales, localizer } from "@/utils/text/localizer";
-import { log } from "@/utils/misc/logger";
+import { ColorCode, log } from "@/utils/misc/logger";
 import { startSetupWizard } from "@/utils/discord/interactions/setupRoutes";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { buildPanelReceiptMessage, replyPanelReceipt } from "@/utils/discord/ui/panel";
 
 export const managerOnly = true;
 
@@ -49,9 +50,10 @@ export async function execute(
     const serverId = isDMChannel ? interaction.user.id : interaction.guild?.id;
 
     if (!serverId) {
-      await interaction.reply({
-        content: localizer(language, "general.errors.critical_error_description"),
-        flags: MessageFlags.Ephemeral,
+      await replyInfoEmbed(interaction, language, {
+        titleKey: "general.errors.unknown_error_title",
+        descriptionKey: "general.errors.critical_error_description",
+        color: ColorCode.ERROR,
       });
       return;
     }
@@ -59,16 +61,17 @@ export async function execute(
     await startSetupWizard(interaction, { locale: language });
   } catch (error) {
     log.error("Error during setup process:", error);
+    const errorReceipt = {
+      tone: "error",
+      heading: localizer(language, "general.errors.unknown_error_title"),
+      detail: localizer(language, "general.errors.unknown_error_description"),
+    } as const;
     try {
+      // A receipt card, not an embed, because this reply may already hold the Components V2 setup panel.
       if (interaction.deferred && !interaction.replied) {
-        await interaction.editReply({
-          content: localizer(language, "general.errors.unknown_error_description"),
-        });
+        await interaction.editReply(buildPanelReceiptMessage(errorReceipt));
       } else if (!interaction.replied) {
-        await interaction.reply({
-          content: localizer(language, "general.errors.unknown_error_description"),
-          flags: MessageFlags.Ephemeral,
-        });
+        await replyPanelReceipt(interaction, errorReceipt);
       }
     } catch (replyError) {
       log.error("Failed to send setup error reply:", replyError);

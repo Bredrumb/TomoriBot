@@ -4,8 +4,9 @@
  * resolves through the shared fallback chain, while a value that does not resolve to a persona the
  * actor may currently trigger is rejected before any repository write.
  */
-import { afterEach, beforeAll, describe, expect, it, spyOn } from "bun:test";
+import { afterEach, beforeAll, describe, expect, it, mock, spyOn } from "bun:test";
 import {
+  ChannelType,
   Collection,
   escapeMarkdown,
   MessageFlags,
@@ -30,6 +31,7 @@ import { CONDITIONING_ACTION_LOCALE_KEYS, type ConditioningActionKey } from "@/u
 import { CONDITIONING_ACTION_TYPES } from "@/utils/conditioning/conditioning";
 import { buildConditioningInteractionEmbed } from "@/utils/conditioning/conditioningEmbed";
 import { classifyProtocolTitle } from "@/utils/discord/embedProtocol";
+import { clearWebhookIdentityCache, getCachedImpersonatedUserIdForWebhook } from "@/utils/chat/webhookIdentity";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -59,6 +61,7 @@ afterEach(() => {
   for (const spy of spies.splice(0)) {
     spy.mockRestore();
   }
+  clearWebhookIdentityCache();
 });
 
 describe("conditioning user targets", () => {
@@ -432,5 +435,83 @@ describe("conditioning persona resolution", () => {
     expect(payload.flags).toBe(MessageFlags.SuppressNotifications);
     expect(recordSpy).not.toHaveBeenCalled();
     expect(chatSpy).not.toHaveBeenCalled();
+  });
+});
+
+/** A text channel where the bot holds Manage Webhooks, so the embed posts as the invoker. */
+function createWebhookInteraction(send: () => Promise<unknown>) {
+  const base = createInteraction("2");
+  const webhook = { id: "invoker-hook", send: mock(send), delete: mock(async () => undefined) };
+  const member = {
+    displayName: "Juno",
+    roles: { cache: [] },
+    user: {},
+    displayAvatarURL: () => "https://cdn.discordapp.com/embed/avatars/0.png",
+  };
+  const guild = base.interaction.guild as unknown as { members: { cache: { get: () => unknown } } };
+  guild.members.cache.get = () => member;
+  Object.assign(base.channel, {
+    type: ChannelType.GuildText,
+    guild: base.interaction.guild,
+    guildId: "guild-1",
+    createWebhook: mock(async () => webhook),
+  });
+  const calls: { method: string; payload?: unknown }[] = [];
+  Object.assign(base.interaction, {
+    deferReply: async (payload: unknown) => {
+      calls.push({ method: "deferReply", payload });
+      Object.assign(base.interaction, { deferred: true });
+    },
+    editReply: async (payload: unknown) => {
+      calls.push({ method: "editReply", payload });
+      return { id: "ack" };
+    },
+    deleteReply: async () => {
+      calls.push({ method: "deleteReply" });
+    },
+    followUp: async (payload: unknown) => {
+      calls.push({ method: "followUp", payload });
+      return { id: "fallback-follow-up", channel: base.channel };
+    },
+  });
+  return { ...base, webhook, calls };
+}
+
+describe("conditioning delivery as the invoker", () => {
+  it("posts through a deleted single-use webhook credited to the invoker and anchors the turn to it", async () => {
+    stubWorkspace([MAIN, ALTER]);
+    const chatSpy = track(spyOn(tomoriChatModule, "tomoriChat").mockResolvedValue("run"));
+    const { interaction, channel, webhook, calls } = createWebhookInteraction(async () => ({
+      id: "webhook-message",
+      channel,
+    }));
+
+    await createConditioningInteractionCommand("punish", "bonk").execute(client, interaction, userData, "en-US");
+
+    expect(calls.map((call) => call.method)).toEqual(["deferReply", "editReply"]);
+    expect(calls[0].payload).toEqual({ flags: MessageFlags.Ephemeral });
+    const ack = calls[1].payload as { embeds: EmbedBuilder[] };
+    expect(ack.embeds[0].toJSON().description).toBe(
+      localizedCopy("en-US", "commands.conditioning.shared.sent_description"),
+    );
+    expect(webhook.send).toHaveBeenCalledTimes(1);
+    expect(webhook.delete).toHaveBeenCalledTimes(1);
+    expect(getCachedImpersonatedUserIdForWebhook(webhook.id)).toBe("user-1");
+    expect(chatSpy.mock.calls.at(-1)?.[0]).toMatchObject({ message: { id: "webhook-message" } });
+  });
+
+  it("falls back to a public follow-up and still deletes the webhook when the webhook cannot post", async () => {
+    stubWorkspace([MAIN, ALTER]);
+    const chatSpy = track(spyOn(tomoriChatModule, "tomoriChat").mockResolvedValue("run"));
+    const { interaction, webhook, calls } = createWebhookInteraction(async () => {
+      throw new Error("fixture send failure");
+    });
+
+    await createConditioningInteractionCommand("reward", "headpat").execute(client, interaction, userData, "en-US");
+
+    expect(calls.map((call) => call.method)).toEqual(["deferReply", "deleteReply", "followUp"]);
+    expect((calls[2].payload as { flags: number }).flags).toBe(MessageFlags.SuppressNotifications);
+    expect(webhook.delete).toHaveBeenCalledTimes(1);
+    expect(chatSpy.mock.calls.at(-1)?.[0]).toMatchObject({ message: { id: "fallback-follow-up" } });
   });
 });

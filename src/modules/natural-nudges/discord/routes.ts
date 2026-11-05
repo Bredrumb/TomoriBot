@@ -1,5 +1,5 @@
 import { computePersonaNudgeFingerprint, computePersonaNudgeListFingerprint } from "@/modules/natural-nudges/db/types";
-import { MessageFlags, type ModalSubmitInteraction } from "discord.js";
+import type { ModalSubmitInteraction } from "discord.js";
 import type { PanelAction } from "@/constants/panelActions";
 import type { PanelReceipt } from "@/types/discord/panel";
 import type { ConfigPanelRoute } from "@/utils/discord/configPanelCatalog";
@@ -7,6 +7,7 @@ import { buildConfigRouteId, CONFIG_MODEL_PAGE_SIZE } from "@/utils/discord/conf
 import { decodeConfigProviderPageValue } from "@/utils/discord/interactions/configModelLoaders";
 import { isConfigRouteAuthorized, type ConfigActor } from "@/utils/discord/interactions/configPermissionPolicy";
 import {
+  deniedReceipt,
   repaint,
   staleReceipt,
   type ConfigRouteDependencies,
@@ -46,6 +47,7 @@ import {
   PERSONA_AUTHORED_IDLE_NUDGE_LIMIT,
   type NaturalNudgeCategory,
 } from "@/modules/natural-nudges/db/types";
+import { replyPanelReceipt } from "@/utils/discord/ui/panel";
 
 type ConfigAction = ConfigPanelRoute["action"];
 
@@ -108,16 +110,15 @@ export async function handleNudgeModalOpen(
   if (!opensModal) return false;
 
   const locale = route.locale;
-  const deny = async (key: string) =>
-    interaction.reply({ content: localizer(locale, key), flags: MessageFlags.Ephemeral });
+  const deny = (receipt: PanelReceipt) => replyPanelReceipt(interaction, receipt);
   if (!isConfigRouteAuthorized(route, actor)) {
-    await deny("commands.config.panel.denied_detail");
+    await deny(deniedReceipt(locale));
     return true;
   }
   const scope = await dependencies.resolveScope(interaction, false);
   const serverId = scope?.personas[0]?.server_id;
   if (!scope || serverId === undefined || scope.readStatus !== "fresh") {
-    await deny("commands.config.panel.stale_detail");
+    await deny(staleReceipt(locale));
     return true;
   }
   const nudges = dependencies.naturalNudges;
@@ -125,7 +126,7 @@ export async function handleNudgeModalOpen(
   const requirePersona = async (personaId: number): Promise<boolean> => {
     if (scope.personas.some((persona) => persona.persona_id === personaId && persona.server_id === serverId))
       return true;
-    await deny("commands.config.panel.stale_detail");
+    await deny(staleReceipt(locale));
     return false;
   };
 
@@ -139,7 +140,7 @@ export async function handleNudgeModalOpen(
     if (!(await requirePersona(route.personaId))) return true;
     const config = await nudges.loadPersonaConfig(route.personaId);
     if (!config || value === undefined) {
-      await deny("commands.config.panel.stale_detail");
+      await deny(staleReceipt(locale));
       return true;
     }
     if (value.startsWith("add:")) {
@@ -150,8 +151,12 @@ export async function handleNudgeModalOpen(
       ) {
         await deny(
           config.idle_nudges.length >= PERSONA_AUTHORED_IDLE_NUDGE_LIMIT
-            ? "commands.config.natural_nudges.limit_detail"
-            : "commands.config.panel.stale_detail",
+            ? {
+                tone: "warning",
+                heading: localizer(locale, "general.panel_notice.limit_heading"),
+                detail: localizer(locale, "commands.config.natural_nudges.limit_detail"),
+              }
+            : staleReceipt(locale),
         );
         return true;
       }
@@ -171,7 +176,7 @@ export async function handleNudgeModalOpen(
     }
     const authored = config.idle_nudges.find((nudge) => nudge.id === value);
     if (!authored) {
-      await deny("commands.config.panel.stale_detail");
+      await deny(staleReceipt(locale));
       return true;
     }
     const content = idleNudgeContentFromAuthored(authored);
@@ -195,7 +200,7 @@ export async function handleNudgeModalOpen(
     const config = await nudges.loadPersonaConfig(route.personaId);
     const authored = config?.idle_nudges.find((nudge) => nudge.id === value);
     if (!config || !authored) {
-      await deny("commands.config.panel.stale_detail");
+      await deny(staleReceipt(locale));
       return true;
     }
     await dependencies.showModal(
@@ -214,7 +219,7 @@ export async function handleNudgeModalOpen(
     if (!(await requirePersona(route.personaId))) return true;
     const config = await nudges.loadPersonaConfig(route.personaId);
     if (!config || config.idle_nudges.length === 0) {
-      await deny("commands.config.panel.stale_detail");
+      await deny(staleReceipt(locale));
       return true;
     }
     dependencies.storeSnapshot(
@@ -242,7 +247,7 @@ export async function handleNudgeModalOpen(
     const config = await nudges.loadPersonaConfig(route.personaId);
     const interest = index === null ? undefined : config?.interests[index];
     if (index === null || !interest) {
-      await deny("commands.config.panel.stale_detail");
+      await deny(staleReceipt(locale));
       return true;
     }
     const fp = computeInterestFingerprint(route.personaId, index, interest);
@@ -255,7 +260,7 @@ export async function handleNudgeModalOpen(
   if (route.action === "nudge-interest-remove-open") {
     const config = await nudges.loadPersonaConfig(route.personaId);
     if (!config || config.interests.length === 0) {
-      await deny("commands.config.panel.stale_detail");
+      await deny(staleReceipt(locale));
       return true;
     }
     await dependencies.showModal(
@@ -268,7 +273,7 @@ export async function handleNudgeModalOpen(
     const settings = await nudges.loadSettings(serverId, locale, null);
     const page = findModelPage(settings.plannerModels, value);
     if (!page) {
-      await deny("commands.config.panel.stale_detail");
+      await deny(staleReceipt(locale));
       return true;
     }
     await dependencies.showModal(
@@ -285,7 +290,7 @@ export async function handleNudgeModalOpen(
         ? findModelPage(settings.checkerDecisionModels, value.slice(NUDGE_DECISION_PROVIDER_PREFIX.length))
         : findModelPage(settings.plannerModels, value);
     if (!page) {
-      await deny("commands.config.panel.stale_detail");
+      await deny(staleReceipt(locale));
       return true;
     }
     const current = kind === "decision" ? settings.config.checker_decision_model_id : settings.config.checker_llm_id;

@@ -34,6 +34,7 @@ export default {
       field_model: `Modelo`,
       field_generation_time: `Tiempo de generación`,
       field_aspect_ratio: `Relación de aspecto`,
+      reference_images_ignored_title: `Imágenes de referencia ignoradas`,
       zai_no_img2img_warning: `Z.ai no admite generación de imagen a imagen. Se ignoraron tus imágenes de referencia, pero la imagen se generará de todos modos a partir de tu texto.`,
       nvidia_no_img2img_warning: `NVIDIA NIM no admite generación de imagen a imagen. Se ignoraron tus imágenes de referencia, pero la imagen se generará de todos modos a partir de tu texto.`,
       disabled_title: `🔴 Generación de imágenes desactivada`,

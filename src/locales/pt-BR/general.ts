@@ -1,6 +1,16 @@
 export default {
   general: {
+    restarting_title: `Reiniciando`,
     restarting: `O TomoriBot está reiniciando. Por favor, tente novamente em breve.`,
+    panel_notice: {
+      outdated_heading: `Painel desatualizado`,
+      unavailable_heading: `Indisponível`,
+      empty_heading: `Nada aqui`,
+      no_changes_heading: `Sem alterações`,
+      limit_heading: `Limite atingido`,
+      not_available_heading: `Indisponível`,
+      invalid_heading: `Escolha inválida`,
+    },
     oauth: {
       invalid_callback: `Este link de login é inválido ou expirou. Inicie o login novamente pelo TomoriBot.`,
       server_error: `O TomoriBot não conseguiu concluir o login devido a um erro de serviço. Tente novamente mais tarde.`,

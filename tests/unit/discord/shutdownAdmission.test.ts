@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
-import { Client, InteractionCollector, Locale, MessageFlags, type Interaction } from "discord.js";
+import { Client, InteractionCollector, Locale, MessageFlags, type EmbedBuilder, type Interaction } from "discord.js";
 import handleCommands from "@/events/interactionCreate/handleCommands";
 import {
   initializeShutdownInteractionAdmission,
@@ -23,6 +23,12 @@ afterEach(() => {
   draining = false;
 });
 
+function expectRestartingNotice(payload: unknown): void {
+  const { embeds, flags } = payload as { embeds: EmbedBuilder[]; flags: number };
+  expect(flags).toBe(MessageFlags.Ephemeral);
+  expect(embeds[0].toJSON().description).toBe(localizedCopy("en-US", "general.restarting"));
+}
+
 describe("shutdown interaction admission", () => {
   it("acknowledges slash commands at the global router before command loading", async () => {
     const f = makeFakeInteraction();
@@ -34,12 +40,8 @@ describe("shutdown interaction admission", () => {
     const client = new Client({ intents: [] });
     await handleCommands(client, interaction);
     await handleCommands(client, interaction);
-    expect(f.calls).toEqual([
-      {
-        method: "reply",
-        args: [{ content: localizedCopy("en-US", "general.restarting"), flags: MessageFlags.Ephemeral }],
-      },
-    ]);
+    expect(f.calls.map((call) => call.method)).toEqual(["reply"]);
+    expectRestartingNotice(f.calls[0].args[0]);
     await client.destroy();
   });
 
@@ -62,9 +64,8 @@ describe("shutdown interaction admission", () => {
         client.emit("interactionCreate", interaction);
         await rejectInteractionDuringShutdown(interaction);
         expect(f.calls.map((call) => call.method)).toEqual(["reply"]);
-        expect(f.replies).toEqual([
-          { content: localizedCopy("en-US", "general.restarting"), flags: MessageFlags.Ephemeral },
-        ]);
+        expect(f.replies).toHaveLength(1);
+        expectRestartingNotice(f.replies[0]);
       }
       expect(collected).not.toHaveBeenCalled();
       expect(routed).not.toHaveBeenCalled();

@@ -42,6 +42,7 @@ export default {
     fallback_used_personal_opt_out_footer: `\`/personal config\` > モデル > フォールバック で、サーバーモデルが個人のプロバイダーの失敗を補うのを止められます`,
     markdown_table: {
       show_button: `マークダウンを表示`,
+      source_expired_title: `テーブルソースの期限切れ`,
       source_expired: `この表のマークダウンはキャッシュから消えているため、ソースを表示できません。`,
       source_attached: `この表は長すぎてそのまま表示できないため、ファイルとして添付します:`,
     },

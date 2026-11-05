@@ -14,6 +14,7 @@ import {
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { createStandardEmbed } from "@/utils/discord/embedHelper";
 import { showRoutedRawModal } from "@/utils/discord/ui/modals";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { createNonce } from "@/utils/discord/panelRouteTokens";
@@ -99,14 +100,19 @@ export async function execute(
     const pageRows = buildModelOverridePageSelectRows(locale, entries.length);
     const capped = entries.length > MODEL_OVERRIDE_PAGE_SELECT_MAX_ENTRIES;
     await interaction.reply({
-      content: capped
-        ? localizer(locale, "commands.model.override.remove.page_select_prompt_capped", {
-            total: String(entries.length),
-            shown: String(MODEL_OVERRIDE_PAGE_SELECT_MAX_ENTRIES),
-          })
-        : localizer(locale, "commands.model.override.remove.page_select_prompt", {
-            total: String(entries.length),
-          }),
+      embeds: [
+        createStandardEmbed(locale, {
+          titleKey: "commands.model.override.remove.modal_title",
+          description: capped
+            ? localizer(locale, "commands.model.override.remove.page_select_prompt_capped", {
+                total: String(entries.length),
+                shown: String(MODEL_OVERRIDE_PAGE_SELECT_MAX_ENTRIES),
+              })
+            : localizer(locale, "commands.model.override.remove.page_select_prompt", {
+                total: String(entries.length),
+              }),
+        }),
+      ],
       components: pageRows,
       flags: MessageFlags.Ephemeral,
     });
@@ -127,7 +133,13 @@ export async function execute(
       });
     } else {
       await interaction.followUp({
-        content: localizer(locale, "general.errors.unknown_error_description"),
+        embeds: [
+          createStandardEmbed(locale, {
+            titleKey: "general.errors.unknown_error_title",
+            descriptionKey: "general.errors.unknown_error_description",
+            color: ColorCode.ERROR,
+          }),
+        ],
         flags: MessageFlags.Ephemeral,
       });
     }

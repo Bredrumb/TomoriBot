@@ -77,7 +77,9 @@ await repaint(interaction, route.locale, scope);
   seconds for the acknowledgement, and anything slow before it loses the interaction.
 - A branch that opens a modal does not use it: `showModal()` must be that interaction's
   acknowledgement, so everything before it (permission check, one fast read) has to finish inside the
-  three seconds.
+  three seconds. Refuse such a press (denied, stale, nothing to change) with
+  `replyPanelReceipt(interaction, receipt)` from `src/utils/discord/ui/panel.ts`. It sends the receipt as
+  a private card and never edits the panel that was pressed. Do not reply with plain `content`.
 - Check the interaction type for each action (`isButton()`, `isStringSelectMenu()`,
   `isModalSubmit()`) and throw on a mismatch; the router logs it and replies with a generic error.
 - Repaint through `deliverGuardedPanel(interaction, payload, { locale, receipt })`. It validates

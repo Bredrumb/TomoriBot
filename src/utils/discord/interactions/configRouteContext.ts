@@ -437,6 +437,33 @@ export function outdatedConfigPanelMessage(locale: string): string {
   return localizer(locale, "commands.config.panel.outdated_panel", { command: CONFIG_PANEL_COMMAND });
 }
 
+export function missingScopeReceipt(
+  locale: string,
+  interaction: ConfigScopeInteraction,
+  dependencies: Pick<ConfigRouteDependencies, "getLastDbError"> = {},
+): PanelReceipt {
+  const key = missingScopeMessageKey(interaction, dependencies);
+  return key === "commands.config.panel.unavailable"
+    ? {
+        tone: "warning",
+        heading: localizer(locale, "general.panel_notice.unavailable_heading"),
+        detail: localizer(locale, key),
+      }
+    : {
+        tone: "error",
+        heading: localizer(locale, "general.errors.tomori_not_setup_title"),
+        detail: localizer(locale, key),
+      };
+}
+
+export function outdatedConfigPanelReceipt(locale: string): PanelReceipt {
+  return {
+    tone: "warning",
+    heading: localizer(locale, "commands.config.panel.stale_heading"),
+    detail: outdatedConfigPanelMessage(locale),
+  };
+}
+
 /** The stale-panel copy as a terminal container, for routes that answer with components. */
 export function outdatedConfigPanelPayload(locale: string): InteractionEditReplyOptions {
   return terminalPayload(locale, "commands.config.panel.outdated_panel", { command: CONFIG_PANEL_COMMAND });

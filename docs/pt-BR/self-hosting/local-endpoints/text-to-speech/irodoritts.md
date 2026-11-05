@@ -122,6 +122,8 @@ Use `/providers` para registrar o endpoint e configurar o modelo. Em seguida, ab
 
 O Irodori adota por padrão um limite de referência de 120 segundos e trunca clipes maiores. Defina `IRODORI_MAX_REF_SECONDS` para alterar esse limite.
 
+O servidor codifica cada clipe de referência uma vez e mantém o resultado em `servers/tts/irodoritts/reference-cache/`, então solicitações repetidas pulam essa etapa. Substituir o clipe de uma persona cria uma nova entrada, e as entradas antigas permanecem até você excluir a pasta.
+
 ### VoiceDesign
 
 1. Abra `/config` em Persona > Voz.
@@ -154,6 +156,40 @@ $env:IRODORI_SWAY_COEFF = "-1.0"
 
 Trata-se de um equilíbrio entre qualidade e velocidade de inferência, portanto teste com o checkpoint e as vozes escolhidas antes de adotar definitivamente.
 
+## Modo de baixa latência (NVIDIA)
+<!-- anchor: low-latency-mode-nvidia -->
+
+O modo de baixa latência torna cada frase cerca de 3-4x mais rápida em uma GPU NVIDIA com os mesmos 40 passos e configurações de voz, então não sacrifica a qualidade da forma que a Amostragem Sway faz. Ative no `.env`:
+
+```dotenv
+IRODORI_COMPILE_MODE="cudagraphs"
+```
+
+`cudagraphs` é o modo mais rápido. `compile` é cerca de 2x mais rápido que o padrão; experimente se o `cudagraphs` não funcionar bem na sua GPU. Ambos precisam do backend `cu128`, e o servidor se recusa a iniciar com qualquer um dos modos em outros backends.
+
+O que esperar:
+
+- O servidor aquece antes de relatar que está pronto. A primeira inicialização leva cerca de 2-4 minutos; inicializações posteriores levam cerca de 1-2 minutos porque os kernels compilados ficam em cache no disco. `bun run launch --irodoritts` aguarda até 5 minutos; em uma GPU mais lenta, aumente esse limite com `TOMORI_TTS_STARTUP_TIMEOUT_MS` (em milissegundos).
+- A primeira solicitação com um novo comprimento de frase ou um novo clipe de voz adiciona uma fração de segundo, apenas uma vez.
+- O uso de VRAM diminui ligeiramente.
+- O áudio não é idêntico bit a bit ao modo padrão para a mesma seed. Nos testes soou equivalente, então ouça algumas falas com suas próprias vozes antes de confiar nele.
+
+No Windows, o modo também precisa do compilador Microsoft C++:
+
+1. Instale o [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) com a carga de trabalho **Desenvolvimento para desktop com C++**.
+2. Execute novamente `.\servers\tts\irodoritts\install-irodori.ps1 cu128` para que o pacote Triton para Windows seja instalado.
+3. Inicie o servidor (ou `bun run launch --irodoritts`) a partir do **Developer PowerShell for VS**, ou carregue o compilador em um PowerShell comum primeiro:
+
+```powershell
+$vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+$vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+cmd /c "`"$vs\VC\Auxiliary\Build\vcvars64.bat`" >nul && set" | ForEach-Object {
+  if ($_ -match "^([^=]+)=(.*)$") { Set-Item -Path "Env:$($Matches[1])" -Value $Matches[2] }
+}
+```
+
+Se o compilador ou o Triton estiverem ausentes, o servidor será interrompido na inicialização e informará qual deles está faltando.
+
 ## Variáveis de ambiente
 
 | Variável | Padrão | Finalidade |
@@ -166,8 +202,7 @@ Trata-se de um equilíbrio entre qualidade e velocidade de inferência, portanto
 | `IRODORI_CODEC_DEVICE` | `auto` | Dispositivo do codec |
 | `IRODORI_MODEL_PRECISION` | `bf16` em CUDA, caso contrário `fp32` | Precisão do modelo |
 | `IRODORI_CODEC_PRECISION` | `fp32` | Precisão do codec |
-| `IRODORI_COMPILE_MODEL` | `false` | Habilita `torch.compile` para o modelo do Irodori |
-| `IRODORI_COMPILE_DYNAMIC` | `false` | Habilita dimensões dinâmicas na compilação |
+| `IRODORI_COMPILE_MODE` | `off` | `off`, `compile` ou `cudagraphs`; consulte [Modo de baixa latência](#low-latency-mode-nvidia) |
 | `IRODORI_NUM_STEPS` | `40` | Passos de amostragem de Euler |
 | `IRODORI_T_SCHEDULE_MODE` | `linear` | Cronograma de amostragem (`linear` ou `sway`) |
 | `IRODORI_SWAY_COEFF` | `-1.0` | Coeficiente sway ao usar o cronograma `sway` |

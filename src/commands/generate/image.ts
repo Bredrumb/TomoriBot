@@ -67,7 +67,8 @@ import { safeDownload } from "@/utils/security/safeDownload";
 import { executeAutoImageCommand } from "@/utils/image/autoImageCommand";
 import { prepareGeneratedImage } from "@/utils/image/generatedImageMetadata";
 import { buildImageGenerationInputAttachment } from "@/utils/image/imageGenerationInput";
-import { localizedStatusTitle, statusNote } from "@/utils/discord/ui/statusTitle";
+import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
+import { createStandardEmbed } from "@/utils/discord/embedHelper";
 import { withProviderOptionCopy } from "@/utils/provider/providerOptionRegistry";
 
 const MODAL_CUSTOM_ID = "generate_image_modal";
@@ -690,7 +691,13 @@ export async function execute(
     } else if (imageRoute.kind === "zai") {
       if (referenceImages.length > 0) {
         await modalSubmitInteraction.followUp({
-          content: statusNote("warning", localizer(locale, "commands.generate.image.zai_no_img2img_warning")),
+          embeds: [
+            createStandardEmbed(locale, {
+              titleKey: "commands.generate.image.reference_images_ignored_title",
+              descriptionKey: "commands.generate.image.zai_no_img2img_warning",
+              color: ColorCode.WARN,
+            }),
+          ],
         });
       }
       const { generateZaiNativeImage } = await import("@/providers/zai/zaiImageGeneration");
@@ -706,7 +713,13 @@ export async function execute(
     } else {
       if (referenceImages.length > 0) {
         await modalSubmitInteraction.followUp({
-          content: statusNote("warning", localizer(locale, "commands.generate.image.nvidia_no_img2img_warning")),
+          embeds: [
+            createStandardEmbed(locale, {
+              titleKey: "commands.generate.image.reference_images_ignored_title",
+              descriptionKey: "commands.generate.image.nvidia_no_img2img_warning",
+              color: ColorCode.WARN,
+            }),
+          ],
         });
       }
       const { generateNvidiaNativeImage } = await import("@/providers/nvidia/nvidiaImageGeneration");

@@ -3,6 +3,8 @@ export default {
     description: `管理長期保留的獎勵與懲罰制約記憶。`,
     shared: {
       target_conflict_description: `請選擇使用者或人格其中一個作為互動對象。`,
+      sent_title: `已發送`,
+      sent_description: `已在此頻道以你的名稱發布。`,
       user_footer: `{bot}會記住這件事。`,
       reward_footer: `❤️ {bot} 會記住這件事。用 /conditioning 管理。`,
       punish_footer: `💀 {bot} 會記住這件事。用 /conditioning 管理。`,

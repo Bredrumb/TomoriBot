@@ -42,6 +42,7 @@ import { formatPanelProse } from "@/utils/discord/ui/panelProse";
 import { moderationOperations, type ModerationScopeData } from "@/utils/moderation/moderationOperations";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { localizedCopy, localizedProse } from "../../helpers/localeCases";
+import { collectTextDisplays } from "../../helpers/panelLimits";
 
 function serializedPanelProse(markdown: string): string {
   return JSON.stringify(formatPanelProse(markdown)).slice(1, -1);
@@ -2265,10 +2266,10 @@ describe("moderation interaction routes", () => {
 
       expect(resolveAddCalled).toBe(false);
       expect(replies).toHaveLength(1);
-      expect(replies[0]).toEqual({
-        content: "You need `Manage Server` permission to use this moderation panel.",
-        flags: 64,
-      });
+      expect((replies[0] as { flags: number }).flags).toBe(MessageFlags.Ephemeral | MessageFlags.IsComponentsV2);
+      expect(collectTextDisplays(replies[0]).join("\n")).toMatch(
+        localizedProse("en-US", "commands.moderation.permission_denied"),
+      );
     });
 
     it("opens whitelist channel add modal with nonce on fresh scope", async () => {

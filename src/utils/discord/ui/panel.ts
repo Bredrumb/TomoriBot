@@ -2,7 +2,9 @@ import { createHash } from "node:crypto";
 import {
   ButtonStyle,
   ComponentType,
+  MessageFlags,
   type ActionRowData,
+  type RepliableInteraction,
   type ButtonComponentData,
   type ComponentInContainerData,
   type ContainerComponentData,
@@ -129,6 +131,23 @@ export function buildPanelReceiptContainer(receipt: PanelReceipt): ContainerComp
     ],
     receipt.tone,
   );
+}
+
+export function buildPanelReceiptMessage(receipt: PanelReceipt) {
+  return { components: [buildPanelReceiptContainer(receipt)], flags: MessageFlags.IsComponentsV2 } as const;
+}
+
+/**
+ * Answers a refused panel press with its receipt in a new private message, never an edit, because
+ * after `deferUpdate()` an edit would replace the panel the user pressed.
+ */
+export async function replyPanelReceipt(interaction: RepliableInteraction, receipt: PanelReceipt): Promise<void> {
+  const payload = {
+    components: [buildPanelReceiptContainer(receipt)],
+    flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+  } as const;
+  if (interaction.replied || interaction.deferred) await interaction.followUp(payload);
+  else await interaction.reply(payload);
 }
 
 export function buildCategoryButtonRow<TCategory extends string>(

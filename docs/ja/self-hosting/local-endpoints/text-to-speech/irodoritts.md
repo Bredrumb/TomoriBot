@@ -122,6 +122,8 @@ IRODORI_TTS_CHECKPOINT="/path/to/custom_checkpoint.pt"
 
 Irodoriはデフォルトで120秒の参照制限を適用し、それより長いクリップをトリミングします。制限を変更するには `IRODORI_MAX_REF_SECONDS` を設定します。
 
+サーバーは各参照クリップを一度だけエンコードし、その結果を `servers/tts/irodoritts/reference-cache/` に保持するため、2回目以降のリクエストではこの処理がスキップされます。ペルソナのクリップを置き換えると新しいエントリが作成され、古いエントリはフォルダーを削除するまで保持されます。
+
 ### VoiceDesign
 
 1. `/config` の ペルソナ > 音声 を開きます。
@@ -154,6 +156,40 @@ $env:IRODORI_SWAY_COEFF = "-1.0"
 
 これは推論の品質と速度のトレードオフであるため、恒久的な設定にする前に、選択したチェックポイントと音声でテストしてください。
 
+## 低レイテンシモード（NVIDIA）
+<!-- anchor: low-latency-mode-nvidia -->
+
+低レイテンシモードは、同じ40ステップおよび音声設定のまま、NVIDIA GPU上での各文の生成を約3-4倍高速化します。そのため、Swayサンプリングのように品質を犠牲にすることはありません。`.env` で有効にします：
+
+```dotenv
+IRODORI_COMPILE_MODE="cudagraphs"
+```
+
+`cudagraphs` が最速のモードです。`compile` はデフォルトと比べて約2倍高速です。お使いのGPUで `cudagraphs` が正常に動作しない場合は、こちらを試してください。どちらのモードも `cu128` バックエンドが必要であり、他のバックエンドではサーバーの起動が拒絶されます。
+
+動作の特徴：
+
+- サーバーは準備完了を報告する前にウォームアップを行います。初回の起動には約2-4分かかります。2回目以降の起動は、コンパイルされたカーネルがディスクにキャッシュされるため約1-2分になります。`bun run launch --irodoritts` は最大5分間待機します。より低速なGPUでは、`TOMORI_TTS_STARTUP_TIMEOUT_MS`（ミリ秒単位）でこの制限を引き上げてください。
+- 新しい文の長さや新しい音声クリップでの最初のリクエストには、一度だけコンマ数秒の追加時間がかかります。
+- VRAM使用量はわずかに減少します。
+- 生成される音声は、同じシード値であってもデフォルトモードとビット単位で同一にはなりません。テストでは同等の品質に聞こえましたが、実運用で使用する前に自身の音声で何行か試聴してください。
+
+Windowsでは、このモードにMicrosoft C++コンパイラも必要です：
+
+1. **C++ によるデスクトップ開発** ワークロードを選択して [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) をインストールします。
+2. `.\servers\tts\irodoritts\install-irodori.ps1 cu128` を再実行し、Windows用のTritonパッケージをインストールします。
+3. **Developer PowerShell for VS** からサーバー（または `bun run launch --irodoritts`）を起動するか、通常のPowerShellにコンパイラ環境を事前に読み込みます：
+
+```powershell
+$vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+$vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+cmd /c "`"$vs\VC\Auxiliary\Build\vcvars64.bat`" >nul && set" | ForEach-Object {
+  if ($_ -match "^([^=]+)=(.*)$") { Set-Item -Path "Env:$($Matches[1])" -Value $Matches[2] }
+}
+```
+
+コンパイラまたはTritonが見つからない場合、サーバーは起動時に停止し、どちらが不足しているかを表示します。
+
 ## 環境変数
 
 | 変数 | デフォルト | 目的 |
@@ -166,8 +202,7 @@ $env:IRODORI_SWAY_COEFF = "-1.0"
 | `IRODORI_CODEC_DEVICE` | `auto` | コーデックデバイス |
 | `IRODORI_MODEL_PRECISION` | CUDAでは `bf16`、それ以外は `fp32` | モデルの精度 |
 | `IRODORI_CODEC_PRECISION` | `fp32` | コーデックの精度 |
-| `IRODORI_COMPILE_MODEL` | `false` | Irodoriモデルで `torch.compile` を有効化 |
-| `IRODORI_COMPILE_DYNAMIC` | `false` | コンパイル時に動的形状を有効化 |
+| `IRODORI_COMPILE_MODE` | `off` | `off`、`compile`、または `cudagraphs`。[低レイテンシモード](#low-latency-mode-nvidia) を参照 |
 | `IRODORI_NUM_STEPS` | `40` | Eulerサンプリングのステップ数 |
 | `IRODORI_T_SCHEDULE_MODE` | `linear` | サンプリングスケジュール（`linear` または `sway`） |
 | `IRODORI_SWAY_COEFF` | `-1.0` | `sway` スケジュール使用時のSway係数 |

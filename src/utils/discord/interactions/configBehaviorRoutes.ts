@@ -1,4 +1,4 @@
-import { ChannelType, ComponentType, MessageFlags, type ModalSubmitInteraction } from "discord.js";
+import { ChannelType, ComponentType, type ModalSubmitInteraction } from "discord.js";
 import type { PanelAction } from "@/constants/panelActions";
 import { CooldownType, type RandomTriggerRow, type TomoriState } from "@/types/db/schema";
 import type { ServerStmConfigRow } from "@/types/db/schema";
@@ -14,13 +14,13 @@ import { isConfigRouteAuthorized, type ConfigActor } from "@/utils/discord/inter
 import {
   repaint,
   staleReceipt,
-  missingScopeMessageKey,
-  outdatedConfigPanelMessage,
   type ConfigBehaviorGeneralView,
   type ConfigBehaviorTriggerView,
   type ConfigRepaintOptions,
   type ConfigRouteDependencies,
   type ConfigScope,
+  missingScopeReceipt,
+  outdatedConfigPanelReceipt,
 } from "@/utils/discord/interactions/configRouteContext";
 import type { GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
 import { buildConfigModalFieldId, CONFIG_PERSONA_PROMPT_PART_FIELDS } from "@/utils/discord/ui/configModals";
@@ -108,6 +108,7 @@ import {
   buildBehaviorToolTriggerAddModal,
   buildBehaviorToolTriggerRemoveModal,
 } from "@/utils/discord/ui/configBehaviorModals";
+import { replyPanelReceipt } from "@/utils/discord/ui/panel";
 
 export const CONFIG_BEHAVIOR_MODAL_OPEN_ACTIONS = new Set<ConfigPanelRoute["action"]>([
   "behavior-prompt-open",
@@ -339,33 +340,29 @@ export async function handleConfigBehaviorModalOpen(
 ): Promise<boolean> {
   if (!CONFIG_BEHAVIOR_MODAL_OPEN_ACTIONS.has(route.action)) return false;
   if (!isConfigRouteAuthorized(route, actor)) {
-    await interaction.reply({
-      content: localizer(route.locale, "commands.config.panel.denied_detail"),
-      flags: MessageFlags.Ephemeral,
+    await replyPanelReceipt(interaction, {
+      tone: "error",
+      heading: localizer(route.locale, "commands.config.panel.denied_heading"),
+      detail: localizer(route.locale, "commands.config.panel.denied_detail"),
     });
     return true;
   }
   const scope = await dependencies.resolveScope(interaction, false);
   if (!scope) {
-    await interaction.reply({
-      content: localizer(route.locale, missingScopeMessageKey(interaction, dependencies)),
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyPanelReceipt(interaction, missingScopeReceipt(route.locale, interaction, dependencies));
     return true;
   }
   const state = stateFromScope(scope);
   if (!state) {
-    await interaction.reply({
-      content: outdatedConfigPanelMessage(route.locale),
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyPanelReceipt(interaction, outdatedConfigPanelReceipt(route.locale));
     return true;
   }
   const view = await behaviorView(scope, dependencies);
   if (SYSTEM_PROMPT_ACTIONS.has(route.action) && view?.general.activeStPresetName) {
-    await interaction.reply({
-      content: localizer(route.locale, "commands.config.panel.system_prompt_st_preset_locked_detail"),
-      flags: MessageFlags.Ephemeral,
+    await replyPanelReceipt(interaction, {
+      tone: "warning",
+      heading: localizer(route.locale, "general.panel_notice.not_available_heading"),
+      detail: localizer(route.locale, "commands.config.panel.system_prompt_st_preset_locked_detail"),
     });
     return true;
   }
@@ -426,11 +423,12 @@ export async function handleConfigBehaviorModalOpen(
   } else if (route.action === "behavior-random-add-open" || route.action === "behavior-random-add-range-select") {
     const count = view?.trigger.randomTriggers.length ?? 0;
     if (count >= RANDOM_TRIGGER_MAX_PER_SERVER) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.config.random-trigger.add.cap_reached_description", {
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "general.panel_notice.limit_heading"),
+        detail: localizer(route.locale, "commands.config.random-trigger.add.cap_reached_description", {
           max: RANDOM_TRIGGER_MAX_PER_SERVER,
         }),
-        flags: MessageFlags.Ephemeral,
       });
       return true;
     }
@@ -441,9 +439,10 @@ export async function handleConfigBehaviorModalOpen(
   } else if (route.action === "behavior-random-remove-open" || route.action === "behavior-random-remove-select") {
     const rows = triggerRows(view?.trigger.randomTriggers ?? []);
     if (rows.length === 0) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.config.random-trigger.remove.none_description"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "info",
+        heading: localizer(route.locale, "general.panel_notice.empty_heading"),
+        detail: localizer(route.locale, "commands.config.random-trigger.remove.none_description"),
       });
       return true;
     }
@@ -460,17 +459,19 @@ export async function handleConfigBehaviorModalOpen(
         ? Number.parseInt(interaction.isStringSelectMenu() ? (interaction.values[0] ?? "") : "", 10)
         : (route.start ?? 0);
     if (!Number.isInteger(requestedStart) || requestedStart < 0 || requestedStart % RANDOM_TRIGGER_PAGE_SIZE !== 0) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.config.panel.stale_detail"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "commands.config.panel.stale_heading"),
+        detail: localizer(route.locale, "commands.config.panel.stale_detail"),
       });
       return true;
     }
     const presented = rows.slice(requestedStart, requestedStart + RANDOM_TRIGGER_PAGE_SIZE);
     if (presented.length === 0) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.config.panel.stale_detail"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "commands.config.panel.stale_heading"),
+        detail: localizer(route.locale, "commands.config.panel.stale_detail"),
       });
       return true;
     }
@@ -1126,26 +1127,21 @@ export async function handleConfigBehaviorD10ModalOpen(
 ): Promise<boolean> {
   if (!CONFIG_BEHAVIOR_D10_MODAL_OPEN_ACTIONS.has(route.action)) return false;
   if (!isConfigRouteAuthorized(route, actor)) {
-    await interaction.reply({
-      content: localizer(route.locale, "commands.config.panel.denied_detail"),
-      flags: MessageFlags.Ephemeral,
+    await replyPanelReceipt(interaction, {
+      tone: "error",
+      heading: localizer(route.locale, "commands.config.panel.denied_heading"),
+      detail: localizer(route.locale, "commands.config.panel.denied_detail"),
     });
     return true;
   }
   const scope = await dependencies.resolveScope(interaction, false);
   if (!scope) {
-    await interaction.reply({
-      content: localizer(route.locale, missingScopeMessageKey(interaction, dependencies)),
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyPanelReceipt(interaction, missingScopeReceipt(route.locale, interaction, dependencies));
     return true;
   }
   const state = scope.personas[0];
   if (!state) {
-    await interaction.reply({
-      content: outdatedConfigPanelMessage(route.locale),
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyPanelReceipt(interaction, outdatedConfigPanelReceipt(route.locale));
     return true;
   }
   const view = await d10View(state, dependencies);
@@ -1163,19 +1159,21 @@ export async function handleConfigBehaviorD10ModalOpen(
     case "behavior-tool-trigger-remove-open": {
       const entryCount = triggerEntries(view.experimental.deliberateToolTriggers).length;
       if (entryCount === 0) {
-        await interaction.reply({
-          content: localizer(route.locale, "commands.config.panel.tool_trigger_none_detail"),
-          flags: MessageFlags.Ephemeral,
+        await replyPanelReceipt(interaction, {
+          tone: "info",
+          heading: localizer(route.locale, "general.panel_notice.empty_heading"),
+          detail: localizer(route.locale, "commands.config.panel.tool_trigger_none_detail"),
         });
         break;
       }
       if (entryCount > MAX_TOOL_TRIGGER_ENTRIES) {
-        await interaction.reply({
-          content: localizer(route.locale, "commands.config.panel.tool_trigger_over_capacity_detail", {
+        await replyPanelReceipt(interaction, {
+          tone: "warning",
+          heading: localizer(route.locale, "general.panel_notice.limit_heading"),
+          detail: localizer(route.locale, "commands.config.panel.tool_trigger_over_capacity_detail", {
             count: entryCount,
             max: MAX_TOOL_TRIGGER_ENTRIES,
           }),
-          flags: MessageFlags.Ephemeral,
         });
         break;
       }
@@ -1193,17 +1191,14 @@ export async function handleConfigBehaviorD10ModalOpen(
       break;
     case "behavior-notice-visibility-open":
       if (TOOL_NOTICE_DEFINITIONS.length > MAX_NOTICE_ENTRIES) {
-        await interaction.reply({
-          content: `${localizer(route.locale, "commands.config.notice-embeds.visibility.too_many_title")}\n${localizer(
-            route.locale,
-            "commands.config.notice-embeds.visibility.too_many_description",
-            {
-              count: TOOL_NOTICE_DEFINITIONS.length,
-              max_entries: MAX_NOTICE_ENTRIES,
-              max_groups: MAX_NOTICE_ENTRIES / 10,
-            },
-          )}`,
-          flags: MessageFlags.Ephemeral,
+        await replyPanelReceipt(interaction, {
+          tone: "warning",
+          heading: localizer(route.locale, "commands.config.notice-embeds.visibility.too_many_title"),
+          detail: localizer(route.locale, "commands.config.notice-embeds.visibility.too_many_description", {
+            count: TOOL_NOTICE_DEFINITIONS.length,
+            max_entries: MAX_NOTICE_ENTRIES,
+            max_groups: MAX_NOTICE_ENTRIES / 10,
+          }),
         });
         break;
       }

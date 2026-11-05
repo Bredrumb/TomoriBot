@@ -3,6 +3,8 @@ export default {
     description: `Quản lý bộ nhớ điều hòa thưởng và phạt dài hạn.`,
     shared: {
       target_conflict_description: `Chọn một người dùng hoặc một persona cho tương tác này.`,
+      sent_title: `Đã gửi`,
+      sent_description: `Đã đăng trong kênh này dưới tên của bạn.`,
       user_footer: `{bot} sẽ nhớ chuyện này.`,
       reward_footer: `❤️ {bot} sẽ ghi nhớ điều này. Dùng /conditioning để quản lý.`,
       punish_footer: `💀 {bot} sẽ ghi nhớ điều này. Dùng /conditioning để quản lý.`,

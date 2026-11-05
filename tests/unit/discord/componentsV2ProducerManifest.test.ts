@@ -246,6 +246,14 @@ export const COMPONENTS_V2_PRODUCER_MANIFEST: readonly ProducerManifestEntry[] =
     coverage: { kind: "suite", suites: ["tests/unit/discord/componentsV2DeclaredProducerSmoke.test.ts"] },
   },
   {
+    modulePath: "src/utils/discord/ui/panel.ts",
+    reason: "Private receipt card answering a refused panel press",
+    coverage: {
+      kind: "delivery",
+      note: "The card holds one TextDisplay of a localized heading and detail, far below the TextDisplay ceiling, so it skips validateAndFallbackPanelPayload like the receipt container every panel already appends.",
+    },
+  },
+  {
     modulePath: "src/utils/stats/statsDashboard.ts",
     reason: "Stats dashboard message builder",
     coverage: { kind: "suite", suites: ["tests/unit/discord/componentsV2DeclaredProducerSmoke.test.ts"] },

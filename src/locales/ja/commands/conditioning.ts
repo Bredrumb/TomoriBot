@@ -3,6 +3,8 @@ export default {
     description: `ご褒美・おしおきの条件付け記憶を管理します。`,
     shared: {
       target_conflict_description: `ユーザーかペルソナのどちらか一方を選んでください。`,
+      sent_title: `送信完了`,
+      sent_description: `このチャンネルにあなたのアカウント名で投稿しました。`,
       user_footer: `{bot}はこのことを覚えているでしょう。`,
       reward_footer: `❤️ {bot}はこれを覚えておきます。管理は /conditioning remove を使用してください。`,
       punish_footer: `💀 {bot}はこれを覚えておきます。管理は /conditioning remove を使用してください。`,

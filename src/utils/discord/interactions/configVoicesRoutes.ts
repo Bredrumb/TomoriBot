@@ -6,9 +6,9 @@ import { isConfigRouteAuthorized, type ConfigActor } from "@/utils/discord/inter
 import {
   repaint,
   staleReceipt,
-  missingScopeMessageKey,
   type ConfigRouteDependencies,
   type ConfigScope,
+  missingScopeReceipt,
 } from "@/utils/discord/interactions/configRouteContext";
 import type { GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
 import {
@@ -35,6 +35,7 @@ import { SPEECH_SAMPLE_MAX_MB } from "@/utils/speech/voiceSampleAddOperation";
 import { validateVoiceSampleUpload, type VoiceSampleUpload } from "@/utils/speech/voiceSampleAddOperation";
 import { log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
+import { replyPanelReceipt } from "@/utils/discord/ui/panel";
 
 export const CONFIG_VOICES_MODAL_OPEN_ACTIONS = new Set<ConfigPanelRoute["action"]>([
   "voice-sample-add-open",
@@ -333,19 +334,17 @@ export async function handleConfigVoicesModalOpen(
   if (!CONFIG_VOICES_MODAL_OPEN_ACTIONS.has(route.action)) return false;
 
   if (!isConfigRouteAuthorized(route, actor)) {
-    await interaction.reply({
-      content: localizer(route.locale, "commands.config.panel.denied_detail"),
-      flags: MessageFlags.Ephemeral,
+    await replyPanelReceipt(interaction, {
+      tone: "error",
+      heading: localizer(route.locale, "commands.config.panel.denied_heading"),
+      detail: localizer(route.locale, "commands.config.panel.denied_detail"),
     });
     return true;
   }
 
   const scope = await dependencies.resolveScope(interaction, false);
   if (!scope) {
-    await interaction.reply({
-      content: localizer(route.locale, missingScopeMessageKey(interaction, dependencies)),
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyPanelReceipt(interaction, missingScopeReceipt(route.locale, interaction, dependencies));
     return true;
   }
 
@@ -367,9 +366,10 @@ export async function handleConfigVoicesModalOpen(
         errorType: "InteractionRouteError",
         metadata: { serverId: scopeServerId(scope) },
       });
-      await interaction.reply({
-        content: `${localizer(route.locale, "general.errors.update_failed_title")}\n${localizer(route.locale, "general.errors.update_failed_description")}`,
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "error",
+        heading: localizer(route.locale, "general.errors.update_failed_title"),
+        detail: localizer(route.locale, "general.errors.update_failed_description"),
       });
     }
     return true;

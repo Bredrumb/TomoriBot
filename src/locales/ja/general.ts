@@ -1,6 +1,16 @@
 export default {
   general: {
+    restarting_title: `再起動中`,
     restarting: `TomoriBotは再起動中です。しばらくしてからもう一度お試しください。`,
+    panel_notice: {
+      outdated_heading: `パネルが古い状態です`,
+      unavailable_heading: `利用不可`,
+      empty_heading: `項目がありません`,
+      no_changes_heading: `変更なし`,
+      limit_heading: `上限に達しました`,
+      not_available_heading: `利用できません`,
+      invalid_heading: `無効な選択です`,
+    },
     oauth: {
       invalid_callback: `このサインインリンクは無効か、有効期限が切れています。TomoriBotからもう一度サインインしてください。`,
       server_error: `サービスエラーのため、TomoriBotはサインインを完了できませんでした。しばらくしてから再度お試しください。`,

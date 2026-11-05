@@ -1,4 +1,4 @@
-import { MessageFlags, type ModalSubmitInteraction } from "discord.js";
+import type { ModalSubmitInteraction } from "discord.js";
 import type { PanelAction } from "@/constants/panelActions";
 import type { ThinkingLevelValue } from "@/constants/thinkingLevels";
 import type { PanelReceipt, PanelReceiptTone } from "@/types/discord/panel";
@@ -44,11 +44,11 @@ import {
 import {
   repaint,
   staleReceipt,
-  missingScopeMessageKey,
-  outdatedConfigPanelMessage,
   type ConfigRepaintOptions,
   type ConfigRouteDependencies,
   type ConfigScope,
+  missingScopeReceipt,
+  outdatedConfigPanelReceipt,
 } from "@/utils/discord/interactions/configRouteContext";
 import { performPanelAction } from "@/utils/discord/interactions/panelController";
 import type { GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
@@ -87,6 +87,7 @@ import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { getProviderOptionFallbackRefOwner } from "@/utils/provider/providerOptionRegistry";
 import { localizer } from "@/utils/text/localizer";
 import { getProviderRequestFailureCopy, type ProviderRequestDeniedError } from "@/utils/provider/providerUsage";
+import { replyPanelReceipt } from "@/utils/discord/ui/panel";
 
 /** Routes that answer with a modal, which is its own acknowledgement and must not be deferred. */
 export const CONFIG_MODEL_MODAL_OPEN_ACTIONS = new Set<ConfigPanelRoute["action"]>([
@@ -229,27 +230,22 @@ export async function handleConfigModelModalOpen(
 
   const locale = route.locale;
   if (!isConfigRouteAuthorized(route, actor)) {
-    await interaction.reply({
-      content: localizer(locale, "commands.config.panel.denied_detail"),
-      flags: MessageFlags.Ephemeral,
+    await replyPanelReceipt(interaction, {
+      tone: "error",
+      heading: localizer(locale, "commands.config.panel.denied_heading"),
+      detail: localizer(locale, "commands.config.panel.denied_detail"),
     });
     return true;
   }
 
   const scope = await dependencies.resolveScope(interaction, false);
   if (!scope) {
-    await interaction.reply({
-      content: localizer(locale, missingScopeMessageKey(interaction, dependencies)),
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyPanelReceipt(interaction, missingScopeReceipt(locale, interaction, dependencies));
     return true;
   }
   const state = serverStateFromScope(scope);
   if (!state) {
-    await interaction.reply({
-      content: outdatedConfigPanelMessage(locale),
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyPanelReceipt(interaction, outdatedConfigPanelReceipt(locale));
     return true;
   }
 
@@ -260,9 +256,10 @@ export async function handleConfigModelModalOpen(
     // The view falls back to the active provider when the requested one is gone, so an exact match
     // is what stops the modal prefilling from a provider the submit would then refuse to write.
     if (view.selectedProvider?.toLowerCase() !== route.provider.toLowerCase()) {
-      await interaction.reply({
-        content: localizer(locale, "commands.config.panel.stale_detail"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(locale, "commands.config.panel.stale_heading"),
+        detail: localizer(locale, "commands.config.panel.stale_detail"),
       });
       return true;
     }
@@ -285,12 +282,13 @@ export async function handleConfigModelModalOpen(
     // Beyond the modal's checkbox capacity a submission could only ever describe a prefix of the
     // list, and unchecked-means-remove would read the remainder as deselected.
     if (stopStrings.length > CONFIG_STOP_STRING_CAPACITY) {
-      await interaction.reply({
-        content: localizer(locale, "commands.config.panel.stop_too_many_detail", {
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(locale, "general.panel_notice.limit_heading"),
+        detail: localizer(locale, "commands.config.panel.stop_too_many_detail", {
           count: stopStrings.length,
           max_entries: CONFIG_STOP_STRING_CAPACITY,
         }),
-        flags: MessageFlags.Ephemeral,
       });
       return true;
     }
@@ -351,16 +349,18 @@ export async function handleConfigModelModalOpen(
         : Number.parseInt(interaction.isStringSelectMenu() ? (interaction.values[0] ?? "") : "", 10);
     const entries = state.config.llm_logit_biases ?? [];
     if (entries.length === 0) {
-      await interaction.reply({
-        content: localizer(locale, "commands.config.panel.logit_none_detail"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "info",
+        heading: localizer(locale, "general.panel_notice.empty_heading"),
+        detail: localizer(locale, "commands.config.panel.logit_none_detail"),
       });
       return true;
     }
     if (!Number.isInteger(requestedStart) || requestedStart < 0) {
-      await interaction.reply({
-        content: localizer(locale, "commands.config.panel.stale_detail"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(locale, "commands.config.panel.stale_heading"),
+        detail: localizer(locale, "commands.config.panel.stale_detail"),
       });
       return true;
     }
@@ -385,9 +385,10 @@ export async function handleConfigModelModalOpen(
 
   if (route.action === "model-provider-select") {
     if (!isConfigCatalogModelCapability(route.capability)) {
-      await interaction.reply({
-        content: localizer(locale, "commands.config.panel.stale_detail"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(locale, "commands.config.panel.stale_heading"),
+        detail: localizer(locale, "commands.config.panel.stale_detail"),
       });
       return true;
     }
@@ -418,9 +419,10 @@ export async function handleConfigModelModalOpen(
     const chosenSlice = selected ? decodeConfigProviderPageValue(selected) : null;
     const chosenProvider = chosenSlice?.provider ?? selected;
     if (!chosenProvider) {
-      await interaction.reply({
-        content: localizer(locale, "commands.config.panel.stale_detail"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(locale, "commands.config.panel.stale_heading"),
+        detail: localizer(locale, "commands.config.panel.stale_detail"),
       });
       return true;
     }
@@ -432,9 +434,10 @@ export async function handleConfigModelModalOpen(
     ]);
     const provider = providers.find((candidate) => candidate.toLowerCase() === chosenProvider.toLowerCase());
     if (!provider) {
-      await interaction.reply({
-        content: localizer(locale, "commands.config.panel.stale_detail"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(locale, "commands.config.panel.stale_heading"),
+        detail: localizer(locale, "commands.config.panel.stale_detail"),
       });
       return true;
     }
@@ -444,11 +447,12 @@ export async function handleConfigModelModalOpen(
         ? speculativeModels
         : await dependencies.loadModelChoices(state, capability, provider, locale);
     if (models.length === 0) {
-      await interaction.reply({
-        content: localizer(locale, "commands.model.text.no_models_description", {
+      await replyPanelReceipt(interaction, {
+        tone: "error",
+        heading: localizer(locale, "commands.model.text.no_models_title"),
+        detail: localizer(locale, "commands.model.text.no_models_description", {
           provider: getProviderDisplayName(provider),
         }),
-        flags: MessageFlags.Ephemeral,
       });
       return true;
     }
@@ -478,9 +482,10 @@ export async function handleConfigModelModalOpen(
 
     const sliceStart = chosenSlice?.start ?? 0;
     if (sliceStart % CONFIG_MODEL_PAGE_SIZE !== 0 || sliceStart >= models.length) {
-      await interaction.reply({
-        content: localizer(locale, "commands.config.panel.stale_detail"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(locale, "commands.config.panel.stale_heading"),
+        detail: localizer(locale, "commands.config.panel.stale_detail"),
       });
       return true;
     }
@@ -501,9 +506,10 @@ export async function handleConfigModelModalOpen(
 
   if (route.action === "endpoint-select") {
     if (route.capability !== "stt") {
-      await interaction.reply({
-        content: localizer(locale, "commands.config.panel.stale_detail"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(locale, "commands.config.panel.stale_heading"),
+        detail: localizer(locale, "commands.config.panel.stale_detail"),
       });
       return true;
     }
@@ -532,18 +538,20 @@ export async function handleConfigModelModalOpen(
   const chosen = interaction.isStringSelectMenu() ? (interaction.values[0] ?? null) : null;
   const decoded = chosen ? decodeConfigProviderPageValue(chosen) : null;
   if (!decoded) {
-    await interaction.reply({
-      content: localizer(locale, "commands.config.panel.stale_detail"),
-      flags: MessageFlags.Ephemeral,
+    await replyPanelReceipt(interaction, {
+      tone: "warning",
+      heading: localizer(locale, "commands.config.panel.stale_heading"),
+      detail: localizer(locale, "commands.config.panel.stale_detail"),
     });
     return true;
   }
 
   const options = await dependencies.loadFallbackOptions(state, decoded.provider, locale);
   if (options.length === 0) {
-    await interaction.reply({
-      content: localizer(locale, "commands.model.fallback.no_models_description"),
-      flags: MessageFlags.Ephemeral,
+    await replyPanelReceipt(interaction, {
+      tone: "info",
+      heading: localizer(locale, "general.panel_notice.empty_heading"),
+      detail: localizer(locale, "commands.model.fallback.no_models_description"),
     });
     return true;
   }
