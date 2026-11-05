@@ -101,7 +101,7 @@ if [ "$allowMigrationDowntime" = true ]; then
     fi
   done
   env "TOMORIBOT_IMAGE=$tomoribotImage" \
-    docker compose -f /etc/tomoribot/docker-compose.yml stop -t 30 tomoribot
+    docker compose -f /etc/tomoribot/docker-compose.yml stop -t 40 tomoribot
   if [ -n "$(docker ps -q --filter label=com.docker.compose.service=tomoribot)" ]; then
     echo "TomoriBot is still running; refusing to migrate." >&2
     exit 1

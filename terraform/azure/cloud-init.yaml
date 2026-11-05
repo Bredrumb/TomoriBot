@@ -212,7 +212,7 @@ write_files:
 
       # Docker's 10s default stop grace is short enough to SIGKILL the bot partway through
       # its own shutdown.
-      docker restart -t 30 "$CID"
+      docker restart -t 40 "$CID"
 
       for _ in $(seq 1 30); do
         # Exit status rather than a written-out status code: curl's --write-out uses a
@@ -443,7 +443,7 @@ write_files:
 
       # Matches the scheduled recycle's grace: Docker's 10s default is short enough to SIGKILL
       # the bot partway through its own shutdown.
-      docker restart -t 30 "$CID"
+      docker restart -t 40 "$CID"
 
       for _ in $(seq 1 30); do
         if curl -sf -o /dev/null --max-time 5 http://127.0.0.1:8081/healthz; then

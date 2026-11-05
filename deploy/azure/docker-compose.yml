@@ -6,6 +6,7 @@ services:
     user: "1001:1001"
     init: true
     restart: unless-stopped
+    stop_grace_period: 40s
     read_only: true
     # Reserve RAM on the 4 GiB host for Docker, sidecars, and zram so the RSS guard remains reachable.
     mem_limit: "${TOMORIBOT_MEMORY_LIMIT_MB:-2048}m"
@@ -24,6 +25,7 @@ services:
     environment:
       NODE_ENV: production
       RUN_ENV: production
+      SHARD_COUNT: "4"
       TOMORI_PUBLIC_BASE_URL: https://api.tomoribot.app
       PORT: "8081"
       SECRET_FILE: /run/secrets/tomoribot.json

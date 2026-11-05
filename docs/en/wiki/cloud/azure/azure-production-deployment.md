@@ -59,6 +59,12 @@ environment-scoped Run Command deployment succeeds.
 
 The workflow deliberately separates recurring releases from one-time lifecycle operations.
 
+`deploy/azure/docker-compose.yml` sets `SHARD_COUNT=4` and leaves `SHARD_IDS` unset so the single
+bot process owns all four gateway shards. Deploy an image containing shard support before relying
+on this setting. Changing the shard count requires recreating the service; a container restart
+keeps its existing environment. Verify that `/healthz` reports four ready shards after deployment.
+Compose, migration stops, and host watchdog and scheduled restarts allow 40 seconds for shutdown.
+
 ### Progress watchdog
 
 Docker restarts a container that *exits* and leaves a merely `unhealthy` one alone, so neither
