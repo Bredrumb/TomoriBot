@@ -1,5 +1,6 @@
 import { sql } from "@/utils/db/client";
 import { initializeDatabase, invalidatePresetPointerStateCaches } from "@/utils/db/initializeDatabase";
+import { detectRagAvailability } from "@/utils/db/ragAvailability";
 import { seedPersonaSpritesFromCatalog } from "@/db/seed/catalog/presetSpriteSeed";
 import { seedPersonaAvatarsFromCatalog } from "@/db/seed/catalog/presetAvatarSeed";
 import { seedPersonaCharacterReferencesFromCatalog } from "@/db/seed/catalog/presetCharacterReferenceSeed";
@@ -31,6 +32,8 @@ export async function initDatabase(environment: AppEnvironment): Promise<void> {
     } else {
       await sql`SELECT 1`;
       log.success("PostgreSQL runtime connection verified (schema management disabled)");
+      // Only initializeDatabase probed pgvector before, so schema-less runtimes kept RAG gated until the monitor's first tick.
+      await detectRagAvailability();
     }
   } catch {
     process.exit(1);
