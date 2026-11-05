@@ -1,0 +1,27 @@
+[Unit]
+Description=TomoriBot encrypted off-site backup
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+OnFailure=tomoribot-alert@%n.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/tomoribot-backup.sh
+Environment=HOME=/var/lib/tomoribot-backup
+StateDirectory=tomoribot-backup
+StateDirectoryMode=0700
+TimeoutStartSec=2h
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/var/backups/tomoribot
+ProtectHome=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes

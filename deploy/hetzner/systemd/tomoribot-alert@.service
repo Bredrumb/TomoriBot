@@ -1,0 +1,6 @@
+[Unit]
+Description=Alert operators that %i failed
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/tomoribot-alert %i

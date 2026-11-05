@@ -1,0 +1,170 @@
+name: tomoribot
+
+services:
+  postgres:
+    build:
+      context: ./postgres
+    image: tomoribot-postgres:16
+    container_name: tomoribot-postgres
+    restart: unless-stopped
+    network_mode: none
+    read_only: true
+    shm_size: 256m
+    mem_limit: 2048m
+    memswap_limit: 2048m
+    pids_limit: 512
+    stop_grace_period: 90s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETUID
+      - SETGID
+    environment:
+      POSTGRES_DB: tomoribot
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg-superuser-password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.utf8 --data-checksums"
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+    volumes:
+      - /var/lib/tomoribot/postgres:/var/lib/postgresql/data
+      - pgsocket:/var/run/postgresql
+      - /etc/tomoribot/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - /etc/tomoribot/postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - /etc/tomoribot/postgres/superuser-password:/run/secrets/pg-superuser-password:ro
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=256m
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "/var/run/postgresql", "-U", "postgres", "-d", "tomoribot"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 60s
+
+  searxng:
+    image: ${SEARXNG_IMAGE:?SEARXNG_IMAGE is required}
+    container_name: tomoribot-searxng
+    restart: unless-stopped
+    read_only: true
+    mem_limit: 512m
+    memswap_limit: 512m
+    pids_limit: 128
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - app_net
+    environment:
+      SEARXNG_SECRET: ${SEARXNG_SECRET:?SEARXNG_SECRET is required}
+      SEARXNG_BASE_URL: http://localhost:8080/
+      GRANIAN_WORKERS_MAX_RSS: "400"
+      GRANIAN_RSS_SAMPLE_INTERVAL: 10s
+      GRANIAN_BLOCKING_THREADS: "2"
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777
+      - /etc/searxng:rw,noexec,nosuid,nodev,size=16m
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  tomoribot:
+    profiles: [gateway]
+    image: ${TOMORIBOT_IMAGE:?TOMORIBOT_IMAGE is required}
+    container_name: tomoribot-app
+    user: "1001:1001"
+    init: true
+    restart: unless-stopped
+    read_only: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+    mem_limit: 3072m
+    memswap_limit: 4096m
+    pids_limit: 256
+    stop_grace_period: 40s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - app_net
+    environment:
+      NODE_ENV: production
+      RUN_ENV: production
+      PORT: "8081"
+      SHARD_COUNT: "4"
+      TOMORI_PUBLIC_BASE_URL: https://${TOMORI_PUBLIC_HOST:?TOMORI_PUBLIC_HOST is required}
+      SECRET_FILE: /run/secrets/tomoribot.json
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/gcp-vertex-sa.json
+      CONTAINER_MEMORY_LIMIT_MB: "3072"
+      DATABASE_SCHEMA_MANAGEMENT_ENABLED: "false"
+      FETCH_URL_ALLOW_PRIVATE_NETWORK: "false"
+      SEARXNG_BASE_URL: http://searxng:8080/
+      TOMORI_LOG_FILE: /app/logs/tomoribot.jsonl
+    ports:
+      - "127.0.0.1:8081:8081"
+    volumes:
+      - /etc/tomoribot/secrets.json:/run/secrets/tomoribot.json:ro
+      - /etc/tomoribot/gcp-vertex-sa.json:/run/secrets/gcp-vertex-sa.json:ro
+      - type: volume
+        source: pgsocket
+        target: /var/run/postgresql
+        read_only: true
+        volume:
+          nocopy: true
+      - /var/log/tomoribot:/app/logs
+      - /var/lib/tomoribot/diagnostics:/app/diagnostics
+      - /var/lib/tomoribot/backups:/app/backups
+      - /var/lib/tomoribot/data:/app/data
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=256m,uid=1001,gid=1001,mode=1777
+      - /home/tomori/.cache:rw,noexec,nosuid,nodev,size=64m,uid=1001,gid=1001,mode=0700
+      - /home/tomori/.bun:rw,noexec,nosuid,nodev,size=128m,uid=1001,gid=1001,mode=0700
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  caddy:
+    profiles: [gateway]
+    image: caddy:2-alpine@sha256:70b3180738b46cd88e49b300d790ae448a0aca3f58edef0f000bb57d619a9ab3
+    restart: unless-stopped
+    read_only: true
+    user: "1001:1001"
+    mem_limit: 256m
+    memswap_limit: 256m
+    pids_limit: 128
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    networks: [app_net]
+    environment:
+      TOMORI_PUBLIC_HOST: ${TOMORI_PUBLIC_HOST:?TOMORI_PUBLIC_HOST is required}
+    ports:
+      - "0.0.0.0:80:80"
+      - "0.0.0.0:443:443"
+    volumes:
+      - /etc/tomoribot/Caddyfile:/etc/caddy/Caddyfile:ro
+      - /var/lib/tomoribot/caddy/data:/data
+      - /var/lib/tomoribot/caddy/config:/config
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,uid=1001,gid=1001
+
+networks:
+  app_net:
+    name: tomoribot-app
+    driver: bridge
+
+volumes:
+  pgsocket:
+    name: tomoribot-pgsocket
