@@ -9,7 +9,7 @@ $VenvDir = Join-Path $ScriptDir ".venv"
 $PythonBin = if ($env:PYTHON_BIN) { $env:PYTHON_BIN } else { "python" }
 $ModelId = if ($env:VOXCPM2_MODEL_ID) { $env:VOXCPM2_MODEL_ID } else { "openbmb/VoxCPM2" }
 $UseCpu = $Cpu.IsPresent -or ($env:CPU_ONLY -match "^(1|true|yes|on)$")
-$CudaIndex = if ($env:TORCH_CUDA_INDEX) { $env:TORCH_CUDA_INDEX } else { "https://download.pytorch.org/whl/cu124" }
+$CudaIndex = if ($env:TORCH_CUDA_INDEX) { $env:TORCH_CUDA_INDEX } else { "https://download.pytorch.org/whl/cu128" }
 
 & $PythonBin -c "import sys; assert (3, 10) <= sys.version_info[:2] < (3, 13), 'VoxCPM2 requires Python 3.10-3.12.'"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -20,10 +20,15 @@ $VenvPython = Join-Path $VenvDir "Scripts\python.exe"
 
 if (-not $UseCpu) {
   Write-Host "Installing CUDA-enabled PyTorch from $CudaIndex..."
-  & $VenvPython -m pip install torch torchvision torchaudio --index-url $CudaIndex
+  & $VenvPython -m pip install "torch==2.10.0" "torchaudio==2.10.0" --index-url $CudaIndex
 }
 
 & $VenvPython -m pip install -r (Join-Path $ScriptDir "requirements.txt")
+
+if (-not $UseCpu) {
+  # Windows CUDA torch wheels do not depend on Triton, which VOXCPM2_OPTIMIZE needs; keep its minor version on the one torch 2.10 expects.
+  & $VenvPython -m pip install "triton-windows>=3.6,<3.7"
+}
 
 if ($env:VOXCPM2_PREFETCH -ne "0") {
   Write-Host "Downloading $ModelId into the Hugging Face cache..."

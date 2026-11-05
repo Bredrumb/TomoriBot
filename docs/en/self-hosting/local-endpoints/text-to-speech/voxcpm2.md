@@ -38,7 +38,9 @@ Recommended starting point:
 - Current NVIDIA driver and a CUDA-enabled PyTorch build for GPU acceleration
 - CPU is supported as a fallback but is substantially slower
 
-The official package also exposes CPU and Apple MPS device selection. For TomoriBot on Windows, the standard Python package can run natively; WSL is not required. The Windows PowerShell installer installs a CUDA-enabled PyTorch build (`cu124`) by default.
+The official package also exposes CPU and Apple MPS device selection. For TomoriBot on Windows, the standard Python package can run natively; WSL is not required. The Windows PowerShell installer installs CUDA-enabled PyTorch 2.10 (`cu128`) and `triton-windows`, which the default `VOXCPM2_OPTIMIZE=1` needs to compile the model.
+
+With compilation on, the first start takes about 2-3 minutes while PyTorch compiles the model, and later starts take under a minute because the compiled kernels are cached. Synthesis is then roughly 2.5-3x faster than uncompiled. Compilation also uses about 2 GB more system memory. If the server stops with a message that Triton is missing, rerun the installer, or set `VOXCPM2_OPTIMIZE=0` to run uncompiled.
 
 To explicitly install on a CPU-only machine, pass the `-Cpu` switch:
 
@@ -49,7 +51,8 @@ To explicitly install on a CPU-only machine, pass the `-Cpu` switch:
 If your native Windows PyTorch installation ever needs a manual reinstall or driver realignment, install the CUDA-enabled PyTorch build directly into the server's virtual environment:
 
 ```powershell
-.\servers\tts\voxcpm2\.venv\Scripts\pip.exe install --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+.\servers\tts\voxcpm2\.venv\Scripts\pip.exe install --force-reinstall torch==2.10.0 torchaudio==2.10.0 --index-url https://download.pytorch.org/whl/cu128
+.\servers\tts\voxcpm2\.venv\Scripts\pip.exe install "triton-windows>=3.6,<3.7"
 ```
 
 ## Installation
@@ -133,7 +136,7 @@ For a cloned voice, one-off delivery instructions take precedence over the refer
 |---|---|---|
 | `VOXCPM2_MODEL_ID` | `openbmb/VoxCPM2` | Hugging Face model ID or local model directory |
 | `VOXCPM2_DEVICE` | `auto` | Runtime device: `auto`, `cuda`, `cuda:N`, `cpu`, or `mps` |
-| `VOXCPM2_OPTIMIZE` | `1` | Enable the official runtime's optimization / compile path |
+| `VOXCPM2_OPTIMIZE` | `1` | Compile the model with `torch.compile` on CUDA; needs Triton, and the server stops at startup without it |
 | `VOXCPM2_LOAD_DENOISER` | `0` | Load the optional upstream denoiser; disabled by default to save memory |
 | `VOXCPM2_CFG_VALUE` | `2.0` | Guidance strength |
 | `VOXCPM2_INFERENCE_TIMESTEPS` | `10` | Flow-matching inference steps; more can improve quality at the cost of speed |
