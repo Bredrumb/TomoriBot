@@ -57,7 +57,7 @@ def resolve_backend(raw_backend: str) -> str:
 
 
 MODE = resolve_mode(read_startup_mode())
-BACKEND = resolve_backend(os.getenv("QWEN3TTS_BACKEND", "transformers"))
+BACKEND = resolve_backend(os.getenv("QWEN3TTS_BACKEND", "cuda-graphs"))
 # Static-cache talker positions shared by the reference prompt and the generated audio (12 per second);
 # 4096 measured about 20% slower per step, so raise it only when the cache-full 422 becomes common.
 CUDA_GRAPH_MAX_SEQ_LEN = 2048
@@ -211,6 +211,23 @@ def guard_static_cache(fast_generate):
   return guarded
 
 
+def require_backend_support() -> None:
+  if BACKEND != "cuda-graphs":
+    return
+  import importlib.util
+
+  if not DEVICE_MAP.startswith("cuda") or not torch.cuda.is_available():
+    raise RuntimeError(
+      "QWEN3TTS_BACKEND=cuda-graphs (the default) needs an NVIDIA GPU with CUDA PyTorch. "
+      "Set QWEN3TTS_BACKEND=transformers to run without it."
+    )
+  if importlib.util.find_spec("faster_qwen3_tts") is None:
+    raise RuntimeError(
+      "QWEN3TTS_BACKEND=cuda-graphs (the default) needs faster-qwen3-tts. Run "
+      "pip install -r servers/tts/qwen3tts/requirements.txt, or set QWEN3TTS_BACKEND=transformers."
+    )
+
+
 def load_cuda_graph_model(source: str, kwargs: dict):
   import faster_qwen3_tts.generate
   from faster_qwen3_tts import FasterQwen3TTS
@@ -328,6 +345,7 @@ def resolve_request_mode(payload: SynthesizeRequest) -> str:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+  require_backend_support()
   if MODE != "auto":
     load_model_for_mode(MODE)
   yield

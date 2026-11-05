@@ -39,14 +39,16 @@ python servers\tts\qwen3tts\server.py --mode auto
 
 Auto mode inspects each `/synthesize` request: requests with `ref_audio` use the clone model, while requests with `instruct` use the VoiceDesign model. It keeps only one model loaded at a time and swaps models when the request type changes, so the first request after a swap may be slower.
 
-## Optional: faster CUDA backend
+## Fast CUDA backend
 
-On an NVIDIA GPU, set `QWEN3TTS_BACKEND=cuda-graphs` before starting the server to use [faster-qwen3-tts](https://github.com/andimarafioti/faster-qwen3-tts), which the requirements already install. Synthesis is about 6x faster, so it runs faster than real time instead of about twice as slow. Its output is not bit-identical to the default backend's for the same input.
+By default the server uses [faster-qwen3-tts](https://github.com/andimarafioti/faster-qwen3-tts), which the requirements install. On an NVIDIA GPU it synthesizes about 6x faster than the standard backend, so speech generates faster than real time instead of about twice as slow. It needs no extra setup, but it only runs on NVIDIA GPUs: on a CPU, a Mac, or an AMD GPU the server stops at startup and tells you to switch backends.
 
-This backend reserves room for a fixed amount of speech per request, shared between the reference clip and the generated audio (about 170 seconds in total). With a 10-20 second clip that leaves well over two minutes of speech. If a request does not fit, the server returns an error instead of cutting the audio short; use a shorter clip or text, or the default `transformers` backend.
+This backend reserves room for a fixed amount of speech per request, shared between the reference clip and the generated audio (about 170 seconds in total). With a 10-20 second clip that leaves well over two minutes of speech. If a request does not fit, the server returns an error instead of cutting the audio short; use a shorter clip or text, or the standard backend.
+
+To use the standard backend instead, set `QWEN3TTS_BACKEND=transformers` before starting the server:
 
 ```powershell
-$env:QWEN3TTS_BACKEND = "cuda-graphs"
+$env:QWEN3TTS_BACKEND = "transformers"
 python servers\tts\qwen3tts\server.py
 ```
 
