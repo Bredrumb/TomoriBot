@@ -3,6 +3,7 @@ import type { ChatIncoming, GenerationTurnResult } from "@/utils/chat/types";
 import {
   getUserImpersonationGenerationError,
   installUserImpersonationCompletion,
+  UserImpersonationReportedProviderError,
 } from "@/utils/chat/userImpersonationCompletion";
 
 function makeIncoming(overrides: Partial<ChatIncoming> = {}): ChatIncoming {
@@ -65,6 +66,27 @@ describe("user impersonation generation completion", () => {
 
     expect(await caught).toBeInstanceOf(Error);
     expect(((await caught) as Error).message).toBe("provider exploded");
+  });
+
+  it.each([
+    "content_blocked",
+    "unknown",
+  ])("preserves prior reporting for %s without carrying private provider text", async (type) => {
+    const incoming = makeIncoming();
+    const completion = installCompletion(incoming);
+    const caught = completion.catch((error: unknown) => error);
+    await incoming.onGenerationResult?.(
+      makeResult("error", [
+        {
+          status: "error",
+          providerFailureReported: true,
+          data: { type, code: "PROHIBITED_CONTENT", message: "PRIVATE_PROVIDER_TEXT PRIVATE_KEY", retryable: false },
+        },
+      ]),
+    );
+    const error = await caught;
+    expect(error).toBeInstanceOf(UserImpersonationReportedProviderError);
+    expect(String(error)).not.toContain("PRIVATE_");
   });
 
   it("rejects timeout results so the slash command can show its timeout embed", async () => {

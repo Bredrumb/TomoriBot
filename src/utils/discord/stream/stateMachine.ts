@@ -464,7 +464,7 @@ export class StreamOrchestrator implements IStreamOrchestrator {
     if (surfaced) {
       await this.errorUi.handleProviderError(chunk.error, provider, context, config.apiKey);
     }
-    return { status: "error", data: chunk.error, ...this.collectDeliveredOutput(state) };
+    return { status: "error", data: chunk.error, providerFailureReported: true, ...this.collectDeliveredOutput(state) };
   }
 
   /** What a failed stream already posted, which the next attempt continues instead of regenerating. */

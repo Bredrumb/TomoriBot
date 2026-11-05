@@ -98,6 +98,9 @@ attempt continues the reply from where the failed one stopped:
   renders a compact Discord button notice informing users that a fallback model answered the turn.
   Each failed attempt is listed by error type and display-safe code only, because context assembly
   reads the notice back for the model; the upstream message stays in the operator log.
+- **Impersonation completion**: provider error results carry `providerFailureReported` after the stream
+  handler schedules their report. The impersonation command keeps its safe error reply and skips a
+  duplicate report; failures outside that stream path retain command-level error logging.
 - **Final emission**: if all attempts fail, only the terminal error is emitted to the response sink.
 
 ## Constraints and rationale
@@ -180,3 +183,7 @@ refusals, timeouts and upstream outages produce a metric plus a retained warning
 - `src/utils/security/keyRotation.ts`: API key selection and rotation tracking.
 - `src/utils/chat/responseReview.ts`: shared state, admitted evidence and reviewer lifecycle.
 - `src/utils/chat/responseRuleCheck.ts`: internal checker validation and bounded evidence.
+
+Reviewer resolution diagnostics distinguish missing, deprecated, unavailable, or unsupported models,
+unsupported providers, unavailable provider options, and missing credentials. They include the model
+ID, codename, and provider when available, without credentials or draft content.
