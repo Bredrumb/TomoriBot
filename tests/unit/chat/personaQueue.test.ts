@@ -1,3 +1,5 @@
+import { stubAllShardOwnership } from "../../helpers/shardOwnership";
+stubAllShardOwnership();
 import { describe, expect, it } from "bun:test";
 import type { Client, Message } from "discord.js";
 import { HumanizerDegree } from "@/types/db/schema";

@@ -56,9 +56,6 @@ async function syncOpenrouterCatalogPricing(): Promise<void> {
  * starts responding: tool registry, localizer, LLM caches, preset avatar cache,
  * and the event handler (which registers all Discord event listeners).
  *
- * Exits the process on critical failures (tool registry). All other failures
- * are non-critical, so the bot degrades gracefully without them.
- *
  */
 export async function initLoaders(client: Client): Promise<void> {
   const { initializeRawModalInterception } = await import("@/utils/discord/ui/modals");
@@ -74,7 +71,7 @@ export async function initLoaders(client: Client): Promise<void> {
     log.success("Tool registry initialized successfully");
   } catch (error) {
     log.error("Failed to initialize tool registry", error as Error);
-    process.exit(1);
+    throw error;
   }
 
   log.section("Initializing LLM Configuration Cache...");

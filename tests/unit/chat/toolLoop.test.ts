@@ -1,3 +1,5 @@
+import { stubAllShardOwnership } from "../../helpers/shardOwnership";
+stubAllShardOwnership();
 import { REST } from "discord.js";
 import { RESPONSE_REVIEW_ITEM_VALUES } from "@/constants/responseReview";
 import type { z } from "zod";

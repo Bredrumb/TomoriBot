@@ -1,152 +1,175 @@
-import { isDraining } from "@/utils/misc/shutdownState";
 import { config } from "dotenv";
-import { initializeOAuthCallbackRoute } from "@/utils/oauth/callbackRoute";
-import { getOAuthPublicBaseUrl } from "@/utils/oauth/settings";
+import { Routes } from "discord.js";
+import { z } from "zod";
 import { resolveEnvironment } from "@/types/config";
-import { startHealthServer } from "@/init/healthServer";
-import { registerHeapSnapshotHandler } from "@/init/heapSnapshot";
 import { loadSecrets } from "@/init/secrets";
-import { initStartupBackup } from "@/init/backup";
 import { createDiscordClient, isTransientGatewayError, resolvePresenceIntentEnabled } from "@/init/discord";
-import { initDatabase } from "@/init/database";
-import { initLoaders } from "@/init/loaders";
-import { initBridges } from "@/init/bridges";
-import { initTimers } from "@/init/timers";
-import { initMediaProcessing } from "@/init/media";
+import { initializeShardTopology } from "@/utils/discord/shardOwnership";
 import { log } from "@/utils/misc/logger";
-import { discordPresenceRetention } from "@/utils/cache/discordPresenceRetention";
-import { statRepository } from "@/utils/db/repositories/StatRepository";
-import { getPrivateNetworkStartupError } from "@/utils/security/remoteUrlSecurity";
 
-/**
- * Detects Discord's "privileged intent not approved" rejection.
- *
- * When the GuildPresences intent is requested but not approved, the gateway
- * closes the connection with code 4014 and discord.js rejects login with a
- * `DisallowedIntents` error. We match on the error code and message so the
- * failure can be reported as an actionable misconfiguration rather than a
- * silent, never-connected process.
- *
- * @returns true if the failure is a disallowed/privileged intent rejection
- */
-function isDisallowedIntentsError(error: unknown): boolean {
-  const code = (error as { code?: unknown })?.code;
-  if (code === "DisallowedIntents") return true;
-  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
-  return message.includes("disallowed intents") || message.includes("privileged intent");
-}
+export async function startBot(): Promise<void> {
+  config({ quiet: true });
+  const environment = resolveEnvironment();
+  const { getPrivateNetworkStartupError } = await import("@/utils/security/remoteUrlSecurity");
+  const privateNetworkError = getPrivateNetworkStartupError();
+  if (privateNetworkError) throw new Error(privateNetworkError);
 
-config({ quiet: true });
-
-const environment = resolveEnvironment();
-
-const privateNetworkStartupError = getPrivateNetworkStartupError();
-if (privateNetworkStartupError) {
-  // Printed directly because the Docker image has no pino-pretty, so the logger would emit this as one JSON line.
-  console.error(privateNetworkStartupError);
-  process.exit(1);
-}
-
-const healthPort = Number.parseInt(process.env.PORT ?? "8080", 10);
-
-// Bind to PORT immediately so Cloud Run's startup probe passes before the rest of init runs
-if (environment === "production") {
-  startHealthServer(healthPort);
-}
-
-await loadSecrets(environment);
-
-// Read after secrets load, because a deployment may supply the base URL as a secret.
-const oauthPublicBaseUrl = getOAuthPublicBaseUrl();
-if (oauthPublicBaseUrl) {
-  initializeOAuthCallbackRoute();
-  // Imported here so the MCP and database modules it pulls in read configuration after secrets load.
-  const { initializeMcpOAuthRoutes } = await import("@/utils/mcp/oauth/routes");
-  initializeMcpOAuthRoutes(oauthPublicBaseUrl);
-  if (environment !== "production") startHealthServer(healthPort);
-  const callbackOrigin = new URL(oauthPublicBaseUrl);
-  // Only a loopback base URL is plain HTTP; a Docker port mapping can make a mismatch intentional, so this only warns.
-  if (callbackOrigin.protocol === "http:" && callbackOrigin.port !== String(healthPort)) {
-    log.warn(
-      `TOMORI_PUBLIC_BASE_URL uses port ${callbackOrigin.port}, but the callback server listens on PORT ${healthPort}`,
+  const { startHealthServer } = await import("@/init/healthServer");
+  const healthPort = Number.parseInt(process.env.PORT ?? "8080", 10);
+  if (environment === "production") startHealthServer(healthPort);
+  await loadSecrets(environment);
+  const topology = initializeShardTopology();
+  const { isDatabaseSchemaManagementEnabled, initDatabase } = await import("@/init/database");
+  const { assertBridgeTopology, initBridges, stopBridges } = await import("@/init/bridges");
+  if (!topology.ownsAllShards() && isDatabaseSchemaManagementEnabled()) {
+    throw new Error(
+      "Subset shard processes require DATABASE_SCHEMA_MANAGEMENT_ENABLED=false; run schema management separately",
     );
+  }
+  assertBridgeTopology();
+
+  const { initStartupBackup } = await import("@/init/backup");
+  if (isDatabaseSchemaManagementEnabled()) await initStartupBackup(environment);
+  const { registerHeapSnapshotHandler } = await import("@/init/heapSnapshot");
+  registerHeapSnapshotHandler();
+  const { initMediaProcessing } = await import("@/init/media");
+  initMediaProcessing();
+
+  const includePresences = await resolvePresenceIntentEnabled(environment);
+  const lifetime = new AbortController();
+  const client = createDiscordClient(includePresences, undefined, topology, lifetime.signal);
+  const [
+    { registerShutdown },
+    { initTimers, stopTimers },
+    { initializeScheduledWorkCoordinator, stopScheduledWorkCoordinator },
+    { initializeShutdownInteractionAdmission },
+    { statRepository },
+    { healthTracker },
+    { acquireShardLeases, hasShardLeaseOwnership, releaseShardLeases },
+    { startInvalidationBus, stopInvalidationBus },
+    { abortChannelTurns },
+    { sql },
+  ] = await Promise.all([
+    import("@/init/shutdown"),
+    import("@/init/timers"),
+    import("@/timers/scheduledWorkCoordinator"),
+    import("@/utils/discord/ui/interactionCore"),
+    import("@/utils/db/repositories/StatRepository"),
+    import("@/utils/misc/healthTracker"),
+    import("@/utils/cluster/shardLeases"),
+    import("@/utils/cache/invalidationBus"),
+    import("@/utils/chat/channelQueue"),
+    import("@/utils/db/client"),
+  ]);
+  initializeShutdownInteractionAdmission(client);
+  const shutdown = registerShutdown(client, {
+    stopScheduledWork: () => {
+      lifetime.abort();
+      stopScheduledWorkCoordinator();
+      stopTimers();
+      healthTracker.stopWatchdog();
+    },
+    flushStats: () => statRepository.shutdown(),
+    cleanupMcp: async () => {
+      const { getGuildMcpManager } = await import("@/utils/mcp/guildMcpManager");
+      await Promise.all([getGuildMcpManager().cleanup(), stopBridges()]);
+    },
+    cleanupCoordination: async () => {
+      const results = await Promise.allSettled([stopInvalidationBus(), releaseShardLeases()]);
+      for (const result of results) if (result.status === "rejected") throw result.reason;
+    },
+  });
+  healthTracker.startWatchdog(() => shutdown.shutdown({ exitCode: 1 }));
+
+  try {
+    await initDatabase(environment);
+    lifetime.signal.throwIfAborted();
+    const acquired = await acquireShardLeases(
+      {
+        onLost: () => {
+          void shutdown.shutdown({ immediate: true, exitCode: 1 });
+        },
+        onStateChange: (state) => {
+          if (state === "uncertain") {
+            abortChannelTurns();
+            stopScheduledWorkCoordinator();
+          } else if (state === "active" && !lifetime.signal.aborted && client.isReady()) {
+            initializeScheduledWorkCoordinator(client);
+          }
+        },
+      },
+      lifetime.signal,
+    );
+    if (!acquired) throw new Error("Could not acquire every selected shard lease; Discord login refused");
+    lifetime.signal.throwIfAborted();
+    await startInvalidationBus(sql, topology);
+    lifetime.signal.throwIfAborted();
+
+    const { getOAuthPublicBaseUrl } = await import("@/utils/oauth/settings");
+    const oauthPublicBaseUrl = getOAuthPublicBaseUrl();
+    if (oauthPublicBaseUrl) {
+      const { initializeOAuthCallbackRoute } = await import("@/utils/oauth/callbackRoute");
+      const { initializeMcpOAuthRoutes } = await import("@/utils/mcp/oauth/routes");
+      initializeOAuthCallbackRoute();
+      initializeMcpOAuthRoutes(oauthPublicBaseUrl);
+      if (environment !== "production") startHealthServer(healthPort);
+      const callbackOrigin = new URL(oauthPublicBaseUrl);
+      if (callbackOrigin.protocol === "http:" && callbackOrigin.port !== String(healthPort)) {
+        log.warn(
+          `TOMORI_PUBLIC_BASE_URL uses port ${callbackOrigin.port}, but the callback server listens on PORT ${healthPort}`,
+        );
+      }
+    }
+
+    if (includePresences) {
+      const { discordPresenceRetention } = await import("@/utils/cache/discordPresenceRetention");
+      const pairs = await statRepository.getPresenceRetentionPairs(topology);
+      lifetime.signal.throwIfAborted();
+      for (const pair of pairs) discordPresenceRetention.retain(pair.server_disc_id, pair.user_disc_id);
+      log.info(`Discord presence retention initialized for ${pairs.length} guild-user pairs`);
+    }
+    const { initLoaders } = await import("@/init/loaders");
+    await initLoaders(client);
+    lifetime.signal.throwIfAborted();
+    if (!hasShardLeaseOwnership()) throw new Error("Shard ownership became unsafe during startup");
+    await initBridges(client);
+    lifetime.signal.throwIfAborted();
+    await initTimers(client);
+    lifetime.signal.throwIfAborted();
+
+    const token = process.env.DISCORD_TOKEN;
+    if (!token) throw new Error("DISCORD_TOKEN is required");
+    client.rest.setToken(token);
+    if (topology.totalShardCount === null) {
+      const gateway = z
+        .object({ shards: z.number().int().positive() })
+        .parse(await client.rest.get(Routes.gatewayBot(), { signal: lifetime.signal }));
+      topology.resolveGatewayShardCount(gateway.shards);
+    }
+    const { waitForSessionStarts } = await import("@/utils/cluster/identifyThrottler");
+    await waitForSessionStarts(client.rest, topology.getResolvedTopology().ownedShardIds.length, lifetime.signal);
+    lifetime.signal.throwIfAborted();
+    if (!hasShardLeaseOwnership()) throw new Error("Shard ownership became unsafe before Discord login");
+    await client.login(token);
+  } catch (error) {
+    const cancelled = lifetime.signal.aborted;
+    if (!cancelled) {
+      log.error(
+        isTransientGatewayError(error)
+          ? "Discord gateway startup failed; the runtime must restart with backoff"
+          : "Bot startup failed",
+        error,
+      );
+    }
+    await shutdown.shutdown({ immediate: true, exitCode: cancelled ? undefined : 1 });
   }
 }
 
-await initStartupBackup(environment);
-
-registerHeapSnapshotHandler();
-
-initMediaProcessing();
-
-// Probe Discord for Presence Intent approval (or honor an explicit override) before
-// building the client, so the privileged intent is requested only when it is actually
-// enabled. Approval is then picked up the moment Discord grants it, with no failed
-// gateway handshake and no manual env change.
-const includePresences = await resolvePresenceIntentEnabled(environment);
-const client = createDiscordClient(includePresences);
-const { registerShutdown } = await import("@/init/shutdown");
-const { stopScheduledWorkCoordinator } = await import("@/timers/scheduledWorkCoordinator");
-const { initializeShutdownInteractionAdmission } = await import("@/utils/discord/ui/interactionCore");
-initializeShutdownInteractionAdmission(client);
-registerShutdown(client, {
-  stopScheduledWork: stopScheduledWorkCoordinator,
-  flushStats: () => statRepository.shutdown(),
-  cleanupMcp: async () => {
-    const { getGuildMcpManager } = await import("@/utils/mcp/guildMcpManager");
-    await getGuildMcpManager().cleanup();
-  },
-});
-
-await initDatabase(environment);
-
-// GUILD_CREATE caches presences during login, so restore eligible pairs before connecting.
-if (includePresences) {
-  const presencePairs = await statRepository.getPresenceRetentionPairs();
-  for (const pair of presencePairs) discordPresenceRetention.retain(pair.server_disc_id, pair.user_disc_id);
-  log.info(`Discord presence retention initialized for ${presencePairs.length} guild-user pairs`);
-}
-
-await initLoaders(client);
-
-await initBridges(client);
-
-if (!isDraining()) initTimers(client);
-
-// Login triggers clientReady, which starts the deferred timers.
-//
-// A failure here has to exit rather than retry: `Client#login` awaits `client.destroy()`, which
-// leaves `ws.destroyed` set (discord.js clears it only in the WebSocket manager constructor),
-// drops `client.token`, and stops the cache sweepers. A second `login()` in the same process
-// never reports ready, which the health endpoint reads as 503 and the runtime reads as a dead
-// container. A rebuilt client is not an option either, because the Matrix bridge closes over the
-// instance it was handed. The restart policy is the only path that yields a usable client.
-//
-// Exiting also keeps a transient gateway failure distinguishable from a misconfiguration.
-try {
-  if (!isDraining()) await client.login(process.env.DISCORD_TOKEN);
-} catch (error) {
-  if (isDisallowedIntentsError(error)) {
-    log.error(
-      "Discord rejected login: a requested privileged intent is not approved for this bot. " +
-        "This is unexpected because approval is probed before connecting. Check whether the " +
-        "Presence Intent was revoked. Restarting will re-probe and boot without the intent " +
-        "(presence context degrades gracefully).",
-      error as Error,
-    );
+if (import.meta.main) {
+  try {
+    await startBot();
+  } catch (error) {
+    await log.error("Bot startup configuration failed", error);
     process.exit(1);
   }
-
-  const transient = isTransientGatewayError(error);
-  log.error(
-    transient
-      ? "Discord login failed because the gateway is unreachable. The process will exit so the " +
-          "container runtime restarts it with backoff; no action is needed if Discord recovers."
-      : "Discord login failed",
-    error as Error,
-  );
-  // Best effort: the handshake already failed, so this only avoids leaving a half-open socket and
-  // a session Discord would hold until it times out.
-  await client.destroy().catch(() => undefined);
-  process.exit(1);
 }
