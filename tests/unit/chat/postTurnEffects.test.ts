@@ -1,3 +1,5 @@
+import { stubAllShardOwnership } from "../../helpers/shardOwnership";
+stubAllShardOwnership();
 import { afterEach, beforeAll, describe, expect, it, mock, spyOn } from "bun:test";
 import { REST } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";

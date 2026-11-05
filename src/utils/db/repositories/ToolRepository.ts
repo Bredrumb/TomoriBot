@@ -19,7 +19,7 @@ import { normalizeMcpToolNameSnapshot } from "@/utils/mcp/mcpToolSnapshot";
 import { type GuildMcpOAuthGrant, guildMcpOAuthRepository } from "@/utils/db/repositories/GuildMcpOAuthRepository";
 import { forgetMcpAccessToken } from "@/utils/mcp/oauth/accessToken";
 import type { ShardTopology } from "@/utils/discord/shardOwnership";
-import { ownedServersOnly } from "@/utils/db/shardFilter";
+import { ownedServersOnly } from "@/utils/db/repositories/shardFilter";
 
 /** Portable tool config export shape (expanded in Phase 6 #16.7). */
 type ToolExportShape = {

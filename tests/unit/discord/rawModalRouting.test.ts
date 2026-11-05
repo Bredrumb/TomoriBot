@@ -550,7 +550,6 @@ describe("shutdown raw modal acknowledgement", () => {
     initializeShutdownInteractionAdmission(client);
     let draining = false;
     const gate = spyOn(shutdownState, "isDraining").mockImplementation(() => draining);
-    const originalFetch = globalThis.fetch;
     const patchState = (globalThis as GlobalDiscordState).__webSocketPatched;
     const opener = Object.assign(createRouteInteraction(), {
       client,
@@ -563,7 +562,7 @@ describe("shutdown raw modal acknowledgement", () => {
       received.push(interaction);
     });
     initializeRawModalInterception(client);
-    stubGlobalFetch(async () => new Response(null, { status: 204 }));
+    const fetchSpy = stubGlobalFetch(async () => new Response(null, { status: 204 }));
     try {
       await showRoutedRawModal(opener, { custom_id: "fixture-modal", title: "Fixture", components: [] });
       expect(hasRawModalAcknowledgement(opener)).toBe(true);
@@ -602,7 +601,7 @@ describe("shutdown raw modal acknowledgement", () => {
       expect(takeRawModalSelectValue(submitted.id, "choice")).toBe("value");
     } finally {
       gate.mockRestore();
-      globalThis.fetch = originalFetch;
+      fetchSpy.mockRestore();
       if (patchState === undefined) delete (globalThis as GlobalDiscordState).__webSocketPatched;
       else (globalThis as GlobalDiscordState).__webSocketPatched = patchState;
       await client.destroy();

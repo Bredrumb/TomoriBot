@@ -3,7 +3,7 @@ import type { SQL } from "bun";
 import { z } from "zod";
 import { PrivacyLevel } from "@/types/db/schema";
 import { sql, withTransientDbRetry } from "@/utils/db/client";
-import { ownedServersOnly } from "@/utils/db/shardFilter";
+import { ownedServersOnly } from "@/utils/db/repositories/shardFilter";
 import type { ShardTopology } from "@/utils/discord/shardOwnership";
 import { log } from "@/utils/misc/logger";
 import { NATURAL_NUDGE_FAILURE_STOP_THRESHOLD, NUDGE_DORMANCY_MS } from "@/modules/natural-nudges/runtime/tuning";

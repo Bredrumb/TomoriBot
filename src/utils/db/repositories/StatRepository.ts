@@ -22,7 +22,7 @@ import { REWARD_HEAT_MULTIPLIER } from "@/modules/natural-nudges/runtime/tuning"
 import type { StatMetric } from "@/constants/statMetrics";
 import { PERSONA_AGNOSTIC_METRICS } from "@/constants/statMetrics";
 import { sql, withTransientDbRetry } from "@/utils/db/client";
-import { ownedServersOnly } from "@/utils/db/shardFilter";
+import { ownedServersOnly } from "@/utils/db/repositories/shardFilter";
 import type { ShardTopology } from "@/utils/discord/shardOwnership";
 import { log } from "@/utils/misc/logger";
 import type { SQL } from "bun";

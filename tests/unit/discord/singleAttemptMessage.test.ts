@@ -1,3 +1,5 @@
+import { stubAllShardOwnership } from "../../helpers/shardOwnership";
+stubAllShardOwnership();
 import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
 import { ChannelType, Client, ClientUser, type Guild, TextChannel } from "discord.js";
 import { sendChannelMessageOnce } from "@/utils/discord/webhook/singleAttemptMessage";

@@ -63,12 +63,12 @@ function fixture(
   process.env.RUN_ENV = "development";
   process.env.DATABASE_SCHEMA_MANAGEMENT_ENABLED = "false";
   process.env.DISCORD_TOKEN = "fixture-token";
-  delete process.env.TOMORI_PUBLIC_BASE_URL;
-  delete process.env.MATRIX_HOMESERVER_URL;
-  delete process.env.MATRIX_ACCESS_TOKEN;
-  delete process.env.MATRIX_HS_TOKEN;
-  delete process.env.MATRIX_BOT_USER_ID;
-  delete process.env.MATRIX_SERVER_NAME;
+  process.env.TOMORI_PUBLIC_BASE_URL = "";
+  process.env.MATRIX_HOMESERVER_URL = "";
+  process.env.MATRIX_ACCESS_TOKEN = "";
+  process.env.MATRIX_HS_TOKEN = "";
+  process.env.MATRIX_BOT_USER_ID = "";
+  process.env.MATRIX_SERVER_NAME = "";
   const topology = ownership.parseShardTopology(
     options.all ? { SHARD_COUNT: "4" } : { SHARD_COUNT: "4", SHARD_IDS: "0,1" },
   );

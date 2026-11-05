@@ -18,7 +18,7 @@ import {
   reminderSchema,
 } from "@/types/db/schema";
 import { sql, withTransientDbRetry } from "@/utils/db/client";
-import { ownedServersOnly } from "@/utils/db/shardFilter";
+import { ownedServersOnly } from "@/utils/db/repositories/shardFilter";
 import type { ShardTopology } from "@/utils/discord/shardOwnership";
 import { emitScheduledWorkNudge } from "@/timers/scheduledWorkSignals";
 import { log } from "@/utils/misc/logger";
