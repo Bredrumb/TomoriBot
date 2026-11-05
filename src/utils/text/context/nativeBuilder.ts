@@ -9,7 +9,7 @@ import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context
 import { appendDialogueHistoryContext, DOCUMENT_HINT_TEMPLATE } from "./dialogueHistory";
 import { convertMentions as convertMentionsBase, type MentionMemo } from "./mentionNormalizer";
 import { buildServerMemoryContextItem, buildShortTermMemoryContext } from "./memories";
-import { buildParticipantContextItem } from "./participants";
+import { buildParticipantContextItems } from "./participants";
 import { buildPersonaUserBlocksContextItem } from "./personaUserBlocks";
 import { buildPersonaSpriteContextItem } from "./personaSprites";
 import { buildServerDocumentContextItem } from "./rag";
@@ -305,9 +305,8 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       convertMentions,
     }),
   );
-  await appendOptionalItem(
-    contextItems,
-    buildParticipantContextItem({
+  contextItems.push(
+    ...(await buildParticipantContextItems({
       client,
       guildId,
       channelName,
@@ -334,7 +333,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       conversationCorpus,
       snapshot,
       convertMentions,
-    }),
+    })),
   );
 
   try {
@@ -376,10 +375,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     log.warn("Failed to build short-term memory context", error);
   }
 
-  // Verbatim tool-calling: when the model opted in, embed the resolved tool
-  // schemas as JSON in-band so endpoints that ignore the native `tools` field
-  // still expose them to the model. Placed in the stable reference zone (right
-  // before server documents) to stay inside the prompt-cache-friendly prefix.
+  // Verbatim schemas stay above history because their contents follow tool configuration.
   await appendOptionalItem(
     contextItems,
     buildVerbatimToolDefinitionsContextItem({

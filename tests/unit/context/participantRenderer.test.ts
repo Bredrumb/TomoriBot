@@ -30,7 +30,7 @@ function render(
 function visibleField(owner: ParticipantKey, line: string, order: number): ParticipantProfileField {
   return {
     owner,
-    kind: "status",
+    kind: "roles",
     order,
     visibility: { visible: true, reason: "visible" },
     lines: [line],
@@ -74,8 +74,6 @@ describe("pure participant prompt renderer", () => {
 
 If Tomori wants to ping any of these users, prepend an "@" symbol to a unique mention handle shown below (case-insensitive). If there is ambiguity with names, ask for clarification instead of guessing. Use mentions only when the notification matters.
 
-Conversation context: #general (ID: 200000000000000001).
-Current time: Aug 2, 2026, 02:00 PM (UTC+8), afternoon.
 ]`);
     expect(rendered.targetIndex.targets).toEqual([]);
     expect(rendered.conversationUsers).toEqual([]);
@@ -104,8 +102,6 @@ Tomori (This is you!)
 - Earlier
 - Later
 
-Conversation context: #general (ID: 200000000000000001).
-Current time: Aug 2, 2026, 02:00 PM (UTC+8), afternoon.
 ]`);
     expect(rendered.targetIndex.targets[0]).toMatchObject({
       serializedKey: "bot:300000000000000001",
@@ -129,8 +125,6 @@ Alice (Mention requires clarification)
 Bob (Mention requires clarification)
 - Second
 
-Conversation context: #general (ID: 200000000000000001).
-Current time: Aug 2, 2026, 02:00 PM (UTC+8), afternoon.
 ]`);
     expect(rendered.targetIndex.targets.map((target) => target.serializedKey)).toEqual([
       "discord_user:400000000000000001",
@@ -140,6 +134,19 @@ Current time: Aug 2, 2026, 02:00 PM (UTC+8), afternoon.
       "400000000000000001",
       "400000000000000002",
     ]);
+  });
+
+  it("attributes visible presence to its profile label without changing profile text", () => {
+    const profile = humanProfile("400000000000000001", "Juno", "juno_h", ["- Archivist"]);
+    const baseline = render([profile]);
+    const presence = visibleField(profile.key, "- Status: Listening to fixture-track", 30);
+    presence.kind = "presence";
+    const rendered = render([{ ...profile, fields: [...profile.fields, presence] }]);
+    expect(rendered.text).toBe(baseline.text);
+    expect(rendered.statusText.split("\n")).toHaveLength(1);
+    expect(rendered.statusText.startsWith(`${profile.displayName}: `)).toBe(true);
+    expect(rendered.targetIndex).toEqual(baseline.targetIndex);
+    expect(rendered.conversationUsers).toEqual(baseline.conversationUsers);
   });
 
   it("renders a neutral service-owned namespace entry after participant entries", () => {

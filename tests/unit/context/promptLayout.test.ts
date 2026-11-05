@@ -11,6 +11,7 @@ import {
   CACHEABLE_PREFIX_END,
   getCacheablePrefixBoundary,
   speakerTurnStartIndexes,
+  TAIL_SLOT_SPEAKER_TURNS,
 } from "@/utils/text/context/promptLayout";
 
 function item(metadataTag: ContextItemTag, role: StructuredContextItem["role"] = "user"): StructuredContextItem {
@@ -69,6 +70,22 @@ describe("prompt layout registry", () => {
     expect(blocks.indexOf(memory)).toBe(2);
     expect(blocks.slice(3)).toEqual([spacer, note, ...history.slice(2)]);
     expect(getCacheablePrefixBoundary(blocks)).toBe(blocks[1]);
+  });
+
+  it("extracts volatile blocks into registry order while constant lore remains above history", () => {
+    const constant = item(ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE, "system");
+    const history = Array.from({ length: 8 }, (_, index) => dialogue(index % 2 ? "Mirri" : "Juno"));
+    const memory = freshMemory();
+    const loreBefore = item(ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE);
+    const loreAfter = item(ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER);
+    const documents = item(ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS);
+    const status = item(ContextItemTag.KNOWLEDGE_USER_STATUS);
+    const current = item(ContextItemTag.KNOWLEDGE_CURRENT_CONTEXT);
+    const blocks = [constant, current, documents, ...history, status, loreAfter, loreBefore];
+    applyPromptLayoutInserts(blocks, [{ tag: "stm_content", items: [memory], depth: -1 }]);
+    expect(blocks[0]).toBe(constant);
+    expect(blocks.slice(5, 11)).toEqual([memory, loreBefore, loreAfter, documents, status, current]);
+    expect(getCacheablePrefixBoundary(blocks)).toBe(blocks[4]);
   });
 
   it("continues into directly preceding samples, counting each sample line separately", () => {
@@ -149,16 +166,43 @@ describe("prompt layout registry", () => {
     }
   });
 
-  it("declares every context tag and insert exactly once", () => {
+  it("declares every context tag with non-overlapping role variants", () => {
     const tags = PROMPT_LAYOUT.map((entry) => entry.tag);
-    expect(new Set(tags).size).toBe(tags.length);
+    const variants = PROMPT_LAYOUT.flatMap((entry) =>
+      (entry.role ? [entry.role] : ["system", "user", "model"]).map((role) => `${entry.tag}:${role}`),
+    );
+    expect(new Set(variants).size).toBe(variants.length);
     const contextTags = new Set<string>(Object.values(ContextItemTag));
     expect(
-      tags
+      [...new Set(tags)]
         .filter((tag) => contextTags.has(tag))
         .map(String)
         .sort(),
     ).toEqual([...contextTags].sort());
+  });
+
+  it("keeps volatility increasing above the tail and confines volatile contributions to tail anchors", () => {
+    const violations: string[] = [];
+    const rank = { static: 0, slow: 1, turn: 2, clock: 3 };
+    let previous = 0;
+    for (const entry of PROMPT_LAYOUT) {
+      const label = `${entry.tag}${entry.role ? `:${entry.role}` : ""}`;
+      if (entry.zone !== "tail" && (entry.anchor.kind === "block" || entry.anchor.kind === "history")) {
+        if (rank[entry.volatility] < previous) violations.push(`${label}: volatility decreases`);
+        previous = rank[entry.volatility];
+        if (entry.anchor.kind === "block" && rank[entry.volatility] >= rank.turn)
+          violations.push(`${label}: volatile block above tail slot`);
+      }
+      if (entry.zone !== "tail" && entry.anchor.kind !== "history" && rank[entry.volatility] >= rank.turn) {
+        if (
+          entry.anchor.kind !== "simplified-message" ||
+          typeof entry.anchor.depth !== "number" ||
+          entry.anchor.depth > TAIL_SLOT_SPEAKER_TURNS
+        )
+          violations.push(`${label}: volatile insert can precede tail slot`);
+      }
+    }
+    expect(violations).toEqual([]);
   });
 
   it("routes tagged blocks by zone and retains the declared personal-memory role exception", () => {
@@ -185,7 +229,7 @@ describe("prompt layout registry", () => {
     const prompt = item(ContextItemTag.SYSTEM_PERSONALITY, "system");
     const blocks = [history, documents, note, latest, prompt];
     orderNativePromptBlocks(blocks);
-    expect(blocks).toEqual([prompt, documents, history, note, latest]);
+    expect(blocks).toEqual([prompt, history, note, latest, documents]);
   });
 
   it("applies positional inserts in registry order regardless of caller order", () => {

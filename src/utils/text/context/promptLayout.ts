@@ -43,6 +43,7 @@ export interface PromptLayoutEntry {
   anchor: PromptAnchor;
   presetFlush?: "knowledge" | "dialogue";
   novelai?: "personality" | "memory" | "sample" | "history";
+  role?: StructuredContextItem["role"];
   roleZones?: Partial<Record<StructuredContextItem["role"], PromptZone>>;
 }
 
@@ -65,7 +66,7 @@ export const PROMPT_LAYOUT: readonly PromptLayoutEntry[] = [
     anchor: { kind: "block" },
     presetFlush: "knowledge",
   },
-  { tag: ContextItemTag.KNOWLEDGE_PERSONA_USER_BLOCKS, zone: "system", volatility: "clock", anchor: { kind: "block" } },
+  { tag: ContextItemTag.KNOWLEDGE_PERSONA_USER_BLOCKS, zone: "system", volatility: "slow", anchor: { kind: "block" } },
   {
     tag: ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
     zone: "system",
@@ -96,39 +97,27 @@ export const PROMPT_LAYOUT: readonly PromptLayoutEntry[] = [
     presetFlush: "knowledge",
   },
   {
-    tag: ContextItemTag.KNOWLEDGE_USERS_IN_CONVERSATION,
-    zone: "reference",
-    volatility: "clock",
-    anchor: { kind: "block" },
-    presetFlush: "dialogue",
-  },
-  {
     tag: ContextItemTag.KNOWLEDGE_USER_MEMORIES,
     zone: "system",
     roleZones: { user: "reference" },
-    volatility: "turn",
+    volatility: "slow",
     anchor: { kind: "block" },
     novelai: "memory",
   },
-  { tag: ContextItemTag.KNOWLEDGE_USER_STATUS, zone: "reference", volatility: "clock", anchor: { kind: "block" } },
-  { tag: ContextItemTag.KNOWLEDGE_CURRENT_CONTEXT, zone: "reference", volatility: "clock", anchor: { kind: "block" } },
   {
-    tag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
-    zone: "reference",
-    volatility: "clock",
-    anchor: { kind: "block" },
-    presetFlush: "dialogue",
-    novelai: "memory",
-  },
-  {
-    tag: ContextItemTag.KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS,
-    zone: "reference",
-    volatility: "turn",
+    tag: ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE,
+    role: "system",
+    zone: "system",
+    volatility: "slow",
     anchor: { kind: "block" },
   },
-  { tag: ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS, zone: "reference", volatility: "turn", anchor: { kind: "block" } },
-  { tag: ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE, zone: "system", volatility: "turn", anchor: { kind: "block" } },
-  { tag: ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER, zone: "system", volatility: "turn", anchor: { kind: "block" } },
+  {
+    tag: ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER,
+    role: "system",
+    zone: "system",
+    volatility: "slow",
+    anchor: { kind: "block" },
+  },
   {
     tag: ContextItemTag.KNOWLEDGE_SERVER_CONDITIONING,
     zone: "system",
@@ -137,9 +126,30 @@ export const PROMPT_LAYOUT: readonly PromptLayoutEntry[] = [
     presetFlush: "dialogue",
   },
   {
+    tag: ContextItemTag.KNOWLEDGE_USERS_IN_CONVERSATION,
+    zone: "reference",
+    volatility: "slow",
+    anchor: { kind: "block" },
+    presetFlush: "dialogue",
+  },
+  {
+    tag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
+    zone: "reference",
+    volatility: "slow",
+    anchor: { kind: "block" },
+    presetFlush: "dialogue",
+    novelai: "memory",
+  },
+  {
+    tag: ContextItemTag.KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS,
+    zone: "reference",
+    volatility: "slow",
+    anchor: { kind: "block" },
+  },
+  {
     tag: ContextItemTag.DIALOGUE_SAMPLE,
     zone: "history",
-    volatility: "turn",
+    volatility: "slow",
     anchor: { kind: "block" },
     novelai: "sample",
   },
@@ -185,17 +195,40 @@ export const PROMPT_LAYOUT: readonly PromptLayoutEntry[] = [
   { tag: "lower_priority_tail", zone: "tail", volatility: "turn", anchor: { kind: "before-latest-pair" } },
   // STM content precedes its nudge so equal-depth inserts keep the content above the nudge.
   { tag: "stm_content", zone: "tail", volatility: "clock", anchor: { kind: "tailSlot" } },
+  {
+    tag: ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE,
+    role: "user",
+    zone: "tail",
+    volatility: "turn",
+    anchor: { kind: "tailSlot" },
+  },
+  {
+    tag: ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER,
+    role: "user",
+    zone: "tail",
+    volatility: "turn",
+    anchor: { kind: "tailSlot" },
+  },
+  { tag: ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS, zone: "tail", volatility: "turn", anchor: { kind: "tailSlot" } },
+  { tag: ContextItemTag.KNOWLEDGE_USER_STATUS, zone: "tail", volatility: "clock", anchor: { kind: "tailSlot" } },
+  { tag: ContextItemTag.KNOWLEDGE_CURRENT_CONTEXT, zone: "tail", volatility: "clock", anchor: { kind: "tailSlot" } },
   { tag: "stm_nudge", zone: "tail", volatility: "turn", anchor: { kind: "dialogue-depth" } },
   { tag: "combined_tail", zone: "tail", volatility: "turn", anchor: { kind: "append" } },
   { tag: "queued_reply", zone: "tail", volatility: "turn", anchor: { kind: "append" } },
   { tag: "uncensor", zone: "tail", volatility: "static", anchor: { kind: "append" } },
 ];
 
-const entriesByTag = new Map(PROMPT_LAYOUT.map((entry) => [entry.tag, entry]));
+function layoutEntry(item: StructuredContextItem): PromptLayoutEntry | undefined {
+  return PROMPT_LAYOUT.find((entry) => entry.tag === item.metadataTag && (!entry.role || entry.role === item.role));
+}
+
+export function isPromptTailSlotItem(item: StructuredContextItem): boolean {
+  return layoutEntry(item)?.anchor.kind === "tailSlot";
+}
 
 export function isPromptSystemItem(item: StructuredContextItem): boolean {
   if (item.metadataTag === undefined) return item.role === "system";
-  const entry = entriesByTag.get(item.metadataTag);
+  const entry = layoutEntry(item);
   return (entry?.roleZones?.[item.role] ?? entry?.zone) === "system";
 }
 
@@ -219,17 +252,16 @@ export function novelaiLayoutTags(kind: "admitted" | "persistent" | "memory"): S
 
 export function orderNativePromptBlocks(items: StructuredContextItem[]): void {
   // History and notes share a rank because simplified-message anchors already interleave notes after date spacers.
-  const order = new Map<ContextItemTag | PromptInsertTag | undefined, number>(
-    PROMPT_LAYOUT.map((entry, index) => [
-      entry.tag,
-      entry.anchor.kind === "history"
-        ? PROMPT_LAYOUT.findIndex((candidate) => candidate.anchor.kind === "history")
-        : index,
-    ]),
-  );
-  items.sort(
-    (a, b) => (order.get(a.metadataTag) ?? PROMPT_LAYOUT.length) - (order.get(b.metadataTag) ?? PROMPT_LAYOUT.length),
-  );
+  const historyIndex = PROMPT_LAYOUT.findIndex((entry) => entry.anchor.kind === "history");
+  const rank = (item: StructuredContextItem) => {
+    const entry = layoutEntry(item);
+    return entry?.anchor.kind === "history"
+      ? historyIndex
+      : entry
+        ? PROMPT_LAYOUT.indexOf(entry)
+        : PROMPT_LAYOUT.length;
+  };
+  items.sort((left, right) => rank(left) - rank(right));
 }
 
 export interface PromptLayoutInsert {
@@ -244,6 +276,17 @@ export function applyPromptLayoutInserts(
   inserts: PromptLayoutInsert[],
   messagePosition?: { index: number; total: number; flush?: boolean },
 ): void {
+  if (!messagePosition) {
+    const inlineInserts: PromptLayoutInsert[] = [];
+    for (let index = 0; index < items.length; ) {
+      const item = items[index];
+      if (isPromptTailSlotItem(item)) {
+        inlineInserts.push({ tag: item.metadataTag as ContextItemTag, items: [item] });
+        items.splice(index, 1);
+      } else index++;
+    }
+    inserts = [...inserts, ...inlineInserts];
+  }
   const slotIndex = messagePosition ? -1 : resolveTailSlotIndex(items);
   const slotItem = items[slotIndex];
   const prefixEnd = items[slotIndex - 1];
@@ -258,6 +301,7 @@ export function applyPromptLayoutInserts(
         insert.emitted = true;
       } else if (!messagePosition) {
         for (const item of insert.items) {
+          if (entry.role && item.role !== entry.role) continue;
           if (entry.anchor.kind === "before-latest-pair") insertBeforeLatestDialoguePair(items, item);
           else if (entry.anchor.kind === "tailSlot") {
             const tailIndex = slotItem ? items.indexOf(slotItem) : items.length;

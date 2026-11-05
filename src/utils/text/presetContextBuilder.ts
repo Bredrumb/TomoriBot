@@ -1,4 +1,4 @@
-import { presetFlushTags } from "@/utils/text/context/promptLayout";
+import { isPromptTailSlotItem, presetFlushTags } from "@/utils/text/context/promptLayout";
 /**
  * Preset-Driven Context Builder
  *
@@ -77,8 +77,8 @@ const MARKER_TO_TAGS: Record<string, ContextItemTag[]> = {
   dialogueExamples: [ContextItemTag.DIALOGUE_SAMPLE],
   chatHistory: [ContextItemTag.DIALOGUE_HISTORY],
 
-  worldInfoBefore: [ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE, ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS],
-  worldInfoAfter: [ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER, ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS],
+  worldInfoBefore: [ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE],
+  worldInfoAfter: [ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER],
 };
 
 /**
@@ -334,7 +334,8 @@ export async function reassembleWithPreset(
   const macroContext = buildMacroContext(macroParams);
   const { resolved, expandedContentMacros } = resolvePresetMacros(nodes, macroContext);
 
-  const buckets = groupByTag(nativeOutput.contextItems);
+  const tailSlotItems = nativeOutput.contextItems.filter(isPromptTailSlotItem);
+  const buckets = groupByTag(nativeOutput.contextItems.filter((item) => !isPromptTailSlotItem(item)));
 
   const systemNodes: ResolvedNode[] = [];
   const depthNodes: ResolvedNode[] = [];
@@ -377,8 +378,7 @@ export async function reassembleWithPreset(
   };
 
   /**
-   * Flush TomoriBot-only dialogue-adjacent blocks (users in conversation, STM) plus lore and documents.
-   * Called once before the first dialogue anchor marker.
+   * Constant lore without a world-info marker flushes before the first dialogue anchor.
    */
   const flushDialogueBlocks = () => {
     if (dialogueFlushed) return;
@@ -388,11 +388,9 @@ export async function reassembleWithPreset(
       contextItems.push(...pullBucket(buckets, tag));
     }
 
-    // Documents stay at the first world-info marker; lore flushes in the before, documents, after order the markers produce.
     const loreBeforeItems = pullBucket(buckets, ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE);
-    const ragItems = pullBucket(buckets, ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS);
     const loreAfterItems = pullBucket(buckets, ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER);
-    contextItems.push(...loreBeforeItems, ...ragItems, ...loreAfterItems);
+    contextItems.push(...loreBeforeItems, ...loreAfterItems);
   };
 
   for (const node of systemNodes) {
@@ -540,6 +538,8 @@ export async function reassembleWithPreset(
   }
 
   await appendTerminalSampleDialogueSpacerIfNeeded(contextItems, mentionParams);
+
+  contextItems.push(...tailSlotItems);
 
   log.info(
     `[Preset Builder] Reassembled ${contextItems.length} context items using preset "${presetData.preset.preset_name}" ` +
