@@ -1,3 +1,4 @@
+import { applyPromptLayoutInserts } from "@/utils/text/context/promptLayout";
 import { mapWithConcurrency } from "@/utils/async/bounded";
 import { isHistoryWindowMessageDeleted, readChannelHistory } from "@/utils/chat/historyWindow";
 import { verifyMessageWebhook, isManagedWebhookMessage } from "@/utils/chat/webhookIdentity";
@@ -68,8 +69,6 @@ import {
   hasContextReactions,
   buildReplyReferenceContextAnnotation,
   findReplyContextTargetInMessage,
-  insertAtDialogueDepth,
-  insertBeforeLatestDialoguePair,
   appendInjectedContextItems,
   mergeForcedMentions,
   stripAtPersonaTriggers,
@@ -683,9 +682,9 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     );
   }
   if (nativeContextItems) {
-    for (const item of contextBuild.memoryInjectionItems ?? []) {
-      insertAtDialogueDepth(nativeContextItems, item, contextBuild.memoryInjectionDepth ?? 0);
-    }
+    applyPromptLayoutInserts(nativeContextItems, [
+      { tag: "stm_content", items: contextBuild.memoryInjectionItems ?? [], depth: contextBuild.memoryInjectionDepth },
+    ]);
   }
   const assistantPrefill = await resolveTurnAssistantPrefill(turn, effectivePersona);
   const carried = incoming.carriedExpressionDelivery;
@@ -1730,39 +1729,17 @@ function appendTailDirectives(args: {
     : null;
 
   const lowerPriorityTailMessage = buildCombinedTailDirectiveMessage(lowerPriority);
-  if (lowerPriorityTailMessage) {
-    insertBeforeLatestDialoguePair(contextItems, lowerPriorityTailMessage);
-  }
-
-  // Inject the deferred STM content block at its configured dialogue depth (only when
-  // the server opted into positional placement; depth -1 keeps it inline upstream).
-  // Done BEFORE the nudge so that at equal depths the nudge lands just below the block:
-  // each item is spliced before the same Nth dialogue turn, and the block (inserted
-  // first, in order) ends up above the later-inserted nudge.
-  if (args.memoryInjectionItems && args.memoryInjectionItems.length > 0 && (args.memoryInjectionDepth ?? -1) >= 0) {
-    for (const memoryItem of args.memoryInjectionItems) {
-      insertAtDialogueDepth(contextItems, memoryItem, args.memoryInjectionDepth ?? 0);
-    }
-  }
-
-  // Inject the unified STM nudge at its configured dialogue depth (0 = tail). Done
-  // here: after dialogue history is assembled: so depth is measured against real
-  // conversation turns regardless of native vs. preset assembly.
-  if (args.nudgeItem) {
-    insertAtDialogueDepth(contextItems, args.nudgeItem, args.nudgeInjectionDepth ?? 0);
-  }
-
   const combinedTailMessage = buildCombinedTailDirectiveMessage(tail);
-  if (combinedTailMessage) {
-    contextItems.push(combinedTailMessage);
-  }
-
-  for (const directive of [queuedDirective, args.uncensorDirective]) {
-    const item = buildTailDirectiveItem(directive);
-    if (item) {
-      contextItems.push(item);
-    }
-  }
+  const queuedItem = buildTailDirectiveItem(queuedDirective);
+  const uncensorItem = buildTailDirectiveItem(args.uncensorDirective);
+  applyPromptLayoutInserts(contextItems, [
+    { tag: "lower_priority_tail", items: lowerPriorityTailMessage ? [lowerPriorityTailMessage] : [] },
+    { tag: "stm_content", items: args.memoryInjectionItems ?? [], depth: args.memoryInjectionDepth },
+    { tag: "stm_nudge", items: args.nudgeItem ? [args.nudgeItem] : [], depth: args.nudgeInjectionDepth },
+    { tag: "combined_tail", items: combinedTailMessage ? [combinedTailMessage] : [] },
+    { tag: "queued_reply", items: queuedItem ? [queuedItem] : [] },
+    { tag: "uncensor", items: uncensorItem ? [uncensorItem] : [] },
+  ]);
 
   return contextItems;
 }

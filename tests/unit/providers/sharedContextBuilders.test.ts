@@ -1,3 +1,4 @@
+import { PROMPT_LAYOUT } from "@/utils/text/context/promptLayout";
 import { describe, expect, it, spyOn } from "bun:test";
 import { buildGeminiImagePromptParts } from "@/providers/utils/geminiImageParts";
 import {
@@ -5,7 +6,7 @@ import {
   buildGifUrlPlaceholder,
   buildInlineGifPlaceholder,
 } from "@/providers/utils/gifContextPlaceholders";
-import { isSystemInstructionContextItem, SYSTEM_INSTRUCTION_CONTEXT_TAGS } from "@/providers/utils/strictChatCompat";
+import { isSystemInstructionContextItem } from "@/providers/utils/strictChatCompat";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import type { StreamContext } from "@/types/stream/interfaces";
 
@@ -84,8 +85,8 @@ describe("shared system-instruction routing", () => {
   }
 
   it("routes the standing system tags to the instruction channel", () => {
-    for (const tag of SYSTEM_INSTRUCTION_CONTEXT_TAGS) {
-      expect(isSystemInstructionContextItem(makeItem("user", tag))).toBe(true);
+    for (const entry of PROMPT_LAYOUT.filter((entry) => entry.zone === "system")) {
+      expect(isSystemInstructionContextItem(makeItem("system", entry.tag as ContextItemTag))).toBe(true);
     }
   });
 
@@ -98,9 +99,9 @@ describe("shared system-instruction routing", () => {
     expect(isSystemInstructionContextItem(makeItem("model"))).toBe(false);
   });
 
-  it("treats a system-role item as instruction regardless of its tag", () => {
+  it("uses roles for untagged preset nodes and zones for tagged items", () => {
     expect(isSystemInstructionContextItem(makeItem("system"))).toBe(true);
-    expect(isSystemInstructionContextItem(makeItem("system", ContextItemTag.DIALOGUE_SAMPLE))).toBe(true);
+    expect(isSystemInstructionContextItem(makeItem("system", ContextItemTag.DIALOGUE_SAMPLE))).toBe(false);
   });
 });
 

@@ -1,3 +1,4 @@
+import { orderNativePromptBlocks } from "@/utils/text/context/promptLayout";
 import { personaRepository } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 import { hasExplicitLongTermMemoryIntent } from "@/utils/memory/explicitLongTermMemoryIntent";
@@ -397,7 +398,6 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     }),
   );
   await appendOptionalItem(contextItems, documentItemPromise);
-  // Activated lore changes from turn to turn, so it stays after documents and outside the cache-stable prefix.
   contextItems.push(
     ...(await buildLorebookContextItems({
       tomoriState,
@@ -476,6 +476,8 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       .trim();
     if (strippedText) uncensorDirective = strippedText;
   }
+
+  orderNativePromptBlocks(contextItems);
 
   log.info(`Built ${contextItems.length} structured context items for guild ${guildId}.`);
   return {

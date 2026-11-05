@@ -1,3 +1,4 @@
+import { applyPromptLayoutInserts } from "@/utils/text/context/promptLayout";
 import { applyAssistantPrefill } from "@/utils/chat/assistantPrefill";
 import { NovelAIPreparationError } from "@/providers/novelai/preparationError";
 import { prepareNovelAIRequest, type PreparedNovelAIRequest } from "@/providers/novelai/promptFitting";
@@ -109,57 +110,6 @@ function buildCombinedTailDirectiveMessage(directives: string[]): StructuredCont
     parts: [{ type: "text", text: `[System: ${normalized.join("\n\n")}]` }],
     metadataTag: ContextItemTag.DIALOGUE_HISTORY,
   };
-}
-
-function insertBeforeLatestDialoguePair(
-  contextSegments: StructuredContextItem[],
-  injectedItem: StructuredContextItem,
-): void {
-  const dialogueIndexes: number[] = [];
-  for (let i = contextSegments.length - 1; i >= 0; i--) {
-    const item = contextSegments[i];
-    if (item.metadataTag === ContextItemTag.DIALOGUE_HISTORY && (item.role === "user" || item.role === "model")) {
-      dialogueIndexes.push(i);
-      if (dialogueIndexes.length === 2) break;
-    }
-  }
-  if (dialogueIndexes.length === 0) {
-    contextSegments.push(injectedItem);
-    return;
-  }
-  const insertAt = dialogueIndexes.length >= 2 ? dialogueIndexes[1] : dialogueIndexes[0];
-  contextSegments.splice(insertAt, 0, injectedItem);
-}
-
-// Local mirror of contextAnnotations.insertAtDialogueDepth so the snapshot reflects
-// the live STM nudge positioning. depth=0 → tail; depth=N → before the Nth dialogue
-// item from the bottom (clamps to earliest dialogue turn when fewer than N exist).
-function insertAtDialogueDepth(
-  contextSegments: StructuredContextItem[],
-  nudge: StructuredContextItem,
-  depth: number,
-): void {
-  if (depth <= 0) {
-    contextSegments.push(nudge);
-    return;
-  }
-  let found = 0;
-  let lastFoundIndex = -1;
-  for (let i = contextSegments.length - 1; i >= 0; i--) {
-    if (contextSegments[i].metadataTag === ContextItemTag.DIALOGUE_HISTORY) {
-      found++;
-      lastFoundIndex = i;
-      if (found === depth) {
-        contextSegments.splice(i, 0, nudge);
-        return;
-      }
-    }
-  }
-  if (lastFoundIndex !== -1) {
-    contextSegments.splice(lastFoundIndex, 0, nudge);
-  } else {
-    contextSegments.push(nudge);
-  }
 }
 
 function isSnapshotAudioAttachment(contentType: string | null | undefined): boolean {
@@ -849,32 +799,21 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
   if (emojiPenaltyDirective) lowerPriorityTailDirectives.push(emojiPenaltyDirective);
 
   const lowerPriorityTailMessage = buildCombinedTailDirectiveMessage(lowerPriorityTailDirectives);
-  if (lowerPriorityTailMessage) insertBeforeLatestDialoguePair(contextItems, lowerPriorityTailMessage);
-
-  // Mirror the live pipeline: inject the deferred STM content block at its depth
-  // (only when content depth >= 0), before the nudge so the snapshot ordering matches.
-  if (
-    contextBuild.memoryInjectionItems &&
-    contextBuild.memoryInjectionItems.length > 0 &&
-    (contextBuild.memoryInjectionDepth ?? -1) >= 0
-  ) {
-    for (const memoryItem of contextBuild.memoryInjectionItems) {
-      insertAtDialogueDepth(contextItems, memoryItem, contextBuild.memoryInjectionDepth ?? 0);
-    }
-  }
-
-  // Mirror the live pipeline: inject the unified STM nudge at its configured depth.
-  if (contextBuild.nudgeItem) {
-    insertAtDialogueDepth(contextItems, contextBuild.nudgeItem, contextBuild.nudgeInjectionDepth ?? 0);
-  }
-
-  const combinedTailMessage = buildCombinedTailDirectiveMessage([...contextBuild.tailDirectives]);
-  if (combinedTailMessage) contextItems.push(combinedTailMessage);
-
-  if (contextBuild.uncensorDirective) {
-    const uncensorTailMessage = buildCombinedTailDirectiveMessage([contextBuild.uncensorDirective]);
-    if (uncensorTailMessage) contextItems.push(uncensorTailMessage);
-  }
+  const combinedTailMessage = buildCombinedTailDirectiveMessage(contextBuild.tailDirectives);
+  const uncensorTailMessage = contextBuild.uncensorDirective
+    ? buildCombinedTailDirectiveMessage([contextBuild.uncensorDirective])
+    : null;
+  applyPromptLayoutInserts(contextItems, [
+    { tag: "lower_priority_tail", items: lowerPriorityTailMessage ? [lowerPriorityTailMessage] : [] },
+    { tag: "stm_content", items: contextBuild.memoryInjectionItems ?? [], depth: contextBuild.memoryInjectionDepth },
+    {
+      tag: "stm_nudge",
+      items: contextBuild.nudgeItem ? [contextBuild.nudgeItem] : [],
+      depth: contextBuild.nudgeInjectionDepth,
+    },
+    { tag: "combined_tail", items: combinedTailMessage ? [combinedTailMessage] : [] },
+    { tag: "uncensor", items: uncensorTailMessage ? [uncensorTailMessage] : [] },
+  ]);
 
   const resolvedContextItems = await resolveMediaForModel(
     contextItems,

@@ -1,3 +1,4 @@
+import { presetFlushTags } from "@/utils/text/context/promptLayout";
 /**
  * Preset-Driven Context Builder
  *
@@ -84,19 +85,9 @@ const MARKER_TO_TAGS: Record<string, ContextItemTag[]> = {
  * TomoriBot-only blocks that have no ST marker equivalent.
  * These are always included and flushed at anchor points.
  */
-const TOMORI_ONLY_KNOWLEDGE_TAGS = new Set([
-  ContextItemTag.KNOWLEDGE_SERVER_INFO,
-  ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
-  ContextItemTag.KNOWLEDGE_SERVER_EMOJIS,
-  ContextItemTag.KNOWLEDGE_SERVER_STICKERS,
-  ContextItemTag.KNOWLEDGE_PERSONA_SPRITES,
-]);
+const TOMORI_ONLY_KNOWLEDGE_TAGS = presetFlushTags("knowledge");
 
-const TOMORI_ONLY_DIALOGUE_TAGS = new Set([
-  ContextItemTag.KNOWLEDGE_USERS_IN_CONVERSATION,
-  ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
-  ContextItemTag.KNOWLEDGE_SERVER_CONDITIONING,
-]);
+const TOMORI_ONLY_DIALOGUE_TAGS = presetFlushTags("dialogue");
 
 /**
  * Markers that trigger flushing of TomoriBot-only knowledge blocks

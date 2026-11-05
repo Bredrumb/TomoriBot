@@ -165,72 +165,7 @@ export function appendInjectedContextItems(
   return [...contextItems, ...injectedContextItems];
 }
 
-export function insertBeforeLatestDialoguePair(
-  contextSegments: StructuredContextItem[],
-  injectedItem: StructuredContextItem,
-): void {
-  const dialogueIndexes: number[] = [];
-
-  for (let index = contextSegments.length - 1; index >= 0; index--) {
-    const item = contextSegments[index];
-    if (item.metadataTag === ContextItemTag.DIALOGUE_HISTORY && (item.role === "user" || item.role === "model")) {
-      dialogueIndexes.push(index);
-      if (dialogueIndexes.length === 2) break;
-    }
-  }
-
-  if (dialogueIndexes.length === 0) {
-    contextSegments.push(injectedItem);
-    return;
-  }
-
-  const insertAt = dialogueIndexes.length >= 2 ? dialogueIndexes[1] : dialogueIndexes[0];
-  contextSegments.splice(insertAt, 0, injectedItem);
-}
-
-/**
- * Injects an item into the dialogue history at a given depth from the bottom.
- * depth=0 → appended after all dialogue (tail, right before model generates).
- * depth=N → inserted before the Nth DIALOGUE_HISTORY item from the end.
- *
- * Only ContextItemTag.DIALOGUE_HISTORY items are counted: DIALOGUE_SAMPLE
- * (sample/example dialogues) are intentionally excluded from the depth walk
- * so they don't interfere with nudge positioning in real conversation history.
- *
- * If fewer real dialogue turns exist than requested depth, clamps to the
- * earliest available position (just before the first real dialogue turn) rather
- * than jumping to tail, keeping the nudge within the conversation area.
- */
-export function insertAtDialogueDepth(
-  items: StructuredContextItem[],
-  nudge: StructuredContextItem,
-  depth: number,
-): void {
-  if (depth <= 0) {
-    items.push(nudge);
-    return;
-  }
-  let found = 0;
-  let lastFoundIndex = -1;
-  for (let i = items.length - 1; i >= 0; i--) {
-    if (items[i].metadataTag === ContextItemTag.DIALOGUE_HISTORY) {
-      found++;
-      lastFoundIndex = i;
-      if (found === depth) {
-        items.splice(i, 0, nudge);
-        return;
-      }
-    }
-  }
-  // Fewer real dialogue turns than depth: clamp to the earliest found position.
-  // This keeps the nudge inside the conversation area rather than jumping to tail.
-  if (lastFoundIndex !== -1) {
-    items.splice(lastFoundIndex, 0, nudge);
-  } else {
-    // No dialogue history at all: tail is the only option
-    items.push(nudge);
-  }
-}
+export { insertBeforeLatestDialoguePair, insertAtDialogueDepth } from "@/utils/text/context/promptLayout";
 
 export function findReplyContextTargetInMessage(
   message: Pick<Message, "embeds">,
