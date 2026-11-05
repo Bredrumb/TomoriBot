@@ -6,13 +6,149 @@ import {
   isPromptSystemItem,
   orderNativePromptBlocks,
   type PromptLayoutInsert,
+  type PromptLayoutItem,
+  STM_TAIL_SLOT,
+  CACHEABLE_PREFIX_END,
+  getCacheablePrefixBoundary,
+  speakerTurnStartIndexes,
 } from "@/utils/text/context/promptLayout";
 
 function item(metadataTag: ContextItemTag, role: StructuredContextItem["role"] = "user"): StructuredContextItem {
   return { role, metadataTag, parts: [{ type: "text", text: "Fixture" }] };
 }
 
+function dialogue(name: string, type: "user" | "persona" = "user"): StructuredContextItem {
+  return { ...item(ContextItemTag.DIALOGUE_HISTORY, type === "persona" ? "model" : "user"), sender: { name, type } };
+}
+
+function freshMemory(): PromptLayoutItem {
+  return { ...item(ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY), [STM_TAIL_SLOT]: true };
+}
+
 describe("prompt layout registry", () => {
+  it("counts speaker changes across media splits and day spacers while ignoring directives and notes", () => {
+    const media = dialogue("Juno");
+    media.mediaDescriptors = [
+      {
+        kind: "image",
+        uri: "https://example.com/image.png",
+        mimeType: "image/png",
+        mediaId: "media_1",
+        withinWindow: true,
+      },
+    ];
+    const blocks = [
+      dialogue("Juno"),
+      media,
+      item(ContextItemTag.DIALOGUE_HISTORY),
+      dialogue("Juno"),
+      item(ContextItemTag.CONTEXT_NOTE_INJECTION),
+      dialogue("Mirri", "persona"),
+      item(ContextItemTag.DIALOGUE_HISTORY),
+      dialogue("Mirri", "persona"),
+      dialogue("Mirri"),
+    ];
+    expect(speakerTurnStartIndexes(blocks)).toEqual([0, 5, 8]);
+  });
+
+  it("places the slot above four complete speaker turns and keeps shallow notes below it", () => {
+    const history = [
+      dialogue("Juno"),
+      dialogue("Mirri", "persona"),
+      dialogue("Juno"),
+      dialogue("Juno"),
+      dialogue("Mirri", "persona"),
+      dialogue("Juno"),
+      dialogue("Mirri", "persona"),
+    ];
+    const note = item(ContextItemTag.CONTEXT_NOTE_INJECTION);
+    const spacer = item(ContextItemTag.DIALOGUE_HISTORY);
+    const memory = freshMemory();
+    const blocks = [...history.slice(0, 2), spacer, note, ...history.slice(2)];
+    applyPromptLayoutInserts(blocks, [{ tag: "stm_content", items: [memory], depth: -1 }]);
+    expect(blocks.indexOf(memory)).toBe(2);
+    expect(blocks.slice(3)).toEqual([spacer, note, ...history.slice(2)]);
+    expect(getCacheablePrefixBoundary(blocks)).toBe(blocks[1]);
+  });
+
+  it("continues into directly preceding samples, counting each sample line separately", () => {
+    const prefix = item(ContextItemTag.SYSTEM_PERSONALITY, "system");
+    const samples = Array.from({ length: 4 }, (_, index) =>
+      item(ContextItemTag.DIALOGUE_SAMPLE, index % 2 ? "model" : "user"),
+    );
+    const history = [dialogue("Juno"), dialogue("Mirri", "persona")];
+    const memory = freshMemory();
+    const blocks = [prefix, ...samples, item(ContextItemTag.DIALOGUE_HISTORY), ...history];
+    applyPromptLayoutInserts(blocks, [{ tag: "stm_content", items: [memory] }]);
+    expect(blocks.indexOf(memory)).toBe(3);
+    expect(blocks.slice(4)).toEqual([...samples.slice(2), item(ContextItemTag.DIALOGUE_HISTORY), ...history]);
+  });
+
+  it("clamps the slot above the earliest counted item when history and adjacent samples are short", () => {
+    for (const samples of [[], [item(ContextItemTag.DIALOGUE_SAMPLE, "model")]]) {
+      const blocks = [item(ContextItemTag.SYSTEM_PERSONALITY, "system"), ...samples, dialogue("Juno")];
+      const memory = freshMemory();
+      applyPromptLayoutInserts(blocks, [{ tag: "stm_content", items: [memory] }]);
+      expect(blocks.indexOf(memory)).toBe(1);
+    }
+  });
+
+  it("does not count preset samples separated from history or placed at the end", () => {
+    const sample = item(ContextItemTag.DIALOGUE_SAMPLE, "model");
+    const separator: StructuredContextItem = { role: "user", parts: [{ type: "text", text: "Preset block" }] };
+    const history = dialogue("Juno");
+    for (const blocks of [
+      [sample, separator, history],
+      [history, sample, separator],
+    ]) {
+      const memory = freshMemory();
+      applyPromptLayoutInserts(blocks, [{ tag: "stm_content", items: [memory] }]);
+      expect(blocks.indexOf(memory)).toBe(blocks.indexOf(history) - 1);
+    }
+  });
+
+  it("uses terminal samples only when no intervening preset block separates them from empty history", () => {
+    const sample = item(ContextItemTag.DIALOGUE_SAMPLE, "model");
+    const separator: StructuredContextItem = { role: "user", parts: [{ type: "text", text: "Preset block" }] };
+    for (const suffix of [[], [separator]]) {
+      const memory = freshMemory();
+      const blocks = [sample, ...suffix];
+      applyPromptLayoutInserts(blocks, [{ tag: "stm_content", items: [memory] }]);
+      expect(blocks.indexOf(memory)).toBe(suffix.length === 0 ? 0 : 2);
+    }
+  });
+
+  it("marks the same cacheable-prefix item with an empty or occupied slot and preserves the data through item spreads", () => {
+    const source = [
+      item(ContextItemTag.SYSTEM_PERSONALITY, "system"),
+      ...Array.from({ length: 6 }, (_, index) => dialogue(index % 2 ? "Mirri" : "Juno")),
+    ];
+    const empty = [...source];
+    const occupied = [...source];
+    applyPromptLayoutInserts(empty, []);
+    applyPromptLayoutInserts(occupied, [{ tag: "stm_content", items: [freshMemory()] }]);
+    for (const blocks of [empty, occupied]) {
+      expect(getCacheablePrefixBoundary(blocks)).toBe(blocks[2]);
+      const copied = blocks.map((item) => ({ ...item }));
+      expect(getCacheablePrefixBoundary(copied)).toBe(copied[2]);
+      expect(JSON.stringify(blocks[2])).toBe(JSON.stringify(source[2]));
+    }
+    expect(getCacheablePrefixBoundary(source)).toBeUndefined();
+    const noPrefix = [dialogue("Juno")];
+    applyPromptLayoutInserts(noPrefix, []);
+    expect(getCacheablePrefixBoundary(noPrefix)).toBeUndefined();
+  });
+
+  it("keeps a saved item depth when it resolves closer to the end than the speaker-turn slot", () => {
+    for (const depth of [0, 1, 3, 20]) {
+      const blocks = Array.from({ length: 6 }, (_, index) => dialogue(index % 2 ? "Mirri" : "Juno"));
+      const memory = freshMemory();
+      applyPromptLayoutInserts(blocks, [{ tag: "stm_content", items: [memory], depth }]);
+      expect(blocks.indexOf(memory)).toBe(Math.max(2, 6 - depth));
+      expect(getCacheablePrefixBoundary(blocks)).toBe(blocks[1]);
+    }
+  });
+
   it("declares every context tag and insert exactly once", () => {
     const tags = PROMPT_LAYOUT.map((entry) => entry.tag);
     expect(new Set(tags).size).toBe(tags.length);
@@ -54,7 +190,7 @@ describe("prompt layout registry", () => {
 
   it("applies positional inserts in registry order regardless of caller order", () => {
     const samples = [item(ContextItemTag.DIALOGUE_SAMPLE), item(ContextItemTag.DIALOGUE_SAMPLE, "model")];
-    const history = Array.from({ length: 4 }, () => item(ContextItemTag.DIALOGUE_HISTORY));
+    const history = Array.from({ length: 4 }, (_, index) => dialogue(index % 2 ? "Mirri" : "Juno"));
     const lower = item(ContextItemTag.DIALOGUE_HISTORY);
     const memory = item(ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY);
     const nudge = { ...item(ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY), completionText: "" };
@@ -70,8 +206,10 @@ describe("prompt layout registry", () => {
       { tag: "stm_content", items: [memory], depth: 2 },
       { tag: "lower_priority_tail", items: [lower] },
     ]);
+    const markedSample: PromptLayoutItem = { ...samples[1], [CACHEABLE_PREFIX_END]: true };
     expect(blocks).toEqual([
-      ...samples,
+      samples[0],
+      markedSample,
       ...history.slice(0, 2),
       lower,
       memory,
@@ -110,7 +248,7 @@ describe("prompt layout registry", () => {
     const sample = item(ContextItemTag.DIALOGUE_SAMPLE);
     const memory = item(ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY);
     const nudge = { ...item(ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY), completionText: "" };
-    const history = item(ContextItemTag.DIALOGUE_HISTORY);
+    const history = dialogue("Juno");
     const blocks = [sample, history];
     applyPromptLayoutInserts(blocks, [
       { tag: "stm_content", items: [memory], depth: -1 },

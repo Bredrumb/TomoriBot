@@ -1,4 +1,4 @@
-import { orderNativePromptBlocks } from "@/utils/text/context/promptLayout";
+import { orderNativePromptBlocks, STM_TAIL_SLOT, type PromptLayoutItem } from "@/utils/text/context/promptLayout";
 import { personaRepository } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 import { hasExplicitLongTermMemoryIntent } from "@/utils/memory/explicitLongTermMemoryIntent";
@@ -32,15 +32,11 @@ export type NativeBuildContextResult = {
   uncensorDirective?: string;
   /** Unified STM nudge, injected positionally by the pipeline at `nudgeInjectionDepth`. */
   nudgeItem?: StructuredContextItem;
-  /** Dialogue depth at which to inject `nudgeItem` (0 = tail). */
+  /** Saved dialogue-item depth preserves spacer and directive counting (0 = tail). */
   nudgeInjectionDepth?: number;
-  /**
-   * STM content block deferred for positional injection. Populated only when the
-   * server set a content depth >= 0; when -1 (default) the block is pushed inline
-   * into `contextItems` here and this stays undefined.
-   */
+  /** Fresh STM and saved non-negative depths bypass preset buckets for downstream positional insertion. */
   memoryInjectionItems?: StructuredContextItem[];
-  /** Dialogue depth at which to inject `memoryInjectionItems` (0 = tail). */
+  /** Saved dialogue-item depth is compared with the tail slot after history assembly. */
   memoryInjectionDepth?: number;
 };
 
@@ -369,14 +365,10 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       nudgeItem = stmResult.nudgeItem;
       nudgeInjectionDepth = stmResult.nudgeInjectionDepth;
       memoryInjectionDepth = stmResult.memoryInjectionDepth;
-      if (memoryInjectionDepth >= 0) {
-        // Depth >= 0: defer the block out-of-band so it can be spliced at a dialogue
-        // depth downstream (after history is assembled), the same way the nudge is.
-        // Keeping it OUT of contextItems also means preset reassembly won't anchor it
-        // at the chatHistory flush point: the positional injection owns placement.
+      if (memoryInjectionDepth >= 0 || stmResult.memoryItems.some((item: PromptLayoutItem) => item[STM_TAIL_SLOT])) {
+        // Deferred content bypasses preset buckets so the tail slot and saved item depth can be compared after history assembly.
         memoryInjectionItems = stmResult.memoryItems;
       } else {
-        // Default (-1): anchor the block near the top as ambient knowledge (legacy).
         contextItems.push(...stmResult.memoryItems);
       }
     }
