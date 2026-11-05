@@ -89,6 +89,11 @@ protobuf below 3.20, and the pinned Irodori revision caps sentencepiece below 0.
 override when its parent admits the patched version. Validate overrides with runtime imports,
 TensorBoard event writing, tokenizer encode/decode, and actual cloning and VoiceDesign synthesis.
 
+The `cu128` extra adds `triton-windows` on Windows, because `IRODORI_COMPILE_MODE` needs Triton
+and the Windows CUDA torch wheels do not depend on it (the Linux ones depend on `triton`). It is a
+community build that packages Triton for Windows; keep its minor version on the Triton release the
+pinned torch expects (torch 2.10 uses Triton 3.6) and move both together.
+
 The following individual Dependabot alerts accept risk within the current server interface:
 
 - **`GHSA-rrmf-rvhw-rf47` / `CVE-2025-3000`, torch**: retain the coordinated Torch/Torchaudio 2.10

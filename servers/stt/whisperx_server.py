@@ -7,6 +7,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
+import ctranslate2
+import numpy as np
 import torch
 import uvicorn
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -16,8 +18,12 @@ from fastapi.responses import JSONResponse, PlainTextResponse, Response
 MODEL_ID = os.getenv("WHISPERX_MODEL", "large-v3")
 HOST = os.getenv("TOMORI_STT_HOST", os.getenv("TOMORI_TRANSCRIPTION_HOST", "127.0.0.1"))
 PORT = int(os.getenv("TOMORI_STT_PORT", os.getenv("TOMORI_TRANSCRIPTION_PORT", "8021")))
-DEVICE = os.getenv("WHISPERX_DEVICE", "cuda" if torch.cuda.is_available() else "cpu")
-COMPUTE_TYPE = os.getenv("WHISPERX_COMPUTE_TYPE", "float16" if torch.cuda.is_available() else "int8")
+DEVICE_SETTING = os.getenv("WHISPERX_DEVICE")
+COMPUTE_TYPE_SETTING = os.getenv("WHISPERX_COMPUTE_TYPE")
+# Whisper runs on CTranslate2, which can use the GPU even when the installed torch is CPU-only.
+DEVICE = DEVICE_SETTING or ("cuda" if ctranslate2.get_cuda_device_count() > 0 else "cpu")
+COMPUTE_TYPE = ""
+TORCH_DEVICE = ""
 BATCH_SIZE = int(os.getenv("WHISPERX_BATCH_SIZE", "16"))
 ENABLE_ALIGNMENT = os.getenv("WHISPERX_ENABLE_ALIGNMENT", "0") == "1"
 
@@ -26,12 +32,51 @@ model_lock = threading.Lock()
 alignment_models = {}
 
 
-def load_model() -> None:
-  global model
+def load_pipeline(device: str):
+  global COMPUTE_TYPE, TORCH_DEVICE
 
   import whisperx
 
-  model = whisperx.load_model(MODEL_ID, DEVICE, compute_type=COMPUTE_TYPE)
+  COMPUTE_TYPE = COMPUTE_TYPE_SETTING or ("float16" if device == "cuda" else "int8")
+  # Pyannote VAD and the alignment models run on torch, so they follow torch's CUDA support, not Whisper's.
+  TORCH_DEVICE = "cuda" if device == "cuda" and torch.cuda.is_available() else "cpu"
+  if TORCH_DEVICE == device:
+    return whisperx.load_model(MODEL_ID, device, compute_type=COMPUTE_TYPE)
+
+  # whisperx would otherwise place the VAD on cuda, which a CPU-only torch cannot do.
+  from whisperx.vads import Pyannote
+
+  vad_model = Pyannote(torch.device(TORCH_DEVICE), vad_onset=0.500, vad_offset=0.363)
+  return whisperx.load_model(MODEL_ID, device, compute_type=COMPUTE_TYPE, vad_model=vad_model)
+
+
+def probe_gpu_encoder(pipeline) -> None:
+  # CTranslate2 loads cuBLAS only on the first encode, and a failure there leaves later requests hanging.
+  n_mels = pipeline.model.feat_kwargs.get("feature_size") or 80
+  pipeline.model.encode(np.zeros((n_mels, 3000), dtype=np.float32))
+
+
+def load_model() -> None:
+  global model, DEVICE
+
+  pipeline = load_pipeline(DEVICE)
+  if DEVICE == "cuda":
+    try:
+      probe_gpu_encoder(pipeline)
+    except RuntimeError as exc:
+      if DEVICE_SETTING:
+        raise RuntimeError(
+          f"WHISPERX_DEVICE=cuda, but CTranslate2 cannot run on the GPU ({exc}). Install the CUDA 12 "
+          "cuBLAS and cuDNN libraries, or set WHISPERX_DEVICE=cpu."
+        ) from exc
+      print(
+        f"[WhisperX] GPU found but unusable ({exc}); using CPU. Install the CUDA 12 cuBLAS and cuDNN "
+        "libraries for GPU transcription."
+      )
+      del pipeline
+      DEVICE = "cpu"
+      pipeline = load_pipeline(DEVICE)
+  model = pipeline
 
 
 @asynccontextmanager
@@ -44,11 +89,14 @@ app = FastAPI(title="TomoriBot WhisperX STT Server", lifespan=lifespan)
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
+def health() -> dict[str, object]:
   return {
     "status": "ok" if model is not None else "loading",
     "model": MODEL_ID,
     "device": DEVICE,
+    "compute_type": COMPUTE_TYPE,
+    "batch_size": BATCH_SIZE,
+    "vad_device": TORCH_DEVICE,
   }
 
 
@@ -91,11 +139,11 @@ def maybe_align(result: dict[str, object], audio: object) -> dict[str, object]:
     return result
 
   if language_code not in alignment_models:
-    alignment_models[language_code] = whisperx.load_align_model(language_code=language_code, device=DEVICE)
+    alignment_models[language_code] = whisperx.load_align_model(language_code=language_code, device=TORCH_DEVICE)
 
   align_model, metadata = alignment_models[language_code]
   segments = result.get("segments", [])
-  return whisperx.align(segments, align_model, metadata, audio, DEVICE, return_char_alignments=False)
+  return whisperx.align(segments, align_model, metadata, audio, TORCH_DEVICE, return_char_alignments=False)
 
 
 def transcribe_file(path: str, language: Optional[str]) -> dict[str, object]:

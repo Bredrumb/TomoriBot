@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
+import json
 import os
 import tempfile
+import time
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from dataclasses import replace
 from pathlib import Path
@@ -15,6 +19,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
 
+import compile_support
 from chunking import split_text_for_speech
 
 
@@ -75,8 +80,11 @@ MODEL_PRECISION = os.getenv(
   "bf16" if torch.cuda.is_available() else "fp32",
 )
 CODEC_PRECISION = os.getenv("IRODORI_CODEC_PRECISION", "fp32")
-COMPILE_MODEL = os.getenv("IRODORI_COMPILE_MODEL", "false").lower() in {"1", "true", "yes", "on"}
-COMPILE_DYNAMIC = os.getenv("IRODORI_COMPILE_DYNAMIC", "false").lower() in {"1", "true", "yes", "on"}
+COMPILE_MODE = os.getenv("IRODORI_COMPILE_MODE", "off").strip().lower() or "off"
+if COMPILE_MODE not in compile_support.COMPILE_MODES:
+  raise ValueError(
+    f"IRODORI_COMPILE_MODE must be one of {', '.join(compile_support.COMPILE_MODES)}."
+  )
 
 NUM_STEPS = int(os.getenv("IRODORI_NUM_STEPS", "40"))
 T_SCHEDULE_MODE = os.getenv("IRODORI_T_SCHEDULE_MODE", "linear")
@@ -88,6 +96,16 @@ MAX_REF_SECONDS_RAW = os.getenv("IRODORI_MAX_REF_SECONDS")
 MAX_REF_SECONDS = float(MAX_REF_SECONDS_RAW) if MAX_REF_SECONDS_RAW else None
 
 MAX_TEXT_CHARS = 1000
+
+WARMUP_TEXTS = ("うん。", "そんなこと、ないよ。", "ねえ、明日の予定はもう決まってるの？")
+WARMUP_CAPTION = "自然で親しみやすい日本語の声。"
+
+# Entries are never evicted: a handful of persona voices is the expected ceiling, so add eviction if replaced clips pile up.
+REFERENCE_CACHE_DIR = Path(__file__).resolve().parent / "reference-cache"
+REFERENCE_CACHE_VERSION = 1
+# Both match the runtime's SamplingRequest defaults for ref_normalize_db and ref_ensure_max.
+REFERENCE_NORMALIZE_DB = -16.0
+REFERENCE_ENSURE_MAX = True
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -119,9 +137,14 @@ CHUNKING_ENABLED = _env_bool("IRODORI_CHUNKING_ENABLED", True)
 CHUNK_MIN_CHARS = _env_positive_int("IRODORI_CHUNK_MIN_CHARS", 80)
 
 runtime = None
+server_ready = False
+warmup_seconds: float | None = None
 resolved_checkpoint: str | None = None
 resolved_model_device: str | None = None
 resolved_codec_device: str | None = None
+
+# CUDA graph trees are thread-local, so every synthesis must run on this one thread.
+inference_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="irodori-inference")
 
 
 class SynthesizeRequest(BaseModel):
@@ -144,6 +167,56 @@ def decode_ref_audio(raw_base64: str, directory: str) -> str:
   ref_path = Path(directory) / "reference.wav"
   ref_path.write_bytes(audio_bytes)
   return str(ref_path)
+
+
+def cached_reference_latent(ref_path: str) -> str | None:
+  if not runtime.key.codec_deterministic_encode:
+    return None
+
+  from irodori_tts.inference_runtime import _load_audio
+
+  max_ref_seconds = (
+    runtime.default_max_ref_seconds if MAX_REF_SECONDS is None else MAX_REF_SECONDS
+  )
+  settings = {
+    "version": REFERENCE_CACHE_VERSION,
+    "codec_repo": runtime.key.codec_repo,
+    "codec_precision": runtime.key.codec_precision,
+    "deterministic": runtime.key.codec_deterministic_encode,
+    "max_ref_seconds": max_ref_seconds,
+    "normalize_db": REFERENCE_NORMALIZE_DB,
+    "ensure_max": REFERENCE_ENSURE_MAX,
+  }
+  digest = hashlib.sha256(Path(ref_path).read_bytes())
+  digest.update(json.dumps(settings, sort_keys=True).encode())
+  target = REFERENCE_CACHE_DIR / f"{digest.hexdigest()}.pt"
+  if target.is_file():
+    return str(target)
+
+  wav, sample_rate = _load_audio(ref_path)
+  if max_ref_seconds > 0:
+    wav = wav[:, : max(1, int(max_ref_seconds * sample_rate))]
+  # synthesize() runs the same codec under this lock, so encoding outside it could overlap a decode.
+  with runtime._infer_lock:
+    latent = runtime.codec.encode_waveform(
+      wav.unsqueeze(0),
+      sample_rate=int(sample_rate),
+      normalize_db=REFERENCE_NORMALIZE_DB,
+      ensure_max=REFERENCE_ENSURE_MAX,
+    ).cpu()
+  if latent.shape[1] == 0:
+    raise ValueError("ref_audio produced an empty latent.")
+
+  REFERENCE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+  handle, temp_name = tempfile.mkstemp(dir=REFERENCE_CACHE_DIR, suffix=".tmp")
+  os.close(handle)
+  try:
+    torch.save(latent, temp_name)
+    os.replace(temp_name, target)
+  except BaseException:
+    Path(temp_name).unlink(missing_ok=True)
+    raise
+  return str(target)
 
 
 def resolve_device(value: str) -> str:
@@ -172,23 +245,21 @@ def _audio_as_channels_first(audio: torch.Tensor) -> torch.Tensor:
   raise RuntimeError(f"Expected audio shape (samples,) or (channels, samples), got {tuple(audio.shape)}")
 
 
-async def synthesize_text_chunks(
+def build_sampling_request(
   *,
   text: str,
   caption: str,
   ref_path: str | None,
-  client_request: Request | None = None,
-) -> tuple[torch.Tensor, int]:
+  ref_latent_path: str | None = None,
+  seed: int | None = None,
+):
   from irodori_tts.inference_runtime import SamplingRequest
 
-  chunks = split_text_for_speech(text, min_chars=CHUNK_MIN_CHARS) if CHUNKING_ENABLED else [text]
-  if len(chunks) > 1:
-    print(f"[Irodori-TTS] Long-text chunking: {len(chunks)} chunks (min_chars={CHUNK_MIN_CHARS})")
-
-  base_request = SamplingRequest(
+  return SamplingRequest(
     text=text,
     caption=caption or None,
-    ref_wav=ref_path,
+    ref_wav=None if ref_latent_path else ref_path,
+    ref_latent=ref_latent_path,
     no_ref=ref_path is None,
     num_candidates=1,
     num_steps=NUM_STEPS,
@@ -198,11 +269,33 @@ async def synthesize_text_chunks(
     cfg_scale_caption=CFG_SCALE_CAPTION,
     cfg_scale_speaker=CFG_SCALE_SPEAKER,
     max_ref_seconds=MAX_REF_SECONDS,
+    seed=seed,
+  )
+
+
+async def synthesize_text_chunks(
+  *,
+  text: str,
+  caption: str,
+  ref_path: str | None,
+  ref_latent_path: str | None = None,
+  client_request: Request | None = None,
+) -> tuple[torch.Tensor, int]:
+  chunks = split_text_for_speech(text, min_chars=CHUNK_MIN_CHARS) if CHUNKING_ENABLED else [text]
+  if len(chunks) > 1:
+    print(f"[Irodori-TTS] Long-text chunking: {len(chunks)} chunks (min_chars={CHUNK_MIN_CHARS})")
+
+  base_request = build_sampling_request(
+    text=text,
+    caption=caption,
+    ref_path=ref_path,
+    ref_latent_path=ref_latent_path,
   )
 
   if not chunks:
     raise ValueError("text contains no speakable characters.")
 
+  loop = asyncio.get_running_loop()
   results = []
   pinned_seed: int | None = base_request.seed
   for index, chunk in enumerate(chunks, start=1):
@@ -214,7 +307,7 @@ async def synthesize_text_chunks(
     if len(chunks) > 1:
       print(f"[Irodori-TTS] Synthesizing chunk {index}/{len(chunks)} ({len(chunk)} chars)")
     chunk_request = replace(base_request, text=chunk, seed=pinned_seed)
-    result = await asyncio.to_thread(runtime.synthesize, chunk_request, log_fn=None)
+    result = await loop.run_in_executor(inference_executor, runtime.synthesize, chunk_request)
     results.append(result)
     if pinned_seed is None:
       pinned_seed = int(result.used_seed)
@@ -235,10 +328,13 @@ def load_model() -> None:
 
   from irodori_tts.inference_runtime import InferenceRuntime, RuntimeKey
 
-  resolved_checkpoint = resolve_checkpoint()
   resolved_model_device = resolve_device(MODEL_DEVICE)
   resolved_codec_device = resolve_device(CODEC_DEVICE)
+  if COMPILE_MODE != "off":
+    compile_support.require_compile_prerequisites(resolved_model_device)
+  resolved_checkpoint = resolve_checkpoint()
 
+  # The upstream compile flag recompiles per shape and then silently falls back to eager.
   runtime = InferenceRuntime.from_key(
     RuntimeKey(
       checkpoint=resolved_checkpoint,
@@ -246,18 +342,45 @@ def load_model() -> None:
       codec_device=resolved_codec_device,
       model_precision=MODEL_PRECISION,
       codec_precision=CODEC_PRECISION,
-      compile_model=COMPILE_MODEL,
-      compile_dynamic=COMPILE_DYNAMIC,
     )
   )
+  if COMPILE_MODE != "off":
+    compile_support.compile_model(runtime.model, cudagraphs=COMPILE_MODE == "cudagraphs")
+
+
+def warm_up() -> None:
+  """Compile and record graphs for the VoiceDesign and clone paths before serving."""
+  from irodori_tts.inference_runtime import save_wav
+
+  last_result = None
+  for text in WARMUP_TEXTS:
+    request = build_sampling_request(text=text, caption=WARMUP_CAPTION, ref_path=None, seed=0)
+    last_result = runtime.synthesize(request)
+
+  # No reference clip ships with the server, so the clone path reuses a VoiceDesign output.
+  with tempfile.TemporaryDirectory(prefix="tomori-irodori-warmup-") as temp_dir:
+    ref_path = str(Path(temp_dir) / "reference.wav")
+    save_wav(ref_path, last_result.audio, int(last_result.sample_rate))
+    for text in WARMUP_TEXTS:
+      runtime.synthesize(build_sampling_request(text=text, caption="", ref_path=ref_path, seed=0))
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+  global server_ready, warmup_seconds
+
   load_model()
   try:
+    if COMPILE_MODE != "off":
+      print(f"[Irodori-TTS] Warming up compile mode '{COMPILE_MODE}' (first start takes minutes)")
+      started = time.perf_counter()
+      await asyncio.get_running_loop().run_in_executor(inference_executor, warm_up)
+      warmup_seconds = round(time.perf_counter() - started, 1)
+      print(f"[Irodori-TTS] Warmup finished in {warmup_seconds} s")
+    server_ready = True
     yield
   finally:
+    server_ready = False
     if runtime is not None:
       runtime.unload()
 
@@ -268,7 +391,7 @@ app = FastAPI(title="TomoriBot Irodori-TTS Server", lifespan=lifespan)
 @app.get("/health")
 def health() -> dict[str, str | int | float | bool | None]:
   return {
-    "status": "ok" if runtime is not None else "loading",
+    "status": "ok" if server_ready else "loading",
     "model_id": MODEL_ID,
     "checkpoint": resolved_checkpoint,
     "model_device": resolved_model_device,
@@ -278,7 +401,8 @@ def health() -> dict[str, str | int | float | bool | None]:
     "num_steps": NUM_STEPS,
     "t_schedule_mode": T_SCHEDULE_MODE,
     "sway_coeff": SWAY_COEFF,
-    "compile_model": COMPILE_MODEL,
+    "compile_mode": COMPILE_MODE,
+    "warmup_seconds": warmup_seconds,
     "chunking_enabled": CHUNKING_ENABLED,
     "chunk_min_chars": CHUNK_MIN_CHARS,
     "supports_voice_design": True,
@@ -287,7 +411,7 @@ def health() -> dict[str, str | int | float | bool | None]:
 
 @app.post("/synthesize")
 async def synthesize(payload: SynthesizeRequest, request: Request) -> Response:
-  if runtime is None:
+  if not server_ready:
     raise HTTPException(status_code=503, detail="Model is still loading.")
 
   text = payload.text.strip()
@@ -308,10 +432,14 @@ async def synthesize(payload: SynthesizeRequest, request: Request) -> Response:
     from irodori_tts.inference_runtime import save_wav
 
     try:
+      ref_latent_path = (
+        await asyncio.to_thread(cached_reference_latent, ref_path) if ref_path else None
+      )
       audio, sample_rate = await synthesize_text_chunks(
         text=text,
         caption=caption,
         ref_path=ref_path,
+        ref_latent_path=ref_latent_path,
         client_request=request,
       )
     except ValueError as exc:

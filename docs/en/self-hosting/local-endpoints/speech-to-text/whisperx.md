@@ -33,7 +33,25 @@ python -m pip install -r requirements.txt
 python whisperx_server.py
 ```
 
-Keep that terminal open while TomoriBot is using WhisperX. The default endpoint URL is `http://127.0.0.1:8021`.
+Keep that terminal open while TomoriBot is using WhisperX. The default endpoint URL is `http://127.0.0.1:8021`. On Windows, use `127.0.0.1` instead of `localhost`.
+
+## Choose a model
+
+Set `WHISPERX_MODEL` before starting the server.
+
+| `WHISPERX_MODEL` | Size | Use |
+|---|---|---|
+| `large-v3` | 1.55B | Best multilingual accuracy; about 0.6 GiB more VRAM than turbo |
+| `large-v3-turbo` | 809M | Multilingual, faster decoder; slightly worse Japanese |
+| `kotoba-tech/kotoba-whisper-v2.0-faster` | 756M | Japanese only; more accurate than turbo on Japanese test clips, at the same speed |
+
+On short clips the encoder dominates, so all three run at similar speed. Pick by language and VRAM.
+`small` and `base` lose too much Japanese accuracy to recommend. Whisper models can still invent
+text on very short or near-silent clips.
+
+## GPU
+
+The server uses an NVIDIA GPU automatically when one is available. Check `http://127.0.0.1:8021/health`: `device` should read `cuda`. On Windows, speech recognition needs the CUDA 12 cuBLAS and cuDNN DLLs on your `PATH`. Without them the server prints `GPU found but unusable` at startup and runs on the CPU, which is much slower: install them and restart the server. If you set `WHISPERX_DEVICE=cuda`, the server stops at startup instead.
 
 ## Register in TomoriBot
 
@@ -42,7 +60,7 @@ Run `/providers`, choose `Add New Custom Endpoint`, and use the transcription AP
 - API Compatibility: `openai-compatible-transcription`
 - `endpoint_url`: `http://127.0.0.1:8021`
 
-After saving the connection, select it and use its model dropdown to add `large-v3`, or whatever `WHISPERX_MODEL` is set to, as a Transcription model.
+After saving the connection, select it and use its model dropdown to add the exact value of `WHISPERX_MODEL` (`large-v3` by default, or the full repo ID such as `kotoba-tech/kotoba-whisper-v2.0-faster`) as a Transcription model.
 
 Use `/providers` for endpoint registration and model setup. Then open `/config` > Models > Switch Models to select and activate the registered endpoint.
 
