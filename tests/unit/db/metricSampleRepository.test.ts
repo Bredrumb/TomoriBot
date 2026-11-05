@@ -1,6 +1,5 @@
-import { beforeAll, beforeEach, describe, expect, it, spyOn } from "bun:test";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import type { sql } from "@/utils/db/client";
-import { initializeShardTopology } from "@/utils/discord/shardOwnership";
 import * as leases from "@/utils/cluster/shardLeases";
 import { useEnvSandbox } from "../../helpers/env";
 import { stubLogMembers } from "../../helpers/mockSurface";
@@ -33,12 +32,18 @@ beforeAll(async () => {
   ({ MetricSampleRepository } = await import("@/utils/db/repositories/MetricSampleRepository"));
 });
 
-initializeShardTopology({ SHARD_COUNT: "1" });
 useEnvSandbox(["METRIC_SAMPLE_PRUNE_INTERVAL_MS", "METRIC_SAMPLE_RETENTION_DAYS"]);
 
+let primarySpy: ReturnType<typeof spyOn<typeof leases, "isPrimaryProcess">>;
+
 beforeEach(() => {
+  primarySpy = spyOn(leases, "isPrimaryProcess").mockReturnValue(true);
   queries.length = 0;
   insertRejection = null;
+});
+
+afterEach(() => {
+  primarySpy.mockRestore();
 });
 
 const inserts = () => queries.filter((q) => q.startsWith("INSERT"));

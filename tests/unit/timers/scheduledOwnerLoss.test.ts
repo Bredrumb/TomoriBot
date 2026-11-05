@@ -7,13 +7,14 @@ import { ScheduledWorkCoordinator } from "@/timers/scheduledWorkCoordinator";
 import { reminderSchema, randomTriggerSchema } from "@/types/db/schema";
 import { LEASE_RENEW_MS, type LeaseStore } from "@/utils/cluster/leaseKeeper";
 import { ShardLeaseCoordinator } from "@/utils/cluster/shardLeases";
+import * as personaCache from "@/utils/cache/tomoriStateCache";
 import * as userCache from "@/utils/cache/userCache";
 import { serverScheduleRepository } from "@/utils/db/repositories";
 import { parseShardTopology } from "@/utils/discord/shardOwnership";
 import { log } from "@/utils/misc/logger";
 import * as shutdownState from "@/utils/misc/shutdownState";
 import { initializeLocalizer } from "@/utils/text/localizer";
-import { createUserRow } from "../../helpers/fixtures";
+import { createPersona, createUserRow } from "../../helpers/fixtures";
 
 const spies: Array<{ mockRestore(): void }> = [];
 let draining = false;
@@ -288,6 +289,53 @@ it.each([
     expect(f.chatCall).not.toHaveBeenCalled();
     expect(f.triggerWrite).not.toHaveBeenCalled();
     f.expectUnconsumed();
+  } finally {
+    await f.close();
+  }
+});
+
+it.each([
+  false,
+  true,
+])("settles a delivered random trigger during drain only with its captured owner (%s)", async (lostOwner) => {
+  const f = await fixture();
+  f.due.mockResolvedValue([]);
+  f.triggers.mockResolvedValue([
+    randomTriggerSchema.parse({
+      trigger_id: 7,
+      server_id: 1,
+      channel_disc_id: f.channel.id,
+      timer_hours: 1,
+      chance_percent: 100,
+      next_trigger_at: new Date(),
+    }),
+  ]);
+  const persona = createPersona({ persona_id: 1, server_id: 1 });
+  spies.push(spyOn(personaCache, "getCachedAllPersonas").mockResolvedValue([persona]));
+  const anchor: Message<true> = Reflect.construct(Message, [
+    f.client,
+    {
+      id: "1500000000000000001",
+      content: "Hello",
+      type: 0,
+      author: { id: f.reminder.user_discord_id, username: "Juno", bot: false },
+    },
+    f.channel,
+  ]);
+  f.messages.mockResolvedValue(new Collection([[anchor.id, anchor]]));
+  f.chatCall.mockImplementationOnce(async (input) => {
+    f.coordinator.stop();
+    if (lostOwner) await f.transition("uncertain");
+    await input.onGenerationResult?.({
+      status: "completed",
+      streamResults: [],
+      personaResponses: [{ personaName: "Tomori", text: "Hello", personaId: 1 }],
+    });
+    return "run";
+  });
+  try {
+    await f.coordinator.runNow();
+    expect(f.triggerWrite).toHaveBeenCalledTimes(lostOwner ? 0 : 1);
   } finally {
     await f.close();
   }

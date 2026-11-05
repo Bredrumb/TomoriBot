@@ -7,6 +7,7 @@ import type { ShardTopology } from "@/utils/discord/shardOwnership";
 import {
   assertScheduledWorkActive,
   canRunScheduledWork,
+  canSettleScheduledWork,
   type ScheduledWorkContext,
 } from "@/timers/scheduledWorkContext";
 
@@ -15,6 +16,7 @@ import { tomoriChat, suppressNextSelfReply } from "../events/messageCreate/tomor
 import { getCachedAllPersonas } from "../utils/cache/tomoriStateCache";
 import { resolvePersonaForMessage } from "@/utils/chat/webhookIdentity";
 import { runWithErrorContext } from "@/utils/misc/errorContextStore";
+import { isDeliveredTurnResult } from "@/utils/chat/postTurnEffects";
 import { seedTurnAnchor } from "@/utils/discord/turnAnchor";
 
 export class RandomTriggerProcessor {
@@ -62,6 +64,7 @@ export class RandomTriggerProcessor {
   private async executeTriggerInContext(trigger: RandomTriggerRow, work?: ScheduledWorkContext): Promise<void> {
     const triggerId = trigger.trigger_id ?? 0;
     let consecutiveFailures = trigger.consecutive_failures ?? 0;
+    let delivered = false;
 
     try {
       assertScheduledWorkActive(work);
@@ -204,13 +207,16 @@ export class RandomTriggerProcessor {
         shouldSurfaceUserErrors: false,
         manualSystemPrompt: trigger.custom_prompt ?? undefined,
         borrowsTriggerMessage: true,
+        onGenerationResult: async (result) => {
+          delivered = isDeliveredTurnResult(result);
+        },
       });
 
       log.success(`Random trigger ${triggerId} fired successfully for persona "${chosenPersona.persona_nickname}"`);
     } catch (error) {
       if (canRunScheduledWork(work)) log.error(`Error executing random trigger ${triggerId}:`, error);
     } finally {
-      if (canRunScheduledWork(work))
+      if (canRunScheduledWork(work) || (delivered && canSettleScheduledWork(work)))
         await this.rescheduleTrigger(
           triggerId,
           trigger.timer_hours,

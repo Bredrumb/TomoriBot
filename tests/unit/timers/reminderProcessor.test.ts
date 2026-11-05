@@ -240,6 +240,33 @@ describe("ReminderProcessor delivery acknowledgement", () => {
     expect(deleteReminderByIdMock).toHaveBeenCalledWith(reminder.reminder_id);
   });
 
+  it("settles delivered reminders during drain but never after owner epoch loss", async () => {
+    for (const lostOwner of [false, true]) {
+      const reminder = makeReminder({ repetition_interval_hours: lostOwner ? null : 24 });
+      const scheduler = new AbortController();
+      const owner = new AbortController();
+      getDueRemindersMock.mockImplementation(async () => [reminder]);
+      tomoriChatMock.mockImplementation(async (input) => {
+        scheduler.abort();
+        if (lostOwner) owner.abort();
+        await input.onGenerationResult?.({
+          status: "completed",
+          streamResults: [],
+          personaResponses: [{ personaName: "Tomori", text: "Reminder!", personaId: 1 }],
+        });
+        return "run";
+      });
+      await new ReminderProcessor(makeClient() as never).processDueReminders({
+        signal: scheduler.signal,
+        ownerSignal: owner.signal,
+        hasOwnership: () => true,
+      });
+      expect(rescheduleReminderMock).toHaveBeenCalledTimes(1);
+      expect(deleteReminderByIdMock).not.toHaveBeenCalled();
+      expect(ensureDiscordUserMentionMock).not.toHaveBeenCalled();
+    }
+  });
+
   it("keeps queued reminders leased and retries them when the queue is cleared", async () => {
     const reminder = makeReminder();
     let onQueueDiscard: QueuedMessageDiscardHandler | undefined;

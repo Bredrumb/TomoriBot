@@ -12,6 +12,7 @@ import type { ShardTopology } from "@/utils/discord/shardOwnership";
 import {
   assertScheduledWorkActive,
   canRunScheduledWork,
+  canSettleScheduledWork,
   type ScheduledWorkContext,
 } from "@/timers/scheduledWorkContext";
 
@@ -308,17 +309,17 @@ export class ReminderProcessor {
   } {
     let settled = false;
 
-    const settle = async (operation: () => Promise<void>): Promise<void> => {
+    const settle = async (operation: () => Promise<void>, delivered = false): Promise<void> => {
       if (settled) {
         return;
       }
       settled = true;
 
       try {
-        if (!canRunScheduledWork(args.work)) return;
+        if (!(delivered ? canSettleScheduledWork(args.work) : canRunScheduledWork(args.work))) return;
         await operation();
       } catch (error) {
-        if (canRunScheduledWork(args.work)) throw error;
+        if (delivered ? canSettleScheduledWork(args.work) : canRunScheduledWork(args.work)) throw error;
       } finally {
         this.releaseReminderDelivery(args.reminder);
       }
@@ -336,7 +337,7 @@ export class ReminderProcessor {
         if (isReminderDeliverySuccessful(result)) {
           await settle(async () => {
             await this.completeReminderDelivery(args);
-          });
+          }, true);
           return;
         }
 
@@ -362,28 +363,33 @@ export class ReminderProcessor {
     work?: ScheduledWorkContext;
   }): Promise<void> {
     const { reminder, channel, afterMessageId, reminderStartTime, isSelfReminder, work } = args;
-    assertScheduledWorkActive(work);
+    if (!canSettleScheduledWork(work)) return;
 
-    if (!isSelfReminder && isBridgeUserId(reminder.user_discord_id)) {
-      await sendMatrixReminderMention(
-        channel,
-        reminder,
-        afterMessageId,
-        reminderStartTime,
-        this.client.user?.id ?? "",
-        () => !canRunScheduledWork(work),
-      );
-    } else if (!isSelfReminder) {
-      await this.ensureReminderRecipientMention(channel, reminder, afterMessageId, reminderStartTime, work);
+    try {
+      if (canRunScheduledWork(work) && !isSelfReminder && isBridgeUserId(reminder.user_discord_id)) {
+        await sendMatrixReminderMention(
+          channel,
+          reminder,
+          afterMessageId,
+          reminderStartTime,
+          this.client.user?.id ?? "",
+          () => !canRunScheduledWork(work),
+        );
+      } else if (canRunScheduledWork(work) && !isSelfReminder) {
+        await this.ensureReminderRecipientMention(channel, reminder, afterMessageId, reminderStartTime, work);
+      }
+    } catch (error) {
+      if (canRunScheduledWork(work) || !canSettleScheduledWork(work)) throw error;
+      log.warn(`Reminder ${reminder.reminder_id}: mention check interrupted during drain`, error);
     }
-    assertScheduledWorkActive(work);
+    if (!canSettleScheduledWork(work)) return;
 
     const repetition = getReminderRepetition(reminder);
 
     if (repetition && reminder.reminder_id) {
       const nextOccurrence = getNextRecurringOccurrence(reminder, repetition);
       const rescheduled = await serverScheduleRepository.rescheduleReminder(reminder.reminder_id, nextOccurrence);
-      assertScheduledWorkActive(work);
+      if (!canSettleScheduledWork(work)) return;
 
       if (rescheduled) {
         reminder.delivery_retry_count = 0;

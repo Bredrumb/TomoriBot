@@ -1,5 +1,5 @@
 import type { Client, GuildTextBasedChannel, Message } from "discord.js";
-import { canRunScheduledWork, type ScheduledWorkContext } from "@/timers/scheduledWorkContext";
+import { canRunScheduledWork, canSettleScheduledWork, type ScheduledWorkContext } from "@/timers/scheduledWorkContext";
 import type { TomoriState } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
@@ -417,7 +417,7 @@ export async function runIdleNudgeAttempt(input: IdleNudgeAttempt): Promise<Atte
   const personaId = attempt.persona.persona_id as number;
   let outcome: AttemptResult | null = null;
   const settle = async (result: GenerationTurnResult): Promise<void> => {
-    if (!canRunScheduledWork(input.work)) {
+    if (!(isDeliveredTurnResult(result) ? canSettleScheduledWork(input.work) : canRunScheduledWork(input.work))) {
       outcome = "aborted";
       return;
     }
@@ -432,8 +432,9 @@ export async function runIdleNudgeAttempt(input: IdleNudgeAttempt): Promise<Atte
       return;
     }
     const openerId =
-      result.firstDeliveredMessageId ?? (await findOpenerAfter(attempt.client, target.channel, anchor.id));
-    if (!canRunScheduledWork(input.work)) return;
+      result.firstDeliveredMessageId ??
+      (canRunScheduledWork(input.work) ? await findOpenerAfter(attempt.client, target.channel, anchor.id) : null);
+    if (!canSettleScheduledWork(input.work)) return;
     const recorded = await naturalNudgeRepository.recordIdleNudgeFire(
       {
         serverId: attempt.serverId,
@@ -482,7 +483,7 @@ export async function runIdleNudgeAttempt(input: IdleNudgeAttempt): Promise<Atte
   });
   // A scene only talks about its target, so only a lone opener must ping them.
   const pingUserTarget = scene ? null : attempt.target;
-  if (outcome === "fired" && pingUserTarget) {
+  if (outcome === "fired" && pingUserTarget && canRunScheduledWork(input.work)) {
     await ensureDiscordUserMention({
       client: attempt.client,
       channel: target.channel,

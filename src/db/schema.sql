@@ -4224,3 +4224,13 @@ CREATE TABLE IF NOT EXISTS cluster_leases (
   token BIGINT NOT NULL CHECK (token > 0),
   expires_at TIMESTAMPTZ NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS metric_samples (
+  metric_sample_id BIGSERIAL PRIMARY KEY,
+  metric_name TEXT NOT NULL,
+  fields JSONB NOT NULL DEFAULT '{}',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_metric_samples_name_time
+  ON metric_samples (metric_name, created_at DESC);

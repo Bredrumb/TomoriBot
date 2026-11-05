@@ -159,6 +159,7 @@ export class ScheduledWorkCoordinator {
     const ownerSignal = this.owner.getWorkSignal();
     const work: ScheduledWorkContext = {
       signal: ownerSignal ? AbortSignal.any([this.lifetime.signal, ownerSignal]) : this.lifetime.signal,
+      ownerSignal: ownerSignal ?? new AbortController().signal,
       hasOwnership: this.owner.hasOwnership,
     };
     this.isProcessing = true;

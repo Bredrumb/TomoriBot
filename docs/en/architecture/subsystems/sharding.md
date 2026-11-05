@@ -72,14 +72,14 @@ accepted provider operation can still complete or incur cost after cancellation.
 ## Background work
 
 The live owner of shard 0 is the primary process. Discord command registration, command catalog
-sync, OpenRouter pricing writes, global STM/OAuth cleanup, message-proxy pruning, metric retention,
+sync, OpenRouter pricing writes, global STM/OAuth cleanup, message-proxy pruning, metric retention, Natural Nudges pruning,
 and preset-art seeding check that predicate before shared side effects. These checks do not provide
 durable exactly-once execution across a crash or primary handover.
 
 Every process still loads local tools, locales, models, command routes, and monitors. Reminders,
 random triggers, Natural Nudges, presence history, development MCP eager-connect, and preset avatar
 fan-out select owned guilds. Scheduled continuations carry cancellation through awaited work and
-check again before dispatch or consuming a schedule. A process-local wake signal accelerates local
+check again before dispatch or consuming a schedule. Delivered reminders, random triggers, and Natural Nudges can settle during graceful drain while their captured owner epoch remains valid. A process-local wake signal accelerates local
 changes; periodic reconciliation discovers changes written by a peer.
 
 Subset status totals come from fresh `cache_sizes` samples covering every shard exactly once.

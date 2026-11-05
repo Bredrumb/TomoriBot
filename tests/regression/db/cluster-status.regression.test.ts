@@ -2,7 +2,7 @@ import { afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { MetricSampleRepository, type MetricFields } from "@/utils/db/repositories/MetricSampleRepository";
 import { parseShardTopology } from "@/utils/discord/shardOwnership";
 import { useEnvSandbox } from "../../helpers/env";
-import { DB_TESTS_AVAILABLE, executeTestSqlFile, setupTestDb, testSql } from "./setup/testDb";
+import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
 
 useEnvSandbox(["CACHE_METRICS_INTERVAL_MS"]);
 const repository = new MetricSampleRepository(testSql);
@@ -24,7 +24,6 @@ async function sample(ids: string, guilds: number, ageMs = 0, count = 4): Promis
 describe.skipIf(!DB_TESTS_AVAILABLE)("cluster guild totals", () => {
   beforeAll(async () => {
     await setupTestDb();
-    await executeTestSqlFile("src/db/migrations/065_metric_samples.sql");
   });
   afterEach(async () => {
     await testSql`DELETE FROM metric_samples WHERE metric_name = 'cache_sizes'`;

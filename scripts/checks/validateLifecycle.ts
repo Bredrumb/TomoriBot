@@ -576,7 +576,19 @@ function assertBackupBundleCreated(): string {
 
 async function validateFreshInitialization(client: SQL): Promise<void> {
   await initializeDatabase({ client, maxRetries: 1, delayMs: 0 });
+  const [freshMetrics] = await client<{ present: boolean; marked: boolean }[]>`
+    SELECT to_regclass('public.metric_samples') IS NOT NULL AS present,
+      EXISTS (SELECT 1 FROM schema_migrations WHERE name = '065_metric_samples') AS marked
+  `;
+  if (!freshMetrics?.present || !freshMetrics.marked)
+    throw new Error("Fresh metrics schema or migration marker missing.");
+  await client`DROP TABLE metric_samples`;
   await initializeDatabase({ client, maxRetries: 1, delayMs: 0 });
+  const [repairedMetrics] = await client<{ present: boolean; indexed: boolean }[]>`
+    SELECT to_regclass('public.metric_samples') IS NOT NULL AS present,
+      to_regclass('public.idx_metric_samples_name_time') IS NOT NULL AS indexed
+  `;
+  if (!repairedMetrics?.present || !repairedMetrics.indexed) throw new Error("Metrics schema was not repaired.");
   await assertRequiredTablesExist(client);
   await assertSeedDataExists(client);
   await assertStartupFunctionsExist(client);

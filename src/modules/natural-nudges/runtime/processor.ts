@@ -1,4 +1,5 @@
 import type { Client, Message } from "discord.js";
+import { isPrimaryProcess } from "@/utils/cluster/shardLeases";
 import type { ShardTopology } from "@/utils/discord/shardOwnership";
 import { canRunScheduledWork, type ScheduledWorkContext } from "@/timers/scheduledWorkContext";
 import type { TomoriState } from "@/types/db/schema";
@@ -134,7 +135,7 @@ export class NaturalNudgeProcessor {
 
   public async processDueIdleNudges(work?: ScheduledWorkContext): Promise<void> {
     if (!canRunScheduledWork(work) || !this.client.isReady()) return;
-    await this.pruneIfDue();
+    if (isPrimaryProcess()) await this.pruneIfDue();
     let servers: EnabledIdleNudgeServer[];
     try {
       servers = await naturalNudgeRepository.listEnabledIdleNudgeServers(new Date(), this.topology);
