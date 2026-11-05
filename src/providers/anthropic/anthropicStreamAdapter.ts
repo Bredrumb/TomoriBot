@@ -13,6 +13,7 @@
  */
 
 import { mapWithConcurrency } from "@/utils/async/bounded";
+import { resolveToolCallId } from "@/providers/utils/toolCallIds";
 import type { FunctionCall, FunctionResponseImageMetadata, ThoughtLogEntry } from "../../types/provider/interfaces";
 import type { StructuredContextItem } from "../../types/misc/context";
 import { log } from "../../utils/misc/logger";
@@ -106,7 +107,7 @@ interface AnthropicMessage {
  * Accumulated tool call data across streaming chunks
  */
 interface AccumulatedToolCall {
-  id: string;
+  id?: string;
   name: string;
   argumentsJson: string;
 }
@@ -405,7 +406,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
 
         if (blockData.content_block?.type === "tool_use") {
           this.toolCallAccumulator.set(this.currentContentBlockIndex, {
-            id: blockData.content_block.id || `tool_${this.currentContentBlockIndex}`,
+            id: typeof blockData.content_block.id === "string" ? blockData.content_block.id : undefined,
             name: blockData.content_block.name || "",
             argumentsJson: "",
           });
@@ -473,6 +474,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
           });
 
           const functionCall: FunctionCall = {
+            id: accumulated.id,
             name: accumulated.name,
             args: parsedArgs,
           };
@@ -832,8 +834,9 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
     }
 
     if (functionInteractionHistory && functionInteractionHistory.length > 0) {
-      for (const interaction of functionInteractionHistory) {
-        const toolUseId = `toolu_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      const usedToolCallIds = new Set<string>();
+      for (const [index, interaction] of functionInteractionHistory.entries()) {
+        const toolUseId = resolveToolCallId(interaction.functionCall.id, index, "toolu", usedToolCallIds);
 
         const assistantContentBlocks: AnthropicContentBlock[] = [];
 

@@ -704,6 +704,7 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
       });
 
       const functionCall: FunctionCall = {
+        id: typeof accumulated.id === "string" ? accumulated.id : undefined,
         name: accumulated.functionName,
         args: parsedArgs,
       };

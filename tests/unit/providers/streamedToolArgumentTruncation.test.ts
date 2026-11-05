@@ -58,6 +58,7 @@ describe("streamed tool arguments truncated mid-payload", () => {
 
     expect(finished.type).toBe("function_call");
     expect(finished.functionCall?.args).toEqual({ scene: "hallway" });
+    expect(finished.functionCall?.id).toBe("call_1");
     expect(finished.functionCall?.argumentsTruncated).toBe(true);
   });
 
@@ -82,6 +83,7 @@ describe("streamed tool arguments truncated mid-payload", () => {
 
     expect(finished.type).toBe("function_call");
     expect(finished.functionCall?.args).toEqual({ scene: "hallway" });
+    expect(finished.functionCall?.id).toBe("toolu_1");
     expect(finished.functionCall?.argumentsTruncated).toBe(true);
   });
 
@@ -103,6 +105,7 @@ describe("streamed tool arguments truncated mid-payload", () => {
     const finished = adapter.processChunk(makeAnthropicChunk("content_block_stop", { index: 0 }));
 
     expect(finished.functionCall?.args).toEqual({ text: "complete" });
+    expect(finished.functionCall?.id).toBe("toolu_1");
     expect(finished.functionCall?.argumentsTruncated).toBeUndefined();
   });
 });

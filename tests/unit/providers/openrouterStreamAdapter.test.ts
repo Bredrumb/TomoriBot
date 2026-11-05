@@ -448,6 +448,7 @@ describe("OpenrouterStreamAdapter.processChunk", () => {
 
     expect(result.type).toBe("function_call");
     expect(result.functionCall?.name).toBe("search_web");
+    expect(result.functionCall?.id).toBe("call_abc");
     expect(result.functionCall?.args).toEqual({ query: "TomoriBot changelog" });
     expect(result.content).toBeUndefined();
   });
@@ -489,6 +490,7 @@ describe("OpenrouterStreamAdapter.processChunk", () => {
 
     expect(result.type).toBe("function_call");
     expect(result.functionCall?.name).toBe("get_time");
+    expect(result.functionCall?.id).toBe("call_xyz");
     expect(result.functionCall?.args).toEqual({ tz: "UTC" });
   });
 

@@ -15,6 +15,7 @@
  */
 
 import { mapWithConcurrency } from "@/utils/async/bounded";
+import { resolveToolCallId } from "@/providers/utils/toolCallIds";
 import type { FunctionCall, FunctionResponseImageMetadata, ThoughtLogEntry } from "../../types/provider/interfaces";
 import type { StructuredContextItem } from "../../types/misc/context";
 import { log } from "../../utils/misc/logger";
@@ -1879,6 +1880,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       }
 
       const functionCall: FunctionCall = {
+        id: typeof accumulated.id === "string" ? accumulated.id : undefined,
         name: accumulated.functionName,
         args: parsedArgs,
       };
@@ -2583,9 +2585,9 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     }
 
     if (functionInteractionHistory && functionInteractionHistory.length > 0) {
-      for (const interaction of functionInteractionHistory) {
-        // Generate a tool call ID since our generic FunctionCall doesn't have one
-        const toolCallId = `call_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      const usedToolCallIds = new Set<string>();
+      for (const [index, interaction] of functionInteractionHistory.entries()) {
+        const toolCallId = resolveToolCallId(interaction.functionCall.id, index, "call", usedToolCallIds);
 
         // CRITICAL: Must include thought_signature and reasoning_details if present (required for Gemini models)
         const toolCallObject: Record<string, unknown> = {
