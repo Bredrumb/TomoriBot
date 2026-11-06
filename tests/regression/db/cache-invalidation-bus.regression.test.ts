@@ -174,7 +174,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("PostgreSQL derived cache invalidation", ()
       idleTimeout: 1,
       maxLifetime: 1,
     };
-    writer = new SQL(options);
+    writer = new SQL({ ...options, idleTimeout: 0, maxLifetime: 0 });
     reader = new SQL(options);
     invalidationBus.register(
       "testBarrier",
