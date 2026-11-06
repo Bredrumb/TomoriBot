@@ -1,4 +1,4 @@
-export {};
+import { initializeShardTopology } from "@/utils/discord/shardOwnership";
 
 /**
  * Pins the run environment for every test process.
@@ -17,6 +17,8 @@ process.env.RUN_ENV = "development";
 // Pinned to what a local-model install chooses, because a workstation's .env would otherwise flip SSRF fixtures.
 process.env.ALLOW_PRIVATE_NETWORK = "true";
 delete process.env.FETCH_URL_ALLOW_PRIVATE_NETWORK;
+
+initializeShardTopology({});
 
 // Imported after the pins above, and registered here because the release guard suites assert registered behavior.
 const { registerSupporterProviderExtensions } = await import("@/modules/supporter-billing/registration");
