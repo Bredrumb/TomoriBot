@@ -16,6 +16,14 @@ export const STATUS_PERSONA_SELECT_PAGE_SIZE = 25;
 
 export type StatusCategory = "persona" | "behavior" | "models" | "access" | "personal";
 
+export const STATUS_CATEGORY_LABEL_KEYS: Record<StatusCategory, string> = {
+  persona: "commands.status.scope_choice_persona",
+  behavior: "commands.status.scope_choice_behavior",
+  access: "commands.status.scope_choice_access",
+  personal: "commands.status.scope_choice_personal",
+  models: "commands.status.scope_choice_models",
+};
+
 export type StatusDashboardRoute =
   | { action: "category"; locale: string; category: StatusCategory; personaId?: number }
   | { action: "page"; locale: string; category: StatusCategory; personaId?: number }

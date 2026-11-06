@@ -6,8 +6,15 @@ import {
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import type { UserRow } from "@/types/db/schema";
-import { buildInitialPersonalConfigPanel } from "@/utils/discord/interactions/personalConfigRoutes";
-import { deliverGuardedPanel } from "@/utils/discord/interactions/panelController";
+import {
+  configurePanelPageOption,
+  PANEL_PAGE_OPTION_NAME,
+  respondWithPanelPages,
+} from "@/utils/discord/autocomplete/panelPageAutocomplete";
+import {
+  listPersonalConfigPageDestinations,
+  openPersonalConfigPanel,
+} from "@/utils/discord/interactions/personalConfigRoutes";
 import { localizer } from "@/utils/text/localizer";
 import {
   autocompleteManagedIdentity,
@@ -23,10 +30,23 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
         .setName("identity")
         .setDescription(localizer("en-US", "commands.personal.config.identity_description"))
         .setAutocomplete(true),
+    )
+    .addStringOption((option) =>
+      configurePanelPageOption(option, localizer("en-US", "commands.personal.config.page_description")),
     );
 
 export async function autocomplete(_client: Client, interaction: AutocompleteInteraction): Promise<void> {
-  await autocompleteManagedIdentity(interaction);
+  if (interaction.options.getFocused(true).name !== PANEL_PAGE_OPTION_NAME) {
+    await autocompleteManagedIdentity(interaction);
+    return;
+  }
+  await respondWithPanelPages(
+    interaction,
+    listPersonalConfigPageDestinations(interaction.locale, {
+      guildId: interaction.guildId,
+      identityMode: Boolean(interaction.options.getString("identity")),
+    }),
+  );
 }
 
 export async function execute(
@@ -38,17 +58,8 @@ export async function execute(
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const rawIdentity = interaction.options.getString("identity");
   const identityId = parseIdentityOption(rawIdentity);
-  await deliverGuardedPanel(
-    interaction,
-    await buildInitialPersonalConfigPanel(
-      interaction,
-      locale,
-      undefined,
-      rawIdentity && !identityId ? -1 : (identityId ?? undefined),
-    ),
-    {
-      method: "editReply",
-      locale,
-    },
-  );
+  await openPersonalConfigPanel(interaction, locale, {
+    identityId: rawIdentity && !identityId ? -1 : (identityId ?? undefined),
+    requestedPage: interaction.options.getString(PANEL_PAGE_OPTION_NAME),
+  });
 }

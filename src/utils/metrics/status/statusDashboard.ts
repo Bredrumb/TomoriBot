@@ -9,6 +9,7 @@ import { buildServerChannelPages } from "@/utils/metrics/status/serverChannelPag
 import { buildServerConfigPages } from "@/utils/metrics/status/serverConfigPages";
 import { buildServerModelPages } from "@/utils/metrics/status/serverModelPages";
 import type { StatusPageCategory } from "@/utils/metrics/status/statusPageRenderer";
+import { STATUS_CATEGORY_LABEL_KEYS } from "@/utils/discord/statusDashboardCatalog";
 import { canViewPromptText } from "@/utils/text/promptInspection/delivery";
 
 export interface StatusDashboardBuildDependencies {
@@ -49,27 +50,27 @@ export async function resolveStatusDashboardCategories(
   const categories: StatusPageCategory[] = [
     {
       id: "persona",
-      labelKey: "commands.status.scope_choice_persona",
+      labelKey: STATUS_CATEGORY_LABEL_KEYS.persona,
       pages: [],
     },
     {
       id: "behavior",
-      labelKey: "commands.status.scope_choice_behavior",
+      labelKey: STATUS_CATEGORY_LABEL_KEYS.behavior,
       pages: [configPages[0], configPages[3], channelPages[0]],
     },
     {
       id: "access",
-      labelKey: "commands.status.scope_choice_access",
+      labelKey: STATUS_CATEGORY_LABEL_KEYS.access,
       pages: [configPages[1], configPages[2], modelPages[2]],
     },
     {
       id: "personal",
-      labelKey: "commands.status.scope_choice_personal",
+      labelKey: STATUS_CATEGORY_LABEL_KEYS.personal,
       pages: personalPages,
     },
     {
       id: "models",
-      labelKey: "commands.status.scope_choice_models",
+      labelKey: STATUS_CATEGORY_LABEL_KEYS.models,
       pages: [modelPages[0], modelPages[1], modelPages[3], configPages[4]],
     },
   ];

@@ -32,6 +32,7 @@ import {
   encodeProviderPageValue,
   encodeProviderParam,
   encodeProviderRangeValue,
+  visiblePersonalConfigPages,
   type PersonalConfigCategory,
   type PersonalConfigManagedCapability,
   type PersonalConfigPage,
@@ -243,74 +244,11 @@ function getPageOptionsForCategory(
   currentPage: PersonalConfigPage,
   guildId: string | null,
 ): SelectMenuComponentOptionData[] {
-  switch (category) {
-    case "profile":
-      return [
-        {
-          label: safeSelectOptionText(localizer(locale, PERSONAL_PAGE_LOCALE_KEYS.profile.general), 100),
-          value: "general",
-          default: currentPage === "general",
-        },
-        {
-          label: safeSelectOptionText(localizer(locale, PERSONAL_PAGE_LOCALE_KEYS.profile.persona), 100),
-          value: "persona",
-          default: currentPage === "persona",
-        },
-        {
-          label: safeSelectOptionText(localizer(locale, PERSONAL_PAGE_LOCALE_KEYS.profile.appearance), 100),
-          value: "appearance",
-          default: currentPage === "appearance",
-        },
-      ];
-    case "privacy":
-      return [
-        {
-          label: safeSelectOptionText(localizer(locale, PERSONAL_PAGE_LOCALE_KEYS.privacy.controls), 100),
-          value: "controls",
-          default: currentPage === "controls",
-        },
-      ];
-    case "models":
-      return [
-        {
-          label: safeSelectOptionText(localizer(locale, PERSONAL_PAGE_LOCALE_KEYS.models.switch), 100),
-          value: "switch",
-          default: currentPage === "switch",
-        },
-        {
-          label: safeSelectOptionText(localizer(locale, PERSONAL_PAGE_LOCALE_KEYS.models.parameters), 100),
-          value: "parameters",
-          default: currentPage === "parameters",
-        },
-        {
-          label: safeSelectOptionText(localizer(locale, PERSONAL_PAGE_LOCALE_KEYS.models.fallbacks), 100),
-          value: "fallbacks",
-          default: currentPage === "fallbacks",
-        },
-      ];
-    case "advanced": {
-      const options: SelectMenuComponentOptionData[] = [
-        {
-          label: safeSelectOptionText(localizer(locale, PERSONAL_PAGE_LOCALE_KEYS.advanced["response-modes"]), 100),
-          value: "response-modes",
-          default: currentPage === "response-modes",
-        },
-        {
-          label: safeSelectOptionText(localizer(locale, PERSONAL_PAGE_LOCALE_KEYS.advanced.impersonation), 100),
-          value: "impersonation",
-          default: currentPage === "impersonation",
-        },
-      ];
-      if (guildId !== null) {
-        options.push({
-          label: safeSelectOptionText(localizer(locale, PERSONAL_PAGE_LOCALE_KEYS.advanced.spotlight), 100),
-          value: "spotlight",
-          default: currentPage === "spotlight",
-        });
-      }
-      return options;
-    }
-  }
+  return visiblePersonalConfigPages(category, guildId).map((page) => ({
+    label: safeSelectOptionText(localizer(locale, PERSONAL_PAGE_LOCALE_KEYS[category][page]), 100),
+    value: page,
+    default: currentPage === page,
+  }));
 }
 
 function renderPanelView(

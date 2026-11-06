@@ -1,6 +1,7 @@
 import { commandRegistry } from "@/utils/discord/commandRegistry";
 import { DOCS_PATHS, type DocsPath } from "@/utils/discord/docsLinks";
 import { localizer } from "@/utils/text/localizer";
+import type { PanelPageDestination } from "@/utils/discord/autocomplete/panelPageAutocomplete";
 
 const HELP_CATEGORY_IDS = ["setup", "features", "moderation", "plugins"] as const;
 export type HelpCategoryId = (typeof HELP_CATEGORY_IDS)[number];
@@ -738,6 +739,18 @@ export const HELP_CATEGORIES: readonly HelpCategoryDefinition[] = [
   { id: "moderation", labelKey: "commands.help.dashboard.categories.moderation", pages: moderationPages },
   { id: "plugins", labelKey: "commands.help.dashboard.categories.plugins", pages: pluginPages },
 ] as const;
+
+/** Pages `/help page:` may open, in dashboard order; help is public, so no page is filtered out. */
+export function listHelpPageDestinations(locale: string): PanelPageDestination<HelpCategoryId, HelpPageId>[] {
+  return HELP_CATEGORIES.flatMap((category) =>
+    category.pages.map((page) => ({
+      category: category.id,
+      page: page.id,
+      categoryLabel: localizer(locale, category.labelKey),
+      pageLabel: localizer(locale, page.labelKey),
+    })),
+  );
+}
 
 export function getHelpCategory(categoryId: string): HelpCategoryDefinition | undefined {
   return HELP_CATEGORIES.find((category) => category.id === categoryId);

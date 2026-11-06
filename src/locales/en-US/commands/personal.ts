@@ -112,6 +112,7 @@ TomoriBot will treat you as a new user from your next message.`,
     },
     config: {
       description: `Manage your personal preferences, privacy, models, and profile.`,
+      page_description: `Page to open the panel on.`,
       identity_description: `Message-proxy identity to edit. Works even when message proxy is off.`,
       outdated_panel: `This panel is outdated. Use {command} to open a fresh panel.`,
       category_profile: `Profile`,

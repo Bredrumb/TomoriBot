@@ -431,7 +431,7 @@ export async function repaint(
   );
 }
 
-export function buildScopedPersonalConfigPanelPayload(
+function buildScopedPersonalConfigPanelPayload(
   input: Parameters<typeof buildPersonalConfigPanelPayload>[0],
   scope: PersonalConfigScope,
 ): ReturnType<typeof buildPersonalConfigPanelPayload> {

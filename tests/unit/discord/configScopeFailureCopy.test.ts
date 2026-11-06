@@ -153,7 +153,7 @@ describe("config scope failure copy", () => {
   it("tells an admin to run /setup from the bare command when nothing was recorded", async () => {
     const harness = makeHarness({ customId: "config" });
 
-    await executeConfigCommand(harness.interaction as unknown as ChatInputCommandInteraction, "en-US", {
+    await executeConfigCommand(harness.interaction as unknown as ChatInputCommandInteraction, "en-US", null, {
       resolveScope: async () => null,
       getLastDbError: NO_RECORDED_FAILURE,
     });
@@ -164,7 +164,7 @@ describe("config scope failure copy", () => {
   it("offers a retry rather than /setup when the workspace read failed", async () => {
     const harness = makeHarness({ customId: "config" });
 
-    await executeConfigCommand(harness.interaction as unknown as ChatInputCommandInteraction, "en-US", {
+    await executeConfigCommand(harness.interaction as unknown as ChatInputCommandInteraction, "en-US", null, {
       resolveScope: async () => null,
       getLastDbError: RECORDED_FAILURE,
     });

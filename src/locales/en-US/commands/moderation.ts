@@ -1,6 +1,7 @@
 export default {
   moderation: {
     description: `Manage member permissions, blacklist, channel and role whitelist, and quota settings.`,
+    page_description: `Page to open the panel on.`,
     title: `Server Moderation`,
     outdated_panel: `This moderation panel is outdated. Run /moderation again.`,
     permission_denied: `You need \`Manage Server\` permission to use this moderation panel.`,

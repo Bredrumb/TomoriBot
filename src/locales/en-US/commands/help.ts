@@ -1,6 +1,7 @@
 export default {
   help: {
     description: `Browse setup, features, providers, memory, behavior, tools, media, and integration guides.`,
+    page_description: `Guide to open.`,
     dashboard: {
       categories: {
         setup: `Setup`,

@@ -18,14 +18,22 @@ import {
   expressionFieldId,
   expressionPanelFingerprint,
   parseExpressionsPanelRoute,
+  EXPRESSION_CATEGORIES,
+  type ExpressionCategory,
   type ExpressionsPanelRoute,
 } from "@/utils/discord/expressionsPanelCatalog";
+import {
+  panelPageNotFoundReceipt,
+  resolvePanelPage,
+  type PanelPageDestination,
+} from "@/utils/discord/autocomplete/panelPageAutocomplete";
 import {
   buildExpressionPersonaModal,
   buildExpressionsEditModal,
   buildExpressionsPanelPayload,
   buildExpressionsTerminalPayload,
   resolveExpressionsSelection,
+  EXPRESSION_CATEGORY_LOCALE_KEYS,
   type ExpressionPanelItem,
   type ExpressionsPanelData,
   type ExpressionPanelPreview,
@@ -570,21 +578,33 @@ export function createExpressionsInteractionRoute(
 
 export const expressionsInteractionRoute = createExpressionsInteractionRoute();
 
+/** Destinations for `/expressions manage page:`; the command is manager-only, so none is filtered. */
+export function listExpressionsPageDestinations(locale: string): PanelPageDestination<ExpressionCategory, null>[] {
+  return EXPRESSION_CATEGORIES.map((category) => ({
+    category,
+    page: null,
+    categoryLabel: localizer(locale, EXPRESSION_CATEGORY_LOCALE_KEYS[category]),
+    pageLabel: null,
+  }));
+}
+
 export async function executeExpressionsManageCommand(
   interaction: ChatInputCommandInteraction,
   locale: string,
+  requestedPage: string | null,
 ): Promise<void> {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   if (!(await authorize(interaction, true)))
     return deny(interaction, locale, "general.errors.permission_denied_description");
   const data = await loadExpressionsPanelData(interaction, true);
   if (!data) return deny(interaction, locale, "general.errors.tomori_not_setup_description");
+  const destination = requestedPage ? resolvePanelPage(listExpressionsPageDestinations(locale), requestedPage) : null;
   await repaint(
     interaction,
     {
       action: "view",
       locale,
-      category: "emojis",
+      category: destination?.category ?? "emojis",
       page: 0,
       entityId: "none",
       fp: "none",
@@ -593,5 +613,6 @@ export async function executeExpressionsManageCommand(
     },
     data,
     defaults,
+    requestedPage && !destination ? panelPageNotFoundReceipt(locale) : undefined,
   );
 }

@@ -58,9 +58,15 @@ import {
   MEMORIES_ROUTE_NAMESPACE,
   MEMORIES_ROUTE_VERSION,
   computeServerStmFingerprint,
+  MEMORIES_CATEGORIES,
   parseMemoriesPanelRoute,
   type MemoriesCategory,
 } from "@/utils/discord/memoriesPanelCatalog";
+import {
+  panelPageNotFoundReceipt,
+  resolvePanelPage,
+  type PanelPageDestination,
+} from "@/utils/discord/autocomplete/panelPageAutocomplete";
 import {
   buildAddDocumentModal,
   buildAddServerMemoryModal,
@@ -76,6 +82,7 @@ import {
   MAX_STM_OPTIONS_PER_GROUP,
   MAX_DOCUMENT_PAGE_SIZE,
   MAX_SERVER_MEMORY_PAGE_SIZE,
+  MEMORIES_CATEGORY_LOCALE_KEYS,
   type MemoriesPanelPayload,
   type StmPanelEntry,
 } from "@/utils/discord/ui/memoriesPanel";
@@ -1335,6 +1342,22 @@ async function repaint(
   );
 }
 
+async function repaintCategory(
+  interaction: GlobalRoutableInteraction | ChatInputCommandInteraction,
+  locale: string,
+  scope: MemoriesScope,
+  category: MemoriesCategory,
+  receipt: PanelReceipt | undefined,
+  dependencies: MemoriesRouteDependencies,
+): Promise<void> {
+  // Every category but Memories opens on the serverwide scope, so it passes the sentinel 0 rather than a persona.
+  const lineageId = category === "memories" ? (scope.personas[0]?.persona_lineage_id ?? 0) : 0;
+  const ownerFilter = scope.canManage ? undefined : scope.userId;
+  const memories =
+    category === "memories" && lineageId ? await dependencies.loadMemories(scope.serverId, lineageId, ownerFilter) : [];
+  await repaint(interaction, locale, scope, category, lineageId, memories, { kind: "main" }, receipt, dependencies);
+}
+
 const defaultDependencies: MemoriesRouteDependencies = {
   resolveScope,
   loadMemories,
@@ -1435,6 +1458,59 @@ const defaultDependencies: MemoriesRouteDependencies = {
   clearStm: clearShortTermMemoryForServerChannel,
 };
 
+function buildUnavailableMemoriesPanel(
+  interaction: GlobalRoutableInteraction | ChatInputCommandInteraction,
+  locale: string,
+): MemoriesPanelPayload {
+  return buildMemoriesPanelPayload({
+    locale,
+    category: "memories",
+    selectedLineageId: 0,
+    personas: [],
+    memories: [],
+    canManage: !interaction.guildId || (interaction.memberPermissions?.has("ManageGuild") ?? false),
+    readStatus: "unavailable",
+    page: { kind: "main" },
+  });
+}
+
+/** Destinations for `/memories page:`; every invoker sees all four category buttons, so none is filtered. */
+export function listMemoriesPageDestinations(locale: string): PanelPageDestination<MemoriesCategory, null>[] {
+  return MEMORIES_CATEGORIES.map((category) => ({
+    category,
+    page: null,
+    categoryLabel: localizer(locale, MEMORIES_CATEGORY_LOCALE_KEYS[category]),
+    pageLabel: null,
+  }));
+}
+
+/** Opens `/memories` on a deferred reply, on `requestedPage` when it names a category. */
+export async function openMemoriesPanel(
+  interaction: ChatInputCommandInteraction,
+  locale: string,
+  requestedPage: string | null,
+  dependencies: MemoriesRouteDependencies = defaultDependencies,
+): Promise<void> {
+  const scope = await dependencies.resolveScope(interaction);
+  if (!scope) {
+    await deliverGuardedPanel(interaction, buildUnavailableMemoriesPanel(interaction, locale), {
+      method: "editReply",
+      locale,
+    });
+    return;
+  }
+
+  const destination = requestedPage ? resolvePanelPage(listMemoriesPageDestinations(locale), requestedPage) : null;
+  await repaintCategory(
+    interaction,
+    locale,
+    scope,
+    destination?.category ?? "memories",
+    requestedPage && !destination ? panelPageNotFoundReceipt(locale) : undefined,
+    dependencies,
+  );
+}
+
 export async function buildInitialMemoriesPanel(
   interaction: GlobalRoutableInteraction | ChatInputCommandInteraction,
   locale: string,
@@ -1442,18 +1518,7 @@ export async function buildInitialMemoriesPanel(
   requestedLineageId?: number,
 ): Promise<MemoriesPanelPayload> {
   const scope = await dependencies.resolveScope(interaction);
-  if (!scope) {
-    return buildMemoriesPanelPayload({
-      locale,
-      category: "memories",
-      selectedLineageId: 0,
-      personas: [],
-      memories: [],
-      canManage: !interaction.guildId || (interaction.memberPermissions?.has("ManageGuild") ?? false),
-      readStatus: "unavailable",
-      page: { kind: "main" },
-    });
-  }
+  if (!scope) return buildUnavailableMemoriesPanel(interaction, locale);
 
   const requestedPersona =
     requestedLineageId === undefined
@@ -2083,23 +2148,7 @@ export function createMemoriesInteractionRoute(
       const ownerFilter = scope.canManage ? undefined : scope.userId;
 
       if (route.action === "category") {
-        // Documents open on the serverwide scope, which is the sentinel 0 rather than a persona.
-        const lineageId = route.category === "memories" ? (scope.personas[0]?.persona_lineage_id ?? 0) : 0;
-        const memories =
-          route.category === "memories" && lineageId
-            ? await dependencies.loadMemories(scope.serverId, lineageId, ownerFilter)
-            : [];
-        await repaint(
-          interaction,
-          route.locale,
-          scope,
-          route.category,
-          lineageId,
-          memories,
-          { kind: "main" },
-          undefined,
-          dependencies,
-        );
+        await repaintCategory(interaction, route.locale, scope, route.category, undefined, dependencies);
         return;
       }
 

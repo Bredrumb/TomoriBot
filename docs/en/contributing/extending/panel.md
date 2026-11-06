@@ -92,6 +92,28 @@ await repaint(interaction, route.locale, scope);
   `src/constants/panelActions.ts` (`<surface>.<scope>.<resource>.<verb>`). Add the action there
   first; the metric only accepts listed identifiers.
 
+## Opening on a page
+
+A panel with categories takes an optional `page` option so users can jump straight to a page or
+category; [Command Archetypes](/contributing/policies/command-archetypes/#opening-on-a-page) says which
+panels get one. The helpers are in `src/utils/discord/autocomplete/panelPageAutocomplete.ts`:
+
+1. Write `listExamplePageDestinations(locale, context)` next to the command's executor. It returns
+   one `PanelPageDestination` per page the invoker may open, filtered by the same visibility rules
+   the page select uses, with the existing category and page label keys. A category without pages
+   is one destination with a null `page` and `pageLabel`, as in `/memories`.
+2. Add the option with `configurePanelPageOption(option, description)` and the key
+   `commands.<path>.page_description`. Keep it optional: a subcommand or a required option stops the
+   bare command from running.
+3. In `autocomplete`, answer with `respondWithPanelPages(interaction, destinations)`. Labels read
+   `Category > Page` and match on either half. Autocomplete has the three-second limit and no deferral,
+   so build the context from the interaction (guild, member permissions) instead of a database read.
+   If the command has another autocompleted option, branch on `interaction.options.getFocused(true).name`.
+4. In `execute`, run `resolvePanelPage(destinations, submitted)` on destinations rebuilt from the
+   loaded scope; a suggestion does not authorize anything. Open the panel on the result through the
+   normal repaint so each page loads its own data. When nothing matches, open the default page with
+   `panelPageNotFoundReceipt(locale)`.
+
 ## Discord limits
 
 `validateComponentsV2MessageLimits()` in `src/utils/discord/ui/componentsV2Limits.ts` enforces these,

@@ -20,6 +20,7 @@ export default {
     },
     manage: {
       description: `Manage emojis, stickers, custom expressions, and persona access.`,
+      page_description: `Category to open the panel on.`,
       title: `Server expressions`,
       emojis: `Emojis`,
       stickers: `Stickers`,

@@ -46,6 +46,13 @@ import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { localizer } from "@/utils/text/localizer";
 import { groupPersonasByLineage, personaRepresentativeForLineage } from "@/utils/persona/lineage";
 
+export const MEMORIES_CATEGORY_LOCALE_KEYS: Record<MemoriesCategory, string> = {
+  memories: "commands.memories.category_memories",
+  documents: "commands.memories.category_documents",
+  lorebooks: "commands.memories.category_lorebooks",
+  stm: "commands.memories.category_stm",
+};
+
 export const MAX_SERVER_MEMORY_PAGE_SIZE = 24;
 export const MAX_DOCUMENT_PAGE_SIZE = 24;
 export const MAX_STM_OPTIONS_PER_GROUP = 10;
@@ -486,22 +493,22 @@ export function buildMemoriesPanelPayload(input: MemoriesPanelRenderInput): Memo
     [
       {
         id: "memories",
-        label: localizer(locale, "commands.memories.category_memories"),
+        label: localizer(locale, MEMORIES_CATEGORY_LOCALE_KEYS.memories),
         customId: buildMemoriesRouteId({ action: "category", locale, category: "memories" }),
       },
       {
         id: "documents",
-        label: localizer(locale, "commands.memories.category_documents"),
+        label: localizer(locale, MEMORIES_CATEGORY_LOCALE_KEYS.documents),
         customId: buildMemoriesRouteId({ action: "category", locale, category: "documents" }),
       },
       {
         id: "lorebooks",
-        label: localizer(locale, "commands.memories.category_lorebooks"),
+        label: localizer(locale, MEMORIES_CATEGORY_LOCALE_KEYS.lorebooks),
         customId: buildMemoriesRouteId({ action: "category", locale, category: "lorebooks" }),
       },
       {
         id: "stm",
-        label: localizer(locale, "commands.memories.category_stm"),
+        label: localizer(locale, MEMORIES_CATEGORY_LOCALE_KEYS.stm),
         customId: buildMemoriesRouteId({ action: "category", locale, category: "stm" }),
       },
     ],

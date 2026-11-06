@@ -11,6 +11,13 @@ import { buildServerConfigPages } from "@/utils/metrics/status/serverConfigPages
 import { buildServerModelPages } from "@/utils/metrics/status/serverModelPages";
 import { resolveStatusDashboardCategories } from "@/utils/metrics/status/statusDashboard";
 import { renderStatusPageDashboard, type StatusCategory } from "@/utils/metrics/status/statusPageRenderer";
+import { STATUS_CATEGORY_LABEL_KEYS } from "@/utils/discord/statusDashboardCatalog";
+import {
+  panelPageNotFoundReceipt,
+  resolvePanelPage,
+  type PanelPageDestination,
+} from "@/utils/discord/autocomplete/panelPageAutocomplete";
+import { localizer } from "@/utils/text/localizer";
 
 export interface StatusCommandDependencies {
   getCachedAllPersonas: typeof getCachedAllPersonas;
@@ -38,15 +45,29 @@ const defaultStatusCommandDependencies: StatusCommandDependencies = {
   renderStatusPageDashboard,
 };
 
+/** Every category `resolveStatusDashboardCategories` builds, in its button order; none is filtered by invoker. */
+const STATUS_CATEGORY_ORDER: readonly StatusCategory[] = ["persona", "behavior", "access", "personal", "models"];
+
+export function listStatusPageDestinations(locale: string): PanelPageDestination<StatusCategory, null>[] {
+  return STATUS_CATEGORY_ORDER.map((category) => ({
+    category,
+    page: null,
+    categoryLabel: localizer(locale, STATUS_CATEGORY_LABEL_KEYS[category]),
+    pageLabel: null,
+  }));
+}
+
 export async function executeStatusCommand(
   client: Client,
   interaction: ChatInputCommandInteraction,
   userData: UserRow,
   locale: string,
   dependencies: StatusCommandDependencies = defaultStatusCommandDependencies,
+  requestedPage: string | null = null,
 ): Promise<void> {
   const serverDiscId = interaction.guildId ?? interaction.user.id;
-  const scope: StatusCategory = "persona";
+  const destination = requestedPage ? resolvePanelPage(listStatusPageDestinations(locale), requestedPage) : null;
+  const scope: StatusCategory = destination?.category ?? "persona";
 
   try {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -83,10 +104,14 @@ export async function executeStatusCommand(
     const personaCategory = categories.find((category) => category.id === "persona");
     if (personaCategory) personaCategory.pages = personaPages;
 
-    await dependencies.renderStatusPageDashboard(interaction, locale, categories, scope, {
-      selectedPersonaId: mainPersona.persona_id,
-      personas,
-    });
+    await dependencies.renderStatusPageDashboard(
+      interaction,
+      locale,
+      categories,
+      scope,
+      { selectedPersonaId: mainPersona.persona_id, personas },
+      requestedPage && !destination ? panelPageNotFoundReceipt(locale) : undefined,
+    );
   } catch (error) {
     log.error(`Error executing status command for scope ${scope}:`, error, {
       errorType: "CommandExecutionError",

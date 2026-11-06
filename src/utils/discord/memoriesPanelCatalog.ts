@@ -16,6 +16,8 @@ export const MEMORIES_ROUTE_VERSION = "v1";
 
 export type MemoriesCategory = "memories" | "documents" | "lorebooks" | "stm";
 
+export const MEMORIES_CATEGORIES: readonly MemoriesCategory[] = ["memories", "documents", "lorebooks", "stm"];
+
 export function computeServerStmFingerprint(
   workspaceId: string,
   userDiscId: string,
@@ -209,7 +211,7 @@ export type MemoriesPanelRoute = (
 const categoryField: RouteFieldCodec<"category", MemoriesCategory> = {
   key: "category",
   encode: (val) => String(val),
-  decode: (raw) => (raw === "memories" || raw === "documents" || raw === "lorebooks" || raw === "stm" ? raw : null),
+  decode: (raw) => MEMORIES_CATEGORIES.find((category) => category === raw) ?? null,
 };
 
 const lineageIdField: RouteFieldCodec<"lineageId", number> = {

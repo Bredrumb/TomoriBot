@@ -33,7 +33,7 @@ import { escapeDiscordMarkdown } from "@/utils/text/discordMarkdown";
 import { buildTextPreview, textPreviewFooterKey, textPreviewFooterVars } from "@/utils/text/textPreview";
 import { localizer } from "@/utils/text/localizer";
 
-const CATEGORY_LABEL_KEYS: Record<ExpressionCategory, string> = {
+export const EXPRESSION_CATEGORY_LOCALE_KEYS: Record<ExpressionCategory, string> = {
   emojis: "commands.expressions.manage.emojis",
   stickers: "commands.expressions.manage.stickers",
   customs: "commands.expressions.manage.customs",
@@ -157,7 +157,7 @@ export function buildExpressionsPanelPayload(input: {
     buildCategoryButtonRow(
       EXPRESSION_CATEGORIES.map((value) => ({
         id: value,
-        label: t(CATEGORY_LABEL_KEYS[value]),
+        label: t(EXPRESSION_CATEGORY_LOCALE_KEYS[value]),
         customId: buildExpressionsRouteId({
           ...route,
           category: value,
