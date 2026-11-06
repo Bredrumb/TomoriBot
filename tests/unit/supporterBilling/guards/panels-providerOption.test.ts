@@ -44,7 +44,7 @@ import * as keyRotation from "@/utils/security/keyRotation";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { useEnvSandbox } from "../../../helpers/env";
 import { createLlmRow, createPersona } from "../../../helpers/fixtures";
-import { expectForEveryLocale, localizedCopy, RUNTIME_LOCALES } from "../../../helpers/localeCases";
+import { expectForEveryLocale, localizedCopy, localizedProse, RUNTIME_LOCALES } from "../../../helpers/localeCases";
 import { createRouteInteraction } from "../../../helpers/routeInteraction";
 
 beforeAll(async () => await initializeLocalizer());
@@ -243,9 +243,7 @@ describe("server provider panel subscription gating", () => {
     await route.execute({} as Client, interaction as never, parsedRoute);
 
     expect(interaction.replies).toHaveLength(1);
-    expect(interaction.replies[0]).toMatchObject({
-      content: localizedCopy("en-US", "commands.providers.unavailable"),
-    });
+    expect(JSON.stringify(interaction.replies[0])).toMatch(localizedProse("en-US", "commands.providers.unavailable"));
   });
 });
 
@@ -339,8 +337,8 @@ describe("setup provider selection persistence", () => {
           interaction.calls.filter((call) => ["reply", "update", "deferUpdate"].includes(call.method)),
         ).toHaveLength(1);
         if (!enabled)
-          expect(JSON.stringify(interaction.replies)).toContain(
-            localizedCopy("en-US", "commands.setup.wizard.provider_invalid"),
+          expect(JSON.stringify(interaction.replies)).toMatch(
+            localizedProse("en-US", "commands.setup.wizard.provider_invalid"),
           );
       }
     } finally {

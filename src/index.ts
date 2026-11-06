@@ -6,6 +6,7 @@ import { loadSecrets } from "@/init/secrets";
 import { createDiscordClient, isTransientGatewayError, resolvePresenceIntentEnabled } from "@/init/discord";
 import { initializeShardTopology } from "@/utils/discord/shardOwnership";
 import { log } from "@/utils/misc/logger";
+import type { PatreonReconcileJobHandle } from "@/modules/supporter-billing/patreon/reconcile";
 
 export async function startBot(): Promise<void> {
   config({ quiet: true });
@@ -62,11 +63,13 @@ export async function startBot(): Promise<void> {
     import("@/utils/db/client"),
   ]);
   initializeShutdownInteractionAdmission(client);
+  let supporterBillingJob: PatreonReconcileJobHandle | null = null;
   const shutdown = registerShutdown(client, {
     stopScheduledWork: () => {
       lifetime.abort();
       stopScheduledWorkCoordinator();
       stopTimers();
+      supporterBillingJob?.stop();
       healthTracker.stopWatchdog();
     },
     flushStats: () => statRepository.shutdown(),
@@ -122,7 +125,7 @@ export async function startBot(): Promise<void> {
     }
 
     const { initSupporterBilling } = await import("@/init/supporterBilling");
-    await initSupporterBilling(environment, client);
+    supporterBillingJob = await initSupporterBilling(environment, client);
     lifetime.signal.throwIfAborted();
 
     if (includePresences) {

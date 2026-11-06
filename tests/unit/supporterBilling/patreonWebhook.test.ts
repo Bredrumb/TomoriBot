@@ -1,4 +1,5 @@
-import { describe, expect, it, spyOn } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, type Mock, spyOn } from "bun:test";
+import * as leases from "@/utils/cluster/shardLeases";
 import { log } from "@/utils/misc/logger";
 import type {
   RecordWebhookEventParams,
@@ -640,6 +641,59 @@ describe("Patreon entitlement member-state persistence", () => {
 });
 
 describe("Patreon entitlement reconcile", () => {
+  let primary = true;
+  let primarySpy: Mock<typeof leases.isPrimaryProcess>;
+  beforeEach(() => {
+    primary = true;
+    primarySpy = spyOn(leases, "isPrimaryProcess").mockImplementation(() => primary);
+  });
+  afterEach(() => primarySpy.mockRestore());
+
+  it("runs no Patreon, key, or maintenance work on a process that is not primary at tick time", async () => {
+    let tick: (() => void) | undefined;
+    const createTimer = globalThis.setInterval;
+    const timers: { setInterval: (callback: () => void, delay: number) => ReturnType<typeof globalThis.setInterval> } =
+      globalThis;
+    const timer = spyOn(timers, "setInterval").mockImplementation((callback) => {
+      tick = callback;
+      return createTimer(() => {}, 300_000);
+    });
+    const info = spyOn(log, "info").mockImplementation(() => {});
+    const calls: string[] = [];
+    const job = startPatreonReconcileJob({
+      config: validSupporterConfig,
+      runEntitlementReconcile: async () => {
+        calls.push("entitlement");
+        return { checkedIdentities: 0, fetchedMembers: 0, activatedOrRenewed: 0, deactivated: 0, failed: 0 };
+      },
+      runMemberKeyReconcile: async () => {
+        calls.push("keys");
+      },
+      runMaintenance: async () => {
+        calls.push("maintenance");
+        return { purgedOAuthStates: 0, purgedWebhookEvents: 0, purgedUsageStatistics: 0 };
+      },
+    });
+    const flush = async () => {
+      for (let count = 0; count < 20; count++) await Promise.resolve();
+    };
+    try {
+      if (!tick) throw new Error("Missing reconcile timer");
+      primary = false;
+      tick();
+      await flush();
+      expect(calls).toEqual([]);
+      primary = true;
+      tick();
+      await flush();
+      expect(calls.toSorted()).toEqual(["entitlement", "keys", "maintenance"]);
+    } finally {
+      job.stop();
+      timer.mockRestore();
+      info.mockRestore();
+    }
+  });
+
   it("waits for membership refresh to settle before key recovery, including when Patreon is unavailable", async () => {
     for (const fails of [false, true]) {
       let tick: (() => void) | undefined;

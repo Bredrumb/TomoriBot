@@ -21,6 +21,7 @@ import {
 import { PatreonApiError } from "@/modules/supporter-billing/patreon/oauth";
 import { runSupporterBillingMaintenance } from "@/modules/supporter-billing/runtime/maintenance";
 import { reconcileMemberKeys } from "@/modules/supporter-billing/openrouter/memberKeys";
+import { isPrimaryProcess } from "@/utils/cluster/shardLeases";
 import {
   getPatreonHttpTimeoutMs,
   getPatreonReconcileMaxPages,
@@ -453,7 +454,7 @@ export function startPatreonReconcileJob(options: {
   const runMemberKeyReconcileHook = options.runMemberKeyReconcile ?? reconcileMemberKeys;
   let running = false;
   const runTick = (): void => {
-    if (running) return;
+    if (running || !isPrimaryProcess()) return;
     running = true;
     const reconcile = runEntitlementReconcileHook({
       config: options.config,

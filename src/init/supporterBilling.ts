@@ -4,24 +4,27 @@ import {
   isSupporterBillingEnabled,
   registerSupporterProviderExtensions,
 } from "@/modules/supporter-billing";
+import type { PatreonReconcileJobHandle } from "@/modules/supporter-billing/patreon/reconcile";
 import type { AppEnvironment } from "@/types/config";
 import { log } from "@/utils/misc/logger";
 
-export async function initSupporterBilling(environment: AppEnvironment, client?: Client): Promise<void> {
+/**
+ * Starts supporter billing and returns its reconcile job for the shutdown path to stop.
+ *
+ * @throws When the billing config, secrets, or schema are invalid, so startup shutdown releases shard leases.
+ */
+export async function initSupporterBilling(
+  environment: AppEnvironment,
+  client?: Client,
+): Promise<PatreonReconcileJobHandle | null> {
   registerSupporterProviderExtensions();
   if (!isSupporterBillingEnabled(environment)) {
-    return;
+    return null;
   }
 
   log.section("Initializing Supporter Billing...");
-
-  try {
-    const result = await initializeSupporterBilling({ environment, client });
-    if (result.enabled) {
-      log.success("Supporter billing config validated and billing schema initialized");
-    }
-  } catch (error) {
-    await log.error("Supporter billing initialization failed", error);
-    process.exit(1);
-  }
+  const result = await initializeSupporterBilling({ environment, client });
+  if (!result.enabled) return null;
+  log.success("Supporter billing config validated and billing schema initialized");
+  return result.reconcileJob;
 }
