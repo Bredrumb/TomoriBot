@@ -2,7 +2,7 @@ import { localizer } from "@/utils/text/localizer";
 import { describe, expect, it } from "bun:test";
 import { PrivacyLevel } from "@/types/db/schema";
 import type { StructuredContextItem } from "@/types/misc/context";
-import { buildParticipantContextItem } from "@/utils/text/context/participants";
+import { buildParticipantContextItems } from "@/utils/text/context/participants";
 import { fitNovelAIPrompt } from "@/providers/novelai/promptFitting";
 import { getNovelAIProfile } from "@/providers/novelai/modelProfiles";
 import type { PublicPersonaProfile } from "@/utils/text/context/types";
@@ -49,7 +49,7 @@ async function buildHumanItem(
     personas: fixture.personas,
     referencePlan,
   });
-  const item = await buildParticipantContextItem({
+  const [item] = await buildParticipantContextItems({
     client: fixture.client,
     guildId: PARTICIPANT_FIXTURE_IDS.guild,
     channelName: "general",
@@ -220,7 +220,7 @@ describe("participant context compatibility matrix", () => {
         personas: fixture.personas,
         referencePlan: references.discoveryPlan,
       });
-      const item = await buildParticipantContextItem({
+      const [item] = await buildParticipantContextItems({
         client: fixture.client,
         guildId: PARTICIPANT_FIXTURE_IDS.guild,
         channelName: "general",

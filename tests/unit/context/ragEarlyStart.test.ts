@@ -1,3 +1,4 @@
+import { applyPromptLayoutInserts } from "@/utils/text/context/promptLayout";
 import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import type { Client } from "discord.js";
 import * as realPersonaSprites from "@/utils/text/context/personaSprites";
@@ -198,7 +199,7 @@ function params() {
 }
 
 describe("native RAG document start", () => {
-  it("starts retrieval before the first contributor and appends the item at its existing position", async () => {
+  it("starts retrieval before the first contributor and positions documents in the tail slot", async () => {
     loadSpy?.mockResolvedValue([toLorebookRow(lorebookInput({ title: "Lantern", keys: ["lantern"] }))]);
 
     const buildPromise = buildContextNative(params());
@@ -212,12 +213,13 @@ describe("native RAG document start", () => {
     documentDeferred.resolve(documentItem);
     const result = await buildPromise;
 
+    applyPromptLayoutInserts(result.contextItems, []);
     const tags = result.contextItems.map((item) => item.metadataTag);
     const documentsIndex = tags.indexOf(ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS);
     const verbatimIndex = tags.indexOf(ContextItemTag.KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS);
     expect(verbatimIndex).toBeGreaterThanOrEqual(0);
-    expect(documentsIndex).toBe(verbatimIndex + 1);
-    expect(tags.indexOf(ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE)).toBe(documentsIndex + 1);
+    expect(documentsIndex).toBeGreaterThan(verbatimIndex);
+    expect(tags.indexOf(ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE)).toBeLessThan(documentsIndex);
     expect(tags.indexOf(ContextItemTag.DIALOGUE_HISTORY)).toBeGreaterThan(documentsIndex);
   });
 

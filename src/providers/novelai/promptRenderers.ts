@@ -1,14 +1,10 @@
+import { novelaiLayoutTags } from "@/utils/text/context/promptLayout";
 import type { TomoriState } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 import { getNovelAiThinkingDirective } from "@/utils/provider/thinkingControl";
 
-const PERSISTENT_TAGS: ContextItemTag[] = [
-  ContextItemTag.SYSTEM_PERSONALITY,
-  ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
-  ContextItemTag.KNOWLEDGE_USER_MEMORIES,
-  ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
-];
+const persistentTags = novelaiLayoutTags("persistent");
 
 // Xialong's official client uses four quality stars when no value is configured.
 const XIALONG_DEFAULT_STARS = 4;
@@ -57,7 +53,7 @@ export function assembleNovelAIPrompt(
   for (const item of contextItems) {
     const textContent = itemText(item);
     if (!textContent) continue;
-    if (item.metadataTag && PERSISTENT_TAGS.includes(item.metadataTag)) {
+    if (item.metadataTag && persistentTags.has(item.metadataTag)) {
       switch (item.metadataTag) {
         case ContextItemTag.SYSTEM_PERSONALITY:
           personalityText = textContent;
@@ -71,7 +67,7 @@ export function assembleNovelAIPrompt(
     }
     if (
       (item.role === "user" || item.role === "model") &&
-      !(item.metadataTag && PERSISTENT_TAGS.includes(item.metadataTag))
+      !(item.metadataTag && persistentTags.has(item.metadataTag))
     ) {
       if (item.metadataTag === ContextItemTag.DIALOGUE_SAMPLE) {
         if (item.role === "user" && !/^[^\n:]+:\s/.test(textContent)) {
@@ -122,7 +118,7 @@ export function assembleGlmChatPrompt(
       continue;
     }
     if (item.metadataTag) {
-      if (PERSISTENT_TAGS.includes(item.metadataTag)) {
+      if (persistentTags.has(item.metadataTag)) {
         systemInstructionParts.push(textContent);
       }
     }
@@ -180,7 +176,7 @@ export function assembleXialongPrompt(
 ): string {
   const persistent = [
     options.attgBlock,
-    ...contextItems.filter((item) => item.metadataTag && PERSISTENT_TAGS.includes(item.metadataTag)).map(itemText),
+    ...contextItems.filter((item) => item.metadataTag && persistentTags.has(item.metadataTag)).map(itemText),
   ].filter(Boolean);
   const parts = ["[gMASK]<sop>", "<|system|>", systemPrompt];
   const thinking = getNovelAiThinkingDirective(options.thinkingLevel, options.forceReason, false) !== "/nothink";

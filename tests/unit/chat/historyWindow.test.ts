@@ -1,6 +1,6 @@
 import { stubAllShardOwnership } from "../../helpers/shardOwnership";
 stubAllShardOwnership();
-import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
+import { afterEach, describe, expect, it, mock, setSystemTime, spyOn } from "bun:test";
 import {
   ChannelType,
   Collection,
@@ -25,7 +25,9 @@ import {
   readChannelHistory,
   recordHistoryWindowChange,
   setHistoryWindowGatewayConnected,
+  selectAnchoredHistory,
 } from "@/utils/chat/historyWindow";
+import { historyWindowStride } from "@/utils/discord/messageFetchLimit";
 import { recordPersonaDelivery } from "@/utils/discord/webhook/personaPost";
 import { createChatLatencyInvocation, runWithChatTurnLatency } from "@/utils/chat/turnLatency";
 import type { RunnableChatAdmission } from "@/utils/chat/types";
@@ -92,8 +94,145 @@ function createHistoryFixture(count = 80, channelType: ChannelType.GuildText | C
 
 describe("busy channel history window", () => {
   afterEach(() => {
+    setSystemTime();
     channelLocks.delete(CHANNEL_ID);
     setHistoryWindowGatewayConnected(0, true);
+  });
+
+  it("anchors a full window across idle, queued, and multi-persona reads until each stride jump", async () => {
+    const fixture = createHistoryFixture();
+    const read = async (reuse: boolean) =>
+      selectAnchoredHistory(CHANNEL_ID, await readChannelHistory(fixture.channel, 80, reuse), 80);
+    expect((await read(false))[0]?.id).toBe("1");
+    for (let exchange = 1; exchange <= 13; exchange++) {
+      for (const id of [79 + exchange * 2, 80 + exchange * 2]) {
+        const message = fixture.message(id);
+        fixture.rest.set(message.id, message);
+        fixture.cache.set(message.id, message);
+      }
+      fixture.release();
+      fixture.acquire(String(80 + exchange * 2));
+      const selected = await read(false);
+      const oldest = exchange === 13 ? 49 : 25;
+      expect(selected[0]?.id).toBe(String(oldest));
+      expect(selected).toHaveLength(81 + exchange * 2 - oldest);
+      expect(await read(true)).toEqual(selected);
+      fixture.entry.messageQueue.push({ message: fixture.message(80 + exchange * 2), isPersonaJob: true });
+      const finished = Promise.withResolvers<void>();
+      fixture.release(async () => {
+        try {
+          fixture.acquire();
+          expect(await read(true)).toEqual(selected);
+          fixture.release();
+          finished.resolve();
+        } catch (error) {
+          finished.reject(error);
+        }
+      });
+      await finished.promise;
+    }
+  });
+
+  it("keeps every supported limit within bounds and advances by the even thirty-percent stride", () => {
+    const messages = (size: number) => Array.from({ length: size }, (_, index) => ({ id: String(index + 1) }));
+    for (let limit = 20; limit <= 100; limit++) {
+      const id = `limit-${limit}`;
+      const stride = historyWindowStride(limit);
+      expect(stride).toBe(Math.floor((limit * 0.3) / 2) * 2);
+      selectAnchoredHistory(id, messages(limit), limit);
+      let oldest = 1;
+      for (let size = limit + 1; size <= limit * 3; size++) {
+        if (size - oldest + 1 > limit) oldest += stride;
+        const selected = selectAnchoredHistory(id, messages(size).slice(-limit), limit);
+        expect(selected[0]?.id).toBe(String(oldest));
+        expect(selected.length).toBeGreaterThanOrEqual(limit - stride);
+        expect(selected.length).toBeLessThanOrEqual(limit);
+      }
+    }
+  });
+
+  it.each([
+    "deleted",
+    "unreachable",
+    "expired",
+    "limit",
+    "gateway",
+  ])("reanchors the newest window after %s", (reason) => {
+    const fixture = createHistoryFixture();
+    const initial = [...fixture.rest.values()];
+    setSystemTime(100_000);
+    selectAnchoredHistory(CHANNEL_ID, initial, 80);
+    const latest = [...initial.slice(2), fixture.message(81), fixture.message(82)];
+    if (reason === "deleted") recordHistoryWindowChange(CHANNEL_ID, "1", "deleted");
+    if (reason === "unreachable")
+      latest.splice(
+        latest.findIndex((message) => message.id === "25"),
+        1,
+      );
+    if (reason === "expired") setSystemTime(400_000);
+    if (reason === "gateway") setHistoryWindowGatewayConnected(0, true);
+    const limit = reason === "limit" ? 70 : 80;
+    expect(selectAnchoredHistory(CHANNEL_ID, latest, limit)).toEqual(latest.slice(-limit));
+  });
+
+  it.each([false, true])("lets a newer reset marker replace an anchor, including the compact marker: %s", (compact) => {
+    const fixture = createHistoryFixture();
+    const initial = [...fixture.rest.values()];
+    selectAnchoredHistory(CHANNEL_ID, initial, 80);
+    const afterMarker = initial.slice(compact ? 59 : 60);
+    expect(selectAnchoredHistory(CHANNEL_ID, afterMarker, 80, "60")).toEqual(afterMarker);
+    const latest = [...afterMarker, fixture.message(81)];
+    expect(selectAnchoredHistory(CHANNEL_ID, latest, 80, "60")).toEqual(latest);
+  });
+
+  it("retains a queued trigger outside the fetch without exceeding Discord message units", () => {
+    const fixture = createHistoryFixture(100);
+    const latest = [...fixture.rest.values()].slice(-80);
+    selectAnchoredHistory(CHANNEL_ID, latest, 80);
+    const trigger = fixture.message(1);
+    const selected = selectAnchoredHistory(CHANNEL_ID, [trigger, ...latest], 80, undefined, trigger.id);
+    expect(selected).toHaveLength(80);
+    expect(selected[0]).toBe(trigger);
+    expect(selected.at(-1)?.id).toBe("100");
+  });
+
+  it("lets inspection share the live selection without creating, advancing, expiring or replacing its anchor", () => {
+    const messages = (size: number) => Array.from({ length: size }, (_, index) => ({ id: String(index + 1) }));
+    const inspect = (size: number, limit = 20, reset?: string) =>
+      selectAnchoredHistory(CHANNEL_ID, messages(size).slice(-limit), limit, reset, undefined, "inspect");
+    setSystemTime(100_000);
+    expect(inspect(20)).toEqual(messages(20));
+    expect(selectAnchoredHistory(CHANNEL_ID, messages(22).slice(-20), 20)[0]?.id).toBe("3");
+    setHistoryWindowGatewayConnected(0, true);
+    selectAnchoredHistory(CHANNEL_ID, messages(20), 20);
+    expect(inspect(22)[0]?.id).toBe("7");
+    expect(selectAnchoredHistory(CHANNEL_ID, messages(20), 20)[0]?.id).toBe("1");
+    expect(inspect(22, 21)[0]?.id).toBe("2");
+    expect(inspect(22, 20, "15")[0]?.id).toBe("3");
+    expect(selectAnchoredHistory(CHANNEL_ID, messages(20), 20)[0]?.id).toBe("1");
+    setSystemTime(399_999);
+    inspect(20);
+    setSystemTime(400_000);
+    expect(inspect(22)[0]?.id).toBe("3");
+    expect(selectAnchoredHistory(CHANNEL_ID, messages(22).slice(-20), 20)[0]?.id).toBe("3");
+  });
+
+  it("evicts the oldest anchor at capacity and prunes expired channels on the next selection", () => {
+    const fixture = createHistoryFixture();
+    const initial = [...fixture.rest.values()];
+    const latest = [...initial.slice(2), fixture.message(81), fixture.message(82)];
+    setSystemTime(100_000);
+    const metrics = spyOn(log, "metric").mockImplementation(() => {});
+    try {
+      for (let index = 0; index <= 2000; index++) selectAnchoredHistory(`capacity-${index}`, initial, 80);
+      expect(selectAnchoredHistory("capacity-0", latest, 80)).toEqual(latest);
+      expect(metrics.mock.calls.at(-1)?.[1]?.entries).toBe(2000);
+      setSystemTime(400_000);
+      selectAnchoredHistory("after-expiry", initial, 80);
+      expect(metrics.mock.calls.at(-1)?.[1]?.entries).toBe(1);
+    } finally {
+      metrics.mockRestore();
+    }
   });
 
   it("merges uncached webhook deliveries with intervening user messages in snowflake order and trims", async () => {

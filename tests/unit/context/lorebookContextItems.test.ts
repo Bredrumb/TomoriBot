@@ -1,3 +1,4 @@
+import { applyPromptLayoutInserts } from "@/utils/text/context/promptLayout";
 import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import type { Client } from "discord.js";
 import type { CachedPresetData } from "@/utils/cache/stPresetCache";
@@ -94,11 +95,13 @@ function textFor(items: StructuredContextItem[], tag: ContextItemTag): string {
 }
 
 function finalized(items: StructuredContextItem[]): StructuredContextItem[] {
-  return resolveRandomChoiceMacrosInBuildOutput({
+  const output = resolveRandomChoiceMacrosInBuildOutput({
     contextItems: items,
     tailDirectives: [],
     lowerPriorityTailDirectives: [],
   }).contextItems;
+  applyPromptLayoutInserts(output, []);
+  return output;
 }
 
 describe("lorebook context items", () => {
@@ -121,6 +124,7 @@ describe("lorebook context items", () => {
     expect(loadSpy).toHaveBeenCalledWith(SERVER_ID, LINEAGE_ID);
     expect(items.map((item) => item.metadataTag)).toEqual([
       ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE,
+      ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE,
       ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER,
     ]);
 
@@ -130,6 +134,26 @@ describe("lorebook context items", () => {
     expect(before).not.toContain("Foreign lore.");
     expect(before).not.toContain("Off lore.");
     expect(textFor(items, ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER)).toContain("Tower lore.");
+  });
+
+  it("reserves the lore budget for constant system content before admitting keyword entries", async () => {
+    const constants = [0, 1].map((placement) =>
+      toRow(
+        input({
+          constant: true,
+          keys: [],
+          placement: placement as 0 | 1,
+          insertion_order: 100,
+          title: `Rule ${placement}`,
+          content: "r".repeat(3000),
+        }),
+      ),
+    );
+    const keyword = toRow(input({ keys: ["route"], insertion_order: 1, content: "k".repeat(3000) }));
+    const inactive = await buildItems([...constants, keyword]);
+    const active = await buildItems([...constants, keyword], { messages: ["route"] });
+    expect(active.filter((item) => item.role === "system")).toEqual(inactive);
+    expect(active.filter((item) => item.role === "user")).toEqual([]);
   });
 
   it("requires an admitted channel for an Always On entry unless channel filtering is off", async () => {
@@ -210,6 +234,7 @@ describe("lorebook context items", () => {
     });
     expect(loreItems.map((item) => item.metadataTag)).toEqual([
       ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE,
+      ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE,
       ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER,
     ]);
 
@@ -237,6 +262,7 @@ describe("lorebook context items", () => {
             role: "user",
             parts: [{ type: "text", text: "Alice: I found the vault." }],
             metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+            sender: { id: "Juno", name: "Juno", type: "user" },
           },
         ],
         tailDirectives: [],
@@ -274,8 +300,9 @@ describe("lorebook context items", () => {
     expect(final.map((item) => item.metadataTag)).toEqual([
       ContextItemTag.SYSTEM_HUMANIZER_RULES,
       ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE,
-      ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS,
+      ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE,
       ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER,
+      ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS,
       ContextItemTag.DIALOGUE_HISTORY,
     ]);
 
@@ -317,7 +344,7 @@ describe("lorebook context items", () => {
     const afterHeader = snapshot.indexOf("=== Lorebook (After) (`/memories`) ===");
     expect(beforeHeader).toBeGreaterThanOrEqual(0);
     expect(beforeHeader).toBeLessThan(documentsHeader);
-    expect(documentsHeader).toBeLessThan(afterHeader);
+    expect(afterHeader).toBeLessThan(documentsHeader);
   });
 });
 

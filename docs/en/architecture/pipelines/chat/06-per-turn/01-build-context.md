@@ -55,6 +55,18 @@ buildContext() (context-build pipeline)        ──► assembles StructuredCon
   shrink a cache after earlier messages were evicted. Shard disconnects and reconnects drop all
   windows; disconnected shards disable reuse. DM turns use REST unless the client subscribes to DM reaction events. The idle channel
   keeps no window because the message sweeper can evict cache entries.
+- **Anchored selection**: after queued-trigger add-back, proxy filtering, and reset/compact-refresh
+  slicing, `selectAnchoredHistory()` in `historyWindow.ts` retains a start ID until the window would
+  exceed the normalized message limit. It advances by `historyWindowStride(limit)`: 30% rounded down
+  to an even number (24 at 80). With enough history, selection holds between `limit - stride` and
+  `limit` Discord messages before simplification. Resets take precedence; a required queued trigger
+  remains included. ID-only anchors survive idle release for five minutes; gateway reconnects,
+  boundary deletions, changed limits, and unavailable starts can force a new anchor.
+- **Budget truncation**: `truncateDialogueHistory()` removes whole stride batches of oldest exchanges
+  when over budget, preserving samples, the newest user request, tail-slot facts, and reserved-tail
+  accounting. It reapplies the registry slot, saved STM depth and cacheable-prefix boundary against
+  surviving history. Inspection reads the same channel anchor without changing its state, and both
+  truncation paths receive the configured limit.
 - **History auxiliary reads**: proxy identities use the unfiltered history; sprite records, minimal
   notice bodies, and agendas use visible messages after blacklist and block filtering. These reads
   run concurrently before simplification.
@@ -106,7 +118,8 @@ so older media never keeps a tool exposed. Each tool's own availability gate sti
 - **Prompt construction**: delegates to `buildContext()` in `src/utils/text/contextBuilder.ts`.
   The [Context-Build Pipeline](/architecture/pipelines/context-build/) owns persona system prompts,
   retrieved memories, and RAG document assembly.
-- **Tail directives**: appends prompt directives in prioritized order, including emoji usage penalties,
+- **Tail directives**: applies registry positional inserts, including tail-slot blocks, then appends
+  prompt directives in prioritized order, including emoji usage penalties,
   reasoning formatting instructions, queued reply guidance, and uncensor rules.
 - **Prefill resolution**: expanded prefill text is stored on `context.assistantPrefill` rather than
   committed directly to `contextItems`, allowing individual model attempts to determine how the prefill

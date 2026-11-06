@@ -32,6 +32,7 @@ function history(id: string, role: "user" | "model", body: string): StructuredCo
     completionText: text,
     parts: [{ type: "text", text }],
     sender: {
+      id: role === "user" ? "Mirri" : "Juno",
       name: role === "user" ? "Mirri" : "Juno",
       type: role === "user" ? "user" : "persona",
     },

@@ -1,3 +1,4 @@
+import { applyPromptLayoutInserts } from "@/utils/text/context/promptLayout";
 import { describe, expect, test } from "bun:test";
 import type { Client } from "discord.js";
 import type { CachedPresetData } from "@/utils/cache/stPresetCache";
@@ -41,7 +42,12 @@ function depthNode(content: string, nodeOrder: number): CachedPresetData["nodes"
 }
 
 function taggedItem(tag: ContextItemTag, text: string, role: "system" | "user" = "system"): StructuredContextItem {
-  return { role, parts: [{ type: "text", text }], metadataTag: tag };
+  return {
+    role,
+    parts: [{ type: "text", text }],
+    metadataTag: tag,
+    ...(tag === ContextItemTag.DIALOGUE_HISTORY ? { sender: { id: "Juno", name: "Juno", type: "user" as const } } : {}),
+  };
 }
 
 function nativeWorldInfoItems(): StructuredContextItem[] {
@@ -90,11 +96,12 @@ async function reassemble(
       toolPromptMacroResolver: createToolPromptMacroResolver({ capabilities: { web_search: true } }),
     },
   );
+  applyPromptLayoutInserts(result.contextItems, []);
   return result.contextItems;
 }
 
 describe("reassembleWithPreset", () => {
-  test("routes before and after lore around documents at their world info markers", async () => {
+  test("routes constant lore at world-info markers and documents at the tail slot", async () => {
     const items = await reassemble(
       [
         markerNode("main", 0),
@@ -108,13 +115,13 @@ describe("reassembleWithPreset", () => {
     expect(items.map((item) => item.metadataTag)).toEqual([
       ContextItemTag.SYSTEM_HUMANIZER_RULES,
       ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE,
-      ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS,
       ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER,
+      ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS,
       ContextItemTag.DIALOGUE_HISTORY,
     ]);
   });
 
-  test("keeps documents at the first world info marker when the after marker comes first", async () => {
+  test("keeps documents at the tail slot when the after marker comes first", async () => {
     const items = await reassemble(
       [
         markerNode("main", 0),
@@ -128,8 +135,8 @@ describe("reassembleWithPreset", () => {
     expect(items.map((item) => item.metadataTag)).toEqual([
       ContextItemTag.SYSTEM_HUMANIZER_RULES,
       ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER,
-      ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS,
       ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE,
+      ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS,
       ContextItemTag.DIALOGUE_HISTORY,
     ]);
   });
@@ -140,8 +147,8 @@ describe("reassembleWithPreset", () => {
     expect(items.map((item) => item.metadataTag)).toEqual([
       ContextItemTag.SYSTEM_HUMANIZER_RULES,
       ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE,
-      ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS,
       ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER,
+      ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS,
       ContextItemTag.DIALOGUE_HISTORY,
     ]);
   });
@@ -155,8 +162,8 @@ describe("reassembleWithPreset", () => {
     expect(items.map((item) => item.metadataTag)).toEqual([
       ContextItemTag.SYSTEM_HUMANIZER_RULES,
       ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE,
-      ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS,
       ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER,
+      ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS,
       ContextItemTag.DIALOGUE_HISTORY,
     ]);
   });
@@ -176,8 +183,8 @@ describe("reassembleWithPreset", () => {
     expect(items.map((item) => item.metadataTag)).toEqual([
       ContextItemTag.SYSTEM_HUMANIZER_RULES,
       ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE,
-      ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS,
       ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER,
+      ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS,
       ContextItemTag.DIALOGUE_HISTORY,
     ]);
     expect(items[4].parts).toEqual([

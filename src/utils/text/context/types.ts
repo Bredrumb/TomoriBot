@@ -26,6 +26,7 @@ export type SimplifiedMessageForContext = {
   authorId: string;
   authorName: string;
   authorType: "user" | "persona";
+  isSystemNotice?: boolean;
   personaName?: string | null;
   authorPersonaId?: number | null;
   authorPersonaLineageId?: number | null;

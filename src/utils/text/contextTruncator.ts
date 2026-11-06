@@ -1,5 +1,11 @@
 import type { StructuredContextItem } from "@/types/misc/context";
 import { ContextItemTag } from "@/types/misc/context";
+import { DEFAULT_MESSAGE_FETCH_LIMIT, historyWindowStride } from "@/utils/discord/messageFetchLimit";
+import {
+  applyPromptLayoutInserts,
+  getCacheablePrefixBoundary,
+  getPromptLayoutInsert,
+} from "@/utils/text/context/promptLayout";
 
 /**
  * Estimates the input token count from a list of context items.
@@ -36,26 +42,13 @@ type TruncationResult = {
   totalDropped: number;
 };
 
-/**
- * Trims context items until the estimated token count fits within the safe input budget:
- *   safeInputBudget = floor((contextLength - maxCompletionTokens) * 0.9)
- *
- * Drop policy:
- * 1) Oldest DIALOGUE_HISTORY exchange pairs (oldest-first), but never remove the newest
- *    DIALOGUE_HISTORY user turn so the current user request remains visible to the model.
- * 2) DIALOGUE_SAMPLE items are protected and never truncated.
- *
- * @param contextItems - Full list of structured context items to truncate
- * @param contextLength - Total context window size (input + output tokens)
- * @param maxCompletionTokens - Maximum output tokens reserved for the model's reply
- * @param reservedTailItems - Items the caller appends after truncation, which must fit the same budget
- * @returns TruncationResult containing the truncated list and drop counts
- */
+/** Drops oldest history exchanges in stride batches, preserving samples and the newest user request. */
 export function truncateDialogueHistory(
   contextItems: StructuredContextItem[],
   contextLength: number,
   maxCompletionTokens: number,
   reservedTailItems: StructuredContextItem[] = [],
+  messageFetchLimit = DEFAULT_MESSAGE_FETCH_LIMIT,
 ): TruncationResult {
   const safeInputBudget =
     computeSafeInputBudget(contextLength, maxCompletionTokens) - estimateInputTokens(reservedTailItems);
@@ -66,7 +59,11 @@ export function truncateDialogueHistory(
 
   const findNewestDialogueUserIndex = (): number => {
     for (let i = items.length - 1; i >= 0; i--) {
-      if (items[i].metadataTag === ContextItemTag.DIALOGUE_HISTORY && items[i].role === "user") {
+      if (
+        items[i].metadataTag === ContextItemTag.DIALOGUE_HISTORY &&
+        items[i].role === "user" &&
+        !getPromptLayoutInsert(items[i])
+      ) {
         return i;
       }
     }
@@ -81,7 +78,8 @@ export function truncateDialogueHistory(
       if (
         i !== newestDialogueUserIdx &&
         items[i].metadataTag === ContextItemTag.DIALOGUE_HISTORY &&
-        items[i].role === "user"
+        items[i].role === "user" &&
+        !getPromptLayoutInsert(items[i])
       ) {
         oldestDroppableUserIdx = i;
         break;
@@ -104,7 +102,10 @@ export function truncateDialogueHistory(
     }
 
     if (followingModelIdx !== -1) {
-      items.splice(oldestDroppableUserIdx, followingModelIdx - oldestDroppableUserIdx + 1);
+      const retained = items
+        .slice(oldestDroppableUserIdx, followingModelIdx + 1)
+        .filter((item) => getPromptLayoutInsert(item) !== undefined);
+      items.splice(oldestDroppableUserIdx, followingModelIdx - oldestDroppableUserIdx + 1, ...retained);
     } else {
       items.splice(oldestDroppableUserIdx, 1);
     }
@@ -112,13 +113,17 @@ export function truncateDialogueHistory(
     return true;
   };
 
-  // Iteratively drop context until within budget (or no droppable content remains)
+  // Drop a full stride so later exchanges can grow without moving the retained start.
+  const exchangesPerStride = historyWindowStride(messageFetchLimit) / 2;
   while (estimateInputTokens(items) > safeInputBudget) {
-    if (dropOldestDroppableHistoryExchange()) {
-      continue;
+    let dropped = 0;
+    while (dropped < exchangesPerStride && dropOldestDroppableHistoryExchange()) {
+      dropped++;
     }
-    break;
+    if (dropped === 0) break;
   }
+  if (historyPairsDropped > 0 && (getCacheablePrefixBoundary(contextItems) || contextItems.some(getPromptLayoutInsert)))
+    applyPromptLayoutInserts(items, []);
 
   return {
     truncated: items,

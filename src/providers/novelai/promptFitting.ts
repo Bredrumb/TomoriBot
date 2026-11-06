@@ -1,3 +1,4 @@
+import { novelaiLayoutTags } from "@/utils/text/context/promptLayout";
 import type { TomoriState } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import {
@@ -26,19 +27,8 @@ import {
 } from "@/providers/novelai/speakerBoundaries";
 import { buildProviderStopStrings } from "@/providers/utils/stopStrings";
 
-const admittedTags = new Set([
-  ContextItemTag.SYSTEM_PERSONALITY,
-  ContextItemTag.DIALOGUE_SAMPLE,
-  ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
-  ContextItemTag.KNOWLEDGE_USER_MEMORIES,
-  ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
-  ContextItemTag.DIALOGUE_HISTORY,
-]);
-const memoryTags = new Set([
-  ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
-  ContextItemTag.KNOWLEDGE_USER_MEMORIES,
-  ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
-]);
+const admittedTags = novelaiLayoutTags("admitted");
+const memoryTags = novelaiLayoutTags("memory");
 // Keep one sample exchange and two recent history exchanges until conversational quality checks justify a different floor.
 const MINIMUM_SAMPLE_EXCHANGES = 1;
 const MINIMUM_HISTORY_EXCHANGES = 2;

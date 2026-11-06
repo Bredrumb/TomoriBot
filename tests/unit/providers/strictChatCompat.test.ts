@@ -270,7 +270,7 @@ describe("relocateAssistantMediaContextItems", () => {
         parts: [{ type: "text", text: "here" }, img],
         metadataTag: ContextItemTag.DIALOGUE_HISTORY,
         messageId: "m1",
-        sender: { name: "Tomori", type: "persona" },
+        sender: { id: "Tomori", name: "Tomori", type: "persona" },
       },
     ];
 
@@ -281,14 +281,14 @@ describe("relocateAssistantMediaContextItems", () => {
         parts: [{ type: "text", text: "here" }],
         metadataTag: ContextItemTag.DIALOGUE_HISTORY,
         messageId: "m1",
-        sender: { name: "Tomori", type: "persona" },
+        sender: { id: "Tomori", name: "Tomori", type: "persona" },
       },
       {
         role: "user",
         parts: [{ type: "text", text: assistantMediaRelocationNotice(1, "Tomori") }, img],
         metadataTag: ContextItemTag.DIALOGUE_HISTORY,
         messageId: "m1",
-        sender: { name: "Tomori", type: "persona" },
+        sender: { id: "Tomori", name: "Tomori", type: "persona" },
       },
     ]);
   });
@@ -298,7 +298,7 @@ describe("relocateAssistantMediaContextItems", () => {
       {
         role: "model",
         parts: [img],
-        sender: { name: "Kana", type: "persona" },
+        sender: { id: "Kana", name: "Kana", type: "persona" },
       },
     ];
 
@@ -306,7 +306,7 @@ describe("relocateAssistantMediaContextItems", () => {
       {
         role: "user",
         parts: [{ type: "text", text: assistantMediaRelocationNotice(1, "Kana") }, img],
-        sender: { name: "Kana", type: "persona" },
+        sender: { id: "Kana", name: "Kana", type: "persona" },
       },
     ]);
   });

@@ -51,10 +51,11 @@ async function readScannableFiles(): Promise<Array<[string, string]>> {
 }
 
 describe("test isolation hygiene", () => {
-  it("keeps database credentials out of unit processes", () => {
+  it("keeps database credentials and background telemetry writes out of unit processes", () => {
     for (const name of ["DATABASE_URL", "POSTGRES_URL", "POSTGRES_PASSWORD", "TEST_DB_READY"]) {
       expect(process.env[name] === undefined, name).toBe(true);
     }
+    expect(process.env.STAT_TRACKING_ENABLED).toBe("false");
   });
 
   it("keeps database-touching tests out of the concurrently-running unit lanes", async () => {

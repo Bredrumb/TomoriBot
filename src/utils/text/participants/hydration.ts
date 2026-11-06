@@ -66,6 +66,7 @@ export type ParticipantProfileFieldKind =
   | "physical_appearance"
   | "naming"
   | "timezone"
+  | "local_time"
   | "identity"
   | "presence"
   | "roles"
@@ -665,28 +666,33 @@ function enrichPhysicalAppearanceField(
   );
 }
 
-function enrichTimezoneField(
+function enrichTimezoneFields(
   base: HydratedDiscordUserBase,
   params: ParticipantHydrationParams,
-): ParticipantProfileField {
+): ParticipantProfileField[] {
   const offset = base.userRow.timezone_offset;
-  const lines =
-    base.policy.exposeTimezone && offset != null
-      ? [
-          `- ${base.profile.displayName}'s timezone: ${formatUTCOffset(offset)} (their local time: ${getCurrentTimeWithOffset(offset)})`,
-        ]
-      : [];
-  return field(
-    base.profile.key,
-    "timezone",
-    20,
-    lines,
-    hiddenReasonForPolicy(base.policy, "timezone", {
-      blacklisted: base.blacklisted,
-      personalizationEnabled: base.personalizationEnabled,
-      isUserImpersonation: params.activePersonaScope.isUserImpersonation,
-    }),
-  );
+  const visible = base.policy.exposeTimezone && offset != null;
+  const hiddenReason = hiddenReasonForPolicy(base.policy, "timezone", {
+    blacklisted: base.blacklisted,
+    personalizationEnabled: base.personalizationEnabled,
+    isUserImpersonation: params.activePersonaScope.isUserImpersonation,
+  });
+  return [
+    field(
+      base.profile.key,
+      "timezone",
+      20,
+      visible ? [`- ${base.profile.displayName}'s timezone: ${formatUTCOffset(offset)}`] : [],
+      hiddenReason,
+    ),
+    field(
+      base.profile.key,
+      "local_time",
+      21,
+      visible ? [`${base.profile.displayName}'s local time: ${getCurrentTimeWithOffset(offset)}`] : [],
+      hiddenReason,
+    ),
+  ];
 }
 
 function enrichIdentityField(base: HydratedDiscordUserBase): ParticipantProfileField {
@@ -820,7 +826,7 @@ async function hydrateDiscordUser(
     enrichPhysicalAppearanceField(base, params),
     enrichNamingField(base, params),
     enrichIdentityField(base),
-    enrichTimezoneField(base, params),
+    ...enrichTimezoneFields(base, params),
     await enrichPresenceField(base, params, dependencies),
     enrichRolesField(base, params),
     await enrichPersonalMemoriesField(base, params, dependencies),

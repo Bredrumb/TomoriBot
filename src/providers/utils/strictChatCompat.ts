@@ -1,4 +1,4 @@
-import { ContextItemTag, type ContextPart, type StructuredContextItem } from "@/types/misc/context";
+import type { ContextPart, StructuredContextItem } from "@/types/misc/context";
 
 // Shared "strict chat-completion" message normalizations: message shapes some provider APIs
 // require and others merely tolerate. Three normalizations live behind this one tested seam, so a
@@ -169,7 +169,7 @@ export function mergeConsecutiveSameRole<T extends NormalizableMessage>(messages
     // top-level tool_calls/tool_call_id: see hasToolMetadata).
     if (current.role === next.role && !hasToolMetadata(current) && !hasToolMetadata(next)) {
       const combined = [...normalizeToParts(current.content), ...normalizeToParts(next.content)];
-      const allText = combined.every((part) => part.type === "text");
+      const allText = combined.every((part) => part.type === "text" && part.cache_control === undefined);
       current = {
         ...current,
         content: allText ? combined.map((part) => String(part.text)).join("\n") : combined,
@@ -244,40 +244,7 @@ export function unseenToolImageNotice(imageCount: number): string {
   );
 }
 
-/**
- * Context tags that belong in the instruction channel rather than the dialogue history: the
- * standing material a provider receives once, ahead of the conversation.
- *
- * The list is a shared pipeline contract. An adapter that routes one of these tags into dialogue,
- * or a dialogue tag into the instruction channel, makes the same conversation read differently per
- * provider, so membership is decided here rather than per adapter.
- */
-export const SYSTEM_INSTRUCTION_CONTEXT_TAGS: readonly ContextItemTag[] = [
-  ContextItemTag.SYSTEM_HUMANIZER_RULES,
-  ContextItemTag.SYSTEM_PERSONA_PROMPT,
-  ContextItemTag.SYSTEM_PERSONALITY,
-  ContextItemTag.KNOWLEDGE_SERVER_INFO,
-  ContextItemTag.KNOWLEDGE_SERVER_EMOJIS, // Text-based with semantic metadata (deterministic ordering)
-  ContextItemTag.KNOWLEDGE_SERVER_STICKERS, // Text-based with semantic metadata (deterministic ordering)
-  ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
-];
-
-/**
- * True when a context item carries standing instructions instead of a dialogue turn.
- *
- * Every user or model item belongs in dialogue unless it carries one of
- * {@link SYSTEM_INSTRUCTION_CONTEXT_TAGS}. DIALOGUE_HISTORY, DIALOGUE_SAMPLE, and newer tags such as
- * KNOWLEDGE_USERS_IN_CONVERSATION are therefore not listed anywhere: they route through the
- * dialogue branch by default.
- */
-export function isSystemInstructionContextItem(item: StructuredContextItem): boolean {
-  return (
-    item.role === "system" ||
-    (item.role === "user" &&
-      item.metadataTag !== undefined &&
-      SYSTEM_INSTRUCTION_CONTEXT_TAGS.includes(item.metadataTag))
-  );
-}
+export { isPromptSystemItem as isSystemInstructionContextItem } from "@/utils/text/context/promptLayout";
 
 /**
  * Move neutral `image` parts off model turns into following synthetic user turns while sender

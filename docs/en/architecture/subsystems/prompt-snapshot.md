@@ -21,11 +21,17 @@ Prompt inspection separates aggregate token measurements from raw prompt content
 Prompt assembly mirrors the production `messageCreate → tomoriChat` pipeline through `assemblePromptInspection()` in `src/utils/text/promptInspection/assemble.ts`:
 
 - **Context construction**: Invokes `buildContext()` to assemble instructions, server memories, conditioning logs, SillyTavern preset reordering, and depth-injected `/context-note` content.
+- **Layout**: uses the shared registry's system routing and positional inserts, including the tail
+  slot after native or preset assembly.
 - **Participant discovery**: Calls `prepareParticipantContext()`, matching live chat profiles, synthetic identity mappings, and attribution logic.
 - **Message boundary processing**: Respects conversation resets (`sliceMessagesAtResetMarker()`), link previews, stickers, and system-produced notice blocks (`extractNoticeTextFromComponents`).
 - **History truncation**: Uses `resolveContextBudget()` for ordinary providers. NovelAI selects, renders, and fits its native context through the same preparation function as generation.
 - **UI exclusion**: Diagnostic embeds and internal debug notices are omitted because they represent interface elements rather than model prompt input.
 - **Hidden agendas**: A Natural Nudges agenda renders above its opener only when the answering persona owns it, as in live context building, so the snapshot shows what that persona sees.
+
+Inspection fetches raw history independently, then uses the live channel's history anchor after
+reset slicing. This read does not create, advance, invalidate, or renew the anchor. Budget
+truncation shares the live stride rule and preserves the tail-slot facts and their prefix boundary.
 
 NovelAI inspection uses native context captured before preset reassembly, the resolved personal or
 server credential, and the saved response prefill. It runs the provider's allowlist, renderer, and

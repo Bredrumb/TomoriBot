@@ -12,7 +12,7 @@ import type { ParticipantRequestScope } from "@/utils/text/participants/preparat
 
 export { formatPendingReminderForContext } from "@/utils/text/participants/hydration";
 
-export async function buildParticipantContextItem(params: {
+export async function buildParticipantContextItems(params: {
   client: Client;
   guildId: string;
   channelName: string;
@@ -39,7 +39,7 @@ export async function buildParticipantContextItem(params: {
   convertMentions: MentionConverter;
   profileEnricherRegistry?: ParticipantProfileEnricherRegistry;
   requestScope?: ParticipantRequestScope;
-}): Promise<StructuredContextItem | null> {
+}): Promise<StructuredContextItem[]> {
   const typedKeys = new Set<string>();
   for (const seed of params.participantSeeds) {
     const serializedKey = serializeParticipantKey(seed.key);
@@ -49,7 +49,7 @@ export async function buildParticipantContextItem(params: {
     typedKeys.add(serializedKey);
   }
   if (params.participantSeeds.length === 0) {
-    return null;
+    return [];
   }
 
   const hydrated = await hydrateParticipantProfiles({
@@ -100,7 +100,7 @@ export async function buildParticipantContextItem(params: {
     timeOfDayPhrase: getTimeOfDayPhrase(timezoneOffset),
   });
 
-  return {
+  const profileItem: StructuredContextItem = {
     role: "user",
     parts: [
       {
@@ -157,4 +157,29 @@ export async function buildParticipantContextItem(params: {
     conversationUsers: rendered.conversationUsers,
     participantTargetIndex: rendered.targetIndex,
   };
+  const items = [profileItem];
+  for (const [metadataTag, text] of [
+    [ContextItemTag.KNOWLEDGE_USER_STATUS, rendered.statusText ? `[System: ${rendered.statusText}\n]` : ""],
+    [ContextItemTag.KNOWLEDGE_CURRENT_CONTEXT, rendered.currentContextText],
+  ] as const) {
+    if (!text) continue;
+    items.push({
+      role: "user",
+      metadataTag,
+      parts: [
+        {
+          type: "text",
+          text: await params.convertMentions(
+            text,
+            params.client,
+            params.guildId,
+            params.triggererName,
+            params.botName,
+            params.tomoriConfig.personal_memories_enabled,
+          ),
+        },
+      ],
+    });
+  }
+  return items;
 }

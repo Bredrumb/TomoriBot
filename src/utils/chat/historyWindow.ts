@@ -1,7 +1,8 @@
 import { ChannelType, GatewayIntentBits, LimitedCollection, type Message } from "discord.js";
 import { channelLocks } from "@/utils/chat/channelQueue";
-import { MAX_MESSAGE_FETCH_LIMIT } from "@/utils/discord/messageFetchLimit";
+import { historyWindowStride, MAX_MESSAGE_FETCH_LIMIT } from "@/utils/discord/messageFetchLimit";
 import { measureChatTurnStage, recordChatTurnHistory } from "@/utils/chat/turnLatency";
+import { log } from "@/utils/misc/logger";
 
 export interface ChannelHistoryWindow {
   messages: Message[];
@@ -16,6 +17,75 @@ export interface ChannelHistoryWindow {
 
 const disconnectedShards = new Set<number>();
 const MAX_HISTORY_CHANGE_SIGNALS = MAX_MESSAGE_FETCH_LIMIT;
+
+type HistoryAnchor = {
+  startId: string;
+  nextStartId?: string;
+  fetchLimit: number;
+  expiresAt: number;
+};
+
+// Anchors use a separate store because idle releases discard the fetched-message window.
+const historyAnchors = new Map<string, HistoryAnchor>();
+const HISTORY_ANCHOR_TTL_MS = 5 * 60_000;
+const MAX_HISTORY_ANCHORS = 2000;
+
+export function selectAnchoredHistory<T extends { id: string }>(
+  channelId: string,
+  messages: T[],
+  fetchLimit: number,
+  resetMessageId?: string,
+  requiredMessageId?: string,
+  mode: "update" | "inspect" = "update",
+): T[] {
+  const now = Date.now();
+  if (mode === "update") {
+    for (const [id, anchor] of historyAnchors) {
+      if (anchor.expiresAt <= now) historyAnchors.delete(id);
+    }
+  }
+  let anchor = historyAnchors.get(channelId);
+  if (
+    anchor &&
+    (anchor.expiresAt <= now ||
+      anchor.fetchLimit !== fetchLimit ||
+      (resetMessageId && compareIds(resetMessageId, anchor.startId) > 0))
+  ) {
+    if (mode === "update") historyAnchors.delete(channelId);
+    anchor = undefined;
+  }
+  const ordered = messages;
+  let start = anchor ? ordered.findIndex((message) => message.id === anchor.startId) : -1;
+  if (anchor && start === -1 && ordered[0] && compareIds(anchor.startId, ordered[0].id) < 0) {
+    start = ordered.findIndex((message) => message.id === anchor.nextStartId);
+  }
+  if (start === -1) start = Math.max(0, ordered.length - fetchLimit);
+  const stride = historyWindowStride(fetchLimit);
+  while (ordered.length - start > fetchLimit) start += stride;
+  let selected = ordered.slice(start);
+  const required = ordered.find((message) => message.id === requiredMessageId);
+  if (required && !selected.includes(required)) {
+    selected = [required, ...selected.slice(-(fetchLimit - 1))].sort((left, right) => compareIds(left.id, right.id));
+  }
+  if (mode === "inspect") return selected;
+  const startId = selected[0]?.id;
+  if (!startId) {
+    historyAnchors.delete(channelId);
+    return selected;
+  }
+  if (!historyAnchors.has(channelId) && historyAnchors.size >= MAX_HISTORY_ANCHORS) {
+    const oldest = historyAnchors.keys().next().value;
+    if (oldest !== undefined) historyAnchors.delete(oldest);
+  }
+  historyAnchors.set(channelId, {
+    startId,
+    nextStartId: selected[stride]?.id,
+    fetchLimit,
+    expiresAt: anchor?.startId === startId ? anchor.expiresAt : now + HISTORY_ANCHOR_TTL_MS,
+  });
+  log.metric("history_anchor_cache", { entries: historyAnchors.size });
+  return selected;
+}
 
 function compareIds(left: string, right: string): number {
   return left.length - right.length || (left < right ? -1 : left > right ? 1 : 0);
@@ -38,6 +108,10 @@ export function recordHistoryWindowChange(
   messageId: string,
   change: "changed" | "uncached" | "deleted",
 ): void {
+  const anchor = historyAnchors.get(channelId);
+  if (change === "deleted" && (anchor?.startId === messageId || anchor?.nextStartId === messageId)) {
+    historyAnchors.delete(channelId);
+  }
   const entry = channelLocks.get(channelId);
   const window = entry?.historyWindow;
   if (!window) return;
@@ -70,6 +144,7 @@ export function recordHistoryWindowDelivery(channelId: string, messageId: string
 }
 
 export function setHistoryWindowGatewayConnected(shardId: number, connected: boolean): void {
+  historyAnchors.clear();
   if (connected) disconnectedShards.delete(shardId);
   else disconnectedShards.add(shardId);
   for (const entry of channelLocks.values()) entry.historyWindow = undefined;
