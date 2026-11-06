@@ -66,7 +66,6 @@ const TAG_LABELS: Readonly<Record<ContextItemTag, TagLabel>> = {
     hint: "composite",
     subsections: [
       { title: "Personal/Server Memories", hint: "/memories, /personal memories" },
-      { title: "Discord Presence/Role/Channel", hint: "system-managed" },
       { title: "Other Personas' Public Attributes", hint: "/config > Persona > Identity & Personality" },
     ],
   },

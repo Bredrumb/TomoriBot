@@ -25,6 +25,8 @@ export interface ParticipantPromptRenderParams {
 
 export interface RenderedParticipantPrompt {
   text: string;
+  statusText: string;
+  currentContextText: string;
   targetIndex: ParticipantTargetIndex;
   conversationUsers: ReturnType<typeof projectConversationUserReferences>;
 }
@@ -38,9 +40,24 @@ export function renderParticipantPrompt(params: ParticipantPromptRenderParams): 
   text += renderProfileEntries(params.profiles, targetIndex, params.isUserImpersonation);
   text += renderMessageProxyNamespaceNotes(params.messageProxyNamespaces ?? []);
   if (params.personaTaskLines.length > 0) text += `${params.personaTaskLines.join("\n")}\n\n`;
-  text += renderChannelTimeFooter(params);
+  text += "]";
   return {
     text: text.trim(),
+    statusText: params.profiles
+      .flatMap((profile) =>
+        profile.fields
+          .filter((field) => (field.kind === "presence" || field.kind === "status") && field.visibility.visible)
+          .flatMap((field) => field.lines.map((line) => `${profile.displayName}: ${line.replace(/^-\s*/, "")}`)),
+      )
+      .join("\n"),
+    currentContextText: `[System: ${params.profiles
+      .flatMap((profile) =>
+        profile.fields
+          .filter((field) => field.kind === "local_time" && field.visibility.visible)
+          .flatMap((field) => [...field.lines]),
+      )
+      .map((line) => `${line}\n`)
+      .join("")}${renderChannelTimeFooter(params)}`,
     targetIndex,
     conversationUsers: projectConversationUserReferences(targetIndex),
   };
@@ -105,7 +122,13 @@ function renderProfileEntries(
     }
 
     for (const profileField of [...profile.fields].sort((left, right) => left.order - right.order)) {
-      if (!profileField.visibility.visible) continue;
+      if (
+        !profileField.visibility.visible ||
+        profileField.kind === "presence" ||
+        profileField.kind === "status" ||
+        profileField.kind === "local_time"
+      )
+        continue;
       for (const line of profileField.lines) text += `${line}\n`;
     }
     text += "\n";

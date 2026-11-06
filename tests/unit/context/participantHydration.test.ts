@@ -468,12 +468,13 @@ describe("participant hydration", () => {
       "naming",
       "identity",
       "timezone",
+      "local_time",
       "presence",
       "roles",
       "personal_memories",
       "human_reminders",
     ]);
-    expect(human?.fields.map((candidate) => candidate.order)).toEqual([10, 12, 15, 20, 30, 40, 50, 60]);
+    expect(human?.fields.map((candidate) => candidate.order)).toEqual([10, 12, 15, 20, 21, 30, 40, 50, 60]);
     expect(human?.fields.every((candidate) => candidate.owner === human.key)).toBe(true);
     expect(human?.fields.every((candidate) => typeof candidate.visibility.visible === "boolean")).toBe(true);
   });

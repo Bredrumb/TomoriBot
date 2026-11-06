@@ -12,7 +12,16 @@ export type PromptVolatility = "static" | "slow" | "turn" | "clock";
 export type PromptAnchor =
   | { kind: "block" | "history" | "before-latest-pair" | "append" }
   | { kind: "simplified-message"; depth: number | "configured" }
-  | { kind: "dialogue-depth" };
+  | { kind: "dialogue-depth" | "tailSlot" };
+
+export const TAIL_SLOT_SPEAKER_TURNS = 4;
+export const STM_TAIL_SLOT = Symbol("stmTailSlot");
+export const CACHEABLE_PREFIX_END = Symbol("cacheablePrefixEnd");
+
+export type PromptLayoutItem = StructuredContextItem & {
+  [STM_TAIL_SLOT]?: true;
+  [CACHEABLE_PREFIX_END]?: true;
+};
 
 export type PromptInsertTag =
   | "persona_note"
@@ -34,6 +43,7 @@ export interface PromptLayoutEntry {
   anchor: PromptAnchor;
   presetFlush?: "knowledge" | "dialogue";
   novelai?: "personality" | "memory" | "sample" | "history";
+  role?: StructuredContextItem["role"];
   roleZones?: Partial<Record<StructuredContextItem["role"], PromptZone>>;
 }
 
@@ -56,7 +66,7 @@ export const PROMPT_LAYOUT: readonly PromptLayoutEntry[] = [
     anchor: { kind: "block" },
     presetFlush: "knowledge",
   },
-  { tag: ContextItemTag.KNOWLEDGE_PERSONA_USER_BLOCKS, zone: "system", volatility: "clock", anchor: { kind: "block" } },
+  { tag: ContextItemTag.KNOWLEDGE_PERSONA_USER_BLOCKS, zone: "system", volatility: "slow", anchor: { kind: "block" } },
   {
     tag: ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
     zone: "system",
@@ -87,39 +97,27 @@ export const PROMPT_LAYOUT: readonly PromptLayoutEntry[] = [
     presetFlush: "knowledge",
   },
   {
-    tag: ContextItemTag.KNOWLEDGE_USERS_IN_CONVERSATION,
-    zone: "reference",
-    volatility: "clock",
-    anchor: { kind: "block" },
-    presetFlush: "dialogue",
-  },
-  {
     tag: ContextItemTag.KNOWLEDGE_USER_MEMORIES,
     zone: "system",
     roleZones: { user: "reference" },
-    volatility: "turn",
+    volatility: "slow",
     anchor: { kind: "block" },
     novelai: "memory",
   },
-  { tag: ContextItemTag.KNOWLEDGE_USER_STATUS, zone: "reference", volatility: "clock", anchor: { kind: "block" } },
-  { tag: ContextItemTag.KNOWLEDGE_CURRENT_CONTEXT, zone: "reference", volatility: "clock", anchor: { kind: "block" } },
   {
-    tag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
-    zone: "reference",
-    volatility: "clock",
-    anchor: { kind: "block" },
-    presetFlush: "dialogue",
-    novelai: "memory",
-  },
-  {
-    tag: ContextItemTag.KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS,
-    zone: "reference",
-    volatility: "turn",
+    tag: ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE,
+    role: "system",
+    zone: "system",
+    volatility: "slow",
     anchor: { kind: "block" },
   },
-  { tag: ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS, zone: "reference", volatility: "turn", anchor: { kind: "block" } },
-  { tag: ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE, zone: "system", volatility: "turn", anchor: { kind: "block" } },
-  { tag: ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER, zone: "system", volatility: "turn", anchor: { kind: "block" } },
+  {
+    tag: ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER,
+    role: "system",
+    zone: "system",
+    volatility: "slow",
+    anchor: { kind: "block" },
+  },
   {
     tag: ContextItemTag.KNOWLEDGE_SERVER_CONDITIONING,
     zone: "system",
@@ -128,9 +126,30 @@ export const PROMPT_LAYOUT: readonly PromptLayoutEntry[] = [
     presetFlush: "dialogue",
   },
   {
+    tag: ContextItemTag.KNOWLEDGE_USERS_IN_CONVERSATION,
+    zone: "reference",
+    volatility: "slow",
+    anchor: { kind: "block" },
+    presetFlush: "dialogue",
+  },
+  {
+    tag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
+    zone: "reference",
+    volatility: "slow",
+    anchor: { kind: "block" },
+    presetFlush: "dialogue",
+    novelai: "memory",
+  },
+  {
+    tag: ContextItemTag.KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS,
+    zone: "reference",
+    volatility: "slow",
+    anchor: { kind: "block" },
+  },
+  {
     tag: ContextItemTag.DIALOGUE_SAMPLE,
     zone: "history",
-    volatility: "turn",
+    volatility: "slow",
     anchor: { kind: "block" },
     novelai: "sample",
   },
@@ -175,18 +194,41 @@ export const PROMPT_LAYOUT: readonly PromptLayoutEntry[] = [
   { tag: ContextItemTag.SYSTEM_INSTRUCTION_BLOCK, zone: "tail", volatility: "turn", anchor: { kind: "append" } },
   { tag: "lower_priority_tail", zone: "tail", volatility: "turn", anchor: { kind: "before-latest-pair" } },
   // STM content precedes its nudge so equal-depth inserts keep the content above the nudge.
-  { tag: "stm_content", zone: "tail", volatility: "clock", anchor: { kind: "dialogue-depth" } },
+  { tag: "stm_content", zone: "tail", volatility: "clock", anchor: { kind: "tailSlot" } },
+  {
+    tag: ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE,
+    role: "user",
+    zone: "tail",
+    volatility: "turn",
+    anchor: { kind: "tailSlot" },
+  },
+  {
+    tag: ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER,
+    role: "user",
+    zone: "tail",
+    volatility: "turn",
+    anchor: { kind: "tailSlot" },
+  },
+  { tag: ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS, zone: "tail", volatility: "turn", anchor: { kind: "tailSlot" } },
+  { tag: ContextItemTag.KNOWLEDGE_USER_STATUS, zone: "tail", volatility: "clock", anchor: { kind: "tailSlot" } },
+  { tag: ContextItemTag.KNOWLEDGE_CURRENT_CONTEXT, zone: "tail", volatility: "clock", anchor: { kind: "tailSlot" } },
   { tag: "stm_nudge", zone: "tail", volatility: "turn", anchor: { kind: "dialogue-depth" } },
   { tag: "combined_tail", zone: "tail", volatility: "turn", anchor: { kind: "append" } },
   { tag: "queued_reply", zone: "tail", volatility: "turn", anchor: { kind: "append" } },
   { tag: "uncensor", zone: "tail", volatility: "static", anchor: { kind: "append" } },
 ];
 
-const entriesByTag = new Map(PROMPT_LAYOUT.map((entry) => [entry.tag, entry]));
+function layoutEntry(item: StructuredContextItem): PromptLayoutEntry | undefined {
+  return PROMPT_LAYOUT.find((entry) => entry.tag === item.metadataTag && (!entry.role || entry.role === item.role));
+}
+
+export function isPromptTailSlotItem(item: StructuredContextItem): boolean {
+  return layoutEntry(item)?.anchor.kind === "tailSlot";
+}
 
 export function isPromptSystemItem(item: StructuredContextItem): boolean {
   if (item.metadataTag === undefined) return item.role === "system";
-  const entry = entriesByTag.get(item.metadataTag);
+  const entry = layoutEntry(item);
   return (entry?.roleZones?.[item.role] ?? entry?.zone) === "system";
 }
 
@@ -210,21 +252,20 @@ export function novelaiLayoutTags(kind: "admitted" | "persistent" | "memory"): S
 
 export function orderNativePromptBlocks(items: StructuredContextItem[]): void {
   // History and notes share a rank because simplified-message anchors already interleave notes after date spacers.
-  const order = new Map<ContextItemTag | PromptInsertTag | undefined, number>(
-    PROMPT_LAYOUT.map((entry, index) => [
-      entry.tag,
-      entry.anchor.kind === "history"
-        ? PROMPT_LAYOUT.findIndex((candidate) => candidate.anchor.kind === "history")
-        : index,
-    ]),
-  );
-  items.sort(
-    (a, b) => (order.get(a.metadataTag) ?? PROMPT_LAYOUT.length) - (order.get(b.metadataTag) ?? PROMPT_LAYOUT.length),
-  );
+  const historyIndex = PROMPT_LAYOUT.findIndex((entry) => entry.anchor.kind === "history");
+  const rank = (item: StructuredContextItem) => {
+    const entry = layoutEntry(item);
+    return entry?.anchor.kind === "history"
+      ? historyIndex
+      : entry
+        ? PROMPT_LAYOUT.indexOf(entry)
+        : PROMPT_LAYOUT.length;
+  };
+  items.sort((left, right) => rank(left) - rank(right));
 }
 
 export interface PromptLayoutInsert {
-  tag: PromptInsertTag;
+  tag: PromptInsertTag | ContextItemTag;
   items: StructuredContextItem[];
   depth?: number;
   emitted?: boolean;
@@ -235,6 +276,20 @@ export function applyPromptLayoutInserts(
   inserts: PromptLayoutInsert[],
   messagePosition?: { index: number; total: number; flush?: boolean },
 ): void {
+  if (!messagePosition) {
+    const inlineInserts: PromptLayoutInsert[] = [];
+    for (let index = 0; index < items.length; ) {
+      const item = items[index];
+      if (isPromptTailSlotItem(item)) {
+        inlineInserts.push({ tag: item.metadataTag as ContextItemTag, items: [item] });
+        items.splice(index, 1);
+      } else index++;
+    }
+    inserts = [...inserts, ...inlineInserts];
+  }
+  const slotIndex = messagePosition ? -1 : resolveTailSlotIndex(items);
+  const slotItem = items[slotIndex];
+  const prefixEnd = items[slotIndex - 1];
   for (const entry of PROMPT_LAYOUT) {
     for (const insert of inserts) {
       if (insert.tag !== entry.tag) continue;
@@ -246,15 +301,79 @@ export function applyPromptLayoutInserts(
         insert.emitted = true;
       } else if (!messagePosition) {
         for (const item of insert.items) {
+          if (entry.role && item.role !== entry.role) continue;
           if (entry.anchor.kind === "before-latest-pair") insertBeforeLatestDialoguePair(items, item);
-          else if (entry.anchor.kind === "dialogue-depth") {
-            if (insert.tag === "stm_content" && (insert.depth ?? -1) < 0) continue;
+          else if (entry.anchor.kind === "tailSlot") {
+            const tailIndex = slotItem ? items.indexOf(slotItem) : items.length;
+            if (insert.tag === "stm_content") {
+              const fresh = (item as PromptLayoutItem)[STM_TAIL_SLOT];
+              if (!fresh && (insert.depth ?? -1) < 0) continue;
+              const depthIndex =
+                (insert.depth ?? -1) < 0 ? tailIndex : resolveDialogueDepthIndex(items, insert.depth ?? 0);
+              items.splice(fresh ? Math.max(tailIndex, depthIndex) : depthIndex, 0, item);
+            } else items.splice(tailIndex, 0, item);
+          } else if (entry.anchor.kind === "dialogue-depth") {
             insertAtDialogueDepth(items, item, insert.depth ?? 0);
           } else if (entry.anchor.kind === "append") items.push(item);
         }
       }
     }
   }
+  if (!messagePosition) {
+    for (let index = 0; index < items.length; index++) {
+      const item = items[index] as PromptLayoutItem;
+      if (item === prefixEnd || item[CACHEABLE_PREFIX_END]) {
+        const copy = { ...item };
+        delete copy[CACHEABLE_PREFIX_END];
+        if (item === prefixEnd) copy[CACHEABLE_PREFIX_END] = true;
+        items[index] = copy;
+      }
+    }
+  }
+}
+
+export function speakerTurnStartIndexes(items: StructuredContextItem[]): number[] {
+  const starts: number[] = [];
+  let previous: StructuredContextItem["sender"];
+  for (const [index, item] of items.entries()) {
+    if (item.metadataTag !== ContextItemTag.DIALOGUE_HISTORY || !item.sender) continue;
+    if (item.sender.name !== previous?.name || item.sender.type !== previous?.type) starts.push(index);
+    previous = item.sender;
+  }
+  return starts;
+}
+
+function rewindHistoryInserts(items: StructuredContextItem[], index: number): number {
+  while (index > 0) {
+    const previous = items[index - 1];
+    if (
+      previous.sender ||
+      (previous.metadataTag !== ContextItemTag.DIALOGUE_HISTORY &&
+        previous.metadataTag !== ContextItemTag.CONTEXT_NOTE_INJECTION)
+    )
+      break;
+    index--;
+  }
+  return index;
+}
+
+function resolveTailSlotIndex(items: StructuredContextItem[]): number {
+  const starts = speakerTurnStartIndexes(items);
+  if (starts.length >= TAIL_SLOT_SPEAKER_TURNS) {
+    return rewindHistoryInserts(items, starts[starts.length - TAIL_SLOT_SPEAKER_TURNS]);
+  }
+  let index = starts.length > 0 ? rewindHistoryInserts(items, starts[0]) : items.length;
+  let remaining = TAIL_SLOT_SPEAKER_TURNS - starts.length;
+  while (remaining > 0 && index > 0 && items[index - 1].metadataTag === ContextItemTag.DIALOGUE_SAMPLE) {
+    index--;
+    remaining--;
+  }
+  return index;
+}
+
+/** Returns the last item above the tail slot, marked even when the slot is empty, or undefined when no item precedes it, without recounting speaker turns. */
+export function getCacheablePrefixBoundary(items: StructuredContextItem[]): StructuredContextItem | undefined {
+  return items.find((item) => (item as PromptLayoutItem)[CACHEABLE_PREFIX_END]);
 }
 
 export function insertBeforeLatestDialoguePair(
@@ -285,9 +404,12 @@ export function insertAtDialogueDepth(
   nudge: StructuredContextItem,
   depth: number,
 ): void {
+  items.splice(resolveDialogueDepthIndex(items, depth), 0, nudge);
+}
+
+function resolveDialogueDepthIndex(items: StructuredContextItem[], depth: number): number {
   if (depth <= 0) {
-    items.push(nudge);
-    return;
+    return items.length;
   }
   let found = 0;
   let lastFoundIndex = -1;
@@ -296,15 +418,10 @@ export function insertAtDialogueDepth(
       found++;
       lastFoundIndex = i;
       if (found === depth) {
-        items.splice(i, 0, nudge);
-        return;
+        return i;
       }
     }
   }
 
-  if (lastFoundIndex !== -1) {
-    items.splice(lastFoundIndex, 0, nudge);
-  } else {
-    items.push(nudge);
-  }
+  return lastFoundIndex !== -1 ? lastFoundIndex : items.length;
 }

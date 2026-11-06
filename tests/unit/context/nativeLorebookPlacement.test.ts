@@ -1,3 +1,4 @@
+import { applyPromptLayoutInserts } from "@/utils/text/context/promptLayout";
 import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import type { Client } from "discord.js";
 import * as realPersonaSprites from "@/utils/text/context/personaSprites";
@@ -120,7 +121,7 @@ const messageHistory: SimplifiedMessageForContext[] = [
 ];
 
 describe("native lorebook placement", () => {
-  it("places activated lore after documents and before dialogue history", async () => {
+  it("keeps constant lore in system content and activated lore before documents in the tail slot", async () => {
     loadSpy?.mockResolvedValue([
       toRow(
         input({
@@ -171,6 +172,7 @@ describe("native lorebook placement", () => {
     });
 
     expect(loadSpy).toHaveBeenCalledWith(SERVER_ID, LINEAGE_ID);
+    applyPromptLayoutInserts(result.contextItems, []);
     const tags = result.contextItems.map((item) => item.metadataTag);
     const documentsIndex = tags.indexOf(ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS);
     const beforeIndex = tags.indexOf(ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE);
@@ -178,9 +180,11 @@ describe("native lorebook placement", () => {
     const historyIndex = tags.indexOf(ContextItemTag.DIALOGUE_HISTORY);
 
     expect(documentsIndex).toBeGreaterThanOrEqual(0);
-    expect(beforeIndex).toBe(documentsIndex + 1);
-    expect(afterIndex).toBe(beforeIndex + 1);
-    expect(historyIndex).toBeGreaterThan(afterIndex);
+    expect(beforeIndex).toBeLessThan(documentsIndex);
+    expect(afterIndex).toBeLessThan(beforeIndex);
+    expect(historyIndex).toBeGreaterThan(documentsIndex);
+    expect(result.contextItems[beforeIndex].role).toBe("user");
+    expect(result.contextItems[afterIndex].role).toBe("system");
     expect(documentsIndex).toBeGreaterThan(tags.indexOf(ContextItemTag.SYSTEM_PERSONA_PROMPT));
   });
 });
