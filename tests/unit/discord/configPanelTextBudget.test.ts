@@ -402,6 +402,7 @@ function makeExplicitSlotView(
   speechActiveIndex: number,
 ): ConfigSwitchModelsView {
   const sttEndpoints: ConfigCapabilityEndpoint[] = Array.from({ length: endpointCount }, (_unused, index) => ({
+    kind: "custom-endpoint",
     id: index + 1,
     capability: "transcription",
     label: `stt-endpoint-${index + 1}`,

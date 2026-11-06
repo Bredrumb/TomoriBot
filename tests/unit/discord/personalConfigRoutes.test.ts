@@ -246,6 +246,7 @@ function makeSpotlight(
 const EMPTY_ROUTING_ROWS: Record<PersonalConfigManagedCapability, PersonalConfigRoutingRow> = {
   speech_design: { capability: "speech_design", activeModelName: null, storedProvider: null, storedModelName: null },
   speech_clone: { capability: "speech_clone", activeModelName: null, storedProvider: null, storedModelName: null },
+  transcription: { capability: "transcription", activeModelName: null, storedProvider: null, storedModelName: null },
   text: { capability: "text", activeModelName: null, storedProvider: null, storedModelName: null },
   vision: { capability: "vision", activeModelName: null, storedProvider: null, storedModelName: null },
   embedding: { capability: "embedding", activeModelName: null, storedProvider: null, storedModelName: null },
@@ -257,6 +258,7 @@ const EMPTY_ROUTING_ROWS: Record<PersonalConfigManagedCapability, PersonalConfig
 const EMPTY_CAPABILITY_PROVIDERS: Record<PersonalConfigManagedCapability, string[]> = {
   speech_design: [],
   speech_clone: [],
+  transcription: [],
   text: [],
   vision: [],
   embedding: [],
@@ -492,6 +494,12 @@ function makeDependencies(
           storedProvider: null,
           storedModelName: null,
         },
+        transcription: {
+          capability: "transcription",
+          activeModelName: null,
+          storedProvider: null,
+          storedModelName: null,
+        },
         text: {
           capability: "text",
           activeModelName: "Claude 3.5 Sonnet",
@@ -533,6 +541,7 @@ function makeDependencies(
       eligibleProvidersForCapability: {
         speech_design: [],
         speech_clone: [],
+        transcription: [],
         text: ["openrouter"],
         vision: ["openrouter"],
         embedding: ["openrouter"],
@@ -2253,6 +2262,12 @@ describe("Models panel rendering", () => {
             storedProvider: null,
             storedModelName: null,
           },
+          transcription: {
+            capability: "transcription",
+            activeModelName: null,
+            storedProvider: null,
+            storedModelName: null,
+          },
           text: {
             capability: "text",
             activeModelName: "Claude 3.5 Sonnet",
@@ -2294,6 +2309,7 @@ describe("Models panel rendering", () => {
         eligibleProvidersForCapability: {
           speech_design: [],
           speech_clone: [],
+          transcription: [],
           text: ["openrouter"],
           vision: ["openrouter"],
           embedding: ["openrouter"],
@@ -2315,7 +2331,7 @@ describe("Models panel rendering", () => {
     const routingControls = components.filter((component) =>
       component.customId?.includes(":model-provider-select:en-US:"),
     );
-    expect(routingControls).toHaveLength(8);
+    expect(routingControls).toHaveLength(9);
     expect(routingControls.map((component) => component.customId?.split(":").at(-1))).toEqual([
       "text",
       "vision",
@@ -2325,6 +2341,7 @@ describe("Models panel rendering", () => {
       "video",
       "speech_design",
       "speech_clone",
+      "transcription",
     ]);
     expect(routingControls.map((component) => component.placeholder)).toEqual([
       "Text: Claude 3.5 Sonnet (OpenRouter)",
@@ -2335,6 +2352,7 @@ describe("Models panel rendering", () => {
       "Video: Using Server Default",
       `${localizedCopy("en-US", "commands.config.panel.capability_tts_design")}: ${localizedCopy("en-US", "commands.personal.config.override_status_server_default")}`,
       `${localizedCopy("en-US", "commands.config.panel.capability_tts_clone")}: ${localizedCopy("en-US", "commands.personal.config.override_status_server_default")}`,
+      `${localizedCopy("en-US", "commands.config.panel.capability_stt")}: ${localizedCopy("en-US", "commands.personal.config.override_status_server_default")}`,
     ]);
     expect(routingControls.every((component) => component.placeholder && component.placeholder.length <= 150)).toBe(
       true,
@@ -2383,11 +2401,18 @@ describe("Models panel rendering", () => {
             storedProvider: null,
             storedModelName: null,
           },
+          transcription: {
+            capability: "transcription",
+            activeModelName: null,
+            storedProvider: null,
+            storedModelName: null,
+          },
         } as unknown as Record<PersonalConfigManagedCapability, PersonalConfigRoutingRow>,
         availableCapabilities: ["text"],
         eligibleProvidersForCapability: {
           speech_design: [],
           speech_clone: [],
+          transcription: [],
           text: ["openrouter"],
         } as unknown as Record<PersonalConfigManagedCapability, string[]>,
         parametersProviders: ["openrouter"],
@@ -2602,11 +2627,18 @@ describe("Models panel rendering", () => {
             storedProvider: null,
             storedModelName: null,
           },
+          transcription: {
+            capability: "transcription",
+            activeModelName: null,
+            storedProvider: null,
+            storedModelName: null,
+          },
         } as unknown as Record<PersonalConfigManagedCapability, PersonalConfigRoutingRow>,
         availableCapabilities: ["text"],
         eligibleProvidersForCapability: {
           speech_design: [],
           speech_clone: [],
+          transcription: [],
           text: ["openrouter"],
         } as unknown as Record<PersonalConfigManagedCapability, string[]>,
         parametersProviders: ["openrouter"],
@@ -2980,6 +3012,12 @@ describe("Range pagination workflow", () => {
             },
             speech_clone: {
               capability: "speech_clone",
+              activeModelName: null,
+              storedProvider: null,
+              storedModelName: null,
+            },
+            transcription: {
+              capability: "transcription",
               activeModelName: null,
               storedProvider: null,
               storedModelName: null,
@@ -3607,8 +3645,8 @@ describe("Quick-Toggle modal structure and routing copy", () => {
     const component = modal.components[0]?.component;
     expect(component?.type).toBe(22);
     expect(component?.min_values).toBe(0);
-    expect(component?.max_values).toBe(8);
-    expect(component?.options).toHaveLength(8);
+    expect(component?.max_values).toBe(9);
+    expect(component?.options).toHaveLength(9);
 
     const values = component?.options.map((opt: { value: string }) => opt.value);
     expect(values).toEqual([
@@ -3620,6 +3658,7 @@ describe("Quick-Toggle modal structure and routing copy", () => {
       "video",
       "speech_design",
       "speech_clone",
+      "transcription",
     ]);
 
     const labels = component?.options.map((opt: { label: string }) => opt.label);
@@ -3633,6 +3672,7 @@ describe("Quick-Toggle modal structure and routing copy", () => {
         "commands.personal.config.routing_video",
         "commands.config.panel.capability_tts_design",
         "commands.config.panel.capability_tts_clone",
+        "commands.config.panel.capability_stt",
       ].map((key) => localizedCopy("en-US", key)),
     );
 
@@ -4481,6 +4521,12 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
             storedProvider: null,
             storedModelName: null,
           },
+          transcription: {
+            capability: "transcription",
+            activeModelName: null,
+            storedProvider: null,
+            storedModelName: null,
+          },
           text: {
             capability: "text",
             activeModelName: "Claude 3.5 Sonnet",
@@ -4497,6 +4543,7 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
         eligibleProvidersForCapability: {
           speech_design: [],
           speech_clone: [],
+          transcription: [],
           text: ["openrouter"],
           vision: [],
           embedding: [],

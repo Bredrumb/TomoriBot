@@ -6,7 +6,7 @@ import { getDiffusionModelById } from "@/utils/image/naiDiffusionModels";
 import { getQuotaConfig } from "@/utils/quota/imageQuotaManager";
 import { getTextQuotaConfig } from "@/utils/quota/textQuotaManager";
 import { getVideoQuotaConfig } from "@/utils/quota/videoQuotaManager";
-import { resolveSpeechTargets, resolveActiveTranscriptionEndpoint } from "@/utils/provider/speechEndpointResolver";
+import { resolveSpeechTargets, resolveTranscriptionTargets } from "@/utils/provider/speechEndpointResolver";
 import { formatLlmDisplayLabel } from "@/utils/provider/modelDisplay";
 import { resolveCustomEndpointForProvider } from "@/utils/provider/customEndpointService";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
@@ -54,7 +54,7 @@ export async function buildServerModelPages(
     config.video_model_id ? loadVideoModelById(config.video_model_id) : Promise.resolve(null),
     config.nai_diffusion_model_id ? getDiffusionModelById(config.nai_diffusion_model_id) : Promise.resolve(null),
     resolveSpeechTargets(tomoriState.server_id),
-    resolveActiveTranscriptionEndpoint(tomoriState.server_id),
+    resolveTranscriptionTargets(tomoriState.server_id).then((targets) => targets[0] ?? null),
     tomoriState.vision_llm
       ? resolveCustomEndpointForProvider(
           tomoriState.vision_llm.llm_provider.toLowerCase(),
@@ -104,7 +104,9 @@ export async function buildServerModelPages(
       : localizer(locale, "commands.choices.none");
   });
   const transcriptionModelValue = transcriptionModel
-    ? `${transcriptionModel.endpoint.model_name || transcriptionModel.endpoint.label} (${transcriptionModel.endpoint.api_style})`
+    ? transcriptionModel.kind === "hosted-model"
+      ? `${transcriptionModel.model.codename} (${getProviderDisplayName(transcriptionModel.model.provider)})`
+      : `${transcriptionModel.endpoint.model_name || transcriptionModel.endpoint.label} (${transcriptionModel.endpoint.api_style})`
     : localizer(locale, "commands.choices.none");
   const customEndpointConfiguredValue = formatBooleanLocalized(!!config.custom_endpoint_url, locale);
   const naiDiffusionModelValue = naiDiffusionModel

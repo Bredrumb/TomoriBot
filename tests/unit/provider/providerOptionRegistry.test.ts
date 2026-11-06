@@ -126,6 +126,7 @@ scopedMock.module("@/utils/db/repositories/LlmModelRepository", () => ({
     loadAvailableVideoGenerationModels: async () => [],
     loadAvailableDecisionModels: async () => [],
     loadAvailableSpeechModels: async () => [],
+    loadAvailableTranscriptionModels: async () => [],
   }),
 }));
 

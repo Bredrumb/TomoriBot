@@ -85,6 +85,31 @@ function buildSpeechBody(request: OpenRouterSpeechRequest): Record<string, unkno
   };
 }
 
+/** Classifies a failed OpenRouter audio response, keeping a spend-limit refusal as the cause. */
+export async function throwOpenRouterAudioError(
+  response: Response,
+  apiKey: string,
+  signal: AbortSignal,
+): Promise<never> {
+  const rawBody = await readBoundedResponse(response, HOSTED_SPEECH_LIMITS.metadataBytes, signal).then(
+    (buffer) => buffer.toString("utf8"),
+    () => undefined,
+  );
+  const body = rawBody === undefined ? undefined : speechErrorBody(rawBody, apiKey);
+  const limit = rawBody === undefined ? null : readOpenRouterLimitError(response.status, response.headers, rawBody);
+  try {
+    checkSpeechStatus(response, body);
+  } catch (error) {
+    if (limit && error instanceof HostedSpeechError)
+      throw new HostedSpeechError(error.kind, error.providerStatus, error.providerBody, {
+        cause: limit,
+        code: error.providerCode,
+      });
+    throw error;
+  }
+  throw new HostedSpeechError("provider_error", response.status, body);
+}
+
 async function synthesizeSpeech(request: OpenRouterSpeechRequest, hold?: ProviderRequestHold): Promise<Buffer> {
   const spec = findOpenRouterSpeechModel(request.model);
   if (!spec || spec.shape !== request.shape) throw new HostedSpeechError("invalid_request");
@@ -115,22 +140,7 @@ async function synthesizeSpeech(request: OpenRouterSpeechRequest, hold?: Provide
   if (generationId && /^[a-zA-Z0-9_-]{1,200}$/.test(generationId)) operation.generationId = generationId;
   if (!response.ok) {
     hold?.reportCost(0);
-    const rawBody = await readBoundedResponse(response, HOSTED_SPEECH_LIMITS.metadataBytes, request.signal).then(
-      (buffer) => buffer.toString("utf8"),
-      () => undefined,
-    );
-    const body = rawBody === undefined ? undefined : speechErrorBody(rawBody, request.apiKey);
-    const limit = rawBody === undefined ? null : readOpenRouterLimitError(response.status, response.headers, rawBody);
-    try {
-      checkSpeechStatus(response, body);
-    } catch (error) {
-      if (limit && error instanceof HostedSpeechError)
-        throw new HostedSpeechError(error.kind, error.providerStatus, error.providerBody, {
-          cause: limit,
-          code: error.providerCode,
-        });
-      throw error;
-    }
+    await throwOpenRouterAudioError(response, request.apiKey, request.signal);
   }
   if (response.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !== "audio/mpeg") {
     await response.body?.cancel();

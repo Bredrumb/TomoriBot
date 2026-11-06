@@ -11,6 +11,7 @@ import type {
   LlmInput,
   ModelSection,
   SpeechInput,
+  TranscriptionInput,
   VideoInput,
 } from "./types";
 
@@ -4710,6 +4711,35 @@ export const speechSections: ModelSection<SpeechInput>[] = [
         voiceMode: "clone",
         desc: "Free Fish S2.1 Pro voice cloning when available.",
         i18n: { ja: "利用可能な場合に使える無料版 Fish S2.1 Pro の音声クローン。" },
+      },
+    ],
+  },
+];
+
+export const transcriptionSections: ModelSection<TranscriptionInput>[] = [
+  {
+    comment: "Voice message transcription",
+    rows: [
+      {
+        provider: "google",
+        codename: "gemini-3.5-transcribe",
+        isDefault: true,
+        desc: "Voice message transcription with Gemini 3.5 Transcribe.",
+        i18n: { ja: "Gemini 3.5 Transcribe によるボイスメッセージの文字起こし。" },
+      },
+      {
+        provider: "vertex",
+        codename: "gemini-3.5-transcribe",
+        isDefault: true,
+        desc: "Voice message transcription with Vertex Gemini 3.5 Transcribe.",
+        i18n: { ja: "Vertex Gemini 3.5 Transcribe によるボイスメッセージの文字起こし。" },
+      },
+      {
+        provider: "openrouter",
+        codename: "openai/whisper-large-v3-turbo",
+        isDefault: true,
+        desc: "Voice message transcription with Whisper Large v3 Turbo, billed per second of audio.",
+        i18n: { ja: "Whisper Large v3 Turbo によるボイスメッセージの文字起こし。音声1秒ごとに課金。" },
       },
     ],
   },

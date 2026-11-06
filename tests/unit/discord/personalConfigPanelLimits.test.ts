@@ -65,6 +65,7 @@ function makeModelDisplayInfo(fallbackCount = 2, providerCount = 1): PersonalCon
   const routingRows = {
     speech_design: { capability: "speech_design", activeModelName: null, storedProvider: null, storedModelName: null },
     speech_clone: { capability: "speech_clone", activeModelName: null, storedProvider: null, storedModelName: null },
+    transcription: { capability: "transcription", activeModelName: null, storedProvider: null, storedModelName: null },
     text: { ...routingRow, capability: "text" as const },
     vision: { ...routingRow, capability: "vision" as const, activeModelName: "GPT-4o" },
     embedding: { ...routingRow, capability: "embedding" as const, activeModelName: "text-embedding-3" },
@@ -87,6 +88,7 @@ function makeModelDisplayInfo(fallbackCount = 2, providerCount = 1): PersonalCon
     eligibleProvidersForCapability: {
       speech_design: [],
       speech_clone: [],
+      transcription: [],
       text: makeProviders("provider_text"),
       vision: makeProviders("provider_vision"),
       embedding: makeProviders("provider_embedding"),

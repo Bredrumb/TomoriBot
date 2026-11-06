@@ -7,7 +7,12 @@ import { findProviderOption } from "@/utils/provider/providerOptionRegistry";
 import type { VoiceSourceMode } from "@/utils/speech/voiceSourceCapabilities";
 import { createHash } from "node:crypto";
 import type { CustomEndpointRow } from "@/types/db/schema";
-import { loadHostedSpeechSelection, type HostedSpeechSelection } from "@/utils/db/repositories/SpeechRepository";
+import {
+  loadHostedSpeechSelection,
+  loadHostedTranscriptionSelections,
+  type HostedSpeechSelection,
+  type HostedTranscriptionSelection,
+} from "@/utils/db/repositories/SpeechRepository";
 import { log } from "@/utils/misc/logger";
 import { buildCustomProviderName } from "@/utils/provider/customProviderUtils";
 import { decryptApiKey } from "@/utils/security/crypto";
@@ -135,12 +140,45 @@ async function resolveActiveSpeechEndpoint(
   return resolveActiveEndpointByCapability(serverId, mode);
 }
 
+export type TranscriptionTarget =
+  | (SpeechEndpointResult & { kind: "custom-endpoint" })
+  | (Omit<HostedTranscriptionSelection, "apiKey" | "keyVersion"> & { kind: "hosted-model"; apiKey: string });
+
+async function decryptTranscriptionSelection(
+  selection: HostedTranscriptionSelection | null,
+): Promise<TranscriptionTarget | null> {
+  if (!selection) return null;
+  try {
+    const apiKey = await decryptApiKey(selection.apiKey, selection.keyVersion);
+    return apiKey ? { ...selection, kind: "hosted-model", apiKey } : null;
+  } catch (error) {
+    log.warn("SpeechResolver: transcription credential unavailable", error, {
+      metadata: { owner: selection.owner, provider: selection.model.provider },
+    });
+    return null;
+  }
+}
+
 /**
- * Resolves the active transcription (STT) endpoint and credentials for a server.
- * Returns null when no transcription endpoint is registered.
+ * Lists the transcription targets to try in order for one message.
+ *
+ * The sender's enabled personal model comes first. The server's hosted model, or else its default
+ * endpoint, follows unless BYOK mode forbids server keys or the sender turned off falling back to them.
  */
-export async function resolveActiveTranscriptionEndpoint(serverId: number): Promise<SpeechEndpointResult | null> {
-  return resolveActiveEndpointByCapability(serverId, "transcription");
+export async function resolveTranscriptionTargets(serverId: number, userId?: number): Promise<TranscriptionTarget[]> {
+  const [selections, policy] = await Promise.all([
+    loadHostedTranscriptionSelections(serverId, userId),
+    userId === undefined ? null : loadSpeechRoutingPolicy(serverId, userId),
+  ]);
+  const personal = await decryptTranscriptionSelection(selections.personal);
+  if (policy && !policy.serverAllowed) return personal ? [personal] : [];
+  if (personal && policy && !policy.fallbackEnabled) return [personal];
+  const server =
+    (await decryptTranscriptionSelection(selections.server)) ??
+    (await resolveActiveEndpointByCapability(serverId, "transcription").then((endpoint) =>
+      endpoint ? { ...endpoint, kind: "custom-endpoint" as const } : null,
+    ));
+  return [personal, server].filter((target): target is TranscriptionTarget => target !== null);
 }
 
 export async function resolveSpeechTargets(

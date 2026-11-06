@@ -85,6 +85,7 @@ interface WorkspaceConfigProjectionRow {
   speech_clone_endpoint_id: number | null;
   speech_design_model_id: number | null;
   speech_clone_model_id: number | null;
+  transcription_model_id: number | null;
   voice_transcript_chat_mode: boolean;
   chatterbox_turbo_enabled: boolean;
   chatterbox_cfg_weight: number;
@@ -401,6 +402,7 @@ export class ExportRepository {
           ssc.speech_clone_endpoint_id AS speech_clone_endpoint_id,
           ssc.speech_design_model_id AS speech_design_model_id,
           ssc.speech_clone_model_id AS speech_clone_model_id,
+          ssc.transcription_model_id AS transcription_model_id,
           COALESCE(ssc.voice_transcript_chat_mode, true)            AS voice_transcript_chat_mode,
           COALESCE(ssc.chatterbox_turbo_enabled, true)              AS chatterbox_turbo_enabled,
           COALESCE(ssc.chatterbox_cfg_weight, 0.5)                  AS chatterbox_cfg_weight,
@@ -605,6 +607,7 @@ export class ExportRepository {
             speech_clone_endpoint_id: configData.speech_clone_endpoint_id,
             speech_design_model_id: configData.speech_design_model_id,
             speech_clone_model_id: configData.speech_clone_model_id,
+            transcription_model_id: configData.transcription_model_id,
             voice_transcript_chat_mode: configData.voice_transcript_chat_mode,
             chatterbox_turbo_enabled: configData.chatterbox_turbo_enabled,
             chatterbox_cfg_weight: configData.chatterbox_cfg_weight,
@@ -807,6 +810,7 @@ export class ExportRepository {
           ssc.speech_clone_endpoint_id AS speech_clone_endpoint_id,
           ssc.speech_design_model_id AS speech_design_model_id,
           ssc.speech_clone_model_id AS speech_clone_model_id,
+          ssc.transcription_model_id AS transcription_model_id,
           COALESCE(ssc.voice_transcript_chat_mode, true) AS voice_transcript_chat_mode,
           COALESCE(ssc.chatterbox_turbo_enabled, true) AS chatterbox_turbo_enabled,
           COALESCE(ssc.chatterbox_cfg_weight, 0.5) AS chatterbox_cfg_weight,
@@ -978,6 +982,7 @@ export class ExportRepository {
           speech_clone_endpoint_id: configData.speech_clone_endpoint_id,
           speech_design_model_id: configData.speech_design_model_id,
           speech_clone_model_id: configData.speech_clone_model_id,
+          transcription_model_id: configData.transcription_model_id,
           voice_transcript_chat_mode: configData.voice_transcript_chat_mode,
           chatterbox_turbo_enabled: configData.chatterbox_turbo_enabled,
           chatterbox_cfg_weight: configData.chatterbox_cfg_weight,

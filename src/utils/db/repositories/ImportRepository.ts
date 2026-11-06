@@ -277,6 +277,7 @@ const WORKSPACE_SECTION_TABLES: Record<WorkspaceConfigSection, readonly SectionT
         "speech_clone_endpoint_id",
         "speech_design_model_id",
         "speech_clone_model_id",
+        "transcription_model_id",
         "voice_transcript_chat_mode",
         "chatterbox_turbo_enabled",
         "chatterbox_cfg_weight",
@@ -1128,6 +1129,7 @@ class ImportRepository {
         config.speech_clone_endpoint_id !== undefined ||
         config.speech_design_model_id !== undefined ||
         config.speech_clone_model_id !== undefined ||
+        config.transcription_model_id !== undefined ||
         config.voice_transcript_chat_mode !== undefined ||
         config.chatterbox_turbo_enabled !== undefined ||
         config.chatterbox_cfg_weight !== undefined ||
@@ -1144,6 +1146,9 @@ class ImportRepository {
               }),
               ...(config.speech_clone_model_id !== undefined && {
                 speech_clone_model_id: config.speech_clone_model_id,
+              }),
+              ...(config.transcription_model_id !== undefined && {
+                transcription_model_id: config.transcription_model_id,
               }),
               ...(config.voice_transcript_chat_mode !== undefined && {
                 voice_transcript_chat_mode: config.voice_transcript_chat_mode,

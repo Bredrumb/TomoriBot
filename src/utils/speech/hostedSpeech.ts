@@ -16,6 +16,8 @@ export const HOSTED_SPEECH_LIMITS = {
   outputBytes: 10 * 1024 * 1024,
   referenceBytes: 15 * 1024 * 1024,
   transcriptCharacters: 10_000,
+  // An hour of speech transcribes to well under 100 KB, so this bound only stops a runaway body.
+  transcriptResponseBytes: 192 * 1024,
   cleanupTimeoutMs: 10_000,
   metadataBytes: 64 * 1024,
   costTimeoutMs: 5_000,
@@ -48,7 +50,7 @@ export const speechUsageSchema = z.object({
 });
 
 export interface SpeechOperation {
-  operation: "create" | "synthesize" | "delete" | "lookup" | "cost";
+  operation: "create" | "synthesize" | "delete" | "lookup" | "cost" | "transcribe";
   success: boolean;
   status?: number;
   usage?: z.infer<typeof speechUsageSchema>;
@@ -89,6 +91,30 @@ export class HostedSpeechError extends Error {
     if (this.providerStatus === undefined) return undefined;
     return this.providerBody ? `HTTP ${this.providerStatus}: ${this.providerBody}` : `HTTP ${this.providerStatus}`;
   }
+}
+
+const EXPECTED_HOSTED_SPEECH_KINDS: ReadonlySet<HostedSpeechErrorKind> = new Set([
+  "content_blocked",
+  "cancelled",
+  "timeout",
+  "script_too_long",
+  "authentication",
+  "quota",
+]);
+const TRANSIENT_HOSTED_SPEECH_STATUSES = new Set([500, 502, 503, 504]);
+
+/** Refusals the key owner or the provider's own availability explains, which are a metric and a warning. */
+export function isExpectedHostedSpeechFailure(
+  kind: HostedSpeechErrorKind,
+  providerStatus: number | undefined,
+): boolean {
+  return (
+    EXPECTED_HOSTED_SPEECH_KINDS.has(kind) ||
+    (kind === "provider_error" &&
+      providerStatus !== undefined &&
+      TRANSIENT_HOSTED_SPEECH_STATUSES.has(providerStatus)) ||
+    (kind === "invalid_request" && providerStatus === undefined)
+  );
 }
 
 /** Provider error bodies can echo the request's credential in a form pattern redaction misses. */

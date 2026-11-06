@@ -90,6 +90,7 @@ const BASE_CONFIG: AssembledServerConfig = {
   speech_clone_endpoint_id: null,
   speech_design_model_id: null,
   speech_clone_model_id: null,
+  transcription_model_id: null,
   voice_transcript_chat_mode: true,
   chatterbox_turbo_enabled: true,
   chatterbox_cfg_weight: 0.5,

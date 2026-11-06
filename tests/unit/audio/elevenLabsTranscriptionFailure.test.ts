@@ -29,10 +29,13 @@ describe("ElevenLabs transcription failure reporting", () => {
   beforeEach(() => {
     detail = { status: "synthetic_outage", message: `rejected ${API_KEY}` };
     spies.push(
-      spyOn(speechEndpointResolver, "resolveActiveTranscriptionEndpoint").mockResolvedValue({
-        endpoint: { api_style: "elevenlabs-transcription", requires_auth: true } as CustomEndpointRow,
-        apiKey: API_KEY,
-      }),
+      spyOn(speechEndpointResolver, "resolveTranscriptionTargets").mockResolvedValue([
+        {
+          kind: "custom-endpoint",
+          endpoint: { api_style: "elevenlabs-transcription", requires_auth: true } as CustomEndpointRow,
+          apiKey: API_KEY,
+        },
+      ]),
       spyOn(safeDownloadModule, "safeDownload").mockResolvedValue({ success: true, buffer: Buffer.from("ogg") }),
       spyOn(log, "warn").mockImplementation(() => undefined),
       stubGlobalFetch(() => Response.json({ detail }, { status })),

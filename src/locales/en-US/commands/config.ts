@@ -1061,6 +1061,8 @@ export default {
       endpoint_activated_heading: `Endpoint Activated`,
       endpoint_activated_detail: `**{endpoint}** is now active for this capability.`,
       endpoint_already_active_detail: `**{endpoint}** is already active. Nothing changed.`,
+      stt_hosted_option_description: `Hosted model from {provider}`,
+      stt_hosted_option_active_description: `[active] Hosted model from {provider}`,
       endpoint_source_changed_direction: `**{endpoint}** is now active. The speech source changed, so reassign voices if needed.`,
       speech_capability_disabled_direction:
         "Speech messages are disabled. Enable them under Plugins > Available Tools.",

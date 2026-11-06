@@ -117,7 +117,7 @@ let speechTargets: Awaited<ReturnType<typeof realSpeechEndpointResolver.resolveS
 scopedMock.module("@/utils/provider/speechEndpointResolver", () => ({
   ...realSpeechEndpointResolver,
   resolveSpeechTargets: async () => speechTargets,
-  resolveActiveTranscriptionEndpoint: async () => null,
+  resolveTranscriptionTargets: async () => [],
 }));
 scopedMock.module("@/utils/provider/customEndpointService", () => ({
   ...realCustomEndpointService,

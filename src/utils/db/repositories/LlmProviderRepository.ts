@@ -2175,7 +2175,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
         INSERT INTO user_saved_provider_configs (
           user_id, provider, api_key, key_version,
           llm_id, diffusion_model_id, embedding_model_id,
-          video_model_id, speech_design_model_id, speech_clone_model_id,
+          video_model_id, speech_design_model_id, speech_clone_model_id, transcription_model_id,
           nai_diffusion_model_id, vision_llm_id, nai_preset_name,
           thinking_level, enabled_capabilities, assigned_capabilities,
           llm_temperature, llm_top_p, llm_top_k,
@@ -2185,7 +2185,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
         ) VALUES (
           ${userId}, ${provider}, ${config.api_key}, ${config.key_version},
           ${config.llm_id}, ${config.diffusion_model_id}, ${config.embedding_model_id},
-          ${config.video_model_id ?? null}, ${config.speech_design_model_id ?? null}, ${config.speech_clone_model_id ?? null},
+          ${config.video_model_id ?? null}, ${config.speech_design_model_id ?? null}, ${config.speech_clone_model_id ?? null}, ${config.transcription_model_id ?? null},
           ${config.nai_diffusion_model_id}, ${config.vision_llm_id ?? null}, ${config.nai_preset_name},
           ${config.thinking_level}, ${enabledCapabilitiesLiteral}::text[], ${assignedCapabilitiesLiteral}::text[],
           ${config.llm_temperature ?? null}, ${config.llm_top_p ?? null}, ${config.llm_top_k ?? null},
@@ -2202,6 +2202,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
           video_model_id = EXCLUDED.video_model_id,
           speech_design_model_id = EXCLUDED.speech_design_model_id,
           speech_clone_model_id = EXCLUDED.speech_clone_model_id,
+          transcription_model_id = EXCLUDED.transcription_model_id,
           nai_diffusion_model_id = EXCLUDED.nai_diffusion_model_id,
           vision_llm_id = EXCLUDED.vision_llm_id,
           nai_preset_name = EXCLUDED.nai_preset_name,
@@ -2764,6 +2765,9 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
             `;
 
       const ok = result.count > 0;
+      if (ok && serverId !== null && params.capability === "transcription") {
+        await sql`UPDATE server_speech_configs SET transcription_model_id = NULL WHERE server_id = ${serverId}`;
+      }
       if (ok && serverId !== null && options.serverDiscId) invalidateTomoriStateCache(options.serverDiscId);
       return ok;
     } catch (error) {

@@ -7,7 +7,12 @@ import {
 import { loadDecisionModelsForScope } from "@/providers/utils/providerFeatureExecutors";
 import { loadProviderModelChoices, type ProviderModelChoice } from "@/utils/provider/modelCatalog";
 import { validateOpenRouterSpeechModel } from "@/utils/cache/openrouterSpeechModelCache";
-import { setHostedSpeechSelection, setSpeechEndpointSelection } from "@/utils/db/repositories/SpeechRepository";
+import { validateOpenRouterTranscriptionModel } from "@/utils/cache/openrouterTranscriptionModelCache";
+import {
+  setHostedSpeechSelection,
+  setHostedTranscriptionSelection,
+  setSpeechEndpointSelection,
+} from "@/utils/db/repositories/SpeechRepository";
 import { supportsSpeechMode, type VoiceSourceMode } from "@/utils/speech/voiceSourceCapabilities";
 import type {
   CustomEndpointRow,
@@ -70,7 +75,7 @@ import {
   type ProviderOptionModelViewCapability,
   type ProviderOptionScope,
 } from "@/utils/provider/providerOptionRegistry";
-import { getStaticProviderInfo } from "@/utils/provider/providerInfoRegistry";
+import { getProviderDisplayName, getStaticProviderInfo } from "@/utils/provider/providerInfoRegistry";
 import { getNovelAIModelAccessError } from "@/providers/novelai/modelAccess";
 import { getNovelAIProfile } from "@/providers/novelai/modelProfiles";
 import { decryptApiKey } from "@/utils/security/crypto";
@@ -374,6 +379,10 @@ export interface ConfigModelOperations {
     tomoriState: TomoriState;
     serverDiscId: string;
     customEndpointId: number;
+  }): Promise<ActivateWorkspaceEndpointResult>;
+  activateHostedTranscriptionModel(input: {
+    tomoriState: TomoriState;
+    transcriptionModelId: number;
   }): Promise<ActivateWorkspaceEndpointResult>;
   setProviderParameters(input: {
     tomoriState: TomoriState;
@@ -832,6 +841,32 @@ export const configModelOperations: ConfigModelOperations = {
       capability: "transcription",
       customEndpointId,
     });
+  },
+
+  async activateHostedTranscriptionModel({ tomoriState, transcriptionModelId }) {
+    const owner = { kind: "server" as const, ownerId: tomoriState.server_id };
+    const model = await llmModelRepo.loadTranscriptionModelById(transcriptionModelId);
+    if (!model) return { status: "not-found" };
+    const [providers, available] = await Promise.all([
+      loadSavedProvidersForCapability(tomoriState.server_id, "transcription"),
+      llmModelRepo.loadAvailableTranscriptionModels(model.provider, owner),
+    ]);
+    if (
+      !providers.some((row) => row.provider === model.provider) ||
+      !available.some((entry) => entry.transcription_model_id === transcriptionModelId)
+    ) {
+      return { status: "not-found" };
+    }
+    const identity = `${model.codename} (${getProviderDisplayName(model.provider)})`;
+    if (tomoriState.config.transcription_model_id === transcriptionModelId)
+      return { status: "already-active", identity };
+    // The OpenRouter catalogue can drop a seeded model, so the live listing is rechecked before the write.
+    if (model.provider === "openrouter" && !(await validateOpenRouterTranscriptionModel(model.codename))) {
+      return { status: "not-found" };
+    }
+    return (await setHostedTranscriptionSelection(owner, transcriptionModelId))
+      ? { status: "success", identity, sourceChanged: false }
+      : { status: "write-failed" };
   },
 
   async setProviderParameters({ tomoriState, serverDiscId, provider, patch }) {

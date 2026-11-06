@@ -583,7 +583,12 @@ async function evaluateAudioTranscriptionAdmission(args: {
     return null;
   }
 
-  const transcriptionResult = await transcribeMessageAudioAttachment(message, earlyTomoriState.server_id);
+  const sender = await getCachedUserRow(message.author.id);
+  const transcriptionResult = await transcribeMessageAudioAttachment(
+    message,
+    earlyTomoriState.server_id,
+    sender?.user_id ?? undefined,
+  );
   if (!transcriptionResult.hasAudio) {
     return null;
   }

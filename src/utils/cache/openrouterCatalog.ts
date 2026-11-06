@@ -106,6 +106,7 @@ export function createOpenRouterCatalog<TEntry>(source: OpenRouterCatalogSource<
       source.label === "decision" ||
       source.label === "video" ||
       source.label === "speech" ||
+      source.label === "transcription" ||
       source.label === "image pricing";
     const response = await fetch(source.url, {
       ...(bounded ? { signal: AbortSignal.timeout(30_000) } : {}),

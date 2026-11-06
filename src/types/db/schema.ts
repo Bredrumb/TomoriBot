@@ -343,6 +343,17 @@ export const speechModelSchema = z.object({
 });
 export type SpeechModelRow = z.infer<typeof speechModelSchema>;
 
+export const transcriptionModelSchema = z.object({
+  transcription_model_id: z.number().int(),
+  provider: z.enum(["google", "openrouter", "vertex"]),
+  codename: z.string().min(1),
+  descriptions: z.record(z.string(), z.string()).nullable().default(null),
+  is_default: z.boolean().default(false),
+  is_deprecated: z.boolean().default(false),
+  is_scoped_registration: z.boolean().default(false),
+});
+export type TranscriptionModelRow = z.infer<typeof transcriptionModelSchema>;
+
 export const speechVoiceBindingSchema = z.object({
   speech_voice_binding_id: z.number().int(),
   persona_id: z.number().int().nullable(),
@@ -943,6 +954,7 @@ const serverSpeechConfigSchema = z.object({
   speech_clone_endpoint_id: z.number().int().nullable().default(null),
   speech_design_model_id: z.number().int().nullable().default(null),
   speech_clone_model_id: z.number().int().nullable().default(null),
+  transcription_model_id: z.number().int().nullable().default(null),
   server_id: z.number().int(),
   voice_transcript_chat_mode: z.boolean().default(true),
   chatterbox_turbo_enabled: z.boolean().default(true),
@@ -1915,6 +1927,7 @@ export const personalProviderCapabilitySchema = z.enum([
   "vision",
   "speech_design",
   "speech_clone",
+  "transcription",
 ]);
 export type PersonalProviderCapability = z.infer<typeof personalProviderCapabilitySchema>;
 
@@ -1935,6 +1948,7 @@ export const userSavedProviderConfigSchema = z.object({
   nai_diffusion_model_id: z.number().nullable(),
   speech_design_model_id: z.number().int().nullable().optional(),
   speech_clone_model_id: z.number().int().nullable().optional(),
+  transcription_model_id: z.number().int().nullable().optional(),
   video_model_id: z.number().nullable().optional(),
   vision_llm_id: z.number().nullable().optional(),
   nai_preset_name: z.string().nullable(),

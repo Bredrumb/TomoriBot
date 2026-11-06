@@ -348,9 +348,13 @@ export type ProviderOptionPersonalCapability =
   | "video"
   | "vision"
   | "speech_design"
-  | "speech_clone";
+  | "speech_clone"
+  | "transcription";
 
-const PERSONAL_CAPABILITY: Record<Exclude<ProviderOptionPersonalCapability, "image_nai">, ProviderOptionCapability> = {
+const PERSONAL_CAPABILITY: Record<
+  Exclude<ProviderOptionPersonalCapability, "image_nai" | "transcription">,
+  ProviderOptionCapability
+> = {
   text: "text",
   embedding: "embedding",
   image: "image",
@@ -363,7 +367,7 @@ const PERSONAL_CAPABILITY: Record<Exclude<ProviderOptionPersonalCapability, "ima
 export function providerOptionCapabilityForPersonal(
   capability: ProviderOptionPersonalCapability,
 ): ProviderOptionCapability | null {
-  return capability === "image_nai" ? null : PERSONAL_CAPABILITY[capability];
+  return capability === "image_nai" || capability === "transcription" ? null : PERSONAL_CAPABILITY[capability];
 }
 
 export function providerOptionOffersPersonalCapability(

@@ -175,6 +175,17 @@ async function loadPersonalCatalogModels(
   locale: string,
 ): Promise<ModelSelectChoice[]> {
   try {
+    if (capability === "transcription") {
+      const models = await llmModelRepo.loadAvailableTranscriptionModels(provider, {
+        kind: "personal",
+        ownerId: userId,
+      });
+      return models.map((model) => ({
+        id: model.transcription_model_id,
+        name: model.codename,
+        isDefault: model.is_default,
+      }));
+    }
     if (capability === "speech_design" || capability === "speech_clone") {
       const models = await llmModelRepo.loadAvailableSpeechModels(provider, { kind: "personal", ownerId: userId });
       const mode = capability === "speech_design" ? "design" : "clone";
@@ -348,6 +359,9 @@ export async function loadPersonalModelDisplayInfo(
           },
         );
         modelName = models.find((model) => model.speech_model_id === id)?.codename ?? null;
+      } else if (cap === "transcription" && row.transcription_model_id) {
+        const m = await llmModelRepo.loadTranscriptionModelById(row.transcription_model_id);
+        modelName = m?.codename ?? null;
       } else if (cap === "text" && row.llm_id) {
         const m = await llmModelRepo.loadById(row.llm_id);
         modelName = m?.llm_codename ?? null;
@@ -416,6 +430,18 @@ export async function loadPersonalModelDisplayInfo(
   ]);
 
   const routingRows: Record<PersonalConfigManagedCapability, PersonalConfigRoutingRow> = {
+    transcription: {
+      capability: "transcription",
+      activeModelName: await resolveCapName(
+        getActivePersonalProviderForCapability(savedProviders, "transcription"),
+        "transcription",
+      ),
+      storedProvider: getStoredPersonalProviderForCapability(savedProviders, "transcription")?.provider ?? null,
+      storedModelName: await resolveCapName(
+        getStoredPersonalProviderForCapability(savedProviders, "transcription"),
+        "transcription",
+      ),
+    },
     speech_design: {
       capability: "speech_design",
       activeModelName: await resolveCapName(
@@ -489,6 +515,7 @@ export async function loadPersonalModelDisplayInfo(
   const eligibleProvidersForCapability: Record<PersonalConfigManagedCapability, string[]> = {
     speech_design: (await loadUserSavedProvidersForCapability(userId, "speech_design")).map((row) => row.provider),
     speech_clone: (await loadUserSavedProvidersForCapability(userId, "speech_clone")).map((row) => row.provider),
+    transcription: (await loadUserSavedProvidersForCapability(userId, "transcription")).map((row) => row.provider),
     text: textProviders.map((p) => p.provider),
     vision: visionProviders.map((p) => p.provider),
     embedding: embeddingProviders.map((p) => p.provider),
@@ -550,6 +577,7 @@ export async function loadPersonalModelDisplayInfo(
       "video",
       "speech_design",
       "speech_clone",
+      "transcription",
     ],
     eligibleProvidersForCapability,
     parametersProviders: textProviderNames,

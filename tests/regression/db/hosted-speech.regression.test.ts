@@ -35,6 +35,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Hosted speech persistence", () => {
   let personalCredentialId: number;
   let foreignServerId: number;
   const migration = path.join(process.cwd(), "src/db/migrations/102_hosted_speech_models.sql");
+  // Replaying 102 restores its older scoped_model_registrations check, so the later 133 must follow it.
+  const transcriptionMigration = path.join(process.cwd(), "src/db/migrations/133_hosted_transcription_models.sql");
   const scope = () => ({ kind: "server" as const, ownerId: refs.serverId });
   const personal = () => ({ kind: "personal" as const, ownerId: refs.userId });
 
@@ -90,6 +92,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Hosted speech persistence", () => {
     expect(fish.some((model) => model.codename === "fish-audio/s2.1-pro-free:free" && !model.is_default)).toBe(true);
     expect(google.some((model) => model.codename === "gemini-3.8-flash-lite-tts" && !model.is_default)).toBe(true);
     await executeTestSqlFile(migration);
+    await executeTestSqlFile(transcriptionMigration);
     for (const userId of [undefined, refs.userId])
       expect(await resolveSpeechTargets(refs.serverId, userId)).toEqual({ design: null, clone: null });
     const personalCredentials = await llmProviderRepo.loadUserSavedProviderConfigs(refs.userId);
@@ -233,6 +236,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Hosted speech persistence", () => {
     expect(state?.config.speech_design_model_id).toBe(googleId);
     expect(state?.config.speech_clone_model_id).toBe(fishId);
     await executeTestSqlFile(migration);
+    await executeTestSqlFile(transcriptionMigration);
     expect((await resolveSpeechTargets(refs.serverId)).clone?.apiKey).toBe("test-server-openrouter-speech");
     const models = {
       design: targets.design?.kind === "hosted-model" ? targets.design.model : null,
@@ -255,6 +259,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Hosted speech persistence", () => {
     expect(targets.design?.endpoint?.custom_endpoint_id).toBe(auto.custom_endpoint_id);
     expect(targets.clone?.endpoint?.custom_endpoint_id).toBe(auto.custom_endpoint_id);
     await executeTestSqlFile(migration);
+    await executeTestSqlFile(transcriptionMigration);
     expect((await resolveSpeechTargets(refs.serverId)).clone?.endpoint?.custom_endpoint_id).toBe(
       auto.custom_endpoint_id,
     );

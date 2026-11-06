@@ -658,11 +658,16 @@ async function handleSwitchModels(context: ConfigModelRouteContext): Promise<boo
 
     const action = await performPanelAction(
       () =>
-        dependencies.modelOperations.activateTranscriptionEndpoint({
-          tomoriState: state,
-          serverDiscId: context.scope.serverDiscId,
-          customEndpointId: endpoint.id,
-        }),
+        endpoint.kind === "hosted-model"
+          ? dependencies.modelOperations.activateHostedTranscriptionModel({
+              tomoriState: state,
+              transcriptionModelId: endpoint.id,
+            })
+          : dependencies.modelOperations.activateTranscriptionEndpoint({
+              tomoriState: state,
+              serverDiscId: context.scope.serverDiscId,
+              customEndpointId: endpoint.id,
+            }),
       () => dependencies.resolveScope(context.interaction, true),
     );
     context.scope = action.state ?? context.scope;
@@ -674,15 +679,28 @@ async function handleSwitchModels(context: ConfigModelRouteContext): Promise<boo
       endpointPage: { capability: "stt", start: Math.floor(selected.position / windowSize) * windowSize },
       receipt:
         result.status === "success"
-          ? receipt(
-              locale,
-              "success",
-              "commands.config.panel.endpoint_activated_heading",
-              "commands.config.panel.endpoint_activated_detail",
-              { endpoint: result.identity },
-            )
+          ? endpoint.kind === "hosted-model"
+            ? receipt(
+                locale,
+                "success",
+                "commands.config.panel.model_updated_heading",
+                "commands.config.panel.model_updated_detail",
+                { model: endpoint.modelLabel, provider: endpoint.label },
+              )
+            : receipt(
+                locale,
+                "success",
+                "commands.config.panel.endpoint_activated_heading",
+                "commands.config.panel.endpoint_activated_detail",
+                { endpoint: result.identity },
+              )
           : result.status === "already-active"
-            ? noChangesReceipt(locale, "commands.config.panel.endpoint_already_active_detail")
+            ? noChangesReceipt(
+                locale,
+                endpoint.kind === "hosted-model"
+                  ? "commands.config.panel.model_already_selected_detail"
+                  : "commands.config.panel.endpoint_already_active_detail",
+              )
             : result.status === "not-found"
               ? staleReceipt(locale)
               : writeFailedReceipt(locale),

@@ -77,6 +77,7 @@ function dependencies(calls: string[]): AddServerProviderDependencies {
       return true;
     },
     activateSpeechDefaults: async () => true,
+    activateTranscriptionDefault: async () => true,
     activateText: async () => {
       calls.push("activate-text");
       return { status: "activated", modelName: "model-one" };

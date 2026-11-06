@@ -156,6 +156,7 @@ export const SERVER_SINGLETON_RESET_TABLES: readonly SingletonResetClassificatio
       "speech_clone_endpoint_id",
       "speech_design_model_id",
       "speech_clone_model_id",
+      "transcription_model_id",
     ],
   },
   {

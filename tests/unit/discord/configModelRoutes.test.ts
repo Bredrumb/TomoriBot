@@ -101,6 +101,7 @@ function makeState({ config, ...overrides }: Record<string, unknown> = {}): Tomo
       speech_clone_endpoint_id: null,
       speech_design_model_id: null,
       speech_clone_model_id: null,
+      transcription_model_id: null,
       llm_id: 1,
       vision_llm_id: null,
       embedding_model_id: null,
@@ -177,6 +178,7 @@ function makeNaiPreset(name: string, target: "kayra" | "erato" = "kayra"): NaiPr
 
 function makeEndpointSlot(count: number, activeIndex = -1): ConfigEndpointSlotView {
   const endpoints: ConfigCapabilityEndpoint[] = Array.from({ length: count }, (_unused, index) => ({
+    kind: "custom-endpoint",
     id: index + 1,
     capability: "transcription",
     label: `stt-endpoint-${index + 1}`,
@@ -1171,6 +1173,7 @@ describe("config models switch page", () => {
   it("keeps every model reachable across the expanded provider page entries", async () => {
     const capabilities = CATALOG_MODEL_CAPABILITIES;
     const models = Array.from({ length: 60 }, (_unused, index) => ({
+      kind: "custom-endpoint",
       id: index + 1,
       name: `model-${index + 1}`,
       description: null,

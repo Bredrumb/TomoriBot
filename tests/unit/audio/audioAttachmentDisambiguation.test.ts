@@ -101,9 +101,7 @@ describe("audioAttachmentDisambiguation", () => {
           created_at: new Date(),
         }),
       );
-      transcriptionEndpointSpy = spyOn(speechEndpointResolver, "resolveActiveTranscriptionEndpoint").mockResolvedValue(
-        null,
-      );
+      transcriptionEndpointSpy = spyOn(speechEndpointResolver, "resolveTranscriptionTargets").mockResolvedValue([]);
     });
 
     afterEach(() => {

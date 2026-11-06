@@ -427,13 +427,21 @@ function buildSwitchModelsBody(input: ConfigModelsPageInput): ComponentInContain
           value: encodeConfigEndpointSelection(visibleStart + offset, fingerprint),
           label: safeSelectOptionText(displayName, 100),
           description: safeSelectOptionText(
-            localizer(
-              locale,
-              endpoint.isActive
-                ? "commands.providers.activate_option_active_description"
-                : "commands.providers.activate_option_description",
-              { capability: endpoint.capability, name: displayName },
-            ),
+            endpoint.kind === "hosted-model"
+              ? localizer(
+                  locale,
+                  endpoint.isActive
+                    ? "commands.config.panel.stt_hosted_option_active_description"
+                    : "commands.config.panel.stt_hosted_option_description",
+                  { provider: endpoint.label },
+                )
+              : localizer(
+                  locale,
+                  endpoint.isActive
+                    ? "commands.providers.activate_option_active_description"
+                    : "commands.providers.activate_option_description",
+                  { capability: endpoint.capability, name: displayName },
+                ),
             100,
           ),
           default: false,

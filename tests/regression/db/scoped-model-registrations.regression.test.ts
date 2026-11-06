@@ -81,7 +81,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Scoped model registrations (Migration D)",
     const definitions = constraints.map((constraint) => constraint.definition).join("\n");
     expect(definitions).toContain("(server_id IS NULL) <> (user_id IS NULL)");
     expect(definitions).toContain(
-      "num_nonnulls(llm_id, embedding_model_id, diffusion_model_id, video_model_id, decision_model_id, speech_model_id) = 1",
+      "num_nonnulls(llm_id, embedding_model_id, diffusion_model_id, video_model_id, decision_model_id, speech_model_id, transcription_model_id) = 1",
     );
     expect(definitions).toContain("FOREIGN KEY (decision_model_id)");
   });
@@ -244,6 +244,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Scoped model registrations (Migration D)",
       await executeMigration("098_decision_models.sql");
       await executeMigration("102_hosted_speech_models.sql");
       await executeMigration("109_openrouter_design_speech_models.sql");
+      await executeMigration("133_hosted_transcription_models.sql");
       await seedModelsFromCatalog(testSql);
     }
     for (const provider of ["google", "openrouter", "vertex"]) {

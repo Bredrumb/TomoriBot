@@ -13,7 +13,7 @@ import {
 } from "@/providers/novelai/modelProfiles";
 import { prunePrimaryFallbackRefs } from "@/utils/provider/fallbackModelIdentity";
 import { writeProviderSpeechSelection } from "@/utils/provider/providerOptionRegistry";
-import { setHostedSpeechSelection } from "@/utils/db/repositories/SpeechRepository";
+import { setHostedSpeechSelection, setHostedTranscriptionSelection } from "@/utils/db/repositories/SpeechRepository";
 
 function sortProviderRows(rows: UserSavedProviderConfigRow[]): UserSavedProviderConfigRow[] {
   return [...rows].sort((left, right) => left.provider.localeCompare(right.provider));
@@ -40,6 +40,8 @@ export function hasConfiguredPersonalModel(
       return row.speech_design_model_id != null;
     case "speech_clone":
       return row.speech_clone_model_id != null;
+    case "transcription":
+      return row.transcription_model_id != null;
   }
 }
 
@@ -219,6 +221,12 @@ export async function assignPersonalCapabilityToProvider(
         setHostedSpeechSelection({ kind: "personal", ownerId: userId }, modelId, mode),
       )
     );
+  }
+
+  if (capability === "transcription") {
+    const row = rows.find((entry) => entry.provider === provider.toLowerCase());
+    const modelId = row ? updater(row).transcription_model_id : null;
+    return modelId != null && setHostedTranscriptionSelection({ kind: "personal", ownerId: userId }, modelId);
   }
 
   let updated = false;

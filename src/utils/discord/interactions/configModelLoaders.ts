@@ -54,6 +54,8 @@ import { localizer, resolveDescription } from "@/utils/text/localizer";
 export type ConfigEndpointModelCapability = "stt";
 
 export interface ConfigCapabilityEndpoint {
+  /** A hosted model's id is a `transcription_models` row, not a custom endpoint. */
+  kind: "custom-endpoint" | "hosted-model";
   id: number;
   capability: "transcription";
   label: string;
@@ -81,8 +83,9 @@ export function normalizeConfigCapabilityEndpoints(
     }
     return [
       {
+        kind: "custom-endpoint" as const,
         id,
-        capability: "transcription",
+        capability: "transcription" as const,
         label: endpoint.label,
         modelLabel: endpoint.model_name ?? endpoint.label,
         apiStyle: endpoint.api_style,
@@ -92,8 +95,30 @@ export function normalizeConfigCapabilityEndpoints(
   });
 }
 
-export const loadConfigCapabilityEndpoints: LoadConfigCapabilityEndpoints = (state) =>
-  llmProviderRepo.loadCustomEndpointsForServer(state.server_id);
+/** Custom transcription endpoints followed by the hosted models the server's saved keys can reach. */
+export const loadConfigCapabilityEndpoints: LoadConfigCapabilityEndpoints = async (state) => {
+  const owner = { kind: "server" as const, ownerId: state.server_id };
+  const [endpoints, providers] = await Promise.all([
+    llmProviderRepo.loadCustomEndpointsForServer(state.server_id),
+    loadSavedProvidersForCapability(state.server_id, "transcription"),
+  ]);
+  const hosted = await Promise.all(
+    providers.map(async ({ provider }) =>
+      (await llmModelRepo.loadAvailableTranscriptionModels(provider, owner)).map(
+        (model): ConfigCapabilityEndpoint => ({
+          kind: "hosted-model",
+          id: model.transcription_model_id,
+          capability: "transcription",
+          label: getProviderDisplayName(provider),
+          modelLabel: model.codename,
+          apiStyle: null,
+          isActive: state.config.transcription_model_id === model.transcription_model_id,
+        }),
+      ),
+    ),
+  );
+  return [...endpoints, ...hosted.flat()];
+};
 
 /** Binds an endpoint choice to its ordered list and the identifying fields of every presented row. */
 export function computeConfigEndpointFingerprint(endpoints: readonly ConfigCapabilityEndpoint[]): string {
@@ -101,6 +126,7 @@ export function computeConfigEndpointFingerprint(endpoints: readonly ConfigCapab
     .update(
       `config-endpoints:stt:${JSON.stringify(
         endpoints.map((endpoint) => ({
+          kind: endpoint.kind,
           id: endpoint.id,
           capability: endpoint.capability,
           label: endpoint.label,
