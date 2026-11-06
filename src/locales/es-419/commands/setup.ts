@@ -89,7 +89,7 @@ Prueba con {model_text_command} para asignar un modelo funcional, o con {provide
       settings_persona_description: `Elige la persona que usaré después de la configuración.`,
       settings_persona_placeholder: `Elige un preajuste de persona...`,
       settings_humanizer_label: `Preajuste de humanizador`,
-      settings_humanizer_description: `¿Qué tan humano debo sonar? Basado en reglas, sin latencia ni costo añadido. Ajústalo más tarde en /config.`,
+      settings_humanizer_description: `¿Qué tan humano debo sonar? Basado en reglas, sin latencia ni costo. Ajústalo luego en /config.`,
       settings_humanizer_placeholder: `Elige un estilo de respuesta...`,
       settings_timezone_label: `Desfase de zona horaria`,
       settings_timezone_description: `Para recordatorios y conciencia del tiempo. Déjalo en blanco para usar UTC.`,

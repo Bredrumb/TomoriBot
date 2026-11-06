@@ -89,7 +89,7 @@ Tente {model_text_command} para atribuir um modelo funcional, ou {provider_add_c
       settings_persona_description: `Escolha a persona que usarei após a configuração.`,
       settings_persona_placeholder: `Escolha uma predefinição de persona...`,
       settings_humanizer_label: `Predefinição do Humanizador`,
-      settings_humanizer_description: `O quão humana deve ser a resposta? Baseado em regras, sem custo ou latência adicionais. Ajuste mais tarde no /config.`,
+      settings_humanizer_description: `O quão humana deve ser a resposta? Baseado em regras, sem latência ou custo. Ajuste no /config.`,
       settings_humanizer_placeholder: `Escolha um estilo de resposta...`,
       settings_timezone_label: `Fuso Horário`,
       settings_timezone_description: `Para lembretes e noção de tempo. Deixe em branco para usar o UTC.`,
