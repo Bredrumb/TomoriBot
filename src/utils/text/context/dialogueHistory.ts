@@ -6,11 +6,11 @@ import {
   type MediaDescriptor,
   type StructuredContextItem,
 } from "@/types/misc/context";
-import { HumanizerDegree, type AssembledServerConfig, type TomoriState } from "@/types/db/schema";
+import type { AssembledServerConfig, TomoriState } from "@/types/db/schema";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { log } from "@/utils/misc/logger";
 import { memoryGuard } from "@/utils/security/rateLimiter";
-import { humanizeString } from "@/utils/text/processors/formatters";
+import { applyStableHumanizer } from "@/utils/text/processors/formatters";
 import { applyUncensorInputTransforms } from "@/utils/text/uncensor";
 import { VERBATIM_TOOL_CALLING_NUDGE, shouldInjectVerbatimToolCallingNudge } from "@/utils/tools/verbatimToolCalling";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
@@ -506,13 +506,13 @@ async function appendTextParts(
       processedContent = `${resolvedAuthorLabel}: ${normalizedContent}`;
     }
 
-    if (params.tomoriConfig.humanizer_degree >= HumanizerDegree.HEAVY && params.role === "model") {
+    if (params.role === "model") {
       // content is already real, previously-delivered text, so re-rolling the same randomized
       // comma/emphasis noise on every context build would just re-randomize already-final output
       // and, since it never lands on the same result twice, defeat provider prompt-prefix caching
-      // for every turn after this one. suppressPunctuationNoise keeps only the deterministic
+      // for every turn after this one. The stable humanizer keeps only the deterministic
       // casing/semicolon normalization, so a rebuilt prompt's history prefix stays byte-stable.
-      [processedContent] = humanizeString(processedContent, { suppressPunctuationNoise: true });
+      processedContent = applyStableHumanizer(processedContent, params.tomoriConfig);
     }
     // Mentions, channel links, and roles still resolve here. Only the identity macros stay
     //    literal: this string carries a real Discord message body, so rewriting "{bot}"/"{char}"

@@ -1,5 +1,5 @@
 import { describe, expect, it, spyOn } from "bun:test";
-import { HumanizerDegree } from "@/types/db/schema";
+import { humanizerSettingsFromDegree } from "@/constants/humanizer";
 import type { StreamContext } from "@/types/stream/interfaces";
 import {
   createDefaultStreamState,
@@ -12,7 +12,7 @@ import { StreamUiUpdater, type StreamSendPayload } from "@/utils/discord/stream/
 
 function textConfig(visibleDeliveryMode = VisibleDeliveryMode.STREAMING): TextProcessingConfig {
   return {
-    humanizerDegree: HumanizerDegree.NONE,
+    humanizer: humanizerSettingsFromDegree(0),
     visibleDeliveryMode,
     emojiUsageEnabled: true,
     emojiStrings: [],
@@ -137,6 +137,19 @@ describe("StreamMessageDelivery copied-render options", () => {
     expect(sentPayloads[1].identityOverride?.username).toBe("Zallya (Ren)");
   });
 
+  it("lowercases a non-streamed reply when Force Lowercase is on", async () => {
+    const sentPayloads: StreamSendPayload[] = [];
+    const delivery = makeDelivery((payload) => sentPayloads.push(payload));
+    const config = textConfig(VisibleDeliveryMode.AGGREGATED_PHASE);
+    config.humanizer = { ...humanizerSettingsFromDegree(0), humanizer_lowercase_enabled: true };
+    const state = createDefaultStreamState();
+    state.pendingAggregatedText = "Hello THERE, NASA Fan.\nSecond Line";
+
+    await delivery.flushAggregatedTextBuffer(config, context, state);
+
+    expect(sentPayloads.map((payload) => payload.content)).toEqual(["hello THERE, NASA fan.\nsecond line"]);
+  });
+
   it("marks message-length and heavy-humanizer splits at the delivery boundary", async () => {
     const sentPayloads: StreamSendPayload[] = [];
     const delivery = makeDelivery((payload) => sentPayloads.push(payload));
@@ -157,7 +170,7 @@ describe("StreamMessageDelivery copied-render options", () => {
 
     sentPayloads.length = 0;
     const heavyConfig = textConfig();
-    heavyConfig.humanizerDegree = HumanizerDegree.HEAVY;
+    heavyConfig.humanizer = humanizerSettingsFromDegree(3);
     // Emphasis flushing in humanizeString rolls against EMPHASIS_FLUSH_PROBABILITY (0.5), so mock below the threshold for deterministic splits.
     const randomSpy = spyOn(Math, "random").mockReturnValue(0);
     try {

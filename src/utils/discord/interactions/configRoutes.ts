@@ -96,7 +96,6 @@ import {
   loadConfigFallbackOptions,
   loadConfigFallbacksView,
   loadConfigImageGenerationView,
-  loadConfigCapabilityEndpoints,
   loadConfigParametersView,
   loadConfigSwitchModelsView,
 } from "@/utils/discord/interactions/configModelLoaders";
@@ -221,6 +220,7 @@ import {
   CONFIG_NAI_ATTG_GENRE_FIELD,
   CONFIG_NAI_ATTG_STARS_FIELD,
   CONFIG_HUMANIZER_FIELD,
+  CONFIG_HUMANIZER_TOGGLES_FIELD,
   CONFIG_CONTEXT_NOTE_DEPTH_FIELD,
   CONFIG_CONTEXT_NOTE_TEXT_FIELD,
   CONFIG_PERSONA_PROMPT_PART_FIELDS,
@@ -247,12 +247,14 @@ import {
 import { storeChecklistSnapshot, takeChecklistSnapshot } from "@/utils/discord/interactions/checklistSnapshotStore";
 import { combineModalPromptParts } from "@/utils/text/modalPromptParts";
 import { buildTextPreview, textPreviewFooterKey, textPreviewFooterVars } from "@/utils/text/textPreview";
+import { DEFAULT_HUMANIZER_SETTINGS, pickHumanizerSettings } from "@/constants/humanizer";
 import {
-  getHumanizerLabel,
-  HUMANIZER_DEFAULT,
+  formatHumanizerSummary,
+  HUMANIZER_CUSTOM_VALUE,
   HUMANIZER_INHERIT_VALUE,
-  HUMANIZER_MAX,
-  HUMANIZER_MIN,
+  humanizerCheckboxFieldName,
+  humanizerDependencyViolationVars,
+  readHumanizerCheckboxGroups,
 } from "@/utils/discord/humanizerOptions";
 import { DEFAULT_MESSAGE_FETCH_LIMIT } from "@/utils/discord/messageFetchLimit";
 import { hasPersonaPrompt } from "@/utils/discord/ui/personaEligibility";
@@ -565,8 +567,10 @@ const defaultDependencies: ConfigRouteDependencies = {
   fetchElevenLabsVoiceCatalog,
   setPersonaVoiceConfig: (personaId, voice) => personaRepository.setVoiceConfig(personaId, voice),
   invalidatePersonaVoiceCache: invalidateTomoriStateCache,
-  loadServerHumanizerDegree: async (serverId) =>
-    (await configRepository.getChatConfig(serverId))?.humanizer_degree ?? null,
+  loadServerHumanizer: async (serverId) => {
+    const chatConfig = await configRepository.getChatConfig(serverId);
+    return chatConfig ? pickHumanizerSettings(chatConfig) : null;
+  },
   loadPersonaSprites: loadPersonaSpriteList,
   loadSavedTextProviders: async (serverId) => loadSavedProvidersForCapability(serverId, "text"),
   loadPersonaTextModels: async (provider, serverId) =>
@@ -582,7 +586,6 @@ const defaultDependencies: ConfigRouteDependencies = {
   operations: configPersonaOperations,
   spriteOperations: configSpriteOperations,
   modelOperations: configModelOperations,
-  loadCapabilityEndpoints: loadConfigCapabilityEndpoints,
   loadSwitchModelsView: loadConfigSwitchModelsView,
   loadParametersView: loadConfigParametersView,
   loadNaiPresets: (target) => configRepository.loadNaiPresets(target),
@@ -615,9 +618,9 @@ const defaultDependencies: ConfigRouteDependencies = {
       prefillModelName: state.llm.llm_codename,
       contextNote: rawChatConfig?.context_note ?? state.config.context_note ?? null,
       contextNoteDepth: rawChatConfig?.context_note_depth ?? state.config.context_note_depth ?? 0,
-      // The assembled state may overlay a persona-specific degree; the General page is the raw
+      // The assembled state may overlay persona-specific toggles; the General page is the raw
       // workspace setting and must not mistake that overlay for its global value.
-      humanizerDegree: rawChatConfig?.humanizer_degree ?? HUMANIZER_DEFAULT,
+      humanizer: rawChatConfig ? pickHumanizerSettings(rawChatConfig) : DEFAULT_HUMANIZER_SETTINGS,
       messageFetchLimit:
         rawChatConfig?.message_fetch_limit ?? state.config.message_fetch_limit ?? DEFAULT_MESSAGE_FETCH_LIMIT,
       timezoneOffset: rawChatConfig?.timezone_offset ?? state.config.timezone_offset ?? 0,
@@ -950,7 +953,13 @@ async function handleModalOpen(
     case "humanizer-open":
       await dependencies.showModal(
         interaction,
-        buildPersonaHumanizerModal(locale, persona.persona_id, nonce, persona.humanizer_degree_override),
+        buildPersonaHumanizerModal(
+          locale,
+          persona.persona_id,
+          nonce,
+          persona.humanizer_override,
+          pickHumanizerSettings(persona.config),
+        ),
       );
       return;
     case "avatar-open":
@@ -1688,12 +1697,21 @@ async function runPersonaWrite(
     }
 
     case "humanizer-submit": {
-      const selectedValue =
-        dependencies.takeSelectValue(
-          (interaction as ModalSubmitInteraction).id,
-          buildConfigModalFieldId(CONFIG_HUMANIZER_FIELD, route.nonce),
-        ) ?? "";
-      const value = selectedValue === HUMANIZER_INHERIT_VALUE ? null : Number.parseInt(selectedValue, 10);
+      const submittedId = (interaction as ModalSubmitInteraction).id;
+      const source = dependencies.takeSelectValue(
+        submittedId,
+        buildConfigModalFieldId(CONFIG_HUMANIZER_FIELD, route.nonce),
+      );
+      const checked = readHumanizerCheckboxGroups((group) =>
+        dependencies.takeCheckboxValues(
+          submittedId,
+          buildConfigModalFieldId(humanizerCheckboxFieldName(CONFIG_HUMANIZER_TOGGLES_FIELD, group), route.nonce),
+        ),
+      );
+      if (source !== HUMANIZER_INHERIT_VALUE && (source !== HUMANIZER_CUSTOM_VALUE || !checked)) {
+        return { receipt: staleReceipt(locale) };
+      }
+      const value = source === HUMANIZER_INHERIT_VALUE ? null : checked;
       const result = await dependencies.operations.setHumanizerOverride({
         persona,
         serverDiscId: scope.serverDiscId,
@@ -1705,8 +1723,8 @@ async function runPersonaWrite(
             locale,
             "error",
             "commands.config.panel.invalid_input_heading",
-            "commands.config.humanizer.invalid_value_description",
-            { min: HUMANIZER_MIN, max: HUMANIZER_MAX },
+            "commands.config.humanizer.dependency_invalid_description",
+            (value && humanizerDependencyViolationVars(locale, value)) ?? {},
           ),
         };
       }
@@ -1717,7 +1735,7 @@ async function runPersonaWrite(
             "info",
             "commands.config.humanizer.already_set_title",
             "commands.config.humanizer.persona_already_set_description",
-            { persona: persona.persona_nickname, value: getHumanizerLabel(locale, value) },
+            { persona: persona.persona_nickname, value: formatHumanizerSummary(locale, value) },
           ),
         };
       }
@@ -1739,8 +1757,8 @@ async function runPersonaWrite(
           "commands.config.humanizer.persona_success_description",
           {
             persona: persona.persona_nickname,
-            value: getHumanizerLabel(locale, value),
-            previous_value: getHumanizerLabel(locale, persona.humanizer_degree_override ?? null),
+            value: formatHumanizerSummary(locale, value),
+            previous_value: formatHumanizerSummary(locale, persona.humanizer_override),
           },
         ),
         telemetry: "server-config.workspace.persona-humanizer.set",

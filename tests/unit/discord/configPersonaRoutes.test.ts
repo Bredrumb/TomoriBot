@@ -1,3 +1,5 @@
+import { type HumanizerSettings, humanizerSettingsFromDegree } from "@/constants/humanizer";
+import { HUMANIZER_CUSTOM_VALUE } from "@/utils/discord/humanizerOptions";
 import { computePersonaNudgeFingerprint, computePersonaNudgeListFingerprint } from "@/modules/natural-nudges/db/types";
 /**
  * Route coverage for the `/config` Persona surface.
@@ -680,11 +682,8 @@ const WIRE_CONTRACT_V2: ReadonlyArray<readonly [string, ConfigPanelRoute]> = [
     { action: "retry", locale: "en-US", category: "persona", page: "general", personaId: 55 },
   ],
   ["config:v2:model-prov-select:en-US:text", { action: "model-provider-select", locale: "en-US", capability: "text" }],
-  ["config:v2:ep-select:en-US:tts-clone", { action: "endpoint-select", locale: "en-US", capability: "tts-clone" }],
-  ["config:v2:ep-select:en-US:tts-design", { action: "endpoint-select", locale: "en-US", capability: "tts-design" }],
   ["config:v2:voice-priority-design:en-US:55", { action: "voice-priority-design", locale: "en-US", personaId: 55 }],
   ["config:v2:voice-priority-clone:en-US:55", { action: "voice-priority-clone", locale: "en-US", personaId: 55 }],
-  ["config:v2:ep-select:en-US:stt", { action: "endpoint-select", locale: "en-US", capability: "stt" }],
   [
     "config:v2:model-modal:en-US:video:custom~12:nonce1234567",
     {
@@ -4162,7 +4161,8 @@ describe("config Persona Advanced routes", () => {
   });
 
   it("opens Humanizer as a modal with the persona override selected", async () => {
-    const persona = makePersona({ persona_id: 55, humanizer_degree_override: 2 });
+    const override = humanizerSettingsFromDegree(2);
+    const persona = makePersona({ persona_id: 55, humanizer_override: override, config: override });
     const harness = makeHarness({
       personas: [persona],
     });
@@ -4174,10 +4174,20 @@ describe("config Persona Advanced routes", () => {
       }),
     );
 
-    const modal = JSON.stringify(harness.modals.at(-1));
-    expect(modal).toContain("config:v2:humanizer-submit");
-    expect(modal).toContain('"value":"2"');
-    expect(modal).toContain('"default":true');
+    const modal = harness.modals.at(-1) as {
+      custom_id: string;
+      components: Array<{ component: { options: Array<{ value: string; default?: boolean }> } }>;
+    };
+    expect(modal.custom_id).toContain("config:v2:humanizer-submit");
+    const [source, ...groups] = modal.components.map((label) => label.component.options);
+    expect(source.find((option) => option.default)?.value).toBe(HUMANIZER_CUSTOM_VALUE);
+    expect(groups).toHaveLength(3);
+    expect(
+      groups
+        .flat()
+        .filter((option) => option.default)
+        .map((option) => option.value),
+    ).toEqual(["humanizer_streaming_enabled", "humanizer_pacing_enabled"]);
   });
 
   it("opens the selected provider's model choices in a modal", async () => {
@@ -4212,7 +4222,7 @@ describe("config Persona Advanced routes", () => {
   });
 
   it("submits Humanizer and text override modal selections through their routed writes", async () => {
-    let humanizerValue: number | null | undefined;
+    let humanizerValue: HumanizerSettings | null | undefined;
     const humanizerHarness = makeHarness({
       operations: {
         setHumanizerOverride: async (input) => {
@@ -4236,6 +4246,26 @@ describe("config Persona Advanced routes", () => {
       }),
     );
     expect(humanizerValue).toBeNull();
+
+    humanizerHarness.dependencies.takeSelectValue = () => HUMANIZER_CUSTOM_VALUE;
+    humanizerHarness.dependencies.takeCheckboxValues = () => [
+      "humanizer_streaming_enabled",
+      "humanizer_lowercase_enabled",
+    ];
+    await dispatch(
+      humanizerHarness,
+      makeInteraction({
+        customId: buildConfigRouteId({
+          action: "humanizer-submit",
+          locale: "en-US",
+          personaId: 55,
+          nonce: "nonce1234567",
+        }),
+        kind: "modal",
+        harness: humanizerHarness,
+      }),
+    );
+    expect(humanizerValue).toEqual({ ...humanizerSettingsFromDegree(1), humanizer_lowercase_enabled: true });
 
     let selectedModelId: number | null | undefined;
     const textHarness = makeHarness({

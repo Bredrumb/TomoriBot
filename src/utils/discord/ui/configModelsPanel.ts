@@ -17,7 +17,6 @@ import {
   CONFIG_MODEL_CLEAR_VALUE,
   CONFIG_MODEL_PAGE_SIZE,
   CONFIG_MODEL_PROVIDER_DIRECT_LIMIT,
-  configEndpointWindowSize,
   CONFIG_NAI_PRESET_NEXT_VALUE,
   CONFIG_NAI_PRESET_PAGE_SIZE,
   CONFIG_NAI_PRESET_PREVIOUS_VALUE,
@@ -25,26 +24,16 @@ import {
   CONFIG_ROUTE_VERSION,
   buildConfigRouteId,
   buildConfigRouteSegments,
-  isConfigCatalogModelCapability,
-  type ConfigCatalogModelCapability,
   type ConfigModelCapability,
   type ConfigPage,
 } from "@/utils/discord/configPanelCatalog";
 import {
-  computeConfigEndpointFingerprint,
-  encodeConfigEndpointPageValue,
-  encodeConfigEndpointSelection,
   encodeConfigProviderPageValue,
   encodeConfigProviderRangeValue,
-} from "@/utils/discord/interactions/configModelLoaders";
-import type {
-  ConfigCapabilityEndpoint,
-  ConfigEndpointModelCapability,
 } from "@/utils/discord/interactions/configModelLoaders";
 import {
   buildModelRoutingControl,
   buildProviderPageEntries,
-  formatModelSelectionLabel,
   type ProviderSelectEntry,
 } from "@/utils/discord/ui/modelRoutingControls";
 import { buildProviderSelectWindow, resolveProviderEntryStart } from "@/utils/discord/ui/providerSelectWindow";
@@ -94,15 +83,16 @@ export const CONFIG_MODEL_CAPABILITY_LOCALE_KEYS: Record<ConfigModelCapability, 
  * Clearing Vision disables the image-understanding tools outright, while either image slot only
  * contributes to one shared flag, so the two consequences cannot share one description.
  */
-const MODEL_CLEAR_DESCRIPTION_LOCALE_KEYS: Partial<Record<ConfigCatalogModelCapability, string>> = {
+const MODEL_CLEAR_DESCRIPTION_LOCALE_KEYS: Partial<Record<ConfigModelCapability, string>> = {
   vision: "commands.config.panel.model_no_model_vision_description",
   image: "commands.config.panel.model_no_model_image_description",
   "nai-image": "commands.config.panel.model_no_model_image_description",
+  stt: "commands.config.panel.model_no_model_stt_description",
 };
 
 /** One server-default slot as the panel renders it. */
 interface ConfigModelSlotView {
-  capability: ConfigCatalogModelCapability;
+  capability: ConfigModelCapability;
   currentModelName: string | null;
   currentProvider: string | null;
   eligibleProviders: string[];
@@ -115,20 +105,9 @@ interface ConfigModelSlotView {
 
 /** Which capability's provider selector is expanded, and where its entry list is scrolled. */
 export interface ConfigSwitchModelsProviderPage {
-  capability: ConfigCatalogModelCapability;
+  capability: ConfigModelCapability;
   provider?: string;
   start: number;
-}
-
-export interface ConfigEndpointPage {
-  capability: ConfigEndpointModelCapability;
-  start: number;
-}
-
-export interface ConfigEndpointSlotView {
-  capability: ConfigEndpointModelCapability;
-  endpoints: ConfigCapabilityEndpoint[];
-  pageStart: number;
 }
 
 /**
@@ -149,7 +128,6 @@ export interface ConfigSwitchModelsView {
   imageGenerationEnabled: boolean;
   videoGenerationEnabled: boolean;
   speechCapabilityEnabled?: boolean;
-  endpointSlots?: ConfigEndpointSlotView[];
 }
 
 export interface ConfigParametersView {
@@ -339,7 +317,6 @@ function buildSwitchModelsBody(input: ConfigModelsPageInput): ComponentInContain
   if (!view) return components;
 
   for (const capability of CONFIG_MODEL_CAPABILITY_ORDER) {
-    if (!isConfigCatalogModelCapability(capability)) continue;
     const slot = view.slots.find((candidate) => candidate.capability === capability);
     if (!slot) continue;
     const capabilityLabel = localizer(locale, CONFIG_MODEL_CAPABILITY_LOCALE_KEYS[capability]);
@@ -407,86 +384,6 @@ function buildSwitchModelsBody(input: ConfigModelsPageInput): ComponentInContain
         disabled: writesDisabled || (entries.length === 0 && !showClear),
       }),
     );
-  }
-
-  const sttSlot = view.endpointSlots?.find((candidate) => candidate.capability === "stt");
-  if (sttSlot) {
-    const capabilityLabel = localizer(locale, CONFIG_MODEL_CAPABILITY_LOCALE_KEYS.stt);
-    const activeEndpoint = sttSlot.endpoints.find((endpoint) => endpoint.isActive);
-    const windowSize = configEndpointWindowSize(sttSlot.endpoints.length);
-    const overflows = sttSlot.endpoints.length > windowSize;
-    const rangeCount = Math.max(1, Math.ceil(sttSlot.endpoints.length / windowSize));
-    const rangeIndex = Math.min(Math.max(0, Math.floor(sttSlot.pageStart / windowSize)), rangeCount - 1);
-    const visibleStart = rangeIndex * windowSize;
-    const fingerprint = computeConfigEndpointFingerprint(sttSlot.endpoints);
-    const options: SelectMenuComponentOptionData[] = sttSlot.endpoints
-      .slice(visibleStart, visibleStart + windowSize)
-      .map((endpoint, offset) => {
-        const displayName = formatModelSelectionLabel(endpoint.modelLabel, endpoint.label, "");
-        return {
-          value: encodeConfigEndpointSelection(visibleStart + offset, fingerprint),
-          label: safeSelectOptionText(displayName, 100),
-          description: safeSelectOptionText(
-            endpoint.kind === "hosted-model"
-              ? localizer(
-                  locale,
-                  endpoint.isActive
-                    ? "commands.config.panel.stt_hosted_option_active_description"
-                    : "commands.config.panel.stt_hosted_option_description",
-                  { provider: endpoint.label },
-                )
-              : localizer(
-                  locale,
-                  endpoint.isActive
-                    ? "commands.providers.activate_option_active_description"
-                    : "commands.providers.activate_option_description",
-                  { capability: endpoint.capability, name: displayName },
-                ),
-            100,
-          ),
-          default: false,
-        };
-      });
-    if (overflows) {
-      const nextRangeIndex = (rangeIndex + 1) % rangeCount;
-      options.push({
-        value: encodeConfigEndpointPageValue(nextRangeIndex * windowSize),
-        label: safeSelectOptionText(
-          localizer(locale, "commands.config.panel.model_endpoint_more_option", {
-            capability: capabilityLabel,
-            page: nextRangeIndex + 1,
-            total: rangeCount,
-          }),
-          100,
-        ),
-        description: undefined,
-        default: false,
-      });
-    }
-    if (options.length === 0) {
-      options.push({
-        value: "ep-none",
-        label: safeSelectOptionText(localizer(locale, "commands.config.panel.no_endpoints_option"), 100),
-        description: safeSelectOptionText(
-          localizer(locale, "commands.config.panel.providers_endpoint_registration_hint"),
-          100,
-        ),
-        default: false,
-      });
-    }
-    const placeholder = `${capabilityLabel}: ${formatModelSelectionLabel(activeEndpoint?.modelLabel ?? null, activeEndpoint?.label ?? null, localizer(locale, "commands.config.panel.none_label"))}`;
-    components.push({
-      type: ComponentType.ActionRow,
-      components: [
-        {
-          type: ComponentType.StringSelect,
-          customId: buildConfigRouteId({ action: "endpoint-select", locale, capability: "stt" }),
-          placeholder: safeSelectOptionText(placeholder, 150),
-          options,
-          disabled: writesDisabled || sttSlot.endpoints.length === 0,
-        },
-      ],
-    });
   }
 
   components.push({

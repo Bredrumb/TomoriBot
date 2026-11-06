@@ -1,3 +1,4 @@
+import { humanizerSettingsFromDegree } from "@/constants/humanizer";
 import { describe, expect, it } from "bun:test";
 import { normalizeNovelAIContextText } from "@/providers/novelai/messageNormalization";
 import { fitNovelAIPrompt } from "@/providers/novelai/promptFitting";
@@ -221,7 +222,10 @@ describe("NovelAI message normalization", () => {
         (humanizerDegree) =>
           fitNovelAIPrompt({
             contextItems: inputs,
-            tomoriState: createPersona({ persona_nickname: "Juno", config: { humanizer_degree: humanizerDegree } }),
+            tomoriState: createPersona({
+              persona_nickname: "Juno",
+              config: humanizerSettingsFromDegree(humanizerDegree),
+            }),
             profile: getNovelAIProfile(model),
             window: 4096,
           }).prompt,

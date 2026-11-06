@@ -34,7 +34,12 @@ import { resolvePrefillPrompt } from "@/utils/text/personaPrompt";
 import { localizer, resolveDescription } from "@/utils/text/localizer";
 import { normalizeTriggerWord } from "@/utils/text/triggerWords";
 import { buildSlugMap } from "@/utils/text/slugifyLabel";
-import { createHumanizerOptions, HUMANIZER_INHERIT_VALUE } from "@/utils/discord/humanizerOptions";
+import type { HumanizerSettings } from "@/constants/humanizer";
+import {
+  createHumanizerCheckboxGroups,
+  createHumanizerSourceOptions,
+  humanizerCheckboxFieldName,
+} from "@/utils/discord/humanizerOptions";
 
 export interface RawModalPayload {
   custom_id: string;
@@ -46,7 +51,6 @@ export function buildConfigModalFieldId(field: string, nonce: string): string {
   return `${field}_${nonce}`;
 }
 
-/** Discord component type 22, the Checkbox Group. */
 const CHECKBOX_GROUP = 22 as const;
 
 /**
@@ -92,6 +96,7 @@ export const CONFIG_NAI_ATTG_TAGS_FIELD = "nai_attg_tags";
 export const CONFIG_NAI_ATTG_GENRE_FIELD = "nai_attg_genre";
 export const CONFIG_NAI_ATTG_STARS_FIELD = "nai_attg_stars";
 export const CONFIG_HUMANIZER_FIELD = "humanizer";
+export const CONFIG_HUMANIZER_TOGGLES_FIELD = "humanizer_toggles";
 export const CONFIG_TEXT_OVERRIDE_MODEL_FIELD = "text_override_model";
 export const CONFIG_SPRITE_NAME_FIELD = "sprite_name";
 export const CONFIG_SPRITE_IMAGE_FIELD = "sprite_image";
@@ -377,11 +382,16 @@ export function buildPersonaCharacterReferenceModal(locale: string, personaId: n
   };
 }
 
+/**
+ * @param override - The persona's own toggles, or null while it inherits the server
+ * @param effective - What the persona runs with now, which pre-checks the boxes either way
+ */
 export function buildPersonaHumanizerModal(
   locale: string,
   personaId: number,
   nonce: string,
-  currentValue: number | null | undefined,
+  override: HumanizerSettings | null,
+  effective: HumanizerSettings,
 ): RawModalPayload {
   return {
     custom_id: buildConfigRouteId({ action: "humanizer-submit", locale, personaId, nonce }),
@@ -389,19 +399,13 @@ export function buildPersonaHumanizerModal(
     components: [
       {
         type: 18,
-        label: modalLabel(locale, "commands.config.panel.response_style_title"),
-        description: modalDescription(locale, "commands.config.panel.response_style_description"),
+        label: modalLabel(locale, "commands.config.humanizer.source_label"),
+        description: modalDescription(locale, "commands.config.humanizer.source_description"),
         component: {
-          type: 3,
+          type: 21,
           custom_id: buildConfigModalFieldId(CONFIG_HUMANIZER_FIELD, nonce),
-          min_values: 1,
-          max_values: 1,
           required: true,
-          options: createHumanizerOptions(
-            locale,
-            currentValue === null || currentValue === undefined ? HUMANIZER_INHERIT_VALUE : String(currentValue),
-            true,
-          ).map((option) => ({
+          options: createHumanizerSourceOptions(locale, override === null).map((option) => ({
             label: safeSelectOptionText(option.label, 100),
             value: option.value,
             description: option.description ? safeSelectOptionText(option.description, 100) : undefined,
@@ -409,6 +413,20 @@ export function buildPersonaHumanizerModal(
           })),
         },
       },
+      ...createHumanizerCheckboxGroups(locale, effective).map((group) => ({
+        type: 18,
+        label: modalLabel(locale, group.labelKey),
+        description: modalDescription(locale, group.descriptionKey),
+        component: buildCheckboxGroupComponent(
+          buildConfigModalFieldId(humanizerCheckboxFieldName(CONFIG_HUMANIZER_TOGGLES_FIELD, group.group), nonce),
+          group.options,
+          (option) => ({
+            ...option,
+            label: safeSelectOptionText(option.label, 100),
+            description: option.description ? safeSelectOptionText(option.description, 100) : undefined,
+          }),
+        ),
+      })),
     ],
   };
 }

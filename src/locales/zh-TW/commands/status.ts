@@ -52,7 +52,7 @@ export default {
     field_frequency_penalty: `頻率懲罰`,
     field_presence_penalty: `出現懲罰`,
     field_omitted_params: `已停用的參數`,
-    field_humanizer: `擬人化程度`,
+    field_humanizer: `擬人化`,
     field_thinking_level: `思考等級`,
     field_timezone: `伺服器時區`,
     field_message_fetch_limit: `訊息讀取上限`,

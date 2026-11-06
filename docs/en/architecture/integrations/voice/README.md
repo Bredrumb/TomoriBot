@@ -72,7 +72,9 @@ failed attempt moves to the next target; an empty transcript is final. Provider 
 transcription, so hosted targets always use a saved key.
 
 A server holds either a hosted model in `server_speech_configs.transcription_model_id` or a default
-transcription endpoint. Selecting one clears the other in the same write path. Adding a Google,
+transcription endpoint. The `/config` > Models STT slot lists both as providers, with endpoint
+connections as `custom:<id>`, like the TTS slots. Selecting one clears the other in the same write
+path, and `- No Model` clears both. Adding a Google,
 Vertex, or OpenRouter key fills an empty transcription slot with that provider's catalogue default,
 for the server and for a personal key alike; it never replaces an existing target. OpenRouter
 registration accepts any codename its live `output_modalities=transcription` catalogue lists, while

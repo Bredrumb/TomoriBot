@@ -268,7 +268,7 @@ export function resolveTurnDeliberateToolMode(turn: ChatTurn): boolean {
 }
 
 export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnContext> {
-  recordChatTurnConfiguration(turn.persona.llm.llm_provider, turn.persona.config.humanizer_degree);
+  recordChatTurnConfiguration(turn.persona.llm.llm_provider, turn.persona.config);
   const incoming = turn.lockedTurn.admission.incoming;
   const { client, message } = incoming;
   const channel = message.channel;
@@ -697,7 +697,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   const expressionDelivery =
     carried && carried.personaId === effectivePersona.persona_id ? carried.state : createExpressionDeliveryState();
 
-  recordChatTurnConfiguration(effectivePersona.llm.llm_provider, effectivePersona.config.humanizer_degree);
+  recordChatTurnConfiguration(effectivePersona.llm.llm_provider, effectivePersona.config);
   recordChatTurnFlags({
     rag: contextItems.some((item) => item.metadataTag === ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS),
   });

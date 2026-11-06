@@ -1,13 +1,13 @@
 import type { Client } from "discord.js";
 import { ContextItemTag, type ContextPart, type StructuredContextItem } from "@/types/misc/context";
-import { HumanizerDegree, type ConditioningType } from "@/types/db/schema";
+import type { ConditioningType } from "@/types/db/schema";
 import { conditioningMemoryRepository } from "@/utils/db/repositories/ConditioningMemoryRepository";
 import {
   CONDITIONING_CONTEXT_MAX_GROUPS_PER_TYPE,
   getConditioningContextPastParticiple,
 } from "@/utils/conditioning/conditioning";
 import { UNPAIRED_SAMPLE_DIALOGUE_SENTINEL } from "@/types/preset/presetExport";
-import { humanizeString } from "@/utils/text/processors/formatters";
+import { applyStableHumanizer } from "@/utils/text/processors/formatters";
 import { applyUncensorInputTransforms } from "@/utils/text/uncensor";
 import { buildBotSpeakerLabelPattern } from "@/utils/text/processors/regexUtils";
 import { isExternalUserId } from "@/utils/externalIdentityUserId";
@@ -292,9 +292,7 @@ export async function buildSampleDialogueContextItems(params: {
     let userSampleText = tomoriState.sample_dialogues_in[i];
     const isUnpairedSample = userSampleText === UNPAIRED_SAMPLE_DIALOGUE_SENTINEL;
     if (!isUnpairedSample) {
-      if (params.tomoriConfig.humanizer_degree >= HumanizerDegree.HEAVY) {
-        [userSampleText] = humanizeString(userSampleText, { suppressPunctuationNoise: true });
-      }
+      userSampleText = applyStableHumanizer(userSampleText, params.tomoriConfig);
       contextItems.push({
         role: "user",
         parts: [
@@ -321,9 +319,7 @@ export async function buildSampleDialogueContextItems(params: {
     let modelSampleText = buildBotSpeakerLabelPattern(params.botName).test(rawOut)
       ? rawOut
       : `${params.botName}: ${rawOut}`;
-    if (params.tomoriConfig.humanizer_degree >= HumanizerDegree.HEAVY) {
-      [modelSampleText] = humanizeString(modelSampleText, { suppressPunctuationNoise: true });
-    }
+    modelSampleText = applyStableHumanizer(modelSampleText, params.tomoriConfig);
     contextItems.push({
       role: "model",
       parts: [

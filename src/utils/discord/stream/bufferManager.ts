@@ -1,6 +1,10 @@
-import { HumanizerDegree } from "@/types/db/schema";
 import type { StreamConfig } from "@/types/stream/interfaces";
-import { type ChunkProcessingResult, DISCORD_STREAMING_CONSTANTS, type StreamState } from "@/types/stream/types";
+import {
+  type ChunkProcessingResult,
+  DISCORD_STREAMING_CONSTANTS,
+  getMessageSplitMode,
+  type StreamState,
+} from "@/types/stream/types";
 import { log } from "@/utils/misc/logger";
 import {
   classifyEmphasisMarkerRun,
@@ -510,7 +514,7 @@ export function processBufferContent(state: StreamState, config: StreamConfig): 
   state.hasSemanticMarkers = hasIncompleteSemanticMarkers(state.buffer);
 
   let periodEndIndex = -1;
-  if (config.humanizerDegree === HumanizerDegree.HEAVY) {
+  if (getMessageSplitMode(config.humanizer) === "sentences") {
     const sentenceRegex = createSentenceSplitRegex();
     const periodMatch = sentenceRegex.exec(state.buffer);
     if (periodMatch && !shouldDelayTrailingPeriodFlush(state.buffer, periodMatch)) {

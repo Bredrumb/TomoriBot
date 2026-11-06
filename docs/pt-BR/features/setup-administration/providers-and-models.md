@@ -69,8 +69,9 @@ Em `/config` > `Modelos` > Switch Models, você pode atribuir modelos e endpoint
 - **Imagem padrão**: geração de imagem padrão (consulte [Geração de imagem](/pt-BR/features/capabilities/media-generation/image-generation/)).
 - **Imagem NovelAI**: [geração de imagem NovelAI](/features/integrations/novelai/#image-generation).
 - **Vídeo**: geração de vídeo.
-- **Ponto final TTS**: ponto final de voz de conversão de texto em fala.
-- **Ponto final STT**: ponto final de transcrição de áudio de fala para texto.
+- **TTS (Design de Voz)**: fala usando uma descrição de voz salva.
+- **TTS (Clone de Voz)**: fala usando uma amostra de referência ou voz do provedor.
+- **Fala para Texto**: transcreve anexos de áudio com um modelo de transcrição hospedado ou um endpoint personalizado. Escolha um provedor e depois seu modelo; `- Nenhum Modelo` interrompe a transcrição na chave do servidor.
 
 A lista de modelos marca o modelo padrão de cada provedor e exibe os preços em dólares americanos. Os modelos de Texto e de Decisão exibem o preço por milhão de tokens de entrada e de saída. Os modelos de imagem, vídeo e voz do OpenRouter mostram a unidade cobrada pelo OpenRouter: por imagem ou por milhão de tokens de imagem, por segundo de vídeo na resolução padrão do TomoriBot, e por milhão de caracteres ou por segundo de áudio. Modelos de imagem que você mesmo registrar não exibem preço. Um modelo sem preço listado não tem medição ou não está precificado no catálogo do TomoriBot, então consulte a página de preços do seu provedor antes de depender dele.
 
@@ -169,9 +170,10 @@ Esses são os padrões a partir dos quais os modelos de imagem de um provedor co
 | Provedor | Conversão de texto para fala | Fala para texto |
 |---|---|---|
 | ElevenLabs | ✅ | ✅ |
-| Google Gemini | Design de voz | Não |
-| Vertex AI (padrão, global) | Design de voz | Não |
+| Google Gemini | Design de voz | ✅ |
+| Vertex AI (padrão, global) | Design de voz | ✅ |
 | OpenRouter Fish | Clone de voz | Não |
 | OpenRouter Seed Audio | Design de voz | Não |
+| Modelos de transcrição do OpenRouter | Não | ✅ |
 
 Os mecanismos de voz locais são cobertos por [Auto-hospedagem](/pt-BR/self-hosting/). Para pesquisa na web integrada e leitura de URL, consulte [Ferramentas e extensões](/pt-BR/features/capabilities/tools-and-extensions/#web-search--url-reading).

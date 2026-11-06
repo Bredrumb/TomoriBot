@@ -18,7 +18,11 @@ import { shortTermMemoryRepository } from "@/utils/db/repositories/ShortTermMemo
 import { convertToPNG } from "@/utils/image/imageProcessor";
 import { parseAndValidateImageTags } from "@/utils/image/tagHelpers";
 import { CONTEXT_NOTE_DEPTH_MAX } from "@/utils/discord/contextNoteOptions";
-import { HUMANIZER_MAX, HUMANIZER_MIN } from "@/utils/discord/humanizerOptions";
+import {
+  findHumanizerDependencyViolation,
+  type HumanizerSettings,
+  humanizerSettingsEqual,
+} from "@/constants/humanizer";
 import {
   getMemoryLimits,
   validateAttribute,
@@ -331,7 +335,7 @@ export interface ConfigPersonaOperations {
   setHumanizerOverride(input: {
     persona: TomoriState;
     serverDiscId: string;
-    value: number | null;
+    value: HumanizerSettings | null;
   }): Promise<ConfigHumanizerResult>;
   replaceCharacterReference(input: {
     persona: TomoriState;
@@ -494,10 +498,11 @@ export const configPersonaOperations: ConfigPersonaOperations = {
   async setHumanizerOverride({ persona, serverDiscId, value }) {
     const personaId = persona.persona_id;
     if (!personaId) return { status: "write-failed" };
-    if (value !== null && (!Number.isInteger(value) || value < HUMANIZER_MIN || value > HUMANIZER_MAX)) {
-      return { status: "invalid-value" };
+    if (value && findHumanizerDependencyViolation(value)) return { status: "invalid-value" };
+    const current = persona.humanizer_override ?? null;
+    if (current === null ? value === null : value !== null && humanizerSettingsEqual(current, value)) {
+      return { status: "unchanged" };
     }
-    if ((persona.humanizer_degree_override ?? null) === value) return { status: "unchanged" };
     const ok = await personaRepository.setHumanizerOverride(personaId, value);
     if (!ok) return { status: "write-failed" };
     invalidateTomoriStateCache(serverDiscId);

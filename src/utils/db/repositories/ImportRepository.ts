@@ -43,6 +43,7 @@ import {
   type MemoryItem,
   type ExportResult,
   normalizeMemoryItem,
+  resolveImportedHumanizer,
 } from "@/types/db/dataExport";
 import { getMemoryLimits, validateMemoryContent } from "@/utils/misc/memoryLimits";
 import { validateTomoriConfigFields } from "@/utils/db/sqlSecurity";
@@ -165,7 +166,11 @@ const WORKSPACE_SECTION_TABLES: Record<WorkspaceConfigSection, readonly SectionT
         "llm_logit_biases",
         "llm_stop_strings",
         "llm_stop_speaker_pattern_enabled",
-        "humanizer_degree",
+        "humanizer_streaming_enabled",
+        "humanizer_pacing_enabled",
+        "humanizer_sentence_split_enabled",
+        "humanizer_lowercase_enabled",
+        "humanizer_punctuation_split_enabled",
         "timezone_offset",
         "message_fetch_limit",
         "system_prompt",
@@ -374,6 +379,14 @@ function buildTablePatches(
   });
 }
 
+function normalizeImportedChatSection(value: unknown): Record<string, unknown> | null {
+  if (!isRecord(value)) return null;
+  const { humanizer_degree: _legacyDegree, ...rest } = value;
+  const humanizer = resolveImportedHumanizer(value);
+  if (humanizer === null) return null;
+  return humanizer ? { ...rest, ...humanizer } : rest;
+}
+
 function getStmCategories(value: unknown): Array<{ position: number; label: string; description: string }> | undefined {
   if (!isRecord(value) || !Array.isArray(value.stm_categories)) return undefined;
   return value.stm_categories.map((category) => {
@@ -477,12 +490,11 @@ class ImportRepository {
       if (!sectionValidation.success) return { success: false, error: "commands.data.import.error_invalid_config" };
       if (!selected.includes(section)) continue;
 
-      const sectionPatches = buildTablePatches(
-        sectionValidation.data,
-        WORKSPACE_SECTION_TABLES[section],
-        "server_id",
-        0,
-      );
+      const sectionData =
+        section === "chat" ? normalizeImportedChatSection(sectionValidation.data) : sectionValidation.data;
+      if (sectionData === null) return { success: false, error: "commands.data.import.error_invalid_config" };
+
+      const sectionPatches = buildTablePatches(sectionData, WORKSPACE_SECTION_TABLES[section], "server_id", 0);
       tablePatches.push(...sectionPatches);
       configFieldsCount += sectionPatches.reduce(
         (count, tablePatch) => count + Object.keys(tablePatch.patch).length,
@@ -997,7 +1009,12 @@ class ImportRepository {
       // STM customization travels as nested keys (stm_config / stm_categories) that are
       // restored via shortTermMemoryRepository.fromExportShape, NOT the dynamic flat-config
       // SQL writer: so exclude them from the column-name allowlist validation below.
-      const configFields = Object.keys(config).filter((f) => f !== "stm_config" && f !== "stm_categories");
+      // humanizer_degree is legacy input that resolveImportedHumanizer maps onto the toggle columns, not a column name.
+      const configFields = Object.keys(config).filter(
+        (f) => f !== "stm_config" && f !== "stm_categories" && f !== "humanizer_degree",
+      );
+      const humanizer = resolveImportedHumanizer(config);
+      if (humanizer === null) return { success: false, error: "commands.data.import.error_invalid_config" };
       try {
         validateTomoriConfigFields(configFields);
       } catch (error) {
@@ -1022,7 +1039,13 @@ class ImportRepository {
         llm_logit_biases: config.llm_logit_biases,
         llm_stop_strings: config.llm_stop_strings,
         llm_stop_speaker_pattern_enabled: config.llm_stop_speaker_pattern_enabled ?? false,
-        humanizer_degree: config.humanizer_degree as ServerChatConfigRow["humanizer_degree"],
+        ...(humanizer && {
+          humanizer_streaming_enabled: humanizer.humanizer_streaming_enabled,
+          humanizer_pacing_enabled: humanizer.humanizer_pacing_enabled,
+          humanizer_sentence_split_enabled: humanizer.humanizer_sentence_split_enabled,
+          humanizer_lowercase_enabled: humanizer.humanizer_lowercase_enabled,
+          humanizer_punctuation_split_enabled: humanizer.humanizer_punctuation_split_enabled,
+        }),
         timezone_offset: config.timezone_offset,
         message_fetch_limit: config.message_fetch_limit,
         system_prompt: config.system_prompt ?? null,

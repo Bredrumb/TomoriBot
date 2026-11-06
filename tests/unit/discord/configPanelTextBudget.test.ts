@@ -13,6 +13,7 @@
  * The stored-maxima sweep keeps every locale: its truncation-tightness check detects truncation by
  * matching English marker text, so it only runs in `en-US`, and the sweep is cheap.
  */
+import { DEFAULT_HUMANIZER_SETTINGS, humanizerSettingsFromDegree } from "@/constants/humanizer";
 import { beforeAll, describe, expect, it } from "bun:test";
 import { ChannelType, ComponentType, type ActionRowData, type ButtonComponentData } from "discord.js";
 import type { LlmRow, NaiPresetRow, SavedProviderConfigRow, TomoriState, VoiceSampleRow } from "@/types/db/schema";
@@ -32,8 +33,7 @@ import {
   CONFIG_MODEL_CAPABILITY_ORDER,
   CONFIG_NAI_PRESET_PAGE_SIZE,
   CONFIG_PAGES_BY_CATEGORY,
-  isConfigCatalogModelCapability,
-  type ConfigCatalogModelCapability,
+  type ConfigModelCapability,
   type ConfigCategory,
 } from "@/utils/discord/configPanelCatalog";
 import type { ResponseDraftingView } from "@/utils/discord/interactions/responseDraftingOperations";
@@ -45,7 +45,6 @@ import {
   type ConfigVoicesView,
 } from "@/utils/discord/ui/configVoicesPanel";
 import { buildConfigVoiceBody, type ConfigPersonaVoiceRemoteView } from "@/utils/discord/ui/configVoicePanel";
-import type { ConfigCapabilityEndpoint } from "@/utils/discord/interactions/configModelLoaders";
 import type { ConfigParametersView, ConfigSwitchModelsView } from "@/utils/discord/ui/configModelsPanel";
 import {
   DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX,
@@ -65,7 +64,6 @@ import { FENCED_PREVIEW_MAX_CHARS } from "@/utils/text/textPreview";
 import { formatImageTagsForConfirmation, MAX_TAGS, TAGS_MODAL_MAX_LENGTH } from "@/utils/image/tagHelpers";
 import { formatPanelProse } from "@/utils/discord/ui/panelProse";
 import { getCapabilitiesManagePermissionDefinitions } from "@/utils/discord/manageConfigMapping";
-import { HUMANIZER_DEFAULT } from "@/utils/discord/humanizerOptions";
 import { DEFAULT_MESSAGE_FETCH_LIMIT } from "@/utils/discord/messageFetchLimit";
 import { withLinePrefix } from "@/utils/discord/ui/panel";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
@@ -339,7 +337,7 @@ function getPayloadTextTotal(payload: unknown): number {
 
 const SWITCH_MODEL_SLOT_STATES: ReadonlyArray<{
   name: string;
-  isUsable: (capability: ConfigCatalogModelCapability) => boolean;
+  isUsable: (capability: ConfigModelCapability) => boolean;
 }> = [
   { name: "all slots usable", isUsable: () => true },
   { name: "all slots unusable", isUsable: () => false },
@@ -351,10 +349,10 @@ const SWITCH_MODEL_SLOT_STATES: ReadonlyArray<{
 function makeSwitchModelsView(
   imageGenerationEnabled: boolean,
   videoGenerationEnabled: boolean,
-  slotState: (capability: ConfigCatalogModelCapability) => boolean,
+  slotState: (capability: ConfigModelCapability) => boolean,
 ): ConfigSwitchModelsView {
   return {
-    slots: CONFIG_MODEL_CAPABILITY_ORDER.filter(isConfigCatalogModelCapability).map((capability) => {
+    slots: CONFIG_MODEL_CAPABILITY_ORDER.map((capability) => {
       const provider = `provider-${capability}`;
       const usable = slotState(capability);
       return {
@@ -372,13 +370,12 @@ function makeSwitchModelsView(
     imageGenerationEnabled,
     videoGenerationEnabled,
     speechCapabilityEnabled: true,
-    endpointSlots: [{ capability: "stt", endpoints: [], pageStart: 0 }],
   };
 }
 
 function makeExplicitCatalogSlot(
-  capability: ConfigCatalogModelCapability,
-  slotState: (candidate: ConfigCatalogModelCapability) => boolean,
+  capability: ConfigModelCapability,
+  slotState: (candidate: ConfigModelCapability) => boolean,
 ) {
   const provider = `provider-${capability}`;
   const usable = slotState(capability);
@@ -396,35 +393,36 @@ function makeExplicitCatalogSlot(
 function makeExplicitSlotView(
   imageGenerationEnabled: boolean,
   videoGenerationEnabled: boolean,
-  slotState: (capability: ConfigCatalogModelCapability) => boolean,
-  endpointCount: number,
+  slotState: (capability: ConfigModelCapability) => boolean,
+  sttProviderCount: number,
   speechCapabilityEnabled: boolean,
   speechActiveIndex: number,
 ): ConfigSwitchModelsView {
-  const sttEndpoints: ConfigCapabilityEndpoint[] = Array.from({ length: endpointCount }, (_unused, index) => ({
-    kind: "custom-endpoint",
-    id: index + 1,
-    capability: "transcription",
-    label: `stt-endpoint-${index + 1}`,
-    modelLabel: `stt-model-${index + 1}`,
-    apiStyle: "openai-compatible-transcription",
-    isActive: index === speechActiveIndex,
-  }));
   const speechSlotState = () => speechActiveIndex >= 0;
+  const sttProviders = Array.from({ length: sttProviderCount }, (_unused, index) => `stt-provider-${index + 1}`);
 
   return {
-    slots: CONFIG_MODEL_CAPABILITY_ORDER.filter(isConfigCatalogModelCapability).map((capability) =>
-      makeExplicitCatalogSlot(
-        capability,
-        capability === "tts-design" || capability === "tts-clone" ? speechSlotState : slotState,
-      ),
+    slots: CONFIG_MODEL_CAPABILITY_ORDER.map((capability) =>
+      capability === "stt"
+        ? {
+            capability,
+            currentModelName: sttProviders.length > 0 ? "stt-model-1" : null,
+            currentProvider: sttProviders[0] ?? null,
+            eligibleProviders: sttProviders,
+            providerPageStart: 0,
+            expandedProvider: null,
+            expandedOptionCount: 0,
+          }
+        : makeExplicitCatalogSlot(
+            capability,
+            capability === "tts-design" || capability === "tts-clone" ? speechSlotState : slotState,
+          ),
     ),
     channelOverrides: [],
     personaOverrides: [],
     imageGenerationEnabled,
     videoGenerationEnabled,
     speechCapabilityEnabled,
-    endpointSlots: [{ capability: "stt", endpoints: sttEndpoints, pageStart: 0 }],
   };
 }
 
@@ -592,7 +590,7 @@ describe("config page text budgeting at stored maxima", () => {
             prefillModelName: "gemini-2.5-flash",
             contextNote: "G".repeat(2000),
             contextNoteDepth: 0,
-            humanizerDegree: 1,
+            humanizer: humanizerSettingsFromDegree(1),
             messageFetchLimit: 20,
             timezoneOffset: 0,
           },
@@ -623,7 +621,7 @@ describe("config page text budgeting at stored maxima", () => {
             prefillModelName: "gemini-2.5-flash",
             contextNote: null,
             contextNoteDepth: 0,
-            humanizerDegree: HUMANIZER_DEFAULT,
+            humanizer: DEFAULT_HUMANIZER_SETTINGS,
             messageFetchLimit: DEFAULT_MESSAGE_FETCH_LIMIT,
             timezoneOffset: 0,
           },
@@ -1232,7 +1230,7 @@ describe("Persona Advanced and Overrides component budgeting", () => {
       nai_attg_title: index === 0 || index === 40 ? "T".repeat(256) : undefined,
       nai_attg_tags: index === 0 || index === 40 ? "G".repeat(256) : undefined,
       nai_attg_genre: index === 0 || index === 40 ? "N".repeat(256) : undefined,
-      humanizer_degree_override: index === 0 || index === 40 ? 2 : undefined,
+      humanizer_override: index === 0 || index === 40 ? humanizerSettingsFromDegree(2) : undefined,
       llm:
         index === 0 || index === 40
           ? createLlmRow({ llm_id: 10, llm_provider: "openrouter", llm_codename: "server-model" })
@@ -1262,7 +1260,7 @@ describe("Persona Advanced and Overrides component budgeting", () => {
       page,
       personas,
       selectedPersonaId,
-      serverHumanizerDegree: 0,
+      serverHumanizer: humanizerSettingsFromDegree(0),
       readStatus: "fresh",
       view:
         page === "overrides"
@@ -1399,7 +1397,7 @@ describe("Switch Models capability notice budgeting", () => {
     receipt: boolean,
     imageGenerationEnabled: boolean,
     videoGenerationEnabled: boolean,
-    slotState: (capability: ConfigCatalogModelCapability) => boolean,
+    slotState: (capability: ConfigModelCapability) => boolean,
   ) =>
     buildConfigPanelPayload({
       locale,
@@ -1494,14 +1492,14 @@ describe("Switch Models capability notice budgeting", () => {
     const componentBudget = 36;
     const componentReserve = 4;
     const discordComponentLimit = 40;
-    const endpointCounts = [0, 1, 24, 25, 26, 60];
+    const sttProviderCounts = [0, 1, 24, 25, 26, 60];
     let maximumReceiptComponentCount = 0;
 
     for (const receipt of [false, true]) {
       for (const readStatus of RENDERING_READ_STATUSES) {
         for (const slotState of SWITCH_MODEL_SLOT_STATES) {
           for (const flags of flagCombinations) {
-            for (const endpointCount of endpointCounts) {
+            for (const sttProviderCount of sttProviderCounts) {
               const payload = buildConfigPanelPayload({
                 locale: BUDGET_LOCALE,
                 actor: GUILD_MANAGER,
@@ -1514,7 +1512,7 @@ describe("Switch Models capability notice budgeting", () => {
                   flags.imageGenerationEnabled,
                   flags.videoGenerationEnabled,
                   slotState.isUsable,
-                  endpointCount,
+                  sttProviderCount,
                   true,
                   -1,
                 ),
@@ -1525,7 +1523,7 @@ describe("Switch Models capability notice budgeting", () => {
               const validation = validateComponentsV2MessageLimits(payload);
               expect(
                 validation.valid,
-                `${BUDGET_LOCALE} ${readStatus} ${slotState.name} endpoint=${endpointCount} ` +
+                `${BUDGET_LOCALE} ${readStatus} ${slotState.name} stt=${sttProviderCount} ` +
                   `${flags.imageGenerationEnabled}/${flags.videoGenerationEnabled}: ${JSON.stringify(validation.violations)}`,
               ).toBe(true);
               for (const menu of getStringSelectMenus(payload)) {
@@ -1545,7 +1543,7 @@ describe("Switch Models capability notice budgeting", () => {
     expect(maximumReceiptComponentCount).toBeLessThanOrEqual(discordComponentLimit - componentReserve);
     expect(maximumReceiptComponentCount + componentReserve).toBe(discordComponentLimit);
 
-    const endpointPayload = buildConfigPanelPayload({
+    const sttPayload = buildConfigPanelPayload({
       locale: "en-US",
       actor: GUILD_MANAGER,
       category: "models",
@@ -1555,24 +1553,14 @@ describe("Switch Models capability notice budgeting", () => {
       readStatus: "fresh",
       switchModelsView: makeExplicitSlotView(true, true, () => false, 1, true, 0),
     });
-    expect(getTextDisplays(endpointPayload)).toContain("-# Use `/providers` to add more model choices.");
-    const endpointMenus = getStringSelectMenus(endpointPayload).filter((menu) => {
+    expect(getTextDisplays(sttPayload)).toContain("-# Use `/providers` to add more model choices.");
+    const sttMenus = getStringSelectMenus(sttPayload).filter((menu) => {
       const customId = menu.customId;
-      return typeof customId === "string" && customId.includes("ep-select");
+      return typeof customId === "string" && customId.endsWith(":stt");
     });
-    expect(endpointMenus).toHaveLength(1);
-    {
-      const menu = endpointMenus[0];
-      const placeholder = menu?.placeholder;
-      expect(typeof placeholder).toBe("string");
-      expect(placeholder).toContain(localizer("en-US", "commands.config.panel.capability_stt"));
-      expect(placeholder).toContain("stt-model-1 (stt-endpoint-1)");
-      const options = menu?.options;
-      expect(Array.isArray(options)).toBe(true);
-      for (const option of (options ?? []) as Array<Record<string, unknown>>) {
-        expect(option.default).not.toBe(true);
-      }
-    }
+    expect(sttMenus).toHaveLength(1);
+    expect(sttMenus[0]?.placeholder).toContain(localizer("en-US", "commands.config.panel.capability_stt"));
+    expect(sttMenus[0]?.placeholder).toContain("stt-model-1");
 
     for (const locale of RUNTIME_LOCALES) {
       // A working speech setup stays silent: the capability notice carries only states that need an
@@ -2217,7 +2205,7 @@ describe("bounded preview unicode and truncation boundary assertions", () => {
             prefillModelName: "gemini-2.5-flash",
             contextNote: null,
             contextNoteDepth: 0,
-            humanizerDegree: 0,
+            humanizer: humanizerSettingsFromDegree(0),
             messageFetchLimit: 10,
             timezoneOffset: 0,
           },
@@ -2295,7 +2283,7 @@ describe("bounded preview unicode and truncation boundary assertions", () => {
           prefillModelName: "gemini-2.5-flash",
           contextNote: null,
           contextNoteDepth: 0,
-          humanizerDegree: 0,
+          humanizer: humanizerSettingsFromDegree(0),
           messageFetchLimit: 10,
           timezoneOffset: 0,
         },
@@ -2365,7 +2353,7 @@ describe("bounded preview unicode and truncation boundary assertions", () => {
           prefillModelName: "gemini-2.5-flash",
           contextNote: null,
           contextNoteDepth: 0,
-          humanizerDegree: 0,
+          humanizer: humanizerSettingsFromDegree(0),
           messageFetchLimit: 10,
           timezoneOffset: 0,
         },
@@ -2790,7 +2778,7 @@ describe("config pages for a workspace with nothing configured", () => {
         prefillModelName: "gemini-2.5-flash",
         contextNote: null,
         contextNoteDepth: 0,
-        humanizerDegree: HUMANIZER_DEFAULT,
+        humanizer: DEFAULT_HUMANIZER_SETTINGS,
         messageFetchLimit: DEFAULT_MESSAGE_FETCH_LIMIT,
         timezoneOffset: 0,
       },

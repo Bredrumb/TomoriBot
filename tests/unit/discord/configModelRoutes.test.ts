@@ -6,7 +6,7 @@
  * than by substituting an operations double, which would restate the expected answer instead of
  * exercising the code under test.
  */
-import { afterEach, beforeAll, describe, expect, it, spyOn } from "bun:test";
+import { beforeAll, describe, expect, it, spyOn } from "bun:test";
 import type { Client } from "discord.js";
 import type { SavedProviderConfigRow, TomoriState } from "@/types/db/schema";
 import type { PanelReadStatus } from "@/types/discord/panel";
@@ -30,8 +30,6 @@ import {
   CONFIG_NAI_PRESET_NEXT_VALUE,
   CONFIG_NAI_PRESET_PAGE_SIZE,
   computeNaiPresetFingerprint,
-  isConfigCatalogModelCapability,
-  type ConfigCatalogModelCapability,
   type ConfigModelCapability,
 } from "@/utils/discord/configPanelCatalog";
 import {
@@ -45,8 +43,6 @@ import {
   decodeConfigProviderPageValue,
   decodeConfigProviderRangeValue,
   encodeConfigProviderPageValue,
-  computeConfigEndpointFingerprint,
-  encodeConfigEndpointSelection,
   loadConfigFallbacksView,
   loadConfigImageGenerationView,
   loadConfigParametersView,
@@ -56,8 +52,9 @@ import { createConfigInteractionRoute } from "@/utils/discord/interactions/confi
 import type { ConfigRouteDependencies, ConfigScope } from "@/utils/discord/interactions/configRouteContext";
 import type { NaiPresetRow } from "@/types/db/schema";
 import { providerPanelOperations } from "@/utils/provider/providerPanelOperations";
-import type { ConfigCapabilityEndpoint } from "@/utils/discord/interactions/configModelLoaders";
-import type { ConfigEndpointSlotView, ConfigSwitchModelsProviderPage } from "@/utils/discord/ui/configModelsPanel";
+import * as speechRepository from "@/utils/db/repositories/SpeechRepository";
+import * as transcriptionCatalogue from "@/utils/cache/openrouterTranscriptionModelCache";
+import type { ConfigSwitchModelsProviderPage } from "@/utils/discord/ui/configModelsPanel";
 import { InteractionRouteRegistry } from "@/utils/discord/interactions/routeRegistry";
 import { buildConfigModalFieldId } from "@/utils/discord/ui/configModals";
 import { buildConfigFallbackSlotId } from "@/utils/discord/ui/configModelModals";
@@ -79,8 +76,7 @@ beforeAll(async () => initializeLocalizer());
 const CLIENT = {} as Client;
 
 type ConfigInteraction = Parameters<ReturnType<typeof createConfigInteractionRoute>["execute"]>[1];
-const CATALOG_MODEL_CAPABILITIES: readonly ConfigCatalogModelCapability[] =
-  CONFIG_MODEL_CAPABILITY_ORDER.filter(isConfigCatalogModelCapability);
+const CATALOG_MODEL_CAPABILITIES: readonly ConfigModelCapability[] = CONFIG_MODEL_CAPABILITY_ORDER;
 
 function makeState({ config, ...overrides }: Record<string, unknown> = {}): TomoriState {
   return {
@@ -176,19 +172,6 @@ function makeNaiPreset(name: string, target: "kayra" | "erato" = "kayra"): NaiPr
   };
 }
 
-function makeEndpointSlot(count: number, activeIndex = -1): ConfigEndpointSlotView {
-  const endpoints: ConfigCapabilityEndpoint[] = Array.from({ length: count }, (_unused, index) => ({
-    kind: "custom-endpoint",
-    id: index + 1,
-    capability: "transcription",
-    label: `stt-endpoint-${index + 1}`,
-    modelLabel: `stt-model-${index + 1}`,
-    apiStyle: "openai-compatible-transcription",
-    isActive: index === activeIndex,
-  }));
-  return { capability: "stt", endpoints, pageStart: 0 };
-}
-
 interface HarnessOptions {
   isManager?: boolean;
   inGuild?: boolean;
@@ -204,7 +187,6 @@ interface HarnessOptions {
   naiPresets?: NaiPresetRow[];
   selectedConfig?: SavedProviderConfigRow | null;
   fallbackProviderEntries?: Array<{ value: string; label: string }>;
-  endpointSlots?: ConfigEndpointSlotView[];
   modelOperationsOverrides?: Partial<ConfigModelOperations>;
 }
 
@@ -275,7 +257,6 @@ function makeHarness(options: HarnessOptions = {}): Harness {
         state,
         _workspaceDiscId,
         providerPage: ConfigSwitchModelsProviderPage | undefined,
-        endpointPage,
       ) => ({
         slots: CATALOG_MODEL_CAPABILITIES.map((capability) => ({
           capability,
@@ -301,12 +282,7 @@ function makeHarness(options: HarnessOptions = {}): Harness {
         personaOverrides: [{ target: "**Juno**", model: "claude-sonnet-4 (OpenRouter)" }],
         imageGenerationEnabled: state.config.imagegen_enabled,
         videoGenerationEnabled: state.config.videogen_enabled,
-        endpointSlots: options.endpointSlots?.map((slot) => ({
-          ...slot,
-          pageStart: endpointPage?.capability === slot.capability ? endpointPage.start : slot.pageStart,
-        })),
       }),
-      loadCapabilityEndpoints: async () => options.endpointSlots?.[0]?.endpoints ?? [],
       loadParametersView: async (_state, requestedProvider, _logitBiasPageStart, naiPresetPageStart = 0) => {
         const providers = options.parametersProviders ?? ["google"];
         const parameterState = options.state ?? makeState();
@@ -497,155 +473,26 @@ describe("config models provider eligibility", () => {
 });
 
 describe("config models switch page", () => {
-  it("keeps endpoint selectors bounded and reaches every endpoint window", async () => {
-    for (const count of [0, 1, 24, 25, 26, 60]) {
-      const endpointSlots = [makeEndpointSlot(count)];
-      const harness = makeHarness({ endpointSlots });
-      const customId = buildConfigRouteId({ action: "endpoint-select", locale: "en-US", capability: "stt" });
-      const visited = new Set<number>();
-      let values: string[] = [];
-      for (let step = 0; step <= count + 1; step += 1) {
-        await dispatch(
+  it("offers a No Model entry on the STT slot only while a target is set", async () => {
+    const customId = buildConfigRouteId({ action: "model-provider-select", locale: "en-US", capability: "stt" });
+    for (const current of [null, "openai/whisper-large-v3-turbo"]) {
+      const harness = makeHarness({
+        currentModels: { stt: current },
+        currentProviders: { stt: current && "openrouter" },
+      });
+      await dispatch(
+        harness,
+        makeInteraction({
+          customId: buildConfigRouteId({ action: "page", locale: "en-US", category: "models", page: "switch" }),
+          kind: "select",
+          values: ["switch"],
           harness,
-          makeInteraction({
-            customId: buildConfigRouteId({ action: "page", locale: "en-US", category: "models", page: "switch" }),
-            kind: "select",
-            values: ["switch"],
-            harness,
-          }),
-        );
-        values = selectOptionValues(harness.edits.at(-1), customId);
-        expect(values.length).toBeLessThanOrEqual(25);
-        for (const value of values) {
-          const match = /^ep\|(\d+)\|/.exec(value);
-          if (match) visited.add(Number(match[1]));
-        }
-        const next = values.find((value) => value.startsWith("ep-page|"));
-        if (!next) break;
-        await dispatch(harness, makeInteraction({ customId, kind: "select", values: [next], harness }));
-        values = selectOptionValues(harness.edits.at(-1), customId);
-        for (const value of values) {
-          const match = /^ep\|(\d+)\|/.exec(value);
-          if (match) visited.add(Number(match[1]));
-        }
-        if (!values.some((value) => value.startsWith("ep-page|"))) break;
-        // The next loop re-renders from the current page in the harness.
-        endpointSlots[0].pageStart = Number(values.find((value) => value.startsWith("ep-page|"))?.split("|")[1] ?? 0);
-      }
-      expect(visited.size).toBe(count);
-      if (count === 0) {
-        expect(findComponentByCustomId(harness.edits.at(-1), customId)?.disabled).toBe(true);
-      }
+        }),
+      );
+      expect(selectOptionValues(harness.edits.at(-1), customId).includes(CONFIG_MODEL_CLEAR_VALUE)).toBe(
+        current !== null,
+      );
     }
-  });
-
-  describe("endpoint activation routes", () => {
-    const activationSpies: Array<{ mockRestore: () => void }> = [];
-
-    afterEach(() => {
-      for (const activationSpy of activationSpies.splice(0)) activationSpy.mockRestore();
-    });
-
-    it("re-reads the endpoint list and delegates a successful STT selection", async () => {
-      const activationSpy = spyOn(providerPanelOperations, "activateWorkspaceEndpoint").mockImplementation(
-        async (input) => ({
-          status: "success",
-          identity: `${input.customEndpointId} (${input.capability})`,
-          sourceChanged: false,
-        }),
-      );
-      activationSpies.push(activationSpy);
-      const endpointSlots = [makeEndpointSlot(1)];
-      const harness = makeHarness({ endpointSlots });
-      const fingerprint = computeConfigEndpointFingerprint(endpointSlots[0].endpoints);
-      await dispatch(
-        harness,
-        makeInteraction({
-          customId: buildConfigRouteId({ action: "endpoint-select", locale: "en-US", capability: "stt" }),
-          kind: "select",
-          values: [encodeConfigEndpointSelection(0, fingerprint)],
-          harness,
-        }),
-      );
-
-      expect(activationSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ capability: "transcription", customEndpointId: 1 }),
-      );
-      expect(harness.telemetry).toContain("server-config.workspace.model.endpoint-select");
-    });
-
-    it("rejects malformed, out-of-range, and changed-fingerprint selections without a write", async () => {
-      const endpointSlots = [makeEndpointSlot(1)];
-      const harness = makeHarness({ endpointSlots });
-      const activationSpy = spyOn(providerPanelOperations, "activateWorkspaceEndpoint");
-      activationSpies.push(activationSpy);
-      const fingerprint = computeConfigEndpointFingerprint(endpointSlots[0].endpoints);
-      for (const value of ["not-an-endpoint", `ep|1|${fingerprint}`, encodeConfigEndpointSelection(0, "deadbeef")]) {
-        await dispatch(
-          harness,
-          makeInteraction({
-            customId: buildConfigRouteId({ action: "endpoint-select", locale: "en-US", capability: "stt" }),
-            kind: "select",
-            values: [value],
-            harness,
-          }),
-        );
-      }
-      expect(activationSpy).not.toHaveBeenCalled();
-      expect(JSON.stringify(harness.edits.at(-1))).toContain(
-        localizedCopy("en-US", "commands.config.panel.stale_heading"),
-      );
-    });
-
-    it("stops a non-manager at the real route authorization gate", async () => {
-      const endpointSlots = [makeEndpointSlot(1)];
-      const harness = makeHarness({ endpointSlots, isManager: false });
-      const repositoryWriteSpy = spyOn(llmProviderRepo, "setActiveCustomEndpoint");
-      activationSpies.push(repositoryWriteSpy);
-      const fingerprint = computeConfigEndpointFingerprint(endpointSlots[0].endpoints);
-      await dispatch(
-        harness,
-        makeInteraction({
-          customId: buildConfigRouteId({ action: "endpoint-select", locale: "en-US", capability: "stt" }),
-          kind: "select",
-          isManager: false,
-          values: [encodeConfigEndpointSelection(0, fingerprint)],
-          harness,
-        }),
-      );
-      expect(repositoryWriteSpy).not.toHaveBeenCalled();
-      expect(harness.replies).toHaveLength(1);
-    });
-
-    it("keeps a DM-backed config workspace on server-scoped endpoint activation", async () => {
-      const activationSpy = spyOn(providerPanelOperations, "activateWorkspaceEndpoint").mockImplementation(
-        async (input) => ({
-          status: "success",
-          identity: `${input.customEndpointId} (${input.capability})`,
-          sourceChanged: false,
-        }),
-      );
-      activationSpies.push(activationSpy);
-      const endpointSlots = [makeEndpointSlot(1)];
-      const harness = makeHarness({ endpointSlots, inGuild: false });
-      const fingerprint = computeConfigEndpointFingerprint(endpointSlots[0].endpoints);
-
-      await dispatch(
-        harness,
-        makeInteraction({
-          customId: buildConfigRouteId({ action: "endpoint-select", locale: "en-US", capability: "stt" }),
-          kind: "select",
-          inGuild: false,
-          values: [encodeConfigEndpointSelection(0, fingerprint)],
-          harness,
-        }),
-      );
-
-      expect(activationSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ serverDiscId: "user-1", capability: "transcription", customEndpointId: 1 }),
-      );
-      expect(activationSpy.mock.calls[0]?.[0].scopeKind).not.toBe("personal");
-    });
   });
 
   it("renders every capability slot and the Text-override rows", async () => {
@@ -1054,20 +901,6 @@ describe("config models switch page", () => {
     }
   });
 
-  it("refuses an endpoint capability that reaches the provider select", async () => {
-    const harness = makeHarness();
-    const selection = makeInteraction({
-      customId: buildConfigRouteId({ action: "model-provider-select", locale: "en-US", capability: "stt" }),
-      kind: "select",
-      values: ["google"],
-      harness,
-    });
-    await dispatch(harness, selection);
-
-    expect(selection.calls.map((call) => call.method)).toEqual(["reply"]);
-    expect(harness.modals).toHaveLength(0);
-  });
-
   it("opens the picker with one page of models rather than a second panel page", async () => {
     const harness = makeHarness({ models: [{ id: 7, name: "gemini-2.5-pro", description: "Pro" }] });
     const selection = makeInteraction({
@@ -1379,37 +1212,92 @@ describe("config models capability writes", () => {
     });
   });
 
-  it("rejects endpoint capabilities without model repository or cache writes", async () => {
-    const providers = spyOn(llmProviderRepo, "loadSavedProviderConfigs").mockResolvedValue([]);
-    const modelUpdate = spyOn(configRepository, "updateModelConfig").mockResolvedValue(true);
-    const naiUpdate = spyOn(configRepository, "updateNovelaiImagegenConfig").mockResolvedValue(true);
-    const invalidate = spyOn(tomoriStateCache, "invalidateTomoriStateCache").mockImplementation(() => undefined);
-
-    const setResult = await configModelOperations.setCapabilityModel({
-      tomoriState: makeState(),
-      serverDiscId: "guild-1",
-      capability: "stt",
-      provider: "custom:12",
-      modelId: 7,
+  it("lists hosted and endpoint transcription providers and writes each through its own target", async () => {
+    const saved = spyOn(llmProviderRepo, "loadSavedProviderConfigs").mockResolvedValue([
+      makeSavedProvider("openrouter"),
+      makeSavedProvider("novelai"),
+    ]);
+    const endpoints = spyOn(llmProviderRepo, "loadCustomEndpointsForServer").mockResolvedValue([
+      {
+        custom_endpoint_id: 41,
+        connection_id: 12,
+        server_id: 9,
+        capability: "transcription",
+        api_style: "openai-compatible-transcription",
+        label: "whisper-local",
+        model_name: "large-v3",
+        extra_config: {},
+      },
+    ] as never);
+    const transcriptionModels = spyOn(llmModelRepo, "loadAvailableTranscriptionModels").mockImplementation(
+      async (provider) =>
+        provider === "openrouter"
+          ? ([
+              {
+                transcription_model_id: 6,
+                provider,
+                codename: "openai/whisper-large-v3-turbo",
+                descriptions: null,
+                is_default: true,
+                is_deprecated: false,
+                is_scoped_registration: false,
+              },
+            ] as never)
+          : [],
+    );
+    const activation = spyOn(providerPanelOperations, "activateWorkspaceEndpoint").mockResolvedValue({
+      status: "success",
+      identity: "whisper-local (transcription)",
+      sourceChanged: false,
     });
-    const clearResult = await configModelOperations.clearCapabilityModel({
-      tomoriState: makeState(),
-      serverDiscId: "guild-1",
-      capability: "stt",
-    });
+    const catalogue = spyOn(transcriptionCatalogue, "validateOpenRouterTranscriptionModel").mockResolvedValue(true);
+    const selection = spyOn(speechRepository, "setHostedTranscriptionSelection").mockResolvedValue(true);
+    const hasSelection = spyOn(speechRepository, "hasTranscriptionSelection").mockResolvedValue(true);
+    try {
+      expect(await loadConfigModelProviders(9, "stt")).toEqual(["openrouter", "custom:12"]);
 
-    expect(setResult.status).toBe("not-found");
-    expect(clearResult.status).toBe("not-clearable");
+      const endpointResult = await configModelOperations.setCapabilityModel({
+        tomoriState: makeState(),
+        serverDiscId: "guild-1",
+        capability: "stt",
+        provider: "custom:12",
+        modelId: 41,
+      });
+      expect(endpointResult.status).toBe("success");
+      expect(activation).toHaveBeenCalledWith(
+        expect.objectContaining({ capability: "transcription", customEndpointId: 41 }),
+      );
 
-    expect(providers).not.toHaveBeenCalled();
-    expect(modelUpdate).not.toHaveBeenCalled();
-    expect(naiUpdate).not.toHaveBeenCalled();
-    expect(invalidate).not.toHaveBeenCalled();
+      const hostedResult = await configModelOperations.setCapabilityModel({
+        tomoriState: makeState(),
+        serverDiscId: "guild-1",
+        capability: "stt",
+        provider: "openrouter",
+        modelId: 6,
+      });
+      expect(hostedResult.status).toBe("success");
+      expect(selection).toHaveBeenCalledWith({ kind: "server", ownerId: 9 }, 6);
 
-    providers.mockRestore();
-    modelUpdate.mockRestore();
-    naiUpdate.mockRestore();
-    invalidate.mockRestore();
+      const clearResult = await configModelOperations.clearCapabilityModel({
+        tomoriState: makeState(),
+        serverDiscId: "guild-1",
+        capability: "stt",
+      });
+      expect(clearResult.status).toBe("success");
+      expect(selection).toHaveBeenLastCalledWith({ kind: "server", ownerId: 9 }, null);
+
+      hasSelection.mockResolvedValue(false);
+      const alreadyClear = await configModelOperations.clearCapabilityModel({
+        tomoriState: makeState(),
+        serverDiscId: "guild-1",
+        capability: "stt",
+      });
+      expect(alreadyClear.status).toBe("already-clear");
+    } finally {
+      for (const spy of [saved, endpoints, transcriptionModels, activation, catalogue, selection, hasSelection]) {
+        spy.mockRestore();
+      }
+    }
   });
 
   it("offers only providers with a model for the speech mode and activates a speech connection", async () => {
@@ -2455,6 +2343,7 @@ describe("config models view loaders", () => {
     const decisions = spyOn(llmModelRepo, "loadDecisionModelOptions").mockResolvedValue([]);
     const speechEndpoints = spyOn(llmProviderRepo, "loadCustomEndpointsForServer").mockResolvedValue([]);
     const speechModels = spyOn(llmModelRepo, "loadAvailableSpeechModels").mockResolvedValue([]);
+    const transcriptionModels = spyOn(llmModelRepo, "loadAvailableTranscriptionModels").mockResolvedValue([]);
     const personas = spyOn(tomoriStateCache, "getCachedAllPersonas").mockResolvedValue([
       {
         ...makeState(),
@@ -2465,8 +2354,8 @@ describe("config models view loaders", () => {
       makeState(),
     ] as unknown as TomoriState[]);
 
-    const view = await loadConfigSwitchModelsView(makeState(), "guild-1", undefined, undefined, async () => []);
-    expect<readonly ConfigCatalogModelCapability[]>(view.slots.map((slot) => slot.capability)).toEqual(
+    const view = await loadConfigSwitchModelsView(makeState(), "guild-1", undefined);
+    expect<readonly ConfigModelCapability[]>(view.slots.map((slot) => slot.capability)).toEqual(
       CATALOG_MODEL_CAPABILITIES,
     );
     expect(providers).toHaveBeenCalledTimes(CATALOG_MODEL_CAPABILITIES.length);
@@ -2500,6 +2389,7 @@ describe("config models view loaders", () => {
     decisions.mockRestore();
     speechEndpoints.mockRestore();
     speechModels.mockRestore();
+    transcriptionModels.mockRestore();
     channelOverrides.mockRestore();
     personas.mockRestore();
   });
@@ -2517,9 +2407,10 @@ describe("config models view loaders", () => {
     const decisions = spyOn(llmModelRepo, "loadDecisionModelOptions").mockResolvedValue([]);
     const speechEndpoints = spyOn(llmProviderRepo, "loadCustomEndpointsForServer").mockResolvedValue([]);
     const speechModels = spyOn(llmModelRepo, "loadAvailableSpeechModels").mockResolvedValue([]);
+    const transcriptionModels = spyOn(llmModelRepo, "loadAvailableTranscriptionModels").mockResolvedValue([]);
     const personas = spyOn(tomoriStateCache, "getCachedAllPersonas").mockResolvedValue([] as unknown as TomoriState[]);
 
-    const view = await loadConfigSwitchModelsView(makeState(), "guild-1", undefined, undefined, async () => []);
+    const view = await loadConfigSwitchModelsView(makeState(), "guild-1", undefined);
     const payload = buildConfigPanelPayload({
       locale: "en-US",
       actor: { workspaceKind: "guild", isManager: true },
@@ -2541,6 +2432,7 @@ describe("config models view loaders", () => {
     decisions.mockRestore();
     speechEndpoints.mockRestore();
     speechModels.mockRestore();
+    transcriptionModels.mockRestore();
     channelOverrides.mockRestore();
     personas.mockRestore();
   });

@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { type HumanizerPreset, type HumanizerSettings, matchHumanizerPreset } from "@/constants/humanizer";
 import type { ChatInvocationSource } from "@/utils/chat/diagnosticTimeline";
 import { log } from "@/utils/misc/logger";
 
@@ -44,7 +45,7 @@ interface ChatTurnLatencyFields {
   image_fetches: number;
   image_ms: number;
   provider: LatencyProvider;
-  humanizer: "none" | "light" | "medium" | "heavy" | "unknown";
+  humanizer: HumanizerPreset | "custom" | "unknown";
   source: ChatInvocationSource;
   rag: YesNo;
   history: "rest" | "reused";
@@ -141,11 +142,11 @@ export async function measureChatTurnStage<T>(field: StageField, callback: () =>
   }
 }
 
-export function recordChatTurnConfiguration(provider: string, humanizer: number): void {
+export function recordChatTurnConfiguration(provider: string, humanizer: HumanizerSettings): void {
   const active = current();
   if (!active) return;
   if (active.fields.dispatch_ms < 0) active.fields.provider = providerDimension(provider);
-  active.fields.humanizer = (["none", "light", "medium", "heavy"] as const)[humanizer] ?? "unknown";
+  active.fields.humanizer = matchHumanizerPreset(humanizer) ?? "custom";
 }
 
 function providerDimension(provider: string): LatencyProvider {

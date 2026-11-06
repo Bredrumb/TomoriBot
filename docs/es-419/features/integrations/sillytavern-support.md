@@ -68,7 +68,7 @@ Cuando un preajuste importado está activo, este controla por completo el prompt
 ### Notas de compatibilidad
 
 - Los nodos deshabilitados en `prompt_order` permanecen inactivos hasta que se habilitan en `/config` > `Plugins` > SillyTavern Presets. Los nodos vacíos y de solo comentarios nunca se envían.
-- El orden de los bloques es literal: colocar `chatHistory` delante de `dialogueExamples` coloca el historial de chat primero en el mensaje.
+- El orden de los marcadores es literal: colocar `chatHistory` delante de `dialogueExamples` coloca el historial de chat primero. Los marcadores de world info posicionan el lore de Always On; el lore activado, los documentos recuperados, la presencia y el reloj permanecen cerca de los cuatro turnos de diálogo más recientes. La memoria a corto plazo reciente o entre canales también permanece cerca de esos mensajes, o más cerca si está configurado.
 - Las inyecciones posteriores al historial se fusionan con el historial de conversaciones existente en lugar de enviarse como mensajes independientes.
 - No se admiten el posprocesamiento de expresiones regulares, los parámetros de muestreo predefinidos (temperatura, top-p) ni los ajustes preestablecidos en capas. Los ajustes preestablecidos de finalización de texto heredados se importan con bloques solo ST eliminados.
 

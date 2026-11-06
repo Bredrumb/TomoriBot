@@ -6,7 +6,7 @@ import { VertexStreamAdapter } from "@/providers/vertex/vertexStreamAdapter";
 import { VertexexpressStreamAdapter } from "@/providers/vertexexpress/vertexexpressStreamAdapter";
 import { OpenAICompatibleStreamAdapter } from "@/providers/openaiCompatible/openaiCompatibleStreamAdapter";
 import { OpenrouterStreamAdapter } from "@/providers/openrouter/openrouterStreamAdapter";
-import { HumanizerDegree } from "@/types/db/schema";
+import { humanizerSettingsFromDegree } from "@/constants/humanizer";
 import type { StreamConfig, StreamContext, StreamProvider } from "@/types/stream/interfaces";
 import type { StreamResult } from "@/types/provider/interfaces";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
@@ -31,7 +31,7 @@ const config: StreamConfig = {
   baseTypeSpeedMsPerChar: 0,
   maxTypingTimeMs: 0,
   minVisibleTypingDurationMs: 0,
-  humanizerDegree: HumanizerDegree.NONE,
+  humanizer: humanizerSettingsFromDegree(0),
   emojiUsageEnabled: true,
 };
 

@@ -26,16 +26,10 @@ import {
   personaAuthoredIdleNudgesSchema,
 } from "@/modules/natural-nudges/db/types";
 import { UTC_OFFSET_MAX, UTC_OFFSET_MIN, UTC_OFFSET_STEP_HOURS } from "@/constants/utcOffset";
+import type { HumanizerSettings } from "@/constants/humanizer";
 
 /** A UTC offset in hours on a quarter-hour mark, such as 5.5 for UTC+5:30. */
 export const utcOffsetSchema = z.number().min(UTC_OFFSET_MIN).max(UTC_OFFSET_MAX).multipleOf(UTC_OFFSET_STEP_HOURS);
-
-export enum HumanizerDegree {
-  NONE = 0,
-  LIGHT = 1,
-  MEDIUM = 2,
-  HEAVY = 3,
-}
 
 export enum PrivacyLevel {
   MINIMAL = 0, // Full personalization features
@@ -848,13 +842,25 @@ export const responseReviewerPromptSchema = z
   .string()
   .refine((value) => value.trim().length > 0 && getDiscordTextLength(value) <= RESPONSE_REVIEWER_PROMPT_MAX_LENGTH);
 
+const humanizerSettingsSchema = z.object({
+  humanizer_streaming_enabled: z.boolean(),
+  humanizer_pacing_enabled: z.boolean(),
+  humanizer_sentence_split_enabled: z.boolean(),
+  humanizer_lowercase_enabled: z.boolean(),
+  humanizer_punctuation_split_enabled: z.boolean(),
+}) satisfies z.ZodType<HumanizerSettings>;
+
 const serverChatConfigSchema = z.object({
   response_reviewer_llm_id: z.number().int().positive().nullable().default(null),
   response_reviewer_prompt: responseReviewerPromptSchema.nullable().default(null),
   response_rule_checker_ref: responseRuleCheckerConfigSchema,
   response_review_items: responseReviewItemsSchema.default(() => [...DEFAULT_RESPONSE_REVIEW_ITEMS]),
   server_id: z.number().int(),
-  humanizer_degree: z.nativeEnum(HumanizerDegree).default(HumanizerDegree.LIGHT),
+  humanizer_streaming_enabled: z.boolean().default(true),
+  humanizer_pacing_enabled: z.boolean().default(false),
+  humanizer_sentence_split_enabled: z.boolean().default(false),
+  humanizer_lowercase_enabled: z.boolean().default(false),
+  humanizer_punctuation_split_enabled: z.boolean().default(false),
   message_fetch_limit: z.number().int().default(80),
   send_message_limit: z.number().int().default(0),
   match_limit: z.number().int().default(3),
@@ -1182,7 +1188,12 @@ export const personaConfigSchema = z.object({
   reward_conditioning_enabled: z.boolean().default(true),
   punish_conditioning_enabled: z.boolean().default(true),
   llm_id: z.number().int().nullable().optional(),
-  humanizer_degree: z.number().int().min(0).max(3).nullable().optional(), // NULL inherits server_chat_configs
+  // All five are NULL together to inherit server_chat_configs (persona_configs_humanizer_override_complete).
+  humanizer_streaming_enabled: z.boolean().nullable().optional(),
+  humanizer_pacing_enabled: z.boolean().nullable().optional(),
+  humanizer_sentence_split_enabled: z.boolean().nullable().optional(),
+  humanizer_lowercase_enabled: z.boolean().nullable().optional(),
+  humanizer_punctuation_split_enabled: z.boolean().nullable().optional(),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });
@@ -1672,7 +1683,7 @@ export type TomoriState = TomoriRow &
     persona_attributes: PersonaAttributeRow[];
     reward_conditioning_enabled: boolean;
     punish_conditioning_enabled: boolean;
-    humanizer_degree_override: number | null; // When set, load-time overlay writes it onto config.humanizer_degree
+    humanizer_override: HumanizerSettings | null; // When set, load-time overlay writes it onto config's humanizer toggles
     server_memories: string[];
     rotation_keys?: ApiKeyRotationRow[];
     persona_llm?: LlmRow; // Persona-specific model override (highest priority in chain)
@@ -1693,7 +1704,7 @@ export const tomoriStateSchema = tomoriSchema.merge(personaScopedConfigStateSche
   persona_attributes: z.array(personaAttributeSchema).default([]),
   reward_conditioning_enabled: z.boolean().default(true),
   punish_conditioning_enabled: z.boolean().default(true),
-  humanizer_degree_override: z.number().int().min(0).max(3).nullable().default(null), // NULL inherits global setting
+  humanizer_override: humanizerSettingsSchema.nullable().default(null), // NULL inherits global setting
   server_memories: z.array(z.string()).default([]),
   rotation_keys: z.array(apiKeyRotationSchema).optional(),
   persona_llm: llmSchema.optional(), // Persona-specific model override (highest priority in chain)

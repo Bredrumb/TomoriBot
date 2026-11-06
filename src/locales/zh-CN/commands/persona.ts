@@ -79,7 +79,9 @@ export default {
       export_json_description: "导出可导入的JSON文件，代替PNG（不含头像）",
       description: `把当前人格导出成可分享的 PNG 文件`,
       success_title: `🟢 人格导出成功`,
-      success_description: `当前人格 **{nickname}** 已导出！把这张 PNG 文件分享给别人，就能传播这份人格配置。`,
+      success_description: `当前人格 **{nickname}** 已导出！把这张 PNG 文件分享给别人，就能传播这份人格配置。
+1. 下载下方附加的 PNG 文件
+2. 使用 \`/persona import\` 并附带该 PNG 文件即可导入此人格`,
       success_description_json: `当前人格 **{nickname}** 已导出为 JSON 文件。
 
 **注意：** 这份 JSON 可以用 \`/persona import\` 重新导入，但不包含头像图片。想把头像一起分享，请用 PNG 导出。`,

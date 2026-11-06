@@ -247,8 +247,8 @@ export async function loadHostedTranscriptionSelections(
 /**
  * Points one owner's transcription slot at a hosted model, or clears it with `null`.
  *
- * A server holds either a hosted model or a default custom endpoint, so selecting a model clears the
- * endpoint default in the same transaction.
+ * A server holds either a hosted model or a default custom endpoint, so every server write clears the
+ * endpoint default in the same transaction; with `null` that leaves the server with no transcription.
  */
 export async function setHostedTranscriptionSelection(
   scope: OpenRouterModelScope,
@@ -294,14 +294,12 @@ export async function setHostedTranscriptionSelection(
       if (scope.kind === "server") {
         await tx`INSERT INTO server_speech_configs (server_id) VALUES (${scope.ownerId}) ON CONFLICT DO NOTHING`;
         await tx`UPDATE server_speech_configs SET transcription_model_id = ${modelId} WHERE server_id = ${scope.ownerId}`;
-        if (model) {
-          await tx`
-            UPDATE custom_endpoints ce SET is_default = false, updated_at = CURRENT_TIMESTAMP
-            FROM custom_endpoint_connections cec
-            WHERE ce.connection_id = cec.connection_id AND cec.server_id = ${scope.ownerId} AND cec.user_id IS NULL
-              AND cec.capability = 'transcription' AND ce.is_default = true
-          `;
-        }
+        await tx`
+          UPDATE custom_endpoints ce SET is_default = false, updated_at = CURRENT_TIMESTAMP
+          FROM custom_endpoint_connections cec
+          WHERE ce.connection_id = cec.connection_id AND cec.server_id = ${scope.ownerId} AND cec.user_id IS NULL
+            AND cec.capability = 'transcription' AND ce.is_default = true
+        `;
       } else {
         await tx`
           UPDATE user_saved_provider_configs SET

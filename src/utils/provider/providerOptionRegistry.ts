@@ -310,10 +310,11 @@ export type ProviderOptionModelViewCapability =
   | "nai-image"
   | "video"
   | "tts-design"
-  | "tts-clone";
+  | "tts-clone"
+  | "stt";
 
 const MODEL_VIEW_CAPABILITY: Record<
-  Exclude<ProviderOptionModelViewCapability, "nai-image">,
+  Exclude<ProviderOptionModelViewCapability, "nai-image" | "stt">,
   ProviderOptionCapability
 > = {
   text: "text",
@@ -329,7 +330,7 @@ const MODEL_VIEW_CAPABILITY: Record<
 export function providerOptionCapabilityForModelView(
   capability: ProviderOptionModelViewCapability,
 ): ProviderOptionCapability | null {
-  return capability === "nai-image" ? null : MODEL_VIEW_CAPABILITY[capability];
+  return capability === "nai-image" || capability === "stt" ? null : MODEL_VIEW_CAPABILITY[capability];
 }
 
 export function providerOptionOffersModelViewCapability(

@@ -1,3 +1,4 @@
+import { type HumanizerSettings, humanizerSettingsFromDegree } from "@/constants/humanizer";
 import { SETUP_FEATURES, type SetupFeature } from "@/types/db/schema";
 /**
  * Regression harness: atomic server setup transactions across provider modes.
@@ -354,6 +355,15 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server setup transaction regression", () =
     `;
     expect(modelConfig.llm_id).toBe(syntheticModel.llm_id);
     expect(modelConfig.api_key).not.toBeNull();
+
+    const [chatConfig] = await testSql<Array<HumanizerSettings>>`
+      SELECT cc.humanizer_streaming_enabled, cc.humanizer_pacing_enabled,
+        cc.humanizer_sentence_split_enabled, cc.humanizer_lowercase_enabled, cc.humanizer_punctuation_split_enabled
+      FROM server_chat_configs cc
+      JOIN servers s ON s.server_id = cc.server_id
+      WHERE s.server_disc_id = ${CUSTOM_SERVER_ID}
+    `;
+    expect({ ...chatConfig }).toEqual(humanizerSettingsFromDegree(2));
   });
 
   it("refuses a custom endpoint API style that lacks text capability", async () => {

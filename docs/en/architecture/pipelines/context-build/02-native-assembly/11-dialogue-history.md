@@ -35,7 +35,7 @@ simplifiedMessageHistory
   resolver, so the instruction to call `read_file` appears only when the turn exposes it; otherwise the
   hint says the contents are unavailable. The filename and media ID are filled in after expansion, so a
   filename is never parsed as a macro.
-- **Deterministic humanization**: At `humanizer_degree >= HumanizerDegree.HEAVY`, model-role historical turns pass through `humanizeString` with `suppressPunctuationNoise: true`. This applies casing normalization and semicolon stripping without randomized comma noise, preserving prefix stability for provider prompt caching.
+- **Deterministic humanization**: When the Force Lowercase or Punctuation Splits toggle is on, model-role historical turns pass through `applyStableHumanizer`. It applies only the deterministic casing and semicolon normalization those toggles imply, never the randomized comma noise, preserving prefix stability for provider prompt caching.
 
 NovelAI reads the item's `completionText` projection. History simplification preserves original
 message prose in `completionContent` before adding reply references, reactions, and media hints.

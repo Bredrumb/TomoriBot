@@ -15,7 +15,7 @@ The contributor `buildSampleDialogueContextItems` in `src/utils/text/context/tem
    - **User example**: When the user prompt matches `UNPAIRED_SAMPLE_DIALOGUE_SENTINEL`, the user turn is omitted and only the model turn emits. Otherwise, the turn text passes through humanization (if enabled), mention conversion, and uncensor transforms, and emits as a `user`-role item tagged `DIALOGUE_SAMPLE`.
    - **Model example**: Ensures the bot name prefix (`${botName}: `) is present on the model output. The text passes through humanization, mention conversion, and uncensor transforms, and emits as a `model`-role item tagged `DIALOGUE_SAMPLE`.
 3. **Humanizer handling**:
-   - At `humanizer_degree >= HumanizerDegree.HEAVY`, both turns pass through `humanizeString` with `suppressPunctuationNoise: true`. This applies casing normalization and semicolon stripping while keeping commas and quotes intact as stable few-shot syntax examples.
+   - When the Force Lowercase or Punctuation Splits toggle is on, both turns pass through `applyStableHumanizer`. Force Lowercase normalizes casing and Punctuation Splits strips semicolons; the randomized comma and emphasis rolls never run here, so commas and quotes stay intact as stable few-shot syntax examples.
 
 ## Constraints and rationale
 

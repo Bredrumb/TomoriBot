@@ -13,6 +13,7 @@ import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import { formatBooleanLocalized } from "@/utils/text/processors/formatters";
+import { formatHumanizerSummary } from "@/utils/discord/humanizerOptions";
 import { loadVideoModelById } from "@/utils/metrics/dbStats";
 import { formatChannelLlmOverrides, formatPersonaLlmOverrides } from "@/utils/metrics/status/channelFormatters";
 import {
@@ -188,7 +189,7 @@ export async function buildServerModelPages(
       },
       {
         nameKey: "commands.status.field_humanizer",
-        value: String(config.humanizer_degree),
+        value: formatHumanizerSummary(locale, config),
         inline: true,
       },
       {

@@ -536,22 +536,30 @@ function checkInsertCounts(dbWrite: string, tableName: string): void {
 // alias and per-table composition rules are exempted for them.
 const REPOSITORY_SOURCED_EXPORT_KEYS = new Set(["stm_config", "stm_categories"]);
 
+// Legacy degrees are import-only input, so only the import-restore rule applies.
+const LEGACY_IMPORT_ONLY_EXPORT_KEYS = new Set(["humanizer_degree"]);
+
 function checkExportImportMappings(
   exportKeys: Set<string>,
   dataExportContent: string,
   dataImportContent: string,
 ): void {
   for (const key of exportKeys) {
+    const isLegacyImportOnly = LEGACY_IMPORT_ONLY_EXPORT_KEYS.has(key);
     // Repository-sourced nested exports have no `as <key>` SQL alias; skip that rule
     // only (the emit + import-restore rules below still apply).
-    if (!REPOSITORY_SOURCED_EXPORT_KEYS.has(key) && !dataExportContent.match(new RegExp(`\\bas\\s+${key}\\b`, "i"))) {
+    if (
+      !isLegacyImportOnly &&
+      !REPOSITORY_SOURCED_EXPORT_KEYS.has(key) &&
+      !dataExportContent.match(new RegExp(`\\bas\\s+${key}\\b`, "i"))
+    ) {
       addIssue(
         "server-config-export",
         `serverConfigExportSchema includes ${key}, but ExportRepository.ts does not SELECT it`,
       );
     }
 
-    if (!dataExportContent.match(new RegExp(`\\b${key}\\s*:`))) {
+    if (!isLegacyImportOnly && !dataExportContent.match(new RegExp(`\\b${key}\\s*:`))) {
       addIssue(
         "server-config-export",
         `serverConfigExportSchema includes ${key}, but ExportRepository.ts does not emit it`,
@@ -925,7 +933,7 @@ function checkServerConfigExportComposition(
 
     for (const key of exportKeys) {
       composedFromSlices.add(key);
-      if (!sourceKeys.has(key)) {
+      if (!sourceKeys.has(key) && !LEGACY_IMPORT_ONLY_EXPORT_KEYS.has(key)) {
         addIssue(
           "server-config-export-coverage",
           `${target.exportSchemaName} exports ${key}, but ${target.tableName} does not define that field`,

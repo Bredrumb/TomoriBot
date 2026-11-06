@@ -609,9 +609,27 @@ SELECT add_column_if_not_exists('persona_configs', 'reward_conditioning_enabled'
 SELECT add_column_if_not_exists('persona_configs', 'punish_conditioning_enabled', 'BOOLEAN', 'true');
 SELECT add_column_if_not_exists('persona_configs', 'preserve_preset_identity', 'BOOLEAN', 'false', 'NOT NULL');
 
--- Add per-persona humanizer degree override (July 2026).
--- NULL inherits the server-wide server_chat_configs.humanizer_degree.
-SELECT add_column_if_not_exists('persona_configs', 'humanizer_degree', 'INT', NULL, 'CHECK (humanizer_degree BETWEEN 0 AND 3)');
+-- Per-persona humanizer toggle override. NULL across all five inherits server_chat_configs.
+SELECT add_column_if_not_exists('persona_configs', 'humanizer_streaming_enabled', 'BOOLEAN');
+SELECT add_column_if_not_exists('persona_configs', 'humanizer_pacing_enabled', 'BOOLEAN');
+SELECT add_column_if_not_exists('persona_configs', 'humanizer_sentence_split_enabled', 'BOOLEAN');
+SELECT add_column_if_not_exists('persona_configs', 'humanizer_lowercase_enabled', 'BOOLEAN');
+SELECT add_column_if_not_exists('persona_configs', 'humanizer_punctuation_split_enabled', 'BOOLEAN');
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'persona_configs_humanizer_override_complete') THEN
+    ALTER TABLE persona_configs ADD CONSTRAINT persona_configs_humanizer_override_complete CHECK (
+      num_nulls(
+        humanizer_streaming_enabled,
+        humanizer_pacing_enabled,
+        humanizer_sentence_split_enabled,
+        humanizer_lowercase_enabled,
+        humanizer_punctuation_split_enabled
+      ) IN (0, 5)
+    );
+  END IF;
+END;
+$$;
 
 -- Add server_id column for server-scoped configs (January 2026)
 
@@ -2953,7 +2971,11 @@ CREATE TABLE IF NOT EXISTS server_chat_configs (
   response_rule_checker_ref JSONB,
   response_review_items TEXT[] NOT NULL DEFAULT '{persona,examples,history}' CHECK (response_review_items <@ ARRAY['persona', 'examples', 'history', 'context', 'tools']::TEXT[]),
   server_id                        INT         PRIMARY KEY REFERENCES servers(server_id) ON DELETE CASCADE,
-  humanizer_degree                 INT         NOT NULL DEFAULT 1,
+  humanizer_streaming_enabled          BOOLEAN NOT NULL DEFAULT true,
+  humanizer_pacing_enabled             BOOLEAN NOT NULL DEFAULT false,
+  humanizer_sentence_split_enabled     BOOLEAN NOT NULL DEFAULT false,
+  humanizer_lowercase_enabled          BOOLEAN NOT NULL DEFAULT false,
+  humanizer_punctuation_split_enabled  BOOLEAN NOT NULL DEFAULT false,
   message_fetch_limit              INT         NOT NULL DEFAULT 80,
   send_message_limit               INT         NOT NULL DEFAULT 0,
   match_limit                      INT         NOT NULL DEFAULT 3,
@@ -2980,6 +3002,11 @@ CREATE TABLE IF NOT EXISTS server_chat_configs (
 );
 
 SELECT add_column_if_not_exists('server_chat_configs', 'response_prefill', 'TEXT');
+SELECT add_column_if_not_exists('server_chat_configs', 'humanizer_streaming_enabled', 'BOOLEAN', 'true', 'NOT NULL');
+SELECT add_column_if_not_exists('server_chat_configs', 'humanizer_pacing_enabled', 'BOOLEAN', 'false', 'NOT NULL');
+SELECT add_column_if_not_exists('server_chat_configs', 'humanizer_sentence_split_enabled', 'BOOLEAN', 'false', 'NOT NULL');
+SELECT add_column_if_not_exists('server_chat_configs', 'humanizer_lowercase_enabled', 'BOOLEAN', 'false', 'NOT NULL');
+SELECT add_column_if_not_exists('server_chat_configs', 'humanizer_punctuation_split_enabled', 'BOOLEAN', 'false', 'NOT NULL');
 SELECT add_column_if_not_exists('server_chat_configs', 'response_reviewer_llm_id', 'INT REFERENCES llms(llm_id) ON DELETE SET NULL');
 SELECT add_column_if_not_exists('server_chat_configs', 'response_reviewer_prompt', 'TEXT CHECK (char_length(response_reviewer_prompt) BETWEEN 1 AND 4000)');
 SELECT add_column_if_not_exists('server_chat_configs', 'response_rule_checker_ref', 'JSONB');

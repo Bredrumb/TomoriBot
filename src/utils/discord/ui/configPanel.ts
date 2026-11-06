@@ -68,7 +68,8 @@ import {
   type ConfigActor,
 } from "@/utils/discord/interactions/configPermissionPolicy";
 import { CHECKLIST_CHANNELS_PER_PAGE } from "@/utils/discord/channelChecklistManager";
-import { getHumanizerLabel, HUMANIZER_DEFAULT } from "@/utils/discord/humanizerOptions";
+import { DEFAULT_HUMANIZER_SETTINGS, type HumanizerSettings } from "@/constants/humanizer";
+import { formatHumanizerSummary } from "@/utils/discord/humanizerOptions";
 import type {
   ConfigChannelsView,
   ConfigChannelsOverridesView,
@@ -277,7 +278,7 @@ export interface ConfigPanelRenderInput {
   receipt?: PanelReceipt;
   view?: ConfigPanelView;
   personaMemoryView?: ConfigPersonaMemoryView;
-  serverHumanizerDegree?: number | null;
+  serverHumanizer?: HumanizerSettings | null;
   personaSprites?: PersonaSpriteRow[];
   spritePageStart?: number;
   selectedSpriteIndex?: number;
@@ -1186,10 +1187,6 @@ ${localizer(input.locale, "commands.config.panel.character_reference_clear_descr
   ];
 }
 
-function renderHumanizerDegree(locale: string, value: number | null | undefined): string {
-  return getHumanizerLabel(locale, value ?? HUMANIZER_DEFAULT);
-}
-
 function buildPersonaAppearanceBody(input: ConfigPanelRenderInput): ComponentInContainerData[] {
   const { locale, actor, personas, selectedPersonaId, readStatus } = input;
   const persona = personas.find((candidate) => candidate.persona_id === selectedPersonaId) ?? null;
@@ -1555,15 +1552,15 @@ ${localizer(locale, "commands.config.panel.overrides_description")}`,
   const actionState = (action: Parameters<typeof resolvePersonaOverridesActionState>[0]) =>
     resolvePersonaOverridesActionState(action, actor);
   const humanizerState = actionState("humanizer");
-  const humanizerValue = persona.humanizer_degree_override ?? null;
+  const humanizerValue = persona.humanizer_override ?? null;
   const humanizerTextDisplay: ComponentInContainerData | undefined =
     humanizerState !== "omitted"
       ? {
           type: ComponentType.TextDisplay,
           content: `**${localizer(locale, "commands.config.panel.response_style_title")}**
 ${localizer(locale, "commands.config.panel.response_style_description")}
-> ${localizer(locale, "commands.config.panel.persona_override_label")}: ${getHumanizerLabel(locale, humanizerValue)}
-> ${localizer(locale, "commands.config.panel.server_default_label")}: ${renderHumanizerDegree(locale, input.serverHumanizerDegree)}`,
+> ${localizer(locale, "commands.config.panel.persona_override_label")}: ${formatHumanizerSummary(locale, humanizerValue)}
+> ${localizer(locale, "commands.config.panel.server_default_label")}: ${formatHumanizerSummary(locale, input.serverHumanizer ?? DEFAULT_HUMANIZER_SETTINGS)}`,
         }
       : undefined;
 
@@ -2364,9 +2361,9 @@ function buildBehaviorGeneralBody(input: ConfigPanelRenderInput): ComponentInCon
     content: `**${localizer(locale, "commands.config.panel.response_style_title")}**\n${localizer(
       locale,
       "commands.config.panel.global_response_style_description",
-    )}\n> ${localizer(locale, "commands.config.panel.humanizer_label")}: ${getHumanizerLabel(
+    )}\n> ${localizer(locale, "commands.config.panel.humanizer_label")}: ${formatHumanizerSummary(
       locale,
-      view.humanizerDegree,
+      view.humanizer,
     )}\n> ${localizer(locale, "commands.config.panel.message_fetch_limit_label")}: ${view.messageFetchLimit}`,
   };
   const timezoneTextDisplay: ComponentInContainerData | undefined =

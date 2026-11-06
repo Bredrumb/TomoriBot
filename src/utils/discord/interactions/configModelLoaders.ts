@@ -1,20 +1,11 @@
-import { createHash } from "node:crypto";
-import type {
-  CustomEndpointApiStyle,
-  CustomEndpointRow,
-  FallbackEntry,
-  FallbackModelRef,
-  NaiPresetRow,
-  TomoriState,
-} from "@/types/db/schema";
+import type { FallbackEntry, FallbackModelRef, NaiPresetRow, TomoriState } from "@/types/db/schema";
 import { configRepository, llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import {
   CONFIG_FALLBACK_PAGE_SIZE,
   CONFIG_FALLBACK_SLOT_COUNT,
   CONFIG_MODEL_CAPABILITY_ORDER,
   computeNaiPresetFingerprint,
-  isConfigCatalogModelCapability,
-  type ConfigCatalogModelCapability,
+  type ConfigModelCapability,
 } from "@/utils/discord/configPanelCatalog";
 import { formatModelOverrideModelSummary } from "@/utils/discord/modelOverrideCatalog";
 import { loadModelOverrideEntries } from "@/utils/discord/interactions/modelOverrideRoutes";
@@ -27,7 +18,6 @@ import {
 import type { ConfigFallbackOption } from "@/utils/discord/ui/configModelModals";
 import type {
   ConfigFallbacksView,
-  ConfigEndpointPage,
   ConfigImageGenerationView,
   ConfigParametersView,
   ConfigSwitchModelsProviderPage,
@@ -51,118 +41,6 @@ import {
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
 import { localizer, resolveDescription } from "@/utils/text/localizer";
 
-export type ConfigEndpointModelCapability = "stt";
-
-export interface ConfigCapabilityEndpoint {
-  /** A hosted model's id is a `transcription_models` row, not a custom endpoint. */
-  kind: "custom-endpoint" | "hosted-model";
-  id: number;
-  capability: "transcription";
-  label: string;
-  modelLabel: string;
-  apiStyle: CustomEndpointApiStyle | null;
-  isActive: boolean;
-}
-
-export type ConfigCapabilityEndpointInput = ConfigCapabilityEndpoint | CustomEndpointRow;
-
-export type LoadConfigCapabilityEndpoints = (state: TomoriState) => Promise<ConfigCapabilityEndpointInput[]>;
-
-export function normalizeConfigCapabilityEndpoints(
-  rows: readonly ConfigCapabilityEndpointInput[],
-): ConfigCapabilityEndpoint[] {
-  return rows.flatMap((endpoint) => {
-    if ("id" in endpoint) {
-      return endpoint.capability === "transcription" && Number.isSafeInteger(endpoint.id) && endpoint.id > 0
-        ? [endpoint]
-        : [];
-    }
-    const id = endpoint.custom_endpoint_id;
-    if (endpoint.capability !== "transcription" || id === undefined || !Number.isSafeInteger(id) || id <= 0) {
-      return [];
-    }
-    return [
-      {
-        kind: "custom-endpoint" as const,
-        id,
-        capability: "transcription" as const,
-        label: endpoint.label,
-        modelLabel: endpoint.model_name ?? endpoint.label,
-        apiStyle: endpoint.api_style,
-        isActive: endpoint.is_default,
-      },
-    ];
-  });
-}
-
-/** Custom transcription endpoints followed by the hosted models the server's saved keys can reach. */
-export const loadConfigCapabilityEndpoints: LoadConfigCapabilityEndpoints = async (state) => {
-  const owner = { kind: "server" as const, ownerId: state.server_id };
-  const [endpoints, providers] = await Promise.all([
-    llmProviderRepo.loadCustomEndpointsForServer(state.server_id),
-    loadSavedProvidersForCapability(state.server_id, "transcription"),
-  ]);
-  const hosted = await Promise.all(
-    providers.map(async ({ provider }) =>
-      (await llmModelRepo.loadAvailableTranscriptionModels(provider, owner)).map(
-        (model): ConfigCapabilityEndpoint => ({
-          kind: "hosted-model",
-          id: model.transcription_model_id,
-          capability: "transcription",
-          label: getProviderDisplayName(provider),
-          modelLabel: model.codename,
-          apiStyle: null,
-          isActive: state.config.transcription_model_id === model.transcription_model_id,
-        }),
-      ),
-    ),
-  );
-  return [...endpoints, ...hosted.flat()];
-};
-
-/** Binds an endpoint choice to its ordered list and the identifying fields of every presented row. */
-export function computeConfigEndpointFingerprint(endpoints: readonly ConfigCapabilityEndpoint[]): string {
-  return createHash("sha256")
-    .update(
-      `config-endpoints:stt:${JSON.stringify(
-        endpoints.map((endpoint) => ({
-          kind: endpoint.kind,
-          id: endpoint.id,
-          capability: endpoint.capability,
-          label: endpoint.label,
-          modelLabel: endpoint.modelLabel,
-          apiStyle: endpoint.apiStyle,
-          isActive: endpoint.isActive,
-        })),
-      )}`,
-    )
-    .digest("base64url")
-    .slice(0, 8);
-}
-
-export function encodeConfigEndpointSelection(position: number, fingerprint: string): string {
-  return `ep|${position}|${fingerprint}`;
-}
-
-export function decodeConfigEndpointSelection(value: string): { position: number; fingerprint: string } | null {
-  const match = /^ep\|(\d+)\|([A-Za-z0-9_-]{8})$/.exec(value);
-  if (!match) return null;
-  const position = Number.parseInt(match[1] ?? "", 10);
-  if (!Number.isSafeInteger(position) || position < 0) return null;
-  return { position, fingerprint: match[2] ?? "" };
-}
-
-export function encodeConfigEndpointPageValue(start: number): string {
-  return `ep-page|${start}`;
-}
-
-export function decodeConfigEndpointPageValue(value: string): number | null {
-  const match = /^ep-page\|(\d+)$/.exec(value);
-  if (!match) return null;
-  const start = Number.parseInt(match[1] ?? "", 10);
-  return Number.isSafeInteger(start) && start >= 0 ? start : null;
-}
-
 /**
  * Resolves the display name of whatever currently occupies one slot.
  *
@@ -171,7 +49,7 @@ export function decodeConfigEndpointPageValue(value: string): number | null {
  */
 async function resolveSlotAssignment(
   state: TomoriState,
-  capability: ConfigCatalogModelCapability,
+  capability: ConfigModelCapability,
 ): Promise<{ modelName: string | null; provider: string | null }> {
   switch (capability) {
     case "text":
@@ -224,6 +102,21 @@ async function resolveSlotAssignment(
       const model = await llmModelRepo.loadSpeechModelById(id);
       return { modelName: model?.codename ?? null, provider: model?.provider ?? null };
     }
+    case "stt": {
+      if (state.config.transcription_model_id) {
+        const model = await llmModelRepo.loadTranscriptionModelById(state.config.transcription_model_id);
+        return { modelName: model?.codename ?? null, provider: model?.provider ?? null };
+      }
+      const endpoint = (await llmProviderRepo.loadCustomEndpointsForServer(state.server_id)).find(
+        (row) => row.capability === "transcription" && row.is_default,
+      );
+      return endpoint
+        ? {
+            modelName: endpoint.model_name ?? endpoint.label,
+            provider: buildCustomProviderName(endpoint.connection_id),
+          }
+        : { modelName: null, provider: null };
+    }
   }
 }
 
@@ -238,11 +131,9 @@ export async function loadConfigSwitchModelsView(
   state: TomoriState,
   workspaceDiscId: string,
   providerPage: ConfigSwitchModelsProviderPage | undefined,
-  endpointPage: ConfigEndpointPage | undefined = undefined,
-  loadCapabilityEndpoints: LoadConfigCapabilityEndpoints = loadConfigCapabilityEndpoints,
 ): Promise<ConfigSwitchModelsView> {
   const slots = await Promise.all(
-    CONFIG_MODEL_CAPABILITY_ORDER.filter(isConfigCatalogModelCapability).map(async (capability) => {
+    CONFIG_MODEL_CAPABILITY_ORDER.map(async (capability) => {
       const expanded = providerPage?.capability === capability ? (providerPage.provider ?? null) : null;
       const [assignment, providers, expandedOptionCount] = await Promise.all([
         resolveSlotAssignment(state, capability),
@@ -273,14 +164,6 @@ export async function loadConfigSwitchModelsView(
     }),
   );
 
-  const endpointSlots = [
-    {
-      capability: "stt" as const,
-      endpoints: normalizeConfigCapabilityEndpoints(await loadCapabilityEndpoints(state)),
-      pageStart: endpointPage?.start ?? 0,
-    },
-  ];
-
   // The removal list and this summary read one loader, so a target named here is a target that
   // command can clear, and both surfaces print the same effective model for it.
   const { channelOverrides, personasWithOverride } = await loadModelOverrideEntries(state.server_id, workspaceDiscId);
@@ -298,7 +181,6 @@ export async function loadConfigSwitchModelsView(
     imageGenerationEnabled: state.config.imagegen_enabled,
     videoGenerationEnabled: state.config.videogen_enabled,
     speechCapabilityEnabled: state.config.voice_message_enabled ?? true,
-    endpointSlots,
   };
 }
 

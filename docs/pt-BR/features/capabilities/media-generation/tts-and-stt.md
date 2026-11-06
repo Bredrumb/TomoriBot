@@ -2,7 +2,6 @@
 title: "Voz: TTS & STT"
 sidebar:
   order: 3
-aiGenerated: true
 ---
 
 TomoriBot pode falar e ouvir em Discord: enviar respostas de voz com conversão de texto em fala (TTS) e transcrever mensagens de áudio em contexto de conversa com conversão de fala em texto (STT).
@@ -68,19 +67,11 @@ Cada mecanismo tem seu próprio guia de configuração:
 
 Consulte a [tabela de comparação de conversão de texto em fala](/pt-BR/self-hosting/local-endpoints/text-to-speech/) para obter orientação sobre hardware e a lista completa de mecanismos.
 
-## Fala-para-Texto
+## Fala para texto
 <!-- anchor: speech-to-text -->
 
-Os pontos finais de transcrição transformam os anexos de áudio do usuário em texto para contexto de conversa. Se as transcrições são postadas publicamente no bate-papo é controlado em `/config` > `Comportamento` > Aviso de Comportamento.
+Um modelo de transcrição transforma anexos de áudio em texto que a TomoriBot pode usar na conversa. Escolha-o separadamente do TTS em `/config` > `Modelos` > `Trocar Modelos` selecionando um provedor e depois um modelo. Escolha `- Nenhum Modelo` para interromper a transcrição na chave do servidor. Google, Vertex AI e OpenRouter oferecem modelos de transcrição hospedados, e adicionar uma de suas chaves escolhe seu modelo padrão quando nada mais estiver transcrevendo ainda. O OpenRouter lista muitos modelos de transcrição; registre qualquer um deles pelo seu ID de modelo em `/providers`. Adicionar o ElevenLabs também registra um endpoint de transcrição. Para opções locais, consulte os [guias de Fala para Texto](/self-hosting/local-endpoints/speech-to-text/).
 
-### ElevenLabs (nuvem)
+Você também pode escolher um modelo de transcrição pessoal em `/personal config`. Suas próprias mensagens de voz usarão sua chave primeiro e recorrerão ao modelo do servidor se o fallback do servidor estiver ativado. A transcrição hospedada é cobrada pelo provedor para cada mensagem de voz que transcreve.
 
-Adicionar ElevenLabs de `/providers` registra o ponto final da transcrição junto com a fala. Use `/providers` para alternar entre pontos de extremidade de transcrição ativos.
-
-### Motores locais (hospedagem própria)
-
-- [WhisperX](/pt-BR/self-hosting/local-endpoints/speech-to-text/whisperx/): caminho local recomendado; cerca de 100 idiomas, acelerados por GPU, vários tamanhos de modelo.
-- [KoboldCPP](/pt-BR/self-hosting/local-endpoints/speech-to-text/koboldcpp/): funciona quando sua compilação expõe um endpoint de transcrição compatível com OpenAI.
-- [sussurro.cpp](/pt-BR/self-hosting/local-endpoints/speech-to-text/whispercpp/).
-
-Consulte o hub [Speech-to-Text](/pt-BR/self-hosting/local-endpoints/speech-to-text/) para obter a lista completa de mecanismos. Para o resumo Discord, execute `/help` e escolha `Recursos` e `Transcrição`.
+Você pode ocultar transcrições visíveis em `/config` > `Comportamento` > `Comportamento de Avisos` > `Transcrições de Fala`. O texto ainda chega ao contexto da conversa.

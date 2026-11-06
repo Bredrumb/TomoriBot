@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { Client } from "discord.js";
-import { HumanizerDegree, type AssembledServerConfig, type TomoriState } from "@/types/db/schema";
+import { humanizerSettingsFromDegree } from "@/constants/humanizer";
+import type { AssembledServerConfig, TomoriState } from "@/types/db/schema";
 import { convertMentions } from "@/utils/text/context/mentionNormalizer";
 import { appendDialogueHistoryContext, DOCUMENT_HINT_TEMPLATE } from "@/utils/text/context/dialogueHistory";
 import { buildSampleDialogueContextItems } from "@/utils/text/context/templates";
@@ -102,7 +103,7 @@ function makeConfig(): AssembledServerConfig {
     message_fetch_limit: 80,
     context_note: null,
     context_note_depth: 0,
-    humanizer_degree: HumanizerDegree.NONE,
+    ...humanizerSettingsFromDegree(0),
     personal_memories_enabled: true,
     uncensor_unicode_space_enabled: false,
     uncensor_sanitize_enabled: false,

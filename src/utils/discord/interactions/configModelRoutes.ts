@@ -12,22 +12,16 @@ import {
   CONFIG_FALLBACK_SLOT_COUNT,
   computeLogitBiasFingerprint,
   computeStopStringFingerprint,
-  configEndpointWindowSize,
   type ConfigModelCapability,
   CONFIG_MODEL_PAGE_SIZE,
   CONFIG_NAI_PRESET_PAGE_SIZE,
   CONFIG_NAI_PRESET_NEXT_VALUE,
   CONFIG_NAI_PRESET_PREVIOUS_VALUE,
   computeNaiPresetFingerprint,
-  isConfigCatalogModelCapability,
   type ConfigPage,
   type ConfigPanelRoute,
 } from "@/utils/discord/configPanelCatalog";
 import {
-  computeConfigEndpointFingerprint,
-  decodeConfigEndpointPageValue,
-  decodeConfigEndpointSelection,
-  normalizeConfigCapabilityEndpoints,
   decodeConfigProviderPageValue,
   decodeConfigProviderRangeValue,
 } from "@/utils/discord/interactions/configModelLoaders";
@@ -102,14 +96,12 @@ export const CONFIG_MODEL_MODAL_OPEN_ACTIONS = new Set<ConfigPanelRoute["action"
   "logit-manage-select",
   "fallback-provider-select",
   "model-provider-select",
-  "endpoint-select",
   "image-tags-default-open",
   "nai-parameters-open",
 ]);
 
 export const CONFIG_MODEL_SELECT_ACTIONS = new Set<ConfigPanelRoute["action"]>([
   "model-provider-select",
-  "endpoint-select",
   "parameters-provider-select",
   "nai-preset-select",
   "fallback-provider-select",
@@ -385,14 +377,6 @@ export async function handleConfigModelModalOpen(
   }
 
   if (route.action === "model-provider-select") {
-    if (!isConfigCatalogModelCapability(route.capability)) {
-      await replyPanelReceipt(interaction, {
-        tone: "warning",
-        heading: localizer(locale, "commands.config.panel.stale_heading"),
-        detail: localizer(locale, "commands.config.panel.stale_detail"),
-      });
-      return true;
-    }
     const capability = route.capability;
     const selected = interaction.isStringSelectMenu() ? (interaction.values[0] ?? null) : null;
 
@@ -505,35 +489,6 @@ export async function handleConfigModelModalOpen(
     return true;
   }
 
-  if (route.action === "endpoint-select") {
-    if (route.capability !== "stt") {
-      await replyPanelReceipt(interaction, {
-        tone: "warning",
-        heading: localizer(locale, "commands.config.panel.stale_heading"),
-        detail: localizer(locale, "commands.config.panel.stale_detail"),
-      });
-      return true;
-    }
-    const selected = interaction.isStringSelectMenu() ? (interaction.values[0] ?? "") : "";
-    const start = decodeConfigEndpointPageValue(selected);
-    if (start !== null) {
-      await interaction.deferUpdate();
-      await repaint(interaction, {
-        locale,
-        scope,
-        category: "models",
-        page: "switch",
-        selectedPersonaId: null,
-        endpointPage: { capability: "stt", start },
-        dependencies,
-      });
-      return true;
-    }
-    // Endpoint selections are acknowledged by the post-defer handler so it can re-read the list
-    // and reject a stale position or fingerprint before the canonical write is reached.
-    return false;
-  }
-
   // The fallback provider select opens its modal directly: one option per option-page, so the
   // range is already chosen by the time the five slot selects are built.
   const chosen = interaction.isStringSelectMenu() ? (interaction.values[0] ?? null) : null;
@@ -632,84 +587,8 @@ async function handleSwitchModels(context: ConfigModelRouteContext): Promise<boo
   const locale = route.locale;
   const state = serverStateFromScope(context.scope);
   if (!state) return false;
-  if (
-    route.action !== "model-provider-select" &&
-    route.action !== "model-modal-submit" &&
-    route.action !== "endpoint-select"
-  ) {
+  if (route.action !== "model-provider-select" && route.action !== "model-modal-submit") {
     return false;
-  }
-  if (route.action === "endpoint-select") {
-    if (route.capability !== "stt") {
-      await baseRepaint(context, "switch", { receipt: staleReceipt(locale) });
-      return true;
-    }
-    const selected = context.selectedValue ? decodeConfigEndpointSelection(context.selectedValue) : null;
-    const endpoints = normalizeConfigCapabilityEndpoints(await dependencies.loadCapabilityEndpoints(state));
-    const fingerprint = computeConfigEndpointFingerprint(endpoints);
-    const endpoint =
-      selected && selected.fingerprint === fingerprint && selected.position < endpoints.length
-        ? endpoints[selected.position]
-        : undefined;
-    if (!selected || !endpoint || !Number.isSafeInteger(endpoint.id) || endpoint.id <= 0) {
-      await baseRepaint(context, "switch", { receipt: staleReceipt(locale) });
-      return true;
-    }
-
-    const action = await performPanelAction(
-      () =>
-        endpoint.kind === "hosted-model"
-          ? dependencies.modelOperations.activateHostedTranscriptionModel({
-              tomoriState: state,
-              transcriptionModelId: endpoint.id,
-            })
-          : dependencies.modelOperations.activateTranscriptionEndpoint({
-              tomoriState: state,
-              serverDiscId: context.scope.serverDiscId,
-              customEndpointId: endpoint.id,
-            }),
-      () => dependencies.resolveScope(context.interaction, true),
-    );
-    context.scope = action.state ?? context.scope;
-    const result = action.result;
-    if (result.status === "success") recordModelAction(context, "server-config.workspace.model.endpoint-select");
-
-    const windowSize = configEndpointWindowSize(endpoints.length);
-    await baseRepaint(context, "switch", {
-      endpointPage: { capability: "stt", start: Math.floor(selected.position / windowSize) * windowSize },
-      receipt:
-        result.status === "success"
-          ? endpoint.kind === "hosted-model"
-            ? receipt(
-                locale,
-                "success",
-                "commands.config.panel.model_updated_heading",
-                "commands.config.panel.model_updated_detail",
-                { model: endpoint.modelLabel, provider: endpoint.label },
-              )
-            : receipt(
-                locale,
-                "success",
-                "commands.config.panel.endpoint_activated_heading",
-                "commands.config.panel.endpoint_activated_detail",
-                { endpoint: result.identity },
-              )
-          : result.status === "already-active"
-            ? noChangesReceipt(
-                locale,
-                endpoint.kind === "hosted-model"
-                  ? "commands.config.panel.model_already_selected_detail"
-                  : "commands.config.panel.endpoint_already_active_detail",
-              )
-            : result.status === "not-found"
-              ? staleReceipt(locale)
-              : writeFailedReceipt(locale),
-    });
-    return true;
-  }
-  if (!isConfigCatalogModelCapability(route.capability)) {
-    await baseRepaint(context, "switch", { receipt: staleReceipt(locale) });
-    return true;
   }
   const capability = route.capability;
 

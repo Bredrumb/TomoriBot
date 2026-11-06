@@ -5,6 +5,7 @@
  * the Components V2 payload are both bare numbers on the wire, so TypeScript accepts any of them
  * and a wrong one renders without throwing; only a literal assertion catches it.
  */
+import { humanizerSettingsFromDegree } from "@/constants/humanizer";
 import { beforeAll, describe, expect, it } from "bun:test";
 import { ComponentType, type ComponentInContainerData, type ContainerComponentData } from "discord.js";
 import type { PersonaSpriteRow, StmCategoryRow, TomoriState } from "@/types/db/schema";
@@ -26,7 +27,7 @@ import { validateComponentsV2MessageLimits } from "@/utils/discord/ui/components
 import { RANDOM_TRIGGER_ADD_PERSONA_PAGE_SIZE } from "@/utils/discord/ui/configBehaviorModals";
 import { buildConfigModelsBody } from "@/utils/discord/ui/configModelsPanel";
 import { buildConfigPanelPayload } from "@/utils/discord/ui/configPanel";
-import { initializeLocalizer, hasLocaleKey } from "@/utils/text/localizer";
+import { initializeLocalizer, hasLocaleKey, localizer } from "@/utils/text/localizer";
 import { localizedCopy, localizedProse, expectForEveryLocale } from "../../helpers/localeCases";
 import { createLlmRow, createPersona } from "../../helpers/fixtures";
 import { expectSafePanelPayload } from "../../helpers/panelLimits";
@@ -1334,7 +1335,7 @@ describe("config Persona Appearance and Advanced bodies", () => {
     persona_prompt: "A careful archivist.",
     context_note: "Prefer concise answers.",
     context_note_depth: 4,
-    humanizer_degree_override: 2,
+    humanizer_override: humanizerSettingsFromDegree(2),
     llm: createLlmRow({
       llm_id: 10,
       llm_provider: "openrouter",
@@ -1437,7 +1438,7 @@ describe("config Persona Appearance and Advanced bodies", () => {
       page: "advanced",
       personas: [advancedPersona],
       selectedPersonaId: 55,
-      serverHumanizerDegree: 0,
+      serverHumanizer: humanizerSettingsFromDegree(0),
     });
     const seen = walk(payload);
     expect(seen.some((component) => component.content?.includes("**Persona Prompt**"))).toBe(true);
@@ -1458,7 +1459,7 @@ describe("config Persona Appearance and Advanced bodies", () => {
       page: "overrides",
       personas: [advancedPersona],
       selectedPersonaId: 55,
-      serverHumanizerDegree: 0,
+      serverHumanizer: humanizerSettingsFromDegree(0),
     });
     const seen = walk(payload);
     expect(seen.some((component) => component.content?.includes("**Persona Prompt**"))).toBe(false);
@@ -1467,7 +1468,8 @@ describe("config Persona Appearance and Advanced bodies", () => {
     expect(seen.filter((component) => component.content?.includes("**Text Model Override**"))).toHaveLength(1);
     expect(buttonFor(payload, { action: "humanizer-open", locale: "en-US", personaId: 55 })).toBeDefined();
     expect(buttonFor(payload, { action: "text-override-clear", locale: "en-US", personaId: 55 })?.style).toBe(2);
-    expect(seen.some((component) => component.content?.includes("> Server default: 0: None"))).toBe(true);
+    const allOff = localizer("en-US", "commands.config.humanizer.all_off_label");
+    expect(seen.some((component) => component.content?.includes(`> Server default: ${allOff}`))).toBe(true);
   });
 
   it("omits guild-only Advanced actions in a DM while retaining prompt and context", () => {
@@ -1689,7 +1691,7 @@ describe("config Behavior pages", () => {
       prefillModelName: "gemini-2.5-flash",
       contextNote: "Stay on topic.",
       contextNoteDepth: 2,
-      humanizerDegree: 2,
+      humanizer: humanizerSettingsFromDegree(2),
       messageFetchLimit: 60,
       timezoneOffset: 8,
     },

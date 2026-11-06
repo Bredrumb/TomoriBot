@@ -2,7 +2,6 @@
 title: "Giọng nói: TTS & STT"
 sidebar:
   order: 3
-aiGenerated: true
 ---
 
 TomoriBot có thể nói và nghe trong Discord: gửi câu trả lời bằng giọng nói bằng tính năng chuyển văn bản thành giọng nói (TTS) và chuyển âm tin nhắn sang ngữ cảnh hội thoại bằng tính năng chuyển lời nói thành văn bản (STT).
@@ -71,16 +70,8 @@ Xem [Bảng so sánh chuyển văn bản sang giọng nói](/vi/self-hosting/loc
 ## Speech-to-Text
 <!-- anchor: speech-to-text -->
 
-Điểm cuối phiên âm biến tệp đính kèm âm thanh của người dùng thành văn bản cho ngữ cảnh cuộc trò chuyện. Việc bản ghi có được đăng công khai trong cuộc trò chuyện hay không được kiểm soát trong `/config` > `Hành vi` > Hành vi thông báo.
+Model phiên âm biến tệp đính kèm âm thanh thành văn bản mà TomoriBot có thể sử dụng trong cuộc trò chuyện. Hãy chọn model này riêng biệt với TTS trong `/config` > `Model` > `Chuyển đổi model` bằng cách chọn một nhà cung cấp, sau đó chọn một model. Chọn `- Không có model` để dừng phiên âm bằng khóa của máy chủ. Google, Vertex AI và OpenRouter cung cấp các model phiên âm hosted, và việc thêm một trong các khóa của họ sẽ chọn model mặc định khi chưa có model nào khác phiên âm. OpenRouter liệt kê nhiều model phiên âm; hãy đăng ký bất kỳ model nào theo ID model của nó trong `/providers`. Thêm ElevenLabs cũng đăng ký một điểm cuối phiên âm. Đối với các tùy chọn cục bộ, hãy xem [Speech-to-Text guides](/self-hosting/local-endpoints/speech-to-text/).
 
-### ElevenLabs (đám mây)
+Bạn cũng có thể chọn model phiên âm cá nhân trong `/personal config`. Khi đó tin nhắn thoại của riêng bạn sẽ dùng khóa của bạn trước và chuyển sang model của máy chủ nếu tính năng dự phòng máy chủ được bật. Phiên âm hosted được tính phí bởi nhà cung cấp cho mỗi tin nhắn thoại mà nó phiên âm.
 
-Việc thêm ElevenLabs từ `/providers` sẽ đăng ký điểm cuối phiên âm cùng với lời nói. Sử dụng `/providers` để chuyển đổi giữa các điểm cuối phiên mã hiện hoạt.
-
-### Các engine cục bộ (self-hosted)
-
-- [WhisperX](/vi/self-hosting/local-endpoints/speech-to-text/whisperx/): đường dẫn cục bộ được đề xuất; khoảng 100 ngôn ngữ, được tăng tốc GPU, nhiều kích cỡ model.
-- [KoboldCPP](/vi/self-hosting/local-endpoints/speech-to-text/koboldcpp/): hoạt động khi bản dựng của bạn hiển thị điểm cuối phiên âm tương thích với OpenAI.
-- [thì thầm.cpp](/vi/self-hosting/local-endpoints/speech-to-text/whispercpp/).
-
-Xem trung tâm [Chuyển giọng nói thành văn bản](/vi/self-hosting/local-endpoints/speech-to-text/) để biết danh sách công cụ đầy đủ. Để có bản tóm tắt Discord, hãy chạy `/help`, sau đó chọn `Tính năng` và `Chép lời`.
+Bạn có thể ẩn bản chép lời hiển thị trong `/config` > `Hành vi` > `Thông báo` > `Bản chép lời nói`. Văn bản vẫn sẽ được đưa vào ngữ cảnh cuộc trò chuyện.

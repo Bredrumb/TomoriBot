@@ -79,7 +79,9 @@ export default {
       persona_description: `Persona to export`,
       export_json_description: `Export an importable JSON file instead of a PNG (no avatar image)`,
       success_title: `Persona Exported Successfully`,
-      success_description: `Current persona **{nickname}** has been exported! Share this PNG file with others to spread this personality configuration.`,
+      success_description: `Current persona **{nickname}** has been exported! Share this PNG file with others to spread this personality configuration.
+1. Download the attached PNG file below
+2. Use \`/persona import\` with the PNG to import this persona`,
       success_description_json: `Current persona **{nickname}** has been exported as a JSON file.
 
 **Note:** This JSON can be re-imported with \`/persona import\`. It does not include the avatar image. Use the PNG export to share the avatar too.`,

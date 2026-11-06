@@ -1,3 +1,4 @@
+import { humanizerSettingsFromDegree } from "@/constants/humanizer";
 import { describe, expect, it } from "bun:test";
 import { createDefaultStreamState } from "@/types/stream/types";
 import {
@@ -212,7 +213,9 @@ describe("stream buffer Discord spoilers", () => {
     const state = createDefaultStreamState();
     state.buffer = "Mirri (The Voice): ||We like Miso.||\nMirri: ...Ignore that.";
 
-    const result = processBufferContent(state, { humanizerDegree: 1 } as Parameters<typeof processBufferContent>[1]);
+    const result = processBufferContent(state, { humanizer: humanizerSettingsFromDegree(1) } as Parameters<
+      typeof processBufferContent
+    >[1]);
 
     expect(result.segmentToFlush).toBe("Mirri (The Voice): ||We like Miso.||\n");
     expect(result.updatedBuffer).toBe("Mirri: ...Ignore that.");

@@ -3,7 +3,7 @@ import { OpenrouterStreamAdapter, type OpenrouterStreamConfig } from "@/provider
 import { synthesizeOpenRouterSpeech } from "@/providers/openrouter/openrouterSpeech";
 import { OpenrouterProvider } from "@/providers/openrouter/openrouterProvider";
 import { ProviderRequestDeniedError, findProviderRequestDeniedError } from "@/utils/provider/providerUsage";
-import { HumanizerDegree } from "@/types/db/schema";
+import { humanizerSettingsFromDegree } from "@/constants/humanizer";
 import type { StreamContext } from "@/types/stream/interfaces";
 import type { SpeechOperation } from "@/utils/speech/hostedSpeech";
 import { HOSTED_SPEECH_LIMITS } from "@/utils/speech/hostedSpeech";
@@ -71,7 +71,7 @@ function makeStreamConfig(): OpenrouterStreamConfig {
     baseTypeSpeedMsPerChar: 0,
     maxTypingTimeMs: 0,
     minVisibleTypingDurationMs: 0,
-    humanizerDegree: HumanizerDegree.NONE,
+    humanizer: humanizerSettingsFromDegree(0),
     emojiUsageEnabled: false,
   };
 }

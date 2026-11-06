@@ -14,6 +14,7 @@ import { lorebookRepository } from "@/modules/lorebooks/db/repositories";
  * separate transactional setup context from its server repository owner.
  * See refactor-integrity-audit.md Intentional Large File table.
  */
+import { type HumanizerSettings, humanizerSettingsFromDegree } from "@/constants/humanizer";
 import type { Guild, GuildEmoji, Sticker } from "discord.js";
 import type { ServerEmojiRow, ServerStickerRow, SetupConfig, SetupResult } from "@/types/db/schema";
 import { serverEmojiSchema, serverStickerSchema, setupConfigSchema, setupResultSchema } from "@/types/db/schema";
@@ -112,8 +113,7 @@ interface SyncItemConfig<TDiscord, TDatabase> {
 }
 
 /** Row shape for server_chat_configs (Phase 6). */
-type ServerChatConfigsRow = {
-  humanizer_degree: number;
+type ServerChatConfigsRow = HumanizerSettings & {
   message_fetch_limit: number;
   send_message_limit: number;
   match_limit: number;
@@ -1171,11 +1171,17 @@ class ServerRepository implements IRepository<ServerExportShape> {
         // system_prompt is written as NULL for built-in default so DEFAULT_SYSTEM_PROMPT
         // resolves dynamically at read time, or as the resolved preset prompt text.
         const resolvedSystemPrompt = validConfig.systemPrompt?.trim() || null;
+        const humanizer = humanizerSettingsFromDegree(validConfig.humanizer);
         await tx`
           INSERT INTO server_chat_configs (
-            server_id, humanizer_degree, timezone_offset, system_prompt
+            server_id, humanizer_streaming_enabled, humanizer_pacing_enabled,
+            humanizer_sentence_split_enabled, humanizer_lowercase_enabled, humanizer_punctuation_split_enabled,
+            timezone_offset, system_prompt
           ) VALUES (
-            ${server.server_id}, ${validConfig.humanizer}, ${validConfig.timezoneOffset}, ${resolvedSystemPrompt}
+            ${server.server_id}, ${humanizer.humanizer_streaming_enabled}, ${humanizer.humanizer_pacing_enabled},
+ ${humanizer.humanizer_sentence_split_enabled},
+            ${humanizer.humanizer_lowercase_enabled}, ${humanizer.humanizer_punctuation_split_enabled},
+            ${validConfig.timezoneOffset}, ${resolvedSystemPrompt}
           ) ON CONFLICT (server_id) DO NOTHING
         `;
         await tx`
@@ -1976,7 +1982,9 @@ class ServerRepository implements IRepository<ServerExportShape> {
   private async sqlLoadChatConfigs(serverId: number): Promise<ServerChatConfigsRow | null> {
     try {
       const [row] = await sql`
-        SELECT humanizer_degree, message_fetch_limit, send_message_limit, match_limit,
+        SELECT humanizer_streaming_enabled, humanizer_pacing_enabled,
+               humanizer_sentence_split_enabled, humanizer_lowercase_enabled,
+               humanizer_punctuation_split_enabled, message_fetch_limit, send_message_limit, match_limit,
                cascade_limit, timezone_offset, self_debug_enabled, model_randomizer_enabled,
                system_prompt, response_prefill,
                context_note, context_note_depth, llm_stop_strings,
@@ -2057,7 +2065,9 @@ class ServerRepository implements IRepository<ServerExportShape> {
     const fallbackRefsJson = JSON.stringify(row.fallback_model_refs);
     await sql`
       INSERT INTO server_chat_configs (
-        server_id, humanizer_degree, message_fetch_limit, send_message_limit,
+        server_id, humanizer_streaming_enabled, humanizer_pacing_enabled,
+        humanizer_sentence_split_enabled, humanizer_lowercase_enabled, humanizer_punctuation_split_enabled,
+        message_fetch_limit, send_message_limit,
         match_limit, cascade_limit, timezone_offset, self_debug_enabled,
         model_randomizer_enabled,
         system_prompt, response_prefill, context_note, context_note_depth, llm_stop_strings,
@@ -2065,7 +2075,9 @@ class ServerRepository implements IRepository<ServerExportShape> {
         llm_top_p, llm_top_k, llm_frequency_penalty, llm_presence_penalty,
         llm_min_p, llm_logit_biases, fallback_model_refs
       ) VALUES (
-        ${serverId}, ${row.humanizer_degree}, ${row.message_fetch_limit},
+        ${serverId}, ${row.humanizer_streaming_enabled}, ${row.humanizer_pacing_enabled},
+ ${row.humanizer_sentence_split_enabled},
+        ${row.humanizer_lowercase_enabled}, ${row.humanizer_punctuation_split_enabled}, ${row.message_fetch_limit},
         ${row.send_message_limit}, ${row.match_limit}, ${row.cascade_limit},
         ${row.timezone_offset}, ${row.self_debug_enabled}, ${row.model_randomizer_enabled},
         ${row.system_prompt}, ${row.response_prefill},
@@ -2076,7 +2088,11 @@ class ServerRepository implements IRepository<ServerExportShape> {
         ${logitBiasesJson}::JSONB, ${fallbackRefsJson}::JSONB
       )
       ON CONFLICT (server_id) DO UPDATE SET
-        humanizer_degree                 = EXCLUDED.humanizer_degree,
+        humanizer_streaming_enabled      = EXCLUDED.humanizer_streaming_enabled,
+        humanizer_pacing_enabled         = EXCLUDED.humanizer_pacing_enabled,
+        humanizer_sentence_split_enabled = EXCLUDED.humanizer_sentence_split_enabled,
+        humanizer_lowercase_enabled      = EXCLUDED.humanizer_lowercase_enabled,
+        humanizer_punctuation_split_enabled = EXCLUDED.humanizer_punctuation_split_enabled,
         message_fetch_limit              = EXCLUDED.message_fetch_limit,
         send_message_limit               = EXCLUDED.send_message_limit,
         match_limit                      = EXCLUDED.match_limit,

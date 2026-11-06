@@ -74,7 +74,7 @@ In `/config` > Models > Switch Models, you can assign models and endpoints acros
 - **Video**: video generation.
 - **TTS (Voice Design)**: speaks using a saved voice description.
 - **TTS (Voice Clone)**: speaks using a reference sample or provider voice.
-- **STT Endpoint**: speech-to-text for audio attachments, from a hosted transcription model or a custom endpoint.
+- **Speech to Text**: transcribes audio attachments with a hosted transcription model or a custom endpoint. Pick a provider, then its model; `- No Model` stops transcription on the server's key.
 
 
 :::tip

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { OpenAICompatibleStreamAdapter } from "@/providers/openaiCompatible/openaiCompatibleStreamAdapter";
 import type { OpenAICompatibleStreamConfig } from "@/providers/openaiCompatible/openaiCompatibleTypes";
-import { HumanizerDegree } from "@/types/db/schema";
+import { humanizerSettingsFromDegree } from "@/constants/humanizer";
 import type { RawStreamChunk, StreamContext } from "@/types/stream/interfaces";
 
 const originalFetch = globalThis.fetch;
@@ -48,7 +48,7 @@ function makeStreamConfig(): OpenAICompatibleStreamConfig {
     baseTypeSpeedMsPerChar: 0,
     maxTypingTimeMs: 0,
     minVisibleTypingDurationMs: 0,
-    humanizerDegree: HumanizerDegree.NONE,
+    humanizer: humanizerSettingsFromDegree(0),
     emojiUsageEnabled: true,
   };
 }

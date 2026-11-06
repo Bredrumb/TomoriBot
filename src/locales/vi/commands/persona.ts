@@ -79,7 +79,9 @@ export default {
       export_json_description: "Xuất tệp JSON có thể nhập thay cho PNG (không có ảnh đại diện)",
       description: `Xuất persona hiện tại thành tệp PNG có thể chia sẻ`,
       success_title: `🟢 Xuất persona thành công`,
-      success_description: `Persona hiện tại **{nickname}** đã được xuất! Hãy chia sẻ tệp PNG này với người khác để lan tỏa cấu hình persona này.`,
+      success_description: `Persona hiện tại **{nickname}** đã được xuất! Hãy chia sẻ tệp PNG này với người khác để lan tỏa cấu hình persona này.
+1. Tải xuống tệp PNG đính kèm bên dưới
+2. Sử dụng \`/persona import\` với tệp PNG để nhập persona này`,
       success_description_json: `Persona hiện tại **{nickname}** đã được xuất thành tệp JSON.
 
 **Lưu ý:** Tệp JSON này có thể được nhập lại bằng \`/persona import\`. Tệp không bao gồm ảnh avatar. Hãy dùng bản xuất PNG để chia sẻ cả avatar.`,

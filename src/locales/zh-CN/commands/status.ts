@@ -52,7 +52,7 @@ export default {
     field_frequency_penalty: `频率惩罚`,
     field_presence_penalty: `存在惩罚`,
     field_omitted_params: `已禁用参数`,
-    field_humanizer: `回复自然度等级`,
+    field_humanizer: `回复自然度`,
     field_thinking_level: `思考等级`,
     field_timezone: `服务器时区`,
     field_message_fetch_limit: `消息读取上限`,

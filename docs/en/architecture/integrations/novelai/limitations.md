@@ -69,7 +69,7 @@ Explicit prefills and continuation fragments remain exact. The user-facing
 [polishing rules](/features/integrations/novelai/#text-polishing-and-discord-delivery) own
 the formatting details and protected content.
 
-Polishing is independent of the humanizer degree. The shared Discord delivery pipeline still
+Polishing is independent of the humanizer toggles. The shared Discord delivery pipeline still
 applies the configured humanizer. Later context is reconstructed from Discord messages, so lost
 punctuation cannot be recovered exactly; no original unhumanized transcript is stored. These
 formatting rules do not rewrite grammar. Other providers retain their existing prompt paths.

@@ -1,6 +1,6 @@
 import { hasOptApiKey } from "@/utils/security/crypto";
 import type { GenerationModelCapability, GenerationModelSelection } from "@/types/provider/generationModels";
-import type { ConfigCatalogModelCapability } from "@/utils/discord/configPanelCatalog";
+import type { ConfigModelCapability } from "@/utils/discord/configPanelCatalog";
 import { configRepository, llmProviderRepo } from "@/utils/db/repositories";
 import type { OpenRouterModelScope } from "@/utils/db/repositories/LlmModelRepository";
 import { buildCustomProviderName, isCustomProvider } from "@/utils/provider/customProviderUtils";
@@ -74,7 +74,7 @@ export async function loadGenerationModelChoices(
           const nai =
             !isCustomProvider(provider) &&
             getStaticProviderInfo(provider)?.featureSupport.imageGeneration === "nai-pipeline";
-          const catalogCapability: ConfigCatalogModelCapability =
+          const catalogCapability: ConfigModelCapability =
             savedCapability === "speech_design"
               ? "tts-design"
               : savedCapability === "speech_clone"

@@ -44,7 +44,11 @@ export const SERVER_SINGLETON_RESET_TABLES: readonly SingletonResetClassificatio
   {
     table: "server_chat_configs",
     reset: [
-      "humanizer_degree",
+      "humanizer_streaming_enabled",
+      "humanizer_pacing_enabled",
+      "humanizer_sentence_split_enabled",
+      "humanizer_lowercase_enabled",
+      "humanizer_punctuation_split_enabled",
       "message_fetch_limit",
       "send_message_limit",
       "match_limit",
@@ -349,7 +353,11 @@ class ResetRepository {
       await tx`
         INSERT INTO server_chat_configs (server_id) VALUES (${serverId})
         ON CONFLICT (server_id) DO UPDATE SET
-          humanizer_degree = DEFAULT,
+          humanizer_streaming_enabled = DEFAULT,
+          humanizer_pacing_enabled = DEFAULT,
+          humanizer_sentence_split_enabled = DEFAULT,
+          humanizer_lowercase_enabled = DEFAULT,
+          humanizer_punctuation_split_enabled = DEFAULT,
           message_fetch_limit = DEFAULT,
           send_message_limit = DEFAULT,
           match_limit = DEFAULT,

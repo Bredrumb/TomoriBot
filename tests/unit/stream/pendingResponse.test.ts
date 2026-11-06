@@ -1,7 +1,7 @@
 import { REST } from "discord.js";
 import { afterEach, describe, expect, it, mock } from "bun:test";
 import type { Client, TextChannel } from "discord.js";
-import { HumanizerDegree } from "@/types/db/schema";
+import { humanizerSettingsFromDegree } from "@/constants/humanizer";
 import type { ProcessedChunk, StreamConfig, StreamContext, StreamProvider } from "@/types/stream/interfaces";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { createPersona } from "../../helpers/fixtures";
@@ -17,7 +17,7 @@ const config: StreamConfig = {
   baseTypeSpeedMsPerChar: 0,
   maxTypingTimeMs: 0,
   minVisibleTypingDurationMs: 0,
-  humanizerDegree: HumanizerDegree.NONE,
+  humanizer: humanizerSettingsFromDegree(0),
   emojiUsageEnabled: true,
 };
 
@@ -37,7 +37,7 @@ function fixture(chunks: ProcessedChunk[], holdResponseText = true) {
       isThread: () => false,
     } as unknown as TextChannel,
     client: {} as Client,
-    tomoriState: createPersona({ persona_nickname: "Mirri", config: { humanizer_degree: HumanizerDegree.NONE } }),
+    tomoriState: createPersona({ persona_nickname: "Mirri", config: { ...humanizerSettingsFromDegree(0) } }),
     contextItems: [],
     currentTurnModelParts: [],
     provider: "fixture",
@@ -145,12 +145,12 @@ describe("held collection ceiling", () => {
   it("stops a LIGHT-humanizer one-message reply near what delivery can send", async () => {
     const sentence = `${"soft words ".repeat(97)}end.\n`;
     const { context, provider, send } = fixture(textChunks(121, sentence));
-    context.tomoriState.config.humanizer_degree = HumanizerDegree.LIGHT;
+    Object.assign(context.tomoriState.config, humanizerSettingsFromDegree(1));
     context.tomoriState.config.send_message_limit = 1;
     const progress = trackConsumption(provider);
     const result = await new StreamOrchestrator().streamToDiscord(
       provider,
-      { ...config, humanizerDegree: HumanizerDegree.LIGHT },
+      { ...config, humanizer: humanizerSettingsFromDegree(1) },
       context,
     );
     expect(result.status).toBe("completed");
@@ -309,7 +309,7 @@ describe("held draft text", () => {
     ]);
     const result = await new StreamOrchestrator().streamToDiscord(
       provider,
-      { ...config, humanizerDegree: HumanizerDegree.LIGHT },
+      { ...config, humanizer: humanizerSettingsFromDegree(1) },
       context,
     );
     expect(result.pendingResponse?.segments).toBeGreaterThan(1);

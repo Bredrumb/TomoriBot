@@ -47,7 +47,8 @@ reference sample, which you can upload under `/config` > `Models` > `TTS Paramet
 <!-- anchor: speech-to-text -->
 
 A transcription model turns audio attachments into text TomoriBot can use in conversation. Choose it
-separately from TTS under `/config` > `Models` > `Switch Models`. Google, Vertex AI, and OpenRouter
+separately from TTS under `/config` > `Models` > `Switch Models` by picking a provider, then a model.
+Choose `- No Model` to stop transcription on the server's key. Google, Vertex AI, and OpenRouter
 offer hosted transcription models, and adding one of their keys picks its default model when nothing
 else transcribes yet. OpenRouter lists many transcription models; register any of them by its model
 ID in `/providers`. Adding ElevenLabs also registers a transcription endpoint. For local options, see

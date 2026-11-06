@@ -1,3 +1,4 @@
+import type { HumanizerSettings } from "@/constants/humanizer";
 import { localizer, resolveSupportedLocale } from "@/utils/text/localizer";
 import {
   findMarkdownBold,
@@ -157,9 +158,9 @@ function protectSemanticSpans(text: string): { protectedText: string; spans: str
  * code blocks, acronyms, internet expressions, and sender prefixes.
  *
  * Modifications:
- * - Converts text to lowercase unless it's an acronym or special expression
+ * - With `lowercase`: converts text to lowercase unless it's an acronym or special expression
  * - Preserves sender strings in format "(Name): " or "Name: "
- * - Removes semicolons (`;` and full-width `；`)
+ * - With `punctuation`: removes semicolons (`;` and full-width `；`), then runs the rolls below
  * - Each comma (`,`, `、`, `，`, or `､`) independently rolls remove / flush / keep. An ASCII comma
  *   only rolls when whitespace or the end follows it, so "1,000" and "a,b" are left untouched; a
  *   full-width comma only skips the roll before a digit
@@ -172,14 +173,18 @@ function protectSemanticSpans(text: string): { protectedText: string; spans: str
  * - Maintains code blocks and inline code unchanged
  * - Preserves standalone "I" pronoun
  * @param options.suppressPunctuationNoise - Skip every comma/emphasis roll above (still lowercases
- *   and strips semicolons). Used for sample dialogues and dialogue-history reconstruction, since
- *   both already represent real authored/delivered text where re-randomizing the same message on
- *   every context build adds no fidelity and only costs prompt-prefix cache stability.
+ *   and strips semicolons when those are on). Used for sample dialogues and dialogue-history
+ *   reconstruction, since both already represent real authored/delivered text where re-randomizing
+ *   the same message on every context build adds no fidelity and only costs prompt-prefix cache
+ *   stability.
  * @returns One or more text segments; length > 1 means a flush was rolled somewhere in the text,
  *   and each piece is meant to be sent as its own Discord message. Always a single segment when
  *   `suppressPunctuationNoise` is set. Never empty, even for empty or fully-stripped input.
  */
-export function humanizeString(text: string, options?: { suppressPunctuationNoise?: boolean }): string[] {
+export function humanizeString(
+  text: string,
+  options: { lowercase: boolean; punctuation: boolean; suppressPunctuationNoise?: boolean },
+): string[] {
   // First, protect all URLs from any transformations
   const { protectedText: urlProtectedText, urls } = detectAndProtectURLs(text);
 
@@ -207,26 +212,29 @@ export function humanizeString(text: string, options?: { suppressPunctuationNois
   // Treat hyphenated forms such as "E-ew" or "D-don't" as one word so the
   // humanizer preserves their internal punctuation. Unicode classes apply the rule to every cased
   // script (accented Latin, Cyrillic, Greek); uncased scripts match but lowercase to themselves.
-  processedText = processedText.replace(
-    /(?<![\p{L}\p{N}\p{M}_])(\p{L}[\p{L}\p{M}'-]*)(?![\p{L}\p{N}\p{M}_])/gu,
-    (word) => {
-      const isAcronym = /^\p{Lu}(?:[\p{Lu}'-]*\p{Lu})?$/u.test(word);
-      const isInternet = INTERNET_EXPRESSIONS.has(word.toLowerCase());
-      const isSingleLetter = word.length === 1 && word !== "A";
-      // If it's an acronym, internet expression, or single letter, leave it;
-      // otherwise lowercase the whole hyphenated or single word.
-      return isAcronym || isInternet || isSingleLetter ? word : word.toLowerCase();
-    },
-  );
+  if (options.lowercase) {
+    processedText = processedText.replace(
+      /(?<![\p{L}\p{N}\p{M}_])(\p{L}[\p{L}\p{M}'-]*)(?![\p{L}\p{N}\p{M}_])/gu,
+      (word) => {
+        const isAcronym = /^\p{Lu}(?:[\p{Lu}'-]*\p{Lu})?$/u.test(word);
+        const isInternet = INTERNET_EXPRESSIONS.has(word.toLowerCase());
+        const isSingleLetter = word.length === 1 && word !== "A";
+        // If it's an acronym, internet expression, or single letter, leave it;
+        // otherwise lowercase the whole hyphenated or single word.
+        return isAcronym || isInternet || isSingleLetter ? word : word.toLowerCase();
+      },
+    );
+  }
 
-  // Unconditional and before span protection, so a semicolon inside a span is stripped the same
-  // way regardless of suppressPunctuationNoise, matching semicolon-stripping's original
-  // (span-unaware) global behavior.
-  processedText = processedText.replace(/[;；]/g, "");
+  // Before span protection, so a semicolon inside a span is stripped the same way regardless of
+  // suppressPunctuationNoise, matching semicolon-stripping's original (span-unaware) global behavior.
+  if (options.punctuation) {
+    processedText = processedText.replace(/[;；]/g, "");
+  }
 
   const spans: string[] = [];
   let flushMarker: string | null = null;
-  if (!options?.suppressPunctuationNoise) {
+  if (options.punctuation && !options.suppressPunctuationNoise) {
     const protectedSpans = protectSemanticSpans(processedText);
     processedText = protectedSpans.protectedText;
     spans.push(...protectedSpans.spans);
@@ -273,6 +281,19 @@ export function humanizeString(text: string, options?: { suppressPunctuationNois
     .filter((segment) => segment.length > 0);
 
   return segments.length > 0 ? segments : [""];
+}
+
+/**
+ * The deterministic part of the humanizer: it never splits text, so a non-streamed reply stays one
+ * message, and prompt text (sample dialogue and past replies) keeps the same bytes across rebuilds.
+ */
+export function applyStableHumanizer(text: string, humanizer: HumanizerSettings): string {
+  if (!humanizer.humanizer_lowercase_enabled && !humanizer.humanizer_punctuation_split_enabled) return text;
+  return humanizeString(text, {
+    lowercase: humanizer.humanizer_lowercase_enabled,
+    punctuation: humanizer.humanizer_punctuation_split_enabled,
+    suppressPunctuationNoise: true,
+  })[0];
 }
 
 /**

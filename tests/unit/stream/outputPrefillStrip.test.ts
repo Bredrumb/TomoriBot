@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { HumanizerDegree } from "@/types/db/schema";
+import { humanizerSettingsFromDegree } from "@/constants/humanizer";
 import type { StreamContext } from "@/types/stream/interfaces";
 import {
   createDefaultStreamState,
@@ -12,7 +12,7 @@ import type { StreamMessageDelivery } from "@/utils/discord/stream/messageDelive
 import { StreamSegmentProcessor } from "@/utils/discord/stream/segmentProcessor";
 
 const textConfig: TextProcessingConfig = {
-  humanizerDegree: HumanizerDegree.NONE,
+  humanizer: humanizerSettingsFromDegree(0),
   visibleDeliveryMode: VisibleDeliveryMode.STREAMING,
   emojiUsageEnabled: true,
   emojiStrings: [],

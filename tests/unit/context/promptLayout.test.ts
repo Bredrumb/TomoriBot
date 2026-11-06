@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { humanizerSettingsFromDegree } from "@/constants/humanizer";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import { appendDialogueHistoryContext } from "@/utils/text/context/dialogueHistory";
 import { buildSampleDialogueContextItems } from "@/utils/text/context/templates";
@@ -37,7 +38,7 @@ function freshMemory(): PromptLayoutItem {
 describe("prompt layout registry", () => {
   it("counts author identities across renamed profiles while ignoring synthetic notices", async () => {
     const fixture = createParticipantContextFixture();
-    const persona = createPersona({ config: { humanizer_degree: 0, context_note: null } });
+    const persona = createPersona({ config: { ...humanizerSettingsFromDegree(0), context_note: null } });
     try {
       const messages = [
         { id: "1", authorId: "first-user", authorName: "Juno" },
@@ -165,7 +166,7 @@ describe("prompt layout registry", () => {
       persona_nickname: "Mirri",
       sample_dialogues_in: Array(4).fill(UNPAIRED_SAMPLE_DIALOGUE_SENTINEL),
       sample_dialogues_out: Array.from({ length: 4 }, (_, index) => String(index)),
-      config: { humanizer_degree: 0 },
+      config: humanizerSettingsFromDegree(0),
     });
     try {
       const samples = await buildSampleDialogueContextItems({

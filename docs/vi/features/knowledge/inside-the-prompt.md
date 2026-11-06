@@ -5,40 +5,21 @@ sidebar:
 aiGenerated: false
 ---
 
-TomoriBot thông thường gửi các khối prompt này theo thứ tự.
-[NovelAI](/features/integrations/novelai/) giải thích các trường hợp ngoại lệ của nó.
+TomoriBot gom nhóm các chỉ dẫn và bộ nhớ ở phía trên cuộc trò chuyện, sau đó đặt thông tin hay thay đổi ở gần các tin nhắn mới nhất. [NovelAI](/features/integrations/novelai/) sử dụng bố cục riêng, và [preset SillyTavern](/features/integrations/sillytavern-support/) có thể sắp xếp lại các khối phía trước.
 
-| Khối | Không bắt buộc? | Lệnh | Nó là gì |
-|---|---|---|---|
-| [Lời nhắc hệ thống](/vi/features/chatting-personality/behavior-tweaking/#system-prompt) |  | `/config` > Động cơ > Chung | Hướng dẫn cơ bản ở trên cùng của ngữ cảnh. |
+| Vị trí | Những gì TomoriBot nhận được | Nơi quản lý |
+|---|---|---|
+| Phần hệ thống | Prompt hệ thống, kênh và persona; thuộc tính persona; hướng dẫn công cụ; thông tin máy chủ; hạn chế giữa persona và người dùng; bộ nhớ máy chủ; emoji, sticker và sprite; các mục lorebook Luôn bật (Always On); điều chỉnh hành vi. | `/config`, `/memories`, `/moderation`, `/expressions` và `/conditioning` |
+| Phía trên cuộc trò chuyện | Hồ sơ người tham gia, bí danh, bộ nhớ cá nhân, lời nhắc và nhiệm vụ của persona; bộ nhớ ngắn hạn cũ hơn trong cùng kênh ở vị trí mặc định; định nghĩa công cụ văn bản khi cần. | `/personal memories`, `/memories` và `/config` |
+| Ví dụ và hội thoại | Hội thoại mẫu, tiếp theo là các tin nhắn gần đây từ kênh này. | `/config` > `Persona` > `Danh tính & Tính cách`; `Hành vi` > `Hành vi chung` |
+| Ngay phía trên bốn lượt người nói mới nhất | Bộ nhớ ngắn hạn mới hoặc bộ nhớ mang nội dung từ các kênh khác, các mục lorebook kích hoạt theo từ khóa hoặc tỷ lệ phần trăm, tài liệu truy xuất, thông tin hiện diện của người tham gia và thời gian hiện tại cùng dòng thông tin kênh. | `/memories` và `/config` |
+| Giữa các tin nhắn gần đây | Ghi chú ngữ cảnh ở độ sâu bạn đã chọn, cùng lời nhắc về công cụ và nhận thức thời gian. | `/config` > `Hành vi` > `Hành vi chung`; `Persona` > `Nâng cao`; `Kênh` > `Ghi đè kênh` |
 
-> **Văn bản lời nhắc hệ thống mặc định**: chỉ được sử dụng khi không có lời nhắc hệ thống máy chủ nào được đặt. >
-> *"Bạn là {bot}. Theo mặc định, {bot} đảm bảo trả lời ngắn gọn và chính xác. {bot} chỉ trả lời dài dòng nếu tình huống đó cho phép. >
-> {{if tool:create_long_term_memory}}{bot} chủ động sử dụng {memory_tool} có sẵn bất cứ khi nào ai đó chia sẻ một chi tiết hoặc {bot} nhận thấy một chi tiết trong cuộc trò chuyện thực sự đáng ghi nhớ, chẳng hạn như sở thích, mối quan tâm hoặc một sự kiện quan trọng, thích ghi nhớ những điều ngay cả khi nó là chuyện nhỏ miễn là nó không trùng lặp với những gì {bot} đã biết. {{/if}}{{if tool:update_long_term_memory}}{bot} sử dụng {memory_update_tool} thay vì thông tin mới thay đổi hoặc thêm vào nội dung nào đó mà {bot} đã ghi nhớ, thay vì lưu bản sao.{{/if}} >
-> {{if tool:review_capabilities}}Khi ai đó hỏi {bot} có thể làm gì hoặc tại sao nội dung nào đó không khả dụng, {bot} sẽ kiểm tra {capabilities_tool} trước khi trả lời. {{/if}}{{if tool_family:url_fetch}}Khi cần thêm thông tin chi tiết, {bot} sử dụng {url_fetch_tool} trên `https://docs.tomoribot.app/llms.txt` để biết thông tin.{{/if}}"*
+Một lượt người nói (speaker turn) nhóm các tin nhắn liên tiếp từ một người hoặc một persona. Bốn lượt người nói có thể chứa nhiều tin nhắn. Trong một cuộc trò chuyện ngắn, TomoriBot sẽ đếm lùi sang các hội thoại mẫu liền kề nếu có. Bộ nhớ ngắn hạn có thể nằm gần tin nhắn mới nhất hơn nếu bạn cấu hình độ sâu nông hơn. Các khối tùy chọn khi để trống sẽ không tốn token.
 
-| Khối | Không bắt buộc? | Yêu cầu | Nó là gì |
-|---|---|---|---|
-| Lời nhắc kênh (chắp thêm) | *(Không bắt buộc)* | `/config` > `Kênh` > Ghi đè kênh | Thay đổi theo từng kênh, được xếp lớp ngay sau lời nhắc hệ thống. Chế độ *thay thế* của cùng một trang sẽ tiếp quản vị trí lời nhắc hệ thống ở trên thay vì thêm một vị trí mới. |
-| Lời nhắc về persona | *(Không bắt buộc)* | `/config` > `Persona` > Nâng cao | Lời nhắc được viết riêng cho persona đang hoạt động, tách biệt với lời nhắc của hệ thống. |
-| [Thuộc tính cá nhân](/vi/features/chatting-personality/multiple-personas/#attributes) |  | `/config` > `Persona` > `Danh tính & Tính cách` | Đặc điểm tính cách và kiểu nói của người năng động. |
-| Thông tin máy chủ |  | *(không có, từ Discord)* | Tên máy chủ, mô tả và kênh cô ấy đang truy cập được lấy từ chính Discord. |
-| [Chặn người dùng cá nhân](/vi/features/capabilities/tools-and-extensions/#built-in-tools) | *(Không bắt buộc)* | `/moderation` để xem xét/xóa; được kiểm soát bởi `/config` > `Quyền hạn` (Chặn người dùng) | Các hạn chế tắt tiếng/chặn hiện hoạt mà tính cách này áp dụng đối với những người dùng cụ thể. |
-| [Bộ nhớ máy chủ](/vi/features/knowledge/memory/#personal-vs-server-memories) |  | `/memories` | Các sự kiện dài hạn được lưu cho máy chủ này. |
-| [Biểu tượng cảm xúc của máy chủ](/vi/features/chatting-personality/behavior-tweaking/#capabilities-what-shes-allowed-to-do) | *(Không bắt buộc)* | `/config` > `Plugin` > `Bổ sung ngữ cảnh` (Biểu tượng cảm xúc trong thư trả lời) (chỉ chuyển đổi), khởi tạo bằng `/expressions initialize` | Biểu tượng cảm xúc tùy chỉnh có trong máy chủ. |
-| [Hình dán máy chủ](/vi/features/chatting-personality/behavior-tweaking/#expressions) | *(Không bắt buộc)* | `/config` > `Plugin` > `Công cụ khả dụng` (`Sử dụng sticker`), phân loại nội dung gốc bằng `/expressions initialize`, quản lý bằng `/expressions manage` | Nhãn dán gốc có thể gửi và mọi biểu thức tùy chỉnh đủ điều kiện cho người phản hồi, kèm theo tên, mô tả và cảm xúc. Các nguồn phương tiện và quy tắc truy cập cá nhân nằm ngoài lời nhắc. |
-| [Nhân vật Persona](/vi/features/chatting-personality/multiple-personas/#sprites-emotion-avatars) | *(Không bắt buộc)* | `/config` > `Persona` > Linh hồn | Các họa tiết biểu thức được đặt tên được định cấu hình cho persona, nếu có. |
-| [Người tham gia cuộc trò chuyện](/vi/features/knowledge/memory/#personal-vs-server-memories) | *(Không bắt buộc)* | `/personal memories` (được kiểm soát bởi `/config` > `Quyền hạn` (Cá nhân hóa)) | Những người trong cuộc trò chuyện, biệt danh và địa chỉ đề cập của họ cũng như những kỷ niệm cá nhân được lưu giữ về mỗi người trong số họ. Được tải khi người đó sở hữu một tin nhắn trong ngữ cảnh hoặc nếu tên/bí danh của họ được nhắc đến. Đồng thời mang kênh hiện tại và giờ địa phương dưới dạng chân trang, sử dụng `/config` > Hành vi > Hành vi chung. |
-| [Bộ nhớ ngắn hạn](/vi/features/knowledge/memory/#short-term-memory-stm) |  | `/config` > `Persona` > Ký ức; `/memories` để xóa các mục; được kiểm soát bởi `/config` > `Quyền hạn` (Bộ nhớ ngắn hạn) | Chứa tóm tắt và tin nhắn gần đây của các kênh khác nhau |
-| [`Tài liệu`](/vi/features/knowledge/memory/#document-knowledge-base-rag) | *(Không bắt buộc)* | `/memories` | Các phần có liên quan được lấy từ cơ sở kiến thức bằng RAG. |
-| [Điều chỉnh hành vi](/vi/features/knowledge/memory/#conditioning) | *(Tùy chọn)* | `/reward <feed\|headpat\|hug\|kiss\|tickle>`, `/punish <bite\|bonk\|pinch\|spank\|squeeze>`; quản lý bằng `/conditioning remove` | Các tác động tích lũy lên hành vi của persona trong máy chủ này. |
-| [Đoạn hội thoại mẫu](/vi/features/chatting-personality/multiple-personas/#sample-dialogues) | *(Không bắt buộc)* | `/config` > `Persona` > `Danh tính & Tính cách` | Ví dụ về cách nói chuyện của persona này, nếu có, đã được định cấu hình. |
-| [Tin nhắn gần đây](/vi/features/chatting-personality/behavior-tweaking/#generation-tuning) | | `/config` > Hành vi > Hành vi chung | Cuộc trò chuyện thực tế, tối đa số tin nhắn này (mặc định 80). |
-| Ghi chú ngữ cảnh | *(Tùy chọn)* | `/config` > Hành vi > Hành vi chung; Persona > Nâng cao; hoặc Kênh > Ghi đè kênh | Hướng dẫn được chèn vào giữa các tin nhắn gần đây ở độ sâu đã chọn tính từ tin nhắn mới nhất. |
+Tin nhắn gần đây tăng dần trong một phạm vi, sau đó loại bỏ các tin nhắn cũ hơn theo từng đợt. Mỗi đợt chiếm 30% giới hạn tin nhắn của bạn, làm tròn xuống số chẵn. Với giới hạn mặc định là 80, mỗi đợt là 24: một cửa sổ đầy sẽ giữ nguyên tin nhắn bắt đầu trong khi các tin nhắn mới tiếp tục đến, rồi tiến thêm 24 khi vượt quá 80. Một lượt tương tác hai tin nhắn thông thường sẽ để lại 58 tin nhắn sau lần tiến đó. Các cuộc trò chuyện ngắn, việc làm mới (/refresh) và dung lượng khả dụng của model có thể để lại ít tin nhắn hơn.
 
-Các khối tùy chọn không tốn token khi trống.
-
-Tin nhắn gần đây tạo thành một cửa sổ di chuyển. Các khối khác được xây dựng lại từ cài đặt và bộ nhớ đã lưu.
+Ghi chú ngữ cảnh được đặt trước nhóm thông tin hay thay đổi sẽ di chuyển qua lịch sử cũ hơn sau mỗi phản hồi của bot và làm giảm hiệu quả lưu bộ nhớ đệm (cache) prompt. Giữ ghi chú này gần tin nhắn mới nhất sẽ tránh được sự gián đoạn bộ nhớ đệm không đáng có đó.
 
 :::tip
 Một số model sử dụng thông tin ở gần đầu hoặc cuối của một prompt dài đáng tin cậy hơn thông tin ở giữa. Đối với các nhà cung cấp sử dụng ghi chú ngữ cảnh, hãy thử đặt hướng dẫn gần tin nhắn mới nhất. Hiệu quả phụ thuộc vào model và tác vụ. Xem [Lost in the Middle](https://aclanthology.org/2024.tacl-1.9/) và [Lost in the Haystack](https://arxiv.org/abs/2505.18148).

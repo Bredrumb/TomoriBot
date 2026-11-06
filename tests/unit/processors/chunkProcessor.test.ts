@@ -1,5 +1,4 @@
 import { describe, expect, it } from "bun:test";
-import { HumanizerDegree } from "@/types/db/schema";
 import { chunkMessage, createSentenceSplitRegex, maskInlineCodeAndUrls } from "@/utils/text/processors/chunkProcessor";
 
 // The regex is a negative-lookbehind split: it matches sentence-ending periods
@@ -146,14 +145,14 @@ describe("createSentenceSplitRegex", () => {
 describe("chunkMessage hard breaks", () => {
   it("breaks unspaced text after a full-width mark before resorting to a hard cut", () => {
     const text = `${"字".repeat(18)}、${"字".repeat(11)}`;
-    const chunks = chunkMessage(text, HumanizerDegree.NONE, 20);
+    const chunks = chunkMessage(text, "lines", 20);
     expect(chunks[0]).toBe(`${"字".repeat(18)}、`);
     expect(chunks.join("")).toBe(text);
   });
 
   it("never cuts between the two halves of a surrogate pair", () => {
     const text = `a${"😀".repeat(15)}`;
-    const chunks = chunkMessage(text, HumanizerDegree.NONE, 20);
+    const chunks = chunkMessage(text, "lines", 20);
     expect(chunks.join("")).toBe(text);
     for (const chunk of chunks) {
       expect(chunk).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/);
@@ -169,34 +168,34 @@ describe("chunkMessage HEAVY protected spans", () => {
   it("keeps a span with an internal newline in one message", () => {
     const text = "*...but if you're asking the answer's more than zero\ndon't make me say a number.*";
 
-    expect(chunkMessage(text, HumanizerDegree.HEAVY)).toEqual([text]);
+    expect(chunkMessage(text, "sentences")).toEqual([text]);
   });
 
   it("keeps an @{handle} with a period in its name in one message", () => {
-    expect(chunkMessage("yo @{Mirri J. Juno} welcome. enjoy", HumanizerDegree.HEAVY)).toEqual([
+    expect(chunkMessage("yo @{Mirri J. Juno} welcome. enjoy", "sentences")).toEqual([
       "yo @{Mirri J. Juno} welcome",
       "enjoy",
     ]);
   });
 
   it("keeps a span with an internal sentence period in one message", () => {
-    expect(chunkMessage("*he said. then he left*", HumanizerDegree.HEAVY)).toEqual(["*he said. then he left*"]);
-    expect(chunkMessage("**bold. still bold**", HumanizerDegree.HEAVY)).toEqual(["**bold. still bold**"]);
-    expect(chunkMessage('he said "hi. there" ok', HumanizerDegree.HEAVY)).toEqual(['he said "hi. there" ok']);
-    expect(chunkMessage("~~old plan. new plan~~", HumanizerDegree.HEAVY)).toEqual(["~~old plan. new plan~~"]);
-    expect(chunkMessage("(wait. really?) ok", HumanizerDegree.HEAVY)).toEqual(["(wait. really?) ok"]);
-    expect(chunkMessage("run `a. b` now", HumanizerDegree.HEAVY)).toEqual(["run `a. b` now"]);
+    expect(chunkMessage("*he said. then he left*", "sentences")).toEqual(["*he said. then he left*"]);
+    expect(chunkMessage("**bold. still bold**", "sentences")).toEqual(["**bold. still bold**"]);
+    expect(chunkMessage('he said "hi. there" ok', "sentences")).toEqual(['he said "hi. there" ok']);
+    expect(chunkMessage("~~old plan. new plan~~", "sentences")).toEqual(["~~old plan. new plan~~"]);
+    expect(chunkMessage("(wait. really?) ok", "sentences")).toEqual(["(wait. really?) ok"]);
+    expect(chunkMessage("run `a. b` now", "sentences")).toEqual(["run `a. b` now"]);
   });
 
   it("keeps a multi-line quoted block in one message", () => {
     const text = '"\nthen the prompt layer gets yeeted AGAIN\ndecember you is gonna HATE september you"';
 
-    expect(chunkMessage(text, HumanizerDegree.HEAVY)).toEqual([text]);
+    expect(chunkMessage(text, "sentences")).toEqual([text]);
   });
 
   it("still splits sentences and newlines outside a span", () => {
-    expect(chunkMessage("first. *a. b* second", HumanizerDegree.HEAVY)).toEqual(["first", "*a. b* second"]);
-    expect(chunkMessage("line one\nline two\n*keep. this*", HumanizerDegree.HEAVY)).toEqual([
+    expect(chunkMessage("first. *a. b* second", "sentences")).toEqual(["first", "*a. b* second"]);
+    expect(chunkMessage("line one\nline two\n*keep. this*", "sentences")).toEqual([
       "line one",
       "line two",
       "*keep. this*",
@@ -205,7 +204,7 @@ describe("chunkMessage HEAVY protected spans", () => {
 
   it("splits a span longer than the chunk limit instead of sending an oversized message", () => {
     const text = `*${"word ".repeat(600).trim()}.*`;
-    const chunks = chunkMessage(text, HumanizerDegree.HEAVY, 1950);
+    const chunks = chunkMessage(text, "sentences", 1950);
 
     expect(chunks.length).toBeGreaterThan(1);
     // findBreakPoint can break one character past the requested length, so the ceiling that
@@ -215,8 +214,8 @@ describe("chunkMessage HEAVY protected spans", () => {
   });
 
   it("leaves the span split per paragraph below HEAVY", () => {
-    expect(chunkMessage("*a. b\nc. d*", HumanizerDegree.LIGHT)).toEqual(["*a. b", "c. d*"]);
-    expect(chunkMessage("*a. b\nc. d*", HumanizerDegree.NONE)).toEqual(["*a. b\nc. d*"]);
+    expect(chunkMessage("*a. b\nc. d*", "paragraphs")).toEqual(["*a. b", "c. d*"]);
+    expect(chunkMessage("*a. b\nc. d*", "lines")).toEqual(["*a. b\nc. d*"]);
   });
 
   /**
@@ -225,28 +224,28 @@ describe("chunkMessage HEAVY protected spans", () => {
    * which is why a candidate has to clear the flanking rules before it is held whole.
    */
   it("ignores markers that are not emphasis delimiters", () => {
-    expect(chunkMessage("* first item\n* second item\n* third item\n* fourth item", HumanizerDegree.HEAVY)).toEqual([
+    expect(chunkMessage("* first item\n* second item\n* third item\n* fourth item", "sentences")).toEqual([
       "* first item",
       "* second item",
       "* third item",
       "* fourth item",
     ]);
-    expect(chunkMessage("ugh -_- fine. whatever. >_< stop", HumanizerDegree.HEAVY)).toEqual([
+    expect(chunkMessage("ugh -_- fine. whatever. >_< stop", "sentences")).toEqual([
       "ugh -_- fine",
       "whatever",
       ">_< stop",
     ]);
-    expect(chunkMessage("yay ^_^ that worked. now fix snake_case next. ok bye", HumanizerDegree.HEAVY)).toEqual([
+    expect(chunkMessage("yay ^_^ that worked. now fix snake_case next. ok bye", "sentences")).toEqual([
       "yay ^_^ that worked",
       "now fix snake_case next",
       "ok bye",
     ]);
-    expect(chunkMessage("he's 2 * 3 years old. no wait. it's 4 * 5", HumanizerDegree.HEAVY)).toEqual([
+    expect(chunkMessage("he's 2 * 3 years old. no wait. it's 4 * 5", "sentences")).toEqual([
       "he's 2 * 3 years old",
       "no wait",
       "it's 4 * 5",
     ]);
-    expect(chunkMessage("the user_id thing. then a_b later. done", HumanizerDegree.HEAVY)).toEqual([
+    expect(chunkMessage("the user_id thing. then a_b later. done", "sentences")).toEqual([
       "the user_id thing",
       "then a_b later",
       "done",
@@ -254,46 +253,44 @@ describe("chunkMessage HEAVY protected spans", () => {
   });
 
   it("still protects a real span that follows rejected markers", () => {
-    expect(chunkMessage("* first item\n* second item\n*third. span*", HumanizerDegree.HEAVY)).toEqual([
+    expect(chunkMessage("* first item\n* second item\n*third. span*", "sentences")).toEqual([
       "* first item",
       "* second item",
       "*third. span*",
     ]);
     // The rejected bullet marker sits in the same sentence as the real span, so the two share one
     // message: what the rescan buys is that "real. span" is held whole instead of splitting there.
-    expect(chunkMessage("* item *real. span*", HumanizerDegree.HEAVY)).toEqual(["* item *real. span*"]);
+    expect(chunkMessage("* item *real. span*", "sentences")).toEqual(["* item *real. span*"]);
     // Underscore emphasis is still held whole in text the chunker receives, even though the stream
     // hold ignores "_" so identifiers and kaomoji cannot stall a reply.
-    expect(chunkMessage("_emphasised. aside_", HumanizerDegree.HEAVY)).toEqual(["_emphasised. aside_"]);
+    expect(chunkMessage("_emphasised. aside_", "sentences")).toEqual(["_emphasised. aside_"]);
   });
 
   it("keeps a span whole when a spaceless script glues the marker to its text", () => {
     const japanese = "ふん*顔をそむける。でも嬉しい*わけじゃない";
-    expect(chunkMessage(japanese, HumanizerDegree.HEAVY)).toEqual([japanese]);
-    expect(chunkMessage("他說*重點。在這*啦", HumanizerDegree.HEAVY)).toEqual(["他說*重點。在這*啦"]);
-    expect(chunkMessage("안녕*강조。이거*해요", HumanizerDegree.HEAVY)).toEqual(["안녕*강조。이거*해요"]);
+    expect(chunkMessage(japanese, "sentences")).toEqual([japanese]);
+    expect(chunkMessage("他說*重點。在這*啦", "sentences")).toEqual(["他說*重點。在這*啦"]);
+    expect(chunkMessage("안녕*강조。이거*해요", "sentences")).toEqual(["안녕*강조。이거*해요"]);
     // A spaced script keeps the intraword rule, so a Latin word glued to the marker is not a span.
-    expect(chunkMessage("word*emph. span*word", HumanizerDegree.HEAVY)).toEqual(["word*emph", "span*word"]);
+    expect(chunkMessage("word*emph. span*word", "sentences")).toEqual(["word*emph", "span*word"]);
   });
 
   it("does not treat an emoticon's bare parens as a parenthetical aside", () => {
-    expect(chunkMessage("ugh :( that sucks. anyway. glad you're back :)", HumanizerDegree.HEAVY)).toEqual([
+    expect(chunkMessage("ugh :( that sucks. anyway. glad you're back :)", "sentences")).toEqual([
       "ugh :( that sucks",
       "anyway",
       "glad you're back :)",
     ]);
     // The rejected face opener is skipped, so the real aside after it is still protected: without
     // that protection the "sure." period would split this into two messages.
-    expect(chunkMessage("hmm :( (really. sure.) ok", HumanizerDegree.HEAVY)).toEqual(["hmm :( (really. sure.) ok"]);
+    expect(chunkMessage("hmm :( (really. sure.) ok", "sentences")).toEqual(["hmm :( (really. sure.) ok"]);
     // A real aside keeps its protection, including the one whose closer follows a colon.
-    expect(chunkMessage("sure (ok. fine) whatever", HumanizerDegree.HEAVY)).toEqual(["sure (ok. fine) whatever"]);
-    expect(chunkMessage("(see note: it. is fine) ok", HumanizerDegree.HEAVY)).toEqual(["(see note: it. is fine) ok"]);
+    expect(chunkMessage("sure (ok. fine) whatever", "sentences")).toEqual(["sure (ok. fine) whatever"]);
+    expect(chunkMessage("(see note: it. is fine) ok", "sentences")).toEqual(["(see note: it. is fine) ok"]);
   });
 
   it("does not let a marker inside inline code become a span", () => {
-    expect(chunkMessage("run `a. b` and *real. span* now", HumanizerDegree.HEAVY)).toEqual([
-      "run `a. b` and *real. span* now",
-    ]);
+    expect(chunkMessage("run `a. b` and *real. span* now", "sentences")).toEqual(["run `a. b` and *real. span* now"]);
   });
 
   it("blanks inline code and URLs before an emphasis scan without shifting any offset", () => {
@@ -311,7 +308,10 @@ describe("chunkMessage HEAVY protected spans", () => {
 
 describe("chunkMessage emoji runs", () => {
   it("merges adjacent custom emojis only when their names share a three-character prefix", () => {
-    const chunks = chunkMessage("<:JoeCaught_1:1><:JoeCaught_2:2>\n<:abcx:3><:abdx:4><:tom:5><:tomori:6>", 1);
+    const chunks = chunkMessage(
+      "<:JoeCaught_1:1><:JoeCaught_2:2>\n<:abcx:3><:abdx:4><:tom:5><:tomori:6>",
+      "paragraphs",
+    );
 
     expect(chunks).toEqual(["<:JoeCaught_1:1><:JoeCaught_2:2>", "<:abcx:3>", "<:abdx:4>", "<:tom:5><:tomori:6>"]);
   });

@@ -8,7 +8,7 @@ import type {
 import { loadDecisionModelsForScope } from "@/providers/utils/providerFeatureExecutors";
 import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import type { OpenRouterModelScope } from "@/utils/db/repositories/LlmModelRepository";
-import type { ConfigCatalogModelCapability } from "@/utils/discord/configPanelCatalog";
+import type { ConfigModelCapability } from "@/utils/discord/configPanelCatalog";
 import { isCustomProvider, parseCustomProvider } from "@/utils/provider/customProviderUtils";
 import { freeModelPriceLabel, resolveRowPricing, type ChoicePricing } from "@/utils/provider/modelPricing";
 import { openRouterMediaRates } from "@/utils/provider/openrouterMediaPricing";
@@ -33,7 +33,7 @@ export interface ProviderModelChoice {
 
 export async function loadProviderModelChoices(
   owner: OpenRouterModelScope,
-  capability: ConfigCatalogModelCapability,
+  capability: ConfigModelCapability,
   provider: string,
   locale = "en-US",
   textModelFilter?: (model: LlmRow) => boolean,
@@ -61,7 +61,7 @@ export async function loadProviderModelChoices(
 
 async function loadCatalogModelChoices(
   owner: OpenRouterModelScope,
-  capability: ConfigCatalogModelCapability,
+  capability: ConfigModelCapability,
   provider: string,
   locale: string,
   textModelFilter: ((model: LlmRow) => boolean) | undefined,
@@ -170,6 +170,29 @@ async function loadCatalogModelChoices(
           pricing: openRouterMediaRates(provider, "speech", model.codename),
           isDefault: model.is_default,
         }));
+    }
+    case "stt": {
+      if (isCustomProvider(provider)) {
+        const connectionId = parseCustomProvider(provider)?.connectionId;
+        return (owner.kind === "server" ? await llmProviderRepo.loadCustomEndpointsForServer(owner.ownerId) : [])
+          .filter(
+            (endpoint): endpoint is CustomEndpointRow & { custom_endpoint_id: number } =>
+              endpoint.capability === "transcription" &&
+              endpoint.connection_id === connectionId &&
+              endpoint.custom_endpoint_id !== undefined,
+          )
+          .map((endpoint) => ({
+            id: endpoint.custom_endpoint_id,
+            name: endpoint.model_name ?? endpoint.label,
+            description: null,
+          }));
+      }
+      return (await llmModelRepo.loadAvailableTranscriptionModels(provider, owner)).map((model) => ({
+        id: model.transcription_model_id,
+        name: model.codename,
+        description: resolveDescription(model.descriptions, locale),
+        isDefault: model.is_default,
+      }));
     }
   }
 }

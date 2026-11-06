@@ -11,7 +11,8 @@ import * as personas from "@/utils/cache/tomoriStateCache";
 import { OpenrouterProvider } from "@/providers/openrouter/openrouterProvider";
 import { ToolRegistry } from "@/tools/toolRegistry";
 import { createLlmRow, createPersona } from "../../helpers/fixtures";
-import { HumanizerDegree, userSavedProviderConfigSchema } from "@/types/db/schema";
+import { humanizerSettingsFromDegree } from "@/constants/humanizer";
+import { userSavedProviderConfigSchema } from "@/types/db/schema";
 import { llmModelRepo } from "@/utils/db/repositories";
 import { currentProviderUsageContext } from "@/utils/provider/providerUsage";
 import { log } from "@/utils/misc/logger";
@@ -41,7 +42,7 @@ const STREAM_CONFIG: StreamConfig = {
   baseTypeSpeedMsPerChar: 0,
   maxTypingTimeMs: 0,
   minVisibleTypingDurationMs: 0,
-  humanizerDegree: HumanizerDegree.NONE,
+  humanizer: humanizerSettingsFromDegree(0),
   emojiUsageEnabled: false,
 };
 

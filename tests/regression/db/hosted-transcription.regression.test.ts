@@ -108,6 +108,16 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Hosted transcription persistence", () => {
     expect(await serverSelection()).toBeNull();
   });
 
+  it("turns server transcription off when clearing a default endpoint", async () => {
+    await insertTranscriptionEndpoint(true);
+    expect((await resolveTranscriptionTargets(refs.serverId)).map((target) => target.kind)).toEqual([
+      "custom-endpoint",
+    ]);
+    expect(await setHostedTranscriptionSelection(server(), null)).toBe(true);
+    expect(await serverSelection()).toBeNull();
+    expect(await resolveTranscriptionTargets(refs.serverId)).toEqual([]);
+  });
+
   it("fills only an empty slot when a provider is added", async () => {
     const endpointId = await insertTranscriptionEndpoint(true);
     expect(await activateProviderTranscriptionDefault(server(), "google")).toBe(true);

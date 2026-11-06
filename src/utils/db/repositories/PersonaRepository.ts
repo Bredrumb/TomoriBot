@@ -9,6 +9,7 @@
  * and consumed by the Phase 6 (#16.7) export pipeline composition.
  */
 import type { SQL } from "bun";
+import { HUMANIZER_TOGGLES, type HumanizerSettings } from "@/constants/humanizer";
 import {
   apiKeyRotationSchema,
   naiPresetSchema,
@@ -206,6 +207,18 @@ export type UnsyncedMainPointer = {
   preset_avatar_shared_url: string;
   preset_avatar_hash: string;
 };
+
+/** NULL across the five columns inherits the server; persona_configs_humanizer_override_complete keeps them set together. */
+function personaHumanizerOverride(personaConfig: PersonaConfigRow | null | undefined): HumanizerSettings | null {
+  if (!personaConfig) return null;
+  const override: Partial<HumanizerSettings> = {};
+  for (const toggle of HUMANIZER_TOGGLES) {
+    const value = personaConfig[toggle];
+    if (typeof value !== "boolean") return null;
+    override[toggle] = value;
+  }
+  return override as HumanizerSettings;
+}
 
 class PersonaRepository implements IRepository<PersonaExportShape> {
   private static readonly FALLBACK_DEBUG_ENABLED = new Set(["1", "true", "yes", "on"]).has(
@@ -682,22 +695,39 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
   }
 
   /**
-   * Sets or clears the per-persona humanizer degree override in persona_configs.
+   * Sets or clears the per-persona humanizer toggle override in persona_configs.
    * Operational setting (like the persona LLM override): does NOT materialize
    * pointer-preset personas, since no preset content is edited.
    * Upserts so the write is self-healing if the persona_configs row is missing.
    *
-   * @param personaId - Internal persona DB ID
-   * @param humanizerDegree - Override value 0-3, or null to inherit the server-wide setting
+   * @param override - The full toggle set, or null to inherit the server-wide setting
    * @returns True when the write succeeded
    */
-  async setHumanizerOverride(personaId: number, humanizerDegree: number | null): Promise<boolean> {
+  async setHumanizerOverride(personaId: number, override: HumanizerSettings | null): Promise<boolean> {
     try {
       const result = await sql`
-        INSERT INTO persona_configs (persona_id, humanizer_degree)
-        VALUES (${personaId}, ${humanizerDegree})
+        INSERT INTO persona_configs (
+          persona_id,
+          humanizer_streaming_enabled,
+          humanizer_pacing_enabled,
+          humanizer_sentence_split_enabled,
+          humanizer_lowercase_enabled,
+          humanizer_punctuation_split_enabled
+        )
+        VALUES (
+          ${personaId},
+          ${override?.humanizer_streaming_enabled ?? null},
+          ${override?.humanizer_pacing_enabled ?? null},
+          ${override?.humanizer_sentence_split_enabled ?? null},
+          ${override?.humanizer_lowercase_enabled ?? null},
+          ${override?.humanizer_punctuation_split_enabled ?? null}
+        )
         ON CONFLICT (persona_id) DO UPDATE
-        SET humanizer_degree = EXCLUDED.humanizer_degree
+        SET humanizer_streaming_enabled = EXCLUDED.humanizer_streaming_enabled,
+          humanizer_pacing_enabled = EXCLUDED.humanizer_pacing_enabled,
+          humanizer_sentence_split_enabled = EXCLUDED.humanizer_sentence_split_enabled,
+          humanizer_lowercase_enabled = EXCLUDED.humanizer_lowercase_enabled,
+          humanizer_punctuation_split_enabled = EXCLUDED.humanizer_punctuation_split_enabled
         RETURNING *
       `;
       return result.length > 0;
@@ -1956,7 +1986,9 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         smc.other_model_codename, smc.other_model_capabilities,
         smc.other_model_capabilities_fetched_at, smc.hide_respond_embed,
         -- 2. server_chat_configs
-        scc.humanizer_degree, scc.message_fetch_limit, scc.send_message_limit,
+        scc.humanizer_streaming_enabled, scc.humanizer_pacing_enabled,
+        scc.humanizer_sentence_split_enabled, scc.humanizer_lowercase_enabled,
+        scc.humanizer_punctuation_split_enabled, scc.message_fetch_limit, scc.send_message_limit,
         scc.match_limit, scc.cascade_limit, scc.timezone_offset, scc.self_debug_enabled,
         scc.model_randomizer_enabled,
         scc.response_reviewer_llm_id,
@@ -2068,7 +2100,9 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         smc.other_model_codename, smc.other_model_capabilities,
         smc.other_model_capabilities_fetched_at, smc.hide_respond_embed,
         -- 2. server_chat_configs
-        scc.humanizer_degree, scc.message_fetch_limit, scc.send_message_limit,
+        scc.humanizer_streaming_enabled, scc.humanizer_pacing_enabled,
+        scc.humanizer_sentence_split_enabled, scc.humanizer_lowercase_enabled,
+        scc.humanizer_punctuation_split_enabled, scc.message_fetch_limit, scc.send_message_limit,
         scc.match_limit, scc.cascade_limit, scc.timezone_offset, scc.self_debug_enabled,
         scc.model_randomizer_enabled,
         scc.response_reviewer_llm_id,
@@ -2782,9 +2816,9 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
           : (personaNamingConfigs.get(personaId) ?? EMPTY_PERSONA_NAMING_CONFIG);
 
       // Per-persona humanizer override: overlay onto a copy of the server config at
-      // load time so every runtime consumer of config.humanizer_degree (providers,
-      // stream buffer, context templates) sees the persona-scoped value unchanged.
-      const humanizerOverride = personaConfig?.humanizer_degree ?? null;
+      // load time so every runtime consumer of the config's humanizer toggles (providers,
+      // stream buffer, context templates) sees the persona-scoped values unchanged.
+      const humanizerOverride = personaHumanizerOverride(personaConfig);
 
       // Combine and validate the full state
       const combinedState = {
@@ -2796,14 +2830,14 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         sample_dialogues_in: sampleDialoguesIn,
         sample_dialogues_out: sampleDialoguesOut,
         persona_attributes: personaAttributes,
-        config: humanizerOverride !== null ? { ...configData, humanizer_degree: humanizerOverride } : configData,
+        config: humanizerOverride ? { ...configData, ...humanizerOverride } : configData,
         llm: llmData,
         trigger_words: triggerWords,
         persona_prompt: personaPrompt,
         naming_config: namingConfig,
         reward_conditioning_enabled: personaConfig?.reward_conditioning_enabled ?? true,
         punish_conditioning_enabled: personaConfig?.punish_conditioning_enabled ?? true,
-        humanizer_degree_override: humanizerOverride,
+        humanizer_override: humanizerOverride,
         ...autochRuntime,
         server_memories: serverMemories,
         rotation_keys: rotationKeys.length > 0 ? rotationKeys : undefined,
@@ -3157,9 +3191,9 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
               : (personaNamingConfigs.get(personaId) ?? EMPTY_PERSONA_NAMING_CONFIG);
 
           // Per-persona humanizer override: overlay onto a copy of the shared server
-          // config so only this persona's state sees the overridden degree. Each
+          // config so only this persona's state sees the overridden toggles. Each
           // state is Zod-parsed below, so the shared configData base stays untouched.
-          const humanizerOverride = personaConfig?.humanizer_degree ?? null;
+          const humanizerOverride = personaHumanizerOverride(personaConfig);
 
           const combinedState = {
             ...tomoriRow,
@@ -3170,14 +3204,14 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
             sample_dialogues_in: sampleDialoguesIn,
             sample_dialogues_out: sampleDialoguesOut,
             persona_attributes: personaAttributes,
-            config: humanizerOverride !== null ? { ...configData, humanizer_degree: humanizerOverride } : configData,
+            config: humanizerOverride ? { ...configData, ...humanizerOverride } : configData,
             llm: llmData,
             trigger_words: triggerWords,
             persona_prompt: personaPrompt,
             naming_config: namingConfig,
             reward_conditioning_enabled: personaConfig?.reward_conditioning_enabled ?? true,
             punish_conditioning_enabled: personaConfig?.punish_conditioning_enabled ?? true,
-            humanizer_degree_override: humanizerOverride,
+            humanizer_override: humanizerOverride,
             server_memories: serverMemories,
             rotation_keys: rotationKeys.length > 0 ? rotationKeys : undefined,
             ...autochRuntime,

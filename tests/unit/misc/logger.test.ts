@@ -1,3 +1,4 @@
+import { humanizerSettingsFromDegree } from "@/constants/humanizer";
 import { describe, expect, spyOn, test } from "bun:test";
 import { errorLogRepository } from "@/utils/db/repositories/ErrorLogRepository";
 import {
@@ -43,7 +44,7 @@ test("retains redacted provider warning diagnostics in production stdout and JSO
     };
     const result = await new StreamOrchestrator().streamToDiscord(provider, {
       apiKey:requestKey,model:"fixture/model",temperature:1,maxMessageLength:1950,flushBufferSize:1000,flushBufferSizeCodeBlock:15000,
-      inactivityTimeoutMs:10000,baseTypeSpeedMsPerChar:0,maxTypingTimeMs:0,minVisibleTypingDurationMs:0,humanizerDegree:0,emojiUsageEnabled:false
+      inactivityTimeoutMs:10000,baseTypeSpeedMsPerChar:0,maxTypingTimeMs:0,minVisibleTypingDurationMs:0,humanizer:{humanizer_streaming_enabled:false,humanizer_pacing_enabled:false,humanizer_sentence_split_enabled:false,humanizer_lowercase_enabled:false,humanizer_punctuation_split_enabled:false},emojiUsageEnabled:false
     }, {channel:{id:"fixture-channel"},client:{},tomoriState:createPersona(),contextItems:[],currentTurnModelParts:[],provider:"custom",
       locale:"en-US",textCredentialSource:"personal",initialInteraction:{reply:async(payload)=>{if(payload.content.includes(requestKey)) process.exit(2);}}});
     if(result.status !== "error") process.exit(3);
@@ -425,7 +426,7 @@ describe("log.error persistence", () => {
           baseTypeSpeedMsPerChar: 0,
           maxTypingTimeMs: 0,
           minVisibleTypingDurationMs: 0,
-          humanizerDegree: 0,
+          humanizer: humanizerSettingsFromDegree(0),
           emojiUsageEnabled: false,
         },
         {

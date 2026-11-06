@@ -2,7 +2,6 @@
 title: "行為調整"
 sidebar:
   order: 3
-aiGenerated: true
 ---
 
 你可以在`/config`中調整TomoriBot能執行哪些動作，以及如何產生回覆，包括權限設定。人格設定請見[多個人格](/zh-TW/features/chatting-personality/multiple-personas/)，知識設定請見[記憶](/zh-TW/features/knowledge/memory/)。這一頁介紹常用的行為設定。
@@ -71,9 +70,9 @@ aiGenerated: true
 ## 生成調整
 <!-- anchor: generation-tuning -->
 
-- `/config` > `模型` > `文字取樣器與參數`：採樣參數，例如溫度和top-p。溫度越高，品種越多。
-- `/config` > `行為` > `一般行為`：反應人性化程度。調整她傳簡訊的隨意程度。預設情況下，此設定適用於伺服器範圍，或適用於個人人格。
-- `/config` > `行為` > `一般行為`：訊息歷史記錄限制。提高它以獲得更深入的對話上下文，或降低它以節省令牌。
+- `/config` > `模型` > `文字取樣器與參數`：取樣參數，例如溫度與 top-p。溫度越高，變化越多。
+- `/config` > `行為` > `一般行為`：回覆擬人化。節奏訊息會在串流傳送的訊息之間加入延遲與停頓。節奏訊息與兩種分割選項都需要即時串流；強制小寫則在未開啟串流時也能運作。這些設定預設套用至全伺服器，或可單獨套用至個別人格。`/setup` 將這些習慣包裝成四個現成的預設集。
+- `/config` > `行為` > `一般行為`：訊息歷史紀錄上限。調高可獲得更深入的對話脈絡，調低則可節省 token。此數值為最大上限：近期對話歷史會隨之增長，並以整批方式捨棄較舊的訊息。視窗與放置規則請參閱[深入提示詞](/features/knowledge/inside-the-prompt/)。
 
 ## 系統提示詞
 <!-- anchor: system-prompt -->

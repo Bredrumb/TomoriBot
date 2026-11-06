@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { humanizerSettingsFromDegree } from "@/constants/humanizer";
 import { AnthropicStreamAdapter } from "@/providers/anthropic/anthropicStreamAdapter";
 import { OpenrouterStreamAdapter } from "@/providers/openrouter/openrouterStreamAdapter";
 import {
@@ -94,7 +95,7 @@ async function capture(
     baseTypeSpeedMsPerChar: 0,
     maxTypingTimeMs: 0,
     minVisibleTypingDurationMs: 0,
-    humanizerDegree: 0,
+    humanizer: humanizerSettingsFromDegree(0),
     emojiUsageEnabled: true,
   };
   const context: StreamContext = {
