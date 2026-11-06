@@ -69,8 +69,10 @@ def apply_reference(active_model, turbo: bool, ref_path: str) -> None:
     conditionals_cache.move_to_end(key)
     active_model.conds = cached
     return
-  # 0.0 is what Turbo's generate() prepares; standard generate() swaps in the request's exaggeration itself.
-  active_model.prepare_conditionals(ref_path, exaggeration=0.0)
+  # Without no_grad the S3Gen speaker embedding keeps its autograd graph, about 287 MB of VRAM per cached voice.
+  with torch.no_grad():
+    # 0.0 is what Turbo's generate() prepares; standard generate() swaps in the request's exaggeration itself.
+    active_model.prepare_conditionals(ref_path, exaggeration=0.0)
   conditionals_cache[key] = active_model.conds
   if len(conditionals_cache) > CONDITIONALS_CACHE_LIMIT:
     conditionals_cache.popitem(last=False)
