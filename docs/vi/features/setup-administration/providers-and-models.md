@@ -74,8 +74,9 @@ Trong `/config` > `Model` > `Chuyển đổi model`, bạn có thể chỉ đị
 - **Hình ảnh tiêu chuẩn**: tạo hình ảnh tiêu chuẩn (xem [Tạo hình ảnh](/vi/features/capabilities/media-generation/image-generation/)).
 - **Hình ảnh NovelAI**: [Tạo hình ảnh NovelAI](/features/integrations/novelai/#image-generation).
 - **Video**: tạo video.
-- **Điểm cuối TTS**: điểm cuối chuyển văn bản thành giọng nói.
-- **Điểm cuối STT**: điểm cuối chuyển âm thanh từ giọng nói thành văn bản.
+- **TTS (Thiết kế giọng đọc)**: nói bằng mô tả giọng đọc đã lưu.
+- **TTS (Sao chép giọng đọc)**: nói bằng mẫu tham chiếu hoặc giọng của nhà cung cấp.
+- **Speech to Text**: phiên âm tệp đính kèm âm thanh bằng một model phiên âm hosted hoặc một điểm cuối tùy chỉnh. Hãy chọn một nhà cung cấp, sau đó chọn model của nhà cung cấp đó; `- Không có model` sẽ dừng việc phiên âm bằng khóa của máy chủ.
 
 Danh sách model đánh dấu model mặc định của từng nhà cung cấp và hiển thị giá bằng đô la Mỹ. Các model Văn bản và Quyết định hiển thị giá trên mỗi 1 triệu token đầu vào và đầu ra. Các model hình ảnh, video và giọng nói của OpenRouter hiển thị đơn vị mà OpenRouter tính phí: theo từng ảnh hoặc mỗi 1 triệu token ảnh, theo từng giây video ở độ phân giải mặc định của TomoriBot, và mỗi 1 triệu ký tự hoặc từng giây âm thanh. Các model hình ảnh do bạn tự đăng ký sẽ không hiển thị giá. Model không có giá niêm yết là model không tính phí theo lượng dùng hoặc chưa có giá trong danh mục của TomoriBot, vì vậy hãy kiểm tra trang giá của nhà cung cấp trước khi dựa vào đó.
 
@@ -174,9 +175,10 @@ Nếu bạn không có phần cứng để lưu trữ các model của riêng m�
 | Nhà cung cấp | Chuyển văn bản thành giọng nói | Chuyển giọng nói thành văn bản |
 |---|---|---|
 | ElevenLabs | ✅ | ✅ |
-| Google Gemini | Thiết kế giọng đọc | Không |
-| Vertex AI (tiêu chuẩn, toàn cầu) | Thiết kế giọng đọc | Không |
+| Google Gemini | Thiết kế giọng đọc | ✅ |
+| Vertex AI (tiêu chuẩn, toàn cầu) | Thiết kế giọng đọc | ✅ |
 | OpenRouter Fish | Sao chép giọng đọc | Không |
 | OpenRouter Seed Audio | Thiết kế giọng đọc | Không |
+| Các model phiên âm OpenRouter | Không | ✅ |
 
 Công cụ giọng nói cục bộ được đề cập trong [Tự lưu trữ](/vi/self-hosting/). Để biết tính năng tìm kiếm trên web và đọc URL tích hợp, hãy xem [Công cụ & tiện ích mở rộng](/vi/features/capabilities/tools-and-extensions/#web-search--url-reading).

@@ -11,7 +11,8 @@
         "src/tools/functionCalls/**/*.ts",
         "src/tools/{fetchUrl/fetchUrlTool.ts,webSearch/webSearchTool.ts}",
         "scripts/**/*.ts",
-        "tests/**/*.test.ts"
+        "tests/**/*.test.ts",
+        "tests/fixtures/shardRuntimeWorker.ts"
       ],
       "project": ["src/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts"],
       "ignoreFiles": ["src/db/seed/catalog/personas/prideful/en-US.ts"]

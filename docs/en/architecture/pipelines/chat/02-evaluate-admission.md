@@ -70,7 +70,8 @@ A persona's webhook post is posted by the channel's shared managed webhook, so i
 ### Audio transcription
 
 When a message contains audio attachments and voice transcription is enabled,
-`evaluateAudioTranscriptionAdmission()` transcribes the attachment using the server's configured STT endpoint.
+`evaluateAudioTranscriptionAdmission()` transcribes the attachment through the sender's personal
+transcription model or the server's target (see [Voice System](/architecture/integrations/voice/)).
 
 In chat mode on supported guild channels, it sends the transcript via a webhook mirroring the user's
 name and avatar. Otherwise, it stores the text in `voiceTranscriptCache`. In both modes, it updates

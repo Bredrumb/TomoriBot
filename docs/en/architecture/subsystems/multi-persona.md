@@ -25,7 +25,7 @@ Each row defines a persona identity in a server:
 Holds per-persona behavior settings:
 
 - `trigger_words`: Array of trigger strings for the persona.
-- `humanizer_degree`: Optional per-persona humanizer level override. When set, state loading overlays this value onto the persona's assembled configuration so providers and stream buffers see persona-scoped humanization without call-site awareness.
+- `humanizer_*_enabled`: Optional per-persona override of the five humanizer toggles. The columns are set together or all NULL (NULL inherits the server), enforced by `persona_configs_humanizer_override_complete`. When set, state loading overlays them onto the persona's assembled configuration so providers and stream buffers see persona-scoped humanization without call-site awareness.
 
 ### `persona_sprites`
 

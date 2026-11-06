@@ -34,9 +34,11 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Hosted speech persistence", () => {
   let googleCredentialId: number;
   let personalCredentialId: number;
   let foreignServerId: number;
-  const migrations = ["102_hosted_speech_models.sql", "901_subscription_speech_selections.sql"].map((name) =>
-    path.join(process.cwd(), "src/db/migrations", name),
-  );
+  const migrations = [
+    "102_hosted_speech_models.sql",
+    "133_hosted_transcription_models.sql",
+    "901_subscription_speech_selections.sql",
+  ].map((name) => path.join(process.cwd(), "src/db/migrations", name));
   const scope = () => ({ kind: "server" as const, ownerId: refs.serverId });
   const personal = () => ({ kind: "personal" as const, ownerId: refs.userId });
 

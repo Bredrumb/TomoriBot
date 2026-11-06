@@ -73,9 +73,10 @@ Brave SearchはAIプロバイダーとは別のもので、画像、ビデオ、
 - **判定**: 登録済みの [判定モデル](#decision-models)。[Natural Nudges](/features/chatting-personality/natural-nudges/#active-nudges) が会話に参加するタイミングを決定するために使用します。
 - **標準イメージ**: 標準イメージの生成 ([イメージ生成](/ja/features/capabilities/media-generation/image-generation/) を参照)。
 - **NovelAIイメージ**: [NovelAIイメージの生成](/features/integrations/novelai/#image-generation)。
-- **ビデオ**: ビデオの生成。
-- **TTSエンドポイント**: テキスト読み上げ音声エンドポイント。
-- **STTエンドポイント**: speech-to-textオーディオトランスクリプションエンドポイント。
+- **動画**: 動画の生成。
+- **TTS（ボイスデザイン）**: 保存された音声の説明を使用して話します。
+- **TTS（ボイスクローン）**: リファレンスサンプルまたはプロバイダーの音声を使用して話します。
+- **音声認識**: ホスト型の文字起こしモデルまたはカスタムエンドポイントで音声の添付ファイルを文字起こしします。プロバイダーを選択してからそのモデルを選択します。`- モデルなし` を選択すると、サーバーのキーでの文字起こしを停止します。
 
 モデルリストでは各プロバイダーのデフォルトモデルが示され、価格が米ドルで表示されます。テキストモデルおよび判定モデルでは、100万入力トークンおよび100万出力トークンあたりの価格が表示されます。OpenRouterの画像・動画・音声モデルでは、OpenRouterの請求単位（1枚あたり、100万画像トークンあたり、TomoriBotのデフォルト解像度における動画1秒あたり、100万文字あたり、または音声1秒あたり）が表示されます。自身で登録した画像モデルには価格が表示されません。価格が表示されていないモデルは、従量制ではないか、あるいはTomoriBotのカタログに価格が登録されていないため、使用する前にプロバイダーの料金ページをご確認ください。
 
@@ -171,12 +172,13 @@ OpenCode Go (`https://opencode.ai/zen/go/v1`) とOpenCode Zen (`https://opencode
 
 ### 音声とオーディオ
 
-| プロバイダー | テキスト読み上げ | 音声からテキストへの変換 |
+| プロバイダー | テキスト読み上げ | 音声認識 |
 |---|---|---|
 | ElevenLabs | ✅ | ✅ |
-| Google Gemini | ボイスデザイン | いいえ |
-| Vertex AI（標準、グローバル） | ボイスデザイン | いいえ |
+| Google Gemini | ボイスデザイン | ✅ |
+| Vertex AI（標準、グローバル） | ボイスデザイン | ✅ |
 | OpenRouter Fish | ボイスクローン | いいえ |
 | OpenRouter Seed Audio | ボイスデザイン | いいえ |
+| OpenRouter文字起こしモデル | いいえ | ✅ |
 
 ローカル音声エンジンは、[セルフホスティング](/ja/self-hosting/) でカバーされています。組み込みのWeb検索とURL読み取りについては、[ツールと拡張機能](/ja/features/capabilities/tools-and-extensions/#web-search--url-reading) を参照してください。

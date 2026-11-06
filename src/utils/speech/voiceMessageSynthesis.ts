@@ -21,6 +21,7 @@ import { cleanupPendingGoogleVoices, synthesizeGoogleVoice } from "@/utils/speec
 import {
   HOSTED_SPEECH_LIMITS,
   HostedSpeechError,
+  isExpectedHostedSpeechFailure,
   type HostedSpeechErrorKind,
   type SpeechOperation,
 } from "@/utils/speech/hostedSpeech";
@@ -142,16 +143,6 @@ export interface VoiceMessageSynthesisRequest {
   /** Turn-level cancellation from /kill, forwarded to whichever backend runs. */
   abortSignal?: AbortSignal;
 }
-
-const EXPECTED_HOSTED_SPEECH_KINDS: ReadonlySet<HostedSpeechErrorKind> = new Set([
-  "content_blocked",
-  "cancelled",
-  "timeout",
-  "script_too_long",
-  "authentication",
-  "quota",
-]);
-const TRANSIENT_HOSTED_SPEECH_STATUSES = new Set([500, 502, 503, 504]);
 
 function speechFailureOwner(
   request: VoiceMessageSynthesisRequest,
@@ -494,12 +485,7 @@ async function synthesizeHostedVoiceMessage(
       summary: "Hosted speech failed",
       errorType: "SpeechOperationFailed",
       error,
-      expected:
-        EXPECTED_HOSTED_SPEECH_KINDS.has(errorKind) ||
-        (errorKind === "provider_error" &&
-          providerStatus !== undefined &&
-          TRANSIENT_HOSTED_SPEECH_STATUSES.has(providerStatus)) ||
-        (errorKind === "invalid_request" && providerStatus === undefined),
+      expected: isExpectedHostedSpeechFailure(errorKind, providerStatus),
       detail: providerDetail,
       ...speechFailureOwner(request, target.owner),
       dimensions: {

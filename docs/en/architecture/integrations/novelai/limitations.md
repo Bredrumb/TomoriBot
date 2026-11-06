@@ -12,7 +12,8 @@ available through commands and through tools called by another text provider.
 `modelProfiles.ts` owns each model's endpoint, renderer, tokenizer, sampling defaults, output policy,
 and subscription allowances. Unknown codenames fail profile lookup. GLM uses a chat template; Kayra
 and Erato use story prompts with ATTG. GLM puts personality and memories at the start of the first
-user turn. These three models have no system block. Xialong uses NovelAI's recommended English
+user turn. GLM uses an inline system message for activated lore; Kayra and Erato have no system block.
+Xialong uses NovelAI's recommended English
 system prompt verbatim, with ATTG as the first entry under `Relevant persistent information:` in
 the first user turn. Its stars default to 4; Erato emits stars only when configured, and Kayra
 omits them.
@@ -42,7 +43,7 @@ selection. Prompt inspection uses the same preparation path.
 ## Prompt content and saved settings
 
 `promptFitting.ts` admits personality, sample dialogue, server and visible personal memories,
-short-term memory, and actual conversation text. Other tags and untagged instructions are excluded.
+short-term memory, lorebooks, and actual conversation text. Other tags and untagged instructions are excluded.
 The native context survives preset reassembly separately, so each actual NovelAI attempt can use it
 without imported preset instructions or depth injections. History carries its conversation text
 separately from generated timestamps, attachment hints, and tail directives. Explicit assistant
@@ -69,7 +70,7 @@ Explicit prefills and continuation fragments remain exact. The user-facing
 [polishing rules](/features/integrations/novelai/#text-polishing-and-discord-delivery) own
 the formatting details and protected content.
 
-Polishing is independent of the humanizer degree. The shared Discord delivery pipeline still
+Polishing is independent of the humanizer toggles. The shared Discord delivery pipeline still
 applies the configured humanizer. Later context is reconstructed from Discord messages, so lost
 punctuation cannot be recovered exactly; no original unhumanized transcript is stored. These
 formatting rules do not rewrite grammar. Other providers retain their existing prompt paths.
@@ -89,8 +90,17 @@ The fitter renders the complete prompt, counts it locally, and removes extra sam
 memories, then oldest history exchanges. It protects personality and ATTG, one sample exchange,
 two recent history exchanges, and the triggering message when its identity is supplied. Memory
 eligibility has no relevance score: older dated entries leave first, with source order breaking ties;
-undated blocks use the same stable ordering. Memory content is bounded to one fifth of the window.
+undated entries and blocks use the same stable ordering. Memories and lore share one fifth of the window.
 An oversized protected floor fails with a localized error.
+
+Lorebook admission follows the role split in the [shared prompt layout](/architecture/pipelines/context-build/).
+Always On lore joins persistent information for GLM and Xialong, or `Server Notes` for Kayra and Erato.
+Activated lore uses the tail slot above the last four speaker turns, with samples supplying missing turns.
+GLM and Xialong combine adjacent activated entries into an inline system message; story profiles insert
+their prose among the conversation lines. Before and after tags retain their relative order within each
+group. Fitting reapplies the slot after removals. All profiles use identity-resolved entry contents
+without generated headings or titles, polish them, and trim them individually with `lorebook:<id>`
+identities in the fitting report. The shared lore activation character budget still applies first.
 
 ## Allowances and tokenizer assets
 

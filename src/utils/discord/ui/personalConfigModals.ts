@@ -11,6 +11,7 @@ import {
   buildPersonalConfigRouteId,
   PERSONAL_FALLBACK_PAGE_SIZE,
   PERSONAL_MODEL_PAGE_SIZE,
+  QUICK_TOGGLE_CAPABILITIES,
   ROUTING_CAPABILITY_LOCALE_KEYS,
   SPOTLIGHT_PERSONA_PAGE_SIZE,
   SPOTLIGHT_REMOVE_PAGE_SIZE,
@@ -460,7 +461,7 @@ export function buildQuickToggleModal(
           type: 22,
           custom_id: buildPersonalConfigModalFieldId("capabilities", nonce),
           min_values: 0,
-          max_values: 8,
+          max_values: QUICK_TOGGLE_CAPABILITIES.length,
           required: false,
           options: [
             {
@@ -499,7 +500,7 @@ export function buildQuickToggleModal(
               description: safeSelectOptionText(getDesc(videoStored), 100),
               default: videoActive,
             },
-            ...(["speech_design", "speech_clone"] as const).map((capability) => ({
+            ...(["speech_design", "speech_clone", "transcription"] as const).map((capability) => ({
               value: capability,
               label: safeSelectOptionText(localizer(locale, ROUTING_CAPABILITY_LOCALE_KEYS[capability]), 100),
               description: safeSelectOptionText(

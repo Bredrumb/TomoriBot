@@ -32,6 +32,7 @@ function collectActiveConfigs(
     "vision",
     "speech_design",
     "speech_clone",
+    "transcription",
   ] as const) {
     // The model check keeps this in step with what the commands call active. Without
     // it an enabled row whose model pointer went NULL would swap its credential in
@@ -176,6 +177,9 @@ export async function applyPersonalProviderSelectionsToTomoriState(
   if (activeConfigs.speech_clone?.speech_clone_model_id) {
     nextConfig.speech_clone_model_id = activeConfigs.speech_clone.speech_clone_model_id;
     nextConfig.speech_clone_endpoint_id = null;
+  }
+  if (activeConfigs.transcription?.transcription_model_id) {
+    nextConfig.transcription_model_id = activeConfigs.transcription.transcription_model_id;
   }
 
   let nextLlm = tomoriState.llm;

@@ -43,10 +43,14 @@ system prompt. Turn the preset off to edit the saved server prompt again.
 
 - `/config` > Models > Text Samplers & Parameters: sampling parameters such as temperature
   and top-p. Higher temperature yields more variety.
-- `/config` > Behavior > General Behavior: response humanizer degree. Adjust how casually she
-  texts. The setting applies server-wide by default, or to an individual persona.
+- `/config` > Behavior > General Behavior: response humanizer. Paced messages adds delays and pauses between streamed messages. Pacing and both split options
+  require live streaming; force lowercase also works without streaming. These settings apply
+  server-wide by default, or to an individual persona.
+  `/setup` offers the same habits as four ready-made presets.
 - `/config` > Behavior > General Behavior: message history limit. Raise it for deeper
-  conversational context, or lower it to save tokens.
+  conversational context, or lower it to save tokens. This is a maximum: recent history grows, then
+  drops older messages in batches. See [Inside The Prompt](/features/knowledge/inside-the-prompt/)
+  for the window and placement rules.
 
 ## Capabilities
 <!-- anchor: capabilities-what-shes-allowed-to-do -->

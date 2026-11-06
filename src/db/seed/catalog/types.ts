@@ -201,3 +201,5 @@ export interface NaiPresetInput {
 export interface SpeechInput extends CommonInput {
   voiceMode: "design" | "clone";
 }
+
+export type TranscriptionInput = CommonInput;

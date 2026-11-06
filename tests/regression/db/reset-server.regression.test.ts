@@ -7,6 +7,7 @@
  *
  * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md)
  */
+import { DEFAULT_HUMANIZER_SETTINGS, type HumanizerSettings } from "@/constants/humanizer";
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import {
   SERVER_COLLECTION_RESET_TABLES,
@@ -51,7 +52,9 @@ async function dirtyEverySingleton(serverId: number): Promise<void> {
   await testSql`
     INSERT INTO server_chat_configs (server_id) VALUES (${serverId})
     ON CONFLICT (server_id) DO UPDATE SET
-      humanizer_degree = 3, message_fetch_limit = 12, send_message_limit = 7, match_limit = 9,
+      humanizer_streaming_enabled = false, humanizer_pacing_enabled = true,
+      humanizer_sentence_split_enabled = true, humanizer_lowercase_enabled = true,
+      humanizer_punctuation_split_enabled = true, message_fetch_limit = 12, send_message_limit = 7, match_limit = 9,
       cascade_limit = 8, timezone_offset = 5, self_debug_enabled = true,
       model_randomizer_enabled = true, system_prompt = '_rt_authored_prompt',
       context_note = '_rt_authored_note', context_note_depth = 4,
@@ -456,18 +459,20 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server configuration reset: regression", (
       expect(stm).toBeDefined();
       expect(stm.refresh_cadence).toBe(5);
 
-      const [chat] = await testSql<Array<{ humanizer_degree: number }>>`
-        SELECT humanizer_degree FROM server_chat_configs WHERE server_id = ${targetServerId}
+      const [chat] = await testSql<Array<HumanizerSettings>>`
+        SELECT humanizer_streaming_enabled, humanizer_pacing_enabled,
+          humanizer_sentence_split_enabled, humanizer_lowercase_enabled, humanizer_punctuation_split_enabled
+        FROM server_chat_configs WHERE server_id = ${targetServerId}
       `;
       expect(chat).toBeDefined();
-      expect(chat.humanizer_degree).toBe(1);
+      expect({ ...chat }).toEqual(DEFAULT_HUMANIZER_SETTINGS);
     });
   });
 
   describe("rollback", () => {
     it("leaves no partial state when a statement fails", async () => {
       await testSql`
-        UPDATE server_chat_configs SET humanizer_degree = 3, system_prompt = '_rt_rollback_prompt'
+        UPDATE server_chat_configs SET humanizer_lowercase_enabled = true, system_prompt = '_rt_rollback_prompt'
         WHERE server_id = ${targetServerId}
       `;
       await testSql.unsafe(`
@@ -486,11 +491,11 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server configuration reset: regression", (
       try {
         await expect(resetRepository.resetServerConfiguration(targetServerId)).rejects.toThrow();
 
-        const [row] = await testSql<Array<{ humanizer_degree: number; system_prompt: string | null }>>`
-          SELECT humanizer_degree, system_prompt FROM server_chat_configs
+        const [row] = await testSql<Array<{ humanizer_lowercase_enabled: boolean; system_prompt: string | null }>>`
+          SELECT humanizer_lowercase_enabled, system_prompt FROM server_chat_configs
           WHERE server_id = ${targetServerId}
         `;
-        expect(row.humanizer_degree).toBe(3);
+        expect(row.humanizer_lowercase_enabled).toBe(true);
         expect(row.system_prompt).toBe("_rt_rollback_prompt");
       } finally {
         await testSql.unsafe("DROP TRIGGER IF EXISTS _rt_reset_injected_failure_trg ON channel_persona_whitelist;");

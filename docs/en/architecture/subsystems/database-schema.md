@@ -210,6 +210,13 @@ Registration and activation failures roll back selections, assignments, and enab
 repository callers invalidate cached state only after commit. Seed initialization adds catalogue
 models without assigning provider ownership or replacing existing speech targets.
 
+Hosted transcription follows the same pattern with one slot: `server_speech_configs` and
+`user_saved_provider_configs` each carry a `transcription_model_id`, and the personal capability is
+`transcription`. Triggers validate the matching saved key and scoped registration, and clear the
+selection when that key is removed or nulled, the registration is deleted, or the model is
+deprecated. On `user_saved_provider_configs` the clearing trigger must sort before the validation
+trigger, because PostgreSQL fires `BEFORE` triggers in name order.
+
 `speech_voice_bindings` stores remote voice IDs by persona, credential snapshot, revision, transport,
 prompt hash, and Cloud project/location. Credential revisions advance when stored ciphertext changes,
 independently of encryption `key_version`. Prompt or credential changes retire bindings to pending
@@ -249,7 +256,7 @@ including link expressions. Existing rows remain editable when the limit is reac
 
 ### Model catalog and custom endpoints
 
-- **`llms`, `image_diffusion_models`, `video_generation_models`, `embedding_models`, `decision_models`, `speech_models`**: global model catalogs seeded from typed code definitions.
+- **`llms`, `image_diffusion_models`, `video_generation_models`, `embedding_models`, `decision_models`, `speech_models`, `transcription_models`**: global model catalogs seeded from typed code definitions.
 - **Pricing storage**: first-party models record token prices directly in `llms.input_price_per_million` and `output_price_per_million`. OpenRouter pricing uses the live API cache first, falling back to database column values.
 - **Decision primitives**: `decision_models.supported_primitives` lists the question types a model answers. Every Decision API style the bot calls accepts `predicate` and `choice`, so new rows default to both; the Active Nudge matcher needs `choice`.
 - **Token limits**: `context_window` and `max_output_tokens` record model ceilings. Runtime code queries them through `resolveModelLimits()`, where live provider responses take precedence.

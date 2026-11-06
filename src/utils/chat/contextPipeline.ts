@@ -1,5 +1,6 @@
+import { applyPromptLayoutInserts } from "@/utils/text/context/promptLayout";
 import { mapWithConcurrency } from "@/utils/async/bounded";
-import { isHistoryWindowMessageDeleted, readChannelHistory } from "@/utils/chat/historyWindow";
+import { isHistoryWindowMessageDeleted, readChannelHistory, selectAnchoredHistory } from "@/utils/chat/historyWindow";
 import { verifyMessageWebhook, isManagedWebhookMessage } from "@/utils/chat/webhookIdentity";
 import type { Message } from "discord.js";
 import { MessageReferenceType, MessageType } from "discord.js";
@@ -68,8 +69,6 @@ import {
   hasContextReactions,
   buildReplyReferenceContextAnnotation,
   findReplyContextTargetInMessage,
-  insertAtDialogueDepth,
-  insertBeforeLatestDialoguePair,
   appendInjectedContextItems,
   mergeForcedMentions,
   stripAtPersonaTriggers,
@@ -269,7 +268,7 @@ export function resolveTurnDeliberateToolMode(turn: ChatTurn): boolean {
 }
 
 export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnContext> {
-  recordChatTurnConfiguration(turn.persona.llm.llm_provider, turn.persona.config.humanizer_degree);
+  recordChatTurnConfiguration(turn.persona.llm.llm_provider, turn.persona.config);
   const incoming = turn.lockedTurn.admission.incoming;
   const { client, message } = incoming;
   const channel = message.channel;
@@ -689,16 +688,16 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     );
   }
   if (nativeContextItems) {
-    for (const item of contextBuild.memoryInjectionItems ?? []) {
-      insertAtDialogueDepth(nativeContextItems, item, contextBuild.memoryInjectionDepth ?? 0);
-    }
+    applyPromptLayoutInserts(nativeContextItems, [
+      { tag: "stm_content", items: contextBuild.memoryInjectionItems ?? [], depth: contextBuild.memoryInjectionDepth },
+    ]);
   }
   const assistantPrefill = await resolveTurnAssistantPrefill(turn, effectivePersona);
   const carried = incoming.carriedExpressionDelivery;
   const expressionDelivery =
     carried && carried.personaId === effectivePersona.persona_id ? carried.state : createExpressionDeliveryState();
 
-  recordChatTurnConfiguration(effectivePersona.llm.llm_provider, effectivePersona.config.humanizer_degree);
+  recordChatTurnConfiguration(effectivePersona.llm.llm_provider, effectivePersona.config);
   recordChatTurnFlags({
     rag: contextItems.some((item) => item.metadataTag === ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS),
   });
@@ -846,6 +845,7 @@ async function buildSimplifiedHistory(
     !messages.some((message) => message.id === turn.lockedTurn.admission.message.id)
   ) {
     messages.push(turn.lockedTurn.admission.message);
+    messages.sort((left, right) => left.id.length - right.id.length || left.id.localeCompare(right.id));
   }
   const fetchedMessages = messages;
   const fetchedMessagesById = new Map<string, Message | null>(fetchedMessages.map((message) => [message.id, message]));
@@ -868,6 +868,7 @@ async function buildSimplifiedHistory(
   // "reset" starts after the marker; "compact_refresh" starts at the marker (it's included).
   let resetIndex = -1;
   let resetType: "reset" | "compact_refresh" | null = null;
+  let resetMessageId: string | undefined;
   for (let i = messages.length - 1; i >= 0; i--) {
     for (const embed of messages[i].embeds) {
       const embedCheck = checkTargetEmbed(embed);
@@ -880,10 +881,18 @@ async function buildSimplifiedHistory(
     if (resetIndex !== -1) break;
   }
   if (resetIndex !== -1) {
+    resetMessageId = messages[resetIndex].id;
     const startIndex = resetType === "compact_refresh" ? resetIndex : resetIndex + 1;
     log.info(`Reset marker at index ${resetIndex} (${resetType}). History starts from index ${startIndex}.`);
     messages = messages.slice(startIndex);
   }
+  messages = selectAnchoredHistory(
+    channel.id,
+    messages,
+    fetchLimit,
+    resetMessageId,
+    turn.lockedTurn.admission.message.id,
+  );
 
   const activeUserBlocks = await loadActivePersonaUserBlocks(turn);
   // Map each 'block'-type target to its row so the simplify loop can render a
@@ -1017,6 +1026,7 @@ async function buildSimplifiedHistory(
         authorId: blockComparableId,
         authorName: "System",
         authorType: "user",
+        isSystemNotice: true,
         personaName: null,
         content: formatBlockedUserNoticeContent(blockedLabel, activeContextBlock.expires_at),
         completionContent: "",
@@ -1055,6 +1065,7 @@ async function buildSimplifiedHistory(
         authorId: AGENDA_NOTICE_AUTHOR_ID,
         authorName: "System",
         authorType: "user",
+        isSystemNotice: true,
         personaName: null,
         content: formatAgendaNotice(turn.persona.persona_nickname, agenda),
         completionContent: "",
@@ -1173,6 +1184,7 @@ async function buildSimplifiedHistory(
       authorId: fallbackAuthorId,
       authorName: "System",
       authorType: "user",
+      isSystemNotice: true,
       personaName: null,
       content: reminderContent,
       completionContent: `*${isSelfReminder ? "A task reminder" : `A reminder for ${incoming.reminderRecipientID?.startsWith("@") ? incoming.reminderRecipientID : `<@${incoming.reminderRecipientID}>`}`}: ${incoming.reminderData.reminder_purpose}*`,
@@ -1459,6 +1471,7 @@ async function simplifyMessage(
       authorId,
       authorName,
       authorType,
+      isSystemNotice: hasProcessedEmbed || isJoin,
       personaName,
       authorPersonaId,
       authorPersonaLineageId,
@@ -1737,39 +1750,17 @@ function appendTailDirectives(args: {
     : null;
 
   const lowerPriorityTailMessage = buildCombinedTailDirectiveMessage(lowerPriority);
-  if (lowerPriorityTailMessage) {
-    insertBeforeLatestDialoguePair(contextItems, lowerPriorityTailMessage);
-  }
-
-  // Inject the deferred STM content block at its configured dialogue depth (only when
-  // the server opted into positional placement; depth -1 keeps it inline upstream).
-  // Done BEFORE the nudge so that at equal depths the nudge lands just below the block:
-  // each item is spliced before the same Nth dialogue turn, and the block (inserted
-  // first, in order) ends up above the later-inserted nudge.
-  if (args.memoryInjectionItems && args.memoryInjectionItems.length > 0 && (args.memoryInjectionDepth ?? -1) >= 0) {
-    for (const memoryItem of args.memoryInjectionItems) {
-      insertAtDialogueDepth(contextItems, memoryItem, args.memoryInjectionDepth ?? 0);
-    }
-  }
-
-  // Inject the unified STM nudge at its configured dialogue depth (0 = tail). Done
-  // here: after dialogue history is assembled: so depth is measured against real
-  // conversation turns regardless of native vs. preset assembly.
-  if (args.nudgeItem) {
-    insertAtDialogueDepth(contextItems, args.nudgeItem, args.nudgeInjectionDepth ?? 0);
-  }
-
   const combinedTailMessage = buildCombinedTailDirectiveMessage(tail);
-  if (combinedTailMessage) {
-    contextItems.push(combinedTailMessage);
-  }
-
-  for (const directive of [queuedDirective, args.uncensorDirective]) {
-    const item = buildTailDirectiveItem(directive);
-    if (item) {
-      contextItems.push(item);
-    }
-  }
+  const queuedItem = buildTailDirectiveItem(queuedDirective);
+  const uncensorItem = buildTailDirectiveItem(args.uncensorDirective);
+  applyPromptLayoutInserts(contextItems, [
+    { tag: "lower_priority_tail", items: lowerPriorityTailMessage ? [lowerPriorityTailMessage] : [] },
+    { tag: "stm_content", items: args.memoryInjectionItems ?? [], depth: args.memoryInjectionDepth },
+    { tag: "stm_nudge", items: args.nudgeItem ? [args.nudgeItem] : [], depth: args.nudgeInjectionDepth },
+    { tag: "combined_tail", items: combinedTailMessage ? [combinedTailMessage] : [] },
+    { tag: "queued_reply", items: queuedItem ? [queuedItem] : [] },
+    { tag: "uncensor", items: uncensorItem ? [uncensorItem] : [] },
+  ]);
 
   return contextItems;
 }

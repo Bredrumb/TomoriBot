@@ -79,7 +79,9 @@ export default {
       export_json_description: "PNGの代わりにインポート可能なJSONファイルとしてエクスポートします（アバター画像なし）",
       description: `現在の人格を共有可能なPNGファイルとしてエクスポートする`,
       success_title: `🟢 ペルソナのエクスポートに成功しました`,
-      success_description: `ペルソナ **{nickname}** がエクスポートされました！このPNGファイルを他の人と共有して、人格設定を広めましょう。`,
+      success_description: `ペルソナ **{nickname}** がエクスポートされました！このPNGファイルを他の人と共有して、人格設定を広めましょう。
+1. 下の添付PNGファイルをダウンロード
+2. PNGファイルと共に \`/persona import\` を使用してこのペルソナをインポート`,
       success_description_json: `ペルソナ **{nickname}** がJSONファイルとしてエクスポートされました。
 
 **注意:** このJSONは \`/persona import\` で再インポートできます。アバター画像は含まれないため、アバターも共有したい場合はPNGエクスポートをご利用ください。`,

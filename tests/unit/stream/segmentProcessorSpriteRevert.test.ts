@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { HumanizerDegree, type PersonaSpriteRow } from "@/types/db/schema";
+import { humanizerSettingsFromDegree } from "@/constants/humanizer";
+import type { PersonaSpriteRow } from "@/types/db/schema";
 import type { StreamContext } from "@/types/stream/interfaces";
 import {
   createDefaultStreamState,
@@ -42,7 +43,7 @@ function sprite(name: string, isIdentity = false): PersonaSpriteRow {
 }
 
 const textConfig: TextProcessingConfig = {
-  humanizerDegree: HumanizerDegree.NONE,
+  humanizer: humanizerSettingsFromDegree(0),
   visibleDeliveryMode: VisibleDeliveryMode.STREAMING,
   emojiUsageEnabled: true,
   emojiStrings: [],

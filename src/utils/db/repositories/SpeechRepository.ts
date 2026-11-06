@@ -1,5 +1,10 @@
-import type { CustomEndpointRow, VoiceSampleRow, SpeechModelRow } from "@/types/db/schema";
-import { speechModelSchema, speechVoiceBindingSchema, type SpeechVoiceBindingRow } from "@/types/db/schema";
+import type { CustomEndpointRow, VoiceSampleRow, SpeechModelRow, TranscriptionModelRow } from "@/types/db/schema";
+import {
+  speechModelSchema,
+  speechVoiceBindingSchema,
+  transcriptionModelSchema,
+  type SpeechVoiceBindingRow,
+} from "@/types/db/schema";
 import type { OpenRouterModelScope } from "@/utils/db/repositories/LlmModelRepository";
 import { customEndpointSchema, voiceSampleSchema } from "@/types/db/schema";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
@@ -210,6 +215,164 @@ export async function setHostedSpeechSelection(
     log.error("SpeechRepository.setHostedSpeechSelection failed", error, { metadata: { scope, modelId } });
     return false;
   }
+}
+
+export interface HostedTranscriptionSelection {
+  model: TranscriptionModelRow;
+  owner: OpenRouterModelScope;
+  credentialId: number;
+  credentialRevision: number;
+  credentialProvider: string;
+  apiKey: Buffer;
+  keyVersion: number;
+}
+
+function parseTranscriptionSelection(
+  row: Record<string, unknown> | undefined,
+  owner: OpenRouterModelScope,
+): HostedTranscriptionSelection | null {
+  if (!row?.api_key) return null;
+  return {
+    model: transcriptionModelSchema.parse(row),
+    owner,
+    credentialId: row.credential_id as number,
+    credentialRevision: row.credential_revision as number,
+    credentialProvider: row.credential_provider as string,
+    apiKey: row.api_key as Buffer,
+    keyVersion: row.key_version as number,
+  };
+}
+
+/** The user's enabled personal transcription model and the server's hosted one, each with its saved key. */
+export async function loadHostedTranscriptionSelections(
+  serverId: number,
+  userId?: number,
+): Promise<{ personal: HostedTranscriptionSelection | null; server: HostedTranscriptionSelection | null }> {
+  const [personalRow] =
+    userId === undefined
+      ? []
+      : await sql`
+          SELECT m.*, c.provider AS credential_provider, c.user_saved_config_id AS credential_id, c.credential_revision, c.api_key, c.key_version
+          FROM user_saved_provider_configs c JOIN transcription_models m
+            ON m.transcription_model_id = c.transcription_model_id AND m.provider = c.provider
+          WHERE c.user_id = ${userId} AND 'transcription' = ANY(c.enabled_capabilities)
+            AND 'transcription' = ANY(c.assigned_capabilities) AND NOT m.is_deprecated
+        `;
+  const [serverRow] = await sql`
+    SELECT m.*, c.provider AS credential_provider, c.saved_config_id AS credential_id, c.credential_revision, c.api_key, c.key_version
+    FROM server_speech_configs s JOIN transcription_models m ON m.transcription_model_id = s.transcription_model_id
+    JOIN saved_provider_configs c ON c.server_id = s.server_id AND c.provider = m.provider
+    WHERE s.server_id = ${serverId} AND NOT m.is_deprecated
+  `;
+  return {
+    personal:
+      userId === undefined ? null : parseTranscriptionSelection(personalRow, { kind: "personal", ownerId: userId }),
+    server: parseTranscriptionSelection(serverRow, { kind: "server", ownerId: serverId }),
+  };
+}
+
+/**
+ * Points one owner's transcription slot at a hosted model, or clears it with `null`.
+ *
+ * A server holds either a hosted model or a default custom endpoint, so every server write clears the
+ * endpoint default in the same transaction; with `null` that leaves the server with no transcription.
+ */
+export async function setHostedTranscriptionSelection(
+  scope: OpenRouterModelScope,
+  modelId: number | null,
+  options: { register?: boolean; replacedModelId?: number } = {},
+): Promise<boolean> {
+  try {
+    const discordId = await sql.begin(async (tx) => {
+      const [owner] =
+        scope.kind === "server"
+          ? await tx`SELECT server_disc_id AS discord_id FROM servers WHERE server_id = ${scope.ownerId} FOR UPDATE`
+          : await tx`SELECT user_disc_id AS discord_id FROM users WHERE user_id = ${scope.ownerId} FOR UPDATE`;
+      if (!owner) throw new Error("Transcription owner missing");
+      const [row] =
+        modelId === null
+          ? []
+          : await tx`SELECT * FROM transcription_models WHERE transcription_model_id = ${modelId} FOR UPDATE`;
+      const model = row ? transcriptionModelSchema.parse(row) : null;
+      if (modelId !== null && (!model || model.is_deprecated)) throw new Error("Ineligible transcription model");
+      if (options.register && model?.is_scoped_registration) {
+        await tx`
+          INSERT INTO scoped_model_registrations (server_id, user_id, transcription_model_id)
+          VALUES (${scope.kind === "server" ? scope.ownerId : null}, ${scope.kind === "personal" ? scope.ownerId : null}, ${modelId})
+          ON CONFLICT DO NOTHING
+        `;
+      }
+      if (options.replacedModelId !== undefined && options.replacedModelId !== modelId) {
+        const [replacedRow] = await tx`
+          SELECT * FROM transcription_models WHERE transcription_model_id = ${options.replacedModelId} FOR UPDATE
+        `;
+        const replaced = replacedRow ? transcriptionModelSchema.parse(replacedRow) : null;
+        if (!model || !replaced || replaced.provider !== model.provider || !replaced.is_scoped_registration) {
+          throw new Error("Ineligible transcription replacement");
+        }
+        const removed = await tx`
+          DELETE FROM scoped_model_registrations WHERE transcription_model_id = ${options.replacedModelId}
+            AND ((${scope.kind} = 'server' AND server_id = ${scope.ownerId} AND user_id IS NULL)
+              OR (${scope.kind} = 'personal' AND user_id = ${scope.ownerId} AND server_id IS NULL))
+          RETURNING scoped_model_registration_id
+        `;
+        if (removed.length === 0) throw new Error("Transcription registration no longer owned");
+      }
+      if (scope.kind === "server") {
+        await tx`INSERT INTO server_speech_configs (server_id) VALUES (${scope.ownerId}) ON CONFLICT DO NOTHING`;
+        await tx`UPDATE server_speech_configs SET transcription_model_id = ${modelId} WHERE server_id = ${scope.ownerId}`;
+        await tx`
+          UPDATE custom_endpoints ce SET is_default = false, updated_at = CURRENT_TIMESTAMP
+          FROM custom_endpoint_connections cec
+          WHERE ce.connection_id = cec.connection_id AND cec.server_id = ${scope.ownerId} AND cec.user_id IS NULL
+            AND cec.capability = 'transcription' AND ce.is_default = true
+        `;
+      } else {
+        await tx`
+          UPDATE user_saved_provider_configs SET
+            transcription_model_id = NULL,
+            assigned_capabilities = array_remove(assigned_capabilities, 'transcription'),
+            enabled_capabilities = array_remove(enabled_capabilities, 'transcription')
+          WHERE user_id = ${scope.ownerId}
+        `;
+        if (model) {
+          const updated = await tx`
+            UPDATE user_saved_provider_configs SET
+              transcription_model_id = ${modelId},
+              assigned_capabilities = array_append(assigned_capabilities, 'transcription'),
+              enabled_capabilities = array_append(enabled_capabilities, 'transcription')
+            WHERE user_id = ${scope.ownerId} AND provider = ${model.provider} AND api_key IS NOT NULL
+            RETURNING user_saved_config_id
+          `;
+          if (updated.length === 0) throw new Error("Matching transcription credentials missing");
+        }
+      }
+      return owner.discord_id as string;
+    });
+    invalidateTomoriStateCache(discordId);
+    return true;
+  } catch (error) {
+    log.error("SpeechRepository.setHostedTranscriptionSelection failed", error, { metadata: { scope, modelId } });
+    return false;
+  }
+}
+
+/** Whether the owner already transcribes through a hosted model or, for a server, a default endpoint. */
+export async function hasTranscriptionSelection(scope: OpenRouterModelScope): Promise<boolean> {
+  const rows =
+    scope.kind === "server"
+      ? await sql`
+          SELECT 1 FROM server_speech_configs WHERE server_id = ${scope.ownerId} AND transcription_model_id IS NOT NULL
+          UNION ALL
+          SELECT 1 FROM custom_endpoints ce JOIN custom_endpoint_connections cec USING (connection_id)
+          WHERE cec.server_id = ${scope.ownerId} AND cec.user_id IS NULL AND cec.capability = 'transcription'
+            AND ce.is_default
+        `
+      : await sql`
+          SELECT 1 FROM user_saved_provider_configs WHERE user_id = ${scope.ownerId}
+            AND transcription_model_id IS NOT NULL AND 'transcription' = ANY(assigned_capabilities)
+        `;
+  return rows.length > 0;
 }
 
 export async function hasSpeechDesignSelection(scope: OpenRouterModelScope): Promise<boolean> {

@@ -2,7 +2,6 @@
 title: "Ajuste del comportamiento"
 sidebar:
   order: 3
-aiGenerated: true
 ---
 
 Puedes ajustar lo que TomoriBot puede hacer y cómo genera respuestas en `/config`, incluida la página de permisos. Para la personalidad, consulta [Múltiples personas](/es-419/features/chatting-personality/multiple-personas/); para el conocimiento, consulta [Memoria](/es-419/features/knowledge/memory/). Esta página cubre los ajustes más comunes.
@@ -72,9 +71,9 @@ Configura canales de juego de rol en `/config` > `Canales` > Reglas del canal.
 ## Ajuste de generación
 <!-- anchor: generation-tuning -->
 
-- `/config` > `Modelos` > Muestrarios y parámetros de texto: parámetros de muestreo como temperatura y top-p. Una temperatura más alta produce más variedad.
-- `/config` > `Comportamiento` > `Comportamiento general`: grado de humanización de la respuesta. Ajusta la naturalidad con la que envía mensajes de texto. La configuración se aplica a todo el servidor de forma predeterminada o a una persona individual.
-- `/config` > `Comportamiento` > `Comportamiento general`: límite del historial de mensajes. Súbelo para un contexto conversacional más profundo o bájalo para ahorrar tokens.
+- `/config` > `Modelos` > `Muestreadores de texto y parámetros`: parámetros de muestreo como temperatura y top-p. Una temperatura más alta produce más variedad.
+- `/config` > `Comportamiento` > `Comportamiento general`: humanizador de respuesta. Mensajes con ritmo añade retrasos y pausas entre mensajes transmitidos. El ritmo y ambas opciones de división requieren transmisión en vivo; forzar minúsculas también funciona sin transmisión. Estos ajustes se aplican a todo el servidor de forma predeterminada o a una persona individual. `/setup` ofrece los mismos hábitos en cuatro preajustes listos para usar.
+- `/config` > `Comportamiento` > `Comportamiento general`: límite del historial de mensajes. Súbelo para un contexto conversacional más profundo o bájalo para ahorrar tokens. Esto es un máximo: el historial reciente crece y luego descarta mensajes más antiguos en lotes. Consulta [Dentro del prompt](/features/knowledge/inside-the-prompt/) para conocer las reglas de ventana y ubicación.
 
 ## Prompt del sistema
 <!-- anchor: system-prompt -->

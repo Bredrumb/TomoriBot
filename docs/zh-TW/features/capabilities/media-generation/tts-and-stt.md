@@ -2,7 +2,6 @@
 title: "語音：TTS與STT"
 sidebar:
   order: 3
-aiGenerated: true
 ---
 
 TomoriBot可以在Discord中說和聽：透過文字轉語音 (TTS) 發送語音回复，並透過語音轉文字 (STT) 將音訊訊息轉錄到對話上下文中。
@@ -69,16 +68,8 @@ OpenRouter 按音訊秒數對 Seed 計費，折合每分鐘費用約為 Fish 的
 ## 語音轉文字
 <!-- anchor: speech-to-text -->
 
-轉錄端點將使用者音訊附件轉換為對話情境的文字。是否在聊天中公開發布文字記錄在`/config` > `行為` > 通知行為中控制。
+轉錄模型會將音訊附件轉換為 TomoriBot 可在對話中使用的文字。在 `/config` > `模型` > `切換模型` 中，你可以先選擇供應商再選取模型，獨立於 TTS 進行設定。選取 `- 無模型` 即可停止使用伺服器的金鑰進行轉錄。Google、Vertex AI 和 OpenRouter 提供託管轉錄模型，若尚未設定其他轉錄模型，新增其中一家的金鑰便會自動選取其預設模型。OpenRouter 列出了許多轉錄模型，只要在 `/providers` 中輸入模型 ID 即可註冊。新增 ElevenLabs 也會同時註冊轉錄端點。如需自架選項，請參閱[語音轉文字指南](/self-hosting/local-endpoints/speech-to-text/)。
 
-### ElevenLabs（雲端）
+你也可以在 `/personal config` 中選取個人轉錄模型。你自己的語音訊息將優先使用你自己的金鑰，並在開啟伺服器備援時退回使用伺服器的模型。託管轉錄服務會由供應商針對每次轉錄的語音訊息計費。
 
-從`/providers`新增ElevenLabs會將轉錄端點與語音一起註冊。使用`/providers`在活動轉錄端點之間切換。
-
-### 本機引擎（自架）
-
-- [WhisperX](/zh-TW/self-hosting/local-endpoints/speech-to-text/whisperx/)：建議本地路徑；約100種語言、GPU加速、多種模型大小。
-- [KoboldCPP](/zh-TW/self-hosting/local-endpoints/speech-to-text/koboldcpp/)：當你的建置公開OpenAI相容的轉錄端點時起作用。
-- [耳語.cpp](/zh-TW/self-hosting/local-endpoints/speech-to-text/whispercpp/)。
-
-請參閱 [語音轉文字](/zh-TW/self-hosting/local-endpoints/speech-to-text/) 中心以取得完整的引擎清單。對於Discord摘要，執行`/help`，然後選擇`功能`和`轉錄`。
+你可以在 `/config` > `行為` > `通知行為` > `語音逐字稿` 中隱藏顯示的逐字稿。轉換後的文字仍會送入對話脈絡。

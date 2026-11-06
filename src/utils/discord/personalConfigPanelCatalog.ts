@@ -50,7 +50,8 @@ export type PersonalConfigManagedCapability =
   | "image_nai"
   | "video"
   | "speech_design"
-  | "speech_clone";
+  | "speech_clone"
+  | "transcription";
 
 export const QUICK_TOGGLE_CAPABILITIES: readonly PersonalConfigManagedCapability[] = [
   "text",
@@ -61,6 +62,7 @@ export const QUICK_TOGGLE_CAPABILITIES: readonly PersonalConfigManagedCapability
   "video",
   "speech_design",
   "speech_clone",
+  "transcription",
 ] as const;
 
 /**
@@ -76,6 +78,7 @@ export const ROUTING_CAPABILITY_LOCALE_KEYS: Record<PersonalProviderCapability, 
   video: "commands.personal.config.routing_video",
   speech_design: "commands.config.panel.capability_tts_design",
   speech_clone: "commands.config.panel.capability_tts_clone",
+  transcription: "commands.config.panel.capability_stt",
 };
 
 /**
@@ -419,7 +422,8 @@ function parseManagedCapability(value: string | undefined): PersonalConfigManage
     value === "image_nai" ||
     value === "video" ||
     value === "speech_design" ||
-    value === "speech_clone"
+    value === "speech_clone" ||
+    value === "transcription"
   ) {
     return value;
   }

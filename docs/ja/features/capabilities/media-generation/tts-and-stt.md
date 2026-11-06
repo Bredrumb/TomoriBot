@@ -2,7 +2,6 @@
 title: "音声: TTS & STT"
 sidebar:
   order: 3
-aiGenerated: true
 ---
 
 TomoriBotは、Discordで話したり聞いたりすることができます。テキスト読み上げ (TTS) で音声応答を送信し、音声テキスト変換 (STT) で音声メッセージを会話コンテキストに書き起こします。
@@ -69,16 +68,8 @@ OpenRouterはSeedを音声の秒数単位で請求するため、Fishと比べ�
 ## 音声認識（STT）
 <!-- anchor: speech-to-text -->
 
-文字起こしエンドポイントは、ユーザーの音声添付ファイルを会話コンテキストのテキストに変換します。トランスクリプトをチャットに公開するかどうかは、`/config` > `動作` > 通知動作で制御されます。
+文字起こしモデルは、音声の添付ファイルをTomoriBotが会話で使用できるテキストに変換します。TTSとは別に、`/config` > `モデル` > `モデルの切り替え` からプロバイダー、次にモデルを選択して設定します。サーバーのキーでの文字起こしを停止するには、`- モデルなし` を選択します。Google、Vertex AI、OpenRouterがホスト型の文字起こしモデルを提供しており、他に文字起こしモデルが設定されていない状態でこれらのキーを追加すると、そのデフォルトモデルが自動的に選択されます。OpenRouterには多数の文字起こしモデルが掲載されており、`/providers` でモデルIDを指定して登録できます。ElevenLabsを追加した場合も文字起こしエンドポイントが登録されます。ローカルの選択肢については、[音声認識ガイド](/self-hosting/local-endpoints/speech-to-text/) を参照してください。
 
-### ElevenLabs（クラウド）
+また、`/personal config` で個人の文字起こしモデルを選択することもできます。自分自身の音声メッセージには個人のキーが優先的に使用され、サーバーへのフォールバックが有効な場合はサーバーのモデルにフォールバックします。ホスト型の文字起こしは、文字起こしを行う音声メッセージごとにプロバイダーから課金されます。
 
-`/providers`からElevenLabsを追加すると、音声とともに文字起こしエンドポイントが登録されます。`/providers`を使用して、アクティブな転写エンドポイントを切り替えます。
-
-### ローカルエンジン（セルフホスト）
-
-- [WhisperX](/ja/self-hosting/local-endpoints/speech-to-text/whisperx/): 推奨されるローカルパス。約100の言語、GPUアクセラレーション、複数のモデルサイズ。
-- [KoboldCPP](/ja/self-hosting/local-endpoints/speech-to-text/koboldcpp/): ビルドがOpenAI互換の転写エンドポイントを公開している場合に機能します。
-- [ささやき.cpp](/ja/self-hosting/local-endpoints/speech-to-text/whispercpp/)。
-
-エンジンの完全なリストについては、[Speech-to-Text](/ja/self-hosting/local-endpoints/speech-to-text/) ハブを参照してください。Discord概要の場合は、`/help`を実行し、`機能`および`文字起こし`を選択します。
+`/config` > `動作` > `通知動作` > `音声の文字起こし` で、チャットに表示される文字起こしを非表示にできます。非表示にした場合でも、テキストは会話コンテキストに渡されます。

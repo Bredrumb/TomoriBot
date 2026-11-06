@@ -189,25 +189,25 @@ macros.
 
 ## Prompt integration
 
-`runtime/contextItems.ts` performs one `loadEnabledForScope` read per turn and passes the rows to the
-same activation function. It emits at most two `system` blocks, tagged `KNOWLEDGE_LOREBOOK_BEFORE` and
-`KNOWLEDGE_LOREBOOK_AFTER`, in that order. Each block opens with `## World Info` and gives every entry
-a `###` heading. The shared budget covers both blocks. No cache sits between the query and the blocks.
+`runtime/contextItems.ts` performs one `loadEnabledForScope` read per chat turn. It evaluates Always
+On (`constant`) entries first, then nonconstant entries with the remaining shared character budget.
+Each group can emit before and after blocks tagged `KNOWLEDGE_LOREBOOK_BEFORE` and
+`KNOWLEDGE_LOREBOOK_AFTER`. Always On blocks use the system role; keyword- or chance-activated blocks
+use the user role and the registry's [tail slot](/architecture/pipelines/context-build/).
 
-Content passes through `convertMentions`, so `{{user}}`, `{{char}}`, and `{{bot}}` resolve to the
-current names the same way stored memories do. Other macros and conditional blocks stay literal, and
-random-choice resolution skips these blocks for the same reason.
+Content passes through `convertMentions`, so `{{user}}`, `{{char}}`, and `{{bot}}` resolve to current
+names. Other macros and conditional blocks stay literal; random-choice resolution skips lore blocks.
+Channel scope follows `channel_memory_enabled`; while enabled, Always On entries still require an
+admitted channel or parent channel.
 
-Native assembly appends the blocks after server documents and before conditioning, sample dialogues,
-and dialogue history. They sit outside the stable persona prefix because their content changes
-whenever an entry activates. Channel scope follows `channel_memory_enabled`; while that switch is on,
-an Always On entry still needs an admitted channel or parent channel.
+Preset world-info markers consume only Always On blocks. Missing markers flush those unclaimed
+blocks before the first dialogue anchor. Activated lore bypasses those buckets and joins STM before
+retrieved documents at the tail slot. The shared budget covers all groups.
 
-Preset reassembly maps `worldInfoBefore` to the before block followed by documents, and
-`worldInfoAfter` to the after block followed by documents. Documents are consumed at the first
-world-info marker whatever its order, as before. With neither marker, the before block, documents, and
-the after block flush before the first dialogue anchor, so lore still precedes chat history. A preset
-with only one marker flushes the unclaimed block the same way.
+Lore blocks also carry plain, identity-resolved entries for NovelAI's per-entry fitting. NovelAI keeps
+the Always On and activated split, omits generated headings and titles, and shares its memory token
+allowance with lore. Its [provider policy](/architecture/integrations/novelai/limitations/) owns the
+profile-specific rendering and trimming rules.
 
 Prompt inspection counts both blocks in the `memory` segment and labels them `Lorebook (Before)` and
 `Lorebook (After)` with the `/memories` hint.
@@ -218,7 +218,7 @@ Prompt inspection counts both blocks in the `memory` segment and labels them `Lo
 - `src/modules/lorebooks/db/repositories.ts`: repository signatures, append and replace writes, and
   failure result unions.
 - `src/modules/lorebooks/runtime/activation.ts`: matching, selection, and budget.
-- `src/modules/lorebooks/runtime/contextItems.ts`: runtime read, the two prompt blocks, and identity
+- `src/modules/lorebooks/runtime/contextItems.ts`: runtime read, role-separated prompt blocks, and identity
   conversion.
 - `src/modules/lorebooks/imports/`: card, world info, and upload conversion plus legacy tag mapping.
 - `src/modules/lorebooks/discord/panelSection.ts`: the Lorebooks tab and its modals.

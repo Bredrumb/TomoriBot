@@ -5,6 +5,8 @@ import { TOOL_NOTICE_DEFINITIONS, type ToolNoticeDefinition } from "@/constants/
 import { DELIBERATE_TOOL_TRIGGER_TARGETS } from "@/utils/tools/deliberateToolMode";
 import type { CheckboxGroupOption } from "@/types/discord/modal";
 import type { ToolNoticeKey } from "@/constants/toolNotices";
+import type { HumanizerSettings } from "@/constants/humanizer";
+import { createHumanizerCheckboxGroups, humanizerCheckboxFieldName } from "@/utils/discord/humanizerOptions";
 import type { RawDiscordComponent } from "@/types/discord/rawApiTypes";
 import type { SelectOption } from "@/types/discord/modal";
 import type { DeliberateToolTrigger, DeliberateToolTriggerMap } from "@/utils/tools/deliberateToolMode";
@@ -32,13 +34,6 @@ import { localizer, resolveDescription, resolvePresetDisplayName } from "@/utils
 import { formatUtcOffsetInput } from "@/utils/text/timezoneHelper";
 import { splitPromptIntoModalParts } from "@/utils/text/modalPromptParts";
 import { promptPartDescription, promptPartLabel } from "@/utils/discord/ui/modalPromptPartLabels";
-
-const HUMANIZER_LABEL_KEYS: Record<0 | 1 | 2 | 3, string> = {
-  "0": "commands.config.humanizer.choice_none",
-  "1": "commands.config.humanizer.choice_light",
-  "2": "commands.config.humanizer.choice_medium",
-  "3": "commands.config.humanizer.choice_heavy",
-};
 
 const STM_CATEGORY_LABEL_KEYS = [
   "commands.server.stm.categories-edit.slot_1_label",
@@ -756,24 +751,24 @@ export function buildBehaviorContextNoteModal(
   };
 }
 
-export function buildBehaviorHumanizerModal(locale: string, nonce: string, current: number): RawModalPayload {
+export function buildBehaviorHumanizerModal(
+  locale: string,
+  nonce: string,
+  current: HumanizerSettings,
+): RawModalPayload {
   return {
     custom_id: buildConfigRouteId({ action: "behavior-humanizer-submit", locale, nonce }),
     title: title(locale, "commands.config.humanizer.modal_title"),
-    components: [
-      radioField(
+    components: createHumanizerCheckboxGroups(locale, current).map((group) =>
+      checkboxGroupField(
         locale,
         nonce,
-        BEHAVIOR_HUMANIZER_FIELD,
-        "commands.config.humanizer.select_label",
-        "commands.config.humanizer.select_description",
-        Object.entries(HUMANIZER_LABEL_KEYS).map(([value, labelKey]) => ({
-          value: String(value),
-          label: localizer(locale, labelKey),
-          default: Number(value) === current,
-        })),
+        humanizerCheckboxFieldName(BEHAVIOR_HUMANIZER_FIELD, group.group),
+        group.labelKey,
+        group.descriptionKey,
+        group.options,
       ),
-    ],
+    ),
   };
 }
 

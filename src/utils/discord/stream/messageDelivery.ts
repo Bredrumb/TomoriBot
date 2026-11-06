@@ -1,5 +1,4 @@
 import { AttachmentBuilder, type Message } from "discord.js";
-import { HumanizerDegree } from "@/types/db/schema";
 import type { StreamContext } from "@/types/stream/interfaces";
 import type {
   SpriteMessageRecordInfo,
@@ -7,7 +6,7 @@ import type {
   TextProcessingConfig,
   TypingSimulationConfig,
 } from "@/types/stream/types";
-import { VisibleDeliveryMode, DISCORD_STREAMING_CONSTANTS } from "@/types/stream/types";
+import { VisibleDeliveryMode, DISCORD_STREAMING_CONSTANTS, getMessageSplitMode } from "@/types/stream/types";
 import { log } from "@/utils/misc/logger";
 import { renderMarkdownTableToPng } from "@/utils/image/markdownTableRenderer";
 import { attachShowMarkdownCollector, createShowMarkdownButtonRow } from "@/utils/discord/markdownTableButton";
@@ -15,7 +14,7 @@ import { resolveManagedChannelWebhook } from "@/utils/discord/webhook/webhookCor
 import { setCachedRenderedMarkdownTable } from "@/utils/text/markdownTableCache";
 import { extractMarkdownTableSegments, MARKDOWN_TABLE_ATTACHMENT_PREFIX } from "@/utils/text/markdownTable";
 import { chunkMessage } from "@/utils/text/processors/chunkProcessor";
-import { humanizeString } from "@/utils/text/processors/formatters";
+import { applyStableHumanizer, humanizeString } from "@/utils/text/processors/formatters";
 import type { StreamSendPayload, StreamUiUpdater } from "@/utils/discord/stream/uiUpdater";
 import type { ResolvedWebhookIdentity } from "@/utils/discord/webhook/identity";
 import type { ChatSendReason } from "@/utils/chat/diagnosticTimeline";
@@ -91,8 +90,10 @@ export class StreamMessageDelivery {
     state.pendingAggregatedText = "";
     state.pendingAggregateJoinNextWithBlankLine = false;
 
-    const messageChunks = chunkMessage(aggregatedText, HumanizerDegree.NONE, textConfig.maxMessageLength);
-    const finalMessageChunks = messageChunks.filter((chunk) => chunk.trim());
+    const messageChunks = chunkMessage(aggregatedText, "lines", textConfig.maxMessageLength);
+    const finalMessageChunks = messageChunks
+      .filter((chunk) => chunk.trim())
+      .map((chunk) => applyStableHumanizer(chunk, textConfig.humanizer));
     if (!finalMessageChunks.length) {
       return;
     }
@@ -224,7 +225,11 @@ export class StreamMessageDelivery {
       await this.flushAggregatedTextBuffer(textConfig, context, state);
     }
 
-    const rawMessageChunks = chunkMessage(segment, textConfig.humanizerDegree, textConfig.maxMessageLength);
+    const rawMessageChunks = chunkMessage(
+      segment,
+      getMessageSplitMode(textConfig.humanizer),
+      textConfig.maxMessageLength,
+    );
     if (!rawMessageChunks.length) return;
 
     const finalMessageChunks: DeliveryChunk[] = [];
@@ -235,12 +240,14 @@ export class StreamMessageDelivery {
           : segment.length > textConfig.maxMessageLength
             ? "length_split"
             : "formatting_split";
-      if (textConfig.humanizerDegree === HumanizerDegree.HEAVY) {
+      const { humanizer_lowercase_enabled: lowercase, humanizer_punctuation_split_enabled: punctuation } =
+        textConfig.humanizer;
+      if (lowercase || punctuation) {
         // A humanizer flush becomes a real extra entry here, so it goes out as its own sent
         // message (with typing simulation in between) rather than a linebreak inside one message.
-        const humanizedPieces = humanizeString(chunk);
+        const humanizedPieces = humanizeString(chunk, { lowercase, punctuation });
         if (humanizedPieces.length > 1 || humanizedPieces[0] !== chunk) {
-          log.info(`Stream Send: Humanized (D3) from "${chunk}" to ${JSON.stringify(humanizedPieces)}`);
+          log.info(`Stream Send: Humanized from "${chunk}" to ${JSON.stringify(humanizedPieces)}`);
         }
         for (const [pieceIndex, piece] of humanizedPieces.entries()) {
           if (piece.trim()) {

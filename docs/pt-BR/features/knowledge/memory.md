@@ -210,6 +210,8 @@ O TomoriBot lê mensagens recentes no canal ativo. A memória de curto prazo (ST
 
 Ela só lembra de conversas das quais participou. Ela atualiza o resumo de um canal quando responde, e em nenhum outro momento, então um canal movimentado onde ninguém fala com ela não deixa memória. A memória de curto prazo de cada canal expira após 24 horas por padrão. Se você optar por não participar em `/personal config`, suas mensagens serão excluídas da memória de curto prazo.
 
+A memória de curto prazo recente e a memória que carrega o conteúdo de outros canais ficam logo acima dos quatro turnos de fala mais recentes. A memória mais antiga deste canal permanece acima da conversa na configuração padrão. Uma profundidade menor configurada pode manter o conteúdo mais perto da mensagem mais recente. Veja [Por Dentro do Prompt](/features/knowledge/inside-the-prompt/) para a disposição completa.
+
 ### Exemplo entre canais
 
 - **Canais públicos:** Você discute uma recomendação de álbum com o TomoriBot em `#music`. Alguns minutos depois em `#general`, você pergunta qual álbum ela sugeriu. Como ela respondeu em `#music`, ela lembra desse contexto em `#general`.

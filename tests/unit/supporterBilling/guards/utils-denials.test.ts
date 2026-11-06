@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it, spyOn } from "bun:test";
 import type { Client, Message, TextChannel } from "discord.js";
-import { HumanizerDegree } from "@/types/db/schema";
+import { humanizerSettingsFromDegree } from "@/constants/humanizer";
 import type { EmbeddingModelRow, SavedProviderConfigRow } from "@/types/db/schema";
 import type {
   ProcessedChunk,
@@ -54,7 +54,7 @@ const STREAM_CONFIG: StreamConfig = {
   baseTypeSpeedMsPerChar: 0,
   maxTypingTimeMs: 0,
   minVisibleTypingDurationMs: 0,
-  humanizerDegree: HumanizerDegree.LIGHT,
+  humanizer: humanizerSettingsFromDegree(1),
   emojiUsageEnabled: false,
 };
 

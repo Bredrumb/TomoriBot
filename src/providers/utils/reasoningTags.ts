@@ -1,5 +1,3 @@
-export const THINK_CLOSE_TAG = "</think>";
-
 /**
  * Optional vendor namespace prefix, e.g. the `mm:` in `<mm:think>`. One segment
  * starting with a letter, then word chars / dots / hyphens, ending in a colon.

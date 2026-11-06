@@ -1,23 +1,15 @@
+import { isPromptSystemItem } from "@/utils/text/context/promptLayout";
 import { mapWithConcurrency } from "@/utils/async/bounded";
 import type { FunctionCall, FunctionResponseImageMetadata } from "@/types/provider/interfaces";
-import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
+import type { StructuredContextItem } from "@/types/misc/context";
 import {
   relocateAssistantMediaContextItems,
   relocateAssistantMediaToUserTurns,
 } from "@/providers/utils/strictChatCompat";
 import { inlineToolResponseImage } from "@/providers/utils/toolImageContent";
+import { resolveToolCallId } from "@/providers/utils/toolCallIds";
 import { log } from "@/utils/misc/logger";
 import { fetchAndOptimizeImage } from "@/utils/image/imageProcessor";
-
-const SYSTEM_INSTRUCTION_TAGS: ContextItemTag[] = [
-  ContextItemTag.SYSTEM_HUMANIZER_RULES,
-  ContextItemTag.SYSTEM_PERSONA_PROMPT,
-  ContextItemTag.SYSTEM_PERSONALITY,
-  ContextItemTag.KNOWLEDGE_SERVER_INFO,
-  ContextItemTag.KNOWLEDGE_SERVER_EMOJIS,
-  ContextItemTag.KNOWLEDGE_SERVER_STICKERS,
-  ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
-];
 
 interface BuildOpenAICompatibleMessagesOptions {
   adapterName: string;
@@ -59,10 +51,7 @@ export async function buildOpenAICompatibleMessages(
       .map((part) => part.text)
       .join("\n");
 
-    if (
-      item.role === "system" ||
-      (item.role === "user" && item.metadataTag && SYSTEM_INSTRUCTION_TAGS.includes(item.metadataTag))
-    ) {
+    if (isPromptSystemItem(item)) {
       if (itemTextContent) {
         systemInstructionParts.push(itemTextContent);
       }
@@ -180,8 +169,9 @@ export async function buildOpenAICompatibleMessages(
   }
 
   if (options.functionInteractionHistory && options.functionInteractionHistory.length > 0) {
-    for (const interaction of options.functionInteractionHistory) {
-      const toolCallId = `call_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const usedToolCallIds = new Set<string>();
+    for (const [index, interaction] of options.functionInteractionHistory.entries()) {
+      const toolCallId = resolveToolCallId(interaction.functionCall.id, index, "call", usedToolCallIds);
       const preToolCallContent = (interaction.preToolCallTextParts ?? [])
         .map((part) => part.text)
         .filter((text): text is string => typeof text === "string" && text.length > 0)

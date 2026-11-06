@@ -1,3 +1,4 @@
+import type { HumanizerSettings } from "@/constants/humanizer";
 import type { ProviderUsageContext } from "@/utils/provider/providerUsage";
 import type { PersonaDeliveryMode, PersonaDeliveryReceipt } from "@/utils/discord/webhook/personaPost";
 /**
@@ -71,7 +72,7 @@ export interface StreamConfig extends ProviderConfig {
   maxTypingTimeMs: number;
   minVisibleTypingDurationMs: number;
 
-  humanizerDegree: number;
+  humanizer: HumanizerSettings;
   emojiUsageEnabled: boolean;
 
   modelOverride?: string;

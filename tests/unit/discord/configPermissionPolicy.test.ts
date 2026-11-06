@@ -843,16 +843,6 @@ describe("isConfigRouteAuthorized", () => {
     expect(Object.keys(MODELS_PAGE_BY_ROUTE)).toContain("model-provider-select");
   });
 
-  it("authorizes endpoint activation through the Models switch page", () => {
-    for (const capability of ["tts-clone", "stt"] as const) {
-      const route: ConfigPanelRoute = { action: "endpoint-select", locale: "en-US", capability };
-      expect(isConfigRouteAuthorized(route, GUILD_MANAGER)).toBe(true);
-      expect(isConfigRouteAuthorized(route, GUILD_MEMBER)).toBe(false);
-      expect(isConfigRouteAuthorized(route, DM_OWNER)).toBe(true);
-    }
-    expect(MODELS_PAGE_BY_ROUTE["endpoint-select"]).toBe("switch");
-  });
-
   it("keeps the NovelAI preset selection manager-only and outside DM workspaces", () => {
     const route: ConfigPanelRoute = { action: "nai-preset-select", locale: "en-US", start: 0, fp: "abcd1234" };
     expect(isConfigRouteAuthorized(route, GUILD_MANAGER)).toBe(true);

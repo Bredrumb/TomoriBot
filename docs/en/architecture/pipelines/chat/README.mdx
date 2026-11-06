@@ -137,7 +137,7 @@ identifiers enter this metric.
 | Dimension | Fixed values and meaning |
 |---|---|
 | `provider` | `anthropic`, `custom`, `deepseek`, `google`, `novelai`, `nvidia`, `openrouter`, `vertex`, `vertexexpress`, `zai`, `zaicoding`, or `unknown`; the first dispatched provider, otherwise the context's planned provider when known. Custom endpoint IDs collapse to `custom`. |
-| `humanizer` | `none`, `light`, `medium`, `heavy`, or `unknown` before context configuration is available. |
+| `humanizer` | `none`, `light`, `medium`, or `heavy` when the toggles match that `/setup` preset, `custom` for any other combination, or `unknown` before context configuration is available. |
 | `source` | `message`, `queue`, `persona_job`, `retry`, `manual`, or `stop`, using the diagnostic timeline's source precedence. |
 | `rag` | `yes` when built context contains server document retrieval content, otherwise `no`; it does not claim every retrieval attempt injected content. |
 | `history` | `reused` for a busy-stretch window, otherwise `rest`. |

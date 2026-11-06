@@ -1,3 +1,4 @@
+import { humanizerSettingsFromDegree } from "@/constants/humanizer";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import * as spendEstimates from "@/modules/supporter-billing/runtime/spendEstimates";
 import { synthesizeOpenRouterSpeech } from "@/providers/openrouter/openrouterSpeech";
@@ -90,7 +91,7 @@ function streamConfig(apiKey: string): OpenrouterStreamConfig {
     baseTypeSpeedMsPerChar: 0,
     maxTypingTimeMs: 0,
     minVisibleTypingDurationMs: 0,
-    humanizerDegree: 0,
+    humanizer: humanizerSettingsFromDegree(0),
     emojiUsageEnabled: false,
   };
 }

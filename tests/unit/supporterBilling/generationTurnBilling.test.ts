@@ -32,7 +32,7 @@ import * as realKeyRotation from "@/utils/security/keyRotation";
 import * as realToolRegistry from "@/tools/toolRegistry";
 import { createScopedModuleMocker, overrideMembers, stubLogMembers } from "../../helpers/mockSurface";
 import { OpenrouterStreamAdapter, type OpenrouterStreamConfig } from "@/providers/openrouter/openrouterStreamAdapter";
-import { HumanizerDegree } from "@/types/db/schema";
+import { humanizerSettingsFromDegree } from "@/constants/humanizer";
 import type { StreamContext } from "@/types/stream/interfaces";
 
 const queuedResults: GenerationTurnResult[] = [];
@@ -739,7 +739,7 @@ async function openRouterRejection(
     baseTypeSpeedMsPerChar: 0,
     maxTypingTimeMs: 0,
     minVisibleTypingDurationMs: 0,
-    humanizerDegree: HumanizerDegree.NONE,
+    humanizer: humanizerSettingsFromDegree(0),
     emojiUsageEnabled: true,
   };
   const streamContext = {

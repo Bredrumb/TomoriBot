@@ -74,8 +74,9 @@ Brave Search與你的AI供應商分開，並透過圖像、影片和新聞結果
 - **標準影像**：標準影像產生（請參閱[影像生成](/zh-TW/features/capabilities/media-generation/image-generation/)）。
 - **NovelAI 圖片**：[NovelAI 影像生成](/features/integrations/novelai/#image-generation)。
 - **影片**：影片產生。
-- **TTS端點**：文字轉語音語音端點。
-- **STT端點**：語音到文字的音訊轉錄端點。
+- **TTS（語音設計）**：使用已儲存的語音描述發聲。
+- **TTS（語音複製）**：使用參考樣本或供應商語音發聲。
+- **語音轉文字**：使用託管轉錄模型或自訂端點轉錄音訊附件。先選擇供應商再選擇其模型；選取 `- 無模型` 即可停止使用伺服器的金鑰進行轉錄。
 
 模型清單會標示各供應商的預設模型，並以美元顯示價格。文字與判定模型顯示每 100 萬輸入與輸出 token 的價格。OpenRouter 的影像、影片與語音模型則會顯示 OpenRouter 計費的單位：每張圖片或每 100 萬圖片 token、以 TomoriBot 預設解析度計算的每秒影片，以及每 100 萬字元或每秒音訊。自行註冊的影像模型不會顯示價格。未列出價格的模型可能是未計量，或是未記錄在 TomoriBot 的目錄中，依賴該模型前請先查看供應商的定價頁面。
 
@@ -174,9 +175,10 @@ OpenCode Go (`https://opencode.ai/zen/go/v1`) 和OpenCode Zen (`https://opencode
 | 供應商 | 文字轉語音 | 語音轉文字 |
 |---|---|---|
 | ElevenLabs | ✅ | ✅ |
-| Google Gemini | 語音設計 | 否 |
-| Vertex AI（標準、全域） | 語音設計 | 否 |
+| Google Gemini | 語音設計 | ✅ |
+| Vertex AI（標準、全域） | 語音設計 | ✅ |
 | OpenRouter Fish | 語音複製 | 否 |
 | OpenRouter Seed Audio | 語音設計 | 否 |
+| OpenRouter 轉錄模型 | 否 | ✅ |
 
 本機語音引擎包含在[自架](/zh-TW/self-hosting/) 中。內建的網路搜尋和URL讀取，請參閱[工具和擴充功能](/zh-TW/features/capabilities/tools-and-extensions/#web-search--url-reading)。

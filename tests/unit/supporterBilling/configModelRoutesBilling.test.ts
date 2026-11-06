@@ -364,6 +364,7 @@ describe("config model subscription billing choices", () => {
     const decisions = spyOn(llmModelRepo, "loadDecisionModelOptions").mockResolvedValue([]);
     const speechEndpoints = spyOn(llmProviderRepo, "loadCustomEndpointsForServer").mockResolvedValue([]);
     const speechModels = spyOn(llmModelRepo, "loadAvailableSpeechModels").mockResolvedValue([]);
+    const transcriptionModels = spyOn(llmModelRepo, "loadAvailableTranscriptionModels").mockResolvedValue([]);
     const channelOverrides = spyOn(llmOverrideRepo, "getAllChannelLlmOverridesForServer").mockResolvedValue([]);
     const personas = spyOn(tomoriStateCache, "getCachedAllPersonas").mockResolvedValue([] as unknown as TomoriState[]);
     const funding = spyOn(supporterFunding, "resolveSupporterFunding").mockResolvedValue({
@@ -377,25 +378,26 @@ describe("config model subscription billing choices", () => {
         llm_codename: "synthetic/shared-model",
         sees_images: false,
       });
-      const byokView = await loadConfigSwitchModelsView(
-        makeState({ llm }),
-        "guild-1",
-        undefined,
-        undefined,
-        async () => [],
-      );
+      const byokView = await loadConfigSwitchModelsView(makeState({ llm }), "guild-1", undefined);
       expect(byokView.slots.find((slot) => slot.capability === "text")?.currentProvider).toBe("openrouter");
 
       const subscribedView = await loadConfigSwitchModelsView(
         makeState({ llm, config: { subscription_capabilities: ["text"] } }),
         "guild-1",
         undefined,
-        undefined,
-        async () => [],
       );
       expect(subscribedView.slots.find((slot) => slot.capability === "text")?.currentProvider).toBe("supporter");
     } finally {
-      for (const spy of [providers, decisions, speechEndpoints, speechModels, channelOverrides, personas, funding])
+      for (const spy of [
+        providers,
+        decisions,
+        speechEndpoints,
+        speechModels,
+        transcriptionModels,
+        channelOverrides,
+        personas,
+        funding,
+      ])
         spy.mockRestore();
     }
   });

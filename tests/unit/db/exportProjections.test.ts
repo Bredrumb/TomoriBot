@@ -1,3 +1,4 @@
+import { humanizerSettingsFromDegree } from "@/constants/humanizer";
 import { describe, expect, it } from "bun:test";
 import type { sql } from "@/utils/db/client";
 import { V2_CONFIG_EXCLUSIONS, personalConfigExportSchema, workspaceConfigExportSchema } from "@/types/db/dataExport";
@@ -19,7 +20,7 @@ const workspaceRow: Record<string, unknown> = {
   llm_logit_biases: [{ id: "bias-1", text: "hello", value: 2, tokenizations: [] }],
   llm_stop_strings: ["END"],
   llm_stop_speaker_pattern_enabled: true,
-  humanizer_degree: 2,
+  ...humanizerSettingsFromDegree(2),
   timezone_offset: 8,
   message_fetch_limit: 60,
   system_prompt: "Portable system prompt",

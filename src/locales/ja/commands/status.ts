@@ -54,7 +54,7 @@ export default {
     field_frequency_penalty: `頻度ペナルティ`,
     field_presence_penalty: `存在ペナルティ`,
     field_omitted_params: `無効化したパラメーター`,
-    field_humanizer: `ヒューマナイザーレベル`,
+    field_humanizer: `ヒューマナイザー`,
     field_thinking_level: `思考レベル`,
     field_timezone: `サーバータイムゾーン`,
     field_message_fetch_limit: `メッセージ取得上限`,

@@ -35,7 +35,7 @@ simplifiedMessageHistory
   resolver, so the instruction to call `read_file` appears only when the turn exposes it; otherwise the
   hint says the contents are unavailable. The filename and media ID are filled in after expansion, so a
   filename is never parsed as a macro.
-- **Deterministic humanization**: At `humanizer_degree >= HumanizerDegree.HEAVY`, model-role historical turns pass through `humanizeString` with `suppressPunctuationNoise: true`. This applies casing normalization and semicolon stripping without randomized comma noise, preserving prefix stability for provider prompt caching.
+- **Deterministic humanization**: When the Force Lowercase or Punctuation Splits toggle is on, model-role historical turns pass through `applyStableHumanizer`. It applies only the deterministic casing and semicolon normalization those toggles imply, never the randomized comma noise, preserving prefix stability for provider prompt caching.
 
 NovelAI reads the item's `completionText` projection. History simplification preserves original
 message prose in `completionContent` before adding reply references, reactions, and media hints.
@@ -55,7 +55,7 @@ Instead of adapting media to a specific model's vision capabilities during conte
 
 ### Context note and spacer injection
 
-Notes are injected at calculated depths measured from the end of history (`totalMessages - depth`):
+The registry applies note ordering at depths measured from the end of simplified history (`totalMessages - depth`), after each message's date spacer. These saved depths count items, independently of speaker-turn counting for the tail slot:
 
 - **Persona and channel notes**: Persona notes and channel notes are additive; both inject when configured. The global server context note is a fallback used only when neither persona nor channel configures a note.
 - **Verbatim tool-calling nudge**: When `shouldInjectVerbatimToolCallingNudge(tomoriState)` is true, injects `VERBATIM_TOOL_CALLING_NUDGE` at depth 3 to guide custom endpoint models on verbatim tool syntax.
@@ -67,7 +67,7 @@ Verified proxy history uses the persisted message index to recover the stable me
 ## Constraints and rationale
 
 - **Capability-neutral history**: Decoupling media descriptors from provider vision capabilities allows the same assembled context to be evaluated across fallback models without rebuilding history.
-- **Prompt cache preservation**: Bypassing randomized punctuation noise keeps history formatting deterministic. Participant state, memory updates, and changing history windows can still alter the prompt prefix.
+- **Prompt cache preservation**: Bypassing randomized punctuation noise keeps history deterministic. A context note deeper than the tail slot moves relative to history each chat turn and reduces cache reuse. Relative date-spacer wording such as "yesterday" changes at server-day boundaries. Anchored selection and budget truncation are owned upstream by [Build Context](/architecture/pipelines/chat/06-per-turn/01-build-context/).
 - **Hints follow the tool list**: a hint that tells the model to call a tool wraps that instruction in `{{if tool:...}}`, because history is simplified before the Deliberate Tool Mode allowlist exists. A hint written into message text at simplification time would name tools the turn never exposes.
 - **Macro preservation**: Preserving identity macros in user message bodies prevents corruption when users ask personas to draft or edit prompts containing `{user}` or `{bot}`.
 - **Preset reassembly**: Dialogue items are tagged `DIALOGUE_HISTORY` and `CONTEXT_NOTE_INJECTION`, which SillyTavern preset reassembly maps to the `chatHistory` marker.

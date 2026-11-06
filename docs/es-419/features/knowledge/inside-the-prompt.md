@@ -5,40 +5,32 @@ sidebar:
 aiGenerated: false
 ---
 
-TomoriBot normalmente envía estos bloques de prompt en orden.
-[NovelAI](/features/integrations/novelai/) cubre sus excepciones.
+TomoriBot agrupa instrucciones y memorias arriba de la conversación, y luego coloca la información cambiante
+cerca de los mensajes más recientes. [NovelAI](/features/integrations/novelai/) usa una estructura independiente, y
+los [preajustes de SillyTavern](/features/integrations/sillytavern-support/) pueden reorganizar los bloques iniciales.
 
-| Bloquear | ¿Opcional? | Comandos | que es |
-|---|---|---|---|
-| [Mensaje del sistema](/es-419/features/chatting-personality/behavior-tweaking/#system-prompt) |  | `/config` > Comportamiento > Comportamiento general | Instrucciones básicas en la parte superior del contexto. |
+| Posición | Qué recibe TomoriBot | Dónde gestionarlo |
+|---|---|---|
+| Parte del sistema | Prompts del sistema, de canal y de persona; atributos de persona; orientación sobre herramientas; información del servidor; restricciones persona-usuario; memorias del servidor; emojis, stickers y sprites; entradas de lorebook Always On; condicionamiento. | `/config`, `/memories`, `/moderation`, `/expressions` y `/conditioning` |
+| Arriba de la conversación | Perfiles de participantes, alias, memorias personales, recordatorios y tareas de la persona; memoria a corto plazo más antigua del mismo canal en su posición predeterminada; definiciones de herramientas de texto cuando sean necesarias. | `/personal memories`, `/memories` y `/config` |
+| Ejemplos y conversación | Diálogos de muestra, seguidos de los mensajes recientes de este canal. | `/config` > Persona > Identidad y personalidad; Comportamiento > Comportamiento general |
+| Justo arriba de los cuatro turnos de diálogo más recientes | Memoria a corto plazo reciente o que contiene contenido de otros canales, entradas de lorebook activadas por palabras clave o por probabilidad, documentos recuperados, presencia de participantes y la hora actual con la línea del canal. | `/memories` y `/config` |
+| Entre los mensajes recientes | Notas de contexto a la profundidad elegida, además de recordatorios de herramientas y de reconocimiento del tiempo. | `/config` > Comportamiento > Comportamiento general; Persona > Avanzado; Canales > Excepciones de canal |
 
-> **Texto de aviso del sistema predeterminado**: se usa solo cuando no hay ningún aviso del sistema del servidor configurado. >
-> *"Eres {bot}. {bot} se asegura de responder de forma breve y concisa de forma predeterminada. {bot} solo da respuestas largas si la situación lo amerita. >
-> {{if tool:create_long_term_memory}}{bot} utiliza proactivamente la {memory_tool} disponible cada vez que alguien comparte un detalle o {bot} nota uno en la conversación que realmente vale la pena recordar, como una preferencia, un interés o un hecho importante, prefiriendo recordar cosas incluso si son menores, siempre y cuando no sean un duplicado de lo que {bot} ya sabe. {{/if}}{{if tool:update_long_term_memory}}{bot} usa {memory_update_tool} en su lugar cuando nueva información cambia o se suma a algo que {bot} ya recuerda, en lugar de guardar un duplicado.{{/if}} >
-> {{if tool:review_capabilities}}Cuando alguien pregunta qué puede hacer {bot} o por qué algo no está disponible, {bot} verifica {capabilities_tool} antes de responder. {{/if}}{{if tool_family:url_fetch}}Cuando se necesitan más detalles, {bot} utiliza {url_fetch_tool} en `https://docs.tomoribot.app/llms.txt` para obtener información.{{/if}}"*
+Un turno de diálogo agrupa mensajes consecutivos de una persona o persona del bot. Cuatro turnos de diálogo pueden contener
+muchos mensajes. En una conversación corta, TomoriBot cuenta hacia atrás en diálogos de muestra adyacentes donde
+estén disponibles. La memoria a corto plazo puede ubicarse más cerca del mensaje más reciente si configuraste una profundidad menor.
+Los bloques opcionales vacíos no cuestan tokens.
 
-| Bloquear | ¿Opcional? | Dominio | que es |
-|---|---|---|---|
-| Mensaje de canal (añadir) | *(Opcional)* | `/config` > `Canales` > Anulación de canales | Varía según el canal y se superpone justo después del mensaje del sistema. El modo *reemplazar* de la misma página ocupa el espacio de aviso del sistema anterior en lugar de agregar uno nuevo. |
-| Mensaje de persona | *(Opcional)* | `/config` > `Persona` > Avanzado | Un mensaje escrito específicamente para la persona activa, separado del mensaje del sistema. |
-| [Atributos personales](/es-419/features/chatting-personality/multiple-personas/#attributes) |  | `/config` > `Persona` > `Identidad y personalidad` | Los rasgos de personalidad y los patrones de habla de la persona activa. |
-| información del servidor |  | *(ninguno, de Discord)* | El nombre del servidor, la descripción y el canal en el que se encuentra, extraídos del propio Discord. |
-| [Bloqueos persona-usuario](/es-419/features/capabilities/tools-and-extensions/#built-in-tools) | *(Opcional)* | `/moderation` para revisar/borrar; cerrado por `/config` > `Permisos` (Bloqueo de usuario) | Restricciones activas de silencio/bloqueo que esta persona tiene contra usuarios específicos. |
-| [Memorias del servidor](/es-419/features/knowledge/memory/#personal-vs-server-memories) |  | `/memories` | Los hechos a largo plazo guardados para este servidor. |
-| [emojis del servidor](/es-419/features/chatting-personality/behavior-tweaking/#capabilities-what-shes-allowed-to-do) | *(Opcional)* | `/config` > `Plugins` > `Adiciones de contexto` (`Emojis en respuestas`) (solo alternar), inicializar con `/expressions initialize` | Los emojis personalizados presentes en el servidor. |
-| [Pegatinas del servidor](/es-419/features/chatting-personality/behavior-tweaking/#expressions) | *(Opcional)* | `/config` > `Plugins` > `Herramientas disponibles` (`Uso de Stickers`), clasificar activos nativos con `/expressions initialize`, administrar con `/expressions manage` | Calcomanías nativas que se pueden enviar y todas las expresiones personalizadas elegibles para la persona que responde, con nombres, descripciones y emociones. Las fuentes de medios y las reglas de acceso de personas permanecen fuera del aviso. |
-| [Sprites personales](/es-419/features/chatting-personality/multiple-personas/#sprites-emotion-avatars) | *(Opcional)* | `/config` > `Persona` > Sprites | Sprites de expresión con nombre configurados para la persona, si tiene alguno. |
-| [Participantes de la conversación](/es-419/features/knowledge/memory/#personal-vs-server-memories) | *(Opcional)* | `/personal memories` (cerrado por `/config` > `Permisos` (Personalización)) | Las personas en la conversación, sus apodos y menciones, y los recuerdos personales guardados sobre cada uno de ellos. Se carga cuando la persona posee un mensaje en contexto, o si se menciona su nombre/alias. También lleva el canal actual y la hora local como pie de página, usando `/config` > Comportamiento > Comportamiento general. |
-| [Memoria a corto plazo](/es-419/features/knowledge/memory/#short-term-memory-stm) |  | `/config` > `Persona` > Recuerdos; `/memories` para borrar entradas; cerrado por `/config` > `Permisos` (memoria a corto plazo) | Contiene resúmenes y mensajes recientes de diferentes canales. |
-| [`Documentos`](/es-419/features/knowledge/memory/#document-knowledge-base-rag) | *(Opcional)* | `/memories` | Partes relevantes extraídas de la base de conocimientos mediante RAG. |
-| [Condicionamiento](/es-419/features/knowledge/memory/#conditioning) | *(Opcional)* | `/reward <feed\|headpat\|hug\|kiss\|tickle>`, `/punish <bite\|bonk\|pinch\|spank\|squeeze>`; administrado con `/conditioning remove` | Preferencias de comportamiento acumuladas para esta persona en este servidor. |
-| [Diálogos de muestra](/es-419/features/chatting-personality/multiple-personas/#sample-dialogues) | *(Opcional)* | `/config` > `Persona` > `Identidad y personalidad` | Ejemplos de cómo habla esta persona, si hay alguno configurado. |
-| [Mensajes recientes](/es-419/features/chatting-personality/behavior-tweaking/#generation-tuning) | | `/config` > Comportamiento > Comportamiento general | La conversación real, hasta esta cantidad de mensajes (80 por defecto). |
-| Nota de contexto | *(Opcional)* | `/config` > Comportamiento > Comportamiento general; Persona > Avanzado; o Canales > Anulación de canales | Una instrucción insertada entre los mensajes recientes a una profundidad elegida desde el último mensaje. |
+Los mensajes recientes crecen dentro de un rango y luego descartan los mensajes más antiguos en un lote. El lote es el 30% de tu
+límite de mensajes, redondeado hacia abajo a un número par. Con el límite predeterminado de 80, el lote es de 24: una ventana
+completa mantiene su mensaje inicial mientras llegan nuevos mensajes, y luego avanza 24 cuando superaría los
+80. Un intercambio típico de dos mensajes deja 58 mensajes después de ese avance. Las conversaciones cortas,
+las actualizaciones y el espacio disponible del modelo pueden dejar menos mensajes.
 
-Los bloques opcionales no cuestan tokens cuando están vacíos.
-
-Los mensajes recientes forman una ventana móvil. Los demás bloques se reconstruyen a partir de las configuraciones guardadas y las memorias.
+Una nota de contexto ubicada antes del grupo de información cambiante se desplaza a través del historial más antiguo en
+cada respuesta del bot y hace que el almacenamiento en caché del prompt sea menos eficaz. Mantenerla cerca del mensaje más reciente
+evita esa alteración adicional de la caché.
 
 :::tip
 Algunos modelos usan la información cerca del principio o del final de un prompt largo de manera más confiable que la información en el medio. Para los proveedores que usan notas de contexto, prueba colocar una instrucción cerca del mensaje más reciente. El efecto depende del modelo y de la tarea. Consulta [Lost in the Middle](https://aclanthology.org/2024.tacl-1.9/) y [Lost in the Haystack](https://arxiv.org/abs/2505.18148).

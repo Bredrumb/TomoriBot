@@ -22,7 +22,7 @@ describe("buildOpenAICompatibleMessages — assistant media relocation (golden)"
       {
         role: "model",
         parts: [{ type: "text", text: "Hi there" }, inlineImagePart("AAA")],
-        sender: { name: "Tomori", type: "persona" },
+        sender: { id: "Tomori", name: "Tomori", type: "persona" },
       },
     ];
 
@@ -52,7 +52,7 @@ describe("buildOpenAICompatibleMessages — assistant media relocation (golden)"
       {
         role: "model",
         parts: [inlineImagePart("AAA"), inlineImagePart("BBB")],
-        sender: { name: "Tomori", type: "persona" },
+        sender: { id: "Tomori", name: "Tomori", type: "persona" },
       },
     ];
 
@@ -82,13 +82,13 @@ describe("buildOpenAICompatibleMessages — assistant media relocation (golden)"
       {
         role: "model",
         parts: [{ type: "text", text: "Aki: first" }, inlineImagePart("AAA")],
-        sender: { name: "Aki", type: "persona" },
+        sender: { id: "Aki", name: "Aki", type: "persona" },
       },
       { role: "user", parts: [{ type: "text", text: "next" }] },
       {
         role: "model",
         parts: [inlineImagePart("BBB")],
-        sender: { name: "Ren", type: "persona" },
+        sender: { id: "Ren", name: "Ren", type: "persona" },
       },
     ];
 

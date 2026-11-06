@@ -1,3 +1,4 @@
+import { humanizerSettingsFromDegree } from "@/constants/humanizer";
 import { describe, expect, it } from "bun:test";
 import { normalizeNovelAIContextText } from "@/providers/novelai/messageNormalization";
 import { fitNovelAIPrompt } from "@/providers/novelai/promptFitting";
@@ -11,7 +12,7 @@ import { attachPersonaMentionMapToContextItems, buildPersonaMentionCatalog } fro
 function turn(body: string): StructuredContextItem {
   return {
     role: "user",
-    sender: { type: "user", name: "mirri" },
+    sender: { id: "mirri", type: "user", name: "mirri" },
     metadataTag: ContextItemTag.DIALOGUE_HISTORY,
     completionText: `mirri: ${body}`,
     parts: [{ type: "text", text: `mirri: ${body}` }],
@@ -136,7 +137,7 @@ describe("NovelAI message normalization", () => {
   it("polishes persona history and sample dialogue without changing the saved text", () => {
     for (const item of [
       { ...turn("hello"), role: "model" as const },
-      { ...turn("hello"), sender: { type: "persona" as const, name: "Juno" } },
+      { ...turn("hello"), sender: { id: "Juno", type: "persona" as const, name: "Juno" } },
       { ...turn("hello"), metadataTag: ContextItemTag.DIALOGUE_SAMPLE },
     ]) {
       expect(normalize(item)).toBe("Mirri: Hello.");
@@ -208,7 +209,7 @@ describe("NovelAI message normalization", () => {
       role: "model",
       completionText: "juno: hey. welcome back",
       parts: [{ type: "text", text: "juno: hey. welcome back" }],
-      sender: { name: "Juno", type: "persona" },
+      sender: { id: "Juno", name: "Juno", type: "persona" },
     };
     const otherPersona = createPersona({ persona_id: 2, persona_nickname: "Mirri" });
     const inputs = attachPersonaMentionMapToContextItems(
@@ -221,7 +222,10 @@ describe("NovelAI message normalization", () => {
         (humanizerDegree) =>
           fitNovelAIPrompt({
             contextItems: inputs,
-            tomoriState: createPersona({ persona_nickname: "Juno", config: { humanizer_degree: humanizerDegree } }),
+            tomoriState: createPersona({
+              persona_nickname: "Juno",
+              config: humanizerSettingsFromDegree(humanizerDegree),
+            }),
             profile: getNovelAIProfile(model),
             window: 4096,
           }).prompt,

@@ -52,7 +52,7 @@ export default {
     field_frequency_penalty: `Penalización de Frecuencia`,
     field_presence_penalty: `Penalización de Presencia`,
     field_omitted_params: `Parámetros Deshabilitados`,
-    field_humanizer: `Nivel de Humanizador`,
+    field_humanizer: `Humanizador`,
     field_thinking_level: `Nivel de Razonamiento`,
     field_timezone: `Zona Horaria del Servidor`,
     field_message_fetch_limit: `Límite de Mensajes Obtenidos`,

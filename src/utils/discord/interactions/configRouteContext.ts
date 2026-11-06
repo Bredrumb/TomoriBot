@@ -34,13 +34,7 @@ import { getLastDbError } from "@/utils/cache/tomoriStateCache";
 import type { AddressingStyle } from "@/types/personaNaming";
 import type { ConditioningGroup } from "@/utils/db/repositories/ConditioningMemoryRepository";
 import type { ShortTermMemoryEntry } from "@/utils/cache/shortTermMemoryCache";
-import type {
-  ConfigCatalogModelCapability,
-  ConfigCategory,
-  ConfigModelCapability,
-  ConfigPage,
-} from "@/utils/discord/configPanelCatalog";
-import type { LoadConfigCapabilityEndpoints } from "@/utils/discord/interactions/configModelLoaders";
+import type { ConfigCategory, ConfigModelCapability, ConfigPage } from "@/utils/discord/configPanelCatalog";
 import type {
   BlocklistChannelTarget,
   ChannelOverrideChannelTarget,
@@ -71,7 +65,6 @@ import type {
   ConfigImageGenerationView,
   ConfigParametersView,
   ConfigSwitchModelsProviderPage,
-  ConfigEndpointPage,
   ConfigSwitchModelsView,
 } from "@/utils/discord/ui/configModelsPanel";
 import type { ConfigVoicesView } from "@/utils/discord/ui/configVoicesPanel";
@@ -91,7 +84,7 @@ import { localizer } from "@/utils/text/localizer";
 import { resolvePrefillBlocker, type PrefillBlocker } from "@/utils/chat/assistantPrefill";
 import { stPresetOperations } from "@/utils/stPreset/stPresetOperations";
 import type { StPresetsPanelRenderInput } from "@/utils/discord/ui/stPresetsPanel";
-import { HUMANIZER_DEFAULT } from "@/utils/discord/humanizerOptions";
+import { type HumanizerSettings, pickHumanizerSettings } from "@/constants/humanizer";
 import { DEFAULT_MESSAGE_FETCH_LIMIT } from "@/utils/discord/messageFetchLimit";
 import type { McpConfigOperations } from "@/utils/mcp/mcpConfigOperations";
 import type { McpSignInRequest, McpSignInStart } from "@/utils/mcp/oauth/signIn";
@@ -130,7 +123,7 @@ export interface ConfigBehaviorGeneralView {
   prefillModelName: string;
   contextNote: string | null;
   contextNoteDepth: number;
-  humanizerDegree: number;
+  humanizer: HumanizerSettings;
   messageFetchLimit: number;
   timezoneOffset: number;
   /** Name of the active SillyTavern preset, which takes over the system prompt; absent when none. */
@@ -272,7 +265,7 @@ export interface ConfigRouteDependencies {
     },
   ): Promise<boolean>;
   invalidatePersonaVoiceCache(serverDiscId: string): void;
-  loadServerHumanizerDegree(serverId: number): Promise<number | null>;
+  loadServerHumanizer(serverId: number): Promise<HumanizerSettings | null>;
   loadPersonaSprites(personaId: number): Promise<PersonaSpriteRow[]>;
   loadSavedTextProviders(serverId: number): Promise<Array<{ provider: string }>>;
   loadPersonaTextModels(provider: string, serverId: number): Promise<LlmRow[]>;
@@ -289,13 +282,10 @@ export interface ConfigRouteDependencies {
   operations: ConfigPersonaOperations;
   spriteOperations: ConfigSpriteOperations;
   modelOperations: ConfigModelOperations;
-  loadCapabilityEndpoints: LoadConfigCapabilityEndpoints;
   loadSwitchModelsView(
     state: TomoriState,
     workspaceDiscId: string,
     providerPage: ConfigSwitchModelsProviderPage | undefined,
-    endpointPage?: ConfigEndpointPage,
-    loadCapabilityEndpoints?: LoadConfigCapabilityEndpoints,
   ): Promise<ConfigSwitchModelsView>;
   loadParametersView(
     state: TomoriState,
@@ -341,7 +331,7 @@ export interface ConfigRouteDependencies {
   startMcpSignIn(request: McpSignInRequest): Promise<McpSignInStart>;
   loadModelChoices(
     state: TomoriState,
-    capability: ConfigCatalogModelCapability,
+    capability: ConfigModelCapability,
     provider: string,
     locale: string,
   ): Promise<ConfigModelChoice[]>;
@@ -433,7 +423,7 @@ export function missingScopeMessageKey(
  * Copy for a route that outlived the persona row it names. A write must never fall back to another
  * persona, so the panel is re-run rather than silently applied somewhere else.
  */
-export function outdatedConfigPanelMessage(locale: string): string {
+function outdatedConfigPanelMessage(locale: string): string {
   return localizer(locale, "commands.config.panel.outdated_panel", { command: CONFIG_PANEL_COMMAND });
 }
 
@@ -518,7 +508,7 @@ export interface ConfigRepaintOptions {
   receipt?: PanelReceipt;
   view?: ConfigPanelView;
   personaMemoryView?: ConfigPersonaMemoryView;
-  serverHumanizerDegree?: number | null;
+  serverHumanizer?: HumanizerSettings | null;
   personaSprites?: PersonaSpriteRow[];
   spritePageStart?: number;
   selectedSpriteIndex?: number;
@@ -526,7 +516,6 @@ export interface ConfigRepaintOptions {
   personaVoiceRemoteView?: ConfigPersonaVoiceRemoteView;
   personaVoicePageStart?: number;
   modelProviderPage?: ConfigSwitchModelsProviderPage;
-  endpointPage?: ConfigEndpointPage;
   behaviorView?: ConfigBehaviorView;
   permissionsView?: ConfigPermissionsView;
   channelsView?: ConfigChannelsView;
@@ -561,20 +550,20 @@ export async function repaint(
   let spriteAvatar: PersonaPanelAvatarData | undefined;
   let characterReference: PersonaPanelCharacterReferenceData | undefined;
   let personaMemoryView = options.personaMemoryView;
-  let serverHumanizerDegree = options.serverHumanizerDegree;
+  let serverHumanizer = options.serverHumanizer;
   let personaSprites = options.personaSprites;
   let personaVoiceView = options.personaVoiceView;
   if (category === "persona") {
     const persona = scope.personas.find((candidate) => candidate.persona_id === selectedPersonaId);
     if (persona) {
-      [avatar, personaMemoryView, serverHumanizerDegree, personaSprites] = await Promise.all([
+      [avatar, personaMemoryView, serverHumanizer, personaSprites] = await Promise.all([
         dependencies.getPersonaAvatarData(interaction, persona),
         page === "memories" && !personaMemoryView
           ? dependencies.loadPersonaMemoryView(interaction, scope, persona)
           : Promise.resolve(personaMemoryView),
-        page === "advanced" && serverHumanizerDegree === undefined
-          ? dependencies.loadServerHumanizerDegree(persona.server_id)
-          : Promise.resolve(serverHumanizerDegree),
+        page === "advanced" && serverHumanizer === undefined
+          ? dependencies.loadServerHumanizer(persona.server_id)
+          : Promise.resolve(serverHumanizer),
         page === "sprites" && personaSprites === undefined && persona.persona_id !== undefined
           ? dependencies.loadPersonaSprites(persona.persona_id)
           : Promise.resolve(personaSprites),
@@ -625,8 +614,6 @@ export async function repaint(
           state,
           scope.serverDiscId,
           options.modelProviderPage,
-          options.endpointPage,
-          dependencies.loadCapabilityEndpoints,
         );
       } else if (page === "parameters") {
         modelParametersView = await dependencies.loadParametersView(
@@ -755,7 +742,7 @@ export async function repaint(
               prefillModelName: state.llm.llm_codename,
               contextNote: state.config.context_note ?? null,
               contextNoteDepth: state.config.context_note_depth ?? 0,
-              humanizerDegree: state.config.humanizer_degree ?? HUMANIZER_DEFAULT,
+              humanizer: pickHumanizerSettings(state.config),
               messageFetchLimit: state.config.message_fetch_limit ?? DEFAULT_MESSAGE_FETCH_LIMIT,
               timezoneOffset: state.config.timezone_offset ?? 0,
             },
@@ -798,7 +785,7 @@ export async function repaint(
         dialoguePageStart: options.dialoguePageStart,
         selectedDialogueIndex: options.selectedDialogueIndex,
         personaMemoryView,
-        serverHumanizerDegree,
+        serverHumanizer,
         personaSprites,
         spritePageStart: options.spritePageStart,
         selectedSpriteIndex: options.selectedSpriteIndex,

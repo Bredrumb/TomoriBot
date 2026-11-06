@@ -31,7 +31,7 @@ cụm từ phân tách bằng dấu phẩy. Việc khớp từ khóa sẽ bỏ q
 
 Để trống từ khóa cho các thông tin bối cảnh không cần khớp từ khóa. Thêm lại từ khóa để khôi phục
 tính năng khớp từ khóa. Các mục mới sử dụng vị trí đặt sau persona; các mục đã nhập vẫn giữ nguyên vị trí đặt của chúng.
-Các vị trí world info của preset SillyTavern sẽ kiểm soát nơi nhóm trước và sau xuất hiện.
+Các vị trí world info của preset SillyTavern sẽ định vị các nhóm Luôn bật (Always On). Các mục được kích hoạt bởi từ khóa hoặc tỷ lệ phần trăm sẽ nằm gần các tin nhắn mới nhất.
 
 ## Khi nào các mục kích hoạt
 
@@ -51,9 +51,7 @@ biểu thức chính quy.
 
 ## Những gì đến được prompt
 
-Các mục đã kích hoạt được gửi trong một khối `World Info` cho mỗi vị trí đặt, theo thứ tự chèn. Cả hai khối
-dùng chung giới hạn 8.000 ký tự; mục nào vượt quá giới hạn sẽ bị bỏ qua để các mục sau vẫn có thể
-vừa vặn.
+Các mục Luôn bật (Always On) được đưa vào phần hệ thống của prompt. Các mục được kích hoạt bởi từ khóa hoặc tỷ lệ phần trăm sẽ nằm ngay phía trên bốn lượt người nói mới nhất, trước các tài liệu được truy xuất. Mỗi nhóm giữ nguyên vị trí đặt trước/sau và thứ tự chèn. Tất cả các nhóm dùng chung ngân sách 8.000 ký tự, trong đó các mục Luôn bật được ưu tiên xét trước; mục nào vượt quá ngân sách sẽ bị bỏ qua để các mục sau vẫn có thể vừa vặn.
 
 Nội dung có thể sử dụng `{{user}}`, `{{char}}` và `{{bot}}`. TomoriBot thay thế chúng bằng các tên hiện tại.
 Các macro `{{...}}` khác và khối điều kiện được giữ nguyên như văn bản đã viết.

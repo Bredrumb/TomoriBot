@@ -5,36 +5,24 @@ sidebar:
 aiGenerated: false
 ---
 
-TomoriBot 通常依序傳送這些提示詞區塊。
-[NovelAI](/features/integrations/novelai/) 涵蓋了其例外情況。
+TomoriBot 將指示與記憶整理在對話上方，並將變動的資訊放在最靠近最新訊息的位置。[NovelAI](/features/integrations/novelai/) 使用獨立的版面配置，而 [SillyTavern 預設集](/features/integrations/sillytavern-support/) 則可重新排列前面的區塊。
 
-| 區塊 | 選用？ | 指令 | 說明 |
-|---|---|---|---|
-| [系統提示詞](/features/chatting-personality/behavior-tweaking/#system-prompt) | | `/config` > 行為 > 一般行為 | 脈絡最頂部的基本說明。 |
-| 頻道提示詞（追加） | *(選用)* | `/config` > 頻道 > 頻道覆寫 | 每個頻道有所不同，在系統提示詞後立即分層。同一頁面的 *替換* 模式接管上面的系統提示詞槽位，而不是新增新的提示詞槽位。 |
-| 人格提示詞 | *(選用)* | `/config` > 人格 > 進階 | 專為使用中人格所寫的提示詞，與系統提示詞分開。 |
-| [人格屬性](/features/chatting-personality/multiple-personas/#attributes) | | `/config` > 人格 > 身分與個性 | 使用中人格的性格特徵與言語模式。 |
-| 伺服器資訊 | | *(無，來自 Discord)* | 伺服器名稱、說明與她所在的頻道，直接從 Discord 本身提取。 |
-| [人格-使用者封鎖](/features/capabilities/tools-and-extensions/built-in-tools/) | *(選用)* | `/moderation` 審核/清除；由 `/config` > 權限（使用者封鎖）控制 | 此人格針對特定使用者設定的主動靜音/封鎖限制。 |
-| [伺服器記憶](/features/knowledge/memory/#personal-vs-server-memories) | | `/memories` | 為此伺服器儲存的長期事實。 |
-| [伺服器表情符號](/features/chatting-personality/behavior-tweaking/#capabilities-what-shes-allowed-to-do) | *(選用)* | `/config` > 外掛 > 脈絡附加（`表情符號與反應`）（僅切換），使用 `/expressions initialize` 初始化 | 伺服器中存在的自訂表情符號。 |
-| [伺服器貼圖](/features/chatting-personality/behavior-tweaking/#expressions) | *(選用)* | `/config` > 外掛 > 可用工具（貼圖使用），使用 `/expressions initialize` 將原生資產分類，使用 `/expressions manage` 進行管理 | 可傳送的原生貼圖和符合回應人格的每個自訂表情，包括名稱、說明與情緒。媒體來源與人格存取規則位於提示詞之外。 |
-| [人格立繪](/features/chatting-personality/multiple-personas/#sprites-emotion-avatars) | *(選用)* | `/config` > 人格 > 立繪 | 為人格設定的具名表情立繪（如果有）。 |
-| [對話參與者](/features/knowledge/memory/#personal-vs-server-memories) | *(選用)* | `/personal memories`（由 `/config` > 權限（個人化）控制） | 對話中的人、他們的暱稱與提及名稱，以及為每個人儲存的個人記憶。當此人在脈絡中擁有訊息或提及其姓名/別名時載入。也使用 `/config` > 行為 > 一般行為將目前頻道與本地時間作為頁尾。 |
-| [短期記憶](/features/knowledge/memory/#short-term-memory-stm) | | `/config` > 人格 > 記憶；`/memories` 清除項目；由 `/config` > 權限（短期記憶）控制 | 包含不同頻道的摘要與近期訊息。 |
-| [文件](/features/knowledge/memory/#document-knowledge-base-rag) | *(選用)* | `/memories` | 使用 RAG 從知識庫中提取的相關區塊。 |
-| [世界書](/features/knowledge/lorebooks/) | *(選用)* | `/memories` > 世界書 | 關鍵字出現在近期訊息中的世界觀設定，加上一律啟用的項目。在文件之後傳送。 |
-| [獎勵與懲罰](/features/knowledge/memory/#conditioning) | *(選用)* | `/reward <feed\|headpat\|hug\|kiss\|tickle>`, `/punish <bite\|bonk\|pinch\|spank\|squeeze>`, 使用 `/conditioning remove` 管理 | 此人格在這個伺服器中累積的行為偏好。 |
-| [範例對話](/features/chatting-personality/multiple-personas/#sample-dialogues) | *(選用)* | `/config` > 人格 > 身分與個性 | 此人格如何說話的範例（若有設定）。 |
-| [近期訊息](/features/chatting-personality/behavior-tweaking/#generation-tuning) | | `/config` > 行為 > 一般行為 | 實際對話，最多這麼多則訊息（預設 80 則）。 |
-| 脈絡備忘 | *(選用)* | `/config` > 行為 > 一般行為；人格 > 進階；或 頻道 > 頻道覆寫 | 在距離最新訊息指定深度處，插入到近期訊息中的指示。 |
+| 位置 | TomoriBot 接收的內容 | 在何處管理 |
+|---|---|---|
+| 系統部分 | 系統、頻道與人格提示詞；人格屬性；工具指引；伺服器資訊；人格對使用者的限制；伺服器記憶；表情符號、貼圖與立繪；Always On 世界書條目；獎勵與懲罰。 | `/config`、`/memories`、`/moderation`、`/expressions` 與 `/conditioning` |
+| 對話上方 | 參與者個人檔案、別名、個人記憶、提醒事項與人格任務；位於預設位置的同頻道較舊短期記憶；需要時的文字工具定義。 | `/personal memories`、`/memories` 與 `/config` |
+| 範例與對話 | 範例對話，接著是來自此頻道的近期訊息。 | `/config` > 人格 > 身分與個性；行為 > 一般行為 |
+| 緊鄰最新四個發言回合上方 | 最新的短期記憶或包含其他頻道內容的短期記憶、關鍵字或機率觸發的世界書條目、檢索到的文件、參與者在線狀態，以及包含頻道行的當前時間。 | `/memories` 與 `/config` |
+| 近期訊息之中 | 位於所選深度的脈絡備註，加上工具與時間感知提醒。 | `/config` > 行為 > 一般行為；人格 > 進階；頻道 > 頻道覆寫 |
 
-選用的區塊在為空時不消耗 token。
+發言回合會將來自同一人或人格的連續訊息歸為一組。四個發言回合可能包含許多則訊息。在較短的對話中，TomoriBot 會在可用的情況下往前計入相鄰的範例對話。如果你設定了較淺的深度，短期記憶可以放在更靠近最新訊息的位置。為空的選用區塊不消耗 token。
 
-近期訊息形成一個滑動視窗。其他區塊則是根據已儲存的設定與記憶重建。
+近期訊息會在一定範圍內增長，接著以整批方式捨棄較舊的訊息。批次大小為你的訊息上限的 30%，並無條件捨去為偶數。以預設上限 80 則為例，批次大小為 24 則：當新訊息送達時，已滿的視窗會保留其起始訊息，當即將超過 80 則時則往前推進 24 則。在往前推進後，典型的兩則訊息交流會留下 58 則訊息。短對話、重新整理以及模型可用的空間可能會留下較少的訊息。
+
+若將脈絡備註放置在變動資訊群組的前面，每次 bot 回覆時它都會在較舊的歷史紀錄中移動，使提示詞快取的效果降低。將它保留在最新訊息附近可以避免這種額外的快取干擾。
 
 :::tip
-某些模型利用長提示詞開頭或結尾資訊的可靠程度，高於提示詞中間的資訊。對於使用脈絡備忘的供應商，請嘗試將指示放在靠近最新訊息的位置。效果取決於模型與任務。請參閱 [Lost in the Middle](https://aclanthology.org/2024.tacl-1.9/) 與 [Lost in the Haystack](https://arxiv.org/abs/2505.18148)。
+某些模型利用長提示詞開頭或結尾資訊的可靠程度，高於提示詞中間的資訊。對於使用脈絡備註的供應商，請嘗試將指示放在靠近最新訊息的位置。效果取決於模型與任務。請參閱 [Lost in the Middle](https://aclanthology.org/2024.tacl-1.9/) 與 [Lost in the Haystack](https://arxiv.org/abs/2505.18148)。
 :::
 
 ### 檢視提示詞

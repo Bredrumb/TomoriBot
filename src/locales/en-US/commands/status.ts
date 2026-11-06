@@ -52,7 +52,7 @@ export default {
     field_frequency_penalty: `Frequency Penalty`,
     field_presence_penalty: `Presence Penalty`,
     field_omitted_params: `Disabled Params`,
-    field_humanizer: `Humanizer Level`,
+    field_humanizer: `Humanizer`,
     field_thinking_level: `Thinking Level`,
     field_timezone: `Server Timezone`,
     field_message_fetch_limit: `Message Fetch Limit`,

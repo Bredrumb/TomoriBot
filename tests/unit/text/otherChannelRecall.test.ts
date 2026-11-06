@@ -10,6 +10,8 @@ import { serverStmConfigSchema, stmCategorySchema } from "@/types/db/schema";
 import { shortTermMemoryRepository } from "@/utils/db/repositories/ShortTermMemoryRepository";
 import { fitNovelAIPrompt } from "@/providers/novelai/promptFitting";
 import { getNovelAIProfile } from "@/providers/novelai/modelProfiles";
+import { applyPromptLayoutInserts, STM_TAIL_SLOT, type PromptLayoutItem } from "@/utils/text/context/promptLayout";
+import { resolveRandomChoiceMacrosInBuildOutput } from "@/utils/text/context/templates";
 
 let otherChannelEntries: ShortTermMemoryEntry[] = [];
 let sameChannelEntry: ShortTermMemoryEntry | undefined;
@@ -65,6 +67,82 @@ describe("other-channel short-term recall", () => {
   afterEach(() => {
     spyOn(shortTermMemoryRepository, "getStmConfig").mockRestore();
     spyOn(shortTermMemoryRepository, "getStmCategories").mockRestore();
+  });
+
+  it("uses the tail slot for fresh same-channel memory and every rendered other-channel block", async () => {
+    spyOn(shortTermMemoryRepository, "getStmConfig").mockResolvedValue(null);
+    spyOn(shortTermMemoryRepository, "getStmCategories").mockResolvedValue([]);
+    const staleTimestamp = Date.now() - 2 * 60 * 60 * 1000;
+    for (const currentState of ["missing", "stale", "fresh"]) {
+      for (const otherContent of [
+        null,
+        { summary: "Other-channel summary" },
+        { categories: { plans: "Climb" } },
+        { messages: [{ role: "user" as const, content: "Climb", timestamp: staleTimestamp }] },
+      ]) {
+        sameChannelEntry =
+          currentState === "missing"
+            ? undefined
+            : hydratedEntry("channel-current", currentState === "fresh" ? Date.now() : staleTimestamp, {
+                summary: "Same-channel summary",
+              });
+        otherChannelEntries = otherContent ? [hydratedEntry("channel-other", staleTimestamp, otherContent)] : [];
+        const result = await buildShortTermMemoryContext({
+          triggeringUserId: "user-1",
+          currentChannelId: "channel-current",
+          currentServerId: "server-1",
+          tomoriState: createPersona(),
+          triggererName: "Mirri",
+          botName: "Juno",
+          personalMemoriesEnabled: false,
+          client: {} as Client,
+          isUserImpersonation: false,
+          convertMentions: async (text) => text,
+        });
+        expect(result.memoryInjectionDepth).toBe(-1);
+        expect(result.memoryItems.length > 0).toBe(currentState !== "missing" || otherContent !== null);
+        const shouldUseSlot = currentState === "fresh" || otherContent !== null;
+        for (const item of result.memoryItems)
+          expect(Boolean((item as PromptLayoutItem)[STM_TAIL_SLOT])).toBe(shouldUseSlot);
+      }
+    }
+  });
+
+  it("compares the saved depth after macro projection instead of comparing item and speaker-turn counts", async () => {
+    spyOn(shortTermMemoryRepository, "getStmConfig").mockResolvedValue(
+      serverStmConfigSchema.parse({ server_id: 1, content_injection_depth: 3 }),
+    );
+    spyOn(shortTermMemoryRepository, "getStmCategories").mockResolvedValue([]);
+    sameChannelEntry = hydratedEntry("channel-current", Date.now(), { summary: "Same-channel summary" });
+    const result = await buildShortTermMemoryContext({
+      triggeringUserId: "user-1",
+      currentChannelId: "channel-current",
+      currentServerId: "server-1",
+      tomoriState: createPersona(),
+      triggererName: "Mirri",
+      botName: "Juno",
+      personalMemoriesEnabled: false,
+      client: {} as Client,
+      isUserImpersonation: false,
+      convertMentions: async (text) => text,
+    });
+    const projected = resolveRandomChoiceMacrosInBuildOutput({
+      contextItems: [],
+      tailDirectives: [],
+      lowerPriorityTailDirectives: [],
+      memoryInjectionItems: result.memoryItems,
+      memoryInjectionDepth: result.memoryInjectionDepth,
+    });
+    const items = Array.from({ length: 8 }, (_, index) => ({
+      role: "user" as const,
+      metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+      sender: { id: index % 2 ? "Mirri" : "Juno", name: index % 2 ? "Mirri" : "Juno", type: "user" as const },
+      parts: [{ type: "text" as const, text: `Message ${index}` }],
+    }));
+    applyPromptLayoutInserts(items, [
+      { tag: "stm_content", items: projected.memoryInjectionItems ?? [], depth: projected.memoryInjectionDepth },
+    ]);
+    expect(items.findIndex((item) => item.metadataTag === ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY)).toBe(5);
   });
 
   it("keeps tool nudges for capable providers but excludes them from every NovelAI prompt", async () => {

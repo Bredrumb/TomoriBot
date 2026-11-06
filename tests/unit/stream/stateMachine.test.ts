@@ -9,7 +9,7 @@ import { ProviderRequestDeniedError, type ProviderUsageContext } from "@/utils/p
 import { localizer } from "@/utils/text/localizer";
 import { afterEach, beforeAll, describe, expect, it, mock, spyOn } from "bun:test";
 import type { Client, CommandInteraction, TextChannel, Webhook } from "discord.js";
-import { HumanizerDegree } from "@/types/db/schema";
+import { humanizerSettingsFromDegree } from "@/constants/humanizer";
 import type {
   ProcessedChunk,
   ProviderError,
@@ -43,7 +43,7 @@ const config: StreamConfig = {
   maxTypingTimeMs: 0,
   minVisibleTypingDurationMs: 0,
   // Must stream because NONE aggregates the reply into one final send that a failed stream never posts.
-  humanizerDegree: HumanizerDegree.LIGHT,
+  humanizer: humanizerSettingsFromDegree(1),
   emojiUsageEnabled: false,
 };
 
@@ -64,7 +64,7 @@ function fixture(steps: Array<ProcessedChunk | (() => void)>, suppressUserErrors
   const context: StreamContext = {
     channel: { id: CHANNEL_ID, send, client: { rest: new REST() }, isThread: () => false } as unknown as TextChannel,
     client: {} as Client,
-    tomoriState: createPersona({ persona_nickname: "Mirri", config: { humanizer_degree: HumanizerDegree.LIGHT } }),
+    tomoriState: createPersona({ persona_nickname: "Mirri", config: { ...humanizerSettingsFromDegree(1) } }),
     contextItems: [],
     currentTurnModelParts: [],
     provider: "fixture",
@@ -203,7 +203,7 @@ describe("StreamOrchestrator failed-stream delivery", () => {
       context.tomoriState = createPersona({
         is_alter: true,
         persona_nickname: "Mirri",
-        config: { humanizer_degree: HumanizerDegree.LIGHT },
+        config: { ...humanizerSettingsFromDegree(1) },
       });
       context.personaUsername = "Mirri";
       context.personaAvatarUrl = "https://example.com/mirri.png";

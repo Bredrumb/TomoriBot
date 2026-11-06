@@ -86,7 +86,7 @@ In `/config` > Models > Switch Models, you can assign models and endpoints acros
 - **Video**: video generation.
 - **TTS (Voice Design)**: speaks using a saved voice description.
 - **TTS (Voice Clone)**: speaks using a reference sample or provider voice.
-- **STT Endpoint**: speech-to-text audio transcription endpoint.
+- **Speech to Text**: transcribes audio attachments with a hosted transcription model or a custom endpoint. Pick a provider, then its model; `- No Model` stops transcription on the server's key.
 
 
 :::tip
@@ -178,10 +178,11 @@ unsupported modes fail at generation time. NovelAI uses its own image pipeline.
 | Provider | Text-to-Speech | Speech-to-Text |
 |---|---|---|
 | ElevenLabs | ✅ | ✅ |
-| Google Gemini | Voice Design | No |
-| Vertex AI (standard, global) | Voice Design | No |
+| Google Gemini | Voice Design | ✅ |
+| Vertex AI (standard, global) | Voice Design | ✅ |
 | OpenRouter Fish | Voice Clone | No |
 | OpenRouter Seed Audio | Voice Design | No |
+| OpenRouter transcription models | No | ✅ |
 
 Local voice engines are covered under [Self-Hosting](/self-hosting/). For built-in web search and
 URL reading, see [Tools & Extensions](/features/capabilities/tools-and-extensions/web-search/).

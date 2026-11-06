@@ -38,7 +38,11 @@ interface WorkspaceConfigProjectionRow {
   llm_logit_biases: unknown;
   llm_stop_strings: string[];
   llm_stop_speaker_pattern_enabled: boolean;
-  humanizer_degree: number;
+  humanizer_streaming_enabled: boolean;
+  humanizer_pacing_enabled: boolean;
+  humanizer_sentence_split_enabled: boolean;
+  humanizer_lowercase_enabled: boolean;
+  humanizer_punctuation_split_enabled: boolean;
   timezone_offset: number;
   message_fetch_limit: number;
   system_prompt: string | null;
@@ -85,6 +89,7 @@ interface WorkspaceConfigProjectionRow {
   speech_clone_endpoint_id: number | null;
   speech_design_model_id: number | null;
   speech_clone_model_id: number | null;
+  transcription_model_id: number | null;
   voice_transcript_chat_mode: boolean;
   chatterbox_turbo_enabled: boolean;
   chatterbox_cfg_weight: number;
@@ -342,7 +347,11 @@ export class ExportRepository {
           COALESCE(scc.llm_logit_biases, '[]'::jsonb)               AS llm_logit_biases,
           COALESCE(scc.llm_stop_strings, ARRAY[]::TEXT[])           AS llm_stop_strings,
           COALESCE(scc.llm_stop_speaker_pattern_enabled, false)     AS llm_stop_speaker_pattern_enabled,
-          COALESCE(scc.humanizer_degree, 1)                         AS humanizer_degree,
+          COALESCE(scc.humanizer_streaming_enabled, true)           AS humanizer_streaming_enabled,
+          COALESCE(scc.humanizer_pacing_enabled, false)             AS humanizer_pacing_enabled,
+          COALESCE(scc.humanizer_sentence_split_enabled, false)     AS humanizer_sentence_split_enabled,
+          COALESCE(scc.humanizer_lowercase_enabled, false)          AS humanizer_lowercase_enabled,
+          COALESCE(scc.humanizer_punctuation_split_enabled, false)  AS humanizer_punctuation_split_enabled,
           COALESCE(smc.thinking_level, 'auto')                      AS thinking_level,
           COALESCE(scc.timezone_offset, 0)                          AS timezone_offset,
           COALESCE(scc.message_fetch_limit, 80)                     AS message_fetch_limit,
@@ -401,6 +410,7 @@ export class ExportRepository {
           ssc.speech_clone_endpoint_id AS speech_clone_endpoint_id,
           ssc.speech_design_model_id AS speech_design_model_id,
           ssc.speech_clone_model_id AS speech_clone_model_id,
+          ssc.transcription_model_id AS transcription_model_id,
           COALESCE(ssc.voice_transcript_chat_mode, true)            AS voice_transcript_chat_mode,
           COALESCE(ssc.chatterbox_turbo_enabled, true)              AS chatterbox_turbo_enabled,
           COALESCE(ssc.chatterbox_cfg_weight, 0.5)                  AS chatterbox_cfg_weight,
@@ -546,7 +556,11 @@ export class ExportRepository {
             llm_logit_biases: configData.llm_logit_biases ?? [],
             llm_stop_strings: configData.llm_stop_strings ?? [],
             llm_stop_speaker_pattern_enabled: configData.llm_stop_speaker_pattern_enabled ?? false,
-            humanizer_degree: configData.humanizer_degree,
+            humanizer_streaming_enabled: configData.humanizer_streaming_enabled,
+            humanizer_pacing_enabled: configData.humanizer_pacing_enabled,
+            humanizer_sentence_split_enabled: configData.humanizer_sentence_split_enabled,
+            humanizer_lowercase_enabled: configData.humanizer_lowercase_enabled,
+            humanizer_punctuation_split_enabled: configData.humanizer_punctuation_split_enabled,
             thinking_level: configData.thinking_level,
             timezone_offset: configData.timezone_offset,
             message_fetch_limit: configData.message_fetch_limit,
@@ -605,6 +619,7 @@ export class ExportRepository {
             speech_clone_endpoint_id: configData.speech_clone_endpoint_id,
             speech_design_model_id: configData.speech_design_model_id,
             speech_clone_model_id: configData.speech_clone_model_id,
+            transcription_model_id: configData.transcription_model_id,
             voice_transcript_chat_mode: configData.voice_transcript_chat_mode,
             chatterbox_turbo_enabled: configData.chatterbox_turbo_enabled,
             chatterbox_cfg_weight: configData.chatterbox_cfg_weight,
@@ -760,7 +775,11 @@ export class ExportRepository {
           COALESCE(scc.llm_logit_biases, '[]'::jsonb) AS llm_logit_biases,
           COALESCE(scc.llm_stop_strings, ARRAY[]::TEXT[]) AS llm_stop_strings,
           COALESCE(scc.llm_stop_speaker_pattern_enabled, false) AS llm_stop_speaker_pattern_enabled,
-          COALESCE(scc.humanizer_degree, 1) AS humanizer_degree,
+          COALESCE(scc.humanizer_streaming_enabled, true) AS humanizer_streaming_enabled,
+          COALESCE(scc.humanizer_pacing_enabled, false) AS humanizer_pacing_enabled,
+          COALESCE(scc.humanizer_sentence_split_enabled, false) AS humanizer_sentence_split_enabled,
+          COALESCE(scc.humanizer_lowercase_enabled, false) AS humanizer_lowercase_enabled,
+          COALESCE(scc.humanizer_punctuation_split_enabled, false) AS humanizer_punctuation_split_enabled,
           COALESCE(scc.timezone_offset, 0) AS timezone_offset,
           COALESCE(scc.message_fetch_limit, 80) AS message_fetch_limit,
           scc.system_prompt AS system_prompt,
@@ -807,6 +826,7 @@ export class ExportRepository {
           ssc.speech_clone_endpoint_id AS speech_clone_endpoint_id,
           ssc.speech_design_model_id AS speech_design_model_id,
           ssc.speech_clone_model_id AS speech_clone_model_id,
+          ssc.transcription_model_id AS transcription_model_id,
           COALESCE(ssc.voice_transcript_chat_mode, true) AS voice_transcript_chat_mode,
           COALESCE(ssc.chatterbox_turbo_enabled, true) AS chatterbox_turbo_enabled,
           COALESCE(ssc.chatterbox_cfg_weight, 0.5) AS chatterbox_cfg_weight,
@@ -886,7 +906,11 @@ export class ExportRepository {
           llm_logit_biases: configData.llm_logit_biases,
           llm_stop_strings: configData.llm_stop_strings,
           llm_stop_speaker_pattern_enabled: configData.llm_stop_speaker_pattern_enabled,
-          humanizer_degree: configData.humanizer_degree,
+          humanizer_streaming_enabled: configData.humanizer_streaming_enabled,
+          humanizer_pacing_enabled: configData.humanizer_pacing_enabled,
+          humanizer_sentence_split_enabled: configData.humanizer_sentence_split_enabled,
+          humanizer_lowercase_enabled: configData.humanizer_lowercase_enabled,
+          humanizer_punctuation_split_enabled: configData.humanizer_punctuation_split_enabled,
           timezone_offset: configData.timezone_offset,
           message_fetch_limit: configData.message_fetch_limit,
           system_prompt: configData.system_prompt,
@@ -978,6 +1002,7 @@ export class ExportRepository {
           speech_clone_endpoint_id: configData.speech_clone_endpoint_id,
           speech_design_model_id: configData.speech_design_model_id,
           speech_clone_model_id: configData.speech_clone_model_id,
+          transcription_model_id: configData.transcription_model_id,
           voice_transcript_chat_mode: configData.voice_transcript_chat_mode,
           chatterbox_turbo_enabled: configData.chatterbox_turbo_enabled,
           chatterbox_cfg_weight: configData.chatterbox_cfg_weight,

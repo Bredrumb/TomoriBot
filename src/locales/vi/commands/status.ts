@@ -52,7 +52,7 @@ export default {
     field_frequency_penalty: `Frequency Penalty`,
     field_presence_penalty: `Presence Penalty`,
     field_omitted_params: `Tham số đã tắt`,
-    field_humanizer: `Mức độ humanizer`,
+    field_humanizer: `Humanizer`,
     field_thinking_level: `Mức độ suy nghĩ`,
     field_timezone: `Múi giờ máy chủ`,
     field_message_fetch_limit: `Giới hạn lấy tin nhắn`,

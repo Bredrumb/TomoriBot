@@ -5,33 +5,32 @@ sidebar:
 aiGenerated: false
 ---
 
-TomoriBot normally sends these prompt blocks in order.
-[NovelAI](/features/integrations/novelai/) covers its exceptions.
+TomoriBot groups instructions and memories above the conversation, then places changing information
+near the latest messages. [NovelAI](/features/integrations/novelai/) uses a separate layout, and
+[SillyTavern presets](/features/integrations/sillytavern-support/) can rearrange the earlier blocks.
 
-| Block | Optional? | Commands | What it is |
-|---|---|---|---|
-| [System prompt](/features/chatting-personality/behavior-tweaking/#system-prompt) | | `/config` > Behavior > General Behavior | Basic instructions at the topmost of context. |
-| Channel prompt (append) | *(Optional)* | `/config` > Channels > Channel Overrides | Varies per-channel, layered in right after the system prompt. The same page's *replace* mode takes over the system prompt slot above instead of adding a new one. |
-| Persona prompt | *(Optional)* | `/config` > Persona > Advanced | A prompt written specifically for the active persona, separate from the system prompt.|
-| [Persona attributes](/features/chatting-personality/multiple-personas/#attributes) | | `/config` > Persona > Identity & Personality | The active persona's personality traits and speech patterns. |
-| Server info | | *(none, from Discord)* | The server name, description, and the channel she's in, pulled from Discord itself. |
-| [Persona-user blocks](/features/capabilities/tools-and-extensions/built-in-tools/) | *(Optional)* | `/moderation` to review/clear; gated by `/config` > Permissions (User Blocking) | Active mute/block restrictions this persona holds against specific users. |
-| [Server memories](/features/knowledge/memory/#personal-vs-server-memories) | | `/memories` | The long-term facts saved for this server. |
-| [Server emojis](/features/chatting-personality/behavior-tweaking/#capabilities-what-shes-allowed-to-do) | *(Optional)* | `/config` > Plugins > Context Additions (`Emojis & Reactions`) (toggle only), initialize with `/expressions initialize` | The custom emojis present in the server.|
-| [Server stickers](/features/chatting-personality/behavior-tweaking/#expressions) | *(Optional)* | `/config` > Plugins > Available Tools (Sticker Usage), classify native assets with `/expressions initialize`, manage with `/expressions manage` | Sendable native stickers and every custom expression eligible for the responding persona, with names, descriptions, and emotions. Media sources and persona access rules stay outside the prompt. |
-| [Persona sprites](/features/chatting-personality/multiple-personas/#sprites-emotion-avatars) | *(Optional)* | `/config` > Persona > Sprites | Named expression sprites configured for the persona, if it has any. |
-| [Conversation Participants](/features/knowledge/memory/#personal-vs-server-memories) | *(Optional)* | `/personal memories` (gated by `/config` > Permissions (Personalization)) | The people in the conversation, their nicknames and mention handles, and the personal memories saved about each of them. Loaded when the person owns a message in context, or if their name/alias get mentioned. Also carries the current channel and local time as a footer, using `/config` > Behavior > General Behavior. |
-| [Short-term memory](/features/knowledge/memory/#short-term-memory-stm) | | `/config` > Persona > Memories; `/memories` to clear entries; gated by `/config` > Permissions (Short-Term Memory) | Contains summaries and recent messages of different channels |
-| [Documents](/features/knowledge/memory/#document-knowledge-base-rag) | *(Optional)* | `/memories` | Relevant chunks pulled from the knowledge base using RAG. |
-| [Lorebooks](/features/knowledge/lorebooks/) | *(Optional)* | `/memories` > Lorebooks | World canon whose keywords appear in recent messages, plus Always On entries. Sent after documents. |
-| [Conditioning](/features/knowledge/memory/#conditioning) | *(Optional)* | `/reward <feed\|headpat\|hug\|kiss\|tickle>`, `/punish <bite\|bonk\|pinch\|spank\|squeeze>`, managed via `/conditioning remove` | Accumulated behavioral nudges for this persona in this server. |
-| [Sample dialogues](/features/chatting-personality/multiple-personas/#sample-dialogues) | *(Optional)* | `/config` > Persona > Identity & Personality | Examples of how this persona talks, if any are configured. |
-| [Recent messages](/features/chatting-personality/behavior-tweaking/#generation-tuning) | | `/config` > Behavior > General Behavior | The actual conversation, up to this many messages (default 80). |
-| Context note | *(Optional)* | `/config` > Behavior > General Behavior; Persona > Advanced; or Channels > Channel Overrides | An instruction inserted among recent messages at a chosen depth from the latest message. |
+| Position | What TomoriBot receives | Where to manage it |
+|---|---|---|
+| System part | System, channel, and persona prompts; persona attributes; tool guidance; server information; persona-user restrictions; server memories; emojis, stickers, and sprites; Always On lorebook entries; conditioning. | `/config`, `/memories`, `/moderation`, `/expressions`, and `/conditioning` |
+| Above the conversation | Participant profiles, aliases, personal memories, reminders, and persona tasks; older same-channel short-term memory at its default position; text tool definitions when needed. | `/personal memories`, `/memories`, and `/config` |
+| Examples and conversation | Sample dialogues, followed by recent messages from this channel. | `/config` > Persona > Identity & Personality; Behavior > General Behavior |
+| Just above the latest four speaker turns | Fresh short-term memory or memory carrying other channels' content, keyword- or chance-activated lorebook entries, retrieved documents, participant presence, and the current time with the channel line. | `/memories` and `/config` |
+| Among recent messages | Context notes at your chosen depth, plus tool and time-awareness reminders. | `/config` > Behavior > General Behavior; Persona > Advanced; Channels > Channel Overrides |
 
-Optional blocks cost no tokens when empty.
+A speaker turn groups consecutive messages from one person or persona. Four speaker turns can contain
+many messages. In a short conversation, TomoriBot counts back into adjacent sample dialogues where
+available. Short-term memory can sit closer to the latest message if you configured a shallower depth.
+Empty optional blocks cost no tokens.
 
-Recent messages form a moving window. Other blocks are rebuilt from saved settings and memories.
+Recent messages grow within a range, then drop older messages in a batch. The batch is 30% of your
+message limit, rounded down to an even number. With the default limit of 80, the batch is 24: a full
+window keeps its starting message while new messages arrive, then advances by 24 when it would exceed
+80. A typical two-message exchange leaves 58 messages after that advance. Short conversations,
+refreshes, and the model's available space can leave fewer messages.
+
+A context note placed earlier than the changing-information group moves through older history on
+every bot response and makes prompt caching less effective. Keeping it near the latest message
+avoids that extra cache disruption.
 
 :::tip
 Some models use information near the beginning or end of a long prompt more reliably than information

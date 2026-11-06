@@ -136,7 +136,7 @@ export class StreamOrchestrator implements IStreamOrchestrator {
     const metrics = createDefaultStreamMetrics();
     const state = createDefaultStreamState();
     const textConfig = createStreamTextProcessingConfig(config, context);
-    const typingConfig = createTypingSimulationConfig(config.humanizerDegree);
+    const typingConfig = createTypingSimulationConfig(config.humanizer);
     let terminalDoneMetadata: Record<string, unknown> | undefined;
     let lastError: Error | undefined;
 
@@ -318,7 +318,7 @@ export class StreamOrchestrator implements IStreamOrchestrator {
       await this.bufferFlusher.flushPendingBuffer(
         state,
         createStreamTextProcessingConfig(config, context),
-        createTypingSimulationConfig(config.humanizerDegree),
+        createTypingSimulationConfig(config.humanizer),
         context,
       );
     } else if (
@@ -346,7 +346,7 @@ export class StreamOrchestrator implements IStreamOrchestrator {
     return {
       status: completesHeldPrefix ? "completed" : "stopped_by_user",
       pendingResponse: completesHeldPrefix
-        ? this.collectPendingResponse(state, textConfig, context, createTypingSimulationConfig(config.humanizerDegree))
+        ? this.collectPendingResponse(state, textConfig, context, createTypingSimulationConfig(config.humanizer))
         : undefined,
       stopReason,
       accumulatedText: state.accumulatedText,

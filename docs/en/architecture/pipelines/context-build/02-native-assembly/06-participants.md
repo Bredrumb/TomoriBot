@@ -3,7 +3,7 @@ title: "02.6: Participants"
 aiGenerated: true
 ---
 
-The participant contributor compiles all active conversation participants into a single structured context item detailing display names, mention handles, presence, roles, personal memories, reminders, persona self-tasks, and current conversation time.
+The participant contributor keeps profiles and personal memories above history while emitting presence and the clock separately for the tail slot.
 
 ## Preparation and hydration flow
 
@@ -16,7 +16,7 @@ prepareParticipantContext(sanitizedMessages, ...)
 PreparedParticipantContext { discoveryPlan, seeds, matrixUsers, syntheticUsers, ... }
   │
   ▼
-buildParticipantContextItem(params)
+buildParticipantContextItems(params)
   │
   ├─ hydrateParticipantProfiles(seeds, activePersonaScope, ...)
   │    ├─ load user rows, privacy levels, blacklist status
@@ -26,10 +26,10 @@ buildParticipantContextItem(params)
   │    └─ resolve unique mention handles and collision indices
   │
   ├─ renderParticipantPrompt(hydratedProfiles, ...)
-  │    └─ pure text rendering of participant cards and time footer
+  │    └─ separate profile, presence, and current-context text
   │
   └─ convertMentions(renderedText, ...)
-       → StructuredContextItem (KNOWLEDGE_USERS_IN_CONVERSATION)
+       → profile item plus presence and current-context items
 ```
 
 ### Discovery preparation
@@ -50,13 +50,11 @@ A `ParticipantRequestScope` attached to the turn caches discovery results across
 
 ### Prompt rendering
 
-`renderParticipantPrompt` in `src/utils/text/participants/renderer.ts` formats the hydrated data into a single text block:
-
-The renderer groups participant names, safe mention handles, recalled personal memories, and matching reminders into one block. It adds persona self-tasks separately and appends the current channel and time. Hydration decides what is safe to include; rendering formats that prepared data without further identity discovery.
+`renderParticipantPrompt` in `src/utils/text/participants/renderer.ts` groups names, safe mention handles, personal memories, reminders, and persona tasks into profile text. It returns presence and the channel/time text separately. `buildParticipantContextItems` emits those as `KNOWLEDGE_USER_STATUS` and `KNOWLEDGE_CURRENT_CONTEXT`; the registry places them at the tail slot on native and preset paths. Profiles retain the tool-target metadata. Hydration decides what is safe to include before rendering.
 
 ## Constraints and rationale
 
-- **Single context item**: All participants render inside a single `user`-role item tagged `KNOWLEDGE_USERS_IN_CONVERSATION`. Grouping participants prevents multiple disjoint system blocks from diluting model attention.
+- **Profile ownership**: `KNOWLEDGE_USERS_IN_CONVERSATION` remains a user-role reference block above history. Presence durations and clock changes cannot alter its text.
 - **Collision-aware mention handles**: Aliases claimed by multiple participants are dropped from the recommended mention handles list. The model is instructed to clarify rather than emit an ambiguous ping.
 - **Privacy enforcement**: Personal memories, pronouns, and physical appearance tags require at least `PrivacyLevel.MINIMAL`. Blacklisted users receive no memory recall or custom nickname expansion.
 - **Reminder and task scoping**: User reminders require context membership and an active-persona match (main personas also match legacy unassigned reminders). Persona self-tasks require an exact active `persona_id` match and do not require human participant membership. Persona self-tasks are omitted during user impersonation.
@@ -66,11 +64,11 @@ The renderer groups participant names, safe mention handles, recalled personal m
 The contributor also attaches a memory-only projection for NovelAI. It uses the hydrated visible
 `personal_memories` entries, preserving resolved contents, internal memory identities, and recency.
 NovelAI receives plain memory contents without added owner labels, tool IDs, or tag prefixes.
-Other providers receive their existing participant text without a second memory block.
+Other providers receive their existing participant text without a second memory block; the nested system-role memory projection is for NovelAI.
 
 ## Source pointers
 
-- `src/utils/text/context/participants.ts`: `buildParticipantContextItem`.
+- `src/utils/text/context/participants.ts`: `buildParticipantContextItems`.
 - `src/utils/text/participants/preparation.ts`: `prepareParticipantContext` and request-scope caching.
 - `src/utils/text/participants/hydration.ts`: `hydrateParticipantProfiles` and privacy/memory loading.
 - `src/utils/text/participants/renderer.ts`: `renderParticipantPrompt`.

@@ -11,6 +11,13 @@ import {
   customIdleNudgeInputSchema,
   serverNaturalNudgeConfigSchema,
 } from "@/modules/natural-nudges/db/types";
+import {
+  findHumanizerDependencyViolation,
+  HUMANIZER_TOGGLES,
+  type HumanizerSettings,
+  humanizerSettingsFromDegree,
+  pickHumanizerSettings,
+} from "@/constants/humanizer";
 import { SUPPORTED_PARAM_VALUES } from "@/constants/supportedParams";
 import { DEFAULT_THINKING_LEVEL, THINKING_LEVEL_VALUES } from "@/constants/thinkingLevels";
 import { NOTICE_VERBOSITY_LEVELS } from "@/constants/toolNotices";
@@ -209,7 +216,13 @@ const serverChatConfigExportSchema = z.object({
   llm_logit_biases: z.preprocess(normalizeJsonColumn, z.array(logitBiasEntrySchema).default([])),
   llm_stop_strings: z.array(z.string()).default([]),
   llm_stop_speaker_pattern_enabled: z.boolean().default(false),
-  humanizer_degree: z.number().int().min(0).max(3),
+  humanizer_streaming_enabled: z.boolean().optional(),
+  humanizer_pacing_enabled: z.boolean().optional(),
+  humanizer_sentence_split_enabled: z.boolean().optional(),
+  humanizer_lowercase_enabled: z.boolean().optional(),
+  humanizer_punctuation_split_enabled: z.boolean().optional(),
+  // Exports written before the toggles existed carry this instead; resolveImportedHumanizer maps it.
+  humanizer_degree: z.number().int().min(0).max(3).optional(),
   timezone_offset: utcOffsetSchema,
   message_fetch_limit: z.number().int().min(20).max(100).default(80),
   system_prompt: z.string().nullable().default(null),
@@ -274,6 +287,7 @@ const serverSpeechConfigExportSchema = z.object({
   speech_clone_endpoint_id: z.number().int().positive().nullable().optional(),
   speech_design_model_id: z.number().int().positive().nullable().optional(),
   speech_clone_model_id: z.number().int().positive().nullable().optional(),
+  transcription_model_id: z.number().int().positive().nullable().optional(),
   voice_transcript_chat_mode: z.boolean().optional(),
   chatterbox_turbo_enabled: z.boolean().optional(),
   chatterbox_cfg_weight: z.number().min(0.0).optional(),
@@ -371,6 +385,23 @@ const serverStmConfigExportSchema = z.object({
     )
     .optional(),
 });
+
+/**
+ * The humanizer toggles an imported chat config sets: undefined when the file carries none, null when a
+ * partial set or a broken toggle dependency makes them unusable, and the degree's toggles for an export
+ * written before the toggles existed.
+ */
+export function resolveImportedHumanizer(
+  config: Partial<Record<(typeof HUMANIZER_TOGGLES)[number], boolean>> & { humanizer_degree?: number },
+): HumanizerSettings | null | undefined {
+  const present = HUMANIZER_TOGGLES.filter((toggle) => config[toggle] !== undefined);
+  if (present.length === 0) {
+    return config.humanizer_degree === undefined ? undefined : humanizerSettingsFromDegree(config.humanizer_degree);
+  }
+  if (present.length !== HUMANIZER_TOGGLES.length) return null;
+  const settings = pickHumanizerSettings(config as HumanizerSettings);
+  return findHumanizerDependencyViolation(settings) ? null : settings;
+}
 
 /**
  * Server configuration export schema.

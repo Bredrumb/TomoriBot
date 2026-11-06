@@ -429,13 +429,15 @@ every orchestrator iteration:
 
 ### Delivery modes
 
-`HumanizerDegree` from configuration sets delivery timing:
+The humanizer toggles in configuration set delivery timing (`src/constants/humanizer.ts`):
 
-- `NONE` (0): aggregated mode. Text accumulates until a tool call, table attachment, or final flush,
-  delivering in one batch.
-- `LIGHT` or `MEDIUM` (1-2): streaming mode. Each segment sends as flushes occur, inserting
-  interruptible typing simulation between messages.
-- `HEAVY` (3): streaming mode with sentence-level splits and probabilistic comma and emphasis rolls.
+- Live Streaming off: aggregated mode. Text accumulates until a tool call, table attachment, or final
+  flush, delivering in one batch. Force Lowercase still applies in this mode.
+- Live Streaming on: streaming mode. Each segment sends as flushes occur. Paced Messages inserts
+  interruptible delays scaled to message length and random pauses between follow-up messages.
+- Sentence Splitting adds sentence-level splits; Force Lowercase changes casing, and Punctuation
+  Splits strips semicolons and adds probabilistic comma and emphasis rolls. Pacing and both split
+  toggles require Live Streaming.
 
 ### Persona and webhook routing
 

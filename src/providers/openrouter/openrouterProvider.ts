@@ -1,3 +1,4 @@
+import { pickHumanizerSettings } from "@/constants/humanizer";
 import { HTTPClient } from "@openrouter/sdk/lib/http";
 import { fetchWithProviderRequest } from "@/utils/provider/providerRequestHook";
 import { normalizeProviderUsage } from "@/utils/text/tokenEstimate";
@@ -747,7 +748,7 @@ export class OpenrouterProvider
         baseTypeSpeedMsPerChar: DISCORD_STREAMING_CONSTANTS.BASE_TYPE_SPEED_MS_PER_CHAR,
         maxTypingTimeMs: DISCORD_STREAMING_CONSTANTS.MAX_TYPING_TIME_MS,
         minVisibleTypingDurationMs: DISCORD_STREAMING_CONSTANTS.MIN_VISIBLE_TYPING_DURATION_MS,
-        humanizerDegree: tomoriState.config.humanizer_degree,
+        humanizer: pickHumanizerSettings(tomoriState.config),
         emojiUsageEnabled: tomoriState.config.emoji_usage_enabled,
         // Preserve createConfig capability overrides (don't revert to DB flags here)
         seesImages: openrouterConfig.seesImages,

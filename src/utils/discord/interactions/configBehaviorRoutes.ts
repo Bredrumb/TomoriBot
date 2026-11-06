@@ -59,7 +59,13 @@ import {
   MAX_MESSAGE_FETCH_LIMIT,
   MIN_MESSAGE_FETCH_LIMIT,
 } from "@/utils/discord/messageFetchLimit";
-import { HUMANIZER_DEFAULT, HUMANIZER_MAX, HUMANIZER_MIN, getHumanizerLabel } from "@/utils/discord/humanizerOptions";
+import { DEFAULT_HUMANIZER_SETTINGS, humanizerSettingsEqual } from "@/constants/humanizer";
+import {
+  formatHumanizerSummary,
+  humanizerCheckboxFieldName,
+  humanizerDependencyViolationVars,
+  readHumanizerCheckboxGroups,
+} from "@/utils/discord/humanizerOptions";
 import { DEFAULT_SYSTEM_PROMPT } from "@/utils/text/contextBuilder";
 import { combineModalPromptParts } from "@/utils/text/modalPromptParts";
 import { UTC_OFFSET_MAX, UTC_OFFSET_MIN } from "@/constants/utcOffset";
@@ -216,7 +222,7 @@ function fallbackBehaviorView(state: TomoriState): {
       prefillModelName: state.llm.llm_codename,
       contextNote: state.config.context_note ?? null,
       contextNoteDepth: state.config.context_note_depth ?? 0,
-      humanizerDegree: HUMANIZER_DEFAULT,
+      humanizer: DEFAULT_HUMANIZER_SETTINGS,
       messageFetchLimit: state.config.message_fetch_limit ?? DEFAULT_MESSAGE_FETCH_LIMIT,
       timezoneOffset: state.config.timezone_offset ?? 0,
     },
@@ -393,7 +399,7 @@ export async function handleConfigBehaviorModalOpen(
   } else if (route.action === "behavior-humanizer-open") {
     await dependencies.showModal(
       interaction,
-      buildBehaviorHumanizerModal(route.locale, nonce, view?.general.humanizerDegree ?? HUMANIZER_DEFAULT),
+      buildBehaviorHumanizerModal(route.locale, nonce, view?.general.humanizer ?? DEFAULT_HUMANIZER_SETTINGS),
     );
   } else if (route.action === "behavior-fetch-open") {
     await dependencies.showModal(
@@ -672,24 +678,18 @@ async function runGeneralWrite(
     };
   }
   if (route.action === "behavior-humanizer-submit" && modalInteraction) {
-    // The degree is a radio group, not a text input. discord.js keys submitted components by their
-    // custom id whatever their type, so reading it as text finds the id, fails the type check, and
-    // throws out of the route. The intercepted select store is where radio values land.
-    const rawValue = dependencies.takeSelectValue(
-      modalInteraction.id,
-      buildConfigModalFieldId(BEHAVIOR_HUMANIZER_FIELD, route.nonce),
+    const value = readHumanizerCheckboxGroups((group) =>
+      dependencies.takeCheckboxValues(
+        modalInteraction.id,
+        buildConfigModalFieldId(humanizerCheckboxFieldName(BEHAVIOR_HUMANIZER_FIELD, group), route.nonce),
+      ),
     );
-    if (rawValue === undefined) return { receipt: staleReceipt(locale) };
-    const value = parseInteger(rawValue, HUMANIZER_MIN, HUMANIZER_MAX);
-    if (value === null)
-      return {
-        receipt: invalid(locale, "commands.config.panel.humanizer_invalid_detail", {
-          min: HUMANIZER_MIN,
-          max: HUMANIZER_MAX,
-        }),
-      };
-    const current = (await behaviorView(scope, dependencies))?.general.humanizerDegree ?? HUMANIZER_DEFAULT;
-    if (value === current)
+    if (!value) return { receipt: staleReceipt(locale) };
+    const violation = humanizerDependencyViolationVars(locale, value);
+    if (violation)
+      return { receipt: invalid(locale, "commands.config.humanizer.dependency_invalid_description", violation) };
+    const current = (await behaviorView(scope, dependencies))?.general.humanizer ?? DEFAULT_HUMANIZER_SETTINGS;
+    if (humanizerSettingsEqual(value, current))
       return {
         receipt: receipt(
           locale,
@@ -697,13 +697,14 @@ async function runGeneralWrite(
           "commands.config.panel.humanizer_no_changes_heading",
           "commands.config.panel.humanizer_no_changes_detail",
           {
-            value: getHumanizerLabel(locale, value),
+            value: formatHumanizerSummary(locale, value),
           },
         ),
       };
-    const updated = await (await import("@/utils/db/repositories")).configRepository.updateChatConfig(state.server_id, {
-      humanizer_degree: value,
-    });
+    const updated = await (await import("@/utils/db/repositories")).configRepository.updateChatConfig(
+      state.server_id,
+      value,
+    );
     if (!updated) return { receipt: writeFailed(locale) };
     invalidateTomoriStateCache(scope.serverDiscId);
     return {
@@ -713,7 +714,7 @@ async function runGeneralWrite(
         "commands.config.panel.humanizer_updated_heading",
         "commands.config.panel.humanizer_updated_detail",
         {
-          value: getHumanizerLabel(locale, value),
+          value: formatHumanizerSummary(locale, value),
         },
       ),
       telemetry: "server-config.workspace.humanizer.set",

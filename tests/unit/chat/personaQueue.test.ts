@@ -2,7 +2,7 @@ import { stubAllShardOwnership } from "../../helpers/shardOwnership";
 stubAllShardOwnership();
 import { describe, expect, it } from "bun:test";
 import type { Client, Message } from "discord.js";
-import { HumanizerDegree } from "@/types/db/schema";
+import { humanizerSettingsFromDegree } from "@/constants/humanizer";
 import type { StreamConfig, StreamContext } from "@/types/stream/interfaces";
 import type { ChannelLockEntry } from "@/utils/chat/channelQueue";
 import { queueAdditionalPersonaTurns } from "@/utils/chat/personaQueue";
@@ -22,7 +22,7 @@ function makeStreamConfig(): StreamConfig {
     baseTypeSpeedMsPerChar: 0,
     maxTypingTimeMs: 0,
     minVisibleTypingDurationMs: 0,
-    humanizerDegree: HumanizerDegree.NONE,
+    humanizer: humanizerSettingsFromDegree(0),
     emojiUsageEnabled: true,
   };
 }

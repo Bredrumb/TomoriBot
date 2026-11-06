@@ -1,3 +1,4 @@
+import { humanizerSettingsFromDegree } from "@/constants/humanizer";
 import { afterAll, beforeAll, describe, expect, it, spyOn } from "bun:test";
 import { randomUUID } from "node:crypto";
 import type { SQL } from "bun";
@@ -1026,7 +1027,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter member-key lifecycle", () => {
       baseTypeSpeedMsPerChar: 0,
       maxTypingTimeMs: 0,
       minVisibleTypingDurationMs: 0,
-      humanizerDegree: 0,
+      humanizer: humanizerSettingsFromDegree(0),
       emojiUsageEnabled: true,
     };
     try {

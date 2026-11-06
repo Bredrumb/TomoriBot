@@ -1182,6 +1182,7 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
 
   private convertGoogleFunctionCall(googleFunctionCall: GoogleFunctionCall): FunctionCall {
     return {
+      id: typeof googleFunctionCall.id === "string" ? googleFunctionCall.id : undefined,
       name: googleFunctionCall.name ?? "",
       args: googleFunctionCall.args || {},
     };

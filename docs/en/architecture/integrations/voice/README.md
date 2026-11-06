@@ -12,8 +12,9 @@ Discord voice messages for persona replies.
 
 ## Architecture and endpoints
 
-Inbound transcription routes through custom endpoints registered per server. Outbound configuration
-stores an independent Voice Design target and Voice Clone target, each a custom endpoint or hosted model:
+Inbound transcription uses one target per server, either a hosted `transcription_models` row or a
+default custom endpoint, plus an optional personal model per sender. Outbound configuration stores an
+independent Voice Design target and Voice Clone target, each a custom endpoint or hosted model:
 
 - `transcription`: powers inbound audio transcription.
 - `speech`: powers outbound voice message synthesis.
@@ -21,7 +22,9 @@ stores an independent Voice Design target and Voice Clone target, each a custom 
 Custom endpoints support local engines (such as `tts-clone` and `openai-compatible-transcription`)
 and ElevenLabs. Hosted synthesis adapters support OpenRouter Fish cloning, OpenRouter Seed Audio
 Voice Design, direct Gemini Voice Design, and standard Vertex Voice Design with a `global` location.
-Vertex Express has no admitted voice lifecycle transport.
+Hosted transcription adapters support OpenRouter `/audio/transcriptions`, the Gemini Interactions
+API, and Vertex `generateContent` with a `global` location. Vertex Express has no admitted voice
+lifecycle transport.
 
 ```
 INBOUND (STT)
@@ -29,9 +32,9 @@ Discord User Audio Attachment
   │
   ▼
 admission.ts (transcribeMessageAudioAttachment)
-  │  Checks active transcription endpoint
+  │  resolveTranscriptionTargets: personal model, then server model or endpoint
   ▼
-Transcription Adapter (OpenAI-compatible / ElevenLabs)
+Transcription Adapter (hosted OpenRouter / Gemini / Vertex, OpenAI-compatible, ElevenLabs)
   │  Caches transcript or posts transcript webhook
   ▼
 Context Assembly ("\n[System: This was sent as a voice message.]\n<transcript>")
@@ -62,8 +65,30 @@ Discord Channel (resolved persona author, native bot or webhook transport)
 When a Discord message includes an audio attachment, turn admission in `src/utils/chat/admission.ts`
 initiates transcription via `transcribeMessageAudioAttachment`:
 
-Audio transcription requires an active `transcription` endpoint. Successful transcripts replace the
-effective input with the original text plus a voice-message annotation. In transcript chat mode, supported
+`resolveTranscriptionTargets` in `speechEndpointResolver.ts` lists the targets to try. The sender's
+enabled personal model comes first. The server's hosted model, or else its default endpoint, follows
+unless BYOK mode forbids server keys or the sender disabled `personal_server_fallback_enabled`. Only a
+failed attempt moves to the next target; an empty transcript is final. Provider options do not offer
+transcription, so hosted targets always use a saved key.
+
+A server holds either a hosted model in `server_speech_configs.transcription_model_id` or a default
+transcription endpoint. The `/config` > Models STT slot lists both as providers, with endpoint
+connections as `custom:<id>`, like the TTS slots. Selecting one clears the other in the same write
+path, and `- No Model` clears both. Adding a Google,
+Vertex, or OpenRouter key fills an empty transcription slot with that provider's catalogue default,
+for the server and for a personal key alike; it never replaces an existing target. OpenRouter
+registration accepts any codename its live `output_modalities=transcription` catalogue lists, while
+Google and Vertex accept only seeded rows.
+
+Hosted requests first transcode the attachment with the bundled ffmpeg to mono 16 kHz MP3, because
+catalogue models differ in the containers they accept and Discord voice messages are Ogg Opus. Each
+attempt has a 60-second deadline matching OpenRouter's upstream limit and a 24 MB converted-audio
+ceiling. Failures report through `reportProviderFailure` with the same expected-refusal rules as
+hosted synthesis. OpenRouter requests pass through the provider request hook, which reads the
+returned `usage.cost`.
+
+Successful transcripts replace the effective input with the original text plus a voice-message
+annotation. In transcript chat mode, supported
 guild channels receive a user-identity webhook transcript; otherwise admission caches it as `user_stt`.
 This mode is controlled by `voice_transcript_chat_mode`, rather than the server notice toggle.
 

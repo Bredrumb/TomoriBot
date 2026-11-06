@@ -32,7 +32,7 @@ ou frases separadas por vírgulas. A correspondência ignora maiúsculas/minúsc
 
 Deixe as palavras-chave em branco para fatos de contexto que não precisam de correspondência por palavra-chave. Adicione palavras-chave novamente para restaurar
 a correspondência. Novas entradas usam o posicionamento depois da persona; entradas importadas mantêm o posicionamento original.
-Os slots de world info de uma predefinição do SillyTavern controlam onde os grupos antes e depois aparecem.
+Os slots de world info de uma predefinição do SillyTavern posicionam os grupos Always On. Entradas ativadas por palavras-chave ou chance ficam perto das mensagens mais recentes.
 
 ## Quando as entradas são ativadas
 
@@ -52,9 +52,7 @@ expressões regulares.
 
 ## O que chega ao prompt
 
-As entradas ativadas são enviadas em um bloco `World Info` por posicionamento, na ordem de inserção. Ambos os blocos
-compartilham um limite de 8.000 caracteres; uma entrada que excederia esse limite é ignorada para que entradas posteriores ainda
-possam caber.
+Entradas Always On vão para a parte do sistema do prompt. Entradas ativadas por palavras-chave ou chance ficam logo acima dos quatro turnos de fala mais recentes, antes dos documentos recuperados. Cada grupo mantém o posicionamento antes/depois e a ordem de inserção. Todos os grupos compartilham um limite de 8.000 caracteres, com as entradas Always On consideradas primeiro; uma entrada que excederia o limite é ignorada para que entradas posteriores ainda possam caber.
 
 O conteúdo pode usar `{{user}}`, `{{char}}` e `{{bot}}`. O TomoriBot os substitui pelos nomes atuais.
 Outras macros `{{...}}` e blocos condicionais permanecem exatamente como escritos.

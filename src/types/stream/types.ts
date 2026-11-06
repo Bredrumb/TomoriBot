@@ -5,7 +5,8 @@
  * the StreamOrchestrator and all StreamProvider implementations.
  */
 
-import { HumanizerDegree } from "../db/schema";
+import type { HumanizerSettings } from "@/constants/humanizer";
+import type { MessageSplitMode } from "@/utils/text/processors/chunkProcessor";
 import type { TokenUsage } from "@/utils/text/tokenEstimate";
 
 /**
@@ -159,7 +160,7 @@ export interface StreamState {
 }
 
 export interface TextProcessingConfig {
-  humanizerDegree: HumanizerDegree;
+  humanizer: HumanizerSettings;
   visibleDeliveryMode: VisibleDeliveryMode;
   emojiUsageEnabled: boolean;
   emojiStrings: string[];
@@ -251,22 +252,25 @@ export function createDefaultStreamMetrics(): StreamMetrics {
 }
 
 export function createTypingSimulationConfig(
-  humanizerDegree: HumanizerDegree,
+  humanizer: HumanizerSettings,
   customConfig?: Partial<TypingSimulationConfig>,
 ): TypingSimulationConfig {
   return {
-    enabled: humanizerDegree >= HumanizerDegree.MEDIUM,
+    enabled: humanizer.humanizer_pacing_enabled,
     baseSpeedMsPerChar: DISCORD_STREAMING_CONSTANTS.BASE_TYPE_SPEED_MS_PER_CHAR,
     maxTypingTimeMs: DISCORD_STREAMING_CONSTANTS.MAX_TYPING_TIME_MS,
     minVisibleDurationMs: DISCORD_STREAMING_CONSTANTS.MIN_VISIBLE_TYPING_DURATION_MS,
-    randomPauseEnabled: humanizerDegree >= HumanizerDegree.MEDIUM,
+    randomPauseEnabled: humanizer.humanizer_pacing_enabled,
     thinkingPauseChance: DISCORD_STREAMING_CONSTANTS.THINKING_PAUSE_CHANCE,
     ...customConfig,
   };
 }
 
-export function getVisibleDeliveryMode(humanizerDegree: HumanizerDegree): VisibleDeliveryMode {
-  return humanizerDegree === HumanizerDegree.NONE
-    ? VisibleDeliveryMode.AGGREGATED_PHASE
-    : VisibleDeliveryMode.STREAMING;
+export function getVisibleDeliveryMode(humanizer: HumanizerSettings): VisibleDeliveryMode {
+  return humanizer.humanizer_streaming_enabled ? VisibleDeliveryMode.STREAMING : VisibleDeliveryMode.AGGREGATED_PHASE;
+}
+
+export function getMessageSplitMode(humanizer: HumanizerSettings): MessageSplitMode {
+  if (!humanizer.humanizer_streaming_enabled) return "lines";
+  return humanizer.humanizer_sentence_split_enabled ? "sentences" : "paragraphs";
 }

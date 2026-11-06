@@ -14,7 +14,14 @@
  * - Handle mid-stream errors with unified error format
  */
 
+import { createHash } from "node:crypto";
+import {
+  applyAnthropicCacheBreakpoints,
+  isOpenRouterAnthropicModel,
+  relocateCacheContextItems,
+} from "@/providers/utils/anthropicCache";
 import { mapWithConcurrency } from "@/utils/async/bounded";
+import { resolveToolCallId } from "@/providers/utils/toolCallIds";
 import type { FunctionCall, FunctionResponseImageMetadata, ThoughtLogEntry } from "../../types/provider/interfaces";
 import type { StructuredContextItem } from "../../types/misc/context";
 import { log } from "../../utils/misc/logger";
@@ -58,7 +65,6 @@ import {
   isSystemInstructionContextItem,
   mergeConsecutiveSameRole,
   type NormalizableMessage,
-  relocateAssistantMediaContextItems,
 } from "@/providers/utils/strictChatCompat";
 import { ThinkBlockContentStripper } from "@/providers/utils/thinkBlockContentStripper";
 import { readOpenRouterLimitError } from "@/providers/openrouter/openrouterLimit";
@@ -449,6 +455,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       context.tomoriState.persona_nickname ?? "Assistant",
       openrouterConfig.seesVideos ?? false, // Default false: videos are strictly opt-in per model
       context.messageIdMap,
+      config.model,
     );
 
     // Strict role alternation: merge consecutive same-role turns and guarantee a leading user
@@ -503,6 +510,11 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         stream: true,
         stream_options: { include_usage: true },
       };
+      if (isOpenRouterAnthropicModel(config.model)) {
+        requestBody.session_id = createHash("sha256")
+          .update(`${context.channel.id}:${context.tomoriState.persona_id}:${config.model}`)
+          .digest("hex");
+      }
       const reasoningRequest = buildOpenRouterReasoningRequest(
         context.tomoriState.config.thinking_level,
         config.forceReason,
@@ -683,6 +695,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       // first token at 120s regardless of the tool loop's longer first-token budget.
       const firstTokenTimeoutMs = Math.max(inactivityTimeoutMs, DISCORD_STREAMING_CONSTANTS.FIRST_TOKEN_TIMEOUT_MS);
       const mandatoryKeys = new Set(["model", "messages", "stream"]);
+      if (requestBody.session_id) mandatoryKeys.add("session_id");
       const { attempts, prepareAttempts } = createDegradationQueue(requestBody, {
         mandatoryKeys,
         stripImages: (attemptMessages) =>
@@ -1879,6 +1892,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       }
 
       const functionCall: FunctionCall = {
+        id: typeof accumulated.id === "string" ? accumulated.id : undefined,
         name: accumulated.functionName,
         args: parsedArgs,
       };
@@ -2302,12 +2316,15 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     _botName: string = "Assistant",
     seesVideos: boolean = false,
     messageIdMap?: StreamContext["messageIdMap"],
+    model?: string,
   ): Promise<Array<Record<string, unknown>>> {
     const messages: Array<Record<string, unknown>> = [];
-    const relocatedContextItems = relocateAssistantMediaContextItems(contextItems);
+    const { items: relocatedContextItems, boundaryIndex } = relocateCacheContextItems(contextItems);
     const systemInstructionParts: string[] = [];
+    let boundaryMessage: Record<string, unknown> | undefined;
 
-    for (const item of relocatedContextItems) {
+    for (const [itemIndex, item] of relocatedContextItems.entries()) {
+      if (itemIndex === boundaryIndex + 1 && boundaryIndex >= 0) boundaryMessage = messages.at(-1);
       let itemTextContent = "";
       if (item.parts.some((p) => p.type === "text")) {
         itemTextContent = item.parts
@@ -2573,19 +2590,28 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       }
     }
 
+    if (boundaryIndex === relocatedContextItems.length - 1) boundaryMessage = messages.at(-1);
+    let systemMessage: { role: string; content: unknown } | undefined;
     if (systemInstructionParts.length > 0) {
       const systemContent = systemInstructionParts.join("\n\n");
-      messages.unshift({
-        role: "system",
-        content: systemContent,
-      });
+      systemMessage = { role: "system", content: systemContent };
+      messages.unshift(systemMessage);
       log.info(`Assembled system message. Length: ${systemContent.length} characters`);
     }
 
+    if (model && isOpenRouterAnthropicModel(model)) {
+      applyAnthropicCacheBreakpoints(
+        model,
+        systemMessage,
+        messages.filter((message) => message !== systemMessage) as Array<{ role: string; content: unknown }>,
+        boundaryMessage as { role: string; content: unknown } | undefined,
+      );
+    }
+
     if (functionInteractionHistory && functionInteractionHistory.length > 0) {
-      for (const interaction of functionInteractionHistory) {
-        // Generate a tool call ID since our generic FunctionCall doesn't have one
-        const toolCallId = `call_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      const usedToolCallIds = new Set<string>();
+      for (const [index, interaction] of functionInteractionHistory.entries()) {
+        const toolCallId = resolveToolCallId(interaction.functionCall.id, index, "call", usedToolCallIds);
 
         // CRITICAL: Must include thought_signature and reasoning_details if present (required for Gemini models)
         const toolCallObject: Record<string, unknown> = {

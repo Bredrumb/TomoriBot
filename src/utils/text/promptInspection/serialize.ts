@@ -1,3 +1,4 @@
+import { isPromptSystemItem } from "@/utils/text/context/promptLayout";
 import { getNovelAIProfile } from "@/providers/novelai/modelProfiles";
 import type { PreparedNovelAIRequest } from "@/providers/novelai/promptFitting";
 import { convertToOpenAIParams, usesOpenAIEndpoint } from "@/providers/novelai/novelaiService";
@@ -65,7 +66,6 @@ const TAG_LABELS: Readonly<Record<ContextItemTag, TagLabel>> = {
     hint: "composite",
     subsections: [
       { title: "Personal/Server Memories", hint: "/memories, /personal memories" },
-      { title: "Discord Presence/Role/Channel", hint: "system-managed" },
       { title: "Other Personas' Public Attributes", hint: "/config > Persona > Identity & Personality" },
     ],
   },
@@ -301,7 +301,7 @@ export async function buildJsonSnapshot(
     const systemTextChunks: string[] = [];
     const nonSystemItems: StructuredContextItem[] = [];
     for (const item of contextItems) {
-      if (item.role === "system") {
+      if (isPromptSystemItem(item)) {
         const text = item.parts
           .filter((p): p is { type: "text"; text: string } => p.type === "text")
           .map((p) => p.text)

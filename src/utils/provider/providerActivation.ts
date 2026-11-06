@@ -6,8 +6,15 @@ import { buildFallbackModelPersistence } from "@/utils/provider/fallbackModelIde
 import { setPersonalTextPrimary } from "@/utils/provider/personalProviderHelpers";
 import { resolveLogitBiasEntriesForLlm } from "@/utils/provider/logitBiasResolver";
 import type { OpenRouterModelScope } from "@/utils/db/repositories/LlmModelRepository";
-import { hasSpeechDesignSelection, setHostedSpeechSelection } from "@/utils/db/repositories/SpeechRepository";
+import {
+  hasSpeechDesignSelection,
+  hasTranscriptionSelection,
+  setHostedSpeechSelection,
+  setHostedTranscriptionSelection,
+} from "@/utils/db/repositories/SpeechRepository";
 import { validateOpenRouterSpeechModel } from "@/utils/cache/openrouterSpeechModelCache";
+import { validateOpenRouterTranscriptionModel } from "@/utils/cache/openrouterTranscriptionModelCache";
+import { log } from "@/utils/misc/logger";
 import { getNovelAIProfile } from "@/providers/novelai/modelProfiles";
 
 /**
@@ -26,6 +33,29 @@ export async function activateProviderSpeechDefaults(scope: OpenRouterModelScope
     if (!(await setHostedSpeechSelection(scope, model.speech_model_id, mode))) return false;
   }
   return true;
+}
+
+/**
+ * Fills an empty transcription slot with the provider's default model.
+ *
+ * An owner who already transcribes through any target keeps it, so adding or re-keying a provider
+ * never replaces a transcription choice.
+ */
+export async function activateProviderTranscriptionDefault(
+  scope: OpenRouterModelScope,
+  provider: string,
+): Promise<boolean> {
+  const model = (await llmModelRepo.loadAvailableTranscriptionModels(provider, scope)).find(
+    (entry) => entry.is_default,
+  );
+  if (!model || (await hasTranscriptionSelection(scope))) return true;
+  if (provider === "openrouter" && !(await validateOpenRouterTranscriptionModel(model.codename))) {
+    log.warn("Skipped the OpenRouter transcription default missing from the live catalogue", undefined, {
+      metadata: { scope, codename: model.codename },
+    });
+    return true;
+  }
+  return setHostedTranscriptionSelection(scope, model.transcription_model_id);
 }
 
 type ActivationStatus = "activated" | "missing_model" | "missing_provider" | "update_failed";

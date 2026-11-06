@@ -329,7 +329,7 @@ function makeReviewContext(): ChatTurnContext & { responseReview: ResponseReview
       role: "user",
       metadataTag: ContextItemTag.DIALOGUE_HISTORY,
       messageId: context.message.id,
-      sender: { name: "Juno", type: "user" },
+      sender: { id: context.userDiscId, name: "Juno", type: "user" },
       parts: [{ type: "text", text: "Juno: Stay here with me." }],
     },
     {

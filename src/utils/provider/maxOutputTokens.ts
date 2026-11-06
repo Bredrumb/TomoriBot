@@ -61,7 +61,7 @@ const DEFAULT_VISION_CAPTION_MAX_OUTPUT_TOKENS = 2048;
  *   positive number, the result is clamped to it so we never exceed the model's ceiling.
  * @returns The resolved output-token budget (always a positive integer).
  */
-export function resolveMaxOutputTokens(params: {
+function resolveMaxOutputTokens(params: {
   configured: number | null | undefined;
   envRaw: string | undefined;
   fallback: number;

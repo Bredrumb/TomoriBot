@@ -1,12 +1,11 @@
-import { HumanizerDegree } from "@/types/db/schema";
 import { log } from "@/utils/misc/logger";
 
 const DISCORD_CUSTOM_EMOJI_NAME_REGEX = /^<a?:([^:>]+):[^>]+>$/;
 // Adjacent custom emojis merge into one message when their normalized names share this many
 // leading characters (JoeCaught_1 + JoeCaught_2), so sticker-like sets land together.
 const EMOJI_RUN_PREFIX_LENGTH = 3;
-const HEAVY_HUMANIZER_ELLIPSIS_PLACEHOLDER = "__TOMORI_ELLIPSIS__";
-const HEAVY_HUMANIZER_SPAN_PLACEHOLDER_PREFIX = "__TOMORI_SPAN_";
+const SENTENCE_SPLIT_ELLIPSIS_PLACEHOLDER = "__TOMORI_ELLIPSIS__";
+const SENTENCE_SPLIT_SPAN_PLACEHOLDER_PREFIX = "__TOMORI_SPAN_";
 
 function getEmojiRunPrefix(emojiTag: string): string | null {
   const match = DISCORD_CUSTOM_EMOJI_NAME_REGEX.exec(emojiTag);
@@ -407,7 +406,7 @@ function isWordCharForMarker(char: string, marker: EmphasisMarker): boolean {
  * side, which keeps kaomoji (`-_-`, `^_^`, `>_<`) and identifiers (`user_id`, `_id`) from reading as
  * emphasis. A single `~` is prose.
  *
- * The stream hold and the HEAVY span protection both classify runs here, so a run one layer treats
+ * The stream hold and the sentence-split span protection both classify runs here, so a run one layer treats
  * as an opener is an opener for the other as well. Deliberately stricter than a renderer in one
  * place: an intraword closer in a spaced script (`*a*b`) is rejected, because the hold shares this
  * rule and would otherwise stall on prose.
@@ -498,24 +497,24 @@ function isEmoticonParenSpan(text: string, span: { start: number; content: strin
 }
 
 /**
- * Replaces every protected span in `text` with a placeholder so the HEAVY sentence splitter cannot
+ * Replaces every protected span in `text` with a placeholder so the sentence splitter cannot
  * cut inside one.
  *
  * The semantic-block merge below rewrites protected spans to plain "text" blocks so their
- * surrounding prose stays in one message, so the HEAVY branch then splits the merged block at every
+ * surrounding prose stays in one message, so the sentence branch then splits the merged block at every
  * newline and sentence period, including ones inside the span. A split span reaches Discord as two
  * messages, each holding one half of the pair as literal syntax
  * ("*...but if you're asking the answer's more than zero" / "don't make me say a number.*").
  * Placeholders survive both splits, and each span is restored into whichever chunk holds it.
  *
- * The candidate set mirrors the semantic-block pass, markdown links included, so the HEAVY path
+ * The candidate set mirrors the semantic-block pass, markdown links included, so the sentence path
  * needs no separate link protection. Emphasis candidates the finders paired wrongly are rejected,
  * and the scan resumes one character into them, so a real span that starts before the false pair's
  * closer is still found. Placeholders are literal tokens, so a reply that emits
  * `__TOMORI_SPAN_<n>__` verbatim could collide with one; the ellipsis placeholder shares that
  * exposure, and a collision costs a visible token rather than content.
  */
-function protectSpansForHeavySplit(text: string): { protectedText: string; spans: string[] } {
+function protectSpansForSentenceSplit(text: string): { protectedText: string; spans: string[] } {
   const spans: string[] = [];
   let protectedText = "";
   let searchIndex = 0;
@@ -550,14 +549,14 @@ function protectSpansForHeavySplit(text: string): { protectedText: string; spans
     }
 
     protectedText += text.slice(searchIndex, earliest.start);
-    protectedText += `${HEAVY_HUMANIZER_SPAN_PLACEHOLDER_PREFIX}${spans.length}__`;
+    protectedText += `${SENTENCE_SPLIT_SPAN_PLACEHOLDER_PREFIX}${spans.length}__`;
     spans.push(earliest.content);
     searchIndex = earliest.end;
   }
 
   protectedText += text.slice(searchIndex);
   if (spans.length > 0) {
-    log.info(`HEAVY Span Protection: Protected ${spans.length} span(s) from the sentence split`);
+    log.info(`Sentence Split Span Protection: Protected ${spans.length} span(s) from the sentence split`);
   }
 
   return { protectedText, spans };
@@ -572,7 +571,7 @@ function protectSpansForHeavySplit(text: string): { protectedText: string; spans
  * is left as written.
  */
 function restoreSpansFromPlaceholders(text: string, spans: string[]): string {
-  const placeholderPattern = new RegExp(`${HEAVY_HUMANIZER_SPAN_PLACEHOLDER_PREFIX}(\\d+)__`, "g");
+  const placeholderPattern = new RegExp(`${SENTENCE_SPLIT_SPAN_PLACEHOLDER_PREFIX}(\\d+)__`, "g");
 
   // Function replacer: a string one would expand "$&"-style sequences inside restored span text.
   return text.replace(placeholderPattern, (match, index: string) => spans[Number(index)] ?? match);
@@ -686,29 +685,6 @@ function splitCodeBlock(codeBlock: string, chunkLength: number): string[] {
   return chunks;
 }
 
-function addTextSegment(text: string, currentChunk: string, chunks: string[], chunkLength: number): string {
-  if (!text) return currentChunk;
-  let segmentedChunk = currentChunk;
-
-  if (segmentedChunk.length + text.length > chunkLength) {
-    if (segmentedChunk.length > 0) {
-      chunks.push(segmentedChunk);
-      segmentedChunk = "";
-    }
-    const textChunks = splitByNewlines(text, chunkLength);
-    if (textChunks.length > 1) {
-      chunks.push(...textChunks.slice(0, -1));
-      segmentedChunk = textChunks[textChunks.length - 1];
-    } else if (textChunks.length === 1) {
-      segmentedChunk = textChunks[0];
-    }
-  } else {
-    segmentedChunk += (segmentedChunk.length > 0 ? "\n" : "") + text;
-  }
-
-  return segmentedChunk;
-}
-
 /**
  * Creates a regex pattern for splitting sentences while preserving common abbreviations.
  * Splits on periods and full-width periods (。．｡) but avoids splitting on common abbreviations,
@@ -752,12 +728,18 @@ export function createSentenceSplitRegex(): RegExp {
 }
 
 /**
+ * How prose outside code blocks becomes messages: `lines` keeps a block's lines together up to the
+ * length limit, `paragraphs` sends each line on its own, and `sentences` also splits at sentence ends
+ * and drops a closing period.
+ */
+export type MessageSplitMode = "lines" | "paragraphs" | "sentences";
+
+/**
  * Splits a long message into smaller chunks for Discord's limits, preserving code blocks
  * and natural breakpoints.
- * @param humanizerDegree - Controls how aggressive text chunking should be (0-3)
  * @param chunkLength - Optional max length for each chunk (defaults to 1900)
  */
-export function chunkMessage(inputText: string, humanizerDegree: number, chunkLength = 1900): string[] {
+export function chunkMessage(inputText: string, splitMode: MessageSplitMode, chunkLength = 1900): string[] {
   const chunkedMessages: string[] = [];
   if (!inputText || inputText.length === 0) return chunkedMessages;
 
@@ -1071,27 +1053,27 @@ export function chunkMessage(inputText: string, humanizerDegree: number, chunkLe
         prevBlockWasEmoji = false;
         if (!textToAdd) continue;
 
-        if (humanizerDegree === HumanizerDegree.NONE) {
+        if (splitMode === "lines") {
           const newlineAwareChunks = splitByNewlines(textToAdd, chunkLength);
           for (const chunk of newlineAwareChunks) {
             if (!chunk.trim()) continue;
             chunkedMessages.push(chunk);
           }
-        } else if (humanizerDegree < HumanizerDegree.HEAVY) {
+        } else if (splitMode === "paragraphs") {
           const paragraphs = textToAdd.split(/\n+/);
           for (const paragraph of paragraphs) {
             if (!paragraph.trim()) continue;
             chunkedMessages.push(paragraph);
           }
-        } else if (humanizerDegree >= HumanizerDegree.HEAVY) {
+        } else {
           // Protected spans are held out of the split for the whole block, not per paragraph: a
           // span containing a newline would otherwise be cut by the paragraph split below.
-          const { protectedText, spans } = protectSpansForHeavySplit(textToAdd);
+          const { protectedText, spans } = protectSpansForSentenceSplit(textToAdd);
           const paragraphs = protectedText.split(/\n+/);
           for (const paragraph of paragraphs) {
             if (!paragraph.trim()) continue;
 
-            const processedParagraph = paragraph.replace(/\.{3}(?!\.)(?!\d)/g, HEAVY_HUMANIZER_ELLIPSIS_PLACEHOLDER);
+            const processedParagraph = paragraph.replace(/\.{3}(?!\.)(?!\d)/g, SENTENCE_SPLIT_ELLIPSIS_PLACEHOLDER);
             const sentences = processedParagraph.split(createSentenceSplitRegex());
 
             for (let sentence of sentences) {
@@ -1104,7 +1086,7 @@ export function chunkMessage(inputText: string, humanizerDegree: number, chunkLe
               }
               if (!processedSentence) continue;
 
-              processedSentence = processedSentence.replaceAll(HEAVY_HUMANIZER_ELLIPSIS_PLACEHOLDER, "...");
+              processedSentence = processedSentence.replaceAll(SENTENCE_SPLIT_ELLIPSIS_PLACEHOLDER, "...");
               processedSentence = restoreSpansFromPlaceholders(processedSentence, spans);
 
               if (currentChunk.length > 0) {
@@ -1121,8 +1103,6 @@ export function chunkMessage(inputText: string, humanizerDegree: number, chunkLe
               }
             }
           }
-        } else {
-          currentChunk = addTextSegment(textToAdd, currentChunk, chunkedMessages, chunkLength);
         }
         break;
       }

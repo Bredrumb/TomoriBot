@@ -7,6 +7,7 @@
  *
  * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md)
  */
+import { humanizerSettingsFromDegree, pickHumanizerSettings } from "@/constants/humanizer";
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { configRepository, personaRepository } from "@/utils/db/repositories";
 import { FIXTURE_IDS, cleanupFixtures, insertFixtures, type FixtureRefs } from "./setup/fixtures";
@@ -32,7 +33,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Config — regression", () => {
     const state = await personaRepository.loadState(FIXTURE_IDS.serverDiscId);
     expect(state?.config).not.toBeNull();
     expect(state?.config.message_fetch_limit).toBe(80);
-    expect(state?.config.humanizer_degree).toBe(1);
+    expect(state && pickHumanizerSettings(state.config)).toEqual(humanizerSettingsFromDegree(1));
     expect(state?.config.server_memteaching_enabled).toBe(false);
     expect(state?.config.tool_use_enabled ?? true).toBe(true);
   });
@@ -50,13 +51,13 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Config — regression", () => {
   });
 
   it("updateTomoriConfig mutates a config field by server ID", async () => {
-    const result = await configRepository.updateChatConfig(refs.serverId, { humanizer_degree: 3 });
+    const result = await configRepository.updateChatConfig(refs.serverId, humanizerSettingsFromDegree(3));
     expect(result).toBe(true);
   });
 
   it("loadTomoriState reflects the config mutation", async () => {
     const state = await personaRepository.loadState(FIXTURE_IDS.serverDiscId);
-    expect(state?.config.humanizer_degree).toBe(3);
+    expect(state && pickHumanizerSettings(state.config)).toEqual(humanizerSettingsFromDegree(3));
   });
 
   it("updateChannelScopeConfig persists TEXT[] channel ids without array-literal corruption", async () => {
@@ -165,7 +166,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Config — regression", () => {
   });
 
   it("updateTomoriConfig returns null for unknown server", async () => {
-    const result = await configRepository.updateChatConfig(999_999_999, { humanizer_degree: 1 });
+    const result = await configRepository.updateChatConfig(999_999_999, humanizerSettingsFromDegree(1));
     expect(result).toBe(false);
   });
 });

@@ -145,7 +145,7 @@ describe("NovelAI foreign-speaker boundaries", () => {
       [
         {
           role: "user",
-          sender: { name: "mirri", type: "user" },
+          sender: { id: "mirri", name: "mirri", type: "user" },
           metadataTag: ContextItemTag.DIALOGUE_HISTORY,
           completionText: "mirri: Hello.",
           parts: [{ type: "text", text: "mirri: Hello." }],

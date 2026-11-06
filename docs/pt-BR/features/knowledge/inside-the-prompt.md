@@ -5,40 +5,21 @@ sidebar:
 aiGenerated: false
 ---
 
-O TomoriBot normalmente envia esses blocos de prompt em ordem.
-O [NovelAI](/features/integrations/novelai/) aborda suas exceções.
+A TomoriBot agrupa instruções e memórias acima da conversa e, em seguida, posiciona informações dinâmicas perto das mensagens mais recentes. O [NovelAI](/features/integrations/novelai/) usa um layout separado, e as [predefinições do SillyTavern](/features/integrations/sillytavern-support/) podem reorganizar os blocos anteriores.
 
-| Bloquear | Opcional? | Comandos | O que é isso |
-|---|---|---|---|
-| [Prompt do sistema](/pt-BR/features/chatting-personality/behavior-tweaking/#system-prompt) |  | `/config` > Comportamento > Comportamento Geral | Instruções básicas no topo do contexto. |
+| Posição | O que a TomoriBot recebe | Onde gerenciar |
+|---|---|---|
+| Parte do sistema | Prompts de sistema, canal e persona; atributos da persona; orientações de ferramentas; informações do servidor; restrições entre persona e usuário; memórias do servidor; emojis, figurinhas e sprites; entradas de lorebook Always On; condicionamento. | `/config`, `/memories`, `/moderation`, `/expressions` e `/conditioning` |
+| Acima da conversa | Perfis de participantes, apelidos, memórias pessoais, lembretes e tarefas da persona; memória de curto prazo mais antiga do mesmo canal em sua posição padrão; definições de ferramentas de texto quando necessárias. | `/personal memories`, `/memories` e `/config` |
+| Exemplos e conversa | Diálogos de exemplo, seguidos pelas mensagens recentes deste canal. | `/config` > `Persona` > `Identidade e Personalidade`; `Comportamento` > `Comportamento Geral` |
+| Logo acima dos quatro turnos de fala mais recentes | Memória de curto prazo recente ou que contém conteúdo de outros canais, entradas de lorebook ativadas por palavras-chave ou chance, documentos recuperados, presença de participantes e a hora atual com a linha do canal. | `/memories` e `/config` |
+| Entre as mensagens recentes | Notas de contexto na profundidade escolhida, além de lembretes de ferramentas e percepção de tempo. | `/config` > `Comportamento` > `Comportamento Geral`; `Persona` > `Avançado`; `Canais` > `Substituições de Canal` |
 
-> **Texto padrão do prompt do sistema**: usado somente enquanto nenhum prompt do sistema do servidor estiver definido. >
-> *"Você é {bot}. {bot} responde de forma curta e concisa por padrão. {bot} só dá respostas longas se a situação justificar. >
-> {{if tool:create_long_term_memory}}{bot} usa proativamente o {memory_tool} disponível sempre que alguém compartilha um detalhe ou {bot} percebe algum na conversa que realmente vale a pena lembrar, como uma preferência, um interesse ou um fato importante, preferindo lembrar de coisas mesmo que sejam menores, desde que não sejam uma duplicata do que {bot} já sabe. {{/if}}{{if tool:update_long_term_memory}}{bot} usa {memory_update_tool} quando novas informações são alteradas ou adicionadas a algo que {bot} já lembra, em vez de salvar uma duplicata.{{/if}} >
-> {{if tool:review_capabilities}}Quando alguém pergunta o que {bot} pode fazer ou por que algo não está disponível, {bot} verifica {capabilities_tool} antes de responder. {{/if}}{{if tool_family:url_fetch}}Quando mais detalhes são necessários, {bot} usa {url_fetch_tool} em `https://docs.tomoribot.app/llms.txt` para obter informações.{{/if}}"*
+Um turno de fala agrupa mensagens consecutivas de uma pessoa ou persona. Quatro turnos de fala podem conter muitas mensagens. Em uma conversa curta, a TomoriBot faz a contagem incluindo diálogos de exemplo adjacentes, quando disponíveis. A memória de curto prazo pode ficar mais próxima da mensagem mais recente se você configurou uma profundidade menor. Blocos opcionais vazios não consomem tokens.
 
-| Bloquear | Opcional? | Comando | O que é isso |
-|---|---|---|---|
-| Prompt de canal (anexar) | *(Opcional)* | `/config` > `Canais` > Substituições de canal | Varia por canal, em camadas logo após o prompt do sistema. O modo *substituir* da mesma página assume o slot de prompt do sistema acima em vez de adicionar um novo. |
-| Solicitação de personalidade | *(Opcional)* | `/config` > `Persona` > Avançado | Um prompt escrito especificamente para a persona ativa, separado do prompt do sistema. |
-| [Atributos da pessoa](/pt-BR/features/chatting-personality/multiple-personas/#attributes) |  | `/config` > `Persona` > `Identidade e Personalidade` | Os traços de personalidade e padrões de fala da persona ativa. |
-| Informações do servidor |  | *(nenhum, de Discord)* | O nome do servidor, a descrição e o canal em que ela está, extraídos do próprio Discord. |
-| [Bloqueios de usuário pessoal](/pt-BR/features/capabilities/tools-and-extensions/#built-in-tools) | *(Opcional)* | `/moderation` para revisar/limpar; bloqueado por `/config` > `Permissões` (bloqueio de usuário) | Restrições ativas de silenciamento/bloqueio que esta pessoa mantém contra usuários específicos. |
-| [Memórias do servidor](/pt-BR/features/knowledge/memory/#personal-vs-server-memories) |  | `/memories` | Os fatos de longo prazo salvos para este servidor. |
-| [Emojis de servidor](/pt-BR/features/chatting-personality/behavior-tweaking/#capabilities-what-shes-allowed-to-do) | *(Opcional)* | `/config` > `Plug-ins` > `Adições de Contexto` (`Emojis nas Respostas`) (somente alternância), inicializar com `/expressions initialize` | Os emojis personalizados presentes no servidor. |
-| [Figurinhas do servidor](/pt-BR/features/chatting-personality/behavior-tweaking/#expressions) | *(Opcional)* | `/config` > `Plug-ins` > `Ferramentas Disponíveis` (uso de figurinhas), classificar ativos nativos com `/expressions initialize`, gerenciar com `/expressions manage` | Figurinhas nativos enviáveis e todas as expressões personalizadas elegíveis para a pessoa que responde, com nomes, descrições e emoções. As fontes de mídia e as regras de acesso pessoal ficam fora do prompt. |
-| [Sprites de personalidade](/pt-BR/features/chatting-personality/multiple-personas/#sprites-emotion-avatars) | *(Opcional)* | `/config` > `Persona` > Sprites | Sprites de expressão nomeada configurados para a persona, se houver. |
-| [Participantes da Conversa](/pt-BR/features/knowledge/memory/#personal-vs-server-memories) | *(Opcional)* | `/personal memories` (bloqueado por `/config` > `Permissões` (Personalização)) | As pessoas na conversa, seus apelidos e menções, e as memórias pessoais salvas sobre cada uma delas. Carregado quando a pessoa possui uma mensagem no contexto ou se seu nome/alias for mencionado. Também carrega o canal atual e a hora local como rodapé, usando `/config` > Comportamento > Comportamento Geral. |
-| [Memória de curto prazo](/pt-BR/features/knowledge/memory/#short-term-memory-stm) |  | `/config` > `Persona` > Memórias; `/memories` para limpar entradas; bloqueado por `/config` > `Permissões` (memória de curto prazo) | Contém resumos e mensagens recentes de diferentes canais |
-| [`Documentos`](/pt-BR/features/knowledge/memory/#document-knowledge-base-rag) | *(Opcional)* | `/memories` | Pedaços relevantes extraídos da base de conhecimento usando RAG. |
-| [Condicionamento](/pt-BR/features/knowledge/memory/#conditioning) | *(Opcional)* | `/reward <feed\|headpat\|hug\|kiss\|tickle>`, `/punish <bite\|bonk\|pinch\|spank\|squeeze>`; gerenciado com `/conditioning remove` | Preferências de comportamento acumuladas para esta persona neste servidor. |
-| [Exemplos de diálogos](/pt-BR/features/chatting-personality/multiple-personas/#sample-dialogues) | *(Opcional)* | `/config` > `Persona` > `Identidade e Personalidade` | Exemplos de como essa persona fala, se houver algum configurado. |
-| [Mensagens recentes](/pt-BR/features/chatting-personality/behavior-tweaking/#generation-tuning) | | `/config` > Comportamento > Comportamento Geral | A conversa real, até esse número de mensagens (padrão 80). |
-| Nota de contexto | *(Opcional)* | `/config` > Comportamento > Comportamento Geral; Persona > Avançado; ou Canais > Substituições de canal | Uma instrução inserida entre as mensagens recentes em uma profundidade escolhida a partir da mensagem mais recente. |
+Mensagens recentes crescem dentro de um intervalo e depois descartam mensagens mais antigas em lote. O lote corresponde a 30% do seu limite de mensagens, arredondado para baixo para um número par. Com o limite padrão de 80, o lote é 24: uma janela cheia mantém sua mensagem inicial enquanto novas mensagens chegam e avança 24 mensagens quando ultrapassaria 80. Uma troca típica de duas mensagens deixa 58 mensagens após esse avanço. Conversas curtas, atualizações e o espaço disponível no modelo podem deixar menos mensagens.
 
-Blocos opcionais não consomem tokens quando vazios.
-
-Mensagens recentes formam uma janela móvel. Os outros blocos são reconstruídos a partir das configurações salvas e memórias.
+Uma nota de contexto colocada antes do grupo de informações dinâmicas se desloca pelo histórico mais antigo a cada resposta do bot, tornando o cache de prompt menos eficiente. Mantê-la perto da mensagem mais recente evita essa interrupção extra no cache.
 
 :::tip
 Alguns modelos usam informações próximas ao início ou final de um prompt longo de forma mais confiável do que informações no meio. Para provedores que usam notas de contexto, tente colocar uma instrução perto da mensagem mais recente. O efeito depende do modelo e da tarefa. Consulte [Lost in the Middle](https://aclanthology.org/2024.tacl-1.9/) e [Lost in the Haystack](https://arxiv.org/abs/2505.18148).

@@ -1,4 +1,5 @@
 import { validateOpenRouterSpeechModel } from "@/utils/cache/openrouterSpeechModelCache";
+import { validateOpenRouterTranscriptionModel } from "@/utils/cache/openrouterTranscriptionModelCache";
 import { getNovelAIModelAccessError } from "@/providers/novelai/modelAccess";
 import { decryptApiKey } from "@/utils/security/crypto";
 import { DEFAULT_THINKING_LEVEL, isThinkingLevelValue } from "@/constants/thinkingLevels";
@@ -368,6 +369,20 @@ export const personalConfigOperations: PersonalConfigOperations = {
     const availableModels = await loadAvailableModelsForCapability(userId, provider, capability);
     if (!availableModels.some((model) => model.id === modelId)) return { status: "write-failed" };
 
+    if (capability === "transcription") {
+      const selected = availableModels.find((model) => model.id === modelId);
+      if (
+        provider.toLowerCase() === "openrouter" &&
+        (!selected || !(await validateOpenRouterTranscriptionModel(selected.name)))
+      )
+        return { status: "write-failed" };
+      return (await assignPersonalCapabilityToProvider(userId, provider, capability, (row) => ({
+        ...row,
+        transcription_model_id: modelId,
+      })))
+        ? { status: "success" }
+        : { status: "write-failed" };
+    }
     if (capability === "speech_design" || capability === "speech_clone") {
       const selected = availableModels.find((model) => model.id === modelId);
       if (

@@ -8,6 +8,7 @@
  * overrides them, as in `createPersona({ persona_id: 2, persona_lineage_id: 101 })`.
  */
 
+import { DEFAULT_HUMANIZER_SETTINGS } from "@/constants/humanizer";
 import type { AssembledServerConfig, LlmRow, NaiPresetRow, TomoriState, UserRow } from "@/types/db/schema";
 import { naiPresetSections } from "@/db/seed/catalog/naiPresets";
 import { PrivacyLevel } from "@/types/db/schema";
@@ -41,7 +42,7 @@ const BASE_CONFIG: AssembledServerConfig = {
   fallback_llm_ids: [],
   other_model_capabilities: null,
   hide_respond_embed: false,
-  humanizer_degree: 1,
+  ...DEFAULT_HUMANIZER_SETTINGS,
   message_fetch_limit: 80,
   send_message_limit: 0,
   match_limit: 3,
@@ -91,6 +92,7 @@ const BASE_CONFIG: AssembledServerConfig = {
   speech_clone_endpoint_id: null,
   speech_design_model_id: null,
   speech_clone_model_id: null,
+  transcription_model_id: null,
   voice_transcript_chat_mode: true,
   chatterbox_turbo_enabled: true,
   chatterbox_cfg_weight: 0.5,
@@ -211,7 +213,7 @@ export function createPersona(overrides: PersonaFixtureOverrides = {}): TomoriSt
     persona_attributes: [],
     reward_conditioning_enabled: true,
     punish_conditioning_enabled: true,
-    humanizer_degree_override: null,
+    humanizer_override: null,
     server_memories: [],
     autoch_counter: 0,
     autoch_next_target: 0,

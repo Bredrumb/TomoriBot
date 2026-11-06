@@ -8,6 +8,7 @@
  * - Specializes in creative storytelling and roleplay
  */
 
+import { pickHumanizerSettings } from "@/constants/humanizer";
 import { getNovelAIProfile } from "@/providers/novelai/modelProfiles";
 import type {
   BaseGuildTextChannel,
@@ -217,7 +218,7 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
         baseTypeSpeedMsPerChar: DISCORD_STREAMING_CONSTANTS.BASE_TYPE_SPEED_MS_PER_CHAR,
         maxTypingTimeMs: DISCORD_STREAMING_CONSTANTS.MAX_TYPING_TIME_MS,
         minVisibleTypingDurationMs: DISCORD_STREAMING_CONSTANTS.MIN_VISIBLE_TYPING_DURATION_MS,
-        humanizerDegree: tomoriState.config.humanizer_degree,
+        humanizer: pickHumanizerSettings(tomoriState.config),
         emojiUsageEnabled: tomoriState.config.emoji_usage_enabled,
       };
 

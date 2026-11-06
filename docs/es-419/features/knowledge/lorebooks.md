@@ -22,7 +22,7 @@ Usa los botones `Todo el servidor` y `Persona` en la parte superior de la págin
 
 Asigna a cada entrada un título, palabras clave y hasta 4,000 caracteres de contenido. Las palabras clave son palabras o frases separadas por comas. La coincidencia no distingue entre mayúsculas y minúsculas, ni entre caracteres de ancho completo o medio ancho.
 
-Deja las palabras clave en blanco para datos de contexto general que no necesiten coincidencia de palabras clave. Vuelve a agregar palabras clave para restaurar la coincidencia. Las entradas nuevas usan la ubicación después de la persona; las entradas importadas conservan su ubicación. Las ranuras de world info de un preajuste de SillyTavern controlan dónde aparecen los grupos antes y después.
+Deja las palabras clave en blanco para datos de contexto general que no necesiten coincidencia de palabras clave. Vuelve a agregar palabras clave para restaurar la coincidencia. Las entradas nuevas usan la ubicación después de la persona; las entradas importadas conservan su ubicación. Las ranuras de world info de un preajuste de SillyTavern posicionan los grupos Always On. Las entradas activadas por palabras clave o por probabilidad permanecen cerca de los mensajes más recientes.
 
 ## Cuándo se activan las entradas
 
@@ -36,7 +36,7 @@ La coincidencia de palabras clave es literal. Las claves con forma de expresione
 
 ## Qué llega al prompt
 
-Las entradas activadas se envían en un bloque de `World Info` por ubicación, según el orden de inserción. Ambos bloques comparten un límite conjunto de 8,000 caracteres; si una entrada supera este límite, se omite para que las siguientes aún puedan incluirse.
+Las entradas Always On van en la parte del sistema del prompt. Las entradas activadas por palabras clave o por probabilidad van justo arriba de los cuatro turnos de diálogo más recientes, antes de los documentos recuperados. Cada grupo conserva la ubicación antes/después y el orden de inserción. Todos los grupos comparten un presupuesto de 8,000 caracteres, considerando primero las entradas Always On; una entrada que exceda el presupuesto se omite para que las entradas posteriores aún puedan caber.
 
 El contenido puede usar `{{user}}`, `{{char}}` y `{{bot}}`. TomoriBot los reemplaza por los nombres actuales. Otras macros `{{...}}` y bloques condicionales se mantienen tal como están escritos.
 

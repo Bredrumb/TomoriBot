@@ -1,4 +1,10 @@
-import type { DiffusionModelRow, EmbeddingModelRow, LlmRow, VideoGenerationModelRow } from "@/types/db/schema";
+import type {
+  DiffusionModelRow,
+  EmbeddingModelRow,
+  LlmRow,
+  TranscriptionModelRow,
+  VideoGenerationModelRow,
+} from "@/types/db/schema";
 import { getOpenRouterPricing, getOrFetchOpenRouterCapabilities } from "@/utils/cache/openrouterCapabilityCache";
 import { getOrFetchOpenRouterEmbeddingModel } from "@/utils/cache/openrouterEmbeddingModelCache";
 import { getOrFetchOpenRouterImageModel } from "@/utils/cache/openrouterImageModelCache";
@@ -11,7 +17,8 @@ import { isOpenRouterGeminiModelCodename } from "@/utils/provider/openrouterMode
 import { resolveDescription } from "@/utils/text/localizer";
 import { validateOpenRouterSpeechModel } from "@/utils/cache/openrouterSpeechModelCache";
 import { findProviderOption, writeProviderSpeechSelection } from "@/utils/provider/providerOptionRegistry";
-import { setHostedSpeechSelection } from "@/utils/db/repositories/SpeechRepository";
+import { setHostedSpeechSelection, setHostedTranscriptionSelection } from "@/utils/db/repositories/SpeechRepository";
+import { validateOpenRouterTranscriptionModel } from "@/utils/cache/openrouterTranscriptionModelCache";
 
 export type OpenRouterModelRegistryScope =
   | {
@@ -26,7 +33,7 @@ export type OpenRouterModelRegistryScope =
 export type OpenRouterModelCapability = "text" | "embedding" | "image" | "video" | "decision";
 
 interface RegisteredOpenRouterModelEntry {
-  capability: OpenRouterModelCapability | "speech";
+  capability: OpenRouterModelCapability | "speech" | "transcription";
   codename: string;
   description: string | null;
   modelId: number;
@@ -476,6 +483,54 @@ export async function registerHostedSpeechModelForScope(
       capability: "speech",
       codename,
       modelId: model.speech_model_id,
+      description: resolveDescription(model.descriptions, "en-US"),
+    },
+  };
+}
+
+/**
+ * Registers and selects a hosted transcription model for one owner.
+ *
+ * OpenRouter accepts any codename its live transcription catalogue lists; Google and Vertex accept
+ * only their seeded rows, because neither publishes a transcription catalogue to check against.
+ */
+export async function registerHostedTranscriptionModelForScope(
+  scope: OpenRouterModelRegistryScope,
+  provider: string,
+  modelName: string,
+  replacedModelId?: number,
+): Promise<RegisterOpenRouterModelResult> {
+  const codename = normalizeModelCodename(modelName);
+  if (!codename || codename.length > 200 || findProviderOption(provider)) return { status: "invalid_model" };
+  let model: TranscriptionModelRow | null;
+  if (provider === "openrouter") {
+    if (!(await validateOpenRouterTranscriptionModel(codename))) return { status: "invalid_model" };
+    model = await llmModelRepo.ensureTranscriptionModel(provider, codename);
+  } else {
+    model =
+      (await llmModelRepo.loadAvailableTranscriptionModels(provider, scope)).find(
+        (entry) => entry.codename === codename,
+      ) ?? null;
+  }
+  if (!model || model.is_deprecated) return { status: "invalid_model" };
+  if (
+    !(await setHostedTranscriptionSelection(scope, model.transcription_model_id, {
+      register: true,
+      replacedModelId,
+    }))
+  ) {
+    if (model.is_scoped_registration) await llmModelRepo.deleteOrphanedTranscriptionModel(model.transcription_model_id);
+    return { status: "write_failed" };
+  }
+  if (replacedModelId !== undefined && replacedModelId !== model.transcription_model_id) {
+    await llmModelRepo.deleteOrphanedTranscriptionModel(replacedModelId);
+  }
+  return {
+    status: "registered",
+    model: {
+      capability: "transcription",
+      codename: model.codename,
+      modelId: model.transcription_model_id,
       description: resolveDescription(model.descriptions, "en-US"),
     },
   };

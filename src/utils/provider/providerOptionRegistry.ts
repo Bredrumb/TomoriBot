@@ -310,10 +310,11 @@ export type ProviderOptionModelViewCapability =
   | "nai-image"
   | "video"
   | "tts-design"
-  | "tts-clone";
+  | "tts-clone"
+  | "stt";
 
 const MODEL_VIEW_CAPABILITY: Record<
-  Exclude<ProviderOptionModelViewCapability, "nai-image">,
+  Exclude<ProviderOptionModelViewCapability, "nai-image" | "stt">,
   ProviderOptionCapability
 > = {
   text: "text",
@@ -329,7 +330,7 @@ const MODEL_VIEW_CAPABILITY: Record<
 export function providerOptionCapabilityForModelView(
   capability: ProviderOptionModelViewCapability,
 ): ProviderOptionCapability | null {
-  return capability === "nai-image" ? null : MODEL_VIEW_CAPABILITY[capability];
+  return capability === "nai-image" || capability === "stt" ? null : MODEL_VIEW_CAPABILITY[capability];
 }
 
 export function providerOptionOffersModelViewCapability(
@@ -348,9 +349,13 @@ export type ProviderOptionPersonalCapability =
   | "video"
   | "vision"
   | "speech_design"
-  | "speech_clone";
+  | "speech_clone"
+  | "transcription";
 
-const PERSONAL_CAPABILITY: Record<Exclude<ProviderOptionPersonalCapability, "image_nai">, ProviderOptionCapability> = {
+const PERSONAL_CAPABILITY: Record<
+  Exclude<ProviderOptionPersonalCapability, "image_nai" | "transcription">,
+  ProviderOptionCapability
+> = {
   text: "text",
   embedding: "embedding",
   image: "image",
@@ -363,7 +368,7 @@ const PERSONAL_CAPABILITY: Record<Exclude<ProviderOptionPersonalCapability, "ima
 export function providerOptionCapabilityForPersonal(
   capability: ProviderOptionPersonalCapability,
 ): ProviderOptionCapability | null {
-  return capability === "image_nai" ? null : PERSONAL_CAPABILITY[capability];
+  return capability === "image_nai" || capability === "transcription" ? null : PERSONAL_CAPABILITY[capability];
 }
 
 export function providerOptionOffersPersonalCapability(

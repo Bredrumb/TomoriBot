@@ -1,7 +1,8 @@
 import { REST } from "discord.js";
 import { beforeAll, describe, expect, it, mock, spyOn } from "bun:test";
 import type { Client, TextChannel } from "discord.js";
-import { HumanizerDegree, type TomoriState } from "@/types/db/schema";
+import { humanizerSettingsFromDegree } from "@/constants/humanizer";
+import type { TomoriState } from "@/types/db/schema";
 import type { StreamConfig, StreamContext, StreamProvider } from "@/types/stream/interfaces";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { log } from "@/utils/misc/logger";
@@ -20,7 +21,7 @@ function makeConfig(): StreamConfig {
     baseTypeSpeedMsPerChar: 0,
     maxTypingTimeMs: 0,
     minVisibleTypingDurationMs: 0,
-    humanizerDegree: HumanizerDegree.NONE,
+    humanizer: humanizerSettingsFromDegree(0),
     emojiUsageEnabled: false,
   };
 }

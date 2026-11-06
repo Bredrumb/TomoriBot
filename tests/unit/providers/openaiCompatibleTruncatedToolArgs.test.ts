@@ -47,6 +47,7 @@ describe("OpenAICompatibleStreamAdapter truncated tool arguments", () => {
     const functionCall = finishToolCalls(adapter);
 
     expect(functionCall.args).toEqual({ summary: "they moved to the study" });
+    expect(functionCall.id).toBe("call_1");
     expect(functionCall.argumentsTruncated).toBeUndefined();
   });
 
@@ -63,6 +64,7 @@ describe("OpenAICompatibleStreamAdapter truncated tool arguments", () => {
     // The adapter recovers what it can and marks the call, because the recovered keys are
     // a subset of what the model was writing rather than the call it intended to make.
     expect(functionCall.args).toEqual({ scene_state: "#master-bedroom, ~1:00 AM Friday." });
+    expect(functionCall.id).toBe("call_1");
     expect(functionCall.argumentsTruncated).toBe(true);
   });
 

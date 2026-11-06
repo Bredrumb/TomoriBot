@@ -4,6 +4,7 @@ import {
   checkSpeechStatus,
   checkSpeechRejection,
   decodeSpeechAudio,
+  HOSTED_SPEECH_LIMITS,
   HostedSpeechError,
   readSpeechJson,
   speechErrorBody,
@@ -32,9 +33,13 @@ export interface GoogleSpeechTransport {
     operations: SpeechOperation[],
   ): Promise<Buffer>;
   delete(voiceId: string, signal: AbortSignal, operations: SpeechOperation[]): Promise<void>;
+  /** Accepts MP3 only, so callers transcode first. */
+  transcribe(audio: Buffer, model: string, signal: AbortSignal, operations: SpeechOperation[]): Promise<string>;
 }
 
 const voiceIdSchema = z.string().regex(/^voice_[A-Za-z0-9_-]+$/);
+// The codename reaches the Vertex request path unescaped, so only path-safe characters are allowed.
+const transcriptionModelSchema = z.string().regex(/^[a-z0-9][a-z0-9.-]{0,99}$/);
 const googleSpeechModels = new Set(["gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts"]);
 
 export class GoogleVoiceCreationError extends HostedSpeechError {
@@ -236,6 +241,65 @@ export function createGoogleSpeechTransport(provider: "google" | "vertex", apiKe
     async delete(voiceId, signal, operations) {
       voiceIdSchema.parse(voiceId);
       await call(`/voices/${encodeURIComponent(voiceId)}`, "DELETE", null, signal, operations, "delete");
+    },
+    async transcribe(audio, model, signal, operations) {
+      if (!transcriptionModelSchema.safeParse(model).success) throw new HostedSpeechError("invalid_request");
+      const data = audio.toString("base64");
+      const json = config
+        ? await call(
+            `/publishers/google/models/${model}:generateContent`,
+            "POST",
+            {
+              contents: [{ role: "user", parts: [{ inlineData: { mimeType: "audio/mp3", data } }] }],
+              generationConfig: { audioTranscriptionConfig: {} },
+            },
+            signal,
+            operations,
+            "transcribe",
+            HOSTED_SPEECH_LIMITS.transcriptResponseBytes,
+          )
+        : await call(
+            "/interactions",
+            "POST",
+            {
+              model,
+              input: [{ type: "audio", data, mime_type: "audio/mp3" }],
+              generation_config: { transcription_config: {} },
+              store: false,
+            },
+            signal,
+            operations,
+            "transcribe",
+            HOSTED_SPEECH_LIMITS.transcriptResponseBytes,
+          );
+      const text = config
+        ? z
+            .object({
+              candidates: z
+                .array(z.object({ content: z.object({ parts: z.array(z.object({ text: z.string().optional() })) }) }))
+                .min(1),
+            })
+            .parse(json)
+            .candidates[0].content.parts.map((part) => part.text ?? "")
+            .join("")
+        : z
+            .object({
+              status: z.literal("completed"),
+              steps: z.array(
+                z.object({
+                  type: z.string(),
+                  content: z.array(z.object({ type: z.string(), text: z.string().optional() })).optional(),
+                }),
+              ),
+            })
+            .parse(json)
+            .steps.filter((step) => step.type === "model_output")
+            .flatMap((step) => step.content ?? [])
+            .map((part) => (part.type === "text" ? (part.text ?? "") : ""))
+            .join("");
+      const operation = operations.at(-1);
+      if (operation) operation.success = true;
+      return text;
     },
   };
 }

@@ -1,6 +1,8 @@
 import {
   speechModelSchema,
   type SpeechModelRow,
+  transcriptionModelSchema,
+  type TranscriptionModelRow,
   decisionModelSchema,
   type DecisionModelRow,
   diffusionModelSchema,
@@ -76,6 +78,63 @@ class LlmModelRepository {
       "load speech model by id",
     );
     return rows.length ? speechModelSchema.parse(rows[0]) : null;
+  }
+
+  async loadAvailableTranscriptionModels(
+    provider: string,
+    scope: OpenRouterModelScope,
+  ): Promise<TranscriptionModelRow[]> {
+    const rows = await withTransientDbRetry(
+      () => sql`
+        SELECT m.* FROM transcription_models m
+        WHERE m.provider = ${provider} AND NOT m.is_deprecated AND (
+          NOT m.is_scoped_registration OR EXISTS (
+            SELECT 1 FROM scoped_model_registrations r WHERE r.transcription_model_id = m.transcription_model_id
+              AND ((${scope.kind} = 'server' AND r.server_id = ${scope.ownerId} AND r.user_id IS NULL)
+                OR (${scope.kind} = 'personal' AND r.user_id = ${scope.ownerId} AND r.server_id IS NULL))
+          )
+        ) ORDER BY m.is_default DESC, m.transcription_model_id
+      `,
+      "load available transcription models",
+    );
+    return transcriptionModelSchema.array().parse(rows);
+  }
+
+  async loadTranscriptionModelById(transcriptionModelId: number): Promise<TranscriptionModelRow | null> {
+    const rows = await withTransientDbRetry(
+      () => sql`SELECT * FROM transcription_models WHERE transcription_model_id = ${transcriptionModelId}`,
+      "load transcription model by id",
+    );
+    return rows.length ? transcriptionModelSchema.parse(rows[0]) : null;
+  }
+
+  /**
+   * Returns the catalogue row for a codename, creating a scoped row when none exists.
+   *
+   * A seeded row is returned as is, so registering a built-in codename never turns it into a
+   * scoped registration that a reseed would then leave behind.
+   */
+  async ensureTranscriptionModel(provider: string, codename: string): Promise<TranscriptionModelRow> {
+    const [row] = await sql`
+      INSERT INTO transcription_models (provider, codename, is_scoped_registration)
+      VALUES (${provider}, ${codename}, true)
+      ON CONFLICT (provider, codename) DO UPDATE SET is_deprecated = false, updated_at = CURRENT_TIMESTAMP
+        WHERE transcription_models.is_scoped_registration
+      RETURNING *
+    `;
+    if (row) return transcriptionModelSchema.parse(row);
+    const [existing] = await sql`
+      SELECT * FROM transcription_models WHERE provider = ${provider} AND codename = ${codename}
+    `;
+    return transcriptionModelSchema.parse(existing);
+  }
+
+  async deleteOrphanedTranscriptionModel(transcriptionModelId: number): Promise<void> {
+    await sql`
+      DELETE FROM transcription_models WHERE transcription_model_id = ${transcriptionModelId}
+        AND is_scoped_registration
+        AND NOT EXISTS (SELECT 1 FROM scoped_model_registrations WHERE transcription_model_id = ${transcriptionModelId})
+    `;
   }
 
   async loadDecisionModelOptions(

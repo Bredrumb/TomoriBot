@@ -1,3 +1,4 @@
+import { applyPromptLayoutInserts, orderNativePromptBlocks } from "@/utils/text/context/promptLayout";
 import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import type { Client } from "discord.js";
 import type { CachedPresetData } from "@/utils/cache/stPresetCache";
@@ -5,6 +6,9 @@ import { lorebookRepository } from "@/modules/lorebooks/db/repositories";
 import { lorebookEntryRowSchema, type LorebookEntryInput, type LorebookEntryRow } from "@/modules/lorebooks/db/types";
 import { convertCharacterBook, taggedMemoryToLorebook } from "@/modules/lorebooks/imports";
 import { buildLorebookContextItems } from "@/modules/lorebooks/runtime/contextItems";
+import { getNovelAIProfile } from "@/providers/novelai/modelProfiles";
+import { fitNovelAIPrompt } from "@/providers/novelai/promptFitting";
+import { createNovelAITokenizerEncoder } from "@/utils/provider/localTokenizerRegistry";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import { convertMentions } from "@/utils/text/context/mentionNormalizer";
 import { resolveRandomChoiceMacrosInBuildOutput } from "@/utils/text/context/templates";
@@ -94,11 +98,13 @@ function textFor(items: StructuredContextItem[], tag: ContextItemTag): string {
 }
 
 function finalized(items: StructuredContextItem[]): StructuredContextItem[] {
-  return resolveRandomChoiceMacrosInBuildOutput({
+  const output = resolveRandomChoiceMacrosInBuildOutput({
     contextItems: items,
     tailDirectives: [],
     lowerPriorityTailDirectives: [],
   }).contextItems;
+  applyPromptLayoutInserts(output, []);
+  return output;
 }
 
 describe("lorebook context items", () => {
@@ -121,6 +127,7 @@ describe("lorebook context items", () => {
     expect(loadSpy).toHaveBeenCalledWith(SERVER_ID, LINEAGE_ID);
     expect(items.map((item) => item.metadataTag)).toEqual([
       ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE,
+      ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE,
       ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER,
     ]);
 
@@ -130,6 +137,26 @@ describe("lorebook context items", () => {
     expect(before).not.toContain("Foreign lore.");
     expect(before).not.toContain("Off lore.");
     expect(textFor(items, ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER)).toContain("Tower lore.");
+  });
+
+  it("reserves the lore budget for constant system content before admitting keyword entries", async () => {
+    const constants = [0, 1].map((placement) =>
+      toRow(
+        input({
+          constant: true,
+          keys: [],
+          placement: placement as 0 | 1,
+          insertion_order: 100,
+          title: `Rule ${placement}`,
+          content: "r".repeat(3000),
+        }),
+      ),
+    );
+    const keyword = toRow(input({ keys: ["route"], insertion_order: 1, content: "k".repeat(3000) }));
+    const inactive = await buildItems([...constants, keyword]);
+    const active = await buildItems([...constants, keyword], { messages: ["route"] });
+    expect(active.filter((item) => item.role === "system")).toEqual(inactive);
+    expect(active.filter((item) => item.role === "user")).toEqual([]);
   });
 
   it("requires an admitted channel for an Always On entry unless channel filtering is off", async () => {
@@ -165,6 +192,137 @@ describe("lorebook context items", () => {
     expect(before).toContain("{{time}}");
     expect(before).toContain("{{#if morning}}dawn{{/if}}");
     expect(before).toContain("{{random::a,b}}");
+  });
+
+  it("renders imported and migrated lore in every NovelAI profile at the shared tail slot", async () => {
+    const converted = convertCharacterBook({
+      entries: [
+        { constant: true, content: "{{char}} keeps the curfew.", name: "Curfew title", position: "before_char" },
+        { constant: true, content: "{{user}} knows the rules.", name: "Rules title", position: "after_char" },
+        { keys: ["lantern"], content: "The lantern stays lit.", name: "Lantern title", position: "after_char" },
+      ],
+    });
+    const migrated = taggedMemoryToLorebook({ content: "The vault holds {{random::a,b}}.", tags: ["vault"] }, true);
+    if (!migrated) throw new Error("Migrated fixture mapping failed");
+    const loreItems = await buildItems(
+      [...converted.entries, migrated].map((entry) => toRow(entry)),
+      {
+        messages: ["We find the lantern and the vault."],
+      },
+    );
+    for (const model of ["kayra-v1", "llama-3-erato-v1", "glm-4-6", "xialong-v1"]) {
+      const contextItems = [...loreItems, ...Array.from({ length: 6 }, (_, index) => conversationItem(index))];
+      orderNativePromptBlocks(contextItems);
+      const prepared = fitNovelAIPrompt({
+        contextItems: finalized(contextItems),
+        tomoriState: createPersona({ persona_nickname: "Mirri", config: { thinking_level: "none" } }),
+        profile: getNovelAIProfile(model),
+        window: 4096,
+        maxOutputTokens: 256,
+      });
+      const markers = [
+        "Mirri keeps the curfew.",
+        "User knows the rules.",
+        "History-0",
+        "History-1",
+        "The vault holds {{random::a,b}}.",
+        "The lantern stays lit.",
+        "History-2",
+        "History-5",
+      ];
+      const positions = markers.map((marker) => prepared.prompt.indexOf(marker));
+      expect(positions.every((position) => position >= 0)).toBe(true);
+      expect(positions).toEqual([...positions].sort((left, right) => left - right));
+      expect(prepared.report.excluded).toEqual([]);
+      expect(prepared.report.trimmed).toEqual([]);
+      for (const heading of ["## World Info", "Curfew title", "Rules title", "Lantern title"])
+        expect(prepared.prompt).not.toContain(heading);
+      if (getNovelAIProfile(model).renderer !== "story") {
+        expect(prepared.prompt).toContain("<|system|>\nThe vault holds {{random::a,b}}.\nThe lantern stays lit.");
+        const persistent = prepared.prompt.slice(0, prepared.prompt.indexOf("History-0"));
+        expect(persistent).toContain("Relevant persistent information:");
+        expect(persistent).not.toContain("The lantern stays lit.");
+      } else {
+        expect(prepared.prompt).toContain("Server Notes:\nMirri keeps the curfew.\nUser knows the rules.");
+      }
+    }
+  });
+
+  it("uses sample turns for the NovelAI lore tail slot when history is short", async () => {
+    const loreItems = await buildItems([toRow(input({ content: "The lantern stays lit.", keys: ["lantern"] }))], {
+      messages: ["lantern"],
+    });
+    const samples: StructuredContextItem[] = Array.from({ length: 4 }, (_, index) => ({
+      role: index % 2 === 0 ? "user" : "model",
+      metadataTag: ContextItemTag.DIALOGUE_SAMPLE,
+      parts: [{ type: "text", text: `${index % 2 === 0 ? "Juno" : "Mirri"}: Sample-${index}.` }],
+    }));
+    for (const model of ["kayra-v1", "llama-3-erato-v1", "glm-4-6", "xialong-v1"]) {
+      const prepared = fitNovelAIPrompt({
+        contextItems: finalized([...samples, conversationItem(0), ...loreItems]),
+        tomoriState: createPersona({ persona_nickname: "Mirri" }),
+        profile: getNovelAIProfile(model),
+        window: 4096,
+        maxOutputTokens: 256,
+      });
+      expect(prepared.prompt.indexOf("Sample-0")).toBeLessThan(prepared.prompt.indexOf("The lantern stays lit."));
+      expect(prepared.prompt.indexOf("The lantern stays lit.")).toBeLessThan(prepared.prompt.indexOf("Sample-1"));
+      const fitted = fitNovelAIPrompt({
+        contextItems: finalized([
+          ...samples.map((sample) => ({
+            ...sample,
+            parts: sample.parts.map((part) =>
+              part.type === "text" ? { ...part, text: `${part.text}${" River.".repeat(160)}` } : part,
+            ),
+          })),
+          conversationItem(0),
+          ...loreItems,
+        ]),
+        tomoriState: createPersona({ persona_nickname: "Mirri" }),
+        profile: getNovelAIProfile(model),
+        window: 1024,
+        maxOutputTokens: 128,
+      });
+      expect(fitted.report.trimmed.some((id) => id.includes(ContextItemTag.DIALOGUE_SAMPLE))).toBe(true);
+      expect(fitted.prompt).toContain("The lantern stays lit.");
+      expect(fitted.prompt.indexOf("The lantern stays lit.")).toBeLessThan(fitted.prompt.indexOf("Sample-0"));
+      expect(fitted.prompt).not.toContain("Sample-2");
+    }
+  });
+
+  it("fits individual lore entries within the shared NovelAI memory allowance", async () => {
+    const loreItems = await buildItems(
+      [1, 2, 3].map((index) => toRow(input({ content: `Lore-${index}${" river".repeat(300)}`, keys: ["river"] }))),
+      { messages: ["river"] },
+    );
+    const profile = getNovelAIProfile("kayra-v1");
+    const prepared = fitNovelAIPrompt({
+      contextItems: finalized([
+        {
+          role: "system",
+          metadataTag: ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
+          parts: [],
+          memoryEntries: [{ id: "server:1", createdAt: 1, text: `Memory${" forest".repeat(300)}` }],
+        },
+        ...loreItems,
+        conversationItem(0),
+      ]),
+      tomoriState: createPersona({ persona_nickname: "Mirri" }),
+      profile,
+      window: 4096,
+      maxOutputTokens: 256,
+    });
+    expect(prepared.report.trimmed.some((id) => id.endsWith("lorebook:1"))).toBe(true);
+    expect(prepared.report.included.some((id) => id.endsWith("lorebook:3"))).toBe(true);
+    expect(prepared.report.included.some((id) => id.endsWith("server:1"))).toBe(true);
+    expect(prepared.prompt).not.toContain("Lore-1");
+    expect(prepared.prompt).toContain("Lore-3");
+    const memoryText = prepared.contextItems
+      .filter((item) => item.memoryEntries === undefined && item.metadataTag !== ContextItemTag.DIALOGUE_HISTORY)
+      .flatMap((item) => item.parts.flatMap((part) => (part.type === "text" ? [part.text] : [])))
+      .join("\n");
+    expect(createNovelAITokenizerEncoder(profile.tokenizer)(memoryText).length).toBeLessThanOrEqual(4096 * 0.2);
+    expect(prepared.report.inputTokens).toBe(createNovelAITokenizerEncoder(profile.tokenizer)(prepared.prompt).length);
   });
 
   it("carries imported and migrated entries through activation into the final preset context", async () => {
@@ -210,6 +368,7 @@ describe("lorebook context items", () => {
     });
     expect(loreItems.map((item) => item.metadataTag)).toEqual([
       ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE,
+      ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE,
       ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER,
     ]);
 
@@ -237,6 +396,7 @@ describe("lorebook context items", () => {
             role: "user",
             parts: [{ type: "text", text: "Alice: I found the vault." }],
             metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+            sender: { id: "Juno", name: "Juno", type: "user" },
           },
         ],
         tailDirectives: [],
@@ -274,8 +434,9 @@ describe("lorebook context items", () => {
     expect(final.map((item) => item.metadataTag)).toEqual([
       ContextItemTag.SYSTEM_HUMANIZER_RULES,
       ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE,
-      ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS,
+      ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE,
       ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER,
+      ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS,
       ContextItemTag.DIALOGUE_HISTORY,
     ]);
 
@@ -317,9 +478,23 @@ describe("lorebook context items", () => {
     const afterHeader = snapshot.indexOf("=== Lorebook (After) (`/memories`) ===");
     expect(beforeHeader).toBeGreaterThanOrEqual(0);
     expect(beforeHeader).toBeLessThan(documentsHeader);
-    expect(documentsHeader).toBeLessThan(afterHeader);
+    expect(afterHeader).toBeLessThan(documentsHeader);
   });
 });
+
+function conversationItem(index: number): StructuredContextItem {
+  const isUser = index % 2 === 0;
+  const name = isUser ? "Juno" : "Mirri";
+  const text = `${name}: History-${index}.`;
+  return {
+    role: isUser ? "user" : "model",
+    parts: [{ type: "text", text }],
+    completionText: text,
+    metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+    messageId: `history-${index}`,
+    sender: { id: name, name, type: isUser ? "user" : "persona" },
+  };
+}
 
 function markerNode(identifier: string, nodeOrder: number): CachedPresetData["nodes"][number] {
   return {

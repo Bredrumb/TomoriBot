@@ -76,7 +76,7 @@ Quando uma predefinição importada está ativa, ela controla totalmente o promp
 ### Notas de Compatibilidade
 
 - Os nós desabilitados em `prompt_order` permanecem inativos até serem habilitados em `/config` > `Plug-ins` > SillyTavern Predefinições. Nós vazios e somente comentários nunca são enviados.
-- A ordem de bloqueio é literal: colocar `chatHistory` à frente de `dialogueExamples` coloca o histórico de bate-papo primeiro no prompt.
+- A ordem dos marcadores é literal: colocar `chatHistory` à frente de `dialogueExamples` coloca o histórico de conversa primeiro. Marcadores de world info posicionam o lore Always On; lore ativado, documentos recuperados, presença e o relógio ficam perto dos quatro turnos de fala mais recentes. A memória de curto prazo recente ou entre canais também fica perto dessas mensagens, ou mais perto se configurada.
 - As injeções pós-histórico se fundem no histórico de conversas existente, em vez de serem enviadas como mensagens independentes.
 - Pós-processamento Regex, parâmetros de amostragem predefinidos (temperatura, top-p) e predefinições em camadas não são suportados. Importação de predefinições legadas de conclusão de texto com blocos somente ST eliminados.
 

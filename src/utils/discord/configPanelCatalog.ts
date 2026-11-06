@@ -300,8 +300,7 @@ export function computeConditioningRemoveFingerprint(
  * slot on the wire instead of re-deriving it, or a custom provider picked in the NovelAI slot would
  * write the standard column.
  *
- * TTS Design and Clone each list hosted models and registered speech connections as providers.
- * `stt` is an endpoint activation rather than a model assignment, so it keeps its own endpoint select.
+ * TTS Design, TTS Clone, and STT each list hosted models and registered connections as providers.
  */
 export type ConfigModelCapability =
   | "text"
@@ -314,14 +313,6 @@ export type ConfigModelCapability =
   | "tts-design"
   | "tts-clone"
   | "stt";
-
-export type ConfigCatalogModelCapability = Exclude<ConfigModelCapability, "stt">;
-
-export function isConfigCatalogModelCapability(
-  capability: ConfigModelCapability,
-): capability is ConfigCatalogModelCapability {
-  return capability !== "stt";
-}
 
 export const CONFIG_MODEL_CAPABILITY_ORDER: readonly ConfigModelCapability[] = [
   "text",
@@ -340,7 +331,8 @@ export const CONFIG_MODEL_CAPABILITY_ORDER: readonly ConfigModelCapability[] = [
  * Slots whose absorbed command offers a clear path. `/model vision` carries a clear sentinel and
  * `/model image` a clear option per column; `/model embedding`, `/model video`, and the Text
  * primary have none, so offering one there would broaden the command surface. Decision has no
- * command, and no Decision model is its default state. A server may run without either speech mode.
+ * command, and no Decision model is its default state. A server may run without either speech mode
+ * or without transcription.
  */
 export const CONFIG_CLEARABLE_MODEL_CAPABILITIES: ReadonlySet<ConfigModelCapability> = new Set([
   "vision",
@@ -349,6 +341,7 @@ export const CONFIG_CLEARABLE_MODEL_CAPABILITIES: ReadonlySet<ConfigModelCapabil
   "nai-image",
   "tts-design",
   "tts-clone",
+  "stt",
 ]);
 
 /** Sentinel the model select carries for the clear path of a nullable slot. */
@@ -379,13 +372,6 @@ export function computeNaiPresetFingerprint(
  * the pagination row beneath reaches the rest.
  */
 export const CONFIG_MODEL_PROVIDER_DIRECT_LIMIT = 25;
-
-/** Endpoint entries share Discord's 25-option ceiling with one navigation entry when paged. */
-const CONFIG_ENDPOINT_PAGE_SIZE = 25;
-
-export function configEndpointWindowSize(count: number): number {
-  return count > CONFIG_ENDPOINT_PAGE_SIZE ? CONFIG_ENDPOINT_PAGE_SIZE - 1 : CONFIG_ENDPOINT_PAGE_SIZE;
-}
 
 /**
  * The fallback modal reserves one option for its clear entry, so a provider page holds 24 models.
@@ -583,7 +569,6 @@ export type ConfigPanelRoute =
   | { action: "sprite-import-submit"; locale: string; personaId: number; nonce: string }
   | { action: "sprite-export"; locale: string; personaId: number }
   | { action: "model-provider-select"; locale: string; capability: ConfigModelCapability }
-  | { action: "endpoint-select"; locale: string; capability: ConfigModelCapability }
   | {
       action: "model-modal-submit";
       locale: string;
@@ -1177,7 +1162,6 @@ export const CONFIG_ROUTE_CODECS: ConfigRouteCodecs = {
   "sprite-import-submit": { wireToken: "sprite-import-sub", fields: [personaIdField, nonceField] },
   "sprite-export": { wireToken: "sprite-export", fields: [personaIdField] },
   "model-provider-select": { wireToken: "model-prov-select", fields: [capabilityField] },
-  "endpoint-select": { wireToken: "ep-select", fields: [capabilityField] },
   "model-modal-submit": { wireToken: "model-modal", fields: [capabilityField, providerField, nonceField] },
   "parameters-provider-select": { wireToken: "param-prov-select", fields: [] },
   "nai-preset-select": { wireToken: "nai-preset-select", fields: [startField, fpField] },

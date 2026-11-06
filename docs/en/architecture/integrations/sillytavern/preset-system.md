@@ -63,8 +63,8 @@ Preset marker nodes pull items from specific native context buckets:
 | `charPersonality` | `SYSTEM_PERSONALITY` | Personality attributes |
 | `dialogueExamples` | `DIALOGUE_SAMPLE` | Sample dialogue turns |
 | `chatHistory` | `DIALOGUE_HISTORY` | Live conversation history |
-| `worldInfoBefore` | `KNOWLEDGE_LOREBOOK_BEFORE`, `KNOWLEDGE_SERVER_DOCUMENTS` | Lore entries placed before, then RAG document chunks |
-| `worldInfoAfter` | `KNOWLEDGE_LOREBOOK_AFTER`, `KNOWLEDGE_SERVER_DOCUMENTS` | Lore entries placed after, then any documents not yet consumed |
+| `worldInfoBefore` | `KNOWLEDGE_LOREBOOK_BEFORE` | Always On lore placed before |
+| `worldInfoAfter` | `KNOWLEDGE_LOREBOOK_AFTER` | Always On lore placed after |
 
 Marker blocks move according to the preset layout. Specific native blocks are suppressed only when
 explicitly replaced:
@@ -85,10 +85,16 @@ automatically at anchor markers:
 - Server information, memories, emojis, and stickers flush after `charPersonality`,
   `charDescription`, or `main`.
 - Active users, short-term memory, and conditioning flush before `dialogueExamples` or `chatHistory`.
-- The first world info marker consumes the document block. When a marker is missing, its lore
-  placement block flushes with the dialogue group in before lore, documents, after lore order.
+- Missing world-info markers leave their Always On lore groups to flush before the first dialogue anchor.
+- Activated lore, retrieved documents, participant presence, and current context bypass marker buckets.
+  The chat pipeline positions them at the registry tail slot after reassembly; fresh or cross-channel
+  STM uses that slot or a closer configured depth.
 - After the node walk, reassembly flushes any unconsumed knowledge and participant groups, then
   appends remaining buckets. Omitting markers does not guarantee that these groups precede history.
+
+Custom nodes with time macros near the top change the prefix on each clock update and make caching
+less effective. Their authored positions are preserved. See the shared
+[layout contract](/architecture/pipelines/context-build/) for speaker turns and the tail slot.
 
 ## Depth injection contracts
 

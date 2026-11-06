@@ -79,7 +79,9 @@ export default {
       export_json_description: "Exporta un archivo JSON importable en lugar de un PNG (sin imagen de avatar)",
       description: `Exporta la personalidad actual como un archivo PNG para compartir`,
       success_title: `🟢 Persona exportada con éxito`,
-      success_description: `¡La persona actual **{nickname}** ha sido exportada! Comparte este archivo PNG con otros para difundir esta configuración de personalidad.`,
+      success_description: `¡La persona actual **{nickname}** ha sido exportada! Comparte este archivo PNG con otros para difundir esta configuración de personalidad.
+1. Descarga el archivo PNG adjunto abajo
+2. Usa \`/persona import\` con el PNG para importar esta persona`,
       success_description_json: `La persona actual **{nickname}** ha sido exportada como un archivo JSON.
 
 **Nota:** Este JSON se puede volver a importar con \`/persona import\`. No incluye la imagen de avatar. Usa la exportación en PNG para compartir también el avatar.`,

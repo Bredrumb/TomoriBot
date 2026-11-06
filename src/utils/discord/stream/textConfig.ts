@@ -15,8 +15,8 @@ export function createStreamTextProcessingConfig(config: StreamConfig, context: 
   const botName = context.prefixStrippingName ?? context.personaUsername ?? context.tomoriState.persona_nickname;
 
   return {
-    humanizerDegree: config.humanizerDegree,
-    visibleDeliveryMode: getVisibleDeliveryMode(config.humanizerDegree),
+    humanizer: config.humanizer,
+    visibleDeliveryMode: getVisibleDeliveryMode(config.humanizer),
     emojiUsageEnabled: config.emojiUsageEnabled,
     emojiStrings: context.emojiStrings || [],
     mentionMap,

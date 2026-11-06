@@ -26,6 +26,7 @@ export interface ConversationUserReference {
 }
 
 interface ContextItemSender {
+  id: string;
   name: string;
   type: "user" | "persona";
 }
