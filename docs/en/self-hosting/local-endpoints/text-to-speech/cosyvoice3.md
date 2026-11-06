@@ -56,7 +56,7 @@ Native Windows is provided as a best-effort path:
 .\servers\tts\cosyvoice3\.venv\Scripts\python.exe servers\tts\cosyvoice3\server.py
 ```
 
-WSL2 is strongly recommended for NVIDIA GPU usage on Windows. Upstream requirements install CPU-only ONNX Runtime on Windows, whereas Linux and WSL2 install GPU-accelerated packages.
+WSL2 is strongly recommended for NVIDIA GPU usage on Windows. Upstream requirements install CPU-only ONNX Runtime on Windows, whereas Linux and WSL2 install GPU-accelerated packages. On Windows this makes the first request with each voice about 1.5 seconds slower while the server encodes the clip; later requests reuse that result until the server restarts.
 
 ## Register in TomoriBot
 
@@ -104,7 +104,7 @@ To guide emotion and delivery, enter direction in the modal or let the persona p
 | `COSYVOICE3_LOAD_TRT` | `0` | Enable upstream TensorRT loading when properly prepared |
 | `COSYVOICE3_LOAD_VLLM` | `0` | Enable upstream vLLM loading when its separate dependencies are installed |
 
-By default, TensorRT, vLLM, and fp16 remain disabled. The standard PyTorch runtime runs comfortably on 16 GB GPUs without additional runtime dependencies.
+By default, TensorRT, vLLM, and fp16 remain disabled. On a 16 GB RTX 40-series card, fp16 was no faster and used more VRAM, so leave it off unless you are measuring it on your own GPU. The standard PyTorch runtime runs comfortably on 16 GB GPUs without additional runtime dependencies.
 
 ## Model variants
 

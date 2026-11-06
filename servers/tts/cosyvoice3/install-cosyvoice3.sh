@@ -6,7 +6,7 @@ RUNTIME_DIR="${SCRIPT_DIR}/CosyVoice"
 MODEL_DIR="${COSYVOICE3_MODEL_DIR:-${RUNTIME_DIR}/pretrained_models/Fun-CosyVoice3-0.5B}"
 MODEL_ID="FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
 RUNTIME_REPO="https://github.com/QwenAudio/CosyVoice.git"
-# The wrapper depends on this runtime's AutoModel and inference signatures. Bump both pins together after testing.
+# The wrapper depends on this runtime's AutoModel, inference signatures, and private frontend extractor names. Bump both pins together after testing.
 RUNTIME_COMMIT="074ca6dc9e80a2f424f1f74b48bdd7d3fea531cc"
 MODEL_REVISION="29e01c4e8d000f4bcd70751be16fa94bf3d85a18"
 PYTHON_BIN="${PYTHON:-python3.10}"
