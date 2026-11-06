@@ -1,3 +1,4 @@
+import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import { describe, expect, it } from "bun:test";
 import type { TomoriState } from "@/types/db/schema";
 import type { ToolContext } from "@/types/tool/interfaces";
@@ -75,13 +76,26 @@ describe("participant adversarial review regressions", () => {
       const referencedPersonaId = referencedPersona.persona_id;
       if (referencedPersonaId === undefined) throw new Error("Fixture persona is missing its persona_id");
 
+      let renderedItems: StructuredContextItem[] = [];
       const item = await buildPreparedParticipantContext(fixture, {
+        onItems: (items) => {
+          renderedItems = items;
+        },
         responderPersonaIds: new Set([referencedPersonaId]),
       });
       const text = participantText(item);
       const target = item.conversationUsers?.find((candidate) => candidate.targetId === "persona:9");
 
-      expect(text).toContain("Kiyo\n- Kiyo's Physical Appearance: red hair\n- Status: Online or status unknown");
+      expect(text).toContain(`${referencedPersona.persona_nickname}\n`);
+      const statusItem = renderedItems.find(
+        (candidate) => candidate.metadataTag === ContextItemTag.KNOWLEDGE_USER_STATUS,
+      );
+      if (!statusItem) throw new Error("Referenced persona fixture lost its presence item");
+      expect(
+        participantText(statusItem)
+          .split("\n")
+          .some((line) => line.startsWith(`${referencedPersona.persona_nickname}: `)),
+      ).toBe(true);
       expect(target).toMatchObject({
         targetId: "persona:9",
         displayLabel: "Kiyo",

@@ -165,7 +165,11 @@ export function appendInjectedContextItems(
   return [...contextItems, ...injectedContextItems];
 }
 
-export { insertBeforeLatestDialoguePair, insertAtDialogueDepth } from "@/utils/text/context/promptLayout";
+export {
+  insertBeforeLatestDialoguePair,
+  insertAtDialogueDepth,
+  speakerTurnStartIndexes,
+} from "@/utils/text/context/promptLayout";
 
 export function findReplyContextTargetInMessage(
   message: Pick<Message, "embeds">,

@@ -1037,15 +1037,9 @@ export const serverStmConfigSchema = z.object({
   tool_description_override: z.string().nullable().optional(),
   // Unified nudge override (merged create+update, migration 052). NULL → seed default.
   update_nudge_override: z.string().nullable().optional(),
-  // Positional injection depth for the nudge, counted in dialogue TURNS from the
-  // bottom (not pairs): 0 = tail, 1 = before the final turn, 2 = before the latest
-  // pair, N = before the Nth turn (migration 052, default 2).
+  // Nudge depth counts dialogue items from the bottom: 0 appends and N inserts before the Nth item (migration 052, default 2).
   nudge_injection_depth: z.number().int().default(2),
-  // Positional injection depth for the STM content block (same/other-channel memory),
-  // counted in dialogue TURNS from the bottom like nudge_injection_depth, with an extra
-  // sentinel: -1 = default (keep the block anchored near the top as ambient knowledge,
-  // legacy behavior), 0 = tail (last dialogue item), N = before the Nth turn
-  // (migration 053, default -1). At equal depths the nudge lands just below the block.
+  // STM content depth counts dialogue items from the bottom, with -1 anchoring stale same-channel content at the top and fresh content using the closer of this position and the tail slot (migration 053, default -1).
   content_injection_depth: z.number().int().default(-1),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),

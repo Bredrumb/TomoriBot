@@ -17,7 +17,7 @@ import {
   userNamingRepository,
   userRepository,
 } from "@/utils/db/repositories";
-import { buildParticipantContextItem } from "@/utils/text/context/participants";
+import { buildParticipantContextItems } from "@/utils/text/context/participants";
 import type { PublicPersonaProfile, SimplifiedMessageForContext } from "@/utils/text/context/types";
 import { attachPersonaMentionMapToContextItems, buildPersonaMentionCatalog } from "@/utils/text/personaMentionHandles";
 import {
@@ -442,6 +442,7 @@ export async function buildPreparedParticipantContext(
     requestScope?: ParticipantRequestScope;
     responderPersonaIds?: ReadonlySet<number>;
     onPrepared?: (prepared: PreparedParticipantContext) => void;
+    onItems?: (items: StructuredContextItem[]) => void;
   } = {},
 ): Promise<StructuredContextItem> {
   const activePersona = options.activePersona ?? fixture.activePersona;
@@ -466,7 +467,7 @@ export async function buildPreparedParticipantContext(
   });
   options.onPrepared?.(prepared);
 
-  const item = await buildParticipantContextItem({
+  const items = await buildParticipantContextItems({
     client: fixture.client,
     guildId: PARTICIPANT_FIXTURE_IDS.guild,
     channelName: "general",
@@ -493,6 +494,8 @@ export async function buildPreparedParticipantContext(
       .toLowerCase(),
     convertMentions: async (text) => text,
   });
+  options.onItems?.(items);
+  const [item] = items;
   if (!item) throw new Error("Participant baseline fixture unexpectedly rendered no context item");
 
   const [itemWithPersonaAliases] = attachPersonaMentionMapToContextItems(

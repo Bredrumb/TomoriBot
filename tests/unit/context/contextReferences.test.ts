@@ -13,7 +13,7 @@ import {
   resolveContextReferences,
 } from "@/utils/text/contextReferences";
 import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
-import { buildParticipantContextItem } from "@/utils/text/context/participants";
+import { buildParticipantContextItems } from "@/utils/text/context/participants";
 import { isEligibleContextReferenceUserV1, userRepository } from "@/utils/db/repositories/UserRepository";
 import { serverScheduleRepository, userNamingRepository } from "@/utils/db/repositories";
 import { buildParticipantDiscoveryPlan, type ParticipantDiscoveryPlan } from "@/utils/text/participants/discoveryPlan";
@@ -551,7 +551,7 @@ describe("public persona profile rendering", () => {
         participantIds: ["999"],
         publicPersonaProfiles,
       });
-      const item = await buildParticipantContextItem({
+      const [item] = await buildParticipantContextItems({
         client,
         guildId: "guild",
         channelName: "general",
@@ -626,7 +626,7 @@ describe("public persona profile rendering", () => {
         ],
       });
       const seeds = await participantSeeds({ client, activePersona, participantIds: [], referencePlan });
-      await buildParticipantContextItem({
+      await buildParticipantContextItems({
         client,
         guildId: "guild",
         channelName: "general",
@@ -707,7 +707,7 @@ describe("persona task context", () => {
 
     try {
       const seeds = await participantSeeds({ client, activePersona, participantIds: ["100", "999"] });
-      const item = await buildParticipantContextItem({
+      const [item] = await buildParticipantContextItems({
         client,
         guildId: "guild",
         channelName: "general",
@@ -780,7 +780,7 @@ describe("persona task context", () => {
 
     try {
       const seeds = await participantSeeds({ client, activePersona, participantIds: ["999"] });
-      const item = await buildParticipantContextItem({
+      const [item] = await buildParticipantContextItems({
         client,
         guildId: "guild",
         channelName: "general",
