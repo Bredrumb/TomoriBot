@@ -39,6 +39,24 @@ The structured request builders apply media relocation independently of the alte
 
 When no sender name is available, the notice falls back to `[System: The following image was sent]`. Relocation runs on structured context items before provider-specific serialization, preserving participant indices and mention metadata.
 
+## Prompt layout and cache identity
+
+Serializers use `isPromptSystemItem()` from the prompt-layout registry for system routing. A system
+role alone does not determine placement for tagged items. Untagged preset nodes keep their authored
+roles. Normalization preserves the cacheable-prefix marker through media relocation and same-role
+merging, including when the boundary item ends in media.
+
+Direct Anthropic and Anthropic models through OpenRouter request two five-minute cache breakpoints:
+the system-message end and the final serialized item above the tail slot. Each is admitted only when
+the local text estimate reaches the model minimum; missing boundaries or undersized prefixes omit
+that marker. `src/providers/utils/anthropicCache.ts` owns this policy. Explicit rejection of
+`cache_control` removes it for a targeted retry.
+
+`resolveToolCallId()` in `src/providers/utils/toolCallIds.ts` preserves usable unique provider IDs
+and generates deterministic IDs in interaction-history order otherwise. OpenRouter, OpenAI-compatible,
+and Anthropic serializers reuse the resolved ID for the call and result, so appending tool-loop steps
+does not change IDs already serialized into the prefix.
+
 ## Resolution and persistence
 
 Compatibility settings are stored as boolean columns on `llms` and `custom_endpoints`:

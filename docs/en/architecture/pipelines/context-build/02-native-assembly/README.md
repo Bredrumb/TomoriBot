@@ -5,29 +5,14 @@ sidebar:
 aiGenerated: true
 ---
 
-Native assembly constructs the LLM prompt through a fixed-order sequence of contributors. Each contributor appends items to a shared context list or emits out-of-band directives for downstream positioning.
+Native assembly builds contributions and orders the completed blocks through
+`src/utils/text/context/promptLayout.ts`. Contributor execution order allows RAG retrieval to overlap
+other work. The registry defines emitted prompt order and system routing; the numbered pages follow
+build stages and retain their URLs when the prompt order changes.
 
-Prompt order matters for LLM reasoning and caching: identity framing sits at the top, reference knowledge sits in the middle, and recent dialogue turns sit at the bottom.
-
-## Contributor sequence
-
-```
-[01] Prompt items                ← system role, top of prompt
-[02] Server info
-     Persona user blocks         ← optional active blocks notice
-[03] Server memories             ← persona-scoped guild/DM long-term memories
-[04] Server emojis               ← custom server emojis
-[05] Server stickers             ← native and custom stickers
-     Persona sprites             ← optional persona sprite instructions
-[06] Participants                ← users in conversation, roles, presence, aliases
-[07] Short-term memory           ← same/other channel summary and categories
-[07b] Verbatim tool definitions  ← optional in-band tool JSON schemas
-[08] RAG documents               ← vector retrieval over uploaded documents
-[08b] Lorebooks                  ← activated world info for both placements
-[09] Conditioning                ← reward and punishment reinforcement notes
-[10] Sample dialogues            ← few-shot persona examples
-[11] Dialogue history            ← recent conversation messages and notes
-```
+Persistent instructions, server knowledge, Always On lore, and conditioning enter the system zone.
+Participant profiles and personal memories remain above history. Changing information is positioned
+at the [tail slot](/architecture/pipelines/context-build/), after preset reassembly when applicable.
 
 ## Contributor index
 
@@ -41,7 +26,7 @@ Prompt order matters for LLM reasoning and caching: identity framing sits at the
 | [Short-term memory](/architecture/pipelines/context-build/02-native-assembly/07-short-term-memory/) | Supplies recent memory and deferred refresh instructions. |
 | [Verbatim tool definitions](/architecture/pipelines/context-build/02-native-assembly/07b-verbatim-tool-definitions/) | Adapts tool schemas for text-based calling. |
 | [RAG documents](/architecture/pipelines/context-build/02-native-assembly/08-rag-documents/) | Retrieves relevant uploaded document excerpts. |
-| [Lorebooks](/architecture/subsystems/lorebooks/#prompt-integration) | Adds activated world info after documents. |
+| [Lorebooks](/architecture/subsystems/lorebooks/#prompt-integration) | Splits Always On system content from activated tail-slot content. |
 | [Conditioning](/architecture/pipelines/context-build/02-native-assembly/09-conditioning/) | Adds server-configured reinforcement. |
 | [Sample dialogues](/architecture/pipelines/context-build/02-native-assembly/10-sample-dialogues/) | Shows persona response examples. |
 | [Dialogue history](/architecture/pipelines/context-build/02-native-assembly/11-dialogue-history/) | Supplies recent messages and capability-neutral media descriptors. |
@@ -50,10 +35,10 @@ Prompt order matters for LLM reasoning and caching: identity framing sits at the
 
 Directives and deferred short-term memory items are kept out of `contextItems` so that the downstream chat pipeline can position them relative to assembled dialogue turns:
 
-- `tailDirectives` receive the impersonation command directive (`Imitate <User>, start your message with <User>:`). `<User>` is the same naming-aware label the history uses, not the Discord display name, and the stream cleaner strips that label as well as the webhook name.
+- `tailDirectives` receive the impersonation command directive (`Imitate <User>, start your message with <User>:`). `<User>` uses the history's resolved speaker label, and the stream cleaner strips that label as well as the webhook name.
 - `uncensorDirective` receives cleaned uncensor text when enabled.
 - `nudgeItem` holds the cadence-gated `update_short_term_memory` prompt.
-- `memoryInjectionItems` holds the short-term memory content block when the server configures a non-negative content depth. A negative depth keeps the block inline inside `contextItems`.
+- `memoryInjectionItems` holds content needing positional placement: fresh or cross-channel STM uses the tail slot or a closer configured depth; stale same-channel content uses its saved depth, with `-1` staying above history.
 
 ## Shared helpers used across contributors
 <!-- anchor: shared-helpers-used-across-contributors -->
