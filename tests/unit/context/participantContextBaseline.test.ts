@@ -38,7 +38,6 @@ Alice Saved (Mention: @{Alice Guild}; Aliases: @{Alice Saved}, @{Alice Display G
 
 Tomori (This is you!)
 - Tomori's Physical Appearance: black hair, blue eyes
-- Status: Online - Currently active and responding to messages
 
 Ren
 - Ren's Physical Appearance: silver hair, violet eyes
@@ -51,13 +50,10 @@ Bob Saved (Mention: @{Bob Guild}; Aliases: @{Bob Saved}, @{Bob Display Global}, 
 - Server Roles: Archivist
 
 Mika Matrix
-- Status: Online or status unknown
 
 Pending Tasks Assigned to You:
 - ID:93 "Review the field notes" (scheduled for Sun, Aug 2, 2026, 10:00 AM (UTC+8), repeats every 24 hour(s)) (destination: <#200000000000000001>)
 
-Conversation context: #general (ID: 200000000000000001).
-Current time: <NOW>.
 ]`,
     },
   ],

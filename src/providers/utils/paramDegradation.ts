@@ -27,7 +27,13 @@ const PARAM_DROP_PRIORITY = [
 /** Maximum number of message-derived attempts that an adapter may enqueue per request. */
 export const MAX_TARGETED_DEGRADATION_ATTEMPTS = 3;
 
-const REJECTABLE_PARAM_TOKENS = [...PARAM_DROP_PRIORITY, "stream_options", "max_context_length", "options"] as const;
+const REJECTABLE_PARAM_TOKENS = [
+  ...PARAM_DROP_PRIORITY,
+  "stream_options",
+  "max_context_length",
+  "options",
+  "cache_control",
+] as const;
 
 /**
  * Tokens that are also ordinary English words, so only a quoted mention names the field. A bare
@@ -118,7 +124,33 @@ function cloneWithoutKeys(input: Record<string, unknown>, keysToRemove: readonly
   for (const key of keysToRemove) {
     delete cloned[key];
   }
+  if (keysToRemove.includes("cache_control")) {
+    if (Array.isArray(input.system)) cloned.system = stripCacheBlocks(input.system);
+    if (Array.isArray(input.messages)) {
+      cloned.messages = input.messages.map((message: Record<string, unknown>) =>
+        Array.isArray(message.content) ? { ...message, content: stripCacheBlocks(message.content) } : message,
+      );
+    }
+  }
   return cloned;
+}
+
+function stripCacheBlocks(blocks: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
+  return blocks.map((block) => {
+    const { cache_control: _cacheControl, ...rest } = block;
+    return rest;
+  });
+}
+
+function hasCacheControl(body: Record<string, unknown>): boolean {
+  const hasBlocks = (blocks: unknown): boolean =>
+    Array.isArray(blocks) && blocks.some((block: Record<string, unknown>) => "cache_control" in block);
+  return (
+    "cache_control" in body ||
+    hasBlocks(body.system) ||
+    (Array.isArray(body.messages) &&
+      body.messages.some((message: Record<string, unknown>) => hasBlocks(message.content)))
+  );
 }
 
 /**
@@ -162,7 +194,7 @@ function isParameterRejectionError(message: string): boolean {
  */
 export function extractRejectedParams(errorMessage: string, requestBody: Record<string, unknown>): string[] {
   return REJECTABLE_PARAM_TOKENS.filter((param) => {
-    if (!(param in requestBody)) return false;
+    if (param === "cache_control" ? !hasCacheControl(requestBody) : !(param in requestBody)) return false;
     return errorNamesParam(errorMessage, param);
   });
 }
@@ -187,7 +219,7 @@ export function classifyDegradableError({
   if (statusCode === 400 && isLikelyGenericErrorMessage(message)) {
     return "generic_400";
   }
-  if (statusCode === 400 && isParameterRejectionError(message)) {
+  if (statusCode === 400 && (isParameterRejectionError(message) || errorNamesParam(message, "cache_control"))) {
     return "parameter_rejection_400";
   }
   if (statusCode === 404 && message.toLowerCase().includes("no endpoints found")) {
@@ -297,6 +329,9 @@ export function buildDegradationAttempts(
 
   const probeBaseline = "stream_options" in baseBody ? cloneWithoutKeys(baseBody, ["stream_options"]) : { ...baseBody };
   addAttempt("no_stream_options", probeBaseline);
+  if (hasCacheControl(probeBaseline)) {
+    addAttempt("probe_drop_cache_control", cloneWithoutKeys(probeBaseline, ["cache_control"]));
+  }
 
   // Declared injected keys are probed before the user's samplers. Each rung drops one key from the
   // same baseline and the ladder stops at the first success, so ordering is pure latency: whichever
@@ -335,7 +370,10 @@ export function buildDegradationAttempts(
       minimalBody[key] = key === "messages" ? strippedMessages : probeBaseline[key];
     }
   }
-  addAttempt("minimal_payload", minimalBody);
+  addAttempt(
+    "minimal_payload",
+    hasCacheControl(minimalBody) ? cloneWithoutKeys(minimalBody, ["cache_control"]) : minimalBody,
+  );
 
   return attempts;
 }
