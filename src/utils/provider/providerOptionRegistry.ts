@@ -195,7 +195,7 @@ export interface ProviderOptionModelCost {
 }
 
 export interface ProviderOptionCopyContext {
-  surface: "recovery" | "completion" | "registration_failed";
+  surface: "recovery" | "registration_failed";
   userDiscId: string | undefined;
   serverId: number | null | undefined;
   credentialScope: "server" | "personal" | undefined;

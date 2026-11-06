@@ -3034,35 +3034,22 @@ describe("setupWizardFinish", () => {
     }
   });
 
-  it("adds completion copy after acknowledgement and preserves a completed setup without contributions", async () => {
+  it("keeps contributed copy off the completed setup receipt", async () => {
     const stubs = stubCommitDependencies();
     const key = "genai.tips.wait_and_retry";
-    let acknowledged = false;
-    let received: providerOptionRegistry.ProviderOptionCopyContext | undefined;
-    const copy = spyOn(providerOptionRegistry, "withProviderOptionCopy");
+    const copy = spyOn(providerOptionRegistry, "withProviderOptionCopy").mockImplementation(async (keys) => [
+      ...keys,
+      key,
+    ]);
     try {
-      for (const contributes of [true, false]) {
-        storeSetupDraft(COMMIT_NONCE, makeCompleteDraft());
-        const customId = buildSetupFinishRouteId({ locale: "en-US", nonce: COMMIT_NONCE });
-        const interaction = makeMockInteraction({ customId, guild: COMMIT_GUILD });
-        copy.mockImplementation(async (keys, context) => {
-          acknowledged = interaction.deferred;
-          received = context;
-          return contributes ? [...keys, key] : keys;
-        });
-        await dispatchGlobalInteraction({} as Client, interaction);
-        expect(acknowledged).toBe(true);
-        expect(received).toEqual({
-          surface: "completion",
-          userDiscId: "actor-1",
-          serverId: 42,
-          credentialScope: "server",
-          managedProvider: null,
-        });
-        const receipt = JSON.stringify(interaction.editReplyCalls.at(-1));
-        expect(receipt).toContain(localizedCopy("en-US", "commands.setup.wizard.receipt_title"));
-        expect(receipt.includes(localizedCopy("en-US", key))).toBe(contributes);
-      }
+      storeSetupDraft(COMMIT_NONCE, makeCompleteDraft());
+      const customId = buildSetupFinishRouteId({ locale: "en-US", nonce: COMMIT_NONCE });
+      const interaction = makeMockInteraction({ customId, guild: COMMIT_GUILD });
+      await dispatchGlobalInteraction({} as Client, interaction);
+      expect(copy).not.toHaveBeenCalled();
+      const receipt = JSON.stringify(interaction.editReplyCalls.at(-1));
+      expect(receipt).toContain(localizedCopy("en-US", "commands.setup.wizard.receipt_title"));
+      expect(receipt.includes(localizedCopy("en-US", key))).toBe(false);
     } finally {
       copy.mockRestore();
       stubs.restore();

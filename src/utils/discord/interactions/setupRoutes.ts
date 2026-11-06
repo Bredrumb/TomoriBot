@@ -915,18 +915,6 @@ async function runSetupPostCommitEffects(input: {
         ? "commands.setup.wizard.receipt_footer_avatar_failed"
         : undefined;
 
-  const footerKeys =
-    access.mode === "catalog" || access.mode === "custom-endpoint"
-      ? await withProviderOptionCopy(footerKey ? [footerKey] : [], {
-          surface: "completion",
-          managedProvider: null,
-          userDiscId: input.interaction.user.id,
-          serverId: input.serverInternalId,
-          credentialScope: "server",
-        })
-      : footerKey
-        ? [footerKey]
-        : [];
   const payload = buildSetupSuccessPayload({
     locale,
     context: draft.context,
@@ -938,7 +926,7 @@ async function runSetupPostCommitEffects(input: {
     learnMore: localizer(locale, "commands.setup.wizard.receipt_learn_more", {
       help: commandRegistry.getCommandMention("help"),
     }),
-    footerKeys,
+    footerKeys: footerKey ? [footerKey] : [],
     optionReceiptDescriptionKey:
       access.mode === "option" ? findProviderOption(access.value)?.setup?.receiptDescriptionKey : undefined,
   });
