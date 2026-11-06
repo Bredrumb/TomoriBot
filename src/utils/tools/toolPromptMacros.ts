@@ -133,9 +133,16 @@ const DYNAMIC_TOOL_PROMPT_MACRO_KEYS = Object.keys(DYNAMIC_TOOL_PROMPT_MACROS);
 // Names no tool, because a model shown a tool it cannot call tends to write the call out as chat text.
 export const UNAVAILABLE_TOOL_TEXT = "an unavailable tool";
 
-export function resolvePromptCapabilityValues(config: AssembledServerConfig): PromptCapabilityValues {
+/**
+ * @param hasTools - The active model's narrowed flag, which carries the Deliberate Tool Mode kill switch that
+ *   `tool_use_enabled` alone does not.
+ */
+export function resolvePromptCapabilityValues(
+  config: AssembledServerConfig,
+  hasTools: boolean,
+): PromptCapabilityValues {
   return {
-    tool_use: config.tool_use_enabled ?? true,
+    tool_use: hasTools && (config.tool_use_enabled ?? true),
     self_teaching: config.self_teaching_enabled,
     personal_memories: config.personal_memories_enabled,
     emoji_usage: config.emoji_usage_enabled,
@@ -423,7 +430,7 @@ export function createToolPromptMacroResolverForState(
   return createToolPromptMacroResolver({
     provider: tomoriState.llm.llm_provider,
     deliberateToolAllowedNames,
-    capabilities: resolvePromptCapabilityValues(tomoriState.config),
+    capabilities: resolvePromptCapabilityValues(tomoriState.config, tomoriState.llm.has_tools),
     stateForContext:
       tomoriState.server_id && tomoriState.llm
         ? {

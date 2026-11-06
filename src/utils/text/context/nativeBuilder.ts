@@ -151,7 +151,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
   });
   const toolPromptMacroResolver = createToolPromptMacroResolver({
     provider: tomoriState?.llm?.llm_provider,
-    capabilities: resolvePromptCapabilityValues(tomoriConfig),
+    capabilities: resolvePromptCapabilityValues(tomoriConfig, Boolean(tomoriState?.llm?.has_tools)),
     deliberateToolAllowedNames,
     stateForContext:
       tomoriState?.server_id && tomoriState.llm

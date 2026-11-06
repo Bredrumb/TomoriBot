@@ -93,6 +93,8 @@ export type StructuredContextItem = {
   conversationUsers?: ConversationUserReference[]; // Hidden metadata for user resolution and mention handling
   participantTargetIndex?: import("@/utils/text/participants/targetIndex").ParticipantTargetIndex;
   personaMentionMap?: Map<string, string>; // Hidden metadata for preserving known persona @trigger text
+  /** Built only when the context model can call tools, so a generation attempt that sends none drops it. */
+  requiresToolCalling?: true;
 };
 
 /**

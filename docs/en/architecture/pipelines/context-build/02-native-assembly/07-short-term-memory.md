@@ -23,7 +23,8 @@ The contributor `buildShortTermMemoryContext` in `src/utils/text/context/memorie
 4. **Unified cadence nudge (`nudgeItem`)**:
    - Emits a prompt hint instructing the model to invoke `{short_term_memory_tool}` after responding.
    - Gated by `turnsSinceRefresh >= refreshCadence` (default 5). The same counter and condition govern both initial creation and ongoing refresh.
-   - Suppressed when the model lacks tools (`has_tools === false`), the provider is NovelAI, or an explicit long-term memory command is detected (`explicitLongTermMemoryIntent === true`).
+   - Suppressed when the model lacks tools (`has_tools === false`), the provider is NovelAI, or an explicit long-term memory command is detected (`explicitLongTermMemoryIntent === true`). The model is the turn's planned model (channel or persona override included), not the server default.
+   - The nudge and the same-channel block carry `requiresToolCalling`, so a fallback attempt that sends no tools drops both while other-channel memories stay.
    - Carries an empty `completionText` projection, so NovelAI request fitting also excludes a nudge built for another model before a personal override or fallback; actual memory contents remain eligible.
    - Returned out-of-band alongside `nudgeInjectionDepth` (default 2, placing it before the latest user/bot turn pair).
 5. **Content placement**: Same-channel memory younger than 60 minutes, or any block carrying other-channel content, receives the `STM_TAIL_SLOT` marker. Native assembly defers that content even when the configured depth is `-1`. Stale same-channel-only content keeps its configured placement, with `-1` remaining above history.

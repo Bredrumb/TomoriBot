@@ -114,6 +114,8 @@ import { resolveEffectiveUserNaming } from "@/utils/text/userNaming";
 import { createExpressionDeliveryState } from "@/utils/chat/expressionDelivery";
 import { CONDITIONING_INTERACTION_RESPONSE_TEMPLATE } from "@/utils/conditioning/conditioningInteractionContext";
 import { createToolPromptMacroResolverForState } from "@/utils/tools/toolPromptMacros";
+import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
+import { resolveRouteTextModel } from "@/utils/provider/textModelSelection";
 
 import {
   chatTurnContextTimings,
@@ -265,6 +267,39 @@ export function resolveTurnDeliberateToolMode(turn: ChatTurn): boolean {
     ? "follow"
     : (turn.userRow.personal_deliberate_tool_mode ?? "follow");
   return resolveDeliberateToolMode(turn.persona.config.deliberate_tool_mode, personalMode);
+}
+
+/**
+ * The persona state that context assembly gates tool-dependent text on: the planned route's model,
+ * narrowed by the server Tool Use switch and this turn's kill switch, because a channel or persona
+ * model row never passes through the persona cache that narrows `has_tools`.
+ */
+async function resolvePromptPersona(
+  turn: ChatTurn,
+  effectivePersona: TomoriState,
+  disableAllTools: boolean,
+): Promise<TomoriState> {
+  const incoming = turn.lockedTurn.admission.incoming;
+  let llm: TomoriState["llm"];
+  try {
+    ({ llm } = await resolveRouteTextModel({
+      state: effectivePersona,
+      route: "planned",
+      textCredentialSource: turn.textCredentialSource,
+      personalRoutingUserId: turn.personalRoutingUserId,
+      channel: incoming.message.channel,
+      isUserImpersonation: incoming.isUserImpersonation,
+      hasSceneModelSelection: Boolean(incoming.sceneTurn?.modelSelection),
+      llmOverrideCodename: incoming.llmOverrideCodename,
+    }));
+  } catch (error) {
+    // Falls back instead of throwing because generation resolves the same route and reports the failure to the user.
+    log.warn("Could not resolve the planned text model for context assembly; gating on the persona model.", error);
+    return effectivePersona;
+  }
+  if (llm === effectivePersona.llm) return effectivePersona;
+  const hasTools = !disableAllTools && resolveToolsEnabled({ llm, config: effectivePersona.config }, llm.has_tools);
+  return { ...effectivePersona, llm: { ...llm, has_tools: hasTools } };
 }
 
 export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnContext> {
@@ -486,6 +521,9 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     streamingContext.disableAllTools && rpBasePersona.llm.has_tools
       ? { ...rpBasePersona, llm: { ...rpBasePersona.llm, has_tools: false } }
       : rpBasePersona;
+  // Generation re-resolves the route from `effectivePersona` and swaps credentials when the
+  // provider changes, so only the prompt state carries the planned model.
+  const promptPersona = await resolvePromptPersona(turn, effectivePersona, !!streamingContext.disableAllTools);
   let participantRequestScope = participantRequestScopes.get(turn.lockedTurn);
   if (!participantRequestScope) {
     participantRequestScope = createParticipantRequestScope();
@@ -588,7 +626,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
       personaPrompt: effectivePersona.persona_prompt ?? null,
       personaLineageId: effectivePersona.persona_lineage_id,
       isDMChannel: turn.isDMChannel,
-      snapshot: { ...turn.requestSnapshot, tomoriState: effectivePersona },
+      snapshot: { ...turn.requestSnapshot, tomoriState: promptPersona },
       preloadedEmojis: assets.loadedEmojis,
       preloadedStickers: assets.loadedStickers,
       preloadedCustomExpressions: assets.loadedCustomExpressions,
@@ -615,10 +653,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   let injectedContextItems = incoming.injectedContextItems;
   let builtContextItems = contextBuild.contextItems;
   if (incoming.conditioningInteraction && !incoming.isUserImpersonation) {
-    const resolver = createToolPromptMacroResolverForState(
-      effectivePersona,
-      streamingContext.deliberateToolAllowedNames,
-    );
+    const resolver = createToolPromptMacroResolverForState(promptPersona, streamingContext.deliberateToolAllowedNames);
     const hint = ["hug", "kiss"].includes(incoming.conditioningInteraction.action)
       ? await resolver.expand(CONDITIONING_INTERACTION_RESPONSE_TEMPLATE)
       : "";

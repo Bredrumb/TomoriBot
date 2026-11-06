@@ -46,7 +46,7 @@ let historySpy: ReturnType<typeof spyOn<typeof naturalNudgeRepository, "loadFire
 let personaConfigSpy: ReturnType<typeof spyOn<typeof naturalNudgeRepository, "loadPersonaConfigs">>;
 let customSpy: ReturnType<typeof spyOn<typeof naturalNudgeRepository, "listCustomIdleNudges">>;
 let scopesSpy: ReturnType<typeof spyOn<typeof naturalNudgeRepository, "loadPersonaScopes">>;
-let toolSpy: ReturnType<typeof spyOn<typeof toolsModule, "loadAvailableToolNames">>;
+let toolSpy: ReturnType<typeof spyOn<typeof toolsModule, "loadChannelAvailableToolNames">>;
 let plannerSpy: ReturnType<typeof spyOn<typeof planner, "planIdleNudge">>;
 
 let onChatCall: (() => void | Promise<void>) | null = null;
@@ -89,7 +89,7 @@ beforeEach(() => {
   customSpy.mockResolvedValue([]);
   scopesSpy = spyOn(naturalNudgeRepository, "loadPersonaScopes");
   scopesSpy.mockResolvedValue(new Map());
-  toolSpy = spyOn(toolsModule, "loadAvailableToolNames");
+  toolSpy = spyOn(toolsModule, "loadChannelAvailableToolNames");
   toolSpy.mockResolvedValue(new Set());
   plannerSpy = spyOn(planner, "planIdleNudge").mockResolvedValue({
     status: "planned",

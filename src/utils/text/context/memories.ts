@@ -508,6 +508,7 @@ export async function buildShortTermMemoryContext(params: {
             },
           ],
           metadataTag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
+          requiresToolCalling: true,
         });
       }
 
@@ -550,6 +551,7 @@ export async function buildShortTermMemoryContext(params: {
             },
           ],
           metadataTag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
+          requiresToolCalling: true,
         };
       }
     }

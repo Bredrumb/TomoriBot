@@ -29,7 +29,7 @@ import { isWithinWakingHours, serverDayStart } from "@/modules/natural-nudges/ru
 import { IDLE_NUDGE_DAILY_CAPS, PLANNER_HISTORY_MESSAGES } from "@/modules/natural-nudges/runtime/tuning";
 import { planIdleNudge, type IdleNudgePlan, type PlannerCandidate } from "@/modules/natural-nudges/runtime/planner";
 import { refreshPingUserTarget, type PingUserTarget } from "@/modules/natural-nudges/runtime/targets";
-import { loadAvailableToolNames } from "@/modules/natural-nudges/runtime/tools";
+import { loadChannelAvailableToolNames } from "@/modules/natural-nudges/runtime/tools";
 import { recordIdleNudgeSample, type IdleNudgeSample } from "@/modules/natural-nudges/runtime/telemetry";
 import { isChannelProcessingLocked, tomoriChat } from "@/events/messageCreate/tomoriChat";
 import { isDeliveredTurnResult } from "@/utils/chat/postTurnEffects";
@@ -131,7 +131,7 @@ async function recheckBeforeSend(
   });
   if (!currentIdleNudge) return "idle_nudge_unavailable";
   if (!sameIdleNudgeDefinition(attempt.idleNudge, currentIdleNudge)) return "idle_nudge_changed";
-  const availableTools = await loadAvailableToolNames(currentPersona);
+  const availableTools = await loadChannelAvailableToolNames(currentPersona, target.channel);
   attempt.availableTools = availableTools;
   if (findMissingIdleNudgeTool(currentIdleNudge, availableTools)) return "tools_unavailable";
   const whitelist = await whitelistRepository.checkChannelWhitelist(attempt.serverDiscId, target.channel.id);

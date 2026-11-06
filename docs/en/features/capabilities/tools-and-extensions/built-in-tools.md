@@ -71,7 +71,8 @@ and may contain one `{{else}}`; general `and`/`or` expressions are not supported
 The supported capability names are `tool_use`, `self_teaching`, `personal_memories`,
 `emoji_usage`, `sticker_usage`, `web_search`, `manage_message`, `thread_creation`,
 `image_generation`, `video_generation`, `voice_message`, `user_blocking`,
-`short_term_memory`, and `time_awareness`.
+`short_term_memory`, and `time_awareness`. `tool_use` is also off when the active model cannot call
+tools.
 
 Tool conditions reflect provider/model support, server configuration, configured backends,
 MCP replacements, and the current Deliberate Tool Mode allowlist. They do not bypass or

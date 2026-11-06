@@ -1,11 +1,14 @@
+import type { GuildTextBasedChannel } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import { getAvailableToolsWithMCP, type ToolStateForContext } from "@/tools/toolRegistry";
 import { log } from "@/utils/misc/logger";
 import { normalizeProviderName } from "@/utils/provider/providerInfoRegistry";
+import { resolveServerTextModel } from "@/utils/provider/textModelSelection";
+import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
 
 /** Built-in tools this persona's turn would be offered, which is what tool prerequisites test. */
 export async function loadAvailableToolNames(persona: TomoriState): Promise<Set<string>> {
-  if (!persona.llm.has_tools) return new Set();
+  if (!resolveToolsEnabled(persona, persona.llm.has_tools)) return new Set();
   const state: ToolStateForContext = {
     server_id: persona.server_id.toString(),
     activePersonaHasElevenlabsVoice: Boolean(
@@ -50,4 +53,12 @@ export async function loadAvailableToolNames(persona: TomoriState): Promise<Set<
     log.warn("Natural Nudges: could not resolve tool availability", error, { personaId: persona.persona_id });
     return new Set();
   }
+}
+
+/** The nudge turn runs on the channel's text model, so its tool prerequisites follow that model rather than the server default. */
+export async function loadChannelAvailableToolNames(
+  persona: TomoriState,
+  channel: GuildTextBasedChannel,
+): Promise<Set<string>> {
+  return loadAvailableToolNames({ ...persona, llm: await resolveServerTextModel(persona, channel, false) });
 }

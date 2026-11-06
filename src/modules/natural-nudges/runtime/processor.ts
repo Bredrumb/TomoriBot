@@ -74,7 +74,7 @@ import { type NudgeModelRef, resolvePlannerModel } from "@/modules/natural-nudge
 import { runIdleNudgeAttempt, type IdleNudgeAttempt } from "@/modules/natural-nudges/runtime/runner";
 import type { PlannerCandidate, ScenePartner } from "@/modules/natural-nudges/runtime/planner";
 import { recordIdleNudgeSample } from "@/modules/natural-nudges/runtime/telemetry";
-import { loadAvailableToolNames } from "@/modules/natural-nudges/runtime/tools";
+import { loadChannelAvailableToolNames } from "@/modules/natural-nudges/runtime/tools";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { statRepository } from "@/utils/db/repositories";
 import { whitelistRepository } from "@/utils/db/repositories/WhitelistRepository";
@@ -399,11 +399,19 @@ export class NaturalNudgeProcessor {
       scopes,
       personaConfig,
     });
-    const availableTools = await loadAvailableToolNames(persona);
+    const toolsByChannel = new Map(
+      await Promise.all(
+        plannerChannels.map(
+          async (channel) =>
+            [channel.channel.id, await loadChannelAvailableToolNames(persona, channel.channel)] as const,
+        ),
+      ),
+    );
+    const availableTools = new Set([...toolsByChannel.values()].flatMap((tools) => [...tools]));
     const channelFacts = (channelId: string): Omit<PrerequisiteFacts, "target"> => ({
       hasHangingConversation: hanging.some((entry) => entry.channel.id === channelId),
       hasScenePartner: hasScenePartner(partnerCandidates, [channelId]),
-      availableTools,
+      availableTools: toolsByChannel.get(channelId) ?? new Set(),
     });
     const channelEligible = runnable.filter((idleNudge) =>
       plannerChannels.some((channel) => isIdleNudgeChannelEligible(idleNudge, channelFacts(channel.channel.id))),

@@ -62,8 +62,8 @@ one credential notice and one quota notice across persona jobs and retries. Pers
 stay outside server quota, and any admitted server route requires the server trigger cooldown.
 A trigger whose turns produce no reply releases its reserved unit so a retry can claim one again.
 
-Server admission and generation use `src/utils/provider/textModelSelection.ts` for the same model
-choice: persona override, channel override (including a thread's parent), then workspace default.
+Server admission, context assembly, and generation use `src/utils/provider/textModelSelection.ts` for
+the same model choice: persona override, channel override (including a thread's parent), then workspace default.
 Impersonation uses the workspace model. An invocation codename override loads that provider's model
 metadata when registered. Personal credentials keep their own model routing ahead of server selection.
 

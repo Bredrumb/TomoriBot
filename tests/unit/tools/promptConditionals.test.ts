@@ -430,25 +430,28 @@ describe("prompt macro resolver condition integration", () => {
   });
 
   it("maps public capability names independently from database column names", () => {
-    const values = resolvePromptCapabilityValues({
-      tool_use_enabled: false,
-      self_teaching_enabled: false,
-      personal_memories_enabled: true,
-      emoji_usage_enabled: true,
-      sticker_usage_enabled: false,
-      web_search_enabled: true,
-      manage_message_enabled: false,
-      thread_creation_enabled: true,
-      conditioning_interactions_enabled: false,
-      dice_rolling_enabled: false,
-      danbooru_enabled: true,
-      imagegen_enabled: false,
-      videogen_enabled: true,
-      voice_message_enabled: false,
-      user_blocking_enabled: true,
-      short_term_memory_enabled: false,
-      time_awareness_enabled: true,
-    } as AssembledServerConfig);
+    const values = resolvePromptCapabilityValues(
+      {
+        tool_use_enabled: false,
+        self_teaching_enabled: false,
+        personal_memories_enabled: true,
+        emoji_usage_enabled: true,
+        sticker_usage_enabled: false,
+        web_search_enabled: true,
+        manage_message_enabled: false,
+        thread_creation_enabled: true,
+        conditioning_interactions_enabled: false,
+        dice_rolling_enabled: false,
+        danbooru_enabled: true,
+        imagegen_enabled: false,
+        videogen_enabled: true,
+        voice_message_enabled: false,
+        user_blocking_enabled: true,
+        short_term_memory_enabled: false,
+        time_awareness_enabled: true,
+      } as AssembledServerConfig,
+      true,
+    );
 
     expect(values).toMatchObject({
       tool_use: false,
@@ -458,6 +461,15 @@ describe("prompt macro resolver condition integration", () => {
       video_generation: true,
       short_term_memory: false,
     });
+  });
+
+  it("reports tool_use off when the active model cannot call tools even with the server switch on", () => {
+    const config = { tool_use_enabled: true } as AssembledServerConfig;
+
+    expect([true, false].map((hasTools) => resolvePromptCapabilityValues(config, hasTools).tool_use)).toEqual([
+      true,
+      false,
+    ]);
   });
 });
 
