@@ -17,11 +17,15 @@
 #
 # NOTE: generation can take 30-90s on first run or on CPU. Raise TTS_SYNTHESIZE_TIMEOUT_MS
 # (default 240000) in TomoriBot's .env if requests abort before audio is returned.
+#
+# faster-qwen3-tts powers the default QWEN3TTS_BACKEND=cuda-graphs. It stays on 0.3.x because 0.4 and later
+# replace qwen-tts with the unofficial qwen-tts-hf build and require transformers 5.
 --index-url https://download.pytorch.org/whl/cu124
 --extra-index-url https://pypi.org/simple
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
 pydantic>=2.5.0
-torch>=2.5.0
+torch>=2.6.0
 soundfile>=0.12.0
-qwen-tts>=0.1.0
+qwen-tts>=0.1.1
+faster-qwen3-tts==0.3.2

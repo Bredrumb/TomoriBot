@@ -122,6 +122,8 @@ Use `/providers` for endpoint registration and model setup. Then open `/config` 
 
 Irodori defaults to a 120-second reference limit and trims longer clips. Set `IRODORI_MAX_REF_SECONDS` to change the limit.
 
+The server encodes each reference clip once and keeps the result in `servers/tts/irodoritts/reference-cache/`, so repeat requests skip that step. Replacing a persona's clip creates a new entry, and old entries stay until you delete the folder.
+
 ### VoiceDesign
 
 1. Open `/config` under Persona > Voice.
@@ -154,6 +156,39 @@ $env:IRODORI_SWAY_COEFF = "-1.0"
 
 This is an inference quality and speed tradeoff, so test it with your chosen checkpoint and voices before making it permanent.
 
+## Low-latency mode (NVIDIA)
+
+Low-latency mode makes each sentence about 3-4x faster on an NVIDIA GPU with the same 40 steps and voice settings, so it does not trade away quality the way Sway Sampling does. Turn it on in `.env`:
+
+```dotenv
+IRODORI_COMPILE_MODE="cudagraphs"
+```
+
+`cudagraphs` is the fastest mode. `compile` is about 2x faster than the default; try it if `cudagraphs` misbehaves on your GPU. Both need the `cu128` backend, and the server refuses to start with either mode on other backends.
+
+What to expect:
+
+- The server warms up before it reports ready. The first start takes about 2-4 minutes; later starts take about 1-2 minutes because the compiled kernels are cached on disk. `bun run launch --irodoritts` waits up to 5 minutes; on a slower GPU, raise that limit with `TOMORI_TTS_STARTUP_TIMEOUT_MS` (in milliseconds).
+- The first request with a new sentence length or a new voice clip adds a fraction of a second, once.
+- VRAM use goes down slightly.
+- The audio is not bit-identical to the default mode for the same seed. In testing it sounded equivalent, so listen to a few lines with your own voices before relying on it.
+
+On Windows, the mode also needs the Microsoft C++ compiler:
+
+1. Install [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with the **Desktop development with C++** workload.
+2. Rerun `.\servers\tts\irodoritts\install-irodori.ps1 cu128` so the Windows Triton package is installed.
+3. Start the server (or `bun run launch --irodoritts`) from **Developer PowerShell for VS**, or load the compiler into an ordinary PowerShell first:
+
+```powershell
+$vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+$vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+cmd /c "`"$vs\VC\Auxiliary\Build\vcvars64.bat`" >nul && set" | ForEach-Object {
+  if ($_ -match "^([^=]+)=(.*)$") { Set-Item -Path "Env:$($Matches[1])" -Value $Matches[2] }
+}
+```
+
+If the compiler or Triton is missing, the server stops at startup and says which one.
+
 ## Environment variables
 
 | Variable | Default | Purpose |
@@ -166,8 +201,7 @@ This is an inference quality and speed tradeoff, so test it with your chosen che
 | `IRODORI_CODEC_DEVICE` | `auto` | Codec device |
 | `IRODORI_MODEL_PRECISION` | `bf16` on CUDA, otherwise `fp32` | Model precision |
 | `IRODORI_CODEC_PRECISION` | `fp32` | Codec precision |
-| `IRODORI_COMPILE_MODEL` | `false` | Enable `torch.compile` for the Irodori model |
-| `IRODORI_COMPILE_DYNAMIC` | `false` | Enable dynamic shapes when compiling |
+| `IRODORI_COMPILE_MODE` | `off` | `off`, `compile`, or `cudagraphs`; see [Low-latency mode](#low-latency-mode-nvidia) |
 | `IRODORI_NUM_STEPS` | `40` | Euler sampling steps |
 | `IRODORI_T_SCHEDULE_MODE` | `linear` | Sampling schedule (`linear` or `sway`) |
 | `IRODORI_SWAY_COEFF` | `-1.0` | Sway coefficient when using the `sway` schedule |

@@ -49,7 +49,18 @@ def read_startup_mode() -> str:
   return os.getenv("TOMORI_TTS_MODE", "auto")
 
 
+def resolve_backend(raw_backend: str) -> str:
+  normalized = raw_backend.strip().lower()
+  if normalized in {"transformers", "cuda-graphs"}:
+    return normalized
+  raise ValueError("QWEN3TTS_BACKEND must be 'transformers' or 'cuda-graphs'.")
+
+
 MODE = resolve_mode(read_startup_mode())
+BACKEND = resolve_backend(os.getenv("QWEN3TTS_BACKEND", "cuda-graphs"))
+# Static-cache talker positions shared by the reference prompt and the generated audio (12 per second);
+# 4096 measured about 20% slower per step, so raise it only when the cache-full 422 becomes common.
+CUDA_GRAPH_MAX_SEQ_LEN = 2048
 HOST = os.getenv("TOMORI_TTS_HOST", "127.0.0.1")
 PORT = int(os.getenv("QWEN3TTS_PORT", "8014" if MODE == "voice-design" else "8012"))
 DEVICE_MAP = os.getenv("QWEN3TTS_DEVICE_MAP", "cuda:0" if torch.cuda.is_available() else "cpu")
@@ -171,6 +182,74 @@ def unload_model() -> None:
     torch.cuda.empty_cache()
 
 
+class StaticCacheFull(Exception):
+  pass
+
+
+def resolve_model_source(model_id: str) -> str:
+  from huggingface_hub import constants, snapshot_download
+
+  if not constants.HF_HUB_OFFLINE or Path(model_id).is_dir():
+    return model_id
+  # transformers 4.57 calls the Hub's model_info while loading a tokenizer by repo id, even offline.
+  return snapshot_download(repo_id=model_id, local_files_only=True)
+
+
+def guard_static_cache(fast_generate):
+  """Turns faster-qwen3-tts's silent stop at a full static cache into StaticCacheFull."""
+
+  def guarded(**kwargs):
+    capacity = kwargs["talker_graph"].max_seq_len
+    prefill_len = kwargs["talker_input_embeds"].shape[1]
+    if prefill_len >= capacity - 1:
+      raise StaticCacheFull()
+    codec_ids, timing = fast_generate(**kwargs)
+    if prefill_len + timing["steps"] >= capacity:
+      raise StaticCacheFull()
+    return codec_ids, timing
+
+  return guarded
+
+
+def require_backend_support() -> None:
+  if BACKEND != "cuda-graphs":
+    return
+  import importlib.util
+
+  if not DEVICE_MAP.startswith("cuda") or not torch.cuda.is_available():
+    raise RuntimeError(
+      "QWEN3TTS_BACKEND=cuda-graphs (the default) needs an NVIDIA GPU with CUDA PyTorch. "
+      "Set QWEN3TTS_BACKEND=transformers to run without it."
+    )
+  if importlib.util.find_spec("faster_qwen3_tts") is None:
+    raise RuntimeError(
+      "QWEN3TTS_BACKEND=cuda-graphs (the default) needs faster-qwen3-tts. Run "
+      "pip install -r servers/tts/qwen3tts/requirements.txt, or set QWEN3TTS_BACKEND=transformers."
+    )
+
+
+def load_cuda_graph_model(source: str, kwargs: dict):
+  import faster_qwen3_tts.generate
+  from faster_qwen3_tts import FasterQwen3TTS
+
+  if not getattr(faster_qwen3_tts.generate.fast_generate, "_tomori_guarded", False):
+    # FasterQwen3TTS imports fast_generate inside each generate call, so replacing the module attribute
+    # reaches every path; 0.3.2 passes all of its arguments by keyword.
+    guarded = guard_static_cache(faster_qwen3_tts.generate.fast_generate)
+    guarded._tomori_guarded = True
+    faster_qwen3_tts.generate.fast_generate = guarded
+
+  fast_model = FasterQwen3TTS.from_pretrained(
+    source,
+    device=DEVICE_MAP,
+    dtype=kwargs["dtype"],
+    attn_implementation=kwargs.get("attn_implementation", "sdpa"),
+    max_seq_len=CUDA_GRAPH_MAX_SEQ_LEN,
+  )
+  fast_model.warmup()
+  return fast_model
+
+
 def load_model_for_mode(mode: str) -> None:
   global model, model_mode
 
@@ -180,8 +259,6 @@ def load_model_for_mode(mode: str) -> None:
   if model is not None:
     log_info(f"Unloading active model mode={model_mode} before loading mode={mode}")
     unload_model()
-
-  from qwen_tts import Qwen3TTSModel
 
   model_id = model_id_for_mode(mode)
   kwargs: dict = {
@@ -193,11 +270,38 @@ def load_model_for_mode(mode: str) -> None:
 
   load_started_at = time.perf_counter()
   log_info(
-    f"Loading model mode={mode} model_id={model_id} device_map={DEVICE_MAP} dtype={DTYPE} flash_attention={USE_FLASH_ATTENTION}"
+    f"Loading model mode={mode} model_id={model_id} backend={BACKEND} device_map={DEVICE_MAP} dtype={DTYPE} "
+    f"flash_attention={USE_FLASH_ATTENTION}"
   )
-  model = Qwen3TTSModel.from_pretrained(model_id, **kwargs)
+  source = resolve_model_source(model_id)
+  if BACKEND == "cuda-graphs":
+    model = load_cuda_graph_model(source, kwargs)
+  else:
+    from qwen_tts import Qwen3TTSModel
+
+    model = Qwen3TTSModel.from_pretrained(source, **kwargs)
   model_mode = mode
   log_info(f"Model loaded mode={mode} elapsed_ms={int((time.perf_counter() - load_started_at) * 1000)}")
+
+
+def generate_clone(text: str, language: str, ref_path: str, ref_text: str):
+  x_vector_only = ref_text == ""
+  if BACKEND == "transformers":
+    return model.generate_voice_clone(
+      text=text,
+      language=language,
+      ref_audio=ref_path,
+      ref_text=ref_text,
+      x_vector_only_mode=x_vector_only,
+    )
+  # Passing ref_audio would fill FasterQwen3TTS's prompt cache, which keys on the per-request temp path
+  # and never evicts.
+  prompt = model.model.create_voice_clone_prompt(
+    ref_audio=ref_path,
+    ref_text=ref_text or None,
+    x_vector_only_mode=x_vector_only,
+  )
+  return model.generate_voice_clone(text=text, language=language, ref_text=ref_text, voice_clone_prompt=prompt)
 
 
 def infer_request_mode(payload: SynthesizeRequest) -> str:
@@ -241,6 +345,7 @@ def resolve_request_mode(payload: SynthesizeRequest) -> str:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+  require_backend_support()
   if MODE != "auto":
     load_model_for_mode(MODE)
   yield
@@ -261,6 +366,7 @@ def health() -> dict[str, str]:
     "device_map": DEVICE_MAP,
     "mode": MODE,
     "active_mode": active_mode,
+    "backend": BACKEND,
   }
 
 
@@ -291,33 +397,37 @@ def synthesize(payload: SynthesizeRequest) -> Response:
 
       load_model_for_mode(request_mode)
 
-      if request_mode == "voice-design":
-        generation_started_at = time.perf_counter()
-        wavs, sample_rate = model.generate_voice_design(
-          text=text,
-          language=language,
-          instruct=design_instruct,
-        )
-        log_info(
-          f"VoiceDesign generation finished sample_rate={sample_rate} elapsed_ms={int((time.perf_counter() - generation_started_at) * 1000)}"
-        )
-      else:
-        if not payload.ref_audio or not payload.ref_audio.strip():
-          raise HTTPException(status_code=400, detail="ref_audio is required.")
+      try:
+        if request_mode == "voice-design":
+          generation_started_at = time.perf_counter()
+          wavs, sample_rate = model.generate_voice_design(
+            text=text,
+            language=language,
+            instruct=design_instruct,
+          )
+          log_info(
+            f"VoiceDesign generation finished sample_rate={sample_rate} elapsed_ms={int((time.perf_counter() - generation_started_at) * 1000)}"
+          )
+        else:
+          if not payload.ref_audio or not payload.ref_audio.strip():
+            raise HTTPException(status_code=400, detail="ref_audio is required.")
 
-        ref_text = payload.ref_text.strip() if payload.ref_text else ""
-        ref_path = decode_ref_audio(payload.ref_audio, temp_dir)
-        generation_started_at = time.perf_counter()
-        wavs, sample_rate = model.generate_voice_clone(
-          text=text,
-          language=language,
-          ref_audio=ref_path,
-          ref_text=ref_text,
-          x_vector_only_mode=ref_text == "",
-        )
-        log_info(
-          f"Clone generation finished sample_rate={sample_rate} elapsed_ms={int((time.perf_counter() - generation_started_at) * 1000)}"
-        )
+          ref_text = payload.ref_text.strip() if payload.ref_text else ""
+          ref_path = decode_ref_audio(payload.ref_audio, temp_dir)
+          generation_started_at = time.perf_counter()
+          wavs, sample_rate = generate_clone(text, language, ref_path, ref_text)
+          log_info(
+            f"Clone generation finished sample_rate={sample_rate} elapsed_ms={int((time.perf_counter() - generation_started_at) * 1000)}"
+          )
+      except StaticCacheFull as exc:
+        raise HTTPException(
+          status_code=422,
+          detail=(
+            f"The reference clip plus the generated speech exceed the cuda-graphs backend's "
+            f"{CUDA_GRAPH_MAX_SEQ_LEN}-position cache. Use a shorter text or reference clip, or set "
+            "QWEN3TTS_BACKEND=transformers."
+          ),
+        ) from exc
 
     sf.write(str(output_path), wavs[0], int(sample_rate))
     log_info(f"/synthesize completed elapsed_ms={int((time.perf_counter() - request_started_at) * 1000)}")

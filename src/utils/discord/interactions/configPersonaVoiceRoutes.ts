@@ -1,14 +1,15 @@
 import { createHash } from "node:crypto";
 import { MAX_VOICE_DESIGN_PROMPT_LENGTH } from "@/constants/speech";
-import { MessageFlags, TextInputStyle, type ModalSubmitInteraction } from "discord.js";
+import { TextInputStyle, type ModalSubmitInteraction } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import type { ElevenLabsVoiceCatalogEntry } from "@/utils/audio/elevenLabsVoiceCatalog";
 import { buildConfigModalFieldId, type RawModalPayload } from "@/utils/discord/ui/configModals";
 import { isConfigRouteAuthorized, type ConfigActor } from "@/utils/discord/interactions/configPermissionPolicy";
 import {
+  deniedReceipt,
   repaint,
   staleReceipt,
-  missingScopeMessageKey,
+  missingScopeReceipt,
   type ConfigRouteDependencies,
   type ConfigScope,
 } from "@/utils/discord/interactions/configRouteContext";
@@ -19,6 +20,7 @@ import { buildTextPreview } from "@/utils/text/textPreview";
 import { localizer } from "@/utils/text/localizer";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { DISCORD_SELECT_OPTIONS_MAX } from "@/utils/discord/ui/componentsV2Limits";
+import { replyPanelReceipt } from "@/utils/discord/ui/panel";
 
 const VOICE_DESIGN_PROMPT_FIELD = "voice_design_prompt";
 const VOICE_PAGE_SIZE = DISCORD_SELECT_OPTIONS_MAX;
@@ -232,17 +234,6 @@ async function repaintVoice(
   });
 }
 
-async function rejectModalRoute(
-  interaction: GlobalRoutableInteraction,
-  locale: string,
-  contentKey: string,
-): Promise<void> {
-  await interaction.reply({
-    content: localizer(locale, contentKey),
-    flags: MessageFlags.Ephemeral,
-  });
-}
-
 export async function handleConfigPersonaVoiceModalOpen(
   interaction: GlobalRoutableInteraction,
   route: ConfigPanelRoute,
@@ -251,23 +242,23 @@ export async function handleConfigPersonaVoiceModalOpen(
 ): Promise<boolean> {
   if (!CONFIG_PERSONA_VOICE_MODAL_OPEN_ACTIONS.has(route.action)) return false;
   if (!isConfigRouteAuthorized(route, actor)) {
-    await rejectModalRoute(interaction, route.locale, "commands.config.panel.denied_detail");
+    await replyPanelReceipt(interaction, deniedReceipt(route.locale));
     return true;
   }
 
   const scope = await dependencies.resolveScope(interaction, false);
   if (!scope) {
-    await rejectModalRoute(interaction, route.locale, missingScopeMessageKey(interaction, dependencies));
+    await replyPanelReceipt(interaction, missingScopeReceipt(route.locale, interaction, dependencies));
     return true;
   }
   const personaId = "personaId" in route ? route.personaId : null;
   const persona = typeof personaId === "number" ? exactPersona(scope, personaId) : null;
   if (!persona) {
-    await rejectModalRoute(interaction, route.locale, "commands.config.panel.stale_detail");
+    await replyPanelReceipt(interaction, staleReceipt(route.locale));
     return true;
   }
   if (!isConfigRouteAuthorized(route, scope.actor)) {
-    await rejectModalRoute(interaction, route.locale, "commands.config.panel.denied_detail");
+    await replyPanelReceipt(interaction, deniedReceipt(route.locale));
     return true;
   }
 

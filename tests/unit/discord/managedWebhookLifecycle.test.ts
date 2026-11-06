@@ -1,3 +1,5 @@
+import { stubAllShardOwnership } from "../../helpers/shardOwnership";
+stubAllShardOwnership();
 import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import { Collection, type BaseGuildTextChannel, type Webhook } from "discord.js";
 import { serverRepository } from "@/utils/db/repositories/ServerRepository";

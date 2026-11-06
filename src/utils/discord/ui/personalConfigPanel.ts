@@ -55,6 +55,7 @@ import {
 } from "@/utils/discord/ui/personalConfigParameterControls";
 import { escapeDiscordMarkdown } from "@/utils/text/discordMarkdown";
 import { truncateDiscordText } from "@/utils/text/discordTextLimits";
+import { renderFencedPreview } from "@/utils/text/textPreview";
 import { formatUTCOffset } from "@/utils/text/timezoneHelper";
 import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { getLocaleEndonym, localizer } from "@/utils/text/localizer";
@@ -1086,17 +1087,20 @@ ${localizer(locale, "commands.personal.config.persona_naming_description")}`,
         );
       }
     } else if (page === "appearance") {
+      const tagsLabel = localizer(locale, "commands.personal.config.tags_label");
       const tagsText =
         user.physical_appearance_tags && user.physical_appearance_tags.length > 0
-          ? `\`${escapeDiscordMarkdown(user.physical_appearance_tags.join(", "))}\``
-          : localizer(locale, "commands.personal.config.not_set_label");
+          ? `${tagsLabel}:\n${renderFencedPreview(locale, user.physical_appearance_tags.join(", "), {
+              actionLabel: localizer(locale, "commands.personal.config.edit_appearance_button"),
+            })}`
+          : `> ${tagsLabel}: ${localizer(locale, "commands.personal.config.not_set_label")}`;
 
       components.push(
         {
           type: ComponentType.TextDisplay,
           content: `### ${localizer(locale, "commands.personal.config.appearance_title")}
 ${localizer(locale, "commands.personal.config.appearance_description")}
-> ${localizer(locale, "commands.personal.config.tags_label")}: ${tagsText}
+${tagsText}
 -# ${localizer(locale, "commands.personal.config.teach_persona_hint").split("\n").join("\n-# ")}`,
         },
         {

@@ -15,6 +15,7 @@ import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed, replySummaryEmbed } from "@/utils/discord/ui/embeds";
+import { createStandardEmbed } from "@/utils/discord/embedHelper";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { getAvailableToolsForContext } from "@/tools/toolRegistry";
 import { getCachedTomoriState, getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
@@ -1794,18 +1795,19 @@ export async function execute(
   } catch (error) {
     await log.error("Error executing /tool estimate cost command", error as Error, errorContext);
 
-    const errorMessage = localizer(locale, "general.errors.unknown_error_description");
+    const errorOptions = {
+      titleKey: "general.errors.unknown_error_title",
+      descriptionKey: "general.errors.unknown_error_description",
+      color: ColorCode.ERROR,
+    };
     try {
       if (interaction.replied || interaction.deferred) {
         await interaction.followUp({
-          content: errorMessage,
+          embeds: [createStandardEmbed(locale, errorOptions)],
           flags: MessageFlags.Ephemeral,
         });
       } else {
-        await interaction.reply({
-          content: errorMessage,
-          flags: MessageFlags.Ephemeral,
-        });
+        await replyInfoEmbed(interaction, locale, errorOptions);
       }
     } catch (replyError) {
       log.error("Failed to send error reply for /tool estimate cost", replyError, errorContext);

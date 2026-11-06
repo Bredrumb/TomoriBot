@@ -1,5 +1,16 @@
 export default {
   general: {
+    restarting_title: `Restarting`,
+    restarting: `TomoriBot is restarting. Please try again shortly.`,
+    panel_notice: {
+      outdated_heading: `Panel Out Of Date`,
+      unavailable_heading: `Unavailable`,
+      empty_heading: `Nothing Here`,
+      no_changes_heading: `No Changes`,
+      limit_heading: `Limit Reached`,
+      not_available_heading: `Not Available`,
+      invalid_heading: `Invalid Choice`,
+    },
     oauth: {
       invalid_callback: `This sign-in link is invalid or expired. Start sign-in again from TomoriBot.`,
       server_error: `TomoriBot could not complete sign-in because of a service error. Please try again later.`,

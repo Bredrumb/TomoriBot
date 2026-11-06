@@ -10,7 +10,7 @@ import { TOMORIBOT_ERROR_FOOTER_KEY } from "@/utils/discord/stream/errorUi";
 import { classifySendFailure, wasSendFailureLogged } from "@/utils/discord/stream/sendFailureCache";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { channelLocks, setActiveChannelTurnState, setChannelToolCallChainActive } from "@/utils/chat/channelQueue";
-import { cacheUserImpersonationWebhook, resolveImpersonatedIdentity } from "@/utils/chat/webhookIdentity";
+import { createUserImpersonationWebhook } from "@/utils/chat/webhookIdentity";
 import type { ChatResponseSink, ChatResponseTarget, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import type { ProviderError } from "@/types/stream/interfaces";
 
@@ -182,32 +182,18 @@ async function createUserImpersonationTarget(
 ): Promise<ChatResponseTarget | undefined> {
   if (!context.impersonatedUserId) return undefined;
 
-  const identity = await resolveImpersonatedIdentity(
+  const { webhook, displayName, avatarUrl } = await createUserImpersonationWebhook(
     context.client,
-    context.guild,
+    webhookTargetChannel,
     context.impersonatedUserId,
-    undefined,
-  );
-  // A whitespace-only display name is truthy, so it would reach Discord as the webhook name.
-  const displayName = identity.displayName.trim() || "User";
-  const webhook = await webhookTargetChannel.createWebhook({
-    name: displayName,
-    avatar: identity.avatarUrl || undefined,
-    reason: "TomoriBot user impersonation",
-  });
-
-  cacheUserImpersonationWebhook(
-    webhook.id,
-    context.impersonatedUserId,
-    webhookTargetChannel.guildId,
-    webhookTargetChannel.id,
+    "TomoriBot user impersonation",
   );
   return {
     webhook,
     temporaryWebhook: webhook,
     deliveryMode: "user_impersonation",
     personaUsername: displayName,
-    personaAvatarUrl: identity.avatarUrl,
+    personaAvatarUrl: avatarUrl,
     prefixStrippingName: displayName,
     webhookTargetChannel,
   };

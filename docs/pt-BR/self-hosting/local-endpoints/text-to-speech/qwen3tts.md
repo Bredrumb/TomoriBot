@@ -39,6 +39,17 @@ python servers\tts\qwen3tts\server.py --mode auto
 
 O modo automático analisa cada solicitação para `/synthesize`: solicitações com `ref_audio` utilizam o modelo de clonagem, enquanto solicitações com `instruct` usam o modelo VoiceDesign. Ele mantém apenas um modelo carregado por vez e troca os modelos quando o tipo de solicitação muda, de modo que a primeira solicitação após uma troca pode ser mais lenta.
 
+## Opcional: backend CUDA mais rápido
+
+Em uma GPU NVIDIA, defina `QWEN3TTS_BACKEND=cuda-graphs` antes de iniciar o servidor para usar o [faster-qwen3-tts](https://github.com/andimarafioti/faster-qwen3-tts), que os requisitos já instalam. A síntese é cerca de 6x mais rápida, executando mais rápido do que em tempo real em vez de cerca de duas vezes mais lenta. Sua saída não é idêntica bit a bit à do backend padrão para a mesma entrada.
+
+Este backend reserva espaço para uma quantidade fixa de fala por solicitação, compartilhada entre o clipe de referência e o áudio gerado (cerca de 170 segundos no total). Com um clipe de 10-20 segundos, sobram bem mais de dois minutos de fala. Se uma solicitação não couber, o servidor retorna um erro em vez de cortar o áudio; use um clipe ou texto mais curto, ou o backend padrão `transformers`.
+
+```powershell
+$env:QWEN3TTS_BACKEND = "cuda-graphs"
+python servers\tts\qwen3tts\server.py
+```
+
 ## Registrar no TomoriBot
 
 Para a maioria dos usuários, registre o servidor em modo automático para que um único endpoint suporte personas tanto com clonagem de voz quanto com VoiceDesign.

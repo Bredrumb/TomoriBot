@@ -29,7 +29,10 @@ import type { FunctionCall, ThoughtLogEntry } from "../../types/provider/interfa
 import type { StructuredContextItem } from "../../types/misc/context";
 import { log } from "../../utils/misc/logger";
 import { isProviderTimeoutMessage } from "@/utils/provider/providerErrorClassification";
-import { createGoogleApiErrorDescription } from "@/providers/google/googleStreamAdapter";
+import {
+  classifyGenAIStreamInterruption,
+  createGoogleApiErrorDescription,
+} from "@/providers/google/googleStreamAdapter";
 import { localizer } from "../../utils/text/localizer";
 import { truncateBeforeGenericSpeakerLine } from "@/utils/text/processors/llmOutputProcessor";
 import {
@@ -795,6 +798,8 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
   }
 
   handleProviderError(error: unknown): ProviderError {
+    const interruption = classifyGenAIStreamInterruption(error);
+    if (interruption) return interruption;
     const errorMessage = error instanceof Error ? error.message : String(error);
 
     // Check for composite-key parse errors first (Vertex-specific)

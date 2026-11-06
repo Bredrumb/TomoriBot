@@ -14,7 +14,7 @@ import type {
 } from "@/utils/messageProxy/types";
 import { formatMessageProxyIdentityUserId, parseMessageProxyIdentityUserId } from "@/utils/messageProxy/identityUserId";
 import { getProxyServiceDescriptor } from "@/utils/messageProxy/registry";
-import { sql } from "@/utils/db/client";
+import { sql, withTransientDbRetry } from "@/utils/db/client";
 import { userRepository } from "@/utils/db/repositories/UserRepository";
 import { log } from "@/utils/misc/logger";
 
@@ -412,10 +412,16 @@ class MessageProxyRepository {
     normalizedHistoryText: string;
   }): Promise<MessageProxyIdentityReference[]> {
     const hostUserDiscIds = [...new Set(params.hostUserDiscIds)];
-    const normalizedHistoryText = params.normalizedHistoryText.trim().toLowerCase().replace(/\s+/g, " ");
+    const normalizedHistoryText = params.normalizedHistoryText
+      .replaceAll("\u0000", " ")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, " ");
     if (hostUserDiscIds.length === 0 || !normalizedHistoryText) return [];
     try {
-      const rows = await sql<MessageProxyIdentityReferenceRow[]>`
+      const rows = await withTransientDbRetry(
+        async () =>
+          await sql<MessageProxyIdentityReferenceRow[]>`
         SELECT DISTINCT cpn.service_id, cpn.instance_id, u.user_disc_id, cpi.display_name, upc.user_nickname
         FROM message_proxy_identities cpi
         JOIN external_identities ei ON ei.external_identity_id = cpi.external_identity_id
@@ -437,7 +443,9 @@ class MessageProxyRepository {
               IN ${normalizedHistoryText}
             ) > 0)
           )
-      `;
+      `,
+        "load message-proxy context reference identities",
+      );
       return rows.flatMap((row) => {
         const parsed = parseMessageProxyIdentityUserId(String(row.user_disc_id));
         if (!parsed || parsed.serviceId !== row.service_id || parsed.instanceId !== row.instance_id) return [];

@@ -25,6 +25,7 @@ temp_*
 *.backup
 .tmp
 __pycache__/
+servers/tts/irodoritts/reference-cache/
 
 # Script outputs
 backups/*

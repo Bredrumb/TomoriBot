@@ -18,6 +18,8 @@ import {
   reminderSchema,
 } from "@/types/db/schema";
 import { sql, withTransientDbRetry } from "@/utils/db/client";
+import { ownedServersOnly } from "@/utils/db/repositories/shardFilter";
+import type { ShardTopology } from "@/utils/discord/shardOwnership";
 import { emitScheduledWorkNudge } from "@/timers/scheduledWorkSignals";
 import { log } from "@/utils/misc/logger";
 import {
@@ -122,13 +124,13 @@ interface RandomTriggerData {
 
 class ServerScheduleRepository implements IRepository<ServerScheduleExportShape> {
   /** Returns all reminders that are due to fire now. */
-  async getDueReminders(): Promise<ReminderRow[] | null> {
-    return this.sqlGetDueReminders();
+  async getDueReminders(topology?: ShardTopology): Promise<ReminderRow[] | null> {
+    return this.sqlGetDueReminders(topology);
   }
 
   /** Returns the timestamp of the next scheduled reminder, or null if none. */
-  async getNextReminderTime(): Promise<Date | null> {
-    return this.sqlGetNextReminderTime();
+  async getNextReminderTime(topology?: ShardTopology): Promise<Date | null> {
+    return this.sqlGetNextReminderTime(topology);
   }
 
   /**
@@ -261,13 +263,13 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
   }
 
   /** Returns all random triggers that are due to fire now. */
-  async getDueTriggers(): Promise<RandomTriggerRow[]> {
-    return this.sqlGetDueRandomTriggers();
+  async getDueTriggers(topology?: ShardTopology): Promise<RandomTriggerRow[]> {
+    return this.sqlGetDueRandomTriggers(topology);
   }
 
   /** Returns the timestamp of the next scheduled random trigger, or null if none. */
-  async getNextTriggerTime(): Promise<Date | null> {
-    return this.sqlGetNextRandomTriggerTime();
+  async getNextTriggerTime(topology?: ShardTopology): Promise<Date | null> {
+    return this.sqlGetNextRandomTriggerTime(topology);
   }
 
   /**
@@ -330,7 +332,7 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     return this.sqlRescheduleRandomTrigger(triggerId, timerHours, randomOffsetRange, consecutiveFailures);
   }
 
-  private async sqlGetDueReminders(): Promise<ReminderRow[] | null> {
+  private async sqlGetDueReminders(topology?: ShardTopology): Promise<ReminderRow[] | null> {
     try {
       return await withTransientDbRetry(async () => {
         const reminderData = await sql`
@@ -343,6 +345,7 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
           JOIN servers s ON s.server_id = r.server_id
           LEFT JOIN server_chat_configs scc ON scc.server_id = r.server_id
           WHERE COALESCE(r.next_attempt_at, r.reminder_time) <= CURRENT_TIMESTAMP
+            AND ${ownedServersOnly(topology)}
           ORDER BY COALESCE(r.next_attempt_at, r.reminder_time) ASC
         `;
 
@@ -376,13 +379,15 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     }
   }
 
-  private async sqlGetNextReminderTime(): Promise<Date | null> {
+  private async sqlGetNextReminderTime(topology?: ShardTopology): Promise<Date | null> {
     try {
       return await withTransientDbRetry(async () => {
         const [result] = await sql<{ next_reminder_time: Date | string | null }[]>`
-          SELECT COALESCE(next_attempt_at, reminder_time) AS next_reminder_time
-          FROM reminders
-          ORDER BY COALESCE(next_attempt_at, reminder_time) ASC
+          SELECT COALESCE(r.next_attempt_at, r.reminder_time) AS next_reminder_time
+          FROM reminders r
+          JOIN servers s ON s.server_id = r.server_id
+          WHERE ${ownedServersOnly(topology)}
+          ORDER BY COALESCE(r.next_attempt_at, r.reminder_time) ASC
           LIMIT 1
         `;
 
@@ -1089,13 +1094,15 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     }
   }
 
-  private async sqlGetDueRandomTriggers(): Promise<RandomTriggerRow[]> {
+  private async sqlGetDueRandomTriggers(topology?: ShardTopology): Promise<RandomTriggerRow[]> {
     try {
       // Fetch all triggers scheduled at or before now
       const rows = await sql`
-        SELECT * FROM random_triggers
-        WHERE next_trigger_at <= NOW()
-        ORDER BY next_trigger_at ASC
+        SELECT t.* FROM random_triggers t
+        JOIN servers s ON s.server_id = t.server_id
+        WHERE t.next_trigger_at <= NOW()
+          AND ${ownedServersOnly(topology)}
+        ORDER BY t.next_trigger_at ASC
       `;
 
       if (!rows.length) return [];
@@ -1116,12 +1123,14 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     }
   }
 
-  private async sqlGetNextRandomTriggerTime(): Promise<Date | null> {
+  private async sqlGetNextRandomTriggerTime(topology?: ShardTopology): Promise<Date | null> {
     try {
       const [result] = await sql<{ next_trigger_time: Date | string | null }[]>`
-        SELECT next_trigger_at AS next_trigger_time
-        FROM random_triggers
-        ORDER BY next_trigger_at ASC
+        SELECT t.next_trigger_at AS next_trigger_time
+        FROM random_triggers t
+        JOIN servers s ON s.server_id = t.server_id
+        WHERE ${ownedServersOnly(topology)}
+        ORDER BY t.next_trigger_at ASC
         LIMIT 1
       `;
 

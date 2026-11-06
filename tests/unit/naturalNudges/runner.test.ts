@@ -263,6 +263,57 @@ function attemptWithOwnerNudge(config = ownerConfig()): { attempt: IdleNudgeAtte
 }
 
 describe("idle nudge channel context", () => {
+  it("records delivered nudges during drain only while the captured owner remains valid", async () => {
+    for (const lostOwner of [false, true]) {
+      const { attempt } = attemptWithHistory(async () => [messageWithId(OLDER_ID)]);
+      const scheduler = new AbortController();
+      const owner = new AbortController();
+      attempt.work = { signal: scheduler.signal, ownerSignal: owner.signal, hasOwnership: () => true };
+      const recordFire = spyOn(naturalNudgeRepository, "recordIdleNudgeFire").mockResolvedValue(true);
+      onChatCall = async () => {
+        scheduler.abort();
+        if (lostOwner) owner.abort();
+        await chatInputs.at(-1)?.onGenerationResult?.({
+          status: "completed",
+          streamResults: [],
+          personaResponses: [{ personaName: "Tomori", text: "Hi", personaId: PERSONA_ID }],
+          firstDeliveredMessageId: RECORDED_ID,
+        });
+      };
+      expect(await runIdleNudgeAttempt(attempt)).toBe(lostOwner ? "aborted" : "fired");
+      expect(recordFire).toHaveBeenCalledTimes(lostOwner ? 0 : 1);
+      recordFire.mockRestore();
+    }
+  });
+
+  it("cancels a detached planner continuation without recording a failure or posting", async () => {
+    const { attempt, sent } = attemptWithHistory(async () => []);
+    const controller = new AbortController();
+    attempt.work = { signal: controller.signal, hasOwnership: () => true };
+    const failure = spyOn(naturalNudgeRepository, "recordFailure").mockResolvedValue(null);
+    spies.push(failure);
+    plannerSpy.mockImplementationOnce(async () => {
+      controller.abort();
+      return { status: "failed", reason: "timeout", model: "fixture-planner", usage: null };
+    });
+    expect(await runIdleNudgeAttempt(attempt)).toBe("aborted");
+    expect(failure).not.toHaveBeenCalled();
+    expect(chatInputs).toHaveLength(0);
+    expect(sent).toHaveLength(0);
+  });
+
+  it("does not seed an idle-nudge anchor after cancellation during its message lookup", async () => {
+    const controller = new AbortController();
+    const { attempt, sent } = attemptWithHistory(async () => {
+      controller.abort();
+      return [];
+    });
+    attempt.work = { signal: controller.signal, hasOwnership: () => true };
+    expect(await runIdleNudgeAttempt(attempt)).toBe("aborted");
+    expect(sent).toHaveLength(0);
+    expect(chatInputs).toHaveLength(0);
+  });
+
   it.each([
     false,
     true,

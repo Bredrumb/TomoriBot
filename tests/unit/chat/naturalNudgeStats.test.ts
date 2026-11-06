@@ -142,7 +142,7 @@ describe("Natural Nudges turns stay out of engagement stats", () => {
       const context = makeContext(false);
       context.turn.lockedTurn.admission.incoming = normalizeChatInvocation({
         ...context.turn.lockedTurn.admission.incoming,
-        conditioningInteraction: { actorType: "user", type },
+        conditioningInteraction: { actorType: "user", type, action: type === "reward" ? "hug" : "bonk" },
       });
       await runPostTurnEffects(context, completed);
       await Bun.sleep(0);
@@ -161,7 +161,7 @@ describe("Natural Nudges turns stay out of engagement stats", () => {
       const context = makeContext(false);
       context.turn.lockedTurn.admission.incoming = normalizeChatInvocation({
         ...context.turn.lockedTurn.admission.incoming,
-        conditioningInteraction: { actorType: "persona", type },
+        conditioningInteraction: { actorType: "persona", type, action: type === "reward" ? "hug" : "bonk" },
       });
       await runPostTurnEffects(context, completed);
       await Bun.sleep(0);
@@ -216,6 +216,7 @@ describe("Natural Nudges turns stay out of engagement stats", () => {
       personaReaction.turn.lockedTurn.admission.incoming.conditioningInteraction = {
         actorType: "persona",
         type: "reward",
+        action: "hug",
       };
       await runPostTurnEffects(personaReaction, completed);
       await Bun.sleep(0);
@@ -235,9 +236,17 @@ describe("Natural Nudges turns stay out of engagement stats", () => {
       for (const actorType of ["user", "persona"] as const) {
         for (const type of ["reward", "punish"] as const) {
           const context = makeContext(false);
-          context.turn.lockedTurn.admission.incoming.conditioningInteraction = { actorType, type };
+          context.turn.lockedTurn.admission.incoming.conditioningInteraction = {
+            actorType,
+            type,
+            action: type === "reward" ? "hug" : "bonk",
+          };
           await runPostTurnEffects(context, { status: "empty_response", streamResults: [], personaResponses: [] });
-          expect(calls.at(-1)?.conditioningInteraction).toEqual({ actorType, type });
+          expect(calls.at(-1)?.conditioningInteraction).toEqual({
+            actorType,
+            type,
+            action: type === "reward" ? "hug" : "bonk",
+          });
         }
       }
       expect(metrics()).not.toContain("message_sent");

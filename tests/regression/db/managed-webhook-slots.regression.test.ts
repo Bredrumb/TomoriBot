@@ -1,3 +1,5 @@
+import { stubAllShardOwnership } from "../../helpers/shardOwnership";
+stubAllShardOwnership();
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import { Collection, type BaseGuildTextChannel, type Webhook, type WebhookType } from "discord.js";
 import { MANAGED_WEBHOOK_KINDS, serverRepository } from "@/utils/db/repositories/ServerRepository";
@@ -161,7 +163,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("managed webhook slot storage and lifecycle
         const { channel, fetchWebhook } = makeChannel([pool]);
         if (restorePool) await resolveManagedWebhookForChannel(channel, pool.id);
         const discoveredPool = { ...pool, token: poolToken } as Webhook<WebhookType.Incoming>;
-        spyOn(channel, "fetchWebhooks")
+        const fetch = spyOn(channel, "fetchWebhooks")
           .mockResolvedValue(
             new Collection([
               [pool.id, discoveredPool],
@@ -180,7 +182,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("managed webhook slot storage and lifecycle
         expect(poolRow?.avatar_fingerprint).toBe(fingerprint);
         expect(getCachedManagedWebhookForChannel(channelId, pool.id)).toBe(restorePool ? pool : null);
         expect((await getOrCreateWebhook(channel)).webhook).toBe(primary);
-        mock.restore();
+        fetch.mockRestore();
+        create.mockRestore();
       }
     }
   });

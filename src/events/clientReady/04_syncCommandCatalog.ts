@@ -2,6 +2,7 @@ import type { Client } from "discord.js";
 import { statRepository } from "@/utils/db/repositories/StatRepository";
 import { getCommandCatalogEntries, loadCommandData } from "@/utils/discord/commandLoader";
 import { log } from "@/utils/misc/logger";
+import { isPrimaryProcess } from "@/utils/cluster/shardLeases";
 
 /**
  * Reconciles the `command_catalog` dimension table with the commands the bot
@@ -19,6 +20,7 @@ import { log } from "@/utils/misc/logger";
  * failure only leaves the catalog stale for a boot; command handling is unaffected.
  */
 export default async (_client: Client): Promise<void> => {
+  if (!isPrimaryProcess()) return;
   try {
     log.section("Syncing command catalog...");
 
@@ -29,7 +31,7 @@ export default async (_client: Client): Promise<void> => {
     const entries = getCommandCatalogEntries(executionMap);
 
     // Reconcile the catalog table (skips prune on an empty/failed load).
-    await statRepository.syncCommandCatalog(entries);
+    if (isPrimaryProcess()) await statRepository.syncCommandCatalog(entries);
   } catch (error) {
     log.error("Failed to sync command catalog (non-critical)", error as Error);
     // Non-critical, so the Grafana unused-command panel may be stale, but the bot

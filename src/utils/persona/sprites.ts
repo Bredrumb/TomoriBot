@@ -3,7 +3,8 @@ import { normalizeRenderModifierName } from "@/utils/discord/renderModifierParse
 const RENDER_MODIFIER_MAX_LENGTH = 64;
 const DEFAULT_MAX_SPRITES_PER_PERSONA = 50;
 const DEFAULT_MAX_PROMPT_SPRITES = 20;
-const DEFAULT_MAX_INSTRUCTIONS_LENGTH = 300;
+// Matches the persona_sprites CHECK, so every stored row (archive imports included) still fits the edit modal.
+const DEFAULT_MAX_INSTRUCTIONS_LENGTH = 1000;
 const INVISIBLE_FORMAT_CHARS = /[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g;
 const DISALLOWED_RENDER_MODIFIER_CHARS = /[:：()（）\r\n]/u;
 

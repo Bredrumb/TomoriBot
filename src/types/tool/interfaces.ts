@@ -120,6 +120,8 @@ export interface StreamingContext {
    */
   deferredTimeoutNotice?: { providerName: string; sawStreamProgress: boolean };
   rotationKeyRetriesUsed?: boolean; // True if one or more rotation-key retries were attempted
+  /** The generation turn will retry an interrupted stream on the same key, so its error stays unsurfaced. */
+  retryStreamInterruption?: boolean;
   disableAllTools?: boolean; // Flag to disable all tool calling (e.g., during user impersonation)
   deliberateToolAllowedNames?: string[]; // Optional per-turn allowlist when deliberate tool mode detects scoped intent
   disableReminderTool?: boolean; // Flag to prevent create_task from being called during a reminder-triggered turn

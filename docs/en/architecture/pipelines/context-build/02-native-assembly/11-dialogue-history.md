@@ -28,6 +28,7 @@ simplifiedMessageHistory
 
 - **Role mapping**: Messages from the active persona map to `model`. During user impersonation, messages from the impersonated user ID map to `model`. All other messages map to `user`.
 - **Blocked users**: Messages from users with an active persona-scoped block (`block_type = 'block'`) are replaced in history by a single `[System: ...]` notice, and reply quote annotations targeting them are suppressed.
+- **Reply quotes**: Referenced message text includes recognized notices and embed previews, even when the message is outside the history window. Diagnostic embeds and unshared dice rolls stay excluded.
 - **Text formatting**: Lines format as `${authorName}: ${content}`. Author names resolve macros (`identityMacroMode: "resolve"`), whereas message bodies preserve `{bot}` and `{user}` literals (`identityMacroMode: "preserve"`). This prevents template drafts typed by users from collapsing into persona names.
 - **File hints**: each `documentAttachments` entry adds a `[System: ...]` part built from
   `DOCUMENT_HINT_TEMPLATE`. The native builder expands the template once with the turn's tool macro

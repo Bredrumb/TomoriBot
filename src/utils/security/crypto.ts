@@ -1,5 +1,5 @@
 import { log } from "../misc/logger";
-import { sql } from "@/utils/db/client";
+import { sql, withTransientDbRetry } from "@/utils/db/client";
 import { lazyRotateEncryptedRow } from "./encryptedColumns";
 import { keyManager } from "./keyManager";
 import type { ErrorContext } from "@/types/db/schema";
@@ -199,11 +199,14 @@ export const hasOptApiKey = async (serverId: number, serviceName: string): Promi
   }
 
   try {
-    const [result] = await sql`
+    const [result] = await withTransientDbRetry(
+      () => sql`
 			SELECT 1
 			FROM opt_api_keys
 			WHERE server_id = ${serverId} AND service_name = ${serviceName}
-		`;
+		`,
+      `check optional API key for ${serviceName}`,
+    );
 
     return !!result;
   } catch (error) {

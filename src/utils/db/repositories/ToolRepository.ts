@@ -18,6 +18,8 @@ import type { IRepository } from "./IRepository";
 import { normalizeMcpToolNameSnapshot } from "@/utils/mcp/mcpToolSnapshot";
 import { type GuildMcpOAuthGrant, guildMcpOAuthRepository } from "@/utils/db/repositories/GuildMcpOAuthRepository";
 import { forgetMcpAccessToken } from "@/utils/mcp/oauth/accessToken";
+import type { ShardTopology } from "@/utils/discord/shardOwnership";
+import { ownedServersOnly } from "@/utils/db/repositories/shardFilter";
 
 /** Portable tool config export shape (expanded in Phase 6 #16.7). */
 type ToolExportShape = {
@@ -45,8 +47,8 @@ class ToolRepository implements IRepository<ToolExportShape> {
    * Loads all enabled MCP server configs across all guilds.
    * Used during bot startup to register active MCP connections.
    */
-  async loadAllEnabledMcpServers(): Promise<GuildMcpServerRow[]> {
-    return this.sqlLoadAllEnabledGuildMcpServers();
+  async loadAllEnabledMcpServers(topology?: ShardTopology): Promise<GuildMcpServerRow[]> {
+    return this.sqlLoadAllEnabledGuildMcpServers(topology);
   }
 
   /**
@@ -490,7 +492,7 @@ class ToolRepository implements IRepository<ToolExportShape> {
     }
   }
 
-  private async sqlLoadAllEnabledGuildMcpServers(): Promise<GuildMcpServerRow[]> {
+  private async sqlLoadAllEnabledGuildMcpServers(topology?: ShardTopology): Promise<GuildMcpServerRow[]> {
     try {
       const rows = await sql`
         SELECT g.guild_mcp_id, g.server_id, g.name, g.url, g.auth_token, g.key_version,
@@ -502,8 +504,9 @@ class ToolRepository implements IRepository<ToolExportShape> {
                  ELSE 'active'
                END AS oauth_status
         FROM guild_mcp_servers AS g
+        JOIN servers s ON s.server_id = g.server_id
         LEFT JOIN guild_mcp_oauth AS o ON o.guild_mcp_id = g.guild_mcp_id
-        WHERE g.is_enabled = true
+        WHERE g.is_enabled = true AND ${ownedServersOnly(topology)}
         ORDER BY g.server_id ASC, g.created_at ASC
       `;
 

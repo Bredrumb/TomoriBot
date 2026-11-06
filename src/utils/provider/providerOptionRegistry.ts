@@ -229,7 +229,8 @@ export async function withProviderOptionCopy(keys: string[], context: ProviderOp
       log.warn("Provider option copy eligibility could not be checked", { metadata: { option: option.value } });
     }
   }
-  return contributions.length ? [...keys, ...contributions] : keys;
+  // Contributed copy leads on purpose: an option's own offer (such as a subscription) outranks the generic recovery tips.
+  return contributions.length ? [...contributions, ...keys] : keys;
 }
 
 export function findProviderOption(value: string | null | undefined): ProviderOptionDefinition | undefined {

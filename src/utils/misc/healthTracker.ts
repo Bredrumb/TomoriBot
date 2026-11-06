@@ -1,224 +1,214 @@
-import type { Client } from "discord.js";
-import { log } from "./logger";
+import { type ClientOptions, Status } from "discord.js";
+import { getShardTopology, type ShardTopology } from "@/utils/discord/shardOwnership";
+import { log } from "@/utils/misc/logger";
 
-/**
- * Health tracking system for monitoring bot connectivity.
- *
- * Tracks Discord readiness and WebSocket heartbeat only. **It does not observe the event loop**,
- * despite what the health endpoint's name suggests; `eventLoopMonitor` does that and reports
- * separately.
- */
-class HealthTracker {
-  /**
-   * Timestamp of the last Discord event received (any event type)
-   */
-  private lastActivityTimestamp: number = Date.now();
+const MAX_PING_LATENCY_MS = 5000;
+const NOT_READY_TIMEOUT_MS = 5 * 60 * 1000;
+const WATCHDOG_INTERVAL_MS = 10_000;
 
-  /**
-   * Discord client instance for checking WebSocket status
-   */
-  private client: Client | null = null;
+interface GatewayHealthClient {
+  isReady(): boolean;
+  options: Pick<ClientOptions, "shards" | "shardCount">;
+  ws: { shards: ReadonlyMap<number, { status: Status; ping: number }> };
+}
 
-  /**
-   * Maximum time (in milliseconds) without activity before considering unhealthy
-   * Default: 2 minutes
-   * NOTE: Currently unused - see "Lonely Bot" problem comment in getHealthStatus()
-   */
-  // private readonly activityTimeout: number = 2 * 60 * 1000;
+interface ShardConnectionState {
+  gatewayFailureCount: number;
+  lastGatewayFailureAt: number | null;
+  notReadySince: number | null;
+}
 
-  /**
-   * Maximum WebSocket ping latency (in milliseconds) before considering unhealthy
-   * Default: 5 seconds
-   */
-  private readonly maxPingLatency: number = 5000;
+export interface ShardHealth {
+  id: number;
+  status: Status | null;
+  ready: boolean;
+  ping: number | null;
+  gatewayFailureCount: number;
+  lastGatewayFailureAt: string | null;
+  notReadySince: string | null;
+}
 
-  /**
-   * Failed gateway connection attempts since the last established session
-   */
-  private gatewayFailureCount: number = 0;
+export interface ShardWatchdogTimeout {
+  shardIds: readonly number[];
+  notReadySince: number;
+}
 
-  /**
-   * When the most recent gateway connection attempt failed
-   */
-  private lastGatewayFailureAt: number | null = null;
+type WatchdogShutdown = (timeout: ShardWatchdogTimeout) => void | Promise<void>;
 
-  /**
-   * Initialize the health tracker with a Discord client
-   */
-  initialize(client: Client): void {
+export class HealthTracker {
+  private lastActivityTimestamp: number;
+  private initializedAt: number;
+  private client: GatewayHealthClient | null = null;
+  private topology: ShardTopology | null = null;
+  private readonly connections = new Map<number, ShardConnectionState>();
+  private watchdog: ReturnType<typeof setInterval> | null = null;
+  private shutdown: WatchdogShutdown | null = null;
+  private watchdogTriggered = false;
+
+  constructor(private readonly now: () => number = Date.now) {
+    this.initializedAt = this.now();
+    this.lastActivityTimestamp = this.initializedAt;
+  }
+
+  initialize(client: GatewayHealthClient, topology: ShardTopology = getShardTopology()): void {
+    if (this.client === client) return;
+    this.stopWatchdog();
     this.client = client;
-    this.lastActivityTimestamp = Date.now();
+    this.topology = topology;
+    this.initializedAt = this.now();
+    this.lastActivityTimestamp = this.initializedAt;
+    this.connections.clear();
+    this.watchdogTriggered = false;
     log.info("Health tracker initialized");
   }
 
-  /**
-   * Record that a Discord event was processed
-   * Call this from event handlers to update activity timestamp
-   */
   recordActivity(): void {
-    this.lastActivityTimestamp = Date.now();
+    this.lastActivityTimestamp = this.now();
+  }
+
+  private connection(shardId: number): ShardConnectionState {
+    let state = this.connections.get(shardId);
+    if (!state) {
+      state = { gatewayFailureCount: 0, lastGatewayFailureAt: null, notReadySince: this.initializedAt };
+      this.connections.set(shardId, state);
+    }
+    return state;
+  }
+
+  private shardHealth(): ShardHealth[] {
+    if (!this.client || !this.topology) return [];
+    const { shards, shardCount } = this.client.options;
+    // discord.js replaces auto with the gateway ID array before connecting any shard.
+    if (this.topology.totalShardCount === null && Array.isArray(shards) && shardCount !== undefined) {
+      this.topology.resolveGatewayShardCount(shardCount);
+    }
+    return (this.topology.ownedShardIds ?? []).map((id) => {
+      const shard = this.client?.ws.shards.get(id);
+      const state = this.connection(id);
+      const ready = shard?.status === Status.Ready;
+      if (ready) state.notReadySince = null;
+      else state.notReadySince ??= this.now();
+      return {
+        id,
+        status: shard?.status ?? null,
+        ready,
+        ping: shard && Number.isFinite(shard.ping) ? shard.ping : null,
+        gatewayFailureCount: state.gatewayFailureCount,
+        lastGatewayFailureAt:
+          state.lastGatewayFailureAt === null ? null : new Date(state.lastGatewayFailureAt).toISOString(),
+        notReadySince: state.notReadySince === null ? null : new Date(state.notReadySince).toISOString(),
+      };
+    });
   }
 
   getHealthStatus(): HealthStatus {
-    const now = Date.now();
-    const timeSinceLastActivity = now - this.lastActivityTimestamp;
-
-    if (!this.client) {
-      return {
-        healthy: false,
-        reason: "Client not initialized",
-        details: {
-          clientReady: false,
-          timeSinceLastActivity,
-          websocketPing: null,
-        },
-      };
-    }
-
-    const isClientReady = this.client.isReady();
-    if (!isClientReady) {
-      return {
-        healthy: false,
-        reason: "Discord client not ready",
-        details: {
-          clientReady: false,
-          timeSinceLastActivity,
-          websocketPing: null,
-        },
-      };
-    }
-
-    // Check WebSocket ping (measures roundtrip latency to Discord)
-    const websocketPing = this.client.ws.ping;
-    if (websocketPing < 0 || websocketPing > this.maxPingLatency) {
-      return {
-        healthy: false,
-        reason: `WebSocket ping unhealthy: ${websocketPing}ms`,
-        details: {
-          clientReady: true,
-          timeSinceLastActivity,
-          websocketPing,
-        },
-      };
-    }
-
-    // Activity timeout check (DISABLED). Quiet hours produce no Discord events, so the bot would
-    // report "unhealthy" while idle and a restart policy would loop it.
-    //
-    // Activity is not liveness: a loop that yields between chunks still answers a short health
-    // probe while the handlers behind it make no progress, which is how a starved main thread went
-    // unnoticed. `eventLoopMonitor` measures that progress on the same endpoint.
-    //
-    // Re-enabling this needs `client.on('raw', ...)` rather than typed events, and a progress
-    // signal that does not depend on activity.
-    /*
-		if (timeSinceLastActivity > this.activityTimeout) {
-			return {
-				healthy: false,
-				reason: `No Discord activity for ${Math.floor(timeSinceLastActivity / 1000)}s`,
-				details: {
-					clientReady: true,
-					timeSinceLastActivity,
-					websocketPing,
-				},
-			};
-		}
-		*/
-
-    return {
-      healthy: true,
-      reason: "All systems operational",
-      details: {
-        clientReady: true,
-        timeSinceLastActivity,
-        websocketPing,
-      },
+    const shards = this.shardHealth();
+    const pings = shards.flatMap((shard) => (shard.ping === null ? [] : [shard.ping]));
+    const details = {
+      clientReady: this.client?.isReady() ?? false,
+      timeSinceLastActivity: this.getTimeSinceLastActivity(),
+      websocketPing: pings.length ? Math.max(...pings) : null,
+      shards,
+      shardCount: this.topology?.totalShardCount ?? null,
     };
+    if (!this.client) return { healthy: false, reason: "Client not initialized", details };
+    const notReady = shards.filter((shard) => !shard.ready);
+    if (notReady.length || shards.length === 0 || !details.clientReady) {
+      return { healthy: false, reason: "Discord client not ready", details };
+    }
+    const unhealthyPing = shards.find(
+      (shard) => shard.ping === null || shard.ping < 0 || shard.ping > MAX_PING_LATENCY_MS,
+    );
+    if (unhealthyPing) {
+      return { healthy: false, reason: `WebSocket ping unhealthy on shard ${unhealthyPing.id}`, details };
+    }
+    return { healthy: true, reason: "All systems operational", details };
   }
 
   getTimeSinceLastActivity(): number {
-    return Date.now() - this.lastActivityTimestamp;
+    return this.now() - this.lastActivityTimestamp;
   }
 
-  /**
-   * Records a failed gateway connection attempt.
-   *
-   * A gateway incident otherwise leaves no durable trace once the log rows are rate-limited, so
-   * the count and the timestamp of the latest attempt are what separate "discord.js is retrying
-   * and will recover" from "this process has never connected".
-   */
-  recordGatewayFailure(): void {
-    this.gatewayFailureCount++;
-    this.lastGatewayFailureAt = Date.now();
+  recordGatewayFailure(shardId: number): void {
+    const state = this.connection(shardId);
+    state.gatewayFailureCount++;
+    state.lastGatewayFailureAt = this.now();
   }
 
-  /** Clears the failure streak once a session is established or resumed. */
-  recordGatewayConnected(): void {
-    this.gatewayFailureCount = 0;
-    this.lastGatewayFailureAt = null;
+  recordGatewayConnected(shardId: number): void {
+    this.shardHealth();
+    const state = this.connection(shardId);
+    state.gatewayFailureCount = 0;
+    state.lastGatewayFailureAt = null;
+    state.notReadySince = null;
   }
 
-  /**
-   * Get WebSocket ping latency in milliseconds
-   */
+  recordGatewayDisconnected(shardId: number): void {
+    this.connection(shardId).notReadySince ??= this.now();
+  }
+
   getWebSocketPing(): number {
-    return this.client?.ws.ping ?? -1;
+    return this.getHealthStatus().details.websocketPing ?? -1;
   }
 
-  /**
-   * Reports connection progress for the health endpoint.
-   *
-   * These are counters rather than a verdict, so they deliberately do not feed `healthy`: a
-   * reconnecting gateway is expected to recover.
-   *
-   * Login is absent by design. A failed login exits the process, so any state recorded for it
-   * would be unreadable by the probe that is meant to report it; the exit code and the log line
-   * are what carry that outcome.
-   */
-  getConnectionState(): {
-    gatewayFailureCount: number;
-    lastGatewayFailureAt: string | null;
-  } {
+  getConnectionState(): { gatewayFailureCount: number; lastGatewayFailureAt: string | null } {
+    const states = [...this.connections.values()];
+    const failures = states.flatMap((state) =>
+      state.lastGatewayFailureAt === null ? [] : [state.lastGatewayFailureAt],
+    );
     return {
-      gatewayFailureCount: this.gatewayFailureCount,
-      lastGatewayFailureAt: this.lastGatewayFailureAt ? new Date(this.lastGatewayFailureAt).toISOString() : null,
+      gatewayFailureCount: states.reduce((sum, state) => sum + state.gatewayFailureCount, 0),
+      lastGatewayFailureAt: failures.length ? new Date(Math.max(...failures)).toISOString() : null,
     };
+  }
+
+  startWatchdog(shutdown: WatchdogShutdown): void {
+    if (this.watchdog !== null) return;
+    if (!this.client) throw new Error("Initialize health tracking before starting the shard watchdog");
+    this.shutdown = shutdown;
+    this.watchdog = setInterval(() => this.checkWatchdog(), WATCHDOG_INTERVAL_MS);
+    this.watchdog.unref();
+  }
+
+  checkWatchdog(): void {
+    if (!this.shutdown || this.watchdogTriggered) return;
+    const shards = this.shardHealth();
+    const expired = shards.filter((shard) => {
+      const since = this.connection(shard.id).notReadySince;
+      return !shard.ready && since !== null && this.now() - since >= NOT_READY_TIMEOUT_MS;
+    });
+    if (!expired.length && (shards.length || this.now() - this.initializedAt < NOT_READY_TIMEOUT_MS)) return;
+    const timeout = {
+      shardIds: expired.map((shard) => shard.id),
+      notReadySince: expired.length
+        ? Math.min(...expired.map((shard) => this.connection(shard.id).notReadySince ?? this.initializedAt))
+        : this.initializedAt,
+    };
+    this.watchdogTriggered = true;
+    const shutdown = this.shutdown;
+    log.warn("Discord shard readiness watchdog requested shutdown", undefined, { metadata: { ...timeout } });
+    void Promise.resolve()
+      .then(() => shutdown(timeout))
+      .catch((error) => log.error("Shard watchdog shutdown failed", error));
+  }
+
+  stopWatchdog(): void {
+    if (this.watchdog !== null) clearInterval(this.watchdog);
+    this.watchdog = null;
+    this.shutdown = null;
   }
 }
 
 interface HealthStatus {
-  /**
-   * Whether the bot is considered healthy
-   */
   healthy: boolean;
-
-  /**
-   * Human-readable reason for the health status
-   */
   reason: string;
-
-  /**
-   * Detailed metrics for debugging
-   */
   details: {
-    /**
-     * Whether Discord client is in ready state
-     */
     clientReady: boolean;
-
-    /**
-     * Time in milliseconds since last Discord event
-     */
     timeSinceLastActivity: number;
-
-    /**
-     * WebSocket ping latency in milliseconds (null if not available)
-     */
     websocketPing: number | null;
+    shards: ShardHealth[];
+    shardCount: number | null;
   };
 }
 
-/**
- * Singleton instance for global health tracking
- */
 export const healthTracker = new HealthTracker();

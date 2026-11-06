@@ -1,3 +1,5 @@
+import { stubAllShardOwnership } from "../../helpers/shardOwnership";
+stubAllShardOwnership();
 import * as personaIdentity from "@/utils/discord/webhook/identity";
 import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import type { Client, Message, TextChannel, Webhook, WebhookMessageCreateOptions } from "discord.js";

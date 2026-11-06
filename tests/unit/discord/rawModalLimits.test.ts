@@ -28,7 +28,13 @@ import {
   getDiscordTextLength,
   validateRawModalLimits,
 } from "@/utils/discord/ui/componentsV2Limits";
-import { buildConfigModalFieldId, buildPersonaRenameModal } from "@/utils/discord/ui/configModals";
+import {
+  buildConfigModalFieldId,
+  buildPersonaRenameModal,
+  buildPersonaSpriteEditModal,
+} from "@/utils/discord/ui/configModals";
+import { personaSpriteSchema } from "@/types/db/schema";
+import type { RawDiscordComponent } from "@/types/discord/rawApiTypes";
 import { PERSONA_NICKNAME_MAX_LENGTH } from "@/types/personaNaming";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 import type { ToolNoticeDefinition, ToolNoticeKey } from "@/constants/toolNotices";
@@ -581,6 +587,30 @@ describe("clampRawModalText", () => {
     const { payload: clamped, truncatedPaths } = clampRawModalText(payload);
     expect(clamped).toEqual(payload);
     expect(truncatedPaths).toEqual([]);
+  });
+});
+
+describe("buildPersonaSpriteEditModal", () => {
+  it("prefills usage instructions at the stored maximum without exceeding the field's max_length", () => {
+    const storedMax = personaSpriteSchema.shape.usage_instructions.unwrap().maxLength ?? 0;
+    const modal = buildPersonaSpriteEditModal("en-US", 55, 0, "fp", "nonce1234567", {
+      persona_id: 55,
+      sprite_name: "Happy",
+      sprite_key: "happy",
+      avatar_url: "https://cdn.example.invalid/sprites/happy.png",
+      usage_instructions: "u".repeat(storedMax),
+      is_identity: false,
+    });
+    assertWithinDiscordLimits(modal, "sprite-edit");
+    const inputs: Array<{ component: RawDiscordComponent; value: string }> = [];
+    eachComponent(modal.components, (component) => {
+      if (component.type === 4 && typeof component.value === "string")
+        inputs.push({ component, value: component.value });
+    });
+    expect(inputs.length).toBeGreaterThan(0);
+    for (const { component, value } of inputs) {
+      expect(getDiscordTextLength(value), component.custom_id).toBeLessThanOrEqual(component.max_length ?? 0);
+    }
   });
 });
 

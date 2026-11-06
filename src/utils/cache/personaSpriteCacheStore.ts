@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { broadcastInvalidation, registerInvalidation, invalidationDatabaseId } from "@/utils/cache/invalidationBus";
 import type { PersonaSpriteRow } from "@/types/db/schema";
 import { TOMORI_STATE_CACHE_TTL_MS } from "@/constants/cacheTtl";
 import { clearPersonaAppearances, invalidatePersonaAppearance } from "@/utils/cache/personaAppearanceCacheStore";
@@ -28,6 +30,7 @@ export function setPersonaSpriteCache(personaId: number, sprites: PersonaSpriteR
 export function invalidatePersonaSpriteCache(personaId: number): void {
   personaSpriteCache.delete(personaId);
   invalidatePersonaAppearance(personaId);
+  broadcastInvalidation("personaSprite", [[String(personaId)]]);
 }
 
 export function clearPersonaSpriteCache(): void {
@@ -38,3 +41,10 @@ export function clearPersonaSpriteCache(): void {
 export function getPersonaSpriteCacheSize(): number {
   return personaSpriteCache.size;
 }
+
+registerInvalidation(
+  "personaSprite",
+  z.tuple([invalidationDatabaseId]),
+  ([persona]) => invalidatePersonaSpriteCache(persona),
+  clearPersonaSpriteCache,
+);

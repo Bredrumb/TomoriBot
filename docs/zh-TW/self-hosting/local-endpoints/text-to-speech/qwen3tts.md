@@ -39,6 +39,17 @@ python servers\tts\qwen3tts\server.py --mode auto
 
 自動模式會檢查每個 `/synthesize` 請求：帶有 `ref_audio` 的請求使用複製模型，而帶有 `instruct` 的請求使用 VoiceDesign 模型。它一次只會在記憶體中保留一個模型，並在請求類型變更時切換模型，因此切換後的第一次請求可能會較慢。
 
+## 選用：更快的 CUDA 後端
+
+在 NVIDIA GPU 上，啟動伺服器前設定 `QWEN3TTS_BACKEND=cuda-graphs` 即可使用 [faster-qwen3-tts](https://github.com/andimarafioti/faster-qwen3-tts)，requirements 已包含安裝。合成速度約快 6 倍，因此執行速度比即時更快，而非慢約兩倍。針對相同的輸入，其輸出與預設後端並非完全逐位元相同。
+
+此後端會為每次請求保留固定長度的語音空間，由參考片段與生成的音訊共用（總共約 170 秒）。搭配 10 到 20 秒的片段使用時，仍留有超過兩分鐘的語音空間。若請求超出此空間，伺服器會傳回錯誤而非截斷音訊；請使用較短的片段或文字，或改用預設的 `transformers` 後端。
+
+```powershell
+$env:QWEN3TTS_BACKEND = "cuda-graphs"
+python servers\tts\qwen3tts\server.py
+```
+
 ## 在 TomoriBot 中註冊
 
 對於大多數使用者，請註冊自動模式伺服器，讓單一端點能同時支援聲音複製與 VoiceDesign 人格。

@@ -1,36 +1,26 @@
-import { getGuildMcpManager } from "../../utils/mcp/guildMcpManager";
+import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
+import { isDraining } from "@/utils/misc/shutdownState";
 import { toolRepository } from "@/utils/db/repositories/ToolRepository";
-import { statRepository } from "@/utils/db/repositories/StatRepository";
-import { log } from "../../utils/misc/logger";
-import type { ErrorContext } from "../../types/db/schema";
+import { log } from "@/utils/misc/logger";
+import type { ErrorContext } from "@/types/db/schema";
+import { getShardTopology } from "@/utils/discord/shardOwnership";
+import { hasShardLeaseOwnership } from "@/utils/cluster/shardLeases";
 
 /**
- * Registers guild MCP shutdown cleanup and, outside production, pre-connects enabled guild servers.
  * Guild MCP servers are remote and administrator-registered; the bot starts no local MCP process.
  */
 export default async (): Promise<void> => {
+  if (isDraining() || !hasShardLeaseOwnership()) return;
   try {
     log.section("Preparing guild MCP connections");
 
     const guildMcpManager = getGuildMcpManager();
 
-    // Uses "once" to avoid double-fire, and re-raises the signal after cleanup
-    // so the default handler (or other listeners) can terminate the process.
-    const cleanupHandler = async (signal: string) => {
-      log.info("Shutting down guild MCP connections...");
-      await guildMcpManager.cleanup();
-      // Drain any buffered usage stats so a normal restart loses nothing
-      // (plan §4: graceful shutdown covers the documented crash window).
-      await statRepository.shutdown();
-      process.kill(process.pid, signal);
-    };
-    process.once("SIGINT", () => cleanupHandler("SIGINT"));
-    process.once("SIGTERM", () => cleanupHandler("SIGTERM"));
-
     const runEnv = process.env.RUN_ENV || "development";
     if (runEnv !== "production") {
       try {
-        const allEnabled = await toolRepository.loadAllEnabledMcpServers();
+        const allEnabled = await toolRepository.loadAllEnabledMcpServers(getShardTopology());
+        if (isDraining() || !hasShardLeaseOwnership()) return;
         if (allEnabled.length > 0) {
           log.info(`[GuildMCP] Dev mode: eager-connecting ${allEnabled.length} enabled guild MCP server(s)...`);
           // Non-blocking, so failures are logged but don't prevent startup

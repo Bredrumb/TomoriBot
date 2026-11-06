@@ -1,4 +1,4 @@
-import { MessageFlags, type ModalSubmitInteraction } from "discord.js";
+import type { ModalSubmitInteraction } from "discord.js";
 import type { PanelAction } from "@/constants/panelActions";
 import type { TomoriState } from "@/types/db/schema";
 import {
@@ -10,12 +10,12 @@ import { isConfigRouteAuthorized, type ConfigActor } from "@/utils/discord/inter
 import {
   repaint,
   staleReceipt,
-  missingScopeMessageKey,
-  outdatedConfigPanelMessage,
   type ConfigRepaintOptions,
   type ConfigRouteDependencies,
   type ConfigScope,
   type ConfigPermissionsView,
+  missingScopeReceipt,
+  outdatedConfigPanelReceipt,
 } from "@/utils/discord/interactions/configRouteContext";
 import type { GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
 import {
@@ -29,6 +29,7 @@ import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { ELEVENLABS_SERVICE_NAME } from "@/utils/audio/elevenLabsAccount";
 import { hasOptApiKey } from "@/utils/security/crypto";
 import { localizer } from "@/utils/text/localizer";
+import { replyPanelReceipt } from "@/utils/discord/ui/panel";
 
 export const CONFIG_PERMISSION_MODAL_OPEN_ACTIONS = new Set<ConfigPanelRoute["action"]>(["permissions-manage-open"]);
 
@@ -224,27 +225,22 @@ export async function handleConfigPermissionModalOpen(
 ): Promise<boolean> {
   if (!CONFIG_PERMISSION_MODAL_OPEN_ACTIONS.has(route.action)) return false;
   if (!isConfigRouteAuthorized(route, actor)) {
-    await interaction.reply({
-      content: localizer(route.locale, "commands.config.panel.denied_detail"),
-      flags: MessageFlags.Ephemeral,
+    await replyPanelReceipt(interaction, {
+      tone: "error",
+      heading: localizer(route.locale, "commands.config.panel.denied_heading"),
+      detail: localizer(route.locale, "commands.config.panel.denied_detail"),
     });
     return true;
   }
 
   const scope = await dependencies.resolveScope(interaction, false);
   if (!scope) {
-    await interaction.reply({
-      content: localizer(route.locale, missingScopeMessageKey(interaction, dependencies)),
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyPanelReceipt(interaction, missingScopeReceipt(route.locale, interaction, dependencies));
     return true;
   }
   const state = stateFromScope(scope);
   if (!state) {
-    await interaction.reply({
-      content: outdatedConfigPanelMessage(route.locale),
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyPanelReceipt(interaction, outdatedConfigPanelReceipt(route.locale));
     return true;
   }
 

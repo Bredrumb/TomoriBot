@@ -122,6 +122,8 @@ Usa `/providers` para el registro del punto de conexión y la configuración del
 
 Irodori aplica por defecto un límite de referencia de 120 segundos y recorta los clips más largos. Define `IRODORI_MAX_REF_SECONDS` para modificar este límite.
 
+El servidor codifica cada clip de referencia una vez y guarda el resultado en `servers/tts/irodoritts/reference-cache/`, por lo que las solicitudes repetidas omiten ese paso. Reemplazar el clip de una persona crea una entrada nueva, y las entradas anteriores permanecen hasta que elimines la carpeta.
+
 ### VoiceDesign
 
 1. Abre `/config` en Persona > Voz.
@@ -154,6 +156,39 @@ $env:IRODORI_SWAY_COEFF = "-1.0"
 
 Este ajuste intercambia calidad de inferencia por velocidad, por lo que conviene probarlo con tu checkpoint y voces elegidos antes de adoptarlo permanentemente.
 
+## Modo de baja latencia (NVIDIA)
+
+El modo de baja latencia hace que cada oración sea entre 3 y 4 veces más rápida en una GPU NVIDIA con los mismos 40 pasos y ajustes de voz, por lo que no sacrifica calidad a diferencia del muestreo Sway. Actívalo en `.env`:
+
+```dotenv
+IRODORI_COMPILE_MODE="cudagraphs"
+```
+
+`cudagraphs` es el modo más rápido. `compile` es aproximadamente 2 veces más rápido que el valor predeterminado; pruébalo si `cudagraphs` no funciona bien en tu GPU. Ambos requieren el backend `cu128`, y el servidor no iniciará con ninguno de estos modos en otros backends.
+
+Qué esperar:
+
+- El servidor realiza un precalentamiento antes de reportarse listo. El primer inicio tarda entre 2 y 4 minutos; los inicios posteriores tardan entre 1 y 2 minutos porque los kernels compilados se guardan en caché en el disco. `bun run launch --irodoritts` espera hasta 5 minutos; en una GPU más lenta, aumenta ese límite con `TOMORI_TTS_STARTUP_TIMEOUT_MS` (en milisegundos).
+- La primera solicitud con una nueva longitud de oración o un nuevo clip de voz añade una fracción de segundo, una sola vez.
+- El uso de VRAM disminuye ligeramente.
+- El audio no es idéntico a nivel de bits al del modo predeterminado para la misma semilla. En las pruebas sonó equivalente, así que escucha algunas frases con tus propias voces antes de depender de él.
+
+En Windows, este modo también necesita el compilador de C++ de Microsoft:
+
+1. Instala [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) con la carga de trabajo **Desarrollo para el escritorio con C++**.
+2. Vuelve a ejecutar `.\servers\tts\irodoritts\install-irodori.ps1 cu128` para instalar el paquete Triton para Windows.
+3. Inicia el servidor (o `bun run launch --irodoritts`) desde **Developer PowerShell for VS**, o carga primero el compilador en una instancia normal de PowerShell:
+
+```powershell
+$vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+$vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+cmd /c "`"$vs\VC\Auxiliary\Build\vcvars64.bat`" >nul && set" | ForEach-Object {
+  if ($_ -match "^([^=]+)=(.*)$") { Set-Item -Path "Env:$($Matches[1])" -Value $Matches[2] }
+}
+```
+
+Si falta el compilador o Triton, el servidor se detiene al iniciar e indica cuál de ellos falta.
+
 ## Variables de entorno
 
 | Variable | Predeterminado | Propósito |
@@ -166,8 +201,7 @@ Este ajuste intercambia calidad de inferencia por velocidad, por lo que conviene
 | `IRODORI_CODEC_DEVICE` | `auto` | Dispositivo para el códec |
 | `IRODORI_MODEL_PRECISION` | `bf16` en CUDA, de lo contrario `fp32` | Precisión del modelo |
 | `IRODORI_CODEC_PRECISION` | `fp32` | Precisión del códec |
-| `IRODORI_COMPILE_MODEL` | `false` | Habilita `torch.compile` para el modelo Irodori |
-| `IRODORI_COMPILE_DYNAMIC` | `false` | Habilita formas dinámicas al compilar |
+| `IRODORI_COMPILE_MODE` | `off` | `off`, `compile` o `cudagraphs`; consulta [Modo de baja latencia](#modo-de-baja-latencia-nvidia) |
 | `IRODORI_NUM_STEPS` | `40` | Pasos de muestreo de Euler |
 | `IRODORI_T_SCHEDULE_MODE` | `linear` | Esquema de muestreo (`linear` o `sway`) |
 | `IRODORI_SWAY_COEFF` | `-1.0` | Coeficiente sway al usar el esquema `sway` |

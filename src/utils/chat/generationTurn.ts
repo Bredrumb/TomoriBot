@@ -15,7 +15,7 @@ import { classifySendFailure } from "@/utils/discord/stream/sendFailureCache";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { buildCustomProviderName } from "@/utils/provider/customProviderUtils";
 import { getProviderForTomori, ProviderFactory } from "@/utils/provider/providerFactory";
-import { formatProviderErrorCodeForDisplay } from "@/utils/provider/providerErrorClassification";
+import { formatProviderErrorCodeForDisplay, isStreamInterruption } from "@/utils/provider/providerErrorClassification";
 import { applyProviderContextTruncation } from "@/utils/provider/contextBudget";
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { withSavedProviderConfig } from "@/utils/provider/savedProviderConfig";
@@ -170,6 +170,7 @@ async function runGenerationAttempts(
     // Index the server route's attempts start at, null until that route contributes any. Only the
     // receipt needs it: a success on the server route of a personal turn has an opt-out to name.
     let serverRouteStartIndex: number | null = null;
+    let streamInterruptionRetried = false;
 
     if (attempts.length === 0 && plan.extendWithServerRoute) {
       const extend = plan.extendWithServerRoute;
@@ -228,6 +229,10 @@ async function runGenerationAttempts(
           hasFallbackKey || hasPendingModelFallback || Boolean(context.supporterProviderFailure),
         );
         context.streamingContext.forceModelFallback = hasPendingModelFallback;
+        // The state machine withholds an interruption's error on this flag, so the retry below must
+        // read the same value: one held back with no retry left would leave the user with silence.
+        context.streamingContext.retryStreamInterruption =
+          !streamInterruptionRetried && keyAttemptCount < MAX_KEY_ATTEMPTS;
 
         if (context.responseReview) {
           context.responseReview.pending = [];
@@ -290,6 +295,16 @@ async function runGenerationAttempts(
           capacityRetried = true;
           if (!(await waitForSupporterCapacity(context, capacityRetryMs))) break;
           log.warn(`Retrying ${attempt.label} after OpenRouter's in-flight budget Retry-After.`);
+          continue;
+        }
+
+        // Stays on the same key because rotating would record a backend fault against a healthy key.
+        if (
+          context.streamingContext.retryStreamInterruption &&
+          isStreamInterruption(result.streamResults.at(-1)?.data)
+        ) {
+          streamInterruptionRetried = true;
+          log.warn(`Stream interrupted: retrying ${attempt.label} once on the same key.`);
           continue;
         }
 
@@ -385,6 +400,7 @@ async function runGenerationAttempts(
         }
         setStreamUserErrorSuppression(context, false);
         context.streamingContext.forceModelFallback = false;
+        context.streamingContext.retryStreamInterruption = false;
 
         // A timeout notice is normally sent while its attempt is still running, and it is held back
         // when a later model may still answer. If the server route then contributed nothing, this is
@@ -420,6 +436,7 @@ async function runGenerationAttempts(
     };
     setStreamUserErrorSuppression(context, false);
     context.streamingContext.forceModelFallback = false;
+    context.streamingContext.retryStreamInterruption = false;
     await sendSupporterFailureNotice(context, unservedRefusal ?? undefined);
     if (context.responseReview) skipped.usageEntries = context.responseReview.usage;
     await responseSink.finalize(skipped);
@@ -427,6 +444,7 @@ async function runGenerationAttempts(
   } catch (error) {
     setStreamUserErrorSuppression(context, false);
     context.streamingContext.forceModelFallback = false;
+    context.streamingContext.retryStreamInterruption = false;
     if (context.supporterProviderFailure) await sendSupporterFailureNotice(context);
     else await responseSink.emitError(error);
     const result: GenerationTurnResult = {

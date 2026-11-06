@@ -42,6 +42,7 @@ export default {
     fallback_used_personal_opt_out_footer: `Stop the server's model from covering your personal provider's failures in \`/personal config\` > Models > Fallbacks`,
     markdown_table: {
       show_button: `Show Markdown`,
+      source_expired_title: `Table Source Expired`,
       source_expired: `That table's markdown is no longer cached, so I can't show the source anymore.`,
       source_attached: `This table is too long to show inline, so here it is as a file:`,
     },
@@ -138,6 +139,8 @@ export default {
       verify_api_key_expiry: `NVIDIA NIM keys expire, and NVIDIA refuses an expired key with the same error as a mistyped one. Check its expiry on [build.nvidia.com](https://build.nvidia.com) and generate a new key if it has lapsed.`,
       nvidia_register_free_model: `If this model keeps failing, NVIDIA may have retired it or its free queue may be backed up. Pick one it currently serves from [NVIDIA's free endpoints](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview), copy its model ID (such as \`deepseek-ai/deepseek-v4.1-flash\`), then add it in \`/providers\` > NVIDIA NIM > **+ Add new Text Model**.`,
       nvidia_register_free_model_personal: `If this model keeps failing, NVIDIA may have retired it or its free queue may be backed up. Pick one it currently serves from [NVIDIA's free endpoints](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview), copy its model ID (such as \`deepseek-ai/deepseek-v4.1-flash\`), then add it in \`/personal providers\` > NVIDIA NIM > **+ Add new Text Model**.`,
+      google_free_tier_daily: `This API key used up Gemini's free requests for today. They reset at midnight Pacific time.`,
+      google_free_tier_minute: `This API key is sending requests faster than Gemini's free plan allows. Wait a minute and try again.`,
       google_credential_type: `This looks like an OAuth or service account token. The \`google\` provider needs a plain API key from [Google AI Studio](https://aistudio.google.com/apikey); use the \`vertex\` provider for Google Cloud credentials.`,
       openrouter_privacy_settings: `Adjust your "Data Policy" settings at [OpenRouter Privacy Settings](https://openrouter.ai/settings/privacy) to allow this model, or choose a different model.`,
       openrouter_fund_account: `Add at least 10 credits to your OpenRouter account to unlock 1000 free model requests per day.`,

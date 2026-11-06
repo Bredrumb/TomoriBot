@@ -17,6 +17,7 @@ import type { SendableChannel } from "@/utils/discord/resolveSendableChannel";
 import { DiscordDeliveryError } from "@/utils/discord/webhook/deliveryOutcome";
 import {
   buildIdentityPayload,
+  captureDiscordOwnership,
   dispatchWebhookWithIdentity,
   type ResolvedWebhookIdentity,
   sendSelectedWebhookMessage,
@@ -116,8 +117,14 @@ export function sendSelectedWebhookMessageOnce(
   payload: WebhookMessageCreateOptions,
   beforePost: () => void,
 ) {
-  return withPostRest(selection.webhook, beforePost, (webhook) =>
-    sendSelectedWebhookMessage({ ...selection, webhook }, payload),
+  const assertOwned = captureDiscordOwnership(selection.webhook.guildId);
+  return withPostRest(
+    selection.webhook,
+    () => {
+      assertOwned();
+      beforePost();
+    },
+    (webhook) => sendSelectedWebhookMessage({ ...selection, webhook }, payload),
   );
 }
 
@@ -126,16 +133,39 @@ export function sendChannelMessageOnce(
   payload: MessageCreateOptions,
   beforePost: () => void,
 ): Promise<Message> {
-  return withPostRest<SendableChannel, Message>(channel, beforePost, (view) => view.send(payload));
+  const assertOwned = captureDiscordOwnership(
+    "guildId" in channel ? channel.guildId : channel.id,
+    !("guildId" in channel),
+  );
+  return withPostRest<SendableChannel, Message>(
+    channel,
+    () => {
+      assertOwned();
+      beforePost();
+    },
+    (view) => view.send(payload),
+  );
 }
 
 /** Posts a prebuilt request body as the bot, for payloads `channel.send` cannot express. */
 export function postChannelMessageOnce(
-  channel: { id: string; client: Client },
+  channel: SendableChannel,
   request: RequestData,
   beforePost: () => void,
 ): Promise<unknown> {
-  return postWithRateLimitWait(channel.client, beforePost, Routes.channelMessages(channel.id), request);
+  const assertOwned = captureDiscordOwnership(
+    "guildId" in channel ? channel.guildId : channel.id,
+    !("guildId" in channel),
+  );
+  return postWithRateLimitWait(
+    channel.client,
+    () => {
+      assertOwned();
+      beforePost();
+    },
+    Routes.channelMessages(channel.id),
+    request,
+  );
 }
 
 /**
@@ -153,6 +183,7 @@ export async function sendWebhookMessageOnce(
   identity: ResolvedWebhookIdentity | undefined,
   beforePost: () => void,
 ): Promise<{ id: string; channelId?: string; webhookId: string; identity: ResolvedWebhookIdentity }> {
+  const assertOwned = captureDiscordOwnership(webhook.guildId);
   const delivery = await dispatchWebhookWithIdentity(webhook, identity, async (selected) => {
     const token = selected.webhook.token;
     if (!token) throw new Error(`Webhook ${selected.webhookId} has no token.`);
@@ -162,7 +193,10 @@ export async function sendWebhookMessageOnce(
     const { body, files } = await MessagePayload.create(target, finalPayload).resolveBody().resolveFiles();
     const created = (await postWithRateLimitWait(
       selected.webhook.client,
-      beforePost,
+      () => {
+        assertOwned();
+        beforePost();
+      },
       Routes.webhook(selected.webhookId, token),
       {
         body,

@@ -38,7 +38,9 @@ Khuyến nghị khởi đầu:
 - Driver NVIDIA hiện tại và bản dựng PyTorch hỗ trợ CUDA để tăng tốc GPU
 - CPU được hỗ trợ dưới dạng dự phòng nhưng chậm hơn đáng kể
 
-Gói chính thức cũng cung cấp khả năng lựa chọn thiết bị CPU và Apple MPS. Đối với TomoriBot trên Windows, gói Python tiêu chuẩn có thể chạy gốc; không bắt buộc phải dùng WSL. Trình cài đặt Windows PowerShell cài đặt bản dựng PyTorch hỗ trợ CUDA (`cu124`) theo mặc định.
+Gói chính thức cũng cung cấp khả năng lựa chọn thiết bị CPU và Apple MPS. Đối với TomoriBot trên Windows, gói Python tiêu chuẩn có thể chạy gốc; không bắt buộc phải dùng WSL. Trình cài đặt Windows PowerShell cài đặt PyTorch 2.10 hỗ trợ CUDA (`cu128`) và `triton-windows`, những thành phần mà thiết lập mặc định `VOXCPM2_OPTIMIZE=1` cần để biên dịch model.
+
+Khi bật biên dịch, lần khởi động đầu tiên mất khoảng 2-3 phút trong lúc PyTorch biên dịch model, và các lần khởi động sau mất chưa đầy một phút vì các kernel đã biên dịch được lưu vào cache. Tốc độ tổng hợp khi đó nhanh hơn khoảng 2.5-3 lần so với khi không biên dịch. Việc biên dịch cũng sử dụng nhiều hơn khoảng 2 GB bộ nhớ hệ thống. Nếu máy chủ dừng lại kèm thông báo thiếu Triton, hãy chạy lại trình cài đặt, hoặc đặt `VOXCPM2_OPTIMIZE=0` để chạy ở chế độ không biên dịch.
 
 Để cài đặt rõ ràng trên máy chỉ có CPU, hãy truyền cờ `-Cpu`:
 
@@ -49,7 +51,8 @@ Gói chính thức cũng cung cấp khả năng lựa chọn thiết bị CPU v�
 Nếu bản cài đặt PyTorch trên Windows gốc của bạn cần cài đặt lại thủ công hoặc căn chỉnh lại driver, hãy cài đặt bản dựng PyTorch hỗ trợ CUDA trực tiếp vào môi trường ảo của máy chủ:
 
 ```powershell
-.\servers\tts\voxcpm2\.venv\Scripts\pip.exe install --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+.\servers\tts\voxcpm2\.venv\Scripts\pip.exe install --force-reinstall torch==2.10.0 torchaudio==2.10.0 --index-url https://download.pytorch.org/whl/cu128
+.\servers\tts\voxcpm2\.venv\Scripts\pip.exe install "triton-windows>=3.6,<3.7"
 ```
 
 ## Cài đặt
@@ -133,7 +136,7 @@ Nếu không có bản ghi văn bản nào được lưu, VoxCPM2 vẫn thực h
 |---|---|---|
 | `VOXCPM2_MODEL_ID` | `openbmb/VoxCPM2` | ID model Hugging Face hoặc thư mục model cục bộ |
 | `VOXCPM2_DEVICE` | `auto` | Thiết bị runtime: `auto`, `cuda`, `cuda:N`, `cpu`, hoặc `mps` |
-| `VOXCPM2_OPTIMIZE` | `1` | Bật đường dẫn tối ưu hóa / biên dịch của runtime chính thức |
+| `VOXCPM2_OPTIMIZE` | `1` | Biên dịch model bằng `torch.compile` trên CUDA; cần Triton, và máy chủ sẽ dừng khi khởi động nếu thiếu |
 | `VOXCPM2_LOAD_DENOISER` | `0` | Nạp bộ khử nhiễu upstream tùy chọn; tắt theo mặc định để tiết kiệm bộ nhớ |
 | `VOXCPM2_CFG_VALUE` | `2.0` | Cường độ hướng dẫn |
 | `VOXCPM2_INFERENCE_TIMESTEPS` | `10` | Các bước suy luận flow-matching; nhiều bước hơn có thể cải thiện chất lượng nhưng giảm tốc độ |

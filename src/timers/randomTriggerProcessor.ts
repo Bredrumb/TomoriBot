@@ -3,24 +3,36 @@ import type { Client, Message } from "discord.js";
 import { ChannelType } from "discord.js";
 import { log } from "../utils/misc/logger";
 import { serverScheduleRepository } from "@/utils/db/repositories";
+import type { ShardTopology } from "@/utils/discord/shardOwnership";
+import {
+  assertScheduledWorkActive,
+  canRunScheduledWork,
+  canSettleScheduledWork,
+  type ScheduledWorkContext,
+} from "@/timers/scheduledWorkContext";
 
 import type { RandomTriggerRow, TomoriState } from "../types/db/schema";
 import { tomoriChat, suppressNextSelfReply } from "../events/messageCreate/tomoriChat";
 import { getCachedAllPersonas } from "../utils/cache/tomoriStateCache";
 import { resolvePersonaForMessage } from "@/utils/chat/webhookIdentity";
 import { runWithErrorContext } from "@/utils/misc/errorContextStore";
+import { isDeliveredTurnResult } from "@/utils/chat/postTurnEffects";
 import { seedTurnAnchor } from "@/utils/discord/turnAnchor";
 
 export class RandomTriggerProcessor {
   private readonly client: Client;
 
-  constructor(client: Client) {
+  constructor(
+    client: Client,
+    private readonly topology?: ShardTopology,
+  ) {
     this.client = client;
   }
 
-  public async processDueRandomTriggers(): Promise<void> {
+  public async processDueRandomTriggers(work?: ScheduledWorkContext): Promise<void> {
+    if (!canRunScheduledWork(work)) return;
     try {
-      const dueTriggers = await serverScheduleRepository.getDueTriggers();
+      const dueTriggers = await serverScheduleRepository.getDueTriggers(this.topology);
 
       if (!dueTriggers || dueTriggers.length === 0) {
         return;
@@ -29,14 +41,15 @@ export class RandomTriggerProcessor {
       log.info(`Processing ${dueTriggers.length} due random trigger(s)`);
 
       for (const trigger of dueTriggers) {
-        await this.executeTrigger(trigger);
+        if (!canRunScheduledWork(work)) return;
+        await this.executeTrigger(trigger, work);
       }
     } catch (error) {
-      log.error("Error checking for due random triggers:", error);
+      if (canRunScheduledWork(work)) log.error("Error checking for due random triggers:", error);
     }
   }
 
-  private async executeTrigger(trigger: RandomTriggerRow): Promise<void> {
+  private async executeTrigger(trigger: RandomTriggerRow, work?: ScheduledWorkContext): Promise<void> {
     return runWithErrorContext(
       {
         source: "random_trigger",
@@ -44,15 +57,17 @@ export class RandomTriggerProcessor {
         serverId: trigger.server_id,
         channelDiscId: trigger.channel_disc_id,
       },
-      () => this.executeTriggerInContext(trigger),
+      () => this.executeTriggerInContext(trigger, work),
     );
   }
 
-  private async executeTriggerInContext(trigger: RandomTriggerRow): Promise<void> {
+  private async executeTriggerInContext(trigger: RandomTriggerRow, work?: ScheduledWorkContext): Promise<void> {
     const triggerId = trigger.trigger_id ?? 0;
     let consecutiveFailures = trigger.consecutive_failures ?? 0;
+    let delivered = false;
 
     try {
+      assertScheduledWorkActive(work);
       const failureThreshold = trigger.failure_threshold ?? null;
       const isForced = failureThreshold !== null && consecutiveFailures >= failureThreshold;
 
@@ -76,6 +91,7 @@ export class RandomTriggerProcessor {
       }
 
       const rawChannel = await this.client.channels.fetch(trigger.channel_disc_id).catch(() => null);
+      assertScheduledWorkActive(work);
 
       if (!rawChannel) {
         log.warn(`Random trigger ${triggerId}: channel ${trigger.channel_disc_id} not found — rescheduling`);
@@ -95,9 +111,11 @@ export class RandomTriggerProcessor {
           const messages = await rawChannel.messages.fetch({ limit: 1 });
           lastMessage = messages.first();
         } catch {
+          assertScheduledWorkActive(work);
           log.warn(`Random trigger ${triggerId}: failed to fetch last message from channel`);
         }
       }
+      assertScheduledWorkActive(work);
 
       if (trigger.silence_threshold_hours !== null && trigger.silence_threshold_hours !== undefined) {
         if (lastMessage) {
@@ -156,8 +174,11 @@ export class RandomTriggerProcessor {
       }
 
       if (!lastMessage && rawChannel.isSendable()) {
-        lastMessage = (await seedTurnAnchor(rawChannel, `random trigger ${triggerId}`)) ?? undefined;
+        lastMessage =
+          (await seedTurnAnchor(rawChannel, `random trigger ${triggerId}`, () => canRunScheduledWork(work))) ??
+          undefined;
       }
+      assertScheduledWorkActive(work);
 
       if (!lastMessage) {
         log.warn(`Random trigger ${triggerId}: no messages in channel and seeding failed — rescheduling`);
@@ -186,18 +207,22 @@ export class RandomTriggerProcessor {
         shouldSurfaceUserErrors: false,
         manualSystemPrompt: trigger.custom_prompt ?? undefined,
         borrowsTriggerMessage: true,
+        onGenerationResult: async (result) => {
+          delivered = isDeliveredTurnResult(result);
+        },
       });
 
       log.success(`Random trigger ${triggerId} fired successfully for persona "${chosenPersona.persona_nickname}"`);
     } catch (error) {
-      log.error(`Error executing random trigger ${triggerId}:`, error);
+      if (canRunScheduledWork(work)) log.error(`Error executing random trigger ${triggerId}:`, error);
     } finally {
-      await this.rescheduleTrigger(
-        triggerId,
-        trigger.timer_hours,
-        trigger.random_offset_range ?? null,
-        consecutiveFailures,
-      );
+      if (canRunScheduledWork(work) || (delivered && canSettleScheduledWork(work)))
+        await this.rescheduleTrigger(
+          triggerId,
+          trigger.timer_hours,
+          trigger.random_offset_range ?? null,
+          consecutiveFailures,
+        );
     }
   }
 

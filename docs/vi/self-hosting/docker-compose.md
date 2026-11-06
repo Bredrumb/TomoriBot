@@ -64,6 +64,24 @@ docker compose up      # bot + database
 
 Soạn các chân `RUN_ENV=development` trong định nghĩa dịch vụ của nó để các bí mật `.env` và điểm cuối HTTP cục bộ hoạt động. Kiểm tra tình trạng vùng chứa báo cáo xem quy trình bot có đang chạy hay không; nó không kiểm tra kết nối cổng Discord. Để biết sự khác biệt của chế độ sản xuất (`RUN_ENV=production`) (trình quản lý bí mật, hạn chế mạng và số liệu), hãy xem [Kiến trúc bảo mật](/en/architecture/subsystems/security/).
 
+## Cấu hình shard tùy chọn trên một máy chủ
+
+Để trống `SHARD_COUNT` và `SHARD_IDS` cho hành vi mặc định: một tiến trình duy nhất sở hữu tất cả các shard được Discord đề xuất khi khởi động. Các cài đặt quy mô nhỏ thường chỉ nhận một shard. Chế độ này không sử dụng cơ chế lease cho shard hoặc bộ lắng nghe vô hiệu hóa bộ nhớ đệm. Nhiều shard có thể dùng chung một tiến trình.
+
+Để chạy bốn shard trong dịch vụ hiện có, hãy thêm `SHARD_COUNT=4` vào `.env` và để trống `SHARD_IDS`. Thêm ghi đè dịch vụ này trong `compose.override.yaml` để cho phép quá trình tắt có giới hạn hoàn tất:
+
+```yaml
+services:
+  tomoribot:
+    stop_grace_period: 40s
+```
+
+Tạo lại dịch vụ bằng lệnh `docker compose up -d --build tomoribot`. Nếu một tập lệnh gọi `docker stop` hoặc cung cấp thời gian chờ dừng Compose riêng, hãy cho phép ít nhất 40 giây ở đó. Tính năng tự động lựa chọn không thay đổi số lượng shard khi đang chạy; việc thay đổi tổng số yêu cầu phải khởi động lại đồng bộ.
+
+Các tập con tĩnh tùy chọn yêu cầu một dịch vụ riêng biệt cho mỗi nhóm có cùng `SHARD_COUNT` rõ ràng và `SHARD_IDS` rời rạc, ví dụ `0,1` và `2,3` với tổng số là `4`. Đặt cho các dịch vụ những tên ổn định riêng biệt, tên container và bất kỳ cổng kiểm tra trạng thái nào được phát hành. Ứng dụng sẽ suy ra các nhãn chỉ số ổn định từ mỗi nhóm. Giữ một cơ sở dữ liệu duy nhất, chạy khởi tạo một lần hiện có `bun run src/db/initializeCli.ts` với thông tin xác thực quản lý lược đồ trước khi khởi động gateway, và đặt `DATABASE_SCHEMA_MANAGEMENT_ENABLED=false` trên mọi tiến trình gateway. Không khởi động dịch vụ sở hữu tất cả shard ban đầu cùng với các nhóm đó. Hãy dừng các tiến trình cũ trước khi thay đổi tổng số hoặc phân vùng.
+
+Chế độ tập con sẽ từ chối cầu nối Matrix đã được cấu hình đầy đủ. Giới hạn lượt phản hồi và tải lên cho mỗi người dùng vẫn được tính theo từng tiến trình, vì vậy hãy cân nhắc xem mức hạn ngạch được nhân lên có thể chấp nhận được hay không trước khi bật tiến trình thứ hai. Các hệ thống sử dụng tính năng thanh toán người ủng hộ chỉ có trên bản phát hành cũng yêu cầu kiểm soát chi tiêu chung và đối soát trước khi phục vụ các yêu cầu được tài trợ từ nhiều tiến trình. Xem [phân mảnh và quyền sở hữu tiến trình](/architecture/subsystems/sharding/) để biết các giới hạn an toàn và trạng thái hoạt động.
+
 ## 4. Các máy chủ cục bộ tùy chọn (Compose profile)
 
 Chạy các máy chủ trợ giúp cục bộ tùy chọn với cấu hình Compose để bạn chỉ bắt đầu những gì mình cần:

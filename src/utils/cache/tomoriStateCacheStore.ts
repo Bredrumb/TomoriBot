@@ -1,5 +1,12 @@
 import type { TomoriState } from "@/types/db/schema";
-import { invalidateServerPersonaAppearances } from "@/utils/cache/personaAppearanceCacheStore";
+import { invalidateServerPersonaAppearances, clearPersonaAppearances } from "@/utils/cache/personaAppearanceCacheStore";
+import { z } from "zod";
+import {
+  broadcastInvalidation,
+  registerInvalidation,
+  invalidationKey,
+  withoutInvalidationBroadcast,
+} from "@/utils/cache/invalidationBus";
 
 /** Repository writers import this store instead of the readers to avoid a repository dependency cycle. */
 
@@ -37,6 +44,7 @@ export function invalidateTomoriStateCache(serverDiscId: string): void {
   invalidateServerPersonaAppearances(serverDiscId);
   cache.delete(serverDiscId);
   lastDbError.delete(serverDiscId);
+  broadcastInvalidation("tomoriState", [[serverDiscId]]);
 }
 
 /**
@@ -46,7 +54,23 @@ export function invalidateTomoriStateCache(serverDiscId: string): void {
  * @param serverDiscIds - Discord server IDs to invalidate
  */
 export function invalidateTomoriStateCaches(serverDiscIds: Iterable<string>): void {
-  for (const serverDiscId of serverDiscIds) {
-    invalidateTomoriStateCache(serverDiscId);
-  }
+  const tuples: [string][] = [];
+  withoutInvalidationBroadcast(() => {
+    for (const serverDiscId of serverDiscIds) {
+      invalidateTomoriStateCache(serverDiscId);
+      tuples.push([serverDiscId]);
+    }
+  });
+  broadcastInvalidation("tomoriState", tuples);
 }
+
+registerInvalidation(
+  "tomoriState",
+  z.tuple([invalidationKey]),
+  ([server]) => invalidateTomoriStateCache(server),
+  () => {
+    clearPersonaAppearances();
+    cache.clear();
+    lastDbError.clear();
+  },
+);

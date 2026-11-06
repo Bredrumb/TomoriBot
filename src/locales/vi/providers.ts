@@ -42,6 +42,7 @@ export default {
     fallback_used_personal_opt_out_footer: `Ngừng để model của máy chủ trả lời thay khi nhà cung cấp cá nhân của bạn gặp lỗi trong \`/personal config\` > Model > Model dự phòng`,
     markdown_table: {
       show_button: `Hiện Markdown`,
+      source_expired_title: `Nguồn bảng đã hết hạn`,
       source_expired: `Markdown của bảng đó không còn được lưu trong bộ nhớ đệm, nên mình không thể hiển thị mã nguồn nữa.`,
       source_attached: `Bảng này quá dài để hiển thị trực tiếp, nên bảng được gửi dưới dạng tệp:`,
     },
@@ -138,6 +139,8 @@ export default {
       verify_api_key_expiry: `API key NVIDIA NIM có hạn dùng, và NVIDIA từ chối key đã hết hạn bằng đúng lỗi như khi key bị gõ sai. Hãy kiểm tra ngày hết hạn tại [build.nvidia.com](https://build.nvidia.com) và tạo key mới nếu key đã hết hạn.`,
       nvidia_register_free_model: `NVIDIA thường xuyên ngừng cung cấp các model được host. Hãy chọn một model mà NVIDIA hiện đang phục vụ trong [các endpoint miễn phí của NVIDIA](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview), sao chép ID model (ví dụ \`deepseek-ai/deepseek-v4.1-flash\`), rồi thêm trong \`/providers\` > NVIDIA NIM > **+ Thêm model văn bản mới**.`,
       nvidia_register_free_model_personal: `NVIDIA thường xuyên ngừng cung cấp các model được host. Hãy chọn một model mà NVIDIA hiện đang phục vụ trong [các endpoint miễn phí của NVIDIA](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview), sao chép ID model (ví dụ \`deepseek-ai/deepseek-v4.1-flash\`), rồi thêm trong \`/personal providers\` > NVIDIA NIM > **+ Thêm model văn bản mới**.`,
+      google_free_tier_daily: `API key này đã dùng hết các yêu cầu miễn phí của Gemini trong hôm nay. Hạn mức sẽ được làm mới vào nửa đêm theo giờ Thái Bình Dương.`,
+      google_free_tier_minute: `API key này đang gửi yêu cầu nhanh hơn mức gói miễn phí của Gemini cho phép. Vui lòng đợi một phút rồi thử lại.`,
       google_credential_type: `Thông tin này có vẻ là token OAuth hoặc service account. Nhà cung cấp \`google\` cần API key thông thường từ [Google AI Studio](https://aistudio.google.com/apikey); hãy dùng nhà cung cấp \`vertex\` cho thông tin xác thực Google Cloud.`,
       openrouter_privacy_settings: `Điều chỉnh cài đặt "Data Policy" tại [Cài đặt quyền riêng tư OpenRouter](https://openrouter.ai/settings/privacy) để cho phép model này, hoặc chọn model khác.`,
       openrouter_fund_account: `Nạp ít nhất 10 tín dụng vào tài khoản OpenRouter của bạn để mở khóa 1000 yêu cầu model miễn phí mỗi ngày.`,

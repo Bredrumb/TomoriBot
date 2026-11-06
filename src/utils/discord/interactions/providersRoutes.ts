@@ -59,7 +59,7 @@ import {
   providerOptionActionOption,
   type ProviderOptionScope,
 } from "@/utils/provider/providerOptionRegistry";
-import { buildPanelContainer } from "@/utils/discord/ui/panel";
+import { buildPanelContainer, replyPanelReceipt } from "@/utils/discord/ui/panel";
 import { getDefaultImageEndpointSupports } from "@/utils/provider/customImageEndpointSupport";
 import { getDefaultSpeechEndpointSettings } from "@/utils/provider/customSpeechEndpointSettings";
 import { resolveCuratedImageSupports } from "@/utils/provider/providerImageCapabilities";
@@ -167,6 +167,18 @@ function terminalPayload(locale: string, key: string): InteractionEditReplyOptio
     },
     locale,
   );
+}
+
+async function replyProvidersUnavailable(interaction: GlobalRoutableInteraction, locale: string): Promise<void> {
+  if (interaction.deferred || interaction.replied) {
+    await interaction.editReply(terminalPayload(locale, "commands.providers.unavailable"));
+    return;
+  }
+  await replyPanelReceipt(interaction, {
+    tone: "warning",
+    heading: localizer(locale, "general.panel_notice.unavailable_heading"),
+    detail: localizer(locale, "commands.providers.unavailable"),
+  });
 }
 
 function providersNotSetupKey(interaction: {
@@ -712,9 +724,10 @@ export function createProvidersInteractionRoute(
         const selectedValue = (interaction as StringSelectMenuInteraction).values[0];
         if (selectedValue === PROVIDERS_ADD_PROVIDER_VALUE) {
           if (!configuration.authorize(interaction)) {
-            await interaction.reply({
-              content: localizer(route.locale, "general.errors.permission_denied_description"),
-              flags: MessageFlags.Ephemeral,
+            await replyPanelReceipt(interaction, {
+              tone: "error",
+              heading: localizer(route.locale, "general.errors.permission_denied_title"),
+              detail: localizer(route.locale, "general.errors.permission_denied_description"),
             });
             return;
           }
@@ -724,9 +737,10 @@ export function createProvidersInteractionRoute(
         }
         if (selectedValue === PROVIDERS_ADD_ENDPOINT_VALUE) {
           if (!configuration.authorize(interaction)) {
-            await interaction.reply({
-              content: localizer(route.locale, "general.errors.permission_denied_description"),
-              flags: MessageFlags.Ephemeral,
+            await replyPanelReceipt(interaction, {
+              tone: "error",
+              heading: localizer(route.locale, "general.errors.permission_denied_title"),
+              detail: localizer(route.locale, "general.errors.permission_denied_description"),
             });
             return;
           }
@@ -737,9 +751,10 @@ export function createProvidersInteractionRoute(
         const optionAction = providerOptionActionOption(selectedValue);
         if (optionAction) {
           if (!configuration.authorize(interaction)) {
-            await interaction.reply({
-              content: localizer(route.locale, "general.errors.permission_denied_description"),
-              flags: MessageFlags.Ephemeral,
+            await replyPanelReceipt(interaction, {
+              tone: "error",
+              heading: localizer(route.locale, "general.errors.permission_denied_title"),
+              detail: localizer(route.locale, "general.errors.permission_denied_description"),
             });
             return;
           }
@@ -753,18 +768,17 @@ export function createProvidersInteractionRoute(
             canManageServer: canManageServer(interaction),
           });
           if (handled) return;
-          const content = localizer(route.locale, "commands.providers.unavailable");
-          if (interaction.deferred || interaction.replied) await interaction.editReply({ content });
-          else await interaction.reply({ content, flags: MessageFlags.Ephemeral });
+          await replyProvidersUnavailable(interaction, route.locale);
           return;
         }
       }
 
       if (route.action === "edit-provider-open") {
         if (!configuration.authorize(interaction)) {
-          await interaction.reply({
-            content: localizer(route.locale, "general.errors.permission_denied_description"),
-            flags: MessageFlags.Ephemeral,
+          await replyPanelReceipt(interaction, {
+            tone: "error",
+            heading: localizer(route.locale, "general.errors.permission_denied_title"),
+            detail: localizer(route.locale, "general.errors.permission_denied_description"),
           });
           return;
         }
@@ -783,9 +797,7 @@ export function createProvidersInteractionRoute(
             canManageServer: canManageServer(interaction),
           });
           if (handled) return;
-          const content = localizer(route.locale, "commands.providers.unavailable");
-          if (interaction.deferred || interaction.replied) await interaction.editReply({ content });
-          else await interaction.reply({ content, flags: MessageFlags.Ephemeral });
+          await replyProvidersUnavailable(interaction, route.locale);
           return;
         }
         const nonce = dependencies.createNonce();
@@ -801,18 +813,20 @@ export function createProvidersInteractionRoute(
 
       if (route.action === "edit-endpoint-open") {
         if (!configuration.authorize(interaction)) {
-          await interaction.reply({
-            content: localizer(route.locale, "general.errors.permission_denied_description"),
-            flags: MessageFlags.Ephemeral,
+          await replyPanelReceipt(interaction, {
+            tone: "error",
+            heading: localizer(route.locale, "general.errors.permission_denied_title"),
+            detail: localizer(route.locale, "general.errors.permission_denied_description"),
           });
           return;
         }
         const scope = await dependencies.resolveScope(interaction, false);
         const context = scope ? endpointEditContext(scope, route.connectionId) : null;
         if (!scope || scope.data.readStatus !== "fresh" || !context) {
-          await interaction.reply({
-            content: localizer(route.locale, "commands.providers.unavailable"),
-            flags: MessageFlags.Ephemeral,
+          await replyPanelReceipt(interaction, {
+            tone: "warning",
+            heading: localizer(route.locale, "general.panel_notice.unavailable_heading"),
+            detail: localizer(route.locale, "commands.providers.unavailable"),
           });
           return;
         }
@@ -823,9 +837,10 @@ export function createProvidersInteractionRoute(
 
       if (route.action === "model-select") {
         if (!configuration.authorize(interaction)) {
-          await interaction.reply({
-            content: localizer(route.locale, "general.errors.permission_denied_description"),
-            flags: MessageFlags.Ephemeral,
+          await replyPanelReceipt(interaction, {
+            tone: "error",
+            heading: localizer(route.locale, "general.errors.permission_denied_title"),
+            detail: localizer(route.locale, "general.errors.permission_denied_description"),
           });
           return;
         }
@@ -850,9 +865,10 @@ export function createProvidersInteractionRoute(
               )
             : undefined;
         if (!modelScope || modelScope.data.readStatus !== "fresh" || !section) {
-          await interaction.reply({
-            content: localizer(route.locale, "commands.providers.unavailable"),
-            flags: MessageFlags.Ephemeral,
+          await replyPanelReceipt(interaction, {
+            tone: "warning",
+            heading: localizer(route.locale, "general.panel_notice.unavailable_heading"),
+            detail: localizer(route.locale, "commands.providers.unavailable"),
           });
           return;
         }

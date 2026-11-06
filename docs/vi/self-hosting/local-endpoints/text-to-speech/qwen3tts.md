@@ -39,6 +39,17 @@ python servers\tts\qwen3tts\server.py --mode auto
 
 Chế độ auto kiểm tra từng yêu cầu `/synthesize`: các yêu cầu có `ref_audio` sử dụng model nhân bản, trong khi các yêu cầu có `instruct` sử dụng model VoiceDesign. Hệ thống chỉ giữ một model được nạp tại một thời điểm và hoán đổi các model khi loại yêu cầu thay đổi, do đó yêu cầu đầu tiên sau khi hoán đổi có thể chậm hơn.
 
+## Tùy chọn: backend CUDA nhanh hơn
+
+Trên GPU NVIDIA, hãy đặt `QWEN3TTS_BACKEND=cuda-graphs` trước khi khởi động máy chủ để sử dụng [faster-qwen3-tts](https://github.com/andimarafioti/faster-qwen3-tts), gói mà tệp requirements đã cài đặt sẵn. Tốc độ tổng hợp nhanh hơn khoảng 6 lần, nên nó chạy nhanh hơn thời gian thực thay vì chậm hơn khoảng hai lần. Đầu ra của nó không giống hệt từng bit so với backend mặc định cho cùng một đầu vào.
+
+Backend này dành trước dung lượng cho một thời lượng giọng nói cố định trên mỗi yêu cầu, được chia sẻ giữa clip tham chiếu và âm thanh được tạo (tổng cộng khoảng 170 giây). Với một clip dài 10-20 giây, thời lượng còn lại cho giọng nói là hơn hai phút. Nếu một yêu cầu không vừa, máy chủ sẽ trả về lỗi thay vì cắt ngắn âm thanh: hãy sử dụng clip hoặc văn bản ngắn hơn, hoặc backend `transformers` mặc định.
+
+```powershell
+$env:QWEN3TTS_BACKEND = "cuda-graphs"
+python servers\tts\qwen3tts\server.py
+```
+
 ## Đăng ký trong TomoriBot
 
 Đối với hầu hết người dùng, hãy đăng ký máy chủ ở chế độ auto để một endpoint có thể hỗ trợ cả persona nhân bản giọng nói lẫn persona VoiceDesign.

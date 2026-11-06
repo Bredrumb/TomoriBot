@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it, spyOn } from "bun:test";
-import { MessageFlags, type Client } from "discord.js";
+import type { Client } from "discord.js";
 import type { MemoryBucket } from "@/types/db/dataExport";
 import { personalConfigExportDataSchema, workspaceConfigExportDataSchema } from "@/types/db/dataExport";
 import type { TomoriState } from "@/types/db/schema";
@@ -35,6 +35,8 @@ import {
 import type { GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
 import { parseInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { localizedProse } from "../../helpers/localeCases";
+import { collectTextDisplays } from "../../helpers/panelLimits";
 import { createRouteInteraction, type RouteInteraction } from "../../helpers/routeInteraction";
 
 type InteractionKind = "button" | "string" | "modal";
@@ -274,10 +276,10 @@ describe("transfer interaction routes", () => {
     const replySpy = spyOn(interaction, "reply");
 
     await expect(dispatchGlobalInteraction({} as Client, interaction)).resolves.toBe(true);
-    expect(replySpy).toHaveBeenCalledWith({
-      content: localizer("en-US", "general.errors.outdated_panel", { command: "/import" }),
-      flags: MessageFlags.Ephemeral,
-    });
+    expect(replySpy).toHaveBeenCalledTimes(1);
+    expect(collectTextDisplays(replySpy.mock.calls[0]?.[0]).join("\n")).toMatch(
+      localizedProse("en-US", "general.errors.outdated_panel", { command: "/import" }),
+    );
   });
 
   it("refuses an unauthorized workspace interaction and preserves the snapshot", async () => {

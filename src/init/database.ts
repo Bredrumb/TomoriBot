@@ -1,5 +1,6 @@
 import { sql } from "@/utils/db/client";
 import { initializeDatabase, invalidatePresetPointerStateCaches } from "@/utils/db/initializeDatabase";
+import { probeRagUsable } from "@/utils/db/ragAvailability";
 import { seedPersonaSpritesFromCatalog } from "@/db/seed/catalog/presetSpriteSeed";
 import { seedPersonaAvatarsFromCatalog } from "@/db/seed/catalog/presetAvatarSeed";
 import { seedPersonaCharacterReferencesFromCatalog } from "@/db/seed/catalog/presetCharacterReferenceSeed";
@@ -31,6 +32,8 @@ export async function initDatabase(environment: AppEnvironment): Promise<void> {
     } else {
       await sql`SELECT 1`;
       log.success("PostgreSQL runtime connection verified (schema management disabled)");
+      // The extension alone is not enough: this runtime may boot before the schema manager has created document_chunks.
+      await probeRagUsable();
     }
   } catch {
     process.exit(1);

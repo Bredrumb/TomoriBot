@@ -25,7 +25,7 @@ import {
 } from "@/utils/discord/conditioningPanelCatalog";
 import { buildConditioningCheckboxGroupId, buildConditioningRemoveModal } from "@/utils/discord/ui/conditioningPanel";
 import { showRoutedRawModal, takeRawModalCheckboxGroupValues } from "@/utils/discord/ui/modals";
-import { buildPanelContainer } from "@/utils/discord/ui/panel";
+import { buildPanelContainer, replyPanelReceipt } from "@/utils/discord/ui/panel";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
 import { ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
@@ -175,18 +175,20 @@ export function createConditioningInteractionRoute(
 
       if (route.action === "page") {
         if (!isAuthorized(interaction)) {
-          await interaction.reply({
-            content: localizer(route.locale, "general.errors.permission_denied_description"),
-            flags: MessageFlags.Ephemeral,
+          await replyPanelReceipt(interaction, {
+            tone: "error",
+            heading: localizer(route.locale, "general.errors.permission_denied_title"),
+            detail: localizer(route.locale, "general.errors.permission_denied_description"),
           });
           return;
         }
 
         const scope = await dependencies.resolveScope(interaction);
         if (!scope) {
-          await interaction.reply({
-            content: localizer(route.locale, "general.errors.tomori_not_setup_description"),
-            flags: MessageFlags.Ephemeral,
+          await replyPanelReceipt(interaction, {
+            tone: "error",
+            heading: localizer(route.locale, "general.errors.tomori_not_setup_title"),
+            detail: localizer(route.locale, "general.errors.tomori_not_setup_description"),
           });
           return;
         }
@@ -194,9 +196,10 @@ export function createConditioningInteractionRoute(
         const startIndex = route.page * CONDITIONING_MODAL_CAPACITY;
         const pageEntries = scope.entries.slice(startIndex, startIndex + CONDITIONING_MODAL_CAPACITY);
         if (pageEntries.length === 0) {
-          await interaction.reply({
-            content: localizer(route.locale, "commands.conditioning.remove.empty_description"),
-            flags: MessageFlags.Ephemeral,
+          await replyPanelReceipt(interaction, {
+            tone: "info",
+            heading: localizer(route.locale, "commands.conditioning.remove.empty_title"),
+            detail: localizer(route.locale, "commands.conditioning.remove.empty_description"),
           });
           return;
         }

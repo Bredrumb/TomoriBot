@@ -1,5 +1,16 @@
 export default {
   general: {
+    restarting_title: `Đang khởi động lại`,
+    restarting: `TomoriBot đang khởi động lại. Vui lòng thử lại sau giây lát.`,
+    panel_notice: {
+      outdated_heading: `Bảng điều khiển đã lỗi thời`,
+      unavailable_heading: `Không khả dụng`,
+      empty_heading: `Không có gì ở đây`,
+      no_changes_heading: `Không có thay đổi`,
+      limit_heading: `Đã đạt giới hạn`,
+      not_available_heading: `Không khả dụng`,
+      invalid_heading: `Lựa chọn không hợp lệ`,
+    },
     oauth: {
       invalid_callback: `Liên kết đăng nhập này không hợp lệ hoặc đã hết hạn. Vui lòng đăng nhập lại từ TomoriBot.`,
       server_error: `TomoriBot không thể hoàn tất đăng nhập do lỗi dịch vụ. Vui lòng thử lại sau.`,

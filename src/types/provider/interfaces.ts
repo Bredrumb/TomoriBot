@@ -101,6 +101,7 @@ export interface StreamResult {
     | "empty_response"
     | "follow_up_interrupt";
   data?: unknown | Error; // Function call data or error details
+  providerFailureReported?: boolean;
   pendingResponse?: import("@/types/stream/pendingResponse").PendingStreamResponse;
   accumulatedText?: string; // Text sent to Discord (for short-term memory storage)
   /** Discord ID of the first message this segment delivered. */
@@ -232,6 +233,13 @@ export interface LLMProvider {
    * @returns Promise<ApiKeyValidationResult> - Validation result with detailed error info if failed
    */
   validateApiKey(apiKey: string): Promise<ApiKeyValidationResult>;
+
+  /**
+   * Looks a text model up in the provider's own catalog before it is registered.
+   * @returns False only when the provider answered that it does not serve `codename`; null when
+   *          the lookup could not answer, which registration treats as unchecked.
+   */
+  checkTextModel?(apiKey: string, codename: string): Promise<boolean | null>;
 
   /**
    * Create a localized provider-specific error description for user-facing embeds.

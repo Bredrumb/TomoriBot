@@ -23,6 +23,8 @@ cu128 = [
     "torch>=2.10.0,<2.11.0",
     "torchao>=0.16.0,<0.17.0",
     "torchaudio>=2.10.0,<2.11.0",
+    # Linux CUDA torch wheels already depend on triton; IRODORI_COMPILE_MODE needs it on Windows too.
+    "triton-windows>=3.6,<3.7; sys_platform == 'win32'",
 ]
 rocm = [
     "pytorch-triton-rocm>=3.5.1; sys_platform == 'linux'",

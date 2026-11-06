@@ -1,9 +1,56 @@
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import type { Client } from "discord.js";
 import { createDiscordClient } from "@/init/discord";
 import { DiscordPresenceRetention } from "@/utils/cache/discordPresenceRetention";
+import { parseShardTopology } from "@/utils/discord/shardOwnership";
+import { healthTracker } from "@/utils/misc/healthTracker";
+import { stubLogMembers } from "../../helpers/mockSurface";
+import { useEnvSandbox } from "../../helpers/env";
+import { collectCacheMetricsSnapshot } from "@/timers/cacheMetricsLogger";
+
+useEnvSandbox(["SHARD_COUNT", "SHARD_IDS"]);
+stubLogMembers({ info: () => undefined, rateLimit: () => undefined, error: () => undefined, warn: () => undefined });
+beforeEach(() => {
+  delete process.env.SHARD_COUNT;
+  delete process.env.SHARD_IDS;
+});
 
 let client: Client | undefined;
+
+describe("Discord shard construction", () => {
+  it.each([undefined, "0,1,2,3", "1,3"])("constructs a fixed topology with explicit IDs (%s)", (SHARD_IDS) => {
+    const topology = parseShardTopology({ SHARD_COUNT: "4", SHARD_IDS });
+    const ids = topology.ownedShardIds;
+    if (!ids) throw new Error("Explicit shard IDs must resolve before constructing the client");
+    client = createDiscordClient(false, undefined, topology);
+    expect(client.options.shardCount).toBe(4);
+    expect(client.options.shards).toEqual([...ids]);
+    expect(healthTracker.getHealthStatus().healthy).toBe(false);
+    expect(healthTracker.getHealthStatus().details.shards.map((shard) => shard.id)).toEqual([...ids]);
+  });
+
+  it("uses auto for an unconfigured self-host", () => {
+    client = createDiscordClient(false, undefined, parseShardTopology({}));
+    expect(client.options.shards).toBe("auto");
+  });
+
+  it("reads topology at initialization after environment loading", () => {
+    process.env.SHARD_COUNT = "0";
+    delete process.env.SHARD_IDS;
+    expect(() => createDiscordClient(false)).toThrow();
+  });
+
+  it("attributes gateway failures and recovery to the emitting shard", () => {
+    client = createDiscordClient(false, undefined, parseShardTopology({ SHARD_COUNT: "4" }));
+    client.emit("shardError", new Error("fixture"), 1);
+    client.emit("shardError", new Error("fixture"), 2);
+    client.emit("shardResume", 1, 0);
+    expect(healthTracker.getConnectionState().gatewayFailureCount).toBe(1);
+    expect(healthTracker.getHealthStatus().details.shards.find((shard) => shard.id === 2)?.gatewayFailureCount).toBe(1);
+    client.emit("shardReady", 2, undefined);
+    expect(healthTracker.getConnectionState().gatewayFailureCount).toBe(0);
+  });
+});
 
 afterEach(async () => {
   await client?.destroy();
@@ -122,4 +169,15 @@ describe("createDiscordClient users sweeper", () => {
 
     expect([...client.users.cache.keys()].sort()).toEqual(["1", "2"]);
   });
+});
+
+it("records stable scalar labels and the resolved gateway total in auto mode", () => {
+  client = createDiscordClient(false);
+  client.options.shardCount = 4;
+  client.options.shards = [0, 1, 2, 3];
+  const snapshot = collectCacheMetricsSnapshot(client);
+  expect(snapshot.shard_count).toBe(4);
+  expect(snapshot.shard_ids).toBe("0,1,2,3");
+  expect(snapshot.process_label).toBe(parseShardTopology({}).processLabel);
+  expect(Object.values(snapshot).every((value) => typeof value === "number" || typeof value === "string")).toBe(true);
 });

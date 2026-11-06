@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { broadcastInvalidation, registerInvalidation, invalidationKey } from "@/utils/cache/invalidationBus";
 import type { WhitelistCheckResult } from "@/types/misc/channelWhitelist";
 import { whitelistRepository } from "@/utils/db/repositories/WhitelistRepository";
 
@@ -85,12 +87,13 @@ export async function getCachedWhitelistStatus(
  * @param channelDiscId - Optional Discord channel ID (snowflake)
  */
 export function invalidateWhitelistCache(serverDiscId: string, channelDiscId?: string): void {
-  const prefix = channelDiscId ? `${serverDiscId}:${channelDiscId}:` : `${serverDiscId}:`;
   for (const key of whitelistCache.keys()) {
-    if (key.startsWith(prefix)) {
+    const [server, channel, parent] = key.split(":");
+    if (server === serverDiscId && (!channelDiscId || channel === channelDiscId || parent === channelDiscId)) {
       whitelistCache.delete(key);
     }
   }
+  broadcastInvalidation("whitelist", [channelDiscId === undefined ? [serverDiscId] : [serverDiscId, channelDiscId]]);
 }
 
 /**
@@ -129,3 +132,10 @@ export function clearWhitelistCache(): void {
   cacheHits = 0;
   cacheMisses = 0;
 }
+
+registerInvalidation(
+  "whitelist",
+  z.union([z.tuple([invalidationKey]), z.tuple([invalidationKey, invalidationKey])]),
+  ([server, channel]) => invalidateWhitelistCache(server, channel),
+  clearWhitelistCache,
+);

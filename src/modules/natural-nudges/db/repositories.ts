@@ -3,6 +3,8 @@ import type { SQL } from "bun";
 import { z } from "zod";
 import { PrivacyLevel } from "@/types/db/schema";
 import { sql, withTransientDbRetry } from "@/utils/db/client";
+import { ownedServersOnly } from "@/utils/db/repositories/shardFilter";
+import type { ShardTopology } from "@/utils/discord/shardOwnership";
 import { log } from "@/utils/misc/logger";
 import { NATURAL_NUDGE_FAILURE_STOP_THRESHOLD, NUDGE_DORMANCY_MS } from "@/modules/natural-nudges/runtime/tuning";
 import {
@@ -148,7 +150,7 @@ class NaturalNudgeRepository {
     }
   }
 
-  async listEnabledIdleNudgeServers(now: Date): Promise<EnabledIdleNudgeServer[]> {
+  async listEnabledIdleNudgeServers(now: Date, topology?: ShardTopology): Promise<EnabledIdleNudgeServer[]> {
     const rows = await withTransientDbRetry(
       () => sql`
       SELECT s.server_id, s.server_disc_id, scc.timezone_offset
@@ -157,6 +159,7 @@ class NaturalNudgeRepository {
       LEFT JOIN server_natural_nudge_configs c ON c.server_id = s.server_id
       LEFT JOIN server_chat_configs scc ON scc.server_id = s.server_id
       WHERE COALESCE(s.is_dm_channel, false) = false
+        AND ${ownedServersOnly(topology)}
         AND COALESCE(c.idle_nudges_enabled, true)
         AND runtime.last_direct_chat_at > ${new Date(now.getTime() - NUDGE_DORMANCY_MS)}
     `,

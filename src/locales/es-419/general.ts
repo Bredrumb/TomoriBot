@@ -1,5 +1,16 @@
 export default {
   general: {
+    restarting_title: `Reiniciando`,
+    restarting: `TomoriBot se está reiniciando. Por favor, intenta de nuevo en breve.`,
+    panel_notice: {
+      outdated_heading: `Panel desactualizado`,
+      unavailable_heading: `No disponible`,
+      empty_heading: `Nada por aquí`,
+      no_changes_heading: `Sin cambios`,
+      limit_heading: `Límite alcanzado`,
+      not_available_heading: `No disponible`,
+      invalid_heading: `Opción no válida`,
+    },
     oauth: {
       invalid_callback: `Este enlace de inicio de sesión no es válido o caducó. Inicia sesión de nuevo desde TomoriBot.`,
       server_error: `TomoriBot no pudo completar el inicio de sesión debido a un error del servicio. Inténtalo de nuevo más tarde.`,

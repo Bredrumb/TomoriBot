@@ -489,6 +489,7 @@ async function resolveReviewer(
   author: LLMProvider,
   config: ProviderConfig,
   failureContext: ErrorContext,
+  onUnavailable: NonNullable<Parameters<typeof resolveServerStructuredModel>[4]>,
 ): Promise<ResolvedServerStructuredModel | { errorLogged: true } | null> {
   const review = context.responseReview;
   if (!review) return null;
@@ -496,8 +497,15 @@ async function resolveReviewer(
     if (
       !context.tomoriState.llm.supports_structoutput ||
       typeof (author as Partial<SupportsStructuredOutput>).callStructuredJSON !== "function"
-    )
+    ) {
+      onUnavailable({
+        category: !context.tomoriState.llm.supports_structoutput ? "unsupported_model" : "unsupported_provider",
+        modelId: context.tomoriState.llm.llm_id,
+        model: context.tomoriState.llm.llm_codename,
+        provider: context.tomoriState.llm.llm_provider,
+      });
       return null;
+    }
     return {
       capability: author as LLMProvider & SupportsStructuredOutput,
       state: context.tomoriState,
@@ -505,7 +513,13 @@ async function resolveReviewer(
       usageContext: context.usageContext,
     };
   }
-  return resolveServerStructuredModel(context.currentPersona, review.reviewerId, failureContext, "reviewer");
+  return resolveServerStructuredModel(
+    context.currentPersona,
+    review.reviewerId,
+    failureContext,
+    "reviewer",
+    onUnavailable,
+  );
 }
 
 export function responseReviewCancelled(context: ChatTurnContext): boolean {
@@ -526,6 +540,7 @@ async function reviewCandidate(
   const kind = proposedCall ? "tool_call" : "response_text";
   const started = Date.now();
   const correlation = randomUUID();
+  let resolutionCategory = "registration_or_capability";
   let modelId: number | undefined;
   let model: string | undefined;
   let provider: string | undefined;
@@ -620,10 +635,21 @@ async function reviewCandidate(
   try {
     const resolved = await runUnderWatchdog(context.channel.id, () =>
       wait(
-        resolveReviewer(context, author, config, {
-          errorType: "ResponseReviewError",
-          metadata: { correlation, operation: kind, category: "credentials", reviewerId: state.reviewerId },
-        }),
+        resolveReviewer(
+          context,
+          author,
+          config,
+          {
+            errorType: "ResponseReviewError",
+            metadata: { correlation, operation: kind, category: "credentials", reviewerId: state.reviewerId },
+          },
+          (failure) => {
+            resolutionCategory = failure.category;
+            modelId = failure.modelId;
+            model = failure.model;
+            provider = failure.provider;
+          },
+        ),
       ),
     );
     if (cancelled()) {
@@ -631,7 +657,7 @@ async function reviewCandidate(
       return { status: "cancelled" };
     }
     if (timeout.aborted) return unavailable("timeout", true);
-    if (!resolved) return unavailable("registration_or_capability", true);
+    if (!resolved) return unavailable(resolutionCategory, true);
     if ("errorLogged" in resolved) return unavailable("credentials");
     requestScope = [resolved.usageContext];
     modelId = resolved.state.llm.llm_id;

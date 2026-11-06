@@ -32,12 +32,15 @@ export async function sendToMatrixRoom(
   avatarUrl?: string | null,
   formattedText?: string,
   mentionedUserIds?: string[],
+  isExecutionCancelled?: () => boolean,
 ): Promise<void> {
+  if (isExecutionCancelled?.()) return;
   const bridge = getMatrixBridge();
   if (!bridge) return;
 
   try {
     const intent = await resolveSendIntent(roomId, personaName, avatarUrl ?? null);
+    if (isExecutionCancelled?.()) return;
     const messageContent: Record<string, unknown> = {
       msgtype: "m.text",
       body: text,

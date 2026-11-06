@@ -1,4 +1,7 @@
-import { afterAll, describe, expect, it, mock, spyOn } from "bun:test";
+import { stubAllShardOwnership } from "../../helpers/shardOwnership";
+stubAllShardOwnership();
+import { afterEach, beforeEach, afterAll, describe, expect, it, mock, spyOn } from "bun:test";
+import * as shutdownState from "@/utils/misc/shutdownState";
 import type { Message } from "discord.js";
 import { ChannelType, DMChannel } from "discord.js";
 import { PrivacyLevel } from "@/types/db/schema";
@@ -16,6 +19,7 @@ import {
   channelLocks,
   getOrCreateChannelLockEntry,
   interruptNudgeScene,
+  queuePersonaJobsAtFront,
   isNudgeOutputActive,
   releaseChannelLockAndReplayQueue,
   runWithChannelLock,
@@ -984,6 +988,156 @@ describe("evaluateChatAdmission verified proxy follow-ups", () => {
       expect(lockEntry.messageQueue).toHaveLength(0);
     } finally {
       stubs.restore();
+    }
+  });
+});
+
+describe("shutdown chat admission", () => {
+  let draining = false;
+  const gate = spyOn(shutdownState, "isDraining").mockImplementation(() => draining);
+  beforeEach(() => {
+    draining = false;
+  });
+  afterEach(() => {
+    draining = false;
+  });
+  afterAll(() => gate.mockRestore());
+
+  it("rejects new turns immediately, including queued and persona invocations", async () => {
+    draining = true;
+    for (const options of [{}, { isFromQueue: true }, { isPersonaJob: true }, { skipLock: true }]) {
+      const incoming = {
+        ...makeDmIncoming({ authorDiscId: "100000000000000025", recipientDiscId: "100000000000000025" }),
+        ...options,
+      };
+      expect(await evaluateChatAdmission(incoming)).toMatchObject({ disposition: "ignore", reason: "shutdown" });
+    }
+  });
+
+  it("rejects admission that completed before shutdown at the lock boundary", async () => {
+    const incoming = makeDmIncoming({ authorDiscId: "100000000000000025", recipientDiscId: "100000000000000025" });
+    const admission: RunnableChatAdmission = {
+      incoming,
+      disposition: "run",
+      locale: "en-US",
+      client: incoming.client,
+      message: incoming.message,
+      channel: incoming.message.channel,
+      referencedMessage: null,
+    };
+    const run = mock(async () => {});
+    draining = true;
+    await runWithChannelLock(admission, run, {
+      handleStopResponse: async () => {},
+      processQueuedMessage: async () => {},
+    });
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("suppresses persona jobs, stop responses and queued replay on release", async () => {
+    const incoming = makeDmIncoming({ authorDiscId: "100000000000000025", recipientDiscId: "100000000000000025" });
+    const channelId = incoming.message.channel.id;
+    const entry = getOrCreateChannelLockEntry(channelId, "300000000000000035");
+    const discard = mock(() => {});
+    const replay = mock(async () => {});
+    entry.messageQueue.push({ message: incoming.message, isPersonaJob: true, onQueueDiscard: discard });
+    StreamOrchestrator.requestStop(channelId, "100000000000000025", {
+      originalStopMessage: incoming.message,
+      client: incoming.client,
+    });
+    acquireChannelLockForTurn(entry, {
+      messageId: "active",
+      userDiscId: "100000000000000025",
+      isPersonaJob: false,
+      isCommandTriggered: false,
+    });
+    draining = true;
+    try {
+      queuePersonaJobsAtFront({
+        lockEntry: entry,
+        message: incoming.message,
+        personaJobs: [{ personaName: "Mirri", selectedPersonaId: 5 }],
+        triggeredPersonaIds: [5],
+        textQuotaSource: "user",
+        textQuotaTriggerKey: "turn",
+        textQuotaUserDiscId: "100000000000000025",
+      });
+      expect(entry.messageQueue).toHaveLength(1);
+      releaseChannelLockAndReplayQueue({
+        channelId,
+        lockEntry: entry,
+        completedMessageId: "active",
+        handleStopResponse: replay,
+        processQueuedMessage: replay,
+      });
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(replay).not.toHaveBeenCalled();
+      expect(discard).toHaveBeenCalledTimes(1);
+      expect(entry.messageQueue).toHaveLength(0);
+    } finally {
+      channelLocks.delete(channelId);
+    }
+  });
+
+  it("lets an existing turn finish a re-entry during drain but blocks it after abort", async () => {
+    const incoming = makeDmIncoming({ authorDiscId: "100000000000000025", recipientDiscId: "100000000000000025" });
+    const channelId = incoming.message.channel.id;
+    const admission: RunnableChatAdmission = {
+      incoming,
+      disposition: "run",
+      locale: "en-US",
+      client: incoming.client,
+      message: incoming.message,
+      channel: incoming.message.channel,
+      referencedMessage: null,
+    };
+    const options = { handleStopResponse: async () => {}, processQueuedMessage: async () => {} };
+    const retry = mock(async () => "completed");
+    try {
+      await runWithChannelLock(
+        admission,
+        async () => {
+          draining = true;
+          const reentry = { ...admission, incoming: { ...incoming, skipLock: true } };
+          expect(await runWithChannelLock(reentry, retry, options)).toBe("completed");
+          channelLocks.get(channelId)?.activeTurnAbortController?.abort();
+          expect(await runWithChannelLock(reentry, retry, options)).toBeUndefined();
+          expect(retry).toHaveBeenCalledTimes(1);
+        },
+        options,
+      );
+      expect(channelLocks.get(channelId)?.isLocked).toBe(false);
+    } finally {
+      channelLocks.delete(channelId);
+    }
+  });
+
+  it("suppresses replay already scheduled before draining began", async () => {
+    const incoming = makeDmIncoming({ authorDiscId: "100000000000000025", recipientDiscId: "100000000000000025" });
+    const channelId = incoming.message.channel.id;
+    const entry = getOrCreateChannelLockEntry(channelId, "300000000000000035");
+    const discard = mock(() => {});
+    const replay = mock(async () => {});
+    entry.messageQueue.push({ message: incoming.message, onQueueDiscard: discard });
+    StreamOrchestrator.requestStop(channelId, "100000000000000025", {
+      originalStopMessage: incoming.message,
+      client: incoming.client,
+    });
+    try {
+      releaseChannelLockAndReplayQueue({
+        channelId,
+        lockEntry: entry,
+        completedMessageId: "active",
+        handleStopResponse: replay,
+        processQueuedMessage: replay,
+      });
+      draining = true;
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(replay).not.toHaveBeenCalled();
+      expect(discard).toHaveBeenCalledTimes(1);
+      expect(entry.pendingHistoryReplay).toBeUndefined();
+    } finally {
+      channelLocks.delete(channelId);
     }
   });
 });

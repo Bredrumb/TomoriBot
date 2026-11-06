@@ -323,8 +323,8 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     streamingContext.disableRecentMessageReplyTool = true;
   }
 
-  const assets = await loadPersonaAssets(turn);
-  const history = await buildSimplifiedHistory(turn, messageIdMap);
+  const assets = await measureChatTurnStage("assets_ms", () => loadPersonaAssets(turn));
+  const history = await measureChatTurnStage("history_build_ms", () => buildSimplifiedHistory(turn, messageIdMap));
 
   let impersonatedUserNickname: string | undefined;
   let impersonatedUserPrompt: string | undefined;
@@ -493,29 +493,33 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     participantRequestScopes.set(turn.lockedTurn, participantRequestScope);
   }
   const participantStartedAt = performance.now();
-  const preparedParticipantContext = await prepareParticipantContext({
-    client,
-    guildId: turn.serverDiscId,
-    simplifiedMessageHistory: history.simplifiedMessages,
-    personas: turn.allPersonas,
-    activePersona: effectivePersona,
-    visibleUserIds: [...history.userIds],
-    syntheticUsers: history.syntheticUsers,
-    matrixUsers: history.matrixUsers,
-    messageProxyUsers: history.messageProxyUsers,
-    responderPersonaIds: new Set(turn.triggeredPersonaIds),
-    requestScope: participantRequestScope,
-  });
+  const preparedParticipantContext = await measureChatTurnStage("participant_ms", () =>
+    prepareParticipantContext({
+      client,
+      guildId: turn.serverDiscId,
+      simplifiedMessageHistory: history.simplifiedMessages,
+      personas: turn.allPersonas,
+      activePersona: effectivePersona,
+      visibleUserIds: [...history.userIds],
+      syntheticUsers: history.syntheticUsers,
+      matrixUsers: history.matrixUsers,
+      messageProxyUsers: history.messageProxyUsers,
+      responderPersonaIds: new Set(turn.triggeredPersonaIds),
+      requestScope: participantRequestScope,
+    }),
+  );
   const participantMs = performance.now() - participantStartedAt;
-  const historyNaming = await buildHistoryNamingProjection({
-    messages: history.simplifiedMessages,
-    receivingPersona: effectivePersona,
-    allPersonas: turn.allPersonas,
-    guild: message.guild,
-    personalizationEnabled: effectivePersona.config.personal_memories_enabled !== false,
-    extraUserIds: incoming.impersonatedUserId ? [incoming.impersonatedUserId] : [],
-    requestScope: participantRequestScope,
-  });
+  const historyNaming = await measureChatTurnStage("naming_ms", () =>
+    buildHistoryNamingProjection({
+      messages: history.simplifiedMessages,
+      receivingPersona: effectivePersona,
+      allPersonas: turn.allPersonas,
+      guild: message.guild,
+      personalizationEnabled: effectivePersona.config.personal_memories_enabled !== false,
+      extraUserIds: incoming.impersonatedUserId ? [incoming.impersonatedUserId] : [],
+      requestScope: participantRequestScope,
+    }),
+  );
   if (incoming.impersonatedUserId) {
     impersonatedUserNickname = historyNaming.userLabels.get(incoming.impersonatedUserId) ?? impersonatedUserNickname;
     streamingContext.impersonatedSpeakerLabel = impersonatedUserNickname;
@@ -544,15 +548,17 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   // A system turn borrows a bystander's message as its trigger, so it must neither greet nor clock them.
   const { note: reunionNote, presence: reunionPresence } = incoming.borrowsTriggerMessage
     ? { note: null, presence: null }
-    : await resolveReunionNote({
-        turn,
-        effectivePersona,
-        isUserImpersonation: incoming.isUserImpersonation,
-        // A chain turn carries the originator's clock but answers a persona, so it must not greet or clock them.
-        isPersonaSpeaker: turn.isSelfMessage || (incoming.sceneTurn?.turnIndex ?? 0) > 0,
-        proxiedIdentityName: proxiedIdentity.name,
-        proxiedIdentityUserDiscId: proxiedIdentity.userDiscId,
-      });
+    : await measureChatTurnStage("reunion_ms", () =>
+        resolveReunionNote({
+          turn,
+          effectivePersona,
+          isUserImpersonation: incoming.isUserImpersonation,
+          // A chain turn carries the originator's clock but answers a persona, so it must not greet or clock them.
+          isPersonaSpeaker: turn.isSelfMessage || (incoming.sceneTurn?.turnIndex ?? 0) > 0,
+          proxiedIdentityName: proxiedIdentity.name,
+          proxiedIdentityUserDiscId: proxiedIdentity.userDiscId,
+        }),
+      );
 
   const contextBuild = await measureChatTurnStage("native_ms", () =>
     buildContext({
@@ -614,7 +620,9 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
       effectivePersona,
       streamingContext.deliberateToolAllowedNames,
     );
-    const hint = await resolver.expand(CONDITIONING_INTERACTION_RESPONSE_TEMPLATE);
+    const hint = ["hug", "kiss"].includes(incoming.conditioningInteraction.action)
+      ? await resolver.expand(CONDITIONING_INTERACTION_RESPONSE_TEMPLATE)
+      : "";
     injectedContextItems = await Promise.all(
       (injectedContextItems ?? []).map(async (item) => {
         if (item.messageId !== message.id) return item;
@@ -1573,6 +1581,11 @@ function getBlockComparableAuthorId(
       (isManagedWebhookMessage(msg) ? getCachedImpersonatedUserIdForWebhook(msg.webhookId) : null) ?? msg.author.id
     );
   }
+  // A slash-command reply is authored by the bot but speaks for its invoker, so a blocked user's
+  // /reward or /punish embed would otherwise reach the persona that blocked them.
+  if (msg.author.bot && msg.interactionMetadata) {
+    return msg.interactionMetadata.user.id;
+  }
   return msg.author.id;
 }
 
@@ -1590,8 +1603,8 @@ function getBlacklistCandidateAuthorId(msg: Message): string | null {
 /**
  * Resolves the name a persona knows a blocked user by, for use in the block
  * notice. Prefers the cached bot-facing nickname, then Discord display/global/
- * username; for webhook-impersonated authors whose underlying user differs, falls
- * back to a mention of the impersonated Discord ID.
+ * username; when the message speaks for someone other than its author (a webhook
+ * impersonation or a slash-command reply), falls back to a mention of that user.
  *
  * @param msg - The original (blocked) Discord message.
  * @param comparableId - The block-comparable author ID from getBlockComparableAuthorId.
@@ -1601,7 +1614,7 @@ async function resolveBlockedAuthorLabel(msg: Message, comparableId: string): Pr
   if (row?.user_nickname) {
     return row.user_nickname;
   }
-  if (!msg.webhookId) {
+  if (comparableId === msg.author.id) {
     return msg.member?.displayName || msg.author.globalName || msg.author.username;
   }
   return `<@${comparableId}>`;

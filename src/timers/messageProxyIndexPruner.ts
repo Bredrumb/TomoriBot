@@ -1,6 +1,7 @@
 import { messageProxyRepository } from "@/utils/db/repositories/MessageProxyRepository";
 import { parsePositiveIntegerEnv } from "@/utils/misc/envFlags";
 import { log } from "@/utils/misc/logger";
+import { isPrimaryProcess } from "@/utils/cluster/shardLeases";
 
 const DEFAULT_RETENTION_DAYS = 30;
 const DEFAULT_PRUNE_INTERVAL_HOURS = 24;
@@ -10,6 +11,7 @@ let pruneInterval: ReturnType<typeof setInterval> | null = null;
 
 /** The repository logs failures and returns 0, so a failed pass never disturbs the interval. */
 async function runPrunePass(retentionDays: number): Promise<void> {
+  if (!isPrimaryProcess()) return;
   const deleted = await messageProxyRepository.pruneMessageIndexOlderThanDays(retentionDays);
   if (deleted > 0) {
     log.info(`Pruned ${deleted} message-proxy message-index row(s) older than ${retentionDays} day(s)`);

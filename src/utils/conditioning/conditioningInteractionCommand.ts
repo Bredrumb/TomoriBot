@@ -1,13 +1,29 @@
 import { CONDITIONING_ACTION_LOCALE_KEYS, CONDITIONING_FOOTER_LOCALE_KEYS } from "@/utils/conditioning/conditioning";
-import type { ChatInputCommandInteraction, Client, Message, SlashCommandSubcommandBuilder } from "discord.js";
+import type {
+  BaseGuildTextChannel,
+  ChatInputCommandInteraction,
+  Client,
+  EmbedBuilder,
+  Message,
+  SlashCommandSubcommandBuilder,
+  TextChannel,
+} from "discord.js";
 import { MessageFlags, PermissionFlagsBits } from "discord.js";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { createStandardEmbed } from "@/utils/discord/embedHelper";
+import { createUserImpersonationWebhook } from "@/utils/chat/webhookIdentity";
+import {
+  isGuildMessageCommandChannel,
+  resolveGuildWebhookTargetChannel,
+  resolveGuildWebhookThreadId,
+} from "@/utils/discord/guildMessageChannel";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { ConditioningType, TomoriState, UserRow } from "@/types/db/schema";
 import { personaRepository } from "@/utils/db/repositories";
 import { getCachedWhitelistStatus } from "@/utils/cache/channelWhitelistCache";
 import { getCachedPersonalSpotlightStatus } from "@/utils/cache/personalSpotlightCache";
+import { getCachedActiveBlocksForUser } from "@/utils/cache/personaUserBlockCache";
 import { tomoriChat } from "@/events/messageCreate/tomoriChat";
 import {
   CONDITIONING_REASON_MAX_LENGTH,
@@ -19,12 +35,88 @@ import { filterPersonasForTrigger, isPersonaAllowedForTrigger } from "@/utils/pe
 import { handlePersonaAutocomplete } from "@/utils/discord/autocomplete/personaAutocomplete";
 import { resolveFallbackPersona } from "@/utils/discord/personaTurnDetectionResolver";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
-import { buildConditioningInteractionEmbed } from "@/utils/conditioning/conditioningEmbed";
+import {
+  buildConditioningIgnoredEmbed,
+  buildConditioningInteractionEmbed,
+} from "@/utils/conditioning/conditioningEmbed";
 import { buildConditioningInteractionEvent } from "@/utils/conditioning/conditioningInteractionContext";
 
 interface ConditioningCommandOptions {
   /** Returns extra interpolation context for the embed description localizer. */
   getExtraContext?: (interaction: ChatInputCommandInteraction) => Record<string, string>;
+}
+
+const INVOKER_WEBHOOK_REASON = "TomoriBot reward or punish interaction";
+
+function resolveInvokerWebhookTarget(
+  interaction: ChatInputCommandInteraction,
+): TextChannel | BaseGuildTextChannel | null {
+  if (!isGuildMessageCommandChannel(interaction.channel)) return null;
+  const target = resolveGuildWebhookTargetChannel(interaction.channel);
+  const botMember = target?.guild.members.me;
+  return target && botMember && target.permissionsFor(botMember).has(PermissionFlagsBits.ManageWebhooks)
+    ? target
+    : null;
+}
+
+async function sendAsInvoker(
+  client: Client,
+  interaction: ChatInputCommandInteraction,
+  target: TextChannel | BaseGuildTextChannel,
+  embed: EmbedBuilder,
+): Promise<Message> {
+  const threadId = isGuildMessageCommandChannel(interaction.channel)
+    ? resolveGuildWebhookThreadId(interaction.channel)
+    : undefined;
+  const { webhook } = await createUserImpersonationWebhook(client, target, interaction.user.id, INVOKER_WEBHOOK_REASON);
+  try {
+    return await webhook.send({
+      embeds: [embed],
+      flags: MessageFlags.SuppressNotifications,
+      allowedMentions: { parse: [] },
+      ...(threadId ? { threadId } : {}),
+    });
+  } finally {
+    await webhook.delete(INVOKER_WEBHOOK_REASON).catch((error: unknown) => {
+      log.warn("Failed to delete temporary reward or punish webhook", error);
+    });
+  }
+}
+
+/**
+ * Posts the action embed under the invoker's name and avatar, or as the interaction reply where the
+ * channel cannot host a webhook, and returns the message that anchors the persona's chat turn.
+ */
+async function deliverConditioningEmbed(
+  client: Client,
+  interaction: ChatInputCommandInteraction,
+  locale: string,
+  embed: EmbedBuilder,
+): Promise<Message> {
+  const target = resolveInvokerWebhookTarget(interaction);
+  if (!target) {
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.SuppressNotifications });
+    return (await interaction.fetchReply()) as Message;
+  }
+
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  let message: Message;
+  try {
+    message = await sendAsInvoker(client, interaction, target, embed);
+  } catch (error) {
+    log.warn(`Falling back to the interaction reply for a reward or punish embed in ${interaction.channelId}`, error);
+    // Discord turns the first follow-up after a pending defer into that ephemeral response, so the
+    // defer is removed first to keep the fallback embed public.
+    await interaction.deleteReply().catch(() => undefined);
+    return (await interaction.followUp({ embeds: [embed], flags: MessageFlags.SuppressNotifications })) as Message;
+  }
+
+  await replyInfoEmbed(interaction, locale, {
+    titleKey: "commands.conditioning.shared.sent_title",
+    descriptionKey: "commands.conditioning.shared.sent_description",
+    color: ColorCode.SUCCESS,
+  });
+  return message;
 }
 
 export function createConditioningInteractionCommand(
@@ -88,22 +180,22 @@ export function createConditioningInteractionCommand(
         targetMember && "displayName" in targetMember
           ? targetMember.displayName
           : (targetMember?.nick ?? targetUser.displayName);
-      await interaction.reply({
-        embeds: [
-          buildConditioningInteractionEmbed({
-            locale,
-            type,
-            actionKey,
-            actorLabel: `<@${interaction.user.id}>`,
-            targetName,
-            targetMention: `<@${targetUser.id}>`,
-            reasonText: normalizeConditioningReason(interaction.options.getString("reason")),
-            extraContext: cmdOptions?.getExtraContext?.(interaction) ?? {},
-            footerKey: "commands.conditioning.shared.user_footer",
-          }),
-        ],
-        flags: MessageFlags.SuppressNotifications,
-      });
+      await deliverConditioningEmbed(
+        client,
+        interaction,
+        locale,
+        buildConditioningInteractionEmbed({
+          locale,
+          type,
+          actionKey,
+          actorLabel: `<@${interaction.user.id}>`,
+          targetName,
+          targetMention: `<@${targetUser.id}>`,
+          reasonText: normalizeConditioningReason(interaction.options.getString("reason")),
+          extraContext: cmdOptions?.getExtraContext?.(interaction) ?? {},
+          footerKey: "commands.conditioning.shared.user_footer",
+        }),
+      );
       return;
     }
 
@@ -242,6 +334,24 @@ export function createConditioningInteractionCommand(
       selectedPersona = fallbackPersona;
     }
 
+    const activeBlocks = await getCachedActiveBlocksForUser(tomoriState.server_id, interaction.user.id);
+    const personaBlock = activeBlocks.find((block) => block.persona_id === selectedPersona.persona_id);
+    if (personaBlock) {
+      await interaction.reply({
+        embeds: [
+          buildConditioningIgnoredEmbed({
+            locale,
+            type,
+            actionKey,
+            targetName: selectedPersona.persona_nickname,
+            expiresAt: personaBlock.expires_at,
+          }),
+        ],
+        flags: MessageFlags.SuppressNotifications,
+      });
+      return;
+    }
+
     if (!userData.user_id) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.operation_failed_title",
@@ -278,10 +388,7 @@ export function createConditioningInteractionCommand(
         footerKey: conditioningEvent ? CONDITIONING_FOOTER_LOCALE_KEYS[type] : null,
       });
 
-      await interaction.reply({
-        embeds: [interactionEmbed],
-        flags: MessageFlags.SuppressNotifications,
-      });
+      const interactionMessage = await deliverConditioningEmbed(client, interaction, locale, interactionEmbed);
 
       if (!whitelistStatus.isTriggerAllowed) {
         log.info(
@@ -297,19 +404,17 @@ export function createConditioningInteractionCommand(
         return;
       }
 
-      const interactionMessage = await interaction.fetchReply();
-
       log.info(
         `${type} ${actionKey} triggered by ${interaction.user.id} in channel ${interaction.channel.id} for message ${interactionMessage.id}`,
       );
 
       await tomoriChat({
         client,
-        message: interactionMessage as Message,
+        message: interactionMessage,
         isFromQueue: false,
         isManuallyTriggered: true,
         selectedPersonaId: selectedPersona.persona_id,
-        conditioningInteraction: { actorType: "user", type },
+        conditioningInteraction: { actorType: "user", type, action: actionKey },
         injectedContextItems: [
           buildConditioningInteractionEvent({
             actorName: `<@${interaction.user.id}>`,
@@ -341,10 +446,20 @@ export function createConditioningInteractionCommand(
       });
 
       try {
-        await interaction.followUp({
-          content: localizer(locale, "general.errors.unknown_error_description"),
-          flags: MessageFlags.Ephemeral,
-        });
+        const errorOptions = {
+          titleKey: "general.errors.unknown_error_title",
+          descriptionKey: "general.errors.unknown_error_description",
+          color: ColorCode.ERROR,
+        };
+        // editReply would overwrite the public action embed when delivery fell back to the reply.
+        if (interaction.replied || interaction.deferred) {
+          await interaction.followUp({
+            embeds: [createStandardEmbed(locale, errorOptions)],
+            flags: MessageFlags.Ephemeral,
+          });
+        } else {
+          await replyInfoEmbed(interaction, locale, errorOptions);
+        }
       } catch (followUpError) {
         await log.error(`Failed to send error follow-up for ${type} ${actionKey} command`, followUpError, {
           errorType: `${type}_${actionKey}_command_error_followup`,

@@ -11,11 +11,13 @@ import {
   normalizeOpenAICompatibleProviderError,
 } from "@/providers/openaiCompatible/openaiCompatibleErrorFormatter";
 import {
+  getGeminiFreeTierQuotaWindow,
   isAccountBalanceExhaustedError,
   isCreditAffordabilityError,
   isNvidiaCredentialRejected,
   isOperatorActionableProviderError,
   isProviderModelError,
+  isStreamInterruption,
 } from "@/utils/provider/providerErrorClassification";
 import { stubLogMembers } from "../../helpers/mockSurface";
 
@@ -60,6 +62,17 @@ describe("account balance exhaustion classification", () => {
     expect(isCreditAffordabilityError(error)).toBe(false);
   });
 
+  it("treats the same quota sentence as an empty balance for OpenAI but not for Gemini", () => {
+    const openai = providerError("You exceeded your current quota, please check your plan and billing details.", "429");
+    const gemini = providerError(
+      `Google API error (429): You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits.\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, description: Generate content requests per day limit exceeded on Free Tier.`,
+      "429",
+    );
+
+    expect(isAccountBalanceExhaustedError(openai)).toBe(true);
+    expect(isAccountBalanceExhaustedError(gemini)).toBe(false);
+  });
+
   it("reads the balance signal out of the original error payload", () => {
     const error: ProviderError = {
       type: "api_error",
@@ -70,6 +83,39 @@ describe("account balance exhaustion classification", () => {
     };
 
     expect(isAccountBalanceExhaustedError(error)).toBe(true);
+  });
+});
+
+describe("Gemini free-tier quota window", () => {
+  const geminiQuota = (description: string, quotaId: string) =>
+    providerError(
+      `Google API error (429): You exceeded your current quota. head to: https://ai.google.dev/gemini-api/docs/rate-limits.\n* Quota exceeded for metric: generativelanguage.googleapis.com/x, description: ${description} "quotaId": "${quotaId}"`,
+      "429",
+    );
+
+  it("tells a daily limit from a per-minute one, and prefers daily when both appear", () => {
+    const day = geminiQuota(
+      "Generate content requests per day limit exceeded on Free Tier.",
+      "GenerateRequestsPerDayPerProjectPerModel-FreeTier",
+    );
+    const minute = geminiQuota(
+      "Generate content requests per minute limit exceeded on Free Tier.",
+      "GenerateRequestsPerMinutePerProjectPerModel-FreeTier",
+    );
+    const both = providerError(`${day.message} ${minute.message}`, "429");
+
+    expect(getGeminiFreeTierQuotaWindow(day)).toBe("day");
+    expect(getGeminiFreeTierQuotaWindow(minute)).toBe("minute");
+    expect(getGeminiFreeTierQuotaWindow(both)).toBe("day");
+  });
+
+  it("ignores paid-tier limits and non-Gemini providers", () => {
+    expect(
+      getGeminiFreeTierQuotaWindow(
+        geminiQuota("Generate content requests per minute exceeded.", "GenerateRequestsPerMinutePerProjectPerModel"),
+      ),
+    ).toBeUndefined();
+    expect(getGeminiFreeTierQuotaWindow(providerError("Free Tier requests per day exceeded", "429"))).toBeUndefined();
   });
 });
 
@@ -148,6 +194,11 @@ function customEndpointError(message: string): ProviderError {
   return makeOpenAICompatibleAdapter().handleProviderError(new TypeError(message));
 }
 
+/** The exact error `@google/genai` throws when a stream body ends partway through an event. */
+function genaiIncompleteStream(): Error {
+  return new Error("Incomplete JSON segment at the end");
+}
+
 /** Runs a Google SDK failure through the adapter's own normalizer, which embeds the API body in the message. */
 function googleError(code: number, status: string, message: string): ProviderError {
   return new GoogleStreamAdapter().handleProviderError(
@@ -185,6 +236,13 @@ describe("operator-actionable provider errors", () => {
       exhaustedBalance: nimError(402, "Payment Required", '{"message":"Insufficient Balance"}'),
       rateLimit: nimError(429, "Too Many Requests", '{"message":"rate limit exceeded"}'),
       outage: nimError(503, "Service Unavailable", '{"message":"upstream unavailable"}'),
+      contentSafetyRefusal: nimError(
+        422,
+        "Unprocessable Entity",
+        '{"error":{"message":"input rejected by content safety screening","type":"api_error"}}',
+      ),
+      interruptedGeminiStream: new GoogleStreamAdapter().handleProviderError(genaiIncompleteStream()),
+      interruptedVertexStream: new VertexStreamAdapter().handleProviderError(genaiIncompleteStream()),
       malformedVertexKey: new VertexStreamAdapter().handleProviderError(
         new Error("Vertex composite key is empty. Expected format: {project_id}::{location}"),
       ),
@@ -231,6 +289,19 @@ describe("operator-actionable provider errors", () => {
     new OpenrouterStreamAdapter().handleProviderError(rejectedKey);
 
     expect(errorCalls).toEqual([]);
+  });
+});
+
+describe("Gemini SDK stream interruption classification", () => {
+  it("marks the SDK's incomplete-stream failure retryable on both adapters that share the SDK", () => {
+    const misclassified = [new GoogleStreamAdapter(), new VertexStreamAdapter()]
+      .map((adapter) => ({
+        name: adapter.constructor.name,
+        error: adapter.handleProviderError(genaiIncompleteStream()),
+      }))
+      .filter(({ error }) => !isStreamInterruption(error) || !error.retryable)
+      .map(({ name, error }) => `${name}: ${error.code} retryable=${error.retryable}`);
+    expect(misclassified).toEqual([]);
   });
 });
 

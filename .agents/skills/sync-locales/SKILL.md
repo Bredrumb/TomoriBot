@@ -28,6 +28,21 @@ bun run find-stale-translations --reason=unfollowed --base=origin/main
 Limit the work to what the branch touched. Pre-existing gaps belong to their own change;
 `bun run find-stale-translations --scope=docs` lists the whole-tree backlog when asked for it.
 
+## Delegate per locale
+
+Spawn one subagent per behind locale in parallel so each subagent owns a disjoint set of target
+files (`src/locales/<locale>/`, `docs/<locale>/`, and `.github/README_<locale>.md`). Pass each
+subagent its locale code, the English diffs or missing keys to translate, and a pointer to this
+skill and `references/glossary-<locale>.md`.
+
+Select the smallest latest model family for the active harness (for example, Luna on Codex, Gemini
+Flash (`flash`) on Antigravity, or Claude Haiku on Claude Code), with `low` or `medium` reasoning
+effort when the harness supports setting it (`low` for isolated locale keys, `medium` for longer
+docs pages or persona-voiced strings).
+
+After every locale subagent finishes, run `bun run generate-command-reference` once in the parent
+session when command descriptions changed, then run the verification steps below.
+
 ## Translate locale keys
 
 The authored trees are the directories under `src/locales/` other than `en-US`. Each mirrors the

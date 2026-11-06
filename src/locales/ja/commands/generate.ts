@@ -34,6 +34,7 @@ export default {
       field_model: `モデル`,
       field_generation_time: `生成時間`,
       field_aspect_ratio: `アスペクト比`,
+      reference_images_ignored_title: `参照画像は無視されました`,
       zai_no_img2img_warning: `Z.aiは画像から画像への生成に対応していません。参照画像は無視されましたが、テキストプロンプトから画像は生成されます。`,
       nvidia_no_img2img_warning: `NVIDIA NIMは画像から画像への生成に対応していません。参照画像は無視されましたが、テキストプロンプトから画像は生成されます。`,
       disabled_title: `🔴 画像生成が無効です`,

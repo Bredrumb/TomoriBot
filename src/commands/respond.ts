@@ -4,6 +4,7 @@ import { DiscordAPIError, MessageFlags, PermissionFlagsBits, RESTJSONErrorCodes 
 import { promptWithPaginatedModal, replyInfoEmbed, safeSelectOptionText } from "@/utils/discord/interactionHelper";
 import { sendCooldownDM } from "@/utils/discord/cooldownDM";
 import { ColorCode, log } from "@/utils/misc/logger";
+import { createStandardEmbed } from "@/utils/discord/embedHelper";
 import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { localizer } from "@/utils/text/localizer";
 import { resolvePersonaSnippet } from "@/utils/text/personaPrompt";
@@ -446,7 +447,13 @@ export async function execute(
 
     try {
       await replyInteraction.followUp({
-        content: localizer(locale, "general.errors.unknown_error_description"),
+        embeds: [
+          createStandardEmbed(locale, {
+            titleKey: "general.errors.unknown_error_title",
+            descriptionKey: "general.errors.unknown_error_description",
+            color: ColorCode.ERROR,
+          }),
+        ],
         flags: MessageFlags.Ephemeral,
       });
     } catch (followUpError) {

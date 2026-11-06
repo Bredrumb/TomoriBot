@@ -4217,3 +4217,20 @@ $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS clear_changed_speech_model ON speech_models;
 CREATE TRIGGER clear_changed_speech_model AFTER UPDATE OF voice_mode, provider, is_deprecated ON speech_models
   FOR EACH ROW EXECUTE FUNCTION clear_changed_speech_model();
+
+CREATE TABLE IF NOT EXISTS cluster_leases (
+  name TEXT PRIMARY KEY CHECK (name <> ''),
+  holder TEXT NOT NULL CHECK (holder <> ''),
+  token BIGINT NOT NULL CHECK (token > 0),
+  expires_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS metric_samples (
+  metric_sample_id BIGSERIAL PRIMARY KEY,
+  metric_name TEXT NOT NULL,
+  fields JSONB NOT NULL DEFAULT '{}',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_metric_samples_name_time
+  ON metric_samples (metric_name, created_at DESC);

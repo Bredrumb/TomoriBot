@@ -33,7 +33,7 @@ import {
   type StPresetsPanelPage,
 } from "@/utils/discord/ui/stPresetsPanel";
 import { showRoutedRawModal, takeRawModalCheckboxGroupValues, takeRawModalFileUpload } from "@/utils/discord/ui/modals";
-import { buildPanelContainer } from "@/utils/discord/ui/panel";
+import { buildPanelContainer, replyPanelReceipt } from "@/utils/discord/ui/panel";
 import {
   loadStPresetToggleableNodes,
   stPresetOperations,
@@ -367,9 +367,10 @@ export function createStPresetsInteractionRoute(
       return;
     }
 
-    await interaction.reply({
-      content: localizer(route.locale, "general.errors.permission_denied_description"),
-      flags: MessageFlags.Ephemeral,
+    await replyPanelReceipt(interaction, {
+      tone: "error",
+      heading: localizer(route.locale, "general.errors.permission_denied_title"),
+      detail: localizer(route.locale, "general.errors.permission_denied_description"),
     });
   };
 
@@ -560,9 +561,10 @@ export function createStPresetsInteractionRoute(
 
         const scope = await dependencies.resolveScope(interaction, false);
         if (!scope) {
-          await interaction.reply({
-            content: localizer(route.locale, "commands.st-presets.not_setup"),
-            flags: MessageFlags.Ephemeral,
+          await replyPanelReceipt(interaction, {
+            tone: "error",
+            heading: localizer(route.locale, "general.errors.tomori_not_setup_title"),
+            detail: localizer(route.locale, "commands.st-presets.not_setup"),
           });
           return;
         }
@@ -639,9 +641,10 @@ export function createStPresetsInteractionRoute(
 
         const scope = await dependencies.resolveScope(interaction, false);
         if (!scope) {
-          await interaction.reply({
-            content: localizer(route.locale, "commands.st-presets.not_setup"),
-            flags: MessageFlags.Ephemeral,
+          await replyPanelReceipt(interaction, {
+            tone: "error",
+            heading: localizer(route.locale, "general.errors.tomori_not_setup_title"),
+            detail: localizer(route.locale, "commands.st-presets.not_setup"),
           });
           return;
         }

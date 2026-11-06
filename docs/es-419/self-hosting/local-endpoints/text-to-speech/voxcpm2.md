@@ -38,7 +38,9 @@ Punto de partida recomendado:
 - Controlador NVIDIA actualizado y compilación de PyTorch con soporte CUDA para aceleración por GPU
 - La ejecución en CPU está admitida como alternativa secundaria, pero es sustancialmente más lenta
 
-El paquete oficial también permite seleccionar dispositivos CPU y Apple MPS. Para TomoriBot en Windows, el paquete estándar de Python puede ejecutarse de forma nativa; no se requiere WSL. El instalador de Windows PowerShell instala por defecto una compilación de PyTorch con soporte CUDA (`cu124`).
+El paquete oficial también permite seleccionar dispositivos CPU y Apple MPS. Para TomoriBot en Windows, el paquete estándar de Python puede ejecutarse de forma nativa; no se requiere WSL. El instalador de Windows PowerShell instala PyTorch 2.10 con soporte CUDA (`cu128`) y `triton-windows`, que el valor predeterminado `VOXCPM2_OPTIMIZE=1` necesita para compilar el modelo.
+
+Con la compilación activada, el primer inicio tarda aproximadamente 2-3 minutos mientras PyTorch compila el modelo, y los inicios posteriores tardan menos de un minuto porque los kernels compilados quedan en caché. La síntesis es entonces aproximadamente 2.5-3 veces más rápida que sin compilar. La compilación también utiliza unos 2 GB más de memoria del sistema. Si el servidor se detiene con un mensaje de que falta Triton, vuelve a ejecutar el instalador o define `VOXCPM2_OPTIMIZE=0` para ejecutar sin compilar.
 
 Para realizar una instalación explícita en una máquina exclusivamente con CPU, añade el modificador `-Cpu`:
 
@@ -49,7 +51,8 @@ Para realizar una instalación explícita en una máquina exclusivamente con CPU
 Si en algún momento tu instalación nativa de PyTorch en Windows requiere una reinstalación manual o realineación de controladores, instala la compilación de PyTorch con CUDA directamente en el entorno virtual del servidor:
 
 ```powershell
-.\servers\tts\voxcpm2\.venv\Scripts\pip.exe install --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+.\servers\tts\voxcpm2\.venv\Scripts\pip.exe install --force-reinstall torch==2.10.0 torchaudio==2.10.0 --index-url https://download.pytorch.org/whl/cu128
+.\servers\tts\voxcpm2\.venv\Scripts\pip.exe install "triton-windows>=3.6,<3.7"
 ```
 
 ## Instalación
@@ -133,7 +136,7 @@ En el caso de una voz clonada, las instrucciones puntuales de entonación tienen
 |---|---|---|
 | `VOXCPM2_MODEL_ID` | `openbmb/VoxCPM2` | ID del modelo en Hugging Face o directorio local del modelo |
 | `VOXCPM2_DEVICE` | `auto` | Dispositivo de ejecución: `auto`, `cuda`, `cuda:N`, `cpu` o `mps` |
-| `VOXCPM2_OPTIMIZE` | `1` | Habilita la ruta de optimización / compilación del entorno oficial |
+| `VOXCPM2_OPTIMIZE` | `1` | Compila el modelo con `torch.compile` en CUDA; necesita Triton y el servidor se detiene al inicio sin él |
 | `VOXCPM2_LOAD_DENOISER` | `0` | Carga el supresor de ruido opcional de origen; desactivado por defecto para ahorrar memoria |
 | `VOXCPM2_CFG_VALUE` | `2.0` | Intensidad de la guía |
 | `VOXCPM2_INFERENCE_TIMESTEPS` | `10` | Pasos de inferencia de coincidencia de flujo (flow-matching); más pasos pueden mejorar la calidad a costa de la velocidad |

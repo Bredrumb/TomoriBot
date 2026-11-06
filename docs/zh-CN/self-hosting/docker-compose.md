@@ -64,6 +64,24 @@ docker compose up      # bot + database
 
 在其服务定义中组合引脚`RUN_ENV=development`，以便`.env`机密和本地HTTP端点正常工作。容器健康检查报告bot进程是否正在运行； 它不测试Discord网关连接。
 
+## 单台主机上的可选分片配置
+
+保持 `SHARD_COUNT` 和 `SHARD_IDS` 未设置为默认行为：单个进程拥有 Discord 在启动时推荐的所有分片。小型安装通常会分配到一个分片。此模式不使用分片租约或缓存失效监听器。多个分片可以共享同一个进程。
+
+要在现有服务中运行四个分片，请在 `.env` 中添加 `SHARD_COUNT=4` 并保持 `SHARD_IDS` 未设置。在 `compose.override.yaml` 中添加此服务覆盖以允许有界关闭完成：
+
+```yaml
+services:
+  tomoribot:
+    stop_grace_period: 40s
+```
+
+使用 `docker compose up -d --build tomoribot` 重新创建服务。如果脚本调用 `docker stop` 或提供其自己的 Compose 停止超时，请在其中也预留至少 40 秒。自动选择不会在运行时更改分片数量；更改总数需要协调重启。
+
+可选的静态子集需要为每个组配置一个单独的服务，具有相同的显式 `SHARD_COUNT` 和不相交的 `SHARD_IDS`，例如 `0,1` 和 `2,3`，总数为 `4`。为服务指定不同的稳定名称、容器名称和任何已发布的健康检查端口。应用程序从每个组中派生出稳定的指标标签。保持单个数据库，在网关启动前使用架构管理凭据运行现有的单次 `bun run src/db/initializeCli.ts` 命令，并在每个网关进程上设置 `DATABASE_SCHEMA_MANAGEMENT_ENABLED=false`。请勿与这些组一起启动原始的全分片所有者服务。在更改总数或分区之前停止旧的所有者进程。
+
+子集模式拒绝完全配置的 Matrix 桥接。每个用户的回合和上传限制仍然是按进程计算的，因此在启用第二个进程之前，请确定其成倍增加的配额是否可以接受。使用 release 分支专享的赞助者计费的安装在从多个进程处理资助请求之前，还需要共享支出准入和对账协调。有关安全性和健康状态限制，请参阅[分片与进程所有权](/architecture/subsystems/sharding/)。
+
 ## 4. 可选本地服务器（Compose profile）
 
 使用Compose配置文件运行可选的本地帮助服务器，以便你只启动你需要的内容：

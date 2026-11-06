@@ -1,3 +1,5 @@
+import { stubAllShardOwnership } from "../../helpers/shardOwnership";
+stubAllShardOwnership();
 import { afterEach, describe, expect, it, spyOn } from "bun:test";
 import type { Client, Message } from "discord.js";
 import { tomoriChat } from "@/events/messageCreate/tomoriChat";

@@ -187,6 +187,7 @@ and the doc is fixed in the same change. `docs/README.md` indexes every page.
 | Add a new AI provider | `docs/en/contributing/extending/new-provider.md` |
 | Add a feature flag tool | `docs/en/contributing/extending/feature-flag-tool.md` |
 | Add an event handler | `docs/en/contributing/extending/event-handler.md` |
+| Add guild-scoped background work, long-lived sessions, or shared caches | `docs/en/architecture/subsystems/sharding.md` |
 | Add an environment variable | `docs/en/contributing/extending/env-variable.md` |
 | Add a locale | `docs/en/contributing/localization/new-locale.md` |
 | Localize the docs site or READMEs | `docs/en/contributing/localization/docs-site.md` |

@@ -122,6 +122,8 @@ IRODORI_TTS_CHECKPOINT="/path/to/custom_checkpoint.pt"
 
 Irodori 默认使用 120 秒的参考音频上限，并会自动截断超出部分。设置 `IRODORI_MAX_REF_SECONDS` 可修改此限制。
 
+服务器会对每个参考音频片段编码一次，并将结果保留在 `servers/tts/irodoritts/reference-cache/` 中，后续重复请求会跳过该步骤。替换人格的音频片段会生成新条目，旧条目会一直保留直到你删除该文件夹。
+
 ### 语音设计
 
 1. 打开 `/config` 下的人格 > 语音。
@@ -154,6 +156,40 @@ $env:IRODORI_SWAY_COEFF = "-1.0"
 
 这是推理质量与速度之间的权衡，请在正式应用前结合你选定的检查点和声音进行测试。
 
+## 低延迟模式（NVIDIA）
+<!-- anchor: low-latency-mode-nvidia -->
+
+低延迟模式在保持相同的 40 步采样和语音设置下，可使 NVIDIA GPU 上的每个句子生成速度提升约 3 到 4 倍，因此不会像 Sway 采样那样牺牲质量。在 `.env` 中开启：
+
+```dotenv
+IRODORI_COMPILE_MODE="cudagraphs"
+```
+
+`cudagraphs` 是最快的模式。`compile` 比默认模式快约 2 倍；如果 `cudagraphs` 在你的 GPU 上运行异常，可以尝试此模式。两种模式都需要 `cu128` 后端，在其他后端上使用任一模式服务器都会拒绝启动。
+
+注意事项：
+
+- 服务器在报告就绪前会先进行预热。首次启动大约需要 2 到 4 分钟；后续启动大约需要 1 到 2 分钟，因为编译好的内核已缓存在磁盘上。`bun run launch --irodoritts` 最多等待 5 分钟；在较慢的 GPU 上，可以通过 `TOMORI_TTS_STARTUP_TIMEOUT_MS`（单位为毫秒）提高此上限。
+- 遇到新句子长度或新语音片段时的首次请求会额外增加不到一秒的耗时，仅发生一次。
+- 显存占用略有下降。
+- 相同随机种子下生成的音频与默认模式并非逐位完全一致。测试中听起来效果相当，因此在正式依赖前请用你自己的声音多听几句试听。
+
+在 Windows 上，该模式还需要 Microsoft C++ 编译器：
+
+1. 安装 [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) 并勾选 **使用 C++ 的桌面开发**（Desktop development with C++）工作负载。
+2. 重新运行 `.\servers\tts\irodoritts\install-irodori.ps1 cu128`，以便安装 Windows 版 Triton 软件包。
+3. 从 **Developer PowerShell for VS** 启动服务器（或运行 `bun run launch --irodoritts`），或者先在普通 PowerShell 中加载编译器环境：
+
+```powershell
+$vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+$vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+cmd /c "`"$vs\VC\Auxiliary\Build\vcvars64.bat`" >nul && set" | ForEach-Object {
+  if ($_ -match "^([^=]+)=(.*)$") { Set-Item -Path "Env:$($Matches[1])" -Value $Matches[2] }
+}
+```
+
+如果缺少编译器或 Triton，服务器会在启动时停止并提示缺少哪一项。
+
 ## 环境变量
 
 | 变量 | 默认值 | 用途 |
@@ -166,8 +202,7 @@ $env:IRODORI_SWAY_COEFF = "-1.0"
 | `IRODORI_CODEC_DEVICE` | `auto` | 编解码器设备 |
 | `IRODORI_MODEL_PRECISION` | 在 CUDA 上为 `bf16`，否则为 `fp32` | 模型精度 |
 | `IRODORI_CODEC_PRECISION` | `fp32` | 编解码器精度 |
-| `IRODORI_COMPILE_MODEL` | `false` | 为 Irodori 模型启用 `torch.compile` |
-| `IRODORI_COMPILE_DYNAMIC` | `false` | 编译时启用动态形状（dynamic shapes） |
+| `IRODORI_COMPILE_MODE` | `off` | `off`、`compile` 或 `cudagraphs`；参见[低延迟模式](#low-latency-mode-nvidia) |
 | `IRODORI_NUM_STEPS` | `40` | Euler 采样步数 |
 | `IRODORI_T_SCHEDULE_MODE` | `linear` | 采样调度策略（`linear` 或 `sway`） |
 | `IRODORI_SWAY_COEFF` | `-1.0` | 使用 `sway` 调度时的 Sway 系数 |

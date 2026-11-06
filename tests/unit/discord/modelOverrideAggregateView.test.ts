@@ -3,7 +3,15 @@
  * Retained aggregate destructive command browsing channel and persona overrides together.
  */
 import { beforeAll, describe, expect, it, spyOn } from "bun:test";
-import { ButtonStyle, type ButtonInteraction, type Client, type ModalSubmitInteraction } from "discord.js";
+import {
+  ButtonStyle,
+  type ButtonInteraction,
+  type Client,
+  type EmbedBuilder,
+  type ModalSubmitInteraction,
+} from "discord.js";
+import { collectTextDisplays } from "../../helpers/panelLimits";
+import { localizedProse } from "../../helpers/localeCases";
 import { execute as executeOverrideRemove } from "@/commands/model/override/remove";
 import * as tomoriStateCache from "@/utils/cache/tomoriStateCache";
 import { llmOverrideRepo } from "@/utils/db/repositories";
@@ -351,10 +359,14 @@ describe("/model override remove - (4) slash command <=50 direct modal vs >50 pa
 
     expect(modalShown).toBe(false);
     expect(interaction.replied).toBe(true);
-    const replyPayload = interaction.getRepliedPayload() as { content: string; components: unknown[]; flags: number };
+    const replyPayload = interaction.getRepliedPayload() as {
+      embeds: EmbedBuilder[];
+      components: unknown[];
+      flags: number;
+    };
     expect(replyPayload.flags).toBe(64); // Ephemeral
     expect(replyPayload.components).toBeDefined();
-    expect(replyPayload.content).toContain(
+    expect(replyPayload.embeds[0].toJSON().description).toBe(
       localizer("en-US", "commands.model.override.remove.page_select_prompt", { total: "55" }),
     );
 
@@ -386,8 +398,8 @@ describe("/model override remove - (4) slash command <=50 direct modal vs >50 pa
     );
 
     expect(interaction.replied).toBe(true);
-    const replyPayload = interaction.getRepliedPayload() as { content: string };
-    expect(replyPayload.content).toContain(
+    const replyPayload = interaction.getRepliedPayload() as { embeds: EmbedBuilder[] };
+    expect(replyPayload.embeds[0].toJSON().description).toBe(
       localizer("en-US", "commands.model.override.remove.page_select_prompt_capped", {
         total: "1300",
         shown: "1250",
@@ -763,7 +775,7 @@ describe("/model override remove global route wiring", () => {
   it("handles a stale model override route and directs the user to the registered command", async () => {
     // Initialized to an empty payload so the closure's assignment is what the assertion reads,
     // not a `null` the compiler can still narrow to after the await.
-    let replyPayload: { content?: string } = {};
+    let replyPayload: unknown = {};
     const interaction = {
       id: "stale-interaction",
       customId: "model-overrides:v0:page:en-US:0",
@@ -772,7 +784,7 @@ describe("/model override remove global route wiring", () => {
       isButton: () => true,
       isStringSelectMenu: () => false,
       isModalSubmit: () => false,
-      reply: async (payload: { content?: string }) => {
+      reply: async (payload: unknown) => {
         replyPayload = payload;
       },
     };
@@ -780,7 +792,9 @@ describe("/model override remove global route wiring", () => {
     const handled = await dispatchGlobalInteraction({} as Client, interaction as unknown as ButtonInteraction);
 
     expect(handled).toBe(true);
-    expect(replyPayload?.content).toContain("/model override remove");
+    expect(collectTextDisplays(replyPayload).join("\n")).toMatch(
+      localizedProse("en-US", "general.errors.outdated_panel", { command: "/model override remove" }),
+    );
   });
 });
 

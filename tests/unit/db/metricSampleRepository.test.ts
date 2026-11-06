@@ -1,5 +1,7 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import type { sql } from "@/utils/db/client";
+import * as leases from "@/utils/cluster/shardLeases";
+import { useEnvSandbox } from "../../helpers/env";
 import { stubLogMembers } from "../../helpers/mockSurface";
 
 const queries: string[] = [];
@@ -30,16 +32,18 @@ beforeAll(async () => {
   ({ MetricSampleRepository } = await import("@/utils/db/repositories/MetricSampleRepository"));
 });
 
-const originalEnv = { ...process.env };
+useEnvSandbox(["METRIC_SAMPLE_PRUNE_INTERVAL_MS", "METRIC_SAMPLE_RETENTION_DAYS"]);
+
+let primarySpy: ReturnType<typeof spyOn<typeof leases, "isPrimaryProcess">>;
 
 beforeEach(() => {
+  primarySpy = spyOn(leases, "isPrimaryProcess").mockReturnValue(true);
   queries.length = 0;
   insertRejection = null;
 });
 
 afterEach(() => {
-  process.env.METRIC_SAMPLE_PRUNE_INTERVAL_MS = originalEnv.METRIC_SAMPLE_PRUNE_INTERVAL_MS;
-  process.env.METRIC_SAMPLE_RETENTION_DAYS = originalEnv.METRIC_SAMPLE_RETENTION_DAYS;
+  primarySpy.mockRestore();
 });
 
 const inserts = () => queries.filter((q) => q.startsWith("INSERT"));
@@ -98,5 +102,25 @@ describe("MetricSampleRepository", () => {
     await expect(repository.recordSample("cache_sizes", { heap_used_mb: 1 })).resolves.toBeUndefined();
     expect(inserts()).toHaveLength(1);
     expect(deletes()).toHaveLength(0);
+  });
+  it("keeps recording local samples but stops pruning after primary loss", async () => {
+    let primary = false;
+    const gate = spyOn(leases, "isPrimaryProcess").mockImplementation(() => primary);
+    process.env.METRIC_SAMPLE_PRUNE_INTERVAL_MS = "1";
+    const repository = new MetricSampleRepository(injectedSql);
+    try {
+      await repository.recordSample("cache_sizes", { discord_guilds: 8 });
+      expect(inserts()).toHaveLength(1);
+      expect(deletes()).toHaveLength(0);
+      primary = true;
+      await repository.recordSample("cache_sizes", { discord_guilds: 9 });
+      expect(deletes()).toHaveLength(1);
+      primary = false;
+      await repository.recordSample("cache_sizes", { discord_guilds: 10 });
+      expect(inserts()).toHaveLength(3);
+      expect(deletes()).toHaveLength(1);
+    } finally {
+      gate.mockRestore();
+    }
   });
 });

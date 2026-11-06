@@ -101,8 +101,8 @@ so older media never keeps a tool exposed. Each tool's own availability gate sti
 - **Mention names**: each native build memoizes user-name promises by guild and user. Persona builds
   share member fetches but resolve mention names independently because personalization can differ.
   Callers outside native assembly can omit the memo and resolve names locally.
-- **Timing**: `context_built.participantMs` measures participant preparation; hydration remains inside
-  the native-build duration.
+- **Timing**: `context_built.participantMs` and the latency metric's `participant_ms` measure participant
+  preparation; hydration remains inside the native-build duration.
 - **Prompt construction**: delegates to `buildContext()` in `src/utils/text/contextBuilder.ts`.
   The [Context-Build Pipeline](/architecture/pipelines/context-build/) owns persona system prompts,
   retrieved memories, and RAG document assembly.

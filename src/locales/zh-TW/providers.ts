@@ -42,6 +42,7 @@ export default {
     fallback_used_personal_opt_out_footer: `用 \`/personal config\` > 模型 > 備援停止讓伺服器模型代為處理你個人供應商的失敗`,
     markdown_table: {
       show_button: `顯示 Markdown`,
+      source_expired_title: `表格來源已過期`,
       source_expired: `那張表格的 Markdown 已經不在快取中，所以我沒辦法再顯示原始碼。`,
       source_attached: `這張表格太長，無法直接顯示，所以改用檔案附上：`,
     },
@@ -138,6 +139,8 @@ export default {
       verify_api_key_expiry: `NVIDIA NIM 金鑰會過期，而 NVIDIA 對過期金鑰回傳的錯誤和輸錯的金鑰一樣。請到 [build.nvidia.com](https://build.nvidia.com) 查看它的有效期限，如果已經失效就重新產生一組。`,
       nvidia_register_free_model: `NVIDIA 經常下架託管的模型。請從 [NVIDIA 的免費端點](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview)選一個它目前提供的模型，複製模型 ID（例如 \`deepseek-ai/deepseek-v4.1-flash\`），再到 \`/providers\` > NVIDIA NIM > **+ 新增文字模型** 新增。`,
       nvidia_register_free_model_personal: `NVIDIA 經常下架託管的模型。請從 [NVIDIA 的免費端點](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview)選一個它目前提供的模型，複製模型 ID（例如 \`deepseek-ai/deepseek-v4.1-flash\`），再到 \`/personal providers\` > NVIDIA NIM > **+ 新增文字模型** 新增。`,
+      google_free_tier_daily: `這組 API 金鑰已用完 Gemini 今天的免費請求額度。額度會在太平洋時間午夜重設。`,
+      google_free_tier_minute: `這組 API 金鑰發送請求的頻率已超過 Gemini 免費方案的限制。請等待一分鐘後再試。`,
       google_credential_type: `這看起來像 OAuth 或服務帳號權杖。\`google\` 供應商需要來自 [Google AI Studio](https://aistudio.google.com/apikey) 的一般 API 金鑰；Google Cloud 憑證請改用 \`vertex\` 供應商。`,
       openrouter_privacy_settings: `請到 [OpenRouter 隱私設定](https://openrouter.ai/settings/privacy)調整你的「資料政策」設定以允許這個模型，或改選其他模型。`,
       openrouter_fund_account: `在你的 OpenRouter 帳號儲值至少 10 點，就能解鎖每天 1000 次免費模型要求。`,

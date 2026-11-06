@@ -108,7 +108,7 @@ IRODORI_TTS_CHECKPOINT="/path/to/custom_checkpoint.pt"
 - 在 人格 > 語音 底下指派了語音樣本的人格會發送儲存的參考音訊以進行聲音複製。
 - 在 人格 > 語音 底下設定了 VoiceDesign 提示詞的人格會將儲存的自然語言提示詞作為 Irodori 說明文字條件發送。
 
-若你只需要參考音訊聲音複製，仍可選擇 `聲音複製` 作為語音來源模式。
+若你只需要參考音訊語音複製，仍可選擇 `語音複製` 作為語音來源模式。
 
 使用 `/providers` 進行端點註冊與模型設定。接著開啟 `/config` > 模型 > 切換模型 以選取並啟用已註冊的端點。
 
@@ -121,6 +121,8 @@ IRODORI_TTS_CHECKPOINT="/path/to/custom_checkpoint.pt"
 3. 在 `/config` 的 人格 > 語音 底下選擇人格與語音樣本。
 
 Irodori 預設使用 120 秒參考上限，並會裁切較長的音訊。設定 `IRODORI_MAX_REF_SECONDS` 可調整此限制。
+
+伺服器只會對每個參考音訊片段編碼一次，並將結果保留在 `servers/tts/irodoritts/reference-cache/` 中，因此重複的請求會略過該步驟。替換人格的音訊片段會建立新的快取項目，舊項目會一直保留直到你手動刪除該資料夾為止。
 
 ### VoiceDesign
 
@@ -154,6 +156,40 @@ $env:IRODORI_SWAY_COEFF = "-1.0"
 
 這是在推論品質與速度之間的權衡，因此在將其設為永久設定前，請先使用你所選的檢查點與語音進行測試。
 
+## 低延遲模式（NVIDIA）
+<!-- anchor: low-latency-mode-nvidia -->
+
+低延遲模式可在維持相同的 40 步與語音設定下，讓 NVIDIA GPU 處理每個句子的速度提升約 3 到 4 倍，因此不會像 Sway 取樣那樣犧牲品質。請在 `.env` 中啟用：
+
+```dotenv
+IRODORI_COMPILE_MODE="cudagraphs"
+```
+
+`cudagraphs` 是速度最快的模式。`compile` 比預設快約 2 倍；若 `cudagraphs` 在你的 GPU 上表現異常，可嘗試使用此模式。兩者都需要 `cu128` 後端，伺服器在其他後端上會拒絕以此二模式啟動。
+
+注意事項與預期行為：
+
+- 伺服器回報就緒前需要先暖機。初次啟動約需 2 到 4 分鐘；後續啟動約需 1 到 2 分鐘，因為編譯好的核心會快取在磁碟上。`bun run launch --irodoritts` 最多等待 5 分鐘；若 GPU 較慢，可用 `TOMORI_TTS_STARTUP_TIMEOUT_MS`（單位為毫秒）調高該上限。
+- 遇到新句子長度或新語音片段時，首次請求會多花不到一秒的時間進行準備（僅此一次）。
+- VRAM 用量會略微下降。
+- 相同隨機種子下，產生的音訊與預設模式並非完全逐位元相同。在測試中聽起來效果相當，但在正式採用前建議先用自己的語音試聽幾句。
+
+在 Windows 上，此模式還需要 Microsoft C++ 編譯器：
+
+1. 安裝 [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)，並勾選 **使用 C++ 的桌面開發** 工作負載。
+2. 重新執行 `.\servers\tts\irodoritts\install-irodori.ps1 cu128` 以安裝 Windows 版 Triton 套件。
+3. 從 **Developer PowerShell for VS** 啟動伺服器（或執行 `bun run launch --irodoritts`），或是先將編譯器載入一般 PowerShell 中：
+
+```powershell
+$vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+$vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+cmd /c "`"$vs\VC\Auxiliary\Build\vcvars64.bat`" >nul && set" | ForEach-Object {
+  if ($_ -match "^([^=]+)=(.*)$") { Set-Item -Path "Env:$($Matches[1])" -Value $Matches[2] }
+}
+```
+
+若缺少編譯器或 Triton，伺服器會在啟動時停止並指明缺少哪一項。
+
 ## 環境變數
 
 | 變數 | 預設值 | 用途 |
@@ -166,8 +202,7 @@ $env:IRODORI_SWAY_COEFF = "-1.0"
 | `IRODORI_CODEC_DEVICE` | `auto` | 編解碼器裝置 |
 | `IRODORI_MODEL_PRECISION` | CUDA 上為 `bf16`，否則為 `fp32` | 模型精度 |
 | `IRODORI_CODEC_PRECISION` | `fp32` | 編解碼器精度 |
-| `IRODORI_COMPILE_MODEL` | `false` | 為 Irodori 模型啟用 `torch.compile` |
-| `IRODORI_COMPILE_DYNAMIC` | `false` | 編譯時啟用動態形狀 |
+| `IRODORI_COMPILE_MODE` | `off` | `off`、`compile` 或 `cudagraphs`；請參閱[低延遲模式](#low-latency-mode-nvidia) |
 | `IRODORI_NUM_STEPS` | `40` | Euler 取樣步數 |
 | `IRODORI_T_SCHEDULE_MODE` | `linear` | 取樣排程（`linear` 或 `sway`） |
 | `IRODORI_SWAY_COEFF` | `-1.0` | 使用 `sway` 排程時的 Sway 係數 |

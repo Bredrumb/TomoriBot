@@ -3,6 +3,7 @@ export default {
     description: `Administra tus configuraciones personales`,
     language: {
       description: `Elige el idioma en el que TomoriBot te habla.`,
+      language_description: `El idioma en el que TomoriBot te habla, en cada servidor y mensaje directo.`,
     },
     providers: {
       description: `Administra tus credenciales de proveedor, endpoints y catálogos de modelos personales.`,

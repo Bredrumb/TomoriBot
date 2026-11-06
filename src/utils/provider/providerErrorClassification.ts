@@ -100,9 +100,13 @@ const ACCOUNT_BALANCE_EXHAUSTED_PATTERNS: RegExp[] = [
   /\bno\s+resource\s+package\b/i,
   /\bplease\s+recharge\b/i,
   /\binsufficient_user_quota\b/i,
-  /\bexceeded\s+your\s+current\s+quota\b/i,
   /\bbilling\s+hard\s+limit\s+has\s+been\s+reached\b/i,
 ];
+
+// OpenAI-style providers say this only for an empty balance, but Gemini opens every 429 quota
+// message with the same sentence, including free-tier per-minute and per-day request limits.
+const EXCEEDED_CURRENT_QUOTA_PATTERN = [/\bexceeded\s+your\s+current\s+quota\b/i];
+const GEMINI_QUOTA_MESSAGE_MARKER = [/\bgenerativelanguage\.googleapis\.com\b/i, /\bai\.google\.dev\b/i];
 
 /**
  * Detects an exhausted account balance (the provider will reject every request until a
@@ -112,9 +116,34 @@ const ACCOUNT_BALANCE_EXHAUSTED_PATTERNS: RegExp[] = [
  * @returns True when any collected message signals a zero or negative balance.
  */
 export function isAccountBalanceExhaustedError(error: ProviderError): boolean {
-  return collectProviderErrorMessages(error).some((message) =>
-    matchesAnyPattern(message, ACCOUNT_BALANCE_EXHAUSTED_PATTERNS),
+  return collectProviderErrorMessages(error).some(
+    (message) =>
+      matchesAnyPattern(message, ACCOUNT_BALANCE_EXHAUSTED_PATTERNS) ||
+      (matchesAnyPattern(message, EXCEEDED_CURRENT_QUOTA_PATTERN) &&
+        !matchesAnyPattern(message, GEMINI_QUOTA_MESSAGE_MARKER)),
   );
+}
+
+const FREE_TIER_PATTERN = [/\bfree[\s_-]?tier\b/i];
+const PER_DAY_PATTERN = [/\bper\s+day\b/i, /PerDay/];
+const PER_MINUTE_PATTERN = [/\bper\s+minute\b/i, /PerMinute/];
+
+/**
+ * Detects a Gemini API free-tier quota 429 and the window it was hit in. The two windows need
+ * opposite advice: a per-minute limit clears on a retry, a per-day limit does not until the daily reset.
+ * @param error - The normalized provider error.
+ * @returns "day" or "minute" for a free-tier limit, or undefined for anything else (including paid-tier limits).
+ */
+export function getGeminiFreeTierQuotaWindow(error: ProviderError): "day" | "minute" | undefined {
+  for (const message of collectProviderErrorMessages(error)) {
+    if (!matchesAnyPattern(message, GEMINI_QUOTA_MESSAGE_MARKER) || !matchesAnyPattern(message, FREE_TIER_PATTERN)) {
+      continue;
+    }
+    // A daily violation outranks a simultaneous per-minute one, since waiting a minute cannot clear it.
+    if (matchesAnyPattern(message, PER_DAY_PATTERN)) return "day";
+    if (matchesAnyPattern(message, PER_MINUTE_PATTERN)) return "minute";
+  }
+  return undefined;
 }
 
 /**
@@ -212,7 +241,7 @@ const NON_INCIDENT_MESSAGE_PATTERNS: RegExp[] = [
   /\bfree\s+tier\b/i,
   /\brecaptcha\b/i,
   /\btrial\s+generations?\b/i,
-  /\bcontent[\s_-]?(?:filter|policy|management)\b/i,
+  /\bcontent[\s_-]?(?:filter|policy|management|safety)\b/i,
   /\bmoderation\b/i,
   /\bflagged\b/i,
 ];
@@ -244,6 +273,14 @@ export function isOperatorActionableProviderError(error: ProviderError): boolean
   return !collectProviderErrorMessages(error).some((message) =>
     matchesAnyPattern(message, NON_INCIDENT_MESSAGE_PATTERNS),
   );
+}
+
+/** Code for a stream the provider ended partway through an event, which a fresh request usually completes. */
+export const STREAM_INTERRUPTED_CODE = "stream_interrupted";
+
+/** Accepts `unknown` because a stream result carries its failure untyped. */
+export function isStreamInterruption(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === STREAM_INTERRUPTED_CODE;
 }
 
 /**

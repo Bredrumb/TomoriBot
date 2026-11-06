@@ -101,6 +101,13 @@ Extend `BaseLLMProvider` and implement `getInfo()`, `validateApiKey()`, `formatE
   otherwise it falls back to 4096. Either default shrinks to a quarter of a known context window.
 - `formatErrorDescription()` owns the provider's user-facing error text, so commands never format
   vendor errors themselves.
+- Implement the optional `checkTextModel()` when the vendor can look a model up by ID or list its
+  models. `/providers` calls it before saving a text model a user typed, and rejects the name only
+  when it returns `false`. Return `null` whenever the lookup cannot answer (an outage, an empty or
+  unreadable listing, an ambiguous 404), so a vendor problem never blocks registration. For an
+  OpenAI-style `GET /v1/models` listing, `isListedInOpenAIModelCatalog()` in
+  `src/utils/provider/modelCatalogLookup.ts` does all of this. A provider without the method saves
+  any name unchecked.
 - Build the `StreamContext` with `buildStreamContext()` from `src/utils/provider/streamContext.ts`.
   It copies every shared field (locale fallback, prefill and reply-notice flags, webhook identity,
   abort signal, and the rest), so a new cross-cutting field reaches every provider in one edit.

@@ -5,6 +5,8 @@ import { healthTracker } from "@/utils/misc/healthTracker";
 import type { AppEnvironment } from "@/types/config";
 import { shouldRejectWebhookRateLimit } from "@/utils/discord/webhook/avatarEditRateLimit";
 import { discordPresenceRetention, type DiscordPresenceRetention } from "@/utils/cache/discordPresenceRetention";
+import { initializeShardTopology, type ShardTopology } from "@/utils/discord/shardOwnership";
+import { buildIdentifyThrottler } from "@/utils/cluster/identifyThrottler";
 
 /**
  * Whether a Discord connection failure is one the bot can recover from on its own.
@@ -112,6 +114,8 @@ export async function resolvePresenceIntentEnabled(environment: AppEnvironment):
 export function createDiscordClient(
   includePresences: boolean,
   presenceRetention: DiscordPresenceRetention = discordPresenceRetention,
+  topology: ShardTopology = initializeShardTopology(),
+  shutdownSignal: AbortSignal = new AbortController().signal,
 ): Client {
   const intents = [
     GatewayIntentBits.Guilds,
@@ -131,6 +135,8 @@ export function createDiscordClient(
   }
 
   const client: Client = new Client({
+    ...topology.getClientShardOptions(),
+    ...(!topology.ownsAllShards() ? { ws: { buildIdentifyThrottler: buildIdentifyThrottler(shutdownSignal) } } : {}),
     intents,
     partials: [Partials.Channel, Partials.Message],
     rest: { rejectOnRateLimit: shouldRejectWebhookRateLimit },
@@ -179,6 +185,8 @@ export function createDiscordClient(
     },
   });
 
+  healthTracker.initialize(client, topology);
+
   client.on("error", (error) => {
     log.error("Discord client error occurred", error);
   });
@@ -201,19 +209,20 @@ export function createDiscordClient(
   client.on("shardReady", (shardId) => {
     setHistoryWindowGatewayConnected(shardId, true);
     gatewayErrorReporter.reset(shardId);
-    healthTracker.recordGatewayConnected();
+    healthTracker.recordGatewayConnected(shardId);
     log.rateLimit(`Discord gateway shard ready (shard ${shardId})`, { shardId });
   });
 
   client.on("shardResume", (shardId, replayedEvents) => {
     setHistoryWindowGatewayConnected(shardId, true);
     gatewayErrorReporter.reset(shardId);
-    healthTracker.recordGatewayConnected();
+    healthTracker.recordGatewayConnected(shardId);
     log.rateLimit(`Discord gateway session resumed (shard ${shardId})`, { shardId, replayedEvents });
   });
 
   client.on("shardDisconnect", (event, shardId) => {
     setHistoryWindowGatewayConnected(shardId, false);
+    healthTracker.recordGatewayDisconnected(shardId);
     log.rateLimit(`Discord gateway disconnected (shard ${shardId})`, {
       code: event.code,
       reason: event.reason ?? "",
@@ -223,6 +232,7 @@ export function createDiscordClient(
 
   client.on("shardReconnecting", (shardId) => {
     setHistoryWindowGatewayConnected(shardId, false);
+    healthTracker.recordGatewayDisconnected(shardId);
     log.rateLimit(`Discord gateway reconnecting (shard ${shardId})`, { shardId });
   });
 
@@ -263,7 +273,7 @@ function createGatewayErrorReporter(): ((error: unknown, shardId: number) => voi
   const reported = new Set<number>();
 
   const report = (error: unknown, shardId: number) => {
-    healthTracker.recordGatewayFailure();
+    healthTracker.recordGatewayFailure(shardId);
     const metadata = { shardId, reason: error instanceof Error ? error.message : String(error) };
 
     if (!reported.has(shardId)) {

@@ -8,6 +8,13 @@ import {
 } from "discord.js";
 import { log, ColorCode } from "../utils/misc/logger";
 import { serverScheduleRepository } from "@/utils/db/repositories";
+import type { ShardTopology } from "@/utils/discord/shardOwnership";
+import {
+  assertScheduledWorkActive,
+  canRunScheduledWork,
+  canSettleScheduledWork,
+  type ScheduledWorkContext,
+} from "@/timers/scheduledWorkContext";
 
 import type { ReminderRow } from "../types/db/schema";
 import { calculateLateness } from "@/utils/text/processors/timeUtils";
@@ -104,13 +111,17 @@ export class ReminderProcessor {
   private readonly client: Client;
   private readonly activeReminderIds = new Set<number>();
 
-  constructor(client: Client) {
+  constructor(
+    client: Client,
+    private readonly topology?: ShardTopology,
+  ) {
     this.client = client;
   }
 
-  public async processDueReminders(): Promise<void> {
+  public async processDueReminders(work?: ScheduledWorkContext): Promise<void> {
+    if (!canRunScheduledWork(work)) return;
     try {
-      const dueReminders = await serverScheduleRepository.getDueReminders();
+      const dueReminders = await serverScheduleRepository.getDueReminders(this.topology);
 
       if (!dueReminders || dueReminders.length === 0) {
         return;
@@ -119,14 +130,15 @@ export class ReminderProcessor {
       log.info(`Processing ${dueReminders.length} due reminder(s)`);
 
       for (const reminder of dueReminders) {
-        await this.executeReminder(reminder);
+        if (!canRunScheduledWork(work)) return;
+        await this.executeReminder(reminder, work);
       }
     } catch (error) {
-      log.error("Error checking for due reminders:", error);
+      if (canRunScheduledWork(work)) log.error("Error checking for due reminders:", error);
     }
   }
 
-  private async executeReminder(reminder: ReminderRow): Promise<void> {
+  private async executeReminder(reminder: ReminderRow, work?: ScheduledWorkContext): Promise<void> {
     return runWithErrorContext(
       {
         source: "reminder",
@@ -136,12 +148,13 @@ export class ReminderProcessor {
         userDiscId: reminder.user_discord_id,
         channelDiscId: reminder.channel_disc_id,
       },
-      () => this.executeReminderInContext(reminder),
+      () => this.executeReminderInContext(reminder, work),
     );
   }
 
-  private async executeReminderInContext(reminder: ReminderRow): Promise<void> {
+  private async executeReminderInContext(reminder: ReminderRow, work?: ScheduledWorkContext): Promise<void> {
     try {
+      assertScheduledWorkActive(work);
       if (reminder.reminder_id && this.activeReminderIds.has(reminder.reminder_id)) {
         log.info(`Reminder ${reminder.reminder_id} is already queued or executing; skipping duplicate delivery.`);
         return;
@@ -152,16 +165,17 @@ export class ReminderProcessor {
       );
 
       const channel = await this.client.channels.fetch(reminder.channel_disc_id);
+      assertScheduledWorkActive(work);
 
       if (!channel) {
         log.error(`Channel ${reminder.channel_disc_id} not found for reminder ${reminder.reminder_id}`);
-        await this.handleReminderExecutionFailure(reminder, `Channel not found: ${reminder.channel_disc_id}`);
+        await this.handleReminderExecutionFailure(reminder, `Channel not found: ${reminder.channel_disc_id}`, work);
         return;
       }
 
       if (!channel.isTextBased()) {
         log.error(`Channel ${reminder.channel_disc_id} is not text-based for reminder ${reminder.reminder_id}`);
-        await this.handleReminderExecutionFailure(reminder, "Channel is not text-based");
+        await this.handleReminderExecutionFailure(reminder, "Channel is not text-based", work);
         return;
       }
 
@@ -170,21 +184,26 @@ export class ReminderProcessor {
         const messages = await channel.messages.fetch({ limit: 1 });
         lastMessage = messages.first();
       } catch (fetchError) {
+        assertScheduledWorkActive(work);
         log.error(
           `Failed to fetch last message from channel ${reminder.channel_disc_id} for reminder ${reminder.reminder_id}:`,
           fetchError,
         );
       }
+      assertScheduledWorkActive(work);
 
       if (!lastMessage && channel.isSendable()) {
-        lastMessage = (await seedTurnAnchor(channel, `reminder ${reminder.reminder_id}`)) ?? undefined;
+        lastMessage =
+          (await seedTurnAnchor(channel, `reminder ${reminder.reminder_id}`, () => canRunScheduledWork(work))) ??
+          undefined;
       }
+      assertScheduledWorkActive(work);
 
       if (!lastMessage) {
         log.warn(
           `No messages found in channel ${reminder.channel_disc_id} for reminder ${reminder.reminder_id}, sending error embed instead`,
         );
-        await this.handleReminderExecutionFailure(reminder, "No messages found in channel for context");
+        await this.handleReminderExecutionFailure(reminder, "No messages found in channel for context", work);
         return;
       }
 
@@ -207,6 +226,7 @@ export class ReminderProcessor {
         afterMessageId: lastMessage.id,
         reminderStartTime,
         isSelfReminder,
+        work,
       });
 
       suppressNextSelfReply(channel.id);
@@ -260,8 +280,16 @@ export class ReminderProcessor {
         log.info(`Reminder ${reminder.reminder_id} queued; DB row remains pending until queued delivery completes.`);
       }
     } catch (error) {
+      if (!canRunScheduledWork(work)) {
+        this.releaseReminderDelivery(reminder);
+        return;
+      }
       log.error(`Error executing reminder ${reminder.reminder_id}:`, error);
-      await this.handleReminderExecutionFailure(reminder, error instanceof Error ? error.message : "Unknown error");
+      await this.handleReminderExecutionFailure(
+        reminder,
+        error instanceof Error ? error.message : "Unknown error",
+        work,
+      );
       this.releaseReminderDelivery(reminder);
     }
   }
@@ -272,6 +300,7 @@ export class ReminderProcessor {
     afterMessageId: string;
     reminderStartTime: number;
     isSelfReminder: boolean;
+    work?: ScheduledWorkContext;
   }): {
     isSettled: () => boolean;
     handleGenerationResult: (result: GenerationTurnResult) => Promise<void>;
@@ -280,14 +309,17 @@ export class ReminderProcessor {
   } {
     let settled = false;
 
-    const settle = async (operation: () => Promise<void>): Promise<void> => {
+    const settle = async (operation: () => Promise<void>, delivered = false): Promise<void> => {
       if (settled) {
         return;
       }
       settled = true;
 
       try {
+        if (!(delivered ? canSettleScheduledWork(args.work) : canRunScheduledWork(args.work))) return;
         await operation();
+      } catch (error) {
+        if (delivered ? canSettleScheduledWork(args.work) : canRunScheduledWork(args.work)) throw error;
       } finally {
         this.releaseReminderDelivery(args.reminder);
       }
@@ -295,7 +327,7 @@ export class ReminderProcessor {
 
     const deferRetry = async (reason: string, retryable = true): Promise<void> => {
       await settle(async () => {
-        await this.deferReminderRetry(args.reminder, reason, retryable);
+        await this.deferReminderRetry(args.reminder, reason, retryable, args.work);
       });
     };
 
@@ -305,7 +337,7 @@ export class ReminderProcessor {
         if (isReminderDeliverySuccessful(result)) {
           await settle(async () => {
             await this.completeReminderDelivery(args);
-          });
+          }, true);
           return;
         }
 
@@ -328,20 +360,36 @@ export class ReminderProcessor {
     afterMessageId: string;
     reminderStartTime: number;
     isSelfReminder: boolean;
+    work?: ScheduledWorkContext;
   }): Promise<void> {
-    const { reminder, channel, afterMessageId, reminderStartTime, isSelfReminder } = args;
+    const { reminder, channel, afterMessageId, reminderStartTime, isSelfReminder, work } = args;
+    if (!canSettleScheduledWork(work)) return;
 
-    if (!isSelfReminder && isBridgeUserId(reminder.user_discord_id)) {
-      await sendMatrixReminderMention(channel, reminder, afterMessageId, reminderStartTime, this.client.user?.id ?? "");
-    } else if (!isSelfReminder) {
-      await this.ensureReminderRecipientMention(channel, reminder, afterMessageId, reminderStartTime);
+    try {
+      if (canRunScheduledWork(work) && !isSelfReminder && isBridgeUserId(reminder.user_discord_id)) {
+        await sendMatrixReminderMention(
+          channel,
+          reminder,
+          afterMessageId,
+          reminderStartTime,
+          this.client.user?.id ?? "",
+          () => !canRunScheduledWork(work),
+        );
+      } else if (canRunScheduledWork(work) && !isSelfReminder) {
+        await this.ensureReminderRecipientMention(channel, reminder, afterMessageId, reminderStartTime, work);
+      }
+    } catch (error) {
+      if (canRunScheduledWork(work) || !canSettleScheduledWork(work)) throw error;
+      log.warn(`Reminder ${reminder.reminder_id}: mention check interrupted during drain`, error);
     }
+    if (!canSettleScheduledWork(work)) return;
 
     const repetition = getReminderRepetition(reminder);
 
     if (repetition && reminder.reminder_id) {
       const nextOccurrence = getNextRecurringOccurrence(reminder, repetition);
       const rescheduled = await serverScheduleRepository.rescheduleReminder(reminder.reminder_id, nextOccurrence);
+      if (!canSettleScheduledWork(work)) return;
 
       if (rescheduled) {
         reminder.delivery_retry_count = 0;
@@ -362,7 +410,13 @@ export class ReminderProcessor {
     }
   }
 
-  private async deferReminderRetry(reminder: ReminderRow, reason: string, retryable = true): Promise<void> {
+  private async deferReminderRetry(
+    reminder: ReminderRow,
+    reason: string,
+    retryable = true,
+    work?: ScheduledWorkContext,
+  ): Promise<void> {
+    assertScheduledWorkActive(work);
     if (!reminder.reminder_id) {
       log.error(`Cannot defer reminder retry for missing reminder_id (reason: ${reason})`);
       return;
@@ -385,7 +439,7 @@ export class ReminderProcessor {
           `Reminder ${reminder.reminder_id} exhausted ${REMINDER_DELIVERY_MAX_RETRIES} delivery retries (last reason: ${reason}); falling back to a plain reminder embed.`,
         );
       }
-      await this.handleReminderExecutionFailure(reminder, `retry_limit_exhausted:${reason}`);
+      await this.handleReminderExecutionFailure(reminder, `retry_limit_exhausted:${reason}`, work);
       return;
     }
 
@@ -419,6 +473,7 @@ export class ReminderProcessor {
     reminder: ReminderRow,
     afterMessageId: string,
     reminderStartTime: number,
+    work?: ScheduledWorkContext,
   ): Promise<void> {
     if (isBridgeUserId(reminder.user_discord_id)) return;
 
@@ -429,7 +484,8 @@ export class ReminderProcessor {
       afterMessageId,
       triggerStartTime: reminderStartTime,
       contextLabel: `reminder ${reminder.reminder_id}`,
-      fallbackSender: (content) => this.trySendPersonaFallbackMention(channel, reminder, content),
+      isExecutionCancelled: () => !canRunScheduledWork(work),
+      fallbackSender: (content) => this.trySendPersonaFallbackMention(channel, reminder, content, work),
     });
   }
 
@@ -437,10 +493,17 @@ export class ReminderProcessor {
     channel: TextBasedChannel,
     reminder: ReminderRow,
     content: string,
+    work?: ScheduledWorkContext,
   ): Promise<boolean> {
     if (!reminder.persona_id || !("guild" in channel) || !channel.guild) return false;
     const persona = (await getCachedAllPersonas(channel.guild.id)).find((p) => p.persona_id === reminder.persona_id);
-    return persona ? sendPersonaMention(channel, persona, reminder.user_discord_id, content) : false;
+    assertScheduledWorkActive(work);
+    return persona
+      ? sendPersonaMention(channel, persona, reminder.user_discord_id, content, {
+          abortSignal: work?.signal,
+          isExecutionCancelled: () => !canRunScheduledWork(work),
+        })
+      : false;
   }
 
   /**
@@ -459,8 +522,13 @@ export class ReminderProcessor {
     return "guild" in channel ? channel.guild.preferredLocale : "en-US";
   }
 
-  private async handleReminderExecutionFailure(reminder: ReminderRow, errorReason: string): Promise<void> {
+  private async handleReminderExecutionFailure(
+    reminder: ReminderRow,
+    errorReason: string,
+    work?: ScheduledWorkContext,
+  ): Promise<void> {
     try {
+      assertScheduledWorkActive(work);
       const repetition = getReminderRepetition(reminder);
       const isRecurring = repetition !== null;
       const retainsSchedule = isRecurring && Boolean(reminder.reminder_id);
@@ -475,7 +543,9 @@ export class ReminderProcessor {
           : isRecurring
             ? "reminders.triggered_footer_recurring_removed"
             : "reminders.triggered_footer_one_time",
+        work,
       );
+      assertScheduledWorkActive(work);
 
       if (reminder.reminder_id) {
         if (
@@ -488,12 +558,13 @@ export class ReminderProcessor {
           log.warn(
             `Reminder ${reminder.reminder_id} removed after ${failedOccurrences} consecutive occurrences reached nobody`,
           );
-          await this.notifyDeadReminderRemoved(reminder, failedOccurrences);
+          await this.notifyDeadReminderRemoved(reminder, failedOccurrences, work);
         } else if (retainsSchedule && repetition !== null) {
           const nextOccurrence = getNextRecurringOccurrence(reminder, repetition);
           recurringScheduleRetained = Boolean(
             await serverScheduleRepository.rescheduleReminder(reminder.reminder_id, nextOccurrence, failedOccurrences),
           );
+          assertScheduledWorkActive(work);
           if (recurringScheduleRetained) {
             reminder.delivery_retry_count = 0;
             reminder.failed_occurrence_count = failedOccurrences;
@@ -516,20 +587,28 @@ export class ReminderProcessor {
           : `Reminder ${reminder.reminder_id} deleted due to execution failure: ${errorReason}`,
       );
     } catch (error) {
-      log.error(`Error handling reminder execution failure for reminder ${reminder.reminder_id}:`, error);
+      if (canRunScheduledWork(work))
+        log.error(`Error handling reminder execution failure for reminder ${reminder.reminder_id}:`, error);
     }
   }
 
   /** Posts the plain fallback embed and reports whether it reached the channel. */
-  private async sendFallbackReminderEmbed(reminder: ReminderRow, footerKey: string): Promise<boolean> {
+  private async sendFallbackReminderEmbed(
+    reminder: ReminderRow,
+    footerKey: string,
+    work?: ScheduledWorkContext,
+  ): Promise<boolean> {
     try {
+      assertScheduledWorkActive(work);
       const channel = await this.client.channels.fetch(reminder.channel_disc_id);
+      assertScheduledWorkActive(work);
       if (!channel?.isTextBased() || !("send" in channel)) {
         return false;
       }
 
       const isSelfReminder = reminder.self_reminder === true;
       const locale = await this.resolveReminderLocale(reminder, channel);
+      assertScheduledWorkActive(work);
       const embed = createStandardEmbed(locale, {
         color: ColorCode.WARN,
         titleKey: isSelfReminder ? "reminders.task_triggered_title" : "reminders.reminder_triggered_title",
@@ -555,6 +634,7 @@ export class ReminderProcessor {
       });
       return true;
     } catch (fallbackError) {
+      assertScheduledWorkActive(work);
       const failure = `Failed to send fallback reminder info embed for reminder ${reminder.reminder_id}:`;
       if (
         fallbackError instanceof DiscordAPIError &&
@@ -570,13 +650,19 @@ export class ReminderProcessor {
   }
 
   /** Tells the recipient by DM that their reminder was removed, since its channel is unreachable by definition. */
-  private async notifyDeadReminderRemoved(reminder: ReminderRow, failedOccurrences: number): Promise<void> {
+  private async notifyDeadReminderRemoved(
+    reminder: ReminderRow,
+    failedOccurrences: number,
+    work?: ScheduledWorkContext,
+  ): Promise<void> {
     // A self-task targets the bot's own user ID, and Discord refuses a bot's DM to itself.
     if (reminder.self_reminder === true || isBridgeUserId(reminder.user_discord_id)) return;
 
     try {
+      assertScheduledWorkActive(work);
       const user = await this.client.users.fetch(reminder.user_discord_id);
       const userRow = await getCachedUserRow(reminder.user_discord_id).catch(() => null);
+      assertScheduledWorkActive(work);
       const locale = userRow?.language_pref ?? "en-US";
       const embed = createStandardEmbed(locale, {
         color: ColorCode.WARN,
@@ -587,7 +673,8 @@ export class ReminderProcessor {
       });
       await user.send({ embeds: [embed] });
     } catch (error) {
-      log.warn(`Could not DM the recipient of removed reminder ${reminder.reminder_id}:`, error);
+      if (canRunScheduledWork(work))
+        log.warn(`Could not DM the recipient of removed reminder ${reminder.reminder_id}:`, error);
     }
   }
 }

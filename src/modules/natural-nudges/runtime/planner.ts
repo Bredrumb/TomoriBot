@@ -45,6 +45,7 @@ export interface PlannerInput {
   channels: readonly PlannerChannel[];
   plannerModel: NudgeModelRef;
   admitRequest: () => boolean;
+  abortSignal?: AbortSignal;
   target: PingUserTarget | null;
 }
 
@@ -321,10 +322,11 @@ export async function planIdleNudge(input: PlannerInput): Promise<PlannerOutcome
   const systemPrompt = buildSystemPrompt(input);
   const userPrompt = buildUserPrompt(input);
   const jsonSchema = buildPlannerJsonSchema(input.candidates);
-  const abortSignal = AbortSignal.timeout(PLANNER_TIMEOUT_MS);
+  const timeout = AbortSignal.timeout(PLANNER_TIMEOUT_MS);
+  const abortSignal = input.abortSignal ? AbortSignal.any([timeout, input.abortSignal]) : timeout;
   let usage: TokenUsage | null = null;
   const ask = (prompt: string, thinkingLevel: string | undefined) => {
-    if (!input.admitRequest()) return null;
+    if (abortSignal.aborted || !input.admitRequest()) return null;
     return withProviderUsageContext(resolved.usageContext, () =>
       resolved.capability.callStructuredJSON<PlannerResult>(
         {

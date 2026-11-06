@@ -23,6 +23,8 @@ import { personaRepository, type UnsyncedMainPointer } from "@/utils/db/reposito
 import { setGuildBotAvatar } from "@/utils/discord/guildIdentity";
 import { log } from "@/utils/misc/logger";
 import { loadStoredPersonaAvatarBuffer } from "@/utils/storage/avatarStorage";
+import { hasShardLeaseOwnership } from "@/utils/cluster/shardLeases";
+import { getShardTopology } from "@/utils/discord/shardOwnership";
 
 /**
  * Parses a non-negative-integer env var, falling back to a default when unset or
@@ -79,6 +81,7 @@ async function patchGuildAvatar(guildDiscId: string, avatarDataUri: string): Pro
  *
  */
 export async function reconcilePresetMainAvatars(client: Client): Promise<void> {
+  if (!hasShardLeaseOwnership()) return;
   // Operational kill switch. Default-on; an operator can disable the fan-out
   // entirely (e.g. during an incident) without a code change.
   if (!SYNC_ENABLED) {
@@ -109,6 +112,8 @@ export async function reconcilePresetMainAvatars(client: Client): Promise<void> 
   let processed = 0;
 
   for (const target of targets) {
+    if (!hasShardLeaseOwnership()) break;
+    if (!getShardTopology().ownsServer(target.server_disc_id, false)) continue;
     if (MAX_PER_RUN > 0 && applied >= MAX_PER_RUN) {
       log.info(`[Preset Avatar Fanout] Reached per-run cap (${MAX_PER_RUN}); remaining sync deferred to next boot`);
       break;
@@ -158,6 +163,7 @@ export async function reconcilePresetMainAvatars(client: Client): Promise<void> 
       continue;
     }
 
+    if (!hasShardLeaseOwnership()) break;
     const result = await patchGuildAvatar(target.server_disc_id, avatarDataUri);
     if (result === "ok") {
       try {

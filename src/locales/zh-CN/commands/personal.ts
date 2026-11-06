@@ -3,6 +3,7 @@ export default {
     description: `管理你的个人设置`,
     language: {
       description: `选择 TomoriBot 与你对话时使用的语言。`,
+      language_description: `TomoriBot 在所有服务器和私信中与你对话时使用的语言。`,
     },
     providers: {
       description: `管理你的个人提供方凭据、端点和模型目录。`,

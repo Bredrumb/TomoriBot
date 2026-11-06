@@ -42,7 +42,8 @@ import {
   buildPersonalMemoriesPanelPayload,
 } from "@/utils/discord/ui/personalMemoriesPanel";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
-import { localizedCopy } from "../../helpers/localeCases";
+import { localizedCopy, localizedProse } from "../../helpers/localeCases";
+import { collectTextDisplays } from "../../helpers/panelLimits";
 import { createPersona } from "../../helpers/fixtures";
 
 beforeAll(async () => initializeLocalizer());
@@ -1616,7 +1617,9 @@ describe("router wiring & outdated version fallback", () => {
     expect(replyPayload).toBeDefined();
     // The stub assigns inside a callback, which control flow analysis cannot see, so read the
     // captured reply through its declared type.
-    expect((replyPayload as InteractionReplyOptions | null)?.content).toContain("/personal memories");
+    expect(collectTextDisplays(replyPayload).join("\n")).toMatch(
+      localizedProse("en-US", "commands.personal.memories.outdated_panel", { command: "/personal memories" }),
+    );
   });
 });
 

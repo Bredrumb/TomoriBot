@@ -9,6 +9,13 @@ export class UserImpersonationGenerationSkippedError extends Error {
   }
 }
 
+export class UserImpersonationReportedProviderError extends Error {
+  constructor() {
+    super("User impersonation provider failure was already reported.");
+    this.name = "UserImpersonationReportedProviderError";
+  }
+}
+
 function normalizeError(value: unknown, fallbackMessage: string): Error {
   if (value instanceof Error) {
     return value;
@@ -39,6 +46,7 @@ export function getUserImpersonationGenerationError(result: GenerationTurnResult
   for (let index = result.streamResults.length - 1; index >= 0; index--) {
     const streamResult = result.streamResults[index];
     if (streamResult && (streamResult.status === "error" || streamResult.status === "timeout")) {
+      if (streamResult.providerFailureReported) return new UserImpersonationReportedProviderError();
       return normalizeError(streamResult.data, fallbackMessage);
     }
   }

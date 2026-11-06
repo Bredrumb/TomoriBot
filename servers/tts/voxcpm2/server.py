@@ -95,10 +95,27 @@ def decode_ref_audio(raw_base64: str, directory: str) -> str:
     return str(ref_path)
 
 
+def require_compile_support() -> None:
+    import importlib.util
+
+    import torch
+
+    device = resolve_device()
+    if not OPTIMIZE or not torch.cuda.is_available() or (device is not None and not device.startswith("cuda")):
+        return
+    # Upstream optimize() only prints a stderr warning and runs eager, about 2.8x slower, when Triton is missing.
+    if importlib.util.find_spec("triton") is None:
+        raise RuntimeError(
+            "VOXCPM2_OPTIMIZE=1 needs Triton for torch.compile. On Windows, rerun install-voxcpm2.ps1 or "
+            "install triton-windows matching your torch version; set VOXCPM2_OPTIMIZE=0 to run uncompiled."
+        )
+
+
 def load_model() -> None:
     global model
     from voxcpm import VoxCPM
 
+    require_compile_support()
     started_at = time.perf_counter()
     log_info(
         f"Loading model_id={MODEL_ID} device={DEVICE} optimize={OPTIMIZE} denoiser={LOAD_DENOISER}"

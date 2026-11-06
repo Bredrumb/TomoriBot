@@ -62,6 +62,7 @@ import {
 } from "@/modules/natural-nudges/db/types";
 import type { NaturalNudgesSettingsView } from "@/modules/natural-nudges/discord/operations";
 import { FENCED_PREVIEW_MAX_CHARS } from "@/utils/text/textPreview";
+import { formatImageTagsForConfirmation, MAX_TAGS, TAGS_MODAL_MAX_LENGTH } from "@/utils/image/tagHelpers";
 import { formatPanelProse } from "@/utils/discord/ui/panelProse";
 import { getCapabilitiesManagePermissionDefinitions } from "@/utils/discord/manageConfigMapping";
 import { HUMANIZER_DEFAULT } from "@/utils/discord/humanizerOptions";
@@ -75,6 +76,11 @@ import { createLlmRow, createPersona } from "../../helpers/fixtures";
 
 /** The locale whose rendered text is longest; see the file header for why one locale suffices. */
 const BUDGET_LOCALE = "es-419";
+
+/** As many tags as the tag modal accepts: MAX_TAGS entries whose comma-joined form fills TAGS_MODAL_MAX_LENGTH. */
+const MAX_MODAL_IMAGE_TAGS = Array.from({ length: MAX_TAGS }, (_, index) =>
+  String(index).padStart(Math.floor((TAGS_MODAL_MAX_LENGTH + 2) / MAX_TAGS) - 2, "t"),
+);
 
 /**
  * Read statuses that render differently. `stale` sets the same `writesDisabled` flag as
@@ -830,6 +836,62 @@ describe("config page text budgeting at stored maxima", () => {
           readStatus: "fresh",
           naturalNudges: { settings: MAX_NUDGE_SETTINGS },
           receipt: receipt ? { tone: "success", heading: "Saved", detail: "Configuration was saved." } : undefined,
+        }),
+    },
+    {
+      name: "Models Image Generation",
+      maxTolerance: PREVIEW_TIGHTNESS_TOLERANCE,
+      buildPayload: (locale: string, receipt: boolean) =>
+        buildConfigPanelPayload({
+          locale,
+          actor: GUILD_MANAGER,
+          category: "models",
+          page: "image",
+          personas: [makePersona({ persona_id: 55 })],
+          selectedPersonaId: 55,
+          readStatus: "fresh",
+          imageGenerationView: {
+            positiveTags: MAX_MODAL_IMAGE_TAGS,
+            negativeTags: MAX_MODAL_IMAGE_TAGS,
+            sampler: "k_euler_ancestral",
+            steps: "28",
+            scale: "5.0",
+            noiseSchedule: "karras",
+            cfgRescale: "0.0",
+          },
+          receipt: receipt
+            ? {
+                tone: "success",
+                heading: localizer(locale, "commands.config.panel.image_tags_updated_heading"),
+                detail: localizer(locale, "commands.config.panel.image_tags_updated_detail", {
+                  tags: formatImageTagsForConfirmation(MAX_MODAL_IMAGE_TAGS),
+                }),
+              }
+            : undefined,
+        }),
+    },
+    {
+      name: "Persona Appearance with tag receipt",
+      maxTolerance: PREVIEW_TIGHTNESS_TOLERANCE,
+      buildPayload: (locale: string, receipt: boolean) =>
+        buildConfigPanelPayload({
+          locale,
+          actor: GUILD_MANAGER,
+          category: "persona",
+          page: "appearance",
+          personas: [makePersona({ persona_id: 55, physical_appearance_tags: MAX_MODAL_IMAGE_TAGS })],
+          selectedPersonaId: 55,
+          readStatus: "fresh",
+          receipt: receipt
+            ? {
+                tone: "success",
+                heading: localizer(locale, "commands.persona.image-tags.success_title"),
+                detail: localizer(locale, "commands.persona.image-tags.success_description", {
+                  persona_name: "Mirri",
+                  tag_list: formatImageTagsForConfirmation(MAX_MODAL_IMAGE_TAGS),
+                }),
+              }
+            : undefined,
         }),
     },
     {

@@ -10,11 +10,11 @@ import {
 } from "@/utils/discord/interactions/configPermissionPolicy";
 import {
   deniedReceipt,
-  missingScopeMessageKey,
   outdatedConfigPanelPayload,
   repaint,
   type ConfigRouteDependencies,
   type ConfigScope,
+  missingScopeReceipt,
 } from "@/utils/discord/interactions/configRouteContext";
 import type { GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
 import { buildAddMcpModal, buildMcpsAddModalFieldId, type McpsPanelPage } from "@/utils/discord/ui/mcpsPanel";
@@ -23,6 +23,7 @@ import type { AddMcpResult, McpSignInHint, ReconnectMcpResult } from "@/utils/mc
 import { formatMcpToolNamesForDiscord } from "@/utils/mcp/mcpToolSnapshot";
 import type { McpSignInOutcome } from "@/utils/mcp/oauth/signIn";
 import { localizer } from "@/utils/text/localizer";
+import { replyPanelReceipt } from "@/utils/discord/ui/panel";
 
 const MCP_ACTIONS = new Set<ConfigPanelRoute["action"]>([
   "mcp-range",
@@ -288,10 +289,7 @@ export async function handleConfigMcpModalOpen(
   if (!isConfigRouteAuthorized(route, actor)) {
     const scope = await dependencies.resolveScope(interaction, false);
     if (!scope) {
-      await interaction.reply({
-        content: localizer(route.locale, missingScopeMessageKey(interaction, dependencies)),
-        flags: MessageFlags.Ephemeral,
-      });
+      await replyPanelReceipt(interaction, missingScopeReceipt(route.locale, interaction, dependencies));
       return true;
     }
     const mcpRead = await dependencies.loadMcpRead(scope.personas[0]?.server_id ?? 0);

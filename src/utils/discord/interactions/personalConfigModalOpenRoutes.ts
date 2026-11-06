@@ -1,4 +1,4 @@
-import { MessageFlags, type StringSelectMenuInteraction } from "discord.js";
+import type { StringSelectMenuInteraction } from "discord.js";
 import { PrivacyLevel } from "@/types/db/schema";
 import { loadFallbackSelectionOptions } from "@/utils/discord/interactions/personalConfigLoaders";
 import {
@@ -22,8 +22,10 @@ import { loadUserSavedProvidersForCapability } from "@/utils/provider/savedProvi
 import {
   repaint,
   resolveSpotlightBlockSelection,
+  terminalPayload,
   type PersonalConfigPreDeferContext,
 } from "@/utils/discord/interactions/personalConfigRouteContext";
+import { replyPanelReceipt } from "@/utils/discord/ui/panel";
 
 export async function handlePersonalConfigModalOpen(
   context: PersonalConfigPreDeferContext,
@@ -35,9 +37,10 @@ export async function handlePersonalConfigModalOpen(
     if (!interaction.isButton()) throw new Error("language-open requires Button interaction");
     const cachedScope = await dependencies.resolveScope(interaction, false);
     if (!cachedScope) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.config.unavailable"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "general.panel_notice.unavailable_heading"),
+        detail: localizer(route.locale, "commands.personal.config.unavailable"),
       });
       return "handled";
     }
@@ -50,9 +53,10 @@ export async function handlePersonalConfigModalOpen(
     if (!interaction.isButton()) throw new Error("timezone-open requires Button interaction");
     const cachedScope = await dependencies.resolveScope(interaction, false);
     if (!cachedScope) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.config.unavailable"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "general.panel_notice.unavailable_heading"),
+        detail: localizer(route.locale, "commands.personal.config.unavailable"),
       });
       return "handled";
     }
@@ -65,9 +69,10 @@ export async function handlePersonalConfigModalOpen(
     if (!interaction.isButton()) throw new Error("naming-open requires Button interaction");
     const cachedScope = await dependencies.resolveScope(interaction, false);
     if (!cachedScope) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.config.unavailable"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "general.panel_notice.unavailable_heading"),
+        detail: localizer(route.locale, "commands.personal.config.unavailable"),
       });
       return "handled";
     }
@@ -84,9 +89,10 @@ export async function handlePersonalConfigModalOpen(
     if (!interaction.isButton()) throw new Error("persona-naming-open requires Button interaction");
     const cachedScope = await dependencies.resolveScope(interaction, false);
     if (!cachedScope) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.config.unavailable"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "general.panel_notice.unavailable_heading"),
+        detail: localizer(route.locale, "commands.personal.config.unavailable"),
       });
       return "handled";
     }
@@ -104,9 +110,10 @@ export async function handlePersonalConfigModalOpen(
     if (!interaction.isButton()) throw new Error("about-open requires Button interaction");
     const cachedScope = await dependencies.resolveScope(interaction, false);
     if (!cachedScope) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.config.unavailable"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "general.panel_notice.unavailable_heading"),
+        detail: localizer(route.locale, "commands.personal.config.unavailable"),
       });
       return "handled";
     }
@@ -123,9 +130,10 @@ export async function handlePersonalConfigModalOpen(
     if (!interaction.isButton()) throw new Error("appearance-open requires Button interaction");
     const cachedScope = await dependencies.resolveScope(interaction, false);
     if (!cachedScope) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.config.unavailable"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "general.panel_notice.unavailable_heading"),
+        detail: localizer(route.locale, "commands.personal.config.unavailable"),
       });
       return "handled";
     }
@@ -143,9 +151,10 @@ export async function handlePersonalConfigModalOpen(
     if (!interaction.isButton()) throw new Error("character-reference-open requires Button interaction");
     const cachedScope = await dependencies.resolveScope(interaction, false);
     if (!cachedScope) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.config.unavailable"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "general.panel_notice.unavailable_heading"),
+        detail: localizer(route.locale, "commands.personal.config.unavailable"),
       });
       return "handled";
     }
@@ -158,9 +167,10 @@ export async function handlePersonalConfigModalOpen(
     if (!interaction.isButton()) throw new Error("privacy-level-open requires Button interaction");
     const cachedScope = await dependencies.resolveScope(interaction, false);
     if (!cachedScope) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.config.unavailable"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "general.panel_notice.unavailable_heading"),
+        detail: localizer(route.locale, "commands.personal.config.unavailable"),
       });
       return "handled";
     }
@@ -178,9 +188,10 @@ export async function handlePersonalConfigModalOpen(
     if (!interaction.isButton()) throw new Error("quick-toggle-open requires Button interaction");
     const cachedScope = await dependencies.resolveScope(interaction, false);
     if (!cachedScope) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.config.unavailable"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "general.panel_notice.unavailable_heading"),
+        detail: localizer(route.locale, "commands.personal.config.unavailable"),
       });
       return "handled";
     }
@@ -194,9 +205,10 @@ export async function handlePersonalConfigModalOpen(
     if (!interaction.isButton()) throw new Error("parameters-1-open requires Button interaction");
     const cachedScope = await dependencies.resolveScope(interaction, false);
     if (!cachedScope) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.config.unavailable"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "general.panel_notice.unavailable_heading"),
+        detail: localizer(route.locale, "commands.personal.config.unavailable"),
       });
       return "handled";
     }
@@ -211,9 +223,10 @@ export async function handlePersonalConfigModalOpen(
     if (!interaction.isButton()) throw new Error("parameters-2-open requires Button interaction");
     const cachedScope = await dependencies.resolveScope(interaction, false);
     if (!cachedScope) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.config.unavailable"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "general.panel_notice.unavailable_heading"),
+        detail: localizer(route.locale, "commands.personal.config.unavailable"),
       });
       return "handled";
     }
@@ -236,9 +249,10 @@ export async function handlePersonalConfigModalOpen(
     // defers and must read a cached scope rather than forcing a refresh.
     const cachedScope = await dependencies.resolveScope(interaction, false);
     if (!cachedScope) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.config.unavailable"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "general.panel_notice.unavailable_heading"),
+        detail: localizer(route.locale, "commands.personal.config.unavailable"),
       });
       return "handled";
     }
@@ -333,10 +347,7 @@ export async function handlePersonalConfigModalOpen(
       await interaction.deferUpdate();
       const cachedScope = await dependencies.resolveScope(interaction, false);
       if (!cachedScope) {
-        await interaction.editReply({
-          content: localizer(route.locale, "commands.personal.config.unavailable"),
-          components: [],
-        });
+        await interaction.editReply(terminalPayload(route.locale, "commands.personal.config.unavailable"));
         return "handled";
       }
       await repaint(interaction, {
@@ -356,9 +367,10 @@ export async function handlePersonalConfigModalOpen(
       const provider = chosenPage?.provider ?? decodeProviderParam(chosen);
       const cachedScope = await dependencies.resolveScope(interaction, false);
       if (!cachedScope) {
-        await interaction.reply({
-          content: localizer(route.locale, "commands.personal.config.unavailable"),
-          flags: MessageFlags.Ephemeral,
+        await replyPanelReceipt(interaction, {
+          tone: "warning",
+          heading: localizer(route.locale, "general.panel_notice.unavailable_heading"),
+          detail: localizer(route.locale, "commands.personal.config.unavailable"),
         });
         return "handled";
       }
@@ -467,9 +479,10 @@ export async function handlePersonalConfigModalOpen(
     if (!interaction.isButton()) throw new Error("impersonation-open requires Button interaction");
     const cachedScope = await dependencies.resolveScope(interaction, false);
     if (!cachedScope) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.config.unavailable"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "general.panel_notice.unavailable_heading"),
+        detail: localizer(route.locale, "commands.personal.config.unavailable"),
       });
       return "handled";
     }
@@ -487,17 +500,19 @@ export async function handlePersonalConfigModalOpen(
     if (!interaction.isButton()) throw new Error("spotlight-set-open requires Button interaction");
     const cachedScope = await dependencies.resolveScope(interaction, false);
     if (!cachedScope?.guildId || !cachedScope.internalServerId) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.config.spotlight_guild_only_detail"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "commands.personal.config.spotlight_guild_only_heading"),
+        detail: localizer(route.locale, "commands.personal.config.spotlight_guild_only_detail"),
       });
       return "handled";
     }
     const personas = await dependencies.loadGuildPersonas(cachedScope.guildId);
     if (personas.length === 0) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.config.spotlight_no_personas_detail"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "info",
+        heading: localizer(route.locale, "general.panel_notice.empty_heading"),
+        detail: localizer(route.locale, "commands.personal.config.spotlight_no_personas_detail"),
       });
       return "handled";
     }
@@ -509,27 +524,30 @@ export async function handlePersonalConfigModalOpen(
     if (!interaction.isButton()) throw new Error("spotlight-set-block requires Button interaction");
     const cachedScope = await dependencies.resolveScope(interaction, false);
     if (!cachedScope?.guildId || !cachedScope.internalServerId) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.config.spotlight_guild_only_detail"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "commands.personal.config.spotlight_guild_only_heading"),
+        detail: localizer(route.locale, "commands.personal.config.spotlight_guild_only_detail"),
       });
       return "handled";
     }
     const personas = await dependencies.loadGuildPersonas(cachedScope.guildId);
     const expectedFp = computeSpotlightSetFingerprint(cachedScope.guildId, cachedScope.userDiscId, personas);
     if (expectedFp !== route.fp) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.config.stale_warning"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "commands.config.panel.stale_heading"),
+        detail: localizer(route.locale, "commands.personal.config.stale_warning"),
       });
       return "handled";
     }
     const blockStart = route.blockIdx * SPOTLIGHT_PERSONA_PAGE_SIZE;
     const block = personas.slice(blockStart, blockStart + SPOTLIGHT_PERSONA_PAGE_SIZE);
     if (block.length === 0) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.config.stale_warning"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "commands.config.panel.stale_heading"),
+        detail: localizer(route.locale, "commands.personal.config.stale_warning"),
       });
       return "handled";
     }
@@ -554,18 +572,20 @@ export async function handlePersonalConfigModalOpen(
     const chosenValue = selectMenu.values[0];
     const cachedScope = await dependencies.resolveScope(interaction, false);
     if (!cachedScope?.guildId || !cachedScope.internalServerId) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.config.spotlight_guild_only_detail"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "commands.personal.config.spotlight_guild_only_heading"),
+        detail: localizer(route.locale, "commands.personal.config.spotlight_guild_only_detail"),
       });
       return "handled";
     }
     const personas = await dependencies.loadGuildPersonas(cachedScope.guildId);
     const expectedFp = computeSpotlightSetFingerprint(cachedScope.guildId, cachedScope.userDiscId, personas);
     if (expectedFp !== route.fp) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.config.stale_warning"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "commands.config.panel.stale_heading"),
+        detail: localizer(route.locale, "commands.personal.config.stale_warning"),
       });
       return "handled";
     }
@@ -590,9 +610,10 @@ export async function handlePersonalConfigModalOpen(
     const blockStart = requestedBlockIdx * SPOTLIGHT_PERSONA_PAGE_SIZE;
     const block = personas.slice(blockStart, blockStart + SPOTLIGHT_PERSONA_PAGE_SIZE);
     if (block.length === 0) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.config.stale_warning"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "commands.config.panel.stale_heading"),
+        detail: localizer(route.locale, "commands.personal.config.stale_warning"),
       });
       return "handled";
     }
@@ -613,34 +634,38 @@ export async function handlePersonalConfigModalOpen(
     if (!interaction.isButton()) throw new Error("spot-set-auto requires Button interaction");
     const cachedScope = await dependencies.resolveScope(interaction, false);
     if (!cachedScope?.guildId || !cachedScope.internalServerId) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.config.spotlight_guild_only_detail"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "commands.personal.config.spotlight_guild_only_heading"),
+        detail: localizer(route.locale, "commands.personal.config.spotlight_guild_only_detail"),
       });
       return "handled";
     }
     const personas = await dependencies.loadGuildPersonas(cachedScope.guildId);
     const expectedFp = computeSpotlightSetFingerprint(cachedScope.guildId, cachedScope.userDiscId, personas);
     if (expectedFp !== route.fp) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.config.stale_warning"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "commands.config.panel.stale_heading"),
+        detail: localizer(route.locale, "commands.personal.config.stale_warning"),
       });
       return "handled";
     }
     const resolved = resolveSpotlightBlockSelection(personas, route.blockIdx, route.mask);
     if (!resolved) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.config.stale_warning"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "commands.config.panel.stale_heading"),
+        detail: localizer(route.locale, "commands.personal.config.stale_warning"),
       });
       return "handled";
     }
     const selectedPersonas = resolved.selected;
     if (selectedPersonas.length === 0) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.config.spotlight_no_selection_detail"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "commands.personal.config.spotlight_no_selection_heading"),
+        detail: localizer(route.locale, "commands.personal.config.spotlight_no_selection_detail"),
       });
       return "handled";
     }
@@ -715,26 +740,29 @@ export async function handlePersonalConfigModalOpen(
     const chosenValue = selectMenu.values[0];
     const cachedScope = await dependencies.resolveScope(interaction, false);
     if (!cachedScope?.guildId || !cachedScope.internalServerId) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.config.spotlight_guild_only_detail"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "commands.personal.config.spotlight_guild_only_heading"),
+        detail: localizer(route.locale, "commands.personal.config.spotlight_guild_only_detail"),
       });
       return "handled";
     }
     const personas = await dependencies.loadGuildPersonas(cachedScope.guildId);
     const expectedFp = computeSpotlightSetFingerprint(cachedScope.guildId, cachedScope.userDiscId, personas);
     if (expectedFp !== route.fp) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.config.stale_warning"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "commands.config.panel.stale_heading"),
+        detail: localizer(route.locale, "commands.personal.config.stale_warning"),
       });
       return "handled";
     }
     const resolvedRange = resolveSpotlightBlockSelection(personas, route.blockIdx, route.mask);
     if (!resolvedRange) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.config.stale_warning"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "commands.config.panel.stale_heading"),
+        detail: localizer(route.locale, "commands.personal.config.stale_warning"),
       });
       return "handled";
     }
@@ -780,17 +808,19 @@ export async function handlePersonalConfigModalOpen(
     if (!interaction.isButton()) throw new Error("spotlight-remove-open requires Button interaction");
     const cachedScope = await dependencies.resolveScope(interaction, false);
     if (!cachedScope?.guildId || !cachedScope.internalServerId) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.config.spotlight_guild_only_detail"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "commands.personal.config.spotlight_guild_only_heading"),
+        detail: localizer(route.locale, "commands.personal.config.spotlight_guild_only_detail"),
       });
       return "handled";
     }
     const activeSpotlights = await dependencies.loadActiveSpotlights(cachedScope.internalServerId, cachedScope.userId);
     if (activeSpotlights.length === 0) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.config.spotlight_none_active"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "info",
+        heading: localizer(route.locale, "general.panel_notice.empty_heading"),
+        detail: localizer(route.locale, "commands.personal.config.spotlight_none_active"),
       });
       return "handled";
     }
@@ -822,18 +852,20 @@ export async function handlePersonalConfigModalOpen(
     const chosenValue = selectMenu.values[0];
     const cachedScope = await dependencies.resolveScope(interaction, false);
     if (!cachedScope?.guildId || !cachedScope.internalServerId) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.config.spotlight_guild_only_detail"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "commands.personal.config.spotlight_guild_only_heading"),
+        detail: localizer(route.locale, "commands.personal.config.spotlight_guild_only_detail"),
       });
       return "handled";
     }
     const allActive = await dependencies.loadActiveSpotlights(cachedScope.internalServerId, cachedScope.userId);
     const expectedFp = computeSpotlightRemoveFingerprint(cachedScope.guildId, cachedScope.userDiscId, allActive);
     if (expectedFp !== route.fp) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.personal.config.stale_warning"),
-        flags: MessageFlags.Ephemeral,
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(route.locale, "commands.config.panel.stale_heading"),
+        detail: localizer(route.locale, "commands.personal.config.stale_warning"),
       });
       return "handled";
     }

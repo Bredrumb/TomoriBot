@@ -3,6 +3,8 @@ import { PermissionsBitField, type ChatInputCommandInteraction } from "discord.j
 import { loadCommandData, ROOT_COMMAND_EXECUTION_KEY } from "@/utils/discord/commandLoader";
 import { resolveCommandCooldown } from "@/events/interactionCreate/handleCommands";
 import { getLocaleEndonym, getSupportedLocales, initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { localizedProse } from "../../helpers/localeCases";
+import { collectTextDisplays } from "../../helpers/panelLimits";
 import { execute } from "@/commands/setup";
 import type { UserRow } from "@/types/db/schema";
 import { serverRepository } from "@/utils/db/repositories";
@@ -138,7 +140,9 @@ describe("/setup execution authorization", () => {
     // content assertion below while leaking that the workspace exists.
     expect(repoSpy).not.toHaveBeenCalled();
     expect(state.deferred).toBe(true);
-    expect(replies[0]?.content).toBe(localizer("en-US", "commands.setup.wizard.permission_denied"));
+    expect(collectTextDisplays(replies[0]).join("\n")).toMatch(
+      localizedProse("en-US", "commands.setup.wizard.permission_denied"),
+    );
 
     repoSpy.mockRestore();
   });
@@ -153,7 +157,9 @@ describe("/setup execution authorization", () => {
 
     await execute({} as unknown as import("discord.js").Client, interaction, {} as UserRow, "en-US");
 
-    expect(replies[0]?.content).toBe(localizer("ja", "commands.setup.wizard.permission_denied"));
+    expect(collectTextDisplays(replies[0]).join("\n")).toMatch(
+      localizedProse("ja", "commands.setup.wizard.permission_denied"),
+    );
 
     repoSpy.mockRestore();
   });
@@ -167,7 +173,9 @@ describe("/setup execution authorization", () => {
 
     await execute({} as unknown as import("discord.js").Client, interaction, {} as UserRow, "ja");
 
-    expect(replies[0]?.content).toBe(localizer("ja", "general.errors.unknown_error_description"));
+    expect(collectTextDisplays(replies[0]).join("\n")).toMatch(
+      localizedProse("ja", "general.errors.unknown_error_description"),
+    );
   });
 
   it("edits a deferred reply when setup initialization fails", async () => {
@@ -179,7 +187,9 @@ describe("/setup execution authorization", () => {
     await execute({} as unknown as import("discord.js").Client, interaction, {} as UserRow, "en-US");
 
     expect(state.deferred).toBe(true);
-    expect(replies[0]?.content).toBe(localizer("en-US", "general.errors.unknown_error_description"));
+    expect(collectTextDisplays(replies[0]).join("\n")).toMatch(
+      localizedProse("en-US", "general.errors.unknown_error_description"),
+    );
 
     repoSpy.mockRestore();
   });

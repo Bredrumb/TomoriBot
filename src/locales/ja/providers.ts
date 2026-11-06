@@ -42,6 +42,7 @@ export default {
     fallback_used_personal_opt_out_footer: `\`/personal config\` > モデル > フォールバック で、サーバーモデルが個人のプロバイダーの失敗を補うのを止められます`,
     markdown_table: {
       show_button: `マークダウンを表示`,
+      source_expired_title: `テーブルソースの期限切れ`,
       source_expired: `この表のマークダウンはキャッシュから消えているため、ソースを表示できません。`,
       source_attached: `この表は長すぎてそのまま表示できないため、ファイルとして添付します:`,
     },
@@ -138,6 +139,8 @@ export default {
       verify_api_key_expiry: `NVIDIA NIMのキーには有効期限があり、期限切れのキーは入力ミスのキーと同じエラーでNVIDIAに拒否されます。[build.nvidia.com](https://build.nvidia.com) で有効期限を確認し、期限が切れていれば新しいキーを生成してください。`,
       nvidia_register_free_model: `NVIDIAはホスト型モデルを頻繁に終了します。[NVIDIAの無料エンドポイント](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview)から現在提供されているモデルを選び、モデルID（例：\`deepseek-ai/deepseek-v4.1-flash\`）をコピーして、\`/providers\` > NVIDIA NIM > **+ 新しいテキストモデルを追加** から追加してください。`,
       nvidia_register_free_model_personal: `NVIDIAはホスト型モデルを頻繁に終了します。[NVIDIAの無料エンドポイント](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview)から現在提供されているモデルを選び、モデルID（例：\`deepseek-ai/deepseek-v4.1-flash\`）をコピーして、\`/personal providers\` > NVIDIA NIM > **+ 新しいテキストモデルを追加** から追加してください。`,
+      google_free_tier_daily: `このAPIキーは本日のGeminiの無料リクエスト枠を使い切りました。太平洋時間の午前0時にリセットされます。`,
+      google_free_tier_minute: `このAPIキーはGeminiの無料プランで許可されている頻度を超えてリクエストを送信しています。1分待ってからもう一度お試しください。`,
       google_credential_type: `OAuthトークンまたはサービスアカウントの認証情報が使われているようです。\`google\` プロバイダーには [Google AI Studio](https://aistudio.google.com/apikey) の通常のAPIキーが必要です。Google Cloudの認証情報を使う場合は \`vertex\` プロバイダーを選んでください。`,
       openrouter_privacy_settings: `[OpenRouter プライバシー設定](https://openrouter.ai/settings/privacy)で「Data Policy」を調整してこのモデルを許可するか、別のモデルを選択してください。`,
       openrouter_fund_account: `1日1000回までの無料モデルリクエストのロックを解除するには、OpenRouterアカウントに少なくとも10クレジットを追加してください。`,

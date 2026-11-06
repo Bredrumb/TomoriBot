@@ -1,3 +1,5 @@
+import { stubAllShardOwnership } from "../../helpers/shardOwnership";
+stubAllShardOwnership();
 import { setPersonaSpriteCache, clearPersonaSpriteCache } from "@/utils/cache/personaSpriteCacheStore";
 import { recordPersonaDelivery } from "@/utils/discord/webhook/personaPost";
 import * as lifecycle from "@/utils/discord/webhook/lifecycle";

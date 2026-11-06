@@ -34,6 +34,7 @@ export default {
       field_model: `模型`,
       field_generation_time: `生成耗时`,
       field_aspect_ratio: `宽高比`,
+      reference_images_ignored_title: `参考图像已被忽略`,
       zai_no_img2img_warning: `Z.ai 不支持图生图生成。你的参考图像已被忽略，但仍会按你的文字提示词生成图像。`,
       nvidia_no_img2img_warning: `NVIDIA NIM 不支持图生图生成。你的参考图像已被忽略，但仍会按你的文字提示词生成图像。`,
       disabled_title: `🔴 图像生成已关闭`,

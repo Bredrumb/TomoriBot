@@ -50,6 +50,7 @@ import {
 } from "@/utils/discord/ui/modals";
 import { recordPanelActionStat } from "@/utils/stats/panelActionMetrics";
 import { localizer } from "@/utils/text/localizer";
+import { replyPanelReceipt } from "@/utils/discord/ui/panel";
 
 type StudioInteraction = GlobalRoutableInteraction | ChatInputCommandInteraction;
 
@@ -167,8 +168,8 @@ function checklistValues(
   return arrived ? checked : null;
 }
 
-async function reply(interaction: GlobalRoutableInteraction, locale: string, key: string): Promise<void> {
-  await interaction.reply({ content: localizer(locale, key), flags: MessageFlags.Ephemeral });
+function errorReceipt(locale: string, headingKey: string, detailKey: string): PanelReceipt {
+  return { tone: "error", heading: localizer(locale, headingKey), detail: localizer(locale, detailKey) };
 }
 
 function limitReceipt(locale: string): PanelReceipt {
@@ -190,9 +191,16 @@ async function openModal(
 ): Promise<void> {
   const { locale, category } = route;
   if (!deps.isAuthorized(interaction))
-    return reply(interaction, locale, "general.errors.permission_denied_description");
+    return replyPanelReceipt(
+      interaction,
+      errorReceipt(locale, "general.errors.permission_denied_title", "general.errors.permission_denied_description"),
+    );
   const scope = await deps.resolveScope(interaction);
-  if (!scope) return reply(interaction, locale, "general.errors.tomori_not_setup_description");
+  if (!scope)
+    return replyPanelReceipt(
+      interaction,
+      errorReceipt(locale, "general.errors.tomori_not_setup_title", "general.errors.tomori_not_setup_description"),
+    );
   const view = await deps.loadView(scope.serverId, category, scope.personas, { judgeBlockers: false });
   const nonce = deps.createNonce();
   const page = routePage(route);

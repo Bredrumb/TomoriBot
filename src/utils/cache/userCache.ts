@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { broadcastInvalidation, registerInvalidation, invalidationKey } from "@/utils/cache/invalidationBus";
 import { PrivacyLevel, type UserRow } from "@/types/db/schema";
 // Import the singleton directly from its defining module rather than the
 // repositories barrel: the barrel re-exports every repository, so importing it
@@ -156,6 +158,7 @@ export async function getCachedBlacklistStatusOrThrow(serverDiscId: string, user
  */
 export function invalidateUserCache(userDiscId: string): void {
   cache.delete(userDiscId);
+  broadcastInvalidation("user", [[userDiscId]]);
 }
 
 /**
@@ -170,6 +173,7 @@ export function invalidateUserBlacklistCache(serverDiscId: string, userDiscId: s
   if (entry) {
     entry.blacklistStatus.delete(serverDiscId);
   }
+  broadcastInvalidation("userBlacklist", [[serverDiscId, userDiscId]]);
 }
 
 /** Removes cached blacklist answers for a workspace while retaining unrelated user settings. */
@@ -177,6 +181,7 @@ export function invalidateAllUserBlacklistCacheForServer(serverDiscId: string): 
   for (const entry of cache.values()) {
     entry.blacklistStatus.delete(serverDiscId);
   }
+  broadcastInvalidation("userBlacklist", [[serverDiscId]]);
 }
 
 /**
@@ -219,3 +224,14 @@ export function getUserCacheStats(): {
     blacklistHitRate,
   };
 }
+
+registerInvalidation("user", z.tuple([invalidationKey]), ([user]) => invalidateUserCache(user), clearUserCache);
+registerInvalidation(
+  "userBlacklist",
+  z.union([z.tuple([invalidationKey]), z.tuple([invalidationKey, invalidationKey])]),
+  ([server, user]) => {
+    if (user === undefined) invalidateAllUserBlacklistCacheForServer(server);
+    else invalidateUserBlacklistCache(server, user);
+  },
+  clearUserCache,
+);

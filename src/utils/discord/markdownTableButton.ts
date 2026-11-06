@@ -10,7 +10,8 @@ import {
   type Webhook,
 } from "discord.js";
 import { getCachedRenderedMarkdownTable } from "@/utils/text/markdownTableCache";
-import { log } from "@/utils/misc/logger";
+import { ColorCode, log } from "@/utils/misc/logger";
+import { createStandardEmbed } from "@/utils/discord/embedHelper";
 import { resolveAuthoringWebhook } from "@/utils/discord/webhook/fallback";
 import { localizer } from "@/utils/text/localizer";
 
@@ -69,7 +70,13 @@ async function replyWithMarkdownSource(
 ): Promise<void> {
   if (!markdown) {
     await interaction.reply({
-      content: localizer(locale, "genai.markdown_table.source_expired"),
+      embeds: [
+        createStandardEmbed(locale, {
+          titleKey: "genai.markdown_table.source_expired_title",
+          descriptionKey: "genai.markdown_table.source_expired",
+          color: ColorCode.WARN,
+        }),
+      ],
       flags: MessageFlags.Ephemeral,
     });
     return;

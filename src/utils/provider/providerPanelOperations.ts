@@ -1,5 +1,6 @@
 import { registerHostedSpeechModelForScope } from "@/utils/provider/openrouterModelRegistry";
 import { getNovelAIModelAccessError } from "@/providers/novelai/modelAccess";
+import { isNovelAITextModel } from "@/providers/novelai/modelProfiles";
 import { supportsSpeechMode } from "@/utils/speech/voiceSourceCapabilities";
 import type {
   CustomEndpointConnectionRow,
@@ -62,7 +63,8 @@ import { isAccountBalanceExhaustedError } from "@/utils/provider/providerErrorCl
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { getStaticProviderInfo } from "@/utils/provider/providerInfoRegistry";
 import { ProviderFactory } from "@/utils/provider/providerFactory";
-import { deleteOptApiKey, encryptApiKey, storeOptApiKey } from "@/utils/security/crypto";
+import { reportModelLookupFailure } from "@/utils/provider/modelCatalogLookup";
+import { decryptApiKey, deleteOptApiKey, encryptApiKey, storeOptApiKey } from "@/utils/security/crypto";
 import {
   buildSavedProviderConfigFromExistingOrDefaults,
   buildUserSavedProviderConfigFromExistingOrDefaults,
@@ -1381,6 +1383,9 @@ async function registerSharedProviderModel(
   input: SaveProviderModelInput,
   provider: string,
 ): Promise<SaveProviderModelResult> {
+  if (provider === "novelai" && input.capability === "text" && !isNovelAITextModel(input.codeName.trim())) {
+    return { status: "invalid-model" };
+  }
   const option = findProviderOption(provider);
   if (option) {
     if (!providerOptionOffersPanelCapability(option, input.capability)) return { status: "unsupported-capability" };
@@ -1478,6 +1483,9 @@ async function registerSharedProviderModel(
           ? await llmModelRepo.loadDiffusionModelByProviderAndCodename(provider, codeName)
           : await llmModelRepo.loadVideoGenerationModelByProviderAndCodename(provider, codeName);
   if (existing && !existing.is_scoped_registration) return { status: "already-available" };
+  if (input.capability === "text" && (await isTextModelRejectedByCatalog(input, provider, codeName))) {
+    return { status: "invalid-model" };
+  }
 
   const modelId =
     input.capability === "text"
@@ -1529,6 +1537,33 @@ async function registerSharedProviderModel(
     await removeScopedRegistration(owner, input.capability, input.editingModelId);
   }
   return { status: "success", entryId: `provider:${provider}`, codeName };
+}
+
+/**
+ * Rejects only a codename the provider's own catalog confirmed it does not serve, so a provider
+ * without a lookup, a scope without a saved key, an unreachable catalog, or a failure while
+ * preparing the lookup all leave registration unchecked.
+ */
+async function isTextModelRejectedByCatalog(
+  input: SaveProviderModelInput,
+  provider: string,
+  codeName: string,
+): Promise<boolean> {
+  try {
+    const instance = await ProviderFactory.getProviderByName(provider);
+    if (!instance.checkTextModel) return false;
+    const saved =
+      input.scopeKind === "personal"
+        ? await llmProviderRepo.loadUserSavedProviderConfig(input.ownerId, provider)
+        : await llmProviderRepo.loadSavedProviderConfig(input.state.server_id, provider);
+    if (!saved?.api_key) return false;
+    // Decryption is itself a database round trip, so a retired pool connection can fail it too.
+    const apiKey = await decryptApiKey(saved.api_key, saved.key_version);
+    return (await instance.checkTextModel(apiKey, codeName)) === false;
+  } catch (error) {
+    await reportModelLookupFailure(provider, error);
+    return false;
+  }
 }
 
 async function removeScopedRegistration(

@@ -1,4 +1,16 @@
-import { describe, expect, it } from "bun:test";
+import { Client, type ButtonInteraction, type Interaction } from "discord.js";
+import * as shutdownState from "@/utils/misc/shutdownState";
+import { initializeLocalizer } from "@/utils/text/localizer";
+import {
+  hasRawModalAcknowledgement,
+  initializeShutdownInteractionAdmission,
+  rejectInteractionDuringShutdown,
+  showRoutedRawModal,
+} from "@/utils/discord/ui/interactionCore";
+import { createRouteInteraction } from "../../helpers/routeInteraction";
+import { localizedCopy } from "../../helpers/localeCases";
+import { stubGlobalFetch } from "../../helpers/fetchStub";
+import { beforeAll, describe, expect, it, spyOn } from "bun:test";
 import type { GlobalDiscordState, RawDiscordWebSocketPacket, RawDiscordShard } from "@/types/discord/rawApiTypes";
 import {
   initializeRawModalInterception,
@@ -526,6 +538,73 @@ describe("routed raw modal gateway support", () => {
     } finally {
       if (previousPatchState === undefined) delete globalState.__webSocketPatched;
       else globalState.__webSocketPatched = previousPatchState;
+    }
+  });
+});
+
+describe("shutdown raw modal acknowledgement", () => {
+  beforeAll(() => initializeLocalizer());
+
+  it("preserves a raw modal acknowledgement and rejects its submission before collectors", async () => {
+    const client = new Client({ intents: [] });
+    initializeShutdownInteractionAdmission(client);
+    let draining = false;
+    const gate = spyOn(shutdownState, "isDraining").mockImplementation(() => draining);
+    const patchState = (globalThis as GlobalDiscordState).__webSocketPatched;
+    const opener = Object.assign(createRouteInteraction(), {
+      client,
+      token: "fixture-token",
+      isAutocomplete: () => false,
+      isRepliable: () => true,
+    }) as unknown as ButtonInteraction;
+    const received: Interaction[] = [];
+    client.on("interactionCreate", (interaction) => {
+      received.push(interaction);
+    });
+    initializeRawModalInterception(client);
+    const fetchSpy = stubGlobalFetch(async () => new Response(null, { status: 204 }));
+    try {
+      await showRoutedRawModal(opener, { custom_id: "fixture-modal", title: "Fixture", components: [] });
+      expect(hasRawModalAcknowledgement(opener)).toBe(true);
+      expect(opener.replied).toBe(false);
+      draining = true;
+      await rejectInteractionDuringShutdown(opener);
+      expect(hasRawModalAcknowledgement(opener)).toBe(true);
+      expect((opener as unknown as ReturnType<typeof createRouteInteraction>).calls).toHaveLength(0);
+
+      const submitted = Object.assign(createRouteInteraction({ kind: "modal" }), {
+        isAutocomplete: () => false,
+        isRepliable: () => true,
+      });
+      const packet: RawDiscordWebSocketPacket = {
+        op: 0,
+        t: "INTERACTION_CREATE",
+        d: {
+          id: submitted.id,
+          type: 5,
+          data: { components: [{ type: 18, component: { type: 3, custom_id: "choice", values: ["value"] } }] },
+        },
+      };
+      delete (globalThis as GlobalDiscordState).__webSocketPatched;
+      const gateway = {
+        ws: {
+          handlePacket: (_packet: RawDiscordWebSocketPacket) =>
+            client.emit("interactionCreate", submitted as unknown as Interaction),
+        },
+      };
+      initializeRawModalInterception(gateway);
+      gateway.ws.handlePacket(packet);
+      await rejectInteractionDuringShutdown(submitted as unknown as Interaction);
+      expect(received).toHaveLength(0);
+      expect(submitted.calls.map((call) => call.method)).toEqual(["reply"]);
+      expect(JSON.stringify(submitted.replies)).toContain(localizedCopy("en-US", "general.restarting"));
+      expect(takeRawModalSelectValue(submitted.id, "choice")).toBe("value");
+    } finally {
+      gate.mockRestore();
+      fetchSpy.mockRestore();
+      if (patchState === undefined) delete (globalThis as GlobalDiscordState).__webSocketPatched;
+      else (globalThis as GlobalDiscordState).__webSocketPatched = patchState;
+      await client.destroy();
     }
   });
 });

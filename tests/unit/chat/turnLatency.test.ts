@@ -1,3 +1,5 @@
+import { stubAllShardOwnership } from "../../helpers/shardOwnership";
+stubAllShardOwnership();
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import type { Client, Message } from "discord.js";
 import { tomoriChat } from "@/events/messageCreate/tomoriChat";
@@ -38,6 +40,11 @@ const fields = [
   "provider_ttfb_ms",
   "first_message_ms",
   "history_fetch_ms",
+  "assets_ms",
+  "history_build_ms",
+  "participant_ms",
+  "naming_ms",
+  "reunion_ms",
   "native_ms",
   "reaction_fetches",
   "reply_fetches",

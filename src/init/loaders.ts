@@ -2,6 +2,7 @@ import type { Client } from "discord.js";
 import { log } from "@/utils/misc/logger";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import eventHandler from "@/handlers/eventHandler";
+import { isPrimaryProcess } from "@/utils/cluster/shardLeases";
 
 /**
  * Mirrors the live OpenRouter rates into the llms catalog so SQL-computed cost surfaces
@@ -13,6 +14,7 @@ import eventHandler from "@/handlers/eventHandler";
  * because that cache was loaded from the pre-sync catalog earlier in startup.
  */
 async function syncOpenrouterCatalogPricing(): Promise<void> {
+  if (!isPrimaryProcess()) return;
   try {
     const { getAllOpenRouterPricing } = await import("@/utils/cache/openrouterCapabilityCache");
     const { llmModelRepo } = await import("@/utils/db/repositories");
@@ -31,6 +33,7 @@ async function syncOpenrouterCatalogPricing(): Promise<void> {
       });
     }
 
+    if (!isPrimaryProcess()) return;
     const updated = await llmModelRepo.syncOpenrouterPrices(prices);
     if (updated === null) {
       log.warn("OpenRouter pricing sync failed (non-critical) - cost surfaces keep their stored rates");
@@ -53,9 +56,6 @@ async function syncOpenrouterCatalogPricing(): Promise<void> {
  * starts responding: tool registry, localizer, LLM caches, preset avatar cache,
  * and the event handler (which registers all Discord event listeners).
  *
- * Exits the process on critical failures (tool registry). All other failures
- * are non-critical, so the bot degrades gracefully without them.
- *
  */
 export async function initLoaders(client: Client): Promise<void> {
   const { initializeRawModalInterception } = await import("@/utils/discord/ui/modals");
@@ -71,7 +71,7 @@ export async function initLoaders(client: Client): Promise<void> {
     log.success("Tool registry initialized successfully");
   } catch (error) {
     log.error("Failed to initialize tool registry", error as Error);
-    process.exit(1);
+    throw error;
   }
 
   log.section("Initializing LLM Configuration Cache...");

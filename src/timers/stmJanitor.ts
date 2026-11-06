@@ -15,6 +15,7 @@
 import { oauthStateRepository } from "@/utils/db/repositories/OAuthStateRepository";
 import { shortTermMemoryRepository } from "@/utils/db/repositories/ShortTermMemoryRepository";
 import { log } from "@/utils/misc/logger";
+import { isPrimaryProcess } from "@/utils/cluster/shardLeases";
 
 const STM_JANITOR_RETENTION_DAYS = Number.parseInt(process.env.STM_JANITOR_RETENTION_DAYS || "90", 10);
 
@@ -28,6 +29,7 @@ let intervalId: NodeJS.Timeout | null = null;
  * Errors are caught so a failed purge never kills the interval.
  */
 async function tick(): Promise<void> {
+  if (!isPrimaryProcess()) return;
   try {
     const deleted = await shortTermMemoryRepository.purgeStaleEntries(STM_JANITOR_RETENTION_DAYS);
     if (deleted > 0) {
@@ -36,6 +38,7 @@ async function tick(): Promise<void> {
   } catch (error) {
     log.error("[STM janitor] Purge cycle failed", error as Error, { errorType: "STMJanitorError" });
   }
+  if (!isPrimaryProcess()) return;
   try {
     const { purgedStates } = await oauthStateRepository.purgeFinishedStates();
     if (purgedStates > 0) {

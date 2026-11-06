@@ -9,6 +9,7 @@ import {
   getNovelAIProfile,
   getNovelAISamplerConfig,
   enableNovelAIPresetSamplers,
+  isNovelAITextModel,
 } from "@/providers/novelai/modelProfiles";
 import { prunePrimaryFallbackRefs } from "@/utils/provider/fallbackModelIdentity";
 import { writeProviderSpeechSelection } from "@/utils/provider/providerOptionRegistry";
@@ -114,7 +115,8 @@ export async function setPersonalTextPrimary(
   endpoints: Iterable<FallbackIdentityEndpoint> = [],
 ): Promise<boolean> {
   const model = provider.toLowerCase() === "novelai" ? await llmModelRepo.loadById(llmId) : null;
-  if (provider.toLowerCase() === "novelai" && !model) return false;
+  // A stored row is a user-registered codename, so one without a NovelAI profile must refuse instead of throwing.
+  if (provider.toLowerCase() === "novelai" && (!model || !isNovelAITextModel(model.llm_codename))) return false;
   const preset = model ? await configRepository.resolveNaiPreset(model.llm_codename) : undefined;
   if (model && getNovelAIProfile(model.llm_codename).samplingPresetTarget && !preset) return false;
   const assigned = await assignPersonalCapabilityToProvider(userId, provider, "text", (row) => ({

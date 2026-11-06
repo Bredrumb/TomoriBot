@@ -1,3 +1,10 @@
+import { z } from "zod";
+import {
+  broadcastInvalidation,
+  registerInvalidation,
+  invalidationKey,
+  invalidationDatabaseId,
+} from "@/utils/cache/invalidationBus";
 import type { PersonaUserBlockRow } from "@/types/db/schema";
 import { personaUserBlockRepository } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
@@ -80,6 +87,11 @@ export function invalidatePersonaUserBlockCache(serverId: number, personaId: num
       }
     }
   }
+  broadcastInvalidation("personaUserBlock", [
+    userDiscId === undefined
+      ? [String(serverId), String(personaId)]
+      : [String(serverId), String(personaId), userDiscId],
+  ]);
 }
 
 /** Removes all persona and user block-cache entries for one server. */
@@ -92,4 +104,22 @@ export function invalidateAllPersonaUserBlockCacheForServer(serverId: number): v
       }
     }
   }
+  broadcastInvalidation("personaUserBlock", [[String(serverId)]]);
 }
+
+registerInvalidation(
+  "personaUserBlock",
+  z.union([
+    z.tuple([invalidationDatabaseId]),
+    z.tuple([invalidationDatabaseId, invalidationDatabaseId]),
+    z.tuple([invalidationDatabaseId, invalidationDatabaseId, invalidationKey]),
+  ]),
+  ([server, persona, user]) => {
+    if (persona === undefined) invalidateAllPersonaUserBlockCacheForServer(server);
+    else invalidatePersonaUserBlockCache(server, persona, user);
+  },
+  () => {
+    personaCache.clear();
+    userCache.clear();
+  },
+);

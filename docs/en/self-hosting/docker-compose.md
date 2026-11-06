@@ -65,6 +65,39 @@ For later starts, `docker compose up` alone is enough unless you change code or 
 
 Compose pins `RUN_ENV=development` in its service definition so `.env` secrets and local HTTP endpoints work. Local endpoints such as `http://host.docker.internal:11434` need `ALLOW_PRIVATE_NETWORK` to allow them (`true`, or a list containing `host.docker.internal:11434`); Compose maps that name to your machine on Linux too. After changing `.env`, run `docker compose up -d` so the container rereads it. The container healthcheck reports whether the bot process is running; it does not test Discord gateway connectivity.
 
+## Optional shard configuration on one host
+
+Leave `SHARD_COUNT` and `SHARD_IDS` unset for the default: one process owns all shards recommended
+by Discord at startup. Small installations normally receive one shard. This mode uses no shard
+leases or cache invalidation listener. Several shards can share the same process.
+
+To run four shards in the existing service, add `SHARD_COUNT=4` to `.env` and leave `SHARD_IDS`
+unset. Add this service override in `compose.override.yaml` to allow bounded shutdown to finish:
+
+```yaml
+services:
+  tomoribot:
+    stop_grace_period: 40s
+```
+
+Recreate the service with `docker compose up -d --build tomoribot`. If a script calls `docker stop`
+or supplies its own Compose stop timeout, allow at least 40 seconds there too. Auto selection does
+not change the shard count while running; changing the total requires a coordinated restart.
+
+Optional static subsets require a separate service per group with the same explicit `SHARD_COUNT`
+and disjoint `SHARD_IDS`, for example `0,1` and `2,3` with total `4`. Give services distinct stable
+names, container names, and any published health ports. The application derives stable metric
+labels from each group. Keep one database, run the existing `bun run src/db/initializeCli.ts`
+one-shot with schema-management credentials before gateway startup, and set
+`DATABASE_SCHEMA_MANAGEMENT_ENABLED=false` on every gateway process. Do not start the original
+all-owner service alongside those groups. Stop old owners before changing the total or partition.
+
+Subset mode refuses a fully configured Matrix bridge. Per-user turn and upload limits remain
+per process, so decide whether their multiplied allowance is acceptable before enabling a second
+process. Installations using release-only supporter billing also require shared spend admission
+and reconcile coordination before serving funded requests from multiple processes. See
+[sharding and process ownership](/architecture/subsystems/sharding/) for safety and health limits.
+
 ## 4. Optional local servers (Compose profiles)
 
 Run optional local helper servers with Compose profiles so you only start what you need:

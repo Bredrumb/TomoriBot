@@ -8,6 +8,8 @@ import {
   MessageFlags,
   TextInputStyle,
   InteractionResponseType,
+  type Client,
+  type Interaction,
 } from "discord.js";
 import type {
   ActionRowData,
@@ -31,6 +33,7 @@ import type {
   UserSelectMenuInteraction,
 } from "discord.js";
 import { localizer } from "../../text/localizer";
+import { isDraining } from "@/utils/misc/shutdownState";
 import { log, ColorCode } from "../../misc/logger";
 import type {
   RawDiscordComponent,
@@ -77,16 +80,53 @@ const modalResolvedAttachments = new Map<string, Record<string, APIAttachment>>(
  * Tracks interactions that were acknowledged via raw Discord REST API
  * Used to prevent "already acknowledged" errors when Discord.js state is out of sync
  */
-const rawModalAcknowledged = new WeakMap<
-  | ChatInputCommandInteraction
-  | ButtonInteraction
-  | StringSelectMenuInteraction
-  | ChannelSelectMenuInteraction
-  | UserSelectMenuInteraction
-  | RoleSelectMenuInteraction
-  | MentionableSelectMenuInteraction,
-  boolean
->();
+const rawModalAcknowledged = new WeakMap<Interaction, boolean>();
+
+const shutdownAcknowledged = new WeakSet<Interaction>();
+const shutdownAdmissionClients = new WeakSet<Client>();
+
+export async function rejectInteractionDuringShutdown(interaction: Interaction): Promise<boolean> {
+  if (!isDraining()) return false;
+  if (shutdownAcknowledged.has(interaction)) return true;
+  shutdownAcknowledged.add(interaction);
+  try {
+    if (interaction.isAutocomplete()) {
+      if (!interaction.responded) await interaction.respond([]);
+    } else if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
+      if (!rawModalAcknowledged.has(interaction)) {
+        await interaction.reply({
+          embeds: [
+            createStandardEmbed(interaction.locale, {
+              titleKey: "general.restarting_title",
+              descriptionKey: "general.restarting",
+              color: ColorCode.WARN,
+            }),
+          ],
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+    }
+  } catch (error) {
+    log.warn("Failed to acknowledge an interaction during shutdown", error);
+  }
+  return true;
+}
+
+export function initializeShutdownInteractionAdmission(client: Client): void {
+  if (shutdownAdmissionClients.has(client)) return;
+  shutdownAdmissionClients.add(client);
+  const emit = client.emit;
+  client.emit = (event: string | symbol, ...args: unknown[]): boolean => {
+    // Suppress the event before EventEmitter fans out to command handlers and independent collectors.
+    if (event === "interactionCreate" && isDraining()) {
+      void rejectInteractionDuringShutdown(args[0] as Interaction);
+      return false;
+    }
+    // A login completing during drain must not start deferred scheduled dispatch or eager connections.
+    if (event === "clientReady" && isDraining()) return false;
+    return Reflect.apply(emit, client, [event, ...args]) as boolean;
+  };
+}
 
 /**
  * Reports whether a command, button, or select menu interaction was acknowledged through the
@@ -444,6 +484,7 @@ export async function showRoutedRawModal(
     | MentionableSelectMenuInteraction,
   data: { custom_id: string; title: string; components: RawDiscordComponent[] },
 ): Promise<void> {
+  if (await rejectInteractionDuringShutdown(interaction)) return;
   setupWebSocketInterception(interaction.client);
   // Discord rejects the whole modal when one string is over its cap, and a translation can grow
   // past a limit the English copy fits, so every routed modal is clamped here rather than per builder.
@@ -3094,6 +3135,7 @@ export async function promptWithRawModal(
   options: ModalOptions,
   autoDeferReply?: boolean | MessageFlags.Ephemeral,
 ): Promise<ModalResult> {
+  if (await rejectInteractionDuringShutdown(interaction)) return { outcome: "cancelled" };
   setupWebSocketInterception(interaction.client);
 
   const { modalTitleKey, modalCustomId, components } = options;
@@ -3645,6 +3687,7 @@ export async function promptWithPaginatedModal(
   locale: string,
   options: ModalOptions,
 ): Promise<ModalResult> {
+  if (await rejectInteractionDuringShutdown(interaction)) return { outcome: "cancelled" };
   // Find the select component (should only be one per modal in current usage)
   const selectComponent = getPaginatedModalComponent(options);
   const optionCount = selectComponent && "options" in selectComponent ? selectComponent.options.length : 0;
