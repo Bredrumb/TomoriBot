@@ -64,7 +64,7 @@ TomoriBot is a free and open-source personal AI assistant and role-playing syste
 
 ![Screenshots 1](assets/img/scs/1-agentic.png)
 <h3 align="center"><a href="https://docs.tomoribot.app/en/features/capabilities/tools-and-extensions/">Agentic AI-Powered Conversation</a></h3>
-<p align="center">TomoriBot has lotsa tools that allows her to go beyond just chatting, such as searching the web, setting recurrent tasks/reminders, utilizing your server's emotes/stickers, media generation, and persistent memory that allow her to remember context across channels and servers. </p>
+<p align="center">TomoriBot has lotsa tools that allows her to go beyond just chatting, such as searching the web, setting recurrent tasks/reminders, utilizing your server's emotes/stickers, image/video/voice generation, and persistent memory that allow her to remember context across channels and servers. </p>
 
 <br />
 
@@ -89,7 +89,7 @@ TomoriBot is a free and open-source personal AI assistant and role-playing syste
 
 ![Screenshots 5](assets/img/scs/5-features.png)
 <h3 align="center"><a href="https://docs.tomoribot.app/en/features/">Lots of More Features, and Counting!</a></h3>
-<p align="center">A bunch of fun features ranging from practical automatic greetings for new server members and voice chat, to role-play ones like dice rolls and actions. New ones are constantly in development, so please report through GitHub issues or the official Discord for any bugs (or to share any fun suggestions).</p>
+<p align="center">A bunch of fun features ranging from practical automatic greetings for new server members, voice chat, and usage stats, to proactive DMs and role-play ones like dice rolls and actions. New ones are constantly in development, so please report through GitHub issues or the official Discord for any bugs (or to share any fun suggestions).</p>
 
 <!-- GETTING STARTED -->
 # Getting Started
