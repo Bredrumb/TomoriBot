@@ -13,7 +13,11 @@ import { log } from "@/utils/misc/logger";
 import { createChatLatencyInvocation, runWithChatTurnLatency } from "@/utils/chat/turnLatency";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { channelLocks, getOrCreateChannelLockEntry } from "@/utils/chat/channelQueue";
-import { recordHistoryWindowChange } from "@/utils/chat/historyWindow";
+import {
+  recordHistoryWindowChange,
+  selectAnchoredHistory,
+  setHistoryWindowGatewayConnected,
+} from "@/utils/chat/historyWindow";
 import { createPersona, createUserRow } from "../../helpers/fixtures";
 
 describe("history reply context", () => {
@@ -28,6 +32,8 @@ describe("history reply context", () => {
     "queued-deleted",
     "literal-system",
     "merged",
+    "reset",
+    "compact_refresh",
   ])("resolves history references: %s", async (scenario) => {
     const prefetch = scenario.startsWith("prefetch");
     const fail = scenario === "prefetch-failure";
@@ -120,6 +126,32 @@ describe("history reply context", () => {
     messages[0].content = replyBody;
     if (scenario === "merged") {
       messages.unshift({ ...messages[0], id: "followup", content: "and another thing", reference: null } as Message);
+    }
+    const resetScenario = scenario === "reset" || scenario === "compact_refresh";
+    if (resetScenario) {
+      const template = messages[0];
+      messages.splice(
+        0,
+        messages.length,
+        ...Array.from(
+          { length: 80 },
+          (_, index) =>
+            ({
+              ...template,
+              id: String(80 - index),
+              author: { ...template.author, id: `speaker-${index % 2}` },
+              reference: null,
+            }) as Message,
+        ),
+      );
+      selectAnchoredHistory(channel.id, [...messages].reverse(), 80);
+      messages[20].embeds = [
+        {
+          title: "Conversation boundary",
+          description: "Retained summary",
+          footer: { text: `[tomori:v1:${scenario}]` },
+        },
+      ] as Message["embeds"];
     }
     if (prefetch) {
       const reply = messages[0];
@@ -281,6 +313,12 @@ describe("history reply context", () => {
         return;
       }
       const result = await buildChatTurnContext(turn);
+      if (resetScenario) {
+        expect(result.simplifiedMessages.some((message) => Number(message.id) < 60)).toBe(false);
+        expect(result.simplifiedMessages.some((message) => message.id === "60")).toBe(scenario === "compact_refresh");
+        expect(result.simplifiedMessages.at(-1)?.id).toBe("80");
+        return;
+      }
       const reply = result.simplifiedMessages.find((message) => message.id === "reply");
       const target = result.simplifiedMessages.find((message) => message.id === "target");
       expect(fetchById).not.toHaveBeenCalled();
@@ -297,6 +335,7 @@ describe("history reply context", () => {
       expect(reply?.completionContent).toBe(scenario === "merged" ? `${replyBody}\nand another thing` : replyBody);
       if (!channelEvicted && scenario !== "merged") expect(reply?.content).toContain(messages[1].content);
     } finally {
+      setHistoryWindowGatewayConnected(0, true);
       if (windowScenario) channelLocks.delete(channel.id);
       release.resolve();
       for (const spy of [sql, read, privacy, blacklist, blocks, builder, metric]) spy.mockRestore();

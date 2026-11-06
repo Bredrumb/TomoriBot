@@ -7,6 +7,11 @@ export const MIN_MESSAGE_FETCH_LIMIT = 20;
 export const MAX_MESSAGE_FETCH_LIMIT = 100;
 export const DEFAULT_MESSAGE_FETCH_LIMIT = 80;
 
+// Round the 30% stride down to an even count so jumps preserve two-message exchanges.
+export function historyWindowStride(limit: number): number {
+  return Math.floor((limit * 0.3) / 2) * 2;
+}
+
 /**
  * Normalize a configured fetch limit to a safe integer within allowed bounds.
  *

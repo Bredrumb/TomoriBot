@@ -278,6 +278,8 @@ async function runLane(
     const childEnv = { ...process.env, ...extraEnv };
     if (omitDatabaseEnv) {
       for (const key of DATABASE_ENV_KEYS) delete childEnv[key];
+      // Unit processes have no database credentials, so telemetry must not arm background writes.
+      childEnv.STAT_TRACKING_ENABLED = "false";
     }
 
     // The wrapper owns environment loading and database selection. Prevent a child from loading a
