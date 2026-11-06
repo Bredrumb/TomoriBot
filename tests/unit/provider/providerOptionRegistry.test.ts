@@ -360,11 +360,10 @@ function optionPanelEntry(): Extract<ProviderPanelEntry, { kind: "provider" }> {
 }
 
 describe("provider option registry", () => {
-  it("contributes localized copy to successful provider saves after acknowledgement for both scopes", async () => {
+  it("keeps contributed copy off provider save receipts in both scopes", async () => {
     const { option } = registerTestOption();
     const contributionKey = "genai.tips.wait_and_retry";
     const received: ProviderOptionCopyContext[] = [];
-    const acknowledged: boolean[] = [];
     for (const personal of [false, true]) {
       for (const success of [false, true]) {
         const namespace = personal ? PERSONAL_PROVIDERS_ROUTE_NAMESPACE : PROVIDERS_ROUTE_NAMESPACE;
@@ -378,7 +377,6 @@ describe("provider option registry", () => {
         if (!scope) throw new Error("Missing provider scope");
         option.contributeCopy = async (context) => {
           received.push(context);
-          acknowledged.push(interaction.deferred);
           return contributionKey;
         };
         const route = createProvidersInteractionRoute(
@@ -408,22 +406,14 @@ describe("provider option registry", () => {
         const parsed = parseInteractionRoute(customId);
         if (!parsed) throw new Error("Missing provider route");
         await route.execute({} as Client, interaction as never, parsed);
-        expect(JSON.stringify(interaction.edits).includes(localizedCopy(LOCALE, contributionKey))).toBe(success);
+        expect(interaction.edits.length).toBeGreaterThan(0);
+        expect(JSON.stringify(interaction.edits).includes(localizedCopy(LOCALE, contributionKey))).toBe(false);
       }
     }
-    expect(acknowledged).toEqual([true, true]);
-    expect(received).toEqual(
-      (["server", "personal"] as const).map((credentialSource) => ({
-        surface: "completion",
-        credentialScope: credentialSource,
-        managedProvider: null,
-        userDiscId: "user-1",
-        serverId: 12,
-      })),
-    );
+    expect(received).toEqual([]);
   });
 
-  it("preserves recovery and completion copy through missing, failed, and removed contributions", async () => {
+  it("preserves recovery and registration-failed copy through missing, failed, and removed contributions", async () => {
     const keys = ["genai.tips.refresh_context"];
     const context: ProviderOptionCopyContext = {
       surface: "recovery",
@@ -438,7 +428,7 @@ describe("provider option registry", () => {
       throw new Error("Storage unavailable");
     };
     expect(await withProviderOptionCopy(keys, context)).toBe(keys);
-    for (const surface of ["recovery", "completion", "registration_failed"] as const) {
+    for (const surface of ["recovery", "registration_failed"] as const) {
       for (const credentialSource of ["server", "personal"] as const) {
         const input = { ...context, surface, credentialScope: credentialSource };
         const receivedContexts: ProviderOptionCopyContext[] = [];

@@ -1,4 +1,4 @@
-import { withProviderOptionCopy, type ProviderOptionCopyContext } from "@/utils/provider/providerOptionRegistry";
+import { withProviderOptionCopy } from "@/utils/provider/providerOptionRegistry";
 import {
   ComponentType,
   MessageFlags,
@@ -555,17 +555,16 @@ function providerOptionScope(
 
 const REGISTRATION_FAILURE_STATUSES: ReadonlySet<string> = new Set(["validation-failed", "no-balance", "unreachable"]);
 
-async function addCompletionCopy(
+async function addRegistrationFailureCopy(
   receipt: PanelReceipt,
   interaction: GlobalRoutableInteraction,
   locale: string,
   scope: LoadedProviderPanelScope,
   eligible: boolean,
-  surface: ProviderOptionCopyContext["surface"] = "completion",
 ): Promise<PanelReceipt> {
   if (!eligible) return receipt;
   const keys = await withProviderOptionCopy([], {
-    surface,
+    surface: "registration_failed",
     managedProvider: null,
     userDiscId: interaction.user.id,
     serverId: scope.state?.server_id,
@@ -573,9 +572,7 @@ async function addCompletionCopy(
   });
   if (!keys.length) return receipt;
   const copy = keys.map((key) => localizer(locale, key));
-  return surface === "registration_failed"
-    ? { ...receipt, metadata: [receipt.metadata, ...copy].filter(Boolean).join(" ") }
-    : { ...receipt, detail: [receipt.detail, ...copy].join("\n") };
+  return { ...receipt, metadata: [receipt.metadata, ...copy].filter(Boolean).join(" ") };
 }
 
 function repaint(
@@ -998,13 +995,12 @@ export function createProvidersInteractionRoute(
           nextScope,
           action.result.status === "success" ? { kind: "entry", entryId: action.result.entryId } : { kind: "entry" },
           action.result.status === "success" ? rangeForEntry(nextScope, action.result.entryId) : 0,
-          await addCompletionCopy(
+          await addRegistrationFailureCopy(
             addReceipt(route.locale, action.result, scope.scopeKind),
             interaction,
             route.locale,
             scope,
-            (action.result.status === "success" || keyRejected) && selectedProvider !== "brave",
-            keyRejected ? "registration_failed" : "completion",
+            keyRejected && selectedProvider !== "brave",
           ),
         );
         return;
@@ -1094,13 +1090,12 @@ export function createProvidersInteractionRoute(
           nextScope,
           action.result.status === "success" ? { kind: "entry", entryId: action.result.entryId } : { kind: "entry" },
           action.result.status === "success" ? rangeForEntry(nextScope, action.result.entryId) : 0,
-          await addCompletionCopy(
+          await addRegistrationFailureCopy(
             addEndpointReceipt(route.locale, action.result, scope.scopeKind),
             interaction,
             route.locale,
             scope,
             REGISTRATION_FAILURE_STATUSES.has(action.result.status),
-            "registration_failed",
           ),
         );
         return;
@@ -1141,13 +1136,12 @@ export function createProvidersInteractionRoute(
           nextScope,
           { kind: "entry", entryId },
           rangeForEntry(nextScope, entryId),
-          await addCompletionCopy(
+          await addRegistrationFailureCopy(
             providerEditReceipt(route.locale, action.result, scope.scopeKind),
             interaction,
             route.locale,
             scope,
             REGISTRATION_FAILURE_STATUSES.has(action.result.status) && route.provider !== "brave",
-            "registration_failed",
           ),
         );
         return;
@@ -1196,13 +1190,12 @@ export function createProvidersInteractionRoute(
           nextScope,
           { kind: "entry", entryId },
           rangeForEntry(nextScope, entryId),
-          await addCompletionCopy(
+          await addRegistrationFailureCopy(
             endpointEditReceipt(route.locale, action.result, scope.scopeKind),
             interaction,
             route.locale,
             scope,
             REGISTRATION_FAILURE_STATUSES.has(action.result.status),
-            "registration_failed",
           ),
         );
         return;
@@ -1283,13 +1276,7 @@ export function createProvidersInteractionRoute(
           nextScope,
           { kind: "entry", entryId },
           rangeForEntry(nextScope, entryId),
-          await addCompletionCopy(
-            modelReceipt(route.locale, action.result, scope.scopeKind),
-            interaction,
-            route.locale,
-            scope,
-            action.result.status === "success" && !action.result.removed && !findProviderOption(route.entryKey),
-          ),
+          modelReceipt(route.locale, action.result, scope.scopeKind),
         );
         return;
       }
