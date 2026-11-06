@@ -8,6 +8,7 @@ import type { AssembledServerConfig } from "@/types/db/schema";
 import type { ToolStateForContext } from "@/tools/toolRegistry";
 import { DOCUMENT_HINT_TEMPLATE } from "@/utils/text/context/dialogueHistory";
 import { CONDITIONING_INTERACTION_RESPONSE_TEMPLATE } from "@/utils/conditioning/conditioningInteractionContext";
+import { personaSections } from "@/db/seed/catalog/personas";
 import { systemPromptSections } from "@/db/seed/catalog/systemPrompts";
 import { DEFAULT_SYSTEM_PROMPT } from "@/utils/text/context/templates";
 import { SPACER_TEMPLATE } from "@/utils/text/context/timeAwareness";
@@ -16,6 +17,7 @@ import {
   createToolPromptMacroResolver,
   type PromptCapabilityValues,
   resolvePromptCapabilityValues,
+  UNAVAILABLE_TOOL_TEXT,
 } from "@/utils/tools/toolPromptMacros";
 import {
   renderPromptConditionals,
@@ -201,11 +203,51 @@ describe("prompt macro resolver condition integration", () => {
   });
 
   it("evaluates capability blocks before expanding surviving tool macros", async () => {
-    const resolver = createToolPromptMacroResolver({ capabilities: ENABLED_CAPABILITIES });
+    const resolver = createToolPromptMacroResolver({
+      provider: "google",
+      stateForContext: TOOL_STATE,
+      capabilities: ENABLED_CAPABILITIES,
+      availableToolNames: new Set(["create_long_term_memory"]),
+    });
 
     expect(await resolver.expand("{{if capability:self_teaching}}Use {memory_tool}.{{/if}}")).toBe(
       "Use `create_long_term_memory`.",
     );
+  });
+
+  it("does not name a tool through a static macro when the turn cannot call it", async () => {
+    const failures: string[] = [];
+    for (const hasTools of [true, false]) {
+      const resolver = createToolPromptMacroResolver({
+        provider: "google",
+        stateForContext: { ...TOOL_STATE, llm: { ...TOOL_STATE.llm, has_tools: hasTools } },
+        capabilities: ENABLED_CAPABILITIES,
+        availableToolNames: new Set(["create_long_term_memory"]),
+      });
+      const expanded = await resolver.expand("Use {memory_tool}, then {short_term_memory_tool}.");
+      const expected = `Use ${hasTools ? "`create_long_term_memory`" : UNAVAILABLE_TOOL_TEXT}, then ${UNAVAILABLE_TOOL_TEXT}.`;
+      if (expanded !== expected) failures.push(`has_tools=${hasTools}: ${expanded}`);
+    }
+    expect(failures).toEqual([]);
+  });
+
+  it("gates every static tool macro in the seeded prompts", async () => {
+    const resolver = createToolPromptMacroResolver({
+      provider: "google",
+      stateForContext: { ...TOOL_STATE, llm: { ...TOOL_STATE.llm, has_tools: false } },
+      capabilities: ENABLED_CAPABILITIES,
+    });
+    const prompts = [
+      ...systemPromptSections.flatMap((section) => section.rows).map((row) => [row.name, row.promptText]),
+      ...personaSections
+        .flatMap((section) => section.rows)
+        .map((row) => [`${row.name} (${row.language})`, row.attributes.join("\n")]),
+    ];
+    const failures: string[] = [];
+    for (const [name, text] of prompts) {
+      if ((await resolver.expand(text)).includes(UNAVAILABLE_TOOL_TEXT)) failures.push(name);
+    }
+    expect(failures).toEqual([]);
   });
 
   it("removes the default memory instructions when tool use is disabled", async () => {

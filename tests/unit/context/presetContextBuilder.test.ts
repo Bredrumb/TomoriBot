@@ -2,7 +2,7 @@ import { applyPromptLayoutInserts } from "@/utils/text/context/promptLayout";
 import { describe, expect, test } from "bun:test";
 import type { Client } from "discord.js";
 import type { CachedPresetData } from "@/utils/cache/stPresetCache";
-import { createToolPromptMacroResolver } from "@/utils/tools/toolPromptMacros";
+import { createToolPromptMacroResolver, UNAVAILABLE_TOOL_TEXT } from "@/utils/tools/toolPromptMacros";
 import { resolvePresetMacros, type MacroContext } from "@/utils/text/stPresetEngine";
 import { reassembleWithPreset } from "@/utils/text/presetContextBuilder";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
@@ -376,7 +376,7 @@ describe("preset conditional and runtime macro expansion", () => {
       [],
       { personaPrompt: "A traveler." },
     );
-    expect(itemTexts(items)).toEqual(["Tomori can use `create_long_term_memory`", "Alice asks"]);
+    expect(itemTexts(items)).toEqual([`Tomori can use ${UNAVAILABLE_TOOL_TEXT}`, "Alice asks"]);
   });
 
   test("preserves variable collection from both tool-conditional branches before the async pass", async () => {

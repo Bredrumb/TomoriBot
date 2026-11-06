@@ -25,7 +25,7 @@ The contributor `buildPromptContextItems` in `src/utils/text/context/templates.t
 
 Before emission, every prompt text undergoes macro and mention expansion:
 
-- **Capability and tool macros**: `toolPromptMacroResolver.expand` prunes inactive `{{if capability:...}}` and `{{if tool:...}}` conditionals, and substitutes active tool names such as `{short_term_memory_tool}` or `{memory_tool}`. Conditionals resolve against provider capabilities and the turn's Deliberate Tool Mode allowlist.
+- **Capability and tool macros**: `toolPromptMacroResolver.expand` prunes inactive `{{if capability:...}}` and `{{if tool:...}}` conditionals, and substitutes active tool names such as `{short_term_memory_tool}` or `{memory_tool}`. A macro whose tool the turn does not expose renders as "an unavailable tool" rather than the tool's name, because a model shown a tool it cannot call tends to write the call out as chat text. Conditionals and macros both resolve against provider capabilities and the turn's Deliberate Tool Mode allowlist, so seeded prompts wrap every macro in a matching `{{if tool:...}}` block.
 - **Mention normalization**: `convertMentions` resolves `<@id>`, `<#id>`, and `{bot}` / `{user}` tokens. Because prompt items instruct the model rather than addressing a specific user, the user name argument is fixed to `"User"`.
 
 ## Constraints and rationale
