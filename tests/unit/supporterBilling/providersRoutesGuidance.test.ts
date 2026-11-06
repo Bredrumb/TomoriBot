@@ -36,7 +36,7 @@ function parsed(customId: string) {
 describe("BYOK provider completion guidance", () => {
   useEnvSandbox(["RUN_ENV", "TOMORI_SUPPORTER_BILLING_ENABLED"]);
 
-  it("adds guidance after a successful server or personal provider save, after acknowledgement", async () => {
+  it("keeps the subscription nudge off a successful server or personal provider save", async () => {
     process.env.RUN_ENV = "production";
     process.env.TOMORI_SUPPORTER_BILLING_ENABLED = "true";
     const identitySpy = spyOn(supporterIdentityRepository, "loadByDiscordUserId").mockResolvedValue(null);
@@ -84,7 +84,8 @@ describe("BYOK provider completion guidance", () => {
           { namespace, authorize: () => true, includeBrave: !personal, allowRotation: !personal },
         );
         await route.execute({} as Client, interaction as never, parsed(customId));
-        expect(JSON.stringify(interaction.edits)).toMatch(
+        expect(JSON.stringify(interaction.edits)).toMatch(localizedProse("en-US", "commands.providers.provider_added"));
+        expect(JSON.stringify(interaction.edits)).not.toMatch(
           localizedProse("en-US", "commands.subscribe.conversion_nudge"),
         );
       }

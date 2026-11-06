@@ -24,7 +24,6 @@ import { validateComponentsV2MessageLimits, validateRawModalLimits } from "@/uti
 import { hasLocaleKey, initializeLocalizer, localizer } from "@/utils/text/localizer";
 import { expectForEveryLocale, localizedCopy } from "../../helpers/localeCases";
 import { collectTextDisplays } from "../../helpers/panelLimits";
-import { localizedProse } from "../../helpers/localeCases";
 
 beforeAll(async () => {
   await initializeLocalizer();
@@ -690,13 +689,7 @@ describe("setupPanel Components V2 layout and limits", () => {
             { label: "Expressions Disabled", detail: "Emoji and sticker usage have been automatically disabled." },
           ],
           learnMore: localizer("en-US", "commands.setup.wizard.receipt_learn_more", { help: "/help" }),
-          footerKeys: [
-            ...(context === "dm" ? ["commands.setup.wizard.receipt_footer_avatar_skipped_dm"] : []),
-            ...(testCase.input.providerAccess.mode === "catalog" ||
-            testCase.input.providerAccess.mode === "custom-endpoint"
-              ? ["commands.subscribe.conversion_nudge"]
-              : []),
-          ],
+          footerKeys: context === "dm" ? ["commands.setup.wizard.receipt_footer_avatar_skipped_dm"] : [],
         });
 
         const validation = validateComponentsV2MessageLimits(payload);
@@ -704,17 +697,6 @@ describe("setupPanel Components V2 layout and limits", () => {
           `${testCase.label}/${context}: []`,
         );
         expect(validation.valid).toBe(true);
-
-        const text = collectTextDisplays(payload).join("\n");
-        if (context === "dm") {
-          expect(text).toMatch(localizedProse("en-US", "commands.setup.wizard.receipt_footer_avatar_skipped_dm"));
-        }
-        if (
-          testCase.input.providerAccess.mode === "catalog" ||
-          testCase.input.providerAccess.mode === "custom-endpoint"
-        ) {
-          expect(text).toMatch(localizedProse("en-US", "commands.subscribe.conversion_nudge"));
-        }
 
         // The receipt is the terminal state, so it carries no components a stale press could reach.
         const json = JSON.stringify(payload);

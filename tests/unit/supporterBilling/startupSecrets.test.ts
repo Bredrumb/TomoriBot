@@ -7,6 +7,8 @@ import { initializeSupporterBilling, type InitializeSupporterBillingOptions } fr
 import { SupporterBillingConfigError } from "@/modules/supporter-billing/config";
 import type { SupporterBillingSchemaInitializationResult } from "@/modules/supporter-billing/db";
 import type { PatreonReconcileJobHandle } from "@/modules/supporter-billing/patreon/reconcile";
+import { initSupporterBilling } from "@/init/supporterBilling";
+import { getProviderOptions } from "@/utils/provider/providerOptionRegistry";
 
 const CONFIG = {
   patreon: {
@@ -189,6 +191,10 @@ describe("supporter billing startup requirements", () => {
     );
     expect(result.requestRegistered).toBe(true);
     expect(result.optionCount).toBe(1);
+  });
+  it("keeps one Subscription option however many times startup runs in a process", async () => {
+    for (let run = 0; run < 3; run++) expect(await initSupporterBilling("development")).toBeNull();
+    expect(getProviderOptions().filter((option) => option.value === "supporter")).toHaveLength(1);
   });
   it("starts with the required keys alone and leaves optional tuning settings unset", async () => {
     const hooks = createStartupHooks();

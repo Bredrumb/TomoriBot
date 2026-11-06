@@ -121,7 +121,6 @@ describe("subscription conversion eligibility", () => {
     const deps = dependencies();
     for (const [surface, key] of [
       ["recovery", "commands.subscribe.conversion_nudge"],
-      ["completion", "commands.subscribe.conversion_nudge"],
       ["registration_failed", "commands.subscribe.conversion_nudge_registration_failed"],
     ] as const) {
       expect(await resolveSupporterNudgeKey({ ...context, surface }, deps)).toBe(key);
