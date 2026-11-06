@@ -4,7 +4,6 @@ import type {
   AutocompleteInteraction,
   ChatInputCommandInteraction,
 } from "discord.js";
-import type { TomoriState } from "@/types/db/schema";
 import {
   respondWithPanelPages,
   resolvePanelPage,
@@ -25,6 +24,7 @@ import { listNudgeStudioPageDestinations } from "@/modules/natural-nudges/discor
 import { listStatusPageDestinations } from "@/utils/metrics/status/command";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { collectCaseFailures, localizedCopy, localizedProse, RUNTIME_LOCALES } from "../../helpers/localeCases";
+import { createPersona } from "../../helpers/fixtures";
 import { createRouteInteraction } from "../../helpers/routeInteraction";
 
 beforeAll(async () => initializeLocalizer());
@@ -160,60 +160,76 @@ describe("panel page autocomplete", () => {
   });
 });
 
-describe("/config page option", () => {
+describe("/config page and persona options", () => {
   const GUILD_ID = "guild-1";
 
   function makeScope(): ConfigScope {
-    const persona = {
-      server_id: 9,
-      persona_id: 55,
-      persona_nickname: "Mirri",
-      is_alter: false,
-      trigger_words: [],
-      naming_config: { prefixes: {}, suffixes: {}, addressTerms: {} },
-      attribute_list: [],
-      sample_dialogues_in: [],
-      sample_dialogues_out: [],
-      llm: { llm_id: 1, llm_codename: "gemini-2.5-flash", llm_provider: "google", sees_images: true, has_tools: true },
-      vision_llm: null,
-      fallback_chain: [],
-      config: { llm_id: 1, vision_llm_id: null, embedding_model_id: null, imagegen_enabled: true },
-    } as unknown as TomoriState;
     return {
       serverDiscId: GUILD_ID,
       guildId: GUILD_ID,
       internalServerId: 9,
       userId: 1,
       actor: MANAGER,
-      personas: [persona],
+      personas: [
+        createPersona({ server_id: 9, persona_id: 55, persona_lineage_id: 550, persona_nickname: "Mirri" }),
+        createPersona({
+          server_id: 9,
+          persona_id: 56,
+          persona_lineage_id: 560,
+          persona_nickname: "Juno",
+          is_alter: true,
+        }),
+      ],
       readStatus: "fresh",
     };
   }
 
-  async function open(requestedPage: string) {
+  async function open(request: { page?: string; persona?: string }) {
     const interaction = createRouteInteraction({ customId: "config", guildId: GUILD_ID });
     const mcpReads: number[] = [];
-    await executeConfigCommand(interaction as unknown as ChatInputCommandInteraction, "en-US", requestedPage, {
-      resolveScope: async () => makeScope(),
-      getPersonaAvatarData: async () => ({ url: null, files: [] }),
-      loadMcpRead: async (serverId: number) => {
-        mcpReads.push(serverId);
-        return { status: "fresh", configs: [] };
+    const avatarPersonaIds: (number | undefined)[] = [];
+    await executeConfigCommand(
+      interaction as unknown as ChatInputCommandInteraction,
+      "en-US",
+      { page: request.page ?? null, persona: request.persona ?? null },
+      {
+        resolveScope: async () => makeScope(),
+        getPersonaAvatarData: async (_interaction, persona) => {
+          avatarPersonaIds.push(persona.persona_id);
+          return { url: null, files: [] };
+        },
+        loadMcpRead: async (serverId: number) => {
+          mcpReads.push(serverId);
+          return { status: "fresh", configs: [] };
+        },
       },
-    });
-    return { rendered: JSON.stringify(interaction.edits.at(-1)), mcpReads };
+    );
+    return { rendered: JSON.stringify(interaction.edits.at(-1)), mcpReads, avatarPersonaIds };
   }
 
   it("opens directly on the requested page", async () => {
-    const { mcpReads } = await open("plugins:mcp-servers");
+    const { mcpReads } = await open({ page: "plugins:mcp-servers" });
 
     expect(mcpReads).toEqual([9]);
   });
 
   it("opens the landing page with a notice when nothing matches", async () => {
-    const { rendered, mcpReads } = await open("zzqx");
+    const { rendered, mcpReads } = await open({ page: "zzqx" });
 
     expect(mcpReads).toEqual([]);
     expect(rendered).toMatch(localizedProse("en-US", "general.panel_notice.page_not_found_detail"));
+  });
+
+  it("selects a persona named by typed text without a picked suggestion", async () => {
+    const { avatarPersonaIds } = await open({ persona: "juno" });
+
+    expect(avatarPersonaIds).toEqual([56]);
+  });
+
+  it("selects the main persona with a notice when no persona has that name", async () => {
+    const { rendered, avatarPersonaIds } = await open({ persona: "Bau" });
+
+    expect(avatarPersonaIds).toEqual([55]);
+    expect(rendered).toMatch(localizedProse("en-US", "general.panel_notice.persona_not_found_detail"));
   });
 });

@@ -11,6 +11,7 @@ import {
   PANEL_PAGE_OPTION_NAME,
   respondWithPanelPages,
 } from "@/utils/discord/autocomplete/panelPageAutocomplete";
+import { handleWorkspacePersonaAutocomplete } from "@/utils/discord/autocomplete/personaAutocomplete";
 import { listMemoriesPageDestinations, openMemoriesPanel } from "@/utils/discord/interactions/memoriesRoutes";
 import { localizer } from "@/utils/text/localizer";
 
@@ -20,10 +21,20 @@ export const configureCommand = (command: SlashCommandBuilder) =>
     .setDescription(localizer("en-US", "commands.memories.description"))
     .addStringOption((option) =>
       configurePanelPageOption(option, localizer("en-US", "commands.memories.page_description")),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("persona")
+        .setDescription(localizer("en-US", "commands.memories.persona_description"))
+        .setAutocomplete(true),
     );
 
-export async function autocomplete(_client: Client, interaction: AutocompleteInteraction): Promise<void> {
-  await respondWithPanelPages(interaction, listMemoriesPageDestinations(interaction.locale));
+export async function autocomplete(client: Client, interaction: AutocompleteInteraction): Promise<void> {
+  if (interaction.options.getFocused(true).name === PANEL_PAGE_OPTION_NAME) {
+    await respondWithPanelPages(interaction, listMemoriesPageDestinations(interaction.locale));
+    return;
+  }
+  await handleWorkspacePersonaAutocomplete(client, interaction);
 }
 
 export async function execute(
@@ -33,5 +44,8 @@ export async function execute(
   locale: string,
 ): Promise<void> {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  await openMemoriesPanel(interaction, locale, interaction.options.getString(PANEL_PAGE_OPTION_NAME));
+  await openMemoriesPanel(interaction, locale, {
+    page: interaction.options.getString(PANEL_PAGE_OPTION_NAME),
+    persona: interaction.options.getString("persona"),
+  });
 }

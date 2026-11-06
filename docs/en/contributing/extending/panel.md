@@ -114,6 +114,14 @@ panels get one. The helpers are in `src/utils/discord/autocomplete/panelPageAuto
    normal repaint so each page loads its own data. When nothing matches, open the default page with
    `panelPageNotFoundReceipt(locale)`.
 
+A panel whose pages belong to a persona also takes an optional option named `persona`, so the loader
+localizes `commands.<path>.persona_description`. Check that key is free first, because the loader applies
+whatever text it already holds. Answer it with `handleWorkspacePersonaAutocomplete`
+and resolve it with `resolveSelectedPersona` from `src/utils/persona/personaOptionValue.ts`, which also
+accepts a typed nickname that exactly one persona has. When nothing resolves, open on the default
+persona with `panelPersonaNotFoundReceipt(locale)`. A command that deletes without a confirmation step
+accepts only a picked ID, as `/persona remove` does.
+
 ## Discord limits
 
 `validateComponentsV2MessageLimits()` in `src/utils/discord/ui/componentsV2Limits.ts` enforces these,

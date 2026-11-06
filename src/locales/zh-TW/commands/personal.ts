@@ -35,7 +35,7 @@ export default {
       global_title: `全域個人記憶`,
       global_description: `這些記憶會跟著你跨伺服器、跨人格。`,
       persona_title: `單一人格的個人記憶`,
-      persona_description: "只有在這個人格於你參與的 對話中發言時，這些記憶才會 生效。",
+      persona_scope_description: "只有在這個人格於你參與的 對話中發言時，這些記憶才會 生效。",
       selector_guidance: `在下方選擇或新增一則個人記憶：`,
       no_memories: `還沒有儲存任何記憶。`,
       empty_memory_label: `（空白記憶）`,

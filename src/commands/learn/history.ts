@@ -300,15 +300,6 @@ export function resolveLearnerScope(learnerInput: string | null): HistoryScope {
   return "persona";
 }
 
-/** @returns The picked persona, or the only persona whose nickname equals the typed text ignoring case */
-export function resolveLearnerPersona<T extends TomoriState>(personas: readonly T[], learnerInput: string): T | null {
-  const picked = resolveSelectedPersona(personas, learnerInput);
-  if (picked) return picked;
-  const typed = learnerInput.toLowerCase();
-  const named = personas.filter((persona) => persona.persona_nickname.trim().toLowerCase() === typed);
-  return named.length === 1 ? named[0] : null;
-}
-
 /** Suggests Automatic and Global ahead of the workspace's personas, so the learner list names every scope. */
 export async function autocomplete(_client: Client, interaction: AutocompleteInteraction): Promise<void> {
   await respondWithPersonaChoices(interaction, interaction.guild?.id ?? interaction.user.id, undefined, [
@@ -1224,7 +1215,7 @@ export async function execute(
 
     // SCOPE: PERSONA
     if (scope === "persona") {
-      const selectedPersona = learnerInput === null ? tomoriState : resolveLearnerPersona(allPersonas, learnerInput);
+      const selectedPersona = learnerInput === null ? tomoriState : resolveSelectedPersona(allPersonas, learnerInput);
       const targetPersonaId = selectedPersona?.persona_id;
       if (!selectedPersona || !targetPersonaId) {
         await replyInfoEmbed(interaction, locale, {

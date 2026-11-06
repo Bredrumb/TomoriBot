@@ -623,7 +623,7 @@ ${localizer(locale, "commands.personal.memories.selector_guidance")}`,
     const personaHeading: TextDisplayComponentData = {
       type: ComponentType.TextDisplay,
       content: `### ${localizer(locale, "commands.personal.memories.persona_title")}
-${localizer(locale, "commands.personal.memories.persona_description")}`,
+${localizer(locale, "commands.personal.memories.persona_scope_description")}`,
     };
     const personaHeadingSection = buildOptionalThumbnailSection(personaHeading, selectedPersonaAvatarUrl);
 

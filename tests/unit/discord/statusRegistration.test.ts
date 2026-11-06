@@ -14,7 +14,7 @@ type RegistrationPayload = {
 };
 
 describe("/status registration", () => {
-  it("registers a bare root with only the optional page jump and no restrictions", async () => {
+  it("registers a bare root with only optional jump options and no restrictions", async () => {
     const { registrationData } = await loadCommandData();
     const status = registrationData.find((command) => command.name === "status") as unknown as
       | RegistrationPayload
@@ -27,8 +27,11 @@ describe("/status registration", () => {
     expect(status.default_member_permissions).toBeUndefined();
     expect(status.options).toEqual([
       expect.objectContaining({ name: "page", type: ApplicationCommandOptionType.String, autocomplete: true }),
+      expect.objectContaining({ name: "persona", type: ApplicationCommandOptionType.String, autocomplete: true }),
     ]);
-    expect((status.options?.[0] as { required?: boolean }).required ?? false).toBe(false);
+    for (const option of status.options ?? []) {
+      expect((option as { required?: boolean }).required ?? false).toBe(false);
+    }
     expect(status.description_localizations?.ja).toBe(localizer("ja", "commands.status.description"));
   }, 30000);
 });

@@ -2,6 +2,7 @@ export default {
   memories: {
     description: `Inspect and manage server memories, documents, lorebooks, and short-term memory.`,
     page_description: `Category to open the panel on.`,
+    persona_description: `Persona whose memories, documents, or lorebook to open.`,
     category_memories: `Memories`,
     category_documents: `Documents`,
     category_lorebooks: `Lorebooks`,

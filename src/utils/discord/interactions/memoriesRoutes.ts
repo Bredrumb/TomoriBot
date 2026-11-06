@@ -64,9 +64,11 @@ import {
 } from "@/utils/discord/memoriesPanelCatalog";
 import {
   panelPageNotFoundReceipt,
+  panelPersonaNotFoundReceipt,
   resolvePanelPage,
   type PanelPageDestination,
 } from "@/utils/discord/autocomplete/panelPageAutocomplete";
+import { resolveSelectedPersona } from "@/utils/persona/personaOptionValue";
 import {
   buildAddDocumentModal,
   buildAddServerMemoryModal,
@@ -1342,16 +1344,26 @@ async function repaint(
   );
 }
 
+/**
+ * The selection a category opens on. Documents key on `persona_id` while Memories and Lorebooks key on
+ * the lineage, and without a persona every category but Memories opens serverwide on the sentinel 0.
+ */
+function openingSelection(category: MemoriesCategory, scope: MemoriesScope, persona: TomoriState | null): number {
+  if (category === "stm") return 0;
+  if (persona) return category === "documents" ? (persona.persona_id ?? 0) : persona.persona_lineage_id;
+  return category === "memories" ? (scope.personas[0]?.persona_lineage_id ?? 0) : 0;
+}
+
 async function repaintCategory(
   interaction: GlobalRoutableInteraction | ChatInputCommandInteraction,
   locale: string,
   scope: MemoriesScope,
   category: MemoriesCategory,
+  persona: TomoriState | null,
   receipt: PanelReceipt | undefined,
   dependencies: MemoriesRouteDependencies,
 ): Promise<void> {
-  // Every category but Memories opens on the serverwide scope, so it passes the sentinel 0 rather than a persona.
-  const lineageId = category === "memories" ? (scope.personas[0]?.persona_lineage_id ?? 0) : 0;
+  const lineageId = openingSelection(category, scope, persona);
   const ownerFilter = scope.canManage ? undefined : scope.userId;
   const memories =
     category === "memories" && lineageId ? await dependencies.loadMemories(scope.serverId, lineageId, ownerFilter) : [];
@@ -1484,11 +1496,11 @@ export function listMemoriesPageDestinations(locale: string): PanelPageDestinati
   }));
 }
 
-/** Opens `/memories` on a deferred reply, on `requestedPage` when it names a category. */
+/** Opens `/memories` on a deferred reply, on the requested category and persona when they resolve. */
 export async function openMemoriesPanel(
   interaction: ChatInputCommandInteraction,
   locale: string,
-  requestedPage: string | null,
+  request: { page: string | null; persona: string | null },
   dependencies: MemoriesRouteDependencies = defaultDependencies,
 ): Promise<void> {
   const scope = await dependencies.resolveScope(interaction);
@@ -1500,13 +1512,19 @@ export async function openMemoriesPanel(
     return;
   }
 
-  const destination = requestedPage ? resolvePanelPage(listMemoriesPageDestinations(locale), requestedPage) : null;
+  const destination = request.page ? resolvePanelPage(listMemoriesPageDestinations(locale), request.page) : null;
+  const persona = request.persona ? resolveSelectedPersona(scope.personas, request.persona) : null;
   await repaintCategory(
     interaction,
     locale,
     scope,
     destination?.category ?? "memories",
-    requestedPage && !destination ? panelPageNotFoundReceipt(locale) : undefined,
+    persona,
+    request.persona && !persona
+      ? panelPersonaNotFoundReceipt(locale)
+      : request.page && !destination
+        ? panelPageNotFoundReceipt(locale)
+        : undefined,
     dependencies,
   );
 }
@@ -2148,7 +2166,7 @@ export function createMemoriesInteractionRoute(
       const ownerFilter = scope.canManage ? undefined : scope.userId;
 
       if (route.action === "category") {
-        await repaintCategory(interaction, route.locale, scope, route.category, undefined, dependencies);
+        await repaintCategory(interaction, route.locale, scope, route.category, null, undefined, dependencies);
         return;
       }
 

@@ -29,7 +29,7 @@ export default {
       global_title: `グローバルな個人の記憶`,
       global_description: `これらの記憶は、サーバーやペルソナを越えてあなたに引き継がれます。`,
       persona_title: `ペルソナ別・個人の記憶`,
-      persona_description:
+      persona_scope_description:
         "これらの記憶は、あなたが参加している 会話でこのペルソナが話している 場合にのみ適用されます。",
       selector_guidance: `下から個人の記憶を選択または追加してください：`,
       no_memories: `まだ記憶は保存されていません。`,

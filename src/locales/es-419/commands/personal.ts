@@ -35,7 +35,7 @@ TomoriBot te tratará como un usuario nuevo a partir de tu próximo mensaje.`,
       global_title: `Memorias personales globales`,
       global_description: `Estas memorias te siguen en todos los servidores y personas.`,
       persona_title: `Memorias personales por persona`,
-      persona_description:
+      persona_scope_description:
         "Estas memorias se aplican solo cuando esta persona está hablando en una conversación en la que participas.",
       selector_guidance: `Selecciona o agrega una memoria personal a continuación:`,
       no_memories: `Sin memorias guardadas aún.`,

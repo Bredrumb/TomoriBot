@@ -98,8 +98,10 @@ Every Categorized Control Panel, Entity Pages panel, and Paginated Reference wit
 optional `page` option that opens it on a named page or category, so users learn one shortcut that
 works everywhere: `/config`, `/personal config`, `/moderation`, `/memories`, `/expressions manage`,
 `/nudge-studio`, `/help`, and `/status`. Collection Panels, Guided Wizards, and roots already split into
-one subcommand per view (`/stats`) take none. Wiring is in
-[Adding a Panel](/contributing/extending/panel/#opening-on-a-page).
+one subcommand per view (`/stats`) take none. Panels whose pages belong to a persona (`/config`,
+`/memories`, `/personal memories`, `/status`) also take an optional `persona` option; in
+`/personal memories` it replaces `page`, because naming a persona already picks its only other
+category. Wiring is in [Adding a Panel](/contributing/extending/panel/#opening-on-a-page).
 
 ## Destructive actions
 

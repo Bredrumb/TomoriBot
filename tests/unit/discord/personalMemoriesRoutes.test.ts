@@ -4,6 +4,7 @@ import type {
   ActionRowData,
   ButtonComponentData,
   ButtonInteraction,
+  ChatInputCommandInteraction,
   Client,
   InteractionReplyOptions,
   ModalSubmitInteraction,
@@ -13,6 +14,7 @@ import type {
 import { ComponentType } from "discord.js";
 import { PrivacyLevel, type PersonalMemoryRow, type TomoriState } from "@/types/db/schema";
 import {
+  buildInitialPersonalMemoriesPanel,
   createPersonalMemoriesInteractionRoute,
   personalMemoriesOperations,
   type PersonalMemoriesOperations,
@@ -925,6 +927,22 @@ describe("personal-memories panel route catalog", () => {
     expect(() =>
       buildInteractionRouteId("personal-memories", "v1", "add-submit", "en-US", "global", "0", "x".repeat(90)),
     ).toThrow("exceeds 100");
+  });
+});
+
+describe("/personal memories persona option", () => {
+  it("opens the Persona category on the lineage of a persona typed by name", async () => {
+    const calls: string[] = [];
+    const { dependencies } = makeDependencies(calls);
+    const interaction = {
+      user: { id: "123456789", displayAvatarURL: () => "https://cdn.example.invalid/user.png" },
+      guildId: "987654321",
+    } as unknown as ChatInputCommandInteraction;
+
+    await buildInitialPersonalMemoriesPanel(interaction, "en-US", dependencies, undefined, undefined, "anon");
+
+    expect(calls).toContain("loadMemories:20");
+    expect(calls).toContain("getPersonaAvatarData:2");
   });
 });
 

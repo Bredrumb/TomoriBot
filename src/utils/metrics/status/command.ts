@@ -14,10 +14,12 @@ import { renderStatusPageDashboard, type StatusCategory } from "@/utils/metrics/
 import { STATUS_CATEGORY_LABEL_KEYS } from "@/utils/discord/statusDashboardCatalog";
 import {
   panelPageNotFoundReceipt,
+  panelPersonaNotFoundReceipt,
   resolvePanelPage,
   type PanelPageDestination,
 } from "@/utils/discord/autocomplete/panelPageAutocomplete";
 import { localizer } from "@/utils/text/localizer";
+import { resolveSelectedPersona } from "@/utils/persona/personaOptionValue";
 
 export interface StatusCommandDependencies {
   getCachedAllPersonas: typeof getCachedAllPersonas;
@@ -63,10 +65,10 @@ export async function executeStatusCommand(
   userData: UserRow,
   locale: string,
   dependencies: StatusCommandDependencies = defaultStatusCommandDependencies,
-  requestedPage: string | null = null,
+  request: { page: string | null; persona: string | null } = { page: null, persona: null },
 ): Promise<void> {
   const serverDiscId = interaction.guildId ?? interaction.user.id;
-  const destination = requestedPage ? resolvePanelPage(listStatusPageDestinations(locale), requestedPage) : null;
+  const destination = request.page ? resolvePanelPage(listStatusPageDestinations(locale), request.page) : null;
   const scope: StatusCategory = destination?.category ?? "persona";
 
   try {
@@ -94,9 +96,10 @@ export async function executeStatusCommand(
     );
 
     const personas = await dependencies.getCachedAllPersonas(serverDiscId);
-    const mainPersona = personas.find((persona) => !persona.is_alter) ?? tomoriState;
+    const requestedPersona = request.persona ? resolveSelectedPersona(personas, request.persona) : null;
+    const selectedPersona = requestedPersona ?? personas.find((persona) => !persona.is_alter) ?? tomoriState;
     const personaPages = await dependencies.buildPersonaStatusPages(
-      mainPersona,
+      selectedPersona,
       userData,
       locale,
       canViewPromptText(interaction.memberPermissions, tomoriState),
@@ -109,8 +112,12 @@ export async function executeStatusCommand(
       locale,
       categories,
       scope,
-      { selectedPersonaId: mainPersona.persona_id, personas },
-      requestedPage && !destination ? panelPageNotFoundReceipt(locale) : undefined,
+      { selectedPersonaId: selectedPersona.persona_id, personas },
+      request.persona && !requestedPersona
+        ? panelPersonaNotFoundReceipt(locale)
+        : request.page && !destination
+          ? panelPageNotFoundReceipt(locale)
+          : undefined,
     );
   } catch (error) {
     log.error(`Error executing status command for scope ${scope}:`, error, {

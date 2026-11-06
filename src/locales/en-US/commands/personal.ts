@@ -29,13 +29,14 @@ TomoriBot will treat you as a new user from your next message.`,
     memories: {
       description: `Manage your personal long-term memories and short-term conversational context.`,
       identity_description: `Message-proxy identity to edit. Works even when message proxy is off.`,
+      persona_description: `Persona whose memories of you to open instead of Global memories.`,
       outdated_panel: `This panel is outdated. Use {command} to open a fresh panel.`,
       category_global: `Global`,
       category_persona: `Persona`,
       global_title: `Global Personal Memories`,
       global_description: `These memories follow you across servers and personas.`,
       persona_title: `Persona-Scoped Personal Memories`,
-      persona_description:
+      persona_scope_description:
         "These memories apply only when this persona is talking in a conversation you're participating in.",
       selector_guidance: `Select or add a personal memory below:`,
       no_memories: `No memories saved yet.`,

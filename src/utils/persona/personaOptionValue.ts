@@ -23,16 +23,20 @@ export function parsePersonaOptionId(value: unknown): number | null {
 }
 
 /**
- * Finds a persona in the server's persona list by an untrusted option value.
- * Returns null if the option value is missing/malformed or does not exist on the server.
+ * Finds a persona by a picked suggestion's ID, or by typed text equal to exactly one nickname ignoring
+ * case, since Discord submits the text when nothing is picked; a partial or shared name resolves to null.
  */
-export function resolveSelectedPersona<T extends { persona_id?: number }>(
+export function resolveSelectedPersona<T extends { persona_id?: number; persona_nickname?: string | null }>(
   personas: readonly T[],
   rawPersonaOption: unknown,
 ): T | null {
   const personaId = parsePersonaOptionId(rawPersonaOption);
-  if (personaId === null) {
-    return null;
-  }
-  return personas.find((p) => p.persona_id === personaId) ?? null;
+  const picked = personaId === null ? undefined : personas.find((p) => p.persona_id === personaId);
+  if (picked) return picked;
+  if (typeof rawPersonaOption !== "string") return null;
+
+  const typed = rawPersonaOption.trim().toLowerCase();
+  if (!typed) return null;
+  const named = personas.filter((p) => p.persona_nickname?.trim().toLowerCase() === typed);
+  return named.length === 1 ? (named[0] ?? null) : null;
 }

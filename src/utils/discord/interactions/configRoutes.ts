@@ -182,10 +182,12 @@ import type { GlobalInteractionRoute, GlobalRoutableInteraction } from "@/utils/
 import { CATEGORY_LOCALE_KEYS, PAGE_LOCALE_KEYS, type ConfigPanelView } from "@/utils/discord/ui/configPanel";
 import {
   panelPageNotFoundReceipt,
+  panelPersonaNotFoundReceipt,
   resolvePanelPage,
   respondWithPanelPages,
   type PanelPageDestination,
 } from "@/utils/discord/autocomplete/panelPageAutocomplete";
+import { resolveSelectedPersona as resolvePersonaOption } from "@/utils/persona/personaOptionValue";
 import { createNonce } from "@/utils/discord/panelRouteTokens";
 import { resolvePersonaPanelAvatar, resolvePersonaPanelAvatarReference } from "@/utils/discord/personaPanelAvatar";
 import { resolvePersonaPanelCharacterReference } from "@/utils/discord/personaPanelCharacterReference";
@@ -4136,7 +4138,7 @@ export async function autocompleteConfigPage(interaction: AutocompleteInteractio
 }
 
 /**
- * Opens the panel from `/config`, on `requestedPage` when it names a page this actor may open.
+ * Opens `/config` on the requested page and persona when they resolve for this actor.
  *
  * The default destination comes from `resolveConfigLanding` rather than the landing constants, so the
  * page the panel opens on is always one this actor may also navigate back to after a denial.
@@ -4144,7 +4146,7 @@ export async function autocompleteConfigPage(interaction: AutocompleteInteractio
 export async function executeConfigCommand(
   interaction: ChatInputCommandInteraction,
   locale: string,
-  requestedPage: string | null,
+  request: { page: string | null; persona: string | null },
   dependenciesOverride: Partial<ConfigRouteDependencies> = {},
 ): Promise<void> {
   const dependencies: ConfigRouteDependencies = { ...defaultDependencies, ...dependenciesOverride };
@@ -4156,17 +4158,23 @@ export async function executeConfigCommand(
     return;
   }
 
-  const destination = requestedPage
-    ? resolvePanelPage(listConfigPageDestinations(locale, scope.actor), requestedPage)
+  const destination = request.page
+    ? resolvePanelPage(listConfigPageDestinations(locale, scope.actor), request.page)
     : null;
   const opening = destination ?? resolveConfigLanding(scope.actor);
+  const persona = request.persona ? resolvePersonaOption(scope.personas, request.persona) : null;
   await repaint(interaction, {
     locale,
     scope,
     category: opening.category,
     page: opening.page,
-    selectedPersonaId: resolveSelectedPersona(scope.personas, null)?.persona_id ?? null,
-    receipt: requestedPage && !destination ? panelPageNotFoundReceipt(locale) : undefined,
+    selectedPersonaId: (persona ?? resolveSelectedPersona(scope.personas, null))?.persona_id ?? null,
+    receipt:
+      request.persona && !persona
+        ? panelPersonaNotFoundReceipt(locale)
+        : request.page && !destination
+          ? panelPageNotFoundReceipt(locale)
+          : undefined,
     dependencies,
   });
 }

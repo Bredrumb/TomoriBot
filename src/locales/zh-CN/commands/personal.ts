@@ -35,7 +35,7 @@ export default {
       global_title: `全局个人记忆`,
       global_description: `这些记忆跟随你跨服务器、跨人格生效。`,
       persona_title: `人格范围内的个人记忆`,
-      persona_description: "只有在这个人格于你参与的 对话里说话时，这些记忆才会 生效。",
+      persona_scope_description: "只有在这个人格于你参与的 对话里说话时，这些记忆才会 生效。",
       selector_guidance: `在下面选择或添加一条个人记忆：`,
       no_memories: `还没有保存任何记忆。`,
       empty_memory_label: `（空记忆）`,

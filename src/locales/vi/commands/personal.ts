@@ -35,7 +35,7 @@ TomoriBot sẽ xem bạn như người dùng mới từ tin nhắn tiếp theo.`
       global_title: `Bộ nhớ cá nhân toàn cục`,
       global_description: `Các bộ nhớ này đi theo bạn qua mọi máy chủ và persona.`,
       persona_title: `Bộ nhớ cá nhân theo persona`,
-      persona_description:
+      persona_scope_description:
         "Các bộ nhớ này chỉ áp dụng khi persona này đang nói chuyện trong cuộc đối thoại mà bạn tham gia.",
       selector_guidance: `Chọn hoặc thêm một bộ nhớ cá nhân bên dưới:`,
       no_memories: `Chưa có bộ nhớ nào được lưu.`,

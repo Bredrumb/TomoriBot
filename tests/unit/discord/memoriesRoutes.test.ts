@@ -30,6 +30,7 @@ import {
   DOCUMENT_RESULT_RECEIPT_KEYS,
   LOREBOOK_RESULT_RECEIPT_KEYS,
   MEMORIES_RECEIPT_KEYS,
+  openMemoriesPanel,
   serverMemoriesOperations,
   type MemoriesRouteDependencies,
 } from "@/utils/discord/interactions/memoriesRoutes";
@@ -673,6 +674,36 @@ describe("memories permissions and scoping", () => {
 
     return { dependencies, calls, memories };
   }
+
+  it("opens each category on the persona the persona option names", async () => {
+    const lorebookLineages: (number | null)[] = [];
+    const { dependencies, calls } = createTestDependencies({
+      loadLorebooks: async (_serverId, lineageId) => {
+        lorebookLineages.push(lineageId);
+        return { status: "fresh" as const, entries: [] };
+      },
+    });
+    const open = (page: string) =>
+      openMemoriesPanel(
+        {
+          user: { id: "user-42", username: "user42" },
+          guildId: "guild-123",
+          memberPermissions: { has: () => true },
+          editReply: async () => undefined,
+        } as unknown as ChatInputCommandInteraction,
+        "en-US",
+        { page, persona: "anon" },
+        dependencies,
+      );
+
+    await open("memories");
+    await open("documents");
+    await open("lorebooks");
+
+    expect(calls).toContain("loadMemories:1:1880:undefined");
+    expect(calls).toContain("loadDocuments:1:20");
+    expect(lorebookLineages).toEqual([1880]);
+  });
 
   it("retries an unavailable initial panel after scope recovery", async () => {
     const { dependencies, calls } = createTestDependencies();

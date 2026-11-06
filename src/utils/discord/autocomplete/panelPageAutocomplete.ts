@@ -109,3 +109,12 @@ export function panelPageNotFoundReceipt(locale: string): PanelReceipt {
     detail: localizer(locale, "general.panel_notice.page_not_found_detail"),
   };
 }
+
+/** `info` for the same reason as the page notice: a persona name typed without picking is not a failure. */
+export function panelPersonaNotFoundReceipt(locale: string): PanelReceipt {
+  return {
+    tone: "info",
+    heading: localizer(locale, "general.panel_notice.not_available_heading"),
+    detail: localizer(locale, "general.panel_notice.persona_not_found_detail"),
+  };
+}

@@ -2,6 +2,7 @@ export default {
   config: {
     description: `Configure persona, behavior, channel, permission, and model settings.`,
     page_description: `Page to open the panel on.`,
+    persona_description: `Persona to select when the panel opens.`,
     options: {
       enable: `Enable`,
       disable: `Disable`,

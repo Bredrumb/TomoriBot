@@ -136,8 +136,11 @@ describe("Config command registration", () => {
     expect(configCommand.contexts).toBeUndefined();
     expect(configCommand.options).toEqual([
       expect.objectContaining({ name: "page", type: ApplicationCommandOptionType.String, autocomplete: true }),
+      expect.objectContaining({ name: "persona", type: ApplicationCommandOptionType.String, autocomplete: true }),
     ]);
-    expect((configCommand.options?.[0] as { required?: boolean }).required ?? false).toBe(false);
+    for (const option of configCommand.options ?? []) {
+      expect((option as { required?: boolean }).required ?? false).toBe(false);
+    }
 
     expect([...(executionMap.get("config") ?? new Map()).keys()]).toEqual([ROOT_COMMAND_EXECUTION_KEY]);
   });

@@ -59,4 +59,16 @@ describe("resolveSelectedPersona", () => {
   it("returns null for stale or cross-server persona IDs", () => {
     expect(resolveSelectedPersona(personas, "999")).toBeNull();
   });
+
+  it("resolves typed text only when exactly one nickname equals it", () => {
+    const named = [createPersona(41, "Mirri"), createPersona(42, "Juno"), createPersona(43, "Juno")];
+
+    expect(resolveSelectedPersona(named, " mirri ")?.persona_id).toBe(41);
+    expect(resolveSelectedPersona(named, "Mir")).toBeNull();
+    expect(resolveSelectedPersona(named, "Juno")).toBeNull();
+  });
+
+  it("falls back to the nickname when a numeric nickname is not a persona ID", () => {
+    expect(resolveSelectedPersona([createPersona(7, "42")], "42")?.persona_id).toBe(7);
+  });
 });
