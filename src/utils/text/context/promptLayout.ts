@@ -44,7 +44,7 @@ export interface PromptLayoutEntry {
   volatility: PromptVolatility;
   anchor: PromptAnchor;
   presetFlush?: "knowledge" | "dialogue";
-  novelai?: "personality" | "memory" | "sample" | "history";
+  novelai?: "personality" | "memory" | "lore" | "sample" | "history";
   role?: StructuredContextItem["role"];
   roleZones?: Partial<Record<StructuredContextItem["role"], PromptZone>>;
 }
@@ -112,6 +112,7 @@ export const PROMPT_LAYOUT: readonly PromptLayoutEntry[] = [
     zone: "system",
     volatility: "slow",
     anchor: { kind: "block" },
+    novelai: "lore",
   },
   {
     tag: ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER,
@@ -119,6 +120,7 @@ export const PROMPT_LAYOUT: readonly PromptLayoutEntry[] = [
     zone: "system",
     volatility: "slow",
     anchor: { kind: "block" },
+    novelai: "lore",
   },
   {
     tag: ContextItemTag.KNOWLEDGE_SERVER_CONDITIONING,
@@ -203,6 +205,7 @@ export const PROMPT_LAYOUT: readonly PromptLayoutEntry[] = [
     zone: "tail",
     volatility: "turn",
     anchor: { kind: "tailSlot" },
+    novelai: "lore",
   },
   {
     tag: ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER,
@@ -210,6 +213,7 @@ export const PROMPT_LAYOUT: readonly PromptLayoutEntry[] = [
     zone: "tail",
     volatility: "turn",
     anchor: { kind: "tailSlot" },
+    novelai: "lore",
   },
   { tag: ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS, zone: "tail", volatility: "turn", anchor: { kind: "tailSlot" } },
   { tag: ContextItemTag.KNOWLEDGE_USER_STATUS, zone: "tail", volatility: "clock", anchor: { kind: "tailSlot" } },
@@ -240,15 +244,18 @@ export function presetFlushTags(flush: "knowledge" | "dialogue"): Set<ContextIte
   );
 }
 
-export function novelaiLayoutTags(kind: "admitted" | "persistent" | "memory"): Set<ContextItemTag> {
+export function novelaiLayoutTags(kind: "admitted" | "persistent" | "memory" | "lore"): Set<ContextItemTag> {
   return new Set(
-    PROMPT_LAYOUT.filter(
-      (entry) =>
+    PROMPT_LAYOUT.filter((entry) => {
+      if (kind === "lore") return entry.novelai === "lore";
+      return (
         entry.novelai &&
         (kind === "admitted" ||
           entry.novelai === "memory" ||
-          (kind === "persistent" && entry.novelai === "personality")),
-    ).map((entry) => entry.tag as ContextItemTag),
+          entry.novelai === "lore" ||
+          (kind === "persistent" && entry.novelai === "personality"))
+      );
+    }).map((entry) => entry.tag as ContextItemTag),
   );
 }
 

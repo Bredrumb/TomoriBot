@@ -441,7 +441,7 @@ export default {
       plugins_nsfw_jailbreaks_docs_label: `Read the age-restricted command guide`,
       behavior_general_title: `General Behavior`,
       behavior_general_description: `Tune the server's default response context.`,
-      behavior_novelai_notice: `While my text model is NovelAI, I ignore the saved system prompt, persona and channel prompts, context notes, humanizer prompt instructions, conditioning, and SillyTavern preset instructions. These settings stay saved for other providers. Personality, sample dialogue, memories, and response prefills still apply. Discord replies still follow the humanizer setting.`,
+      behavior_novelai_notice: `While my text model is NovelAI, I ignore the saved system prompt, persona and channel prompts, context notes, humanizer prompt instructions, conditioning, and SillyTavern preset instructions. These settings stay saved for other providers. Personality, sample dialogue, memories, lorebooks, and response prefills still apply. Discord replies still follow the humanizer setting.`,
       behavior_trigger_title: `Trigger Behavior`,
       behavior_trigger_description: `Control when and how conversations trigger responses.`,
       behavior_experimental_title: `Experimental Behavior`,

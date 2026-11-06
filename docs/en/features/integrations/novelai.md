@@ -37,7 +37,8 @@ Omitted settings stay saved in `/config` > `Behavior` > `General Behavior` for o
 | Content or setting | NovelAI handling |
 |---|---|
 | Persona attributes, sample dialogue, conversation, and memories | Kept, including visible personal and short-term memories. Privacy and memory-tag filters still apply. |
-| System, persona, and channel prompts; context notes; humanizer rules; conditioning; SillyTavern instructions | Omitted. Xialong uses NovelAI's system prompt; GLM, Kayra, and Erato have no system block. |
+| Lorebooks | Kept as entry contents. Always On lore stays with persistent information; activated lore sits above the last four speaker turns. |
+| System, persona, and channel prompts; context notes; humanizer rules; conditioning; SillyTavern instructions | Omitted. Xialong uses NovelAI's system prompt. |
 | Status, time/channel/server info, documents, and emoji/sticker/sprite inventories | Omitted. |
 | Memory-tool nudges | Omitted, including nudges built before a personal override or fallback. |
 | ATTG metadata and quality stars | ATTG means Author, Title, Tags, and Genre. Xialong puts metadata first in its persistent information and defaults to 4 stars. Erato uses configured stars; Kayra omits stars. |
@@ -52,24 +53,25 @@ The local guard preserves code; literal API stops can still match inside generat
 ## Context trimming
 <!-- anchor: context-trimming -->
 
-Memories use up to 20% of the context window, with older entries removed first. If the prompt still
-does not fit, TomoriBot trims it in this order:
+Memories and lore share up to 20% of the context window. Older memories leave first; undated entries
+use their source order. Always On lore can also be trimmed. If the prompt still does not fit,
+TomoriBot trims it in this order:
 
 | Order | Content removed | Content protected |
 |---|---|---|
 | 1 | Extra sample dialogue | One available sample exchange |
-| 2 | Memories, older entries first | No minimum |
+| 2 | Memories and lore | No minimum |
 | 3 | Old conversation history | Up to two recent history exchanges |
 
 Persona attributes, ATTG metadata, and the current turn also stay protected. Generation fails if the
-protected context cannot fit. Trimming leaves saved memories and messages unchanged.
+protected context cannot fit. Trimming leaves saved memories, lore, and messages unchanged.
 
 `/tool prompt snapshot` shows the final prompt, token counts, reply cap, and trimming report.
 
 ## Text polishing and Discord delivery
 <!-- anchor: text-polishing-and-discord-delivery -->
 
-Polishing changes only the copy of history, memories, and sample dialogue sent to all four NovelAI
+Polishing changes only the copy of history, memories, lore, and sample dialogue sent to all four NovelAI
 models, before token counting. Saved text and other providers are unchanged; grammar is not rewritten.
 
 - **Text is properly capitalized**: Latin sentence and line starts are capitalized; known persona

@@ -197,6 +197,8 @@ describe("NovelAI prompt fitting", () => {
             ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
             ContextItemTag.KNOWLEDGE_USER_MEMORIES,
             ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
+            ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE,
+            ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER,
           ].includes(tag),
       )
       .map((tag) => ({
@@ -493,6 +495,12 @@ describe("NovelAI prompt fitting", () => {
           window: 4096,
           outputPrefill,
           contextItems: [
+            {
+              role: "user",
+              metadataTag: ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER,
+              parts: [{ type: "text", text: "## World Info\n### Lantern\nThe lantern stays lit." }],
+              memoryEntries: [{ id: "lorebook:1", text: "The lantern stays lit." }],
+            },
             history("trigger", "user", "hello"),
             {
               role: "model",
@@ -504,6 +512,7 @@ describe("NovelAI prompt fitting", () => {
         });
         expect(prepared.prompt).toEndWith(outputPrefill);
         expect(prepared.prompt).not.toContain("Juno: Juno");
+        expect(prepared.prompt).toContain("The lantern stays lit.");
       }
     }
   });

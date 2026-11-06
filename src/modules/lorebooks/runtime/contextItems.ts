@@ -74,6 +74,19 @@ export async function buildLorebookContextItems(params: {
           },
         ],
         metadataTag,
+        memoryEntries: await Promise.all(
+          group.map(async (entry) => ({
+            id: `lorebook:${entry.entry_id}`,
+            text: await params.convertMentions(
+              entry.content,
+              params.client,
+              params.guildId,
+              "User",
+              params.botName,
+              params.personalMemoriesEnabled,
+            ),
+          })),
+        ),
       });
     }
   }

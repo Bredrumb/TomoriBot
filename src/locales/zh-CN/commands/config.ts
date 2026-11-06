@@ -1427,7 +1427,7 @@ export default {
       toggle_sentence_split_label: `按句分割`,
       toggle_sentence_split_description: `单独发送每个句子并去除句末句号。`,
       toggle_lowercase_label: `强制小写`,
-      toggle_lowercase_description: `以全小写发送，但保留首字母缩写。`,
+      toggle_lowercase_description: `对中文无效果（以全小写发送英文，但保留首字母缩写）。`,
       toggle_punctuation_split_label: `标点分割`,
       toggle_punctuation_split_description: `省略分号和部分逗号，并在部分逗号、! 或 ? 处切分。`,
       all_off_label: `全部关闭`,

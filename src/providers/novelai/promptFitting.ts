@@ -1,4 +1,4 @@
-import { novelaiLayoutTags } from "@/utils/text/context/promptLayout";
+import { applyPromptLayoutInserts, novelaiLayoutTags } from "@/utils/text/context/promptLayout";
 import type { TomoriState } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import {
@@ -196,30 +196,33 @@ export function fitNovelAIPrompt(args: FitInput): PreparedNovelAIRequest {
   );
   const sentenceReserve = parameters.generate_until_sentence ? profile.sentenceCompletionReserve : 0;
   const overhead = profile.nativeFramingTokens + sentenceReserve;
+  let renderedItems: StructuredContextItem[] = [];
   const render = (): string => {
+    renderedItems = [...selected];
+    applyPromptLayoutInserts(renderedItems, []);
     const botName = tomoriState.persona_nickname;
     let prompt: string;
     if (profile.renderer === "story") {
-      const base = assembleNovelAIPrompt(selected, botName, {
+      const base = assembleNovelAIPrompt(renderedItems, botName, {
         attgBlock: buildAttgBlock(tomoriState, profile.codename),
       });
       prompt =
         args.outputPrefill && base.trimEnd().endsWith(args.outputPrefill.trim()) ? base : `${base}\n${botName}: `;
     } else if (profile.renderer === "xialong") {
-      prompt = assembleXialongPrompt(selected, profile.systemPrompt, {
+      prompt = assembleXialongPrompt(renderedItems, profile.systemPrompt, {
         attgBlock: buildAttgBlock(tomoriState, profile.codename),
         outputPrefill: args.outputPrefill,
         thinkingLevel: tomoriState.config.thinking_level,
         forceReason: args.forceReason,
       });
     } else {
-      prompt = assembleGlmChatPrompt(selected, botName, profile.characterPrefix, {
+      prompt = assembleGlmChatPrompt(renderedItems, botName, profile.characterPrefix, {
         thinkingLevel: tomoriState.config.thinking_level,
         forceReason: args.forceReason,
         thinkingByDefault: profile.thinkingByDefault,
       });
-      if (args.outputPrefill && selected.at(-1)?.completionText === args.outputPrefill) {
-        const withoutPrefill = selected.slice(0, -1);
+      if (args.outputPrefill && renderedItems.at(-1)?.completionText === args.outputPrefill) {
+        const withoutPrefill = renderedItems.slice(0, -1);
         prompt = assembleGlmChatPrompt(withoutPrefill, botName, profile.characterPrefix, {
           thinkingLevel: tomoriState.config.thinking_level,
           forceReason: args.forceReason,
@@ -278,7 +281,7 @@ export function fitNovelAIPrompt(args: FitInput): PreparedNovelAIRequest {
   return {
     prompt,
     parameters,
-    contextItems: selected,
+    contextItems: renderedItems,
     speakers,
     stopStrings,
     report: {

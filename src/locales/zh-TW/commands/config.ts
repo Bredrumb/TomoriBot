@@ -1432,7 +1432,7 @@ CFG 權重：**{cfg_weight}**
       toggle_sentence_split_label: `句子分割`,
       toggle_sentence_split_description: `單獨發送每個句子並省略句末句號。`,
       toggle_lowercase_label: `強制小寫`,
-      toggle_lowercase_description: `以小寫書寫，但保留縮寫首字母。`,
+      toggle_lowercase_description: `對中文無效果（以小寫書寫英文，但保留縮寫首字母）。`,
       toggle_punctuation_split_label: `標點分割`,
       toggle_punctuation_split_description: `省略分號和部分逗號，並在部分逗號、! 或 ? 處進行分割。`,
       all_off_label: `全部關閉`,

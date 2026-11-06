@@ -5,12 +5,44 @@ import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 import { getNovelAiThinkingDirective } from "@/utils/provider/thinkingControl";
 
 const persistentTags = novelaiLayoutTags("persistent");
+const loreTags = novelaiLayoutTags("lore");
 
 // Xialong's official client uses four quality stars when no value is configured.
 const XIALONG_DEFAULT_STARS = 4;
 
 function itemText(item: StructuredContextItem): string {
   return item.parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n");
+}
+
+function isPersistentItem(item: StructuredContextItem): boolean {
+  return Boolean(
+    item.metadataTag &&
+      persistentTags.has(item.metadataTag) &&
+      (!loreTags.has(item.metadataTag) || item.role === "system"),
+  );
+}
+
+function isActivatedLore(item: StructuredContextItem): boolean {
+  return item.role === "user" && Boolean(item.metadataTag && loreTags.has(item.metadataTag));
+}
+
+function collectChatTurns(contextItems: StructuredContextItem[]) {
+  const turns: Array<{ role: StructuredContextItem["role"]; content: string; item: StructuredContextItem }> = [];
+  for (const item of contextItems) {
+    const content = itemText(item);
+    if (!content) continue;
+    if (isActivatedLore(item)) {
+      const previous = turns.at(-1);
+      if (previous?.role === "system") previous.content += `\n${content}`;
+      else turns.push({ role: "system", content, item });
+    } else if (
+      (item.role === "user" || item.role === "model") &&
+      (item.metadataTag === ContextItemTag.DIALOGUE_SAMPLE || item.metadataTag === ContextItemTag.DIALOGUE_HISTORY)
+    ) {
+      turns.push({ role: item.role, content, item });
+    }
+  }
+  return turns;
 }
 
 export function buildAttgBlock(tomoriState: TomoriState, model: string): string | null {
@@ -34,10 +66,11 @@ export function assembleNovelAIPrompt(
     attgBlock?: string | null;
   },
 ): string {
-  const sampleDialogueParts: string[] = [];
-  const historyParts: string[] = [];
+  const dialogueBlocks: string[][] = [];
+  let dialogueTag: ContextItemTag | undefined;
   let personalityText = "";
   let memoriesText = "";
+  const loreParts: string[] = [];
   let defaultSpeakerLabel = "User";
   // Samples without labels inherit the live user's label for multi-user chat consistency.
   for (const scanItem of contextItems) {
@@ -53,7 +86,7 @@ export function assembleNovelAIPrompt(
   for (const item of contextItems) {
     const textContent = itemText(item);
     if (!textContent) continue;
-    if (item.metadataTag && persistentTags.has(item.metadataTag)) {
+    if (isPersistentItem(item)) {
       switch (item.metadataTag) {
         case ContextItemTag.SYSTEM_PERSONALITY:
           personalityText = textContent;
@@ -63,37 +96,40 @@ export function assembleNovelAIPrompt(
         case ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY:
           memoriesText = [memoriesText, textContent].filter(Boolean).join("\n");
           break;
+        case ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE:
+        case ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER:
+          loreParts.push(textContent);
+          break;
       }
     }
-    if (
+    const isDialogue =
       (item.role === "user" || item.role === "model") &&
-      !(item.metadataTag && persistentTags.has(item.metadataTag))
-    ) {
-      if (item.metadataTag === ContextItemTag.DIALOGUE_SAMPLE) {
-        if (item.role === "user" && !/^[^\n:]+:\s/.test(textContent)) {
-          sampleDialogueParts.push(`${defaultSpeakerLabel}: ${textContent}`);
-        } else {
-          sampleDialogueParts.push(textContent);
-        }
-      } else if (item.metadataTag === ContextItemTag.DIALOGUE_HISTORY) {
-        historyParts.push(textContent);
+      (item.metadataTag === ContextItemTag.DIALOGUE_SAMPLE || item.metadataTag === ContextItemTag.DIALOGUE_HISTORY);
+    if (isDialogue || isActivatedLore(item)) {
+      if (!dialogueBlocks.length || (isDialogue && dialogueTag && dialogueTag !== item.metadataTag)) {
+        dialogueBlocks.push([]);
       }
+      if (isDialogue) dialogueTag = item.metadataTag;
+      const content =
+        item.metadataTag === ContextItemTag.DIALOGUE_SAMPLE && item.role === "user" && !/^[^\n:]+:\s/.test(textContent)
+          ? `${defaultSpeakerLabel}: ${textContent}`
+          : textContent;
+      dialogueBlocks.at(-1)?.push(content);
     }
   }
   const systemBlocks: string[] = [];
   if (personalityText) {
     systemBlocks.push(`Characters:\n${botName}\n${personalityText}`);
   }
-  if (memoriesText) {
-    systemBlocks.push(`Server Notes:\n${memoriesText}`);
+  const notes = [memoriesText, ...loreParts].filter(Boolean).join("\n");
+  if (notes) {
+    systemBlocks.push(`Server Notes:\n${notes}`);
   }
   const attgPrefix = options?.attgBlock ? `${options.attgBlock}\n` : "";
   const systemHeader = systemBlocks.length > 0 ? `${attgPrefix}${systemBlocks.join("\n")}` : attgPrefix.trimEnd();
-  const sampleText = sampleDialogueParts.join("\n");
-  const historyText = historyParts.join("\n");
-  const styledSampleText = sampleText.trim() ? `[ Style: chat ]\n${sampleText}` : "";
-  const styledHistoryText = historyText.trim() ? `[ Style: chat ]\n${historyText}` : "";
-  const parts = [systemHeader, styledSampleText, styledHistoryText].filter((p) => p?.trim());
+  const parts = [systemHeader, ...dialogueBlocks.map((block) => `[ Style: chat ]\n${block.join("\n")}`)].filter((p) =>
+    p?.trim(),
+  );
   return parts.join("\n***\n");
 }
 
@@ -107,30 +143,8 @@ export function assembleGlmChatPrompt(
     thinkingByDefault?: boolean;
   },
 ): string {
-  const systemInstructionParts: string[] = [];
-  const dialogueTurns: Array<{
-    role: "user" | "model";
-    content: string;
-  }> = [];
-  for (const item of contextItems) {
-    const textContent = itemText(item);
-    if (!textContent) {
-      continue;
-    }
-    if (item.metadataTag) {
-      if (persistentTags.has(item.metadataTag)) {
-        systemInstructionParts.push(textContent);
-      }
-    }
-    if (item.role === "user" || item.role === "model") {
-      if (item.metadataTag === ContextItemTag.DIALOGUE_SAMPLE || item.metadataTag === ContextItemTag.DIALOGUE_HISTORY) {
-        dialogueTurns.push({
-          role: item.role,
-          content: textContent,
-        });
-      }
-    }
-  }
+  const systemInstructionParts = contextItems.filter(isPersistentItem).map(itemText);
+  const dialogueTurns = collectChatTurns(contextItems);
   const thinkDirective = getNovelAiThinkingDirective(
     options?.thinkingLevel,
     options?.forceReason,
@@ -149,6 +163,8 @@ export function assembleGlmChatPrompt(
           : turn.content,
       );
       persistentPending = false;
+    } else if (turn.role === "system") {
+      promptParts.push("<|system|>", turn.content);
     } else if (turn.role === "model") {
       promptParts.push("<|assistant|>");
       promptParts.push(thinkDirective);
@@ -174,21 +190,18 @@ export function assembleXialongPrompt(
   systemPrompt: string,
   options: { attgBlock: string | null; outputPrefill?: string; thinkingLevel?: string | null; forceReason?: boolean },
 ): string {
-  const persistent = [
-    options.attgBlock,
-    ...contextItems.filter((item) => item.metadataTag && persistentTags.has(item.metadataTag)).map(itemText),
-  ].filter(Boolean);
+  const persistent = [options.attgBlock, ...contextItems.filter(isPersistentItem).map(itemText)].filter(Boolean);
   const parts = ["[gMASK]<sop>", "<|system|>", systemPrompt];
   const thinking = getNovelAiThinkingDirective(options.thinkingLevel, options.forceReason, false) !== "/nothink";
   let firstUser = true;
-  for (const item of contextItems.filter(
-    (item) =>
-      item.metadataTag === ContextItemTag.DIALOGUE_HISTORY || item.metadataTag === ContextItemTag.DIALOGUE_SAMPLE,
-  )) {
+  for (const turn of collectChatTurns(contextItems)) {
+    const { item } = turn;
     if (options.outputPrefill && item === contextItems.at(-1) && item.completionText === options.outputPrefill)
       continue;
-    let content = itemText(item);
-    if (item.role === "user") {
+    let content = turn.content;
+    if (turn.role === "system") {
+      parts.push("<|system|>", content);
+    } else if (turn.role === "user") {
       if (firstUser && persistent.length)
         content = `Relevant persistent information:\n${persistent.join("\n")}\n***\n${content}`;
       firstUser = false;

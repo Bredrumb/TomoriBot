@@ -204,6 +204,11 @@ Preset world-info markers consume only Always On blocks. Missing markers flush t
 blocks before the first dialogue anchor. Activated lore bypasses those buckets and joins STM before
 retrieved documents at the tail slot. The shared budget covers all groups.
 
+Lore blocks also carry plain, identity-resolved entries for NovelAI's per-entry fitting. NovelAI keeps
+the Always On and activated split, omits generated headings and titles, and shares its memory token
+allowance with lore. Its [provider policy](/architecture/integrations/novelai/limitations/) owns the
+profile-specific rendering and trimming rules.
+
 Prompt inspection counts both blocks in the `memory` segment and labels them `Lorebook (Before)` and
 `Lorebook (After)` with the `/memories` hint.
 
