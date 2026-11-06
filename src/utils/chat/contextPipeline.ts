@@ -1,6 +1,6 @@
 import { applyPromptLayoutInserts } from "@/utils/text/context/promptLayout";
 import { mapWithConcurrency } from "@/utils/async/bounded";
-import { isHistoryWindowMessageDeleted, readChannelHistory } from "@/utils/chat/historyWindow";
+import { isHistoryWindowMessageDeleted, readChannelHistory, selectAnchoredHistory } from "@/utils/chat/historyWindow";
 import { verifyMessageWebhook, isManagedWebhookMessage } from "@/utils/chat/webhookIdentity";
 import type { Message } from "discord.js";
 import { MessageReferenceType, MessageType } from "discord.js";
@@ -838,6 +838,7 @@ async function buildSimplifiedHistory(
     !messages.some((message) => message.id === turn.lockedTurn.admission.message.id)
   ) {
     messages.push(turn.lockedTurn.admission.message);
+    messages.sort((left, right) => left.id.length - right.id.length || left.id.localeCompare(right.id));
   }
   const fetchedMessages = messages;
   const fetchedMessagesById = new Map<string, Message | null>(fetchedMessages.map((message) => [message.id, message]));
@@ -860,6 +861,7 @@ async function buildSimplifiedHistory(
   // "reset" starts after the marker; "compact_refresh" starts at the marker (it's included).
   let resetIndex = -1;
   let resetType: "reset" | "compact_refresh" | null = null;
+  let resetMessageId: string | undefined;
   for (let i = messages.length - 1; i >= 0; i--) {
     for (const embed of messages[i].embeds) {
       const embedCheck = checkTargetEmbed(embed);
@@ -872,10 +874,18 @@ async function buildSimplifiedHistory(
     if (resetIndex !== -1) break;
   }
   if (resetIndex !== -1) {
+    resetMessageId = messages[resetIndex].id;
     const startIndex = resetType === "compact_refresh" ? resetIndex : resetIndex + 1;
     log.info(`Reset marker at index ${resetIndex} (${resetType}). History starts from index ${startIndex}.`);
     messages = messages.slice(startIndex);
   }
+  messages = selectAnchoredHistory(
+    channel.id,
+    messages,
+    fetchLimit,
+    resetMessageId,
+    turn.lockedTurn.admission.message.id,
+  );
 
   const activeUserBlocks = await loadActivePersonaUserBlocks(turn);
   // Map each 'block'-type target to its row so the simplify loop can render a

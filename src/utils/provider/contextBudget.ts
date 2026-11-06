@@ -1,6 +1,7 @@
 import type { TomoriState } from "@/types/db/schema";
 import type { StructuredContextItem } from "@/types/misc/context";
 import { log } from "@/utils/misc/logger";
+import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { resolveChatMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
 import { resolveModelLimits } from "@/utils/provider/modelLimits";
 import { normalizeProviderName, providerUsesApiFamily } from "@/utils/provider/providerInfoRegistry";
@@ -56,6 +57,7 @@ export async function applyProviderContextTruncation(
     budget.contextLength,
     budget.outputReserve,
     reservedTailItems,
+    normalizeMessageFetchLimit(tomoriState.config.message_fetch_limit),
   );
   if (totalDropped === 0) return contextItems;
 

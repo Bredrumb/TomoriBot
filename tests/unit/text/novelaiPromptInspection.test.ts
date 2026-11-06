@@ -29,6 +29,7 @@ import { prepareNovelAIRequest } from "@/providers/novelai/promptFitting";
 import { getNovelAIProfile } from "@/providers/novelai/modelProfiles";
 import { createNovelAITokenizerEncoder } from "@/utils/provider/localTokenizerRegistry";
 import type { StreamConfig, StreamContext } from "@/types/stream/interfaces";
+import { applyProviderContextTruncation } from "@/utils/provider/contextBudget";
 
 const restores: Array<() => void> = [];
 beforeAll(initializeLocalizer);
@@ -160,6 +161,7 @@ describe("NovelAI prompt inspection credentials", () => {
     ]).flat();
     for (const item of items)
       item.completionText = item.parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n");
+    let builtItems: StructuredContextItem[] = [];
     const spies = [
       spyOn(channelLlm, "getCachedChannelLlm").mockResolvedValue(null),
       spyOn(channelPrompt, "getCachedChannelPrompt").mockResolvedValue(null),
@@ -188,6 +190,7 @@ describe("NovelAI prompt inspection credentials", () => {
           uncensorInputOptions: { unicodeSpacesEnabled: false, sanitizeEnabled: false },
           convertMentions: async (text) => text,
         });
+        builtItems = contextItems;
         return {
           contextItems,
           tailDirectives: [],
@@ -321,5 +324,24 @@ describe("NovelAI prompt inspection credentials", () => {
     );
     expect(seenKeys).toEqual(["server-key", "personal-key"]);
     expect(rotated).not.toHaveBeenCalled();
+    const budgetPersona = createPersona({
+      llm: createLlmRow({ llm_provider: "openrouter", llm_codename: "inspection-margin", context_window: 16000 }),
+      config: { message_fetch_limit: 20, llm_max_output_tokens: 100 },
+    });
+    resolved.mockResolvedValue({
+      provider: "openrouter",
+      apiKey: "fixture-key",
+      keyVersion: 1,
+      savedConfig,
+      source: "server",
+    });
+    const budgetSnapshot = await assemblePromptInspection({
+      ...request,
+      tomoriState: budgetPersona,
+      selectedPersona: budgetPersona,
+      personas: [budgetPersona],
+    });
+    expect(budgetSnapshot?.historyPairsDropped).toBe(3);
+    expect(budgetSnapshot?.contextItems).toEqual(await applyProviderContextTruncation(builtItems, budgetPersona));
   });
 });

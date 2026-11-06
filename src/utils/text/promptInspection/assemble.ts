@@ -833,7 +833,7 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
   }
   const budget = await resolveContextBudget(answeringState);
   const truncation = budget
-    ? truncateDialogueHistory(resolvedContextItems, budget.contextLength, budget.outputReserve)
+    ? truncateDialogueHistory(resolvedContextItems, budget.contextLength, budget.outputReserve, [], messageFetchLimit)
     : null;
 
   if (providerUsesApiFamily(answeringState.llm.llm_provider, "novelai") && !inspectionApiKey) {

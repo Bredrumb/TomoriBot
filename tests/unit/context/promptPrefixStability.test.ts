@@ -20,6 +20,7 @@ import * as ragAvailability from "@/utils/db/ragAvailability";
 import * as credentialResolver from "@/utils/provider/credentialResolver";
 import { memoryGuard } from "@/utils/security/rateLimiter";
 import { log } from "@/utils/misc/logger";
+import { selectAnchoredHistory, setHistoryWindowGatewayConnected } from "@/utils/chat/historyWindow";
 import { buildContext } from "@/utils/text/context/builder";
 import { applyPromptLayoutInserts, getCacheablePrefixBoundary } from "@/utils/text/context/promptLayout";
 import type { SimplifiedMessageForContext } from "@/utils/text/context/types";
@@ -99,6 +100,7 @@ function textFor(items: StructuredContextItem[], tag: ContextItemTag): string {
 afterEach(() => {
   setSystemTime();
   invalidateStPresetCache(1);
+  setHistoryWindowGatewayConnected(0, true);
 });
 
 it("preserves serialized prefixes across volatile updates and appended exchanges on every path and adapter", async () => {
@@ -330,7 +332,21 @@ it("preserves serialized prefixes across volatile updates and appended exchanges
   }
   const failures: string[] = [];
   try {
-    const cases = [{ name: "growing history", first: history(11), next: history(13) }];
+    selectAnchoredHistory("prefix-full-window", history(80), 80);
+    const anchored = Array.from({ length: 13 }, (_, index) =>
+      selectAnchoredHistory("prefix-full-window", history(82 + index * 2).slice(-80), 80),
+    );
+    expect(anchored[0]?.[0]?.id).toBe(history(82)[24]?.id);
+    expect(anchored[11]?.[0]?.id).toBe(anchored[0]?.[0]?.id);
+    expect(anchored[12]?.[0]?.id).toBe(history(106)[48]?.id);
+    const cases = [
+      { name: "growing history", first: history(11), next: history(13) },
+      ...anchored.slice(0, 11).map((first, index) => ({
+        name: `full window exchange ${index + 1}`,
+        first,
+        next: anchored[index + 1] ?? [],
+      })),
+    ];
     for (const path of ["native", "preset"]) {
       preset = path === "preset";
       for (const scenario of cases) {
