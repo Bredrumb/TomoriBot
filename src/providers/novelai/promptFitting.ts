@@ -36,7 +36,7 @@ const MEMORY_WINDOW_FRACTION = 0.2;
 // Erato expands each name into multiple token sequences, so match SillyTavern's 1,024-sequence cap to bound the request.
 const MAX_NATIVE_STOP_SEQUENCES = 1024;
 
-export interface NovelAIFitReport {
+interface NovelAIFitReport {
   included: string[];
   excluded: string[];
   trimmed: string[];

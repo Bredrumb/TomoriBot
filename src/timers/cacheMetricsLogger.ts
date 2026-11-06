@@ -287,6 +287,7 @@ async function emitHostSnapshot(): Promise<void> {
  * Safe to call multiple times, so a subsequent call is a no-op if already running.
  *
  * @param intervalMs - Optional override; defaults to CACHE_METRICS_INTERVAL_MS env or 5 min
+ * @public Dynamically loaded by `src/init/timers.ts` on main and release.
  */
 export function initializeCacheMetricsLogger(client: Client, intervalMs?: number): void {
   // Skip in non-production, so these snapshots are for CloudWatch, not local dev
@@ -315,6 +316,7 @@ export function initializeCacheMetricsLogger(client: Client, intervalMs?: number
 
 /**
  * Stop the cache metrics interval. No-op if not running.
+ * @public Dynamically loaded by `src/init/timers.ts` on main and release.
  */
 export function stopCacheMetricsLogger(): void {
   if (intervalId !== null) {

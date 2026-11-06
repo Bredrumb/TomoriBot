@@ -2,10 +2,10 @@ import { setTimeout as delay } from "node:timers/promises";
 import { clusterLeaseRepository, type ClusterLeaseRepository } from "@/utils/db/repositories/ClusterLeaseRepository";
 import { log } from "@/utils/misc/logger";
 
-export const LEASE_TTL_MS = 30_000;
+const LEASE_TTL_MS = 30_000;
 export const LEASE_RENEW_MS = 10_000;
 // Query send time leaves five seconds for transport delay and event-loop scheduling before database expiry.
-export const LEASE_SAFETY_MS = 25_000;
+const LEASE_SAFETY_MS = 25_000;
 const ACQUIRE_WAIT_MS = 35_000;
 const ACQUIRE_RETRY_MS = 250;
 

@@ -7,11 +7,7 @@ import { serverScheduleRepository } from "@/utils/db/repositories";
 import { RandomTriggerProcessor } from "./randomTriggerProcessor";
 import { ReminderProcessor } from "./reminderProcessor";
 import { NaturalNudgeProcessor } from "@/modules/natural-nudges/runtime/processor";
-import {
-  clearScheduledWorkNudgeHandler,
-  emitScheduledWorkNudge,
-  registerScheduledWorkNudgeHandler,
-} from "./scheduledWorkSignals";
+import { clearScheduledWorkNudgeHandler, registerScheduledWorkNudgeHandler } from "./scheduledWorkSignals";
 
 const MAX_TIMEOUT_MS = 2_147_483_647;
 const SCHEDULED_WORK_RECONCILE_INTERVAL_MS = 60_000;
@@ -21,7 +17,7 @@ export interface ScheduledWorkOwner {
   getWorkSignal: () => AbortSignal | undefined;
 }
 
-export type ScheduledWorkStatus = {
+type ScheduledWorkStatus = {
   isRunning: boolean;
   isProcessing: boolean;
   reconcileIntervalMs: number;
@@ -253,18 +249,10 @@ export function stopScheduledWorkCoordinator(): void {
   scheduledWorkCoordinatorInstance = null;
 }
 
-export function getScheduledWorkStatus(): ScheduledWorkStatus | null {
-  return scheduledWorkCoordinatorInstance?.getStatus() ?? null;
-}
-
 export async function runScheduledWorkNow(reason?: string): Promise<void> {
   if (!scheduledWorkCoordinatorInstance) {
     throw new Error("Scheduled work coordinator not initialized");
   }
 
   await scheduledWorkCoordinatorInstance.runNow(reason);
-}
-
-export function nudgeScheduledWork(reason?: string): void {
-  emitScheduledWorkNudge(reason);
 }

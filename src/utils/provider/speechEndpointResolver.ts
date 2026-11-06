@@ -26,7 +26,7 @@ import {
   loadSpeechRoutingPolicy,
 } from "@/utils/db/repositories/SpeechRepository";
 
-export interface SpeechEndpointResult {
+interface SpeechEndpointResult {
   endpoint: CustomEndpointRow;
   /** Empty string when requires_auth = false (local endpoint with no auth). */
   apiKey: string;

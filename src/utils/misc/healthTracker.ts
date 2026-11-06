@@ -28,7 +28,7 @@ export interface ShardHealth {
   notReadySince: string | null;
 }
 
-export interface ShardWatchdogTimeout {
+interface ShardWatchdogTimeout {
   shardIds: readonly number[];
   notReadySince: number;
 }

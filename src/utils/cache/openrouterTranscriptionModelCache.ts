@@ -8,7 +8,7 @@ const catalogEntrySchema = z.object({
   }),
 });
 
-export function parseOpenRouterTranscriptionModelList(payload: unknown): { id: string }[] {
+function parseOpenRouterTranscriptionModelList(payload: unknown): { id: string }[] {
   const envelope = z.object({ data: z.array(z.unknown()) }).parse(payload);
   return envelope.data.flatMap((entry) => {
     const result = catalogEntrySchema.safeParse(entry);

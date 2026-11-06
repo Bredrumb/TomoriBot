@@ -3,13 +3,13 @@ import { VERBATIM_TOOL_CALLING_CONTEXT_DEPTH } from "@/utils/tools/verbatimToolC
 import { TIME_AWARENESS_NOTE_DEPTH } from "@/utils/text/context/timeAwareness";
 
 /** Zones identify system-message content, user reference blocks before history, conversation history, and positional tail guidance. */
-export type PromptZone = "system" | "reference" | "history" | "tail";
+type PromptZone = "system" | "reference" | "history" | "tail";
 
 /** Volatility identifies config-only edits (static), memory or asset writes (slow), per-turn selection (turn), and wall-time or presence changes (clock). */
-export type PromptVolatility = "static" | "slow" | "turn" | "clock";
+type PromptVolatility = "static" | "slow" | "turn" | "clock";
 
 /** Simplified-message anchors run after that message's date spacer, while dialogue-depth anchors count emitted history items from the end. */
-export type PromptAnchor =
+type PromptAnchor =
   | { kind: "block" | "history" | "before-latest-pair" | "append" }
   | { kind: "simplified-message"; depth: number | "configured" }
   | { kind: "dialogue-depth" | "tailSlot" };
@@ -25,7 +25,7 @@ export type PromptLayoutItem = StructuredContextItem & {
   [APPLIED_LAYOUT_INSERT]?: Pick<PromptLayoutInsert, "tag" | "depth">;
 };
 
-export type PromptInsertTag =
+type PromptInsertTag =
   | "persona_note"
   | "channel_note"
   | "global_note"

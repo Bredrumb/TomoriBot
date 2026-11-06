@@ -433,7 +433,7 @@ export function missingScopeMessageKey(
  * Copy for a route that outlived the persona row it names. A write must never fall back to another
  * persona, so the panel is re-run rather than silently applied somewhere else.
  */
-export function outdatedConfigPanelMessage(locale: string): string {
+function outdatedConfigPanelMessage(locale: string): string {
   return localizer(locale, "commands.config.panel.outdated_panel", { command: CONFIG_PANEL_COMMAND });
 }
 

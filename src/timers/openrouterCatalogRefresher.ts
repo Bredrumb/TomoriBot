@@ -18,7 +18,7 @@ import { warmOpenRouterMediaPricing } from "@/utils/provider/openrouterMediaPric
  * parameters are consulted per turn and would keep answering from the boot snapshot for
  * weeks. This exists for them.
  */
-export class OpenRouterCatalogRefresher {
+class OpenRouterCatalogRefresher {
   private intervalId: NodeJS.Timeout | null = null;
   private isRunning = false;
   private readonly intervalMs: number;
@@ -76,6 +76,7 @@ export class OpenRouterCatalogRefresher {
 
 let refresherInstance: OpenRouterCatalogRefresher | null = null;
 
+/** @public Dynamically loaded by `src/init/timers.ts` on main and release. */
 export function initializeOpenRouterCatalogRefresher(intervalMs?: number): void {
   if (refresherInstance) {
     log.warn("OpenRouter catalog refresher already initialized");
@@ -90,6 +91,7 @@ export function initializeOpenRouterCatalogRefresher(intervalMs?: number): void 
   refresherInstance.start();
 }
 
+/** @public Dynamically loaded by `src/init/timers.ts` on main and release. */
 export function stopOpenRouterCatalogRefresher(): void {
   if (refresherInstance) {
     refresherInstance.stop();

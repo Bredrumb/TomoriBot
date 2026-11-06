@@ -16,7 +16,7 @@ import {
 /**
  * Class to manage the memory monitoring system
  */
-export class MemoryMonitor {
+class MemoryMonitor {
   private intervalId: NodeJS.Timeout | null = null;
   private unregisterEmergencyHandler: (() => void) | null = null;
   private isRunning = false;
@@ -138,6 +138,7 @@ let memoryMonitorInstance: MemoryMonitor | null = null;
 /**
  * @param clientOrPollIntervalMs - Optional Discord client or polling interval in milliseconds (default 30000)
  * @param pollIntervalMs - Optional polling interval when a client is provided
+ * @public Dynamically loaded by `src/init/timers.ts` on main and release.
  */
 export function initializeMemoryMonitor(clientOrPollIntervalMs?: Client | number, pollIntervalMs?: number): void {
   if (memoryMonitorInstance) {
@@ -154,29 +155,11 @@ export function initializeMemoryMonitor(clientOrPollIntervalMs?: Client | number
   log.success("Memory monitoring system initialized");
 }
 
+/** @public Dynamically loaded by `src/init/timers.ts` on main and release. */
 export function stopMemoryMonitor(): void {
   if (memoryMonitorInstance) {
     memoryMonitorInstance.stop();
     memoryMonitorInstance = null;
     log.success("Memory monitoring system stopped");
   }
-}
-
-export function getMemoryMonitorStatus(): {
-  isRunning: boolean;
-  intervalMs: number;
-  lastStatus: MemoryStatus;
-} | null {
-  return memoryMonitorInstance ? memoryMonitorInstance.getStatus() : null;
-}
-
-/**
- * Manually trigger a memory status check (useful for testing)
- */
-export async function checkMemoryManually(): Promise<void> {
-  if (!memoryMonitorInstance) {
-    throw new Error("Memory monitor not initialized");
-  }
-
-  await memoryMonitorInstance.checkMemoryStatus();
 }

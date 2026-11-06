@@ -19,7 +19,7 @@ import {
 const IS_PRODUCTION = process.env.RUN_ENV === "production";
 export const GUARDS_ENABLED = IS_PRODUCTION; // Automatically disabled in dev
 
-export const MESSAGE_RATE_LIMITS = {
+const MESSAGE_RATE_LIMITS = {
   /**
    * Maximum concurrent messages a single user can have active (processing + queued)
    * across ALL servers. Prevents a single user from spamming the bot.
@@ -123,7 +123,7 @@ export const IMPORT_LIMITS = {
   MAX_CHARX_ASSET_TOTAL_MB: Number.parseInt(process.env.MAX_CHARX_ASSET_TOTAL_MB || "256", 10),
 } as const;
 
-export const PERSONA_RATE_LIMITS = {
+const PERSONA_RATE_LIMITS = {
   /**
    * Maximum persona operations (create/generate) per user per 24 hours
    * Prevents volume-based DDoS via rapid successive uploads
@@ -134,7 +134,7 @@ export const PERSONA_RATE_LIMITS = {
     : Number.POSITIVE_INFINITY,
 } as const;
 
-export const IMPORT_RATE_LIMITS = {
+const IMPORT_RATE_LIMITS = {
   /**
    * Maximum import operations per user per 24 hours
    * Prevents volume-based DDoS via rapid successive imports
@@ -145,7 +145,7 @@ export const IMPORT_RATE_LIMITS = {
     : Number.POSITIVE_INFINITY,
 } as const;
 
-export const DOCUMENT_RATE_LIMITS = {
+const DOCUMENT_RATE_LIMITS = {
   /**
    * Maximum document upload operations per user per 24 hours
    * Prevents volume-based DDoS via rapid successive document uploads
@@ -156,7 +156,7 @@ export const DOCUMENT_RATE_LIMITS = {
     : Number.POSITIVE_INFINITY,
 } as const;
 
-export const AVATAR_RATE_LIMITS = {
+const AVATAR_RATE_LIMITS = {
   /**
    * Maximum avatar changes per server (guild) per 24 hours
    * Note: This is a guild-level quota, not user-level
@@ -214,7 +214,7 @@ export const STREAMING_LIMITS = {
  * Must be a function (not a const) so values are read after secrets are
  * loaded in index.ts, so module-level consts evaluate before getAppSecrets() runs.
  */
-export function MEMORY_PROTECTION() {
+function MEMORY_PROTECTION() {
   return {
     /**
      * Total container memory limit in MB (AWS instance/ECS task limit).
@@ -263,7 +263,7 @@ export interface MemoryCheckResult {
   reducedMediaWindow?: number; // Suggested reduced media window during warning
 }
 
-export interface MemoryEmergencyEvent {
+interface MemoryEmergencyEvent {
   rssUsedMB: number;
   memoryLimitMB: number;
   percentUsed: number;
@@ -708,81 +708,16 @@ export function reserveAvatarQuota(guildId: string): QuotaCheckResult {
   return reserveDailyQuota(avatarQuotaMap, guildId, AVATAR_RATE_LIMITS.MAX_OPERATIONS_PER_DAY);
 }
 
-/**
- * ============================================================================
- * UTILITY FUNCTIONS
- * ============================================================================
- */
-
-/**
- * Logs current configuration (useful for debugging)
- */
-export function logGuardConfiguration(): void {
-  log.info("=== Guard Manager Configuration ===");
-  log.info(`Guards Enabled: ${GUARDS_ENABLED}`);
-  log.info(`Environment: ${process.env.RUN_ENV || "development"}`);
-  log.info("\n--- Message Rate Limits ---");
-  log.info(`Max User Active Messages: ${MESSAGE_RATE_LIMITS.MAX_USER_ACTIVE_MESSAGES}`);
-  log.info(`Max Server Active Messages: ${MESSAGE_RATE_LIMITS.MAX_SERVER_ACTIVE_MESSAGES}`);
-  log.info("\n--- Media Limits ---");
-  log.info(`Media Context Window: ${MEDIA_LIMITS.MEDIA_CONTEXT_WINDOW}`);
-  log.info(
-    `Default Max Media Extend: ${MEDIA_LIMITS.MESSAGE_FETCH_LIMIT - MEDIA_LIMITS.MEDIA_CONTEXT_WINDOW} (actual value depends on /config message-fetch-limit)`,
-  );
-  log.info(`Max Media Size: ${MEDIA_LIMITS.MAX_MEDIA_SIZE_MB} MB`);
-  log.info(`Max GIF Size: ${MEDIA_LIMITS.MAX_GIF_SIZE_MB} MB`);
-  log.info("\n--- Persona Limits ---");
-  log.info(`Max Avatar Size: ${PERSONA_LIMITS.MAX_AVATAR_SIZE_MB} MB`);
-  log.info("\n--- Import Limits ---");
-  log.info(`Max Data Import Size: ${IMPORT_LIMITS.MAX_DATA_IMPORT_SIZE_MB} MB`);
-  log.info(`Max Persona Import Size: ${IMPORT_LIMITS.MAX_PERSONA_IMPORT_SIZE_MB} MB`);
-  log.info(`Max Character Card Archive Size: ${IMPORT_LIMITS.MAX_CHARX_IMPORT_SIZE_MB} MB`);
-  log.info(`Max Character Card Payload Size: ${IMPORT_LIMITS.MAX_CHARX_CARD_SIZE_MB} MB`);
-  log.info("\n--- Upload Quota Limits (24h) ---");
-  log.info(`Max Persona Operations: ${PERSONA_RATE_LIMITS.MAX_OPERATIONS_PER_DAY} per user`);
-  log.info(`Max Import Operations: ${IMPORT_RATE_LIMITS.MAX_OPERATIONS_PER_DAY} per user`);
-  log.info(`Max Document Operations: ${DOCUMENT_RATE_LIMITS.MAX_OPERATIONS_PER_DAY} per user`);
-  log.info(`Max Avatar Operations: ${AVATAR_RATE_LIMITS.MAX_OPERATIONS_PER_DAY} per server`);
-  log.info("\n--- Fetch Tool Limits ---");
-  log.info(`Max Fetch Size: ${FETCH_LIMITS.MAX_FETCH_SIZE_MB} MB`);
-  log.info(`Base Fetch Char Limit: ${FETCH_LIMITS.FETCH_CHAR_LIMIT}`);
-  log.info(
-    `Memory Reductions: ${FETCH_LIMITS.MEMORY_REDUCTION_WARNING * 100}% (warning), ${FETCH_LIMITS.MEMORY_REDUCTION_CRITICAL * 100}% (critical)`,
-  );
-  log.info("\n--- Streaming Limits ---");
-  log.info(`Max Flush Count: ${STREAMING_LIMITS.MAX_FLUSH_COUNT}`);
-  const protection = MEMORY_PROTECTION();
-  log.info("\n--- Memory Protection ---");
-  log.info(`Container Memory Limit: ${protection.CONTAINER_MEMORY_LIMIT_MB} MB (RSS)`);
-  log.info(`Warning Threshold: ${protection.MEMORY_WARNING_THRESHOLD * 100}%`);
-  log.info(`Critical Threshold: ${protection.MEMORY_CRITICAL_THRESHOLD * 100}%`);
-  log.info(`Emergency Cooldown: ${protection.EMERGENCY_COOLDOWN_MS / 1000}s`);
-  log.info("===================================");
-}
-
-/**
- * Renders an already-taken memory reading.
- *
- * Callers that branch on a reading must format that same reading rather than calling
- * `getMemoryStatusSummary`, which samples afresh. Emergency clearing runs between the two
- * samples, so prod logs carried lines whose label and body disagreed
- * ("changed to CRITICAL: ... - Status: WARNING").
- */
+/** Format the same memory reading used for branching, since emergency clearing can change the next sample. */
 export function formatMemoryStatus(check: MemoryCheckResult): string {
   return `Memory (RSS): ${check.rssUsedMB.toFixed(2)} MB / ${check.memoryLimitMB} MB (${(check.percentUsed * 100).toFixed(1)}%) - Status: ${check.status.toUpperCase()}`;
-}
-
-/**
- * Gets a summary of current memory status (useful for monitoring/logging)
- */
-export function getMemoryStatusSummary(): string {
-  return formatMemoryStatus(memoryGuard.checkMemory());
 }
 
 /**
  * Initializes the quota cleanup interval
  * Removes expired quota entries every hour to prevent memory leaks
  * Should be called once during application startup
+ * @public Dynamically loaded by `src/init/timers.ts` on main and release.
  */
 export function initializeQuotaCleanup(): void {
   const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
