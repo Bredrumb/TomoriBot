@@ -141,6 +141,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("PostgreSQL derived cache invalidation", ()
   let listenerPid: number;
   let subscriptions = 0;
   let barrierResolve: (() => void) | undefined;
+  let peerBarrierResolve: (() => void) | undefined;
   const sender = crypto.randomUUID();
 
   async function notify(kind: string, args: Args[]): Promise<void> {
@@ -151,11 +152,14 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("PostgreSQL derived cache invalidation", ()
     const barrier = new Promise<void>((resolve) => {
       barrierResolve = resolve;
     });
+    const peerBarrier = new Promise<void>((resolve) => {
+      peerBarrierResolve = resolve;
+    });
     await (writer as unknown as InvalidationTransport).notify(
       INVALIDATION_CHANNEL,
       JSON.stringify({ v: 1, s: sender, k: "testBarrier", a: [["ready"]] }),
     );
-    await barrier;
+    await Promise.all([barrier, peerBarrier]);
   }
 
   beforeAll(async () => {
@@ -200,7 +204,9 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("PostgreSQL derived cache invalidation", ()
     peer.register(
       "testBarrier",
       z.tuple([invalidationKey]),
-      () => {},
+      () => {
+        peerBarrierResolve?.();
+      },
       () => {},
     );
     await peer.start(writer, topology);
