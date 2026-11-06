@@ -59,7 +59,8 @@ import { measureFormattedPanelTextLength } from "@/utils/discord/ui/panelProse";
 import { statusNote, type StatusTone } from "@/utils/discord/ui/statusTitle";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { formatStopStringForDisplay } from "@/utils/provider/stopStringConfig";
-import { getDiscordTextLength, neutralizeFenceRuns, truncateDiscordText } from "@/utils/text/discordTextLimits";
+import { getDiscordTextLength, truncateDiscordText } from "@/utils/text/discordTextLimits";
+import { renderFencedPreview } from "@/utils/text/textPreview";
 import { localizer, resolveDescription } from "@/utils/text/localizer";
 import { buildConfigVoicesBody, type ConfigVoicesView } from "@/utils/discord/ui/configVoicesPanel";
 export type { ConfigVoicesView };
@@ -935,8 +936,8 @@ ${localizer(locale, "commands.config.panel.randomizer_description")}${
   return components;
 }
 
-function renderTagBlock(tags: readonly string[]): string {
-  return ["```markdown", neutralizeFenceRuns(tags.join(", ")) || " ", "```"].join("\n");
+function renderTagBlock(locale: string, tags: readonly string[], actionLabelKey: string): string {
+  return renderFencedPreview(locale, tags.join(", ") || " ", { actionLabel: localizer(locale, actionLabelKey) });
 }
 
 function buildImageGenerationBody(input: ConfigModelsPageInput): ComponentInContainerData[] {
@@ -954,9 +955,9 @@ function buildImageGenerationBody(input: ConfigModelsPageInput): ComponentInCont
       content: `**${localizer(locale, "commands.config.panel.image_defaults_title")}**
 ${localizer(locale, "commands.config.panel.image_defaults_description")}
 ${localizer(locale, "commands.config.panel.image_positive_label")}:
-${renderTagBlock(view.positiveTags)}
+${renderTagBlock(locale, view.positiveTags, "commands.config.panel.edit_positive_button")}
 ${localizer(locale, "commands.config.panel.image_negative_label")}:
-${renderTagBlock(view.negativeTags)}`,
+${renderTagBlock(locale, view.negativeTags, "commands.config.panel.edit_negative_button")}`,
     },
     {
       type: ComponentType.ActionRow,

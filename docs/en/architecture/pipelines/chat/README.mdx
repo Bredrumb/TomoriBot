@@ -116,6 +116,11 @@ overlap and must not be added to reconstruct total latency.
 | `provider_ttfb_ms` | First adapter entry to its first stream progress callback; `-1` if that call produces no progress, even if a fallback later succeeds. |
 | `first_message_ms` | Invocation entry to the first confirmed send recorded by `recordChatMessageSent`, including held response delivery. |
 | `history_fetch_ms` | Sum of channel history `messages.fetch` durations. |
+| `assets_ms` | Persona emoji, sticker, and custom expression loading. |
+| `history_build_ms` | The whole `buildSimplifiedHistory` call, including `history_fetch_ms` and reply fetches. |
+| `participant_ms` | The `prepareParticipantContext` call; hydration inside `buildContext` belongs to `native_ms`. |
+| `naming_ms` | The history naming projection. |
+| `reunion_ms` | Reunion note resolution; `-1` when a borrowed trigger skips it. |
 | `native_ms` | Sum of `buildContext` durations, including native assembly, participant hydration, RAG, and any preset reassembly. |
 | `reaction_fetches` | Calls to `reaction.users.fetch` during metadata reveal; ordinary turns use cached reaction counts and record zero. |
 | `reply_fetches` | Reply target REST calls in `withReplyContext`, after history-window and message-cache misses, including failed calls. |
@@ -138,9 +143,10 @@ identifiers enter this metric.
 | `history` | `reused` for a busy-stretch window, otherwise `rest`. |
 | `drafting` | `yes` when response review enabled holding response text during this turn, otherwise `no`. |
 
-For example, compare `dispatch_ms` for the same provider and source before inspecting the history,
-native, and download fields for the source of a change. `context_built.participantMs` measures the
-participant preparation call; hydration inside `buildContext` belongs to `native_ms`.
+For example, compare `dispatch_ms` for the same provider and source before inspecting the stage and
+download fields for the source of a change. `context_ms` minus the context stage fields
+(`assets_ms`, `history_build_ms`, `participant_ms`, `naming_ms`, `reunion_ms`, `native_ms`) leaves
+intent preflight, forced mentions, channel prompt lookups, sprite checks, and prefill.
 
 ## Source pointers
 

@@ -1227,8 +1227,12 @@ function resolveComfyUiEffectiveDenoise(options: ComfyUiGenerationOptions, inpai
   return 1;
 }
 
+// Discord interaction tokens expire 15 minutes after the defer, so `/generate` needs time left after
+// setup and polling to send its failure reply; chat tool calls end sooner under the tool timeout.
+const COMFYUI_DEFAULT_POLL_TIMEOUT_MS = 13 * 60 * 1000;
+
 function getComfyUiTimeoutMs(): number {
-  const defaultTimeoutMs = 900000;
+  const defaultTimeoutMs = COMFYUI_DEFAULT_POLL_TIMEOUT_MS;
   const parsed = Number.parseInt(process.env.COMFYUI_POLL_TIMEOUT_MS ?? `${defaultTimeoutMs}`, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultTimeoutMs;
 }

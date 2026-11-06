@@ -81,6 +81,7 @@ import {
   buildConfigModelSelectModal,
 } from "@/utils/discord/ui/configModelModals";
 import { NAI_IMAGE_NOISE_SCHEDULES, NAI_IMAGE_SAMPLERS } from "@/utils/image/naiImageParams";
+import { formatImageTagsForConfirmation } from "@/utils/image/tagHelpers";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { log } from "@/utils/misc/logger";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
@@ -1401,7 +1402,7 @@ async function handleImageGeneration(context: ConfigModelRouteContext): Promise<
               result.reset
                 ? "commands.config.panel.image_tags_reset_detail"
                 : "commands.config.panel.image_tags_updated_detail",
-              { tags: result.tags.join(", ") },
+              { tags: formatImageTagsForConfirmation(result.tags) },
             )
           : result.status === "no-tags"
             ? receipt(

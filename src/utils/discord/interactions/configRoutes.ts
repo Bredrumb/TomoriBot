@@ -256,7 +256,7 @@ import {
 } from "@/utils/discord/humanizerOptions";
 import { DEFAULT_MESSAGE_FETCH_LIMIT } from "@/utils/discord/messageFetchLimit";
 import { hasPersonaPrompt } from "@/utils/discord/ui/personaEligibility";
-import { MAX_TAG_LENGTH, MAX_TAGS } from "@/utils/image/tagHelpers";
+import { formatImageTagsForConfirmation, MAX_TAG_LENGTH, MAX_TAGS } from "@/utils/image/tagHelpers";
 import { PERSONA_SPRITE_LIMITS } from "@/utils/persona/sprites";
 import { IMPORT_LIMITS, PERSONA_LIMITS } from "@/utils/security/rateLimiter";
 import { log } from "@/utils/misc/logger";
@@ -1379,7 +1379,7 @@ async function runPersonaWrite(
             result.tags.length === 0
               ? "commands.persona.image-tags.cleared_description"
               : "commands.persona.image-tags.success_description",
-            { persona_name: persona.persona_nickname, tag_list: result.tags.join(", ") },
+            { persona_name: persona.persona_nickname, tag_list: formatImageTagsForConfirmation(result.tags) },
           ),
           telemetry: "server-config.workspace.persona-image-tags.set",
         };

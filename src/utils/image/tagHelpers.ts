@@ -1,6 +1,17 @@
+import { neutralizeFenceRuns, truncateDiscordText } from "@/utils/text/discordTextLimits";
+import { CONFIRMATION_PREVIEW_BUDGET } from "@/utils/text/textPreview";
+
 export const MAX_TAGS = 100;
 export const MAX_TAG_LENGTH = 200;
 export const TAGS_MODAL_MAX_LENGTH = 4000;
+
+/**
+ * Shortens saved tags for a save receipt, because the full list can reach the modal's 4000
+ * characters and the panel beside the receipt already previews it.
+ */
+export function formatImageTagsForConfirmation(tags: readonly string[]): string {
+  return truncateDiscordText(neutralizeFenceRuns(tags.join(", ")), CONFIRMATION_PREVIEW_BUDGET);
+}
 
 export type ImageTagValidationResult =
   | { isValid: true; tags: string[] }

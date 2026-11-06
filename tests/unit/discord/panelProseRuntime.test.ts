@@ -20,6 +20,7 @@ import {
 } from "@/utils/discord/ui/setupPanel";
 import { SETUP_DRAFT_SCHEMA_VERSION, type SetupDraftRecord } from "@/types/discord/setupWizard";
 import { formatPanelProse } from "@/utils/discord/ui/panelProse";
+import { PERSONA_SPRITE_LIMITS } from "@/utils/persona/sprites";
 import { getSupportedLocales, initializeLocalizer, localizer } from "@/utils/text/localizer";
 import { createPersona } from "../../helpers/fixtures";
 import { expectForEveryLocale } from "../../helpers/localeCases";
@@ -341,7 +342,7 @@ describe("panel prose runtime formatting", () => {
         sprite_name: "s".repeat(64),
         sprite_key: "s".repeat(64),
         avatar_url: "https://cdn.example.invalid/sprites/happy.png",
-        usage_instructions: "u".repeat(300),
+        usage_instructions: "u".repeat(PERSONA_SPRITE_LIMITS.MAX_INSTRUCTIONS_LENGTH),
         is_identity: true,
       };
       const build = (actor: ConfigActor, selectedPersonaAvatarUrl: string | null) =>

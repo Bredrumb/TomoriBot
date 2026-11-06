@@ -33,6 +33,11 @@ interface ChatTurnLatencyFields {
   provider_ttfb_ms: number;
   first_message_ms: number;
   history_fetch_ms: number;
+  assets_ms: number;
+  history_build_ms: number;
+  participant_ms: number;
+  naming_ms: number;
+  reunion_ms: number;
   native_ms: number;
   reaction_fetches: number;
   reply_fetches: number;
@@ -45,6 +50,16 @@ interface ChatTurnLatencyFields {
   history: "rest" | "reused";
   drafting: YesNo;
 }
+
+type StageField =
+  | "context_ms"
+  | "history_fetch_ms"
+  | "assets_ms"
+  | "history_build_ms"
+  | "participant_ms"
+  | "naming_ms"
+  | "reunion_ms"
+  | "native_ms";
 
 interface TurnLatencyScope {
   invocation: ChatLatencyInvocation;
@@ -81,6 +96,11 @@ export async function runWithChatTurnLatency<T>(
       provider_ttfb_ms: -1,
       first_message_ms: -1,
       history_fetch_ms: -1,
+      assets_ms: -1,
+      history_build_ms: -1,
+      participant_ms: -1,
+      naming_ms: -1,
+      reunion_ms: -1,
       native_ms: -1,
       reaction_fetches: 0,
       reply_fetches: 0,
@@ -109,10 +129,7 @@ function current(): TurnLatencyScope | undefined {
   return active?.finished ? undefined : active;
 }
 
-export async function measureChatTurnStage<T>(
-  field: "context_ms" | "history_fetch_ms" | "native_ms",
-  callback: () => Promise<T>,
-): Promise<T> {
+export async function measureChatTurnStage<T>(field: StageField, callback: () => Promise<T>): Promise<T> {
   const active = current();
   const startedAt = performance.now();
   try {

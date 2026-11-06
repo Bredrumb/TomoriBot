@@ -323,8 +323,8 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     streamingContext.disableRecentMessageReplyTool = true;
   }
 
-  const assets = await loadPersonaAssets(turn);
-  const history = await buildSimplifiedHistory(turn, messageIdMap);
+  const assets = await measureChatTurnStage("assets_ms", () => loadPersonaAssets(turn));
+  const history = await measureChatTurnStage("history_build_ms", () => buildSimplifiedHistory(turn, messageIdMap));
 
   let impersonatedUserNickname: string | undefined;
   let impersonatedUserPrompt: string | undefined;
@@ -493,29 +493,33 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     participantRequestScopes.set(turn.lockedTurn, participantRequestScope);
   }
   const participantStartedAt = performance.now();
-  const preparedParticipantContext = await prepareParticipantContext({
-    client,
-    guildId: turn.serverDiscId,
-    simplifiedMessageHistory: history.simplifiedMessages,
-    personas: turn.allPersonas,
-    activePersona: effectivePersona,
-    visibleUserIds: [...history.userIds],
-    syntheticUsers: history.syntheticUsers,
-    matrixUsers: history.matrixUsers,
-    messageProxyUsers: history.messageProxyUsers,
-    responderPersonaIds: new Set(turn.triggeredPersonaIds),
-    requestScope: participantRequestScope,
-  });
+  const preparedParticipantContext = await measureChatTurnStage("participant_ms", () =>
+    prepareParticipantContext({
+      client,
+      guildId: turn.serverDiscId,
+      simplifiedMessageHistory: history.simplifiedMessages,
+      personas: turn.allPersonas,
+      activePersona: effectivePersona,
+      visibleUserIds: [...history.userIds],
+      syntheticUsers: history.syntheticUsers,
+      matrixUsers: history.matrixUsers,
+      messageProxyUsers: history.messageProxyUsers,
+      responderPersonaIds: new Set(turn.triggeredPersonaIds),
+      requestScope: participantRequestScope,
+    }),
+  );
   const participantMs = performance.now() - participantStartedAt;
-  const historyNaming = await buildHistoryNamingProjection({
-    messages: history.simplifiedMessages,
-    receivingPersona: effectivePersona,
-    allPersonas: turn.allPersonas,
-    guild: message.guild,
-    personalizationEnabled: effectivePersona.config.personal_memories_enabled !== false,
-    extraUserIds: incoming.impersonatedUserId ? [incoming.impersonatedUserId] : [],
-    requestScope: participantRequestScope,
-  });
+  const historyNaming = await measureChatTurnStage("naming_ms", () =>
+    buildHistoryNamingProjection({
+      messages: history.simplifiedMessages,
+      receivingPersona: effectivePersona,
+      allPersonas: turn.allPersonas,
+      guild: message.guild,
+      personalizationEnabled: effectivePersona.config.personal_memories_enabled !== false,
+      extraUserIds: incoming.impersonatedUserId ? [incoming.impersonatedUserId] : [],
+      requestScope: participantRequestScope,
+    }),
+  );
   if (incoming.impersonatedUserId) {
     impersonatedUserNickname = historyNaming.userLabels.get(incoming.impersonatedUserId) ?? impersonatedUserNickname;
     streamingContext.impersonatedSpeakerLabel = impersonatedUserNickname;
@@ -544,15 +548,17 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   // A system turn borrows a bystander's message as its trigger, so it must neither greet nor clock them.
   const { note: reunionNote, presence: reunionPresence } = incoming.borrowsTriggerMessage
     ? { note: null, presence: null }
-    : await resolveReunionNote({
-        turn,
-        effectivePersona,
-        isUserImpersonation: incoming.isUserImpersonation,
-        // A chain turn carries the originator's clock but answers a persona, so it must not greet or clock them.
-        isPersonaSpeaker: turn.isSelfMessage || (incoming.sceneTurn?.turnIndex ?? 0) > 0,
-        proxiedIdentityName: proxiedIdentity.name,
-        proxiedIdentityUserDiscId: proxiedIdentity.userDiscId,
-      });
+    : await measureChatTurnStage("reunion_ms", () =>
+        resolveReunionNote({
+          turn,
+          effectivePersona,
+          isUserImpersonation: incoming.isUserImpersonation,
+          // A chain turn carries the originator's clock but answers a persona, so it must not greet or clock them.
+          isPersonaSpeaker: turn.isSelfMessage || (incoming.sceneTurn?.turnIndex ?? 0) > 0,
+          proxiedIdentityName: proxiedIdentity.name,
+          proxiedIdentityUserDiscId: proxiedIdentity.userDiscId,
+        }),
+      );
 
   const contextBuild = await measureChatTurnStage("native_ms", () =>
     buildContext({
