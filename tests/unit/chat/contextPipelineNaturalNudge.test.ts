@@ -34,6 +34,7 @@ async function buildTurnContext(
     gestureHistory?: boolean;
     borrowsTriggerMessage?: boolean;
     nativeContext?: boolean;
+    agenda?: string;
   } = {},
 ): Promise<{
   context: ChatTurnContext;
@@ -148,7 +149,9 @@ async function buildTurnContext(
     spyOn(userCache, "getCachedPrivacyLevel").mockResolvedValue(PrivacyLevel.MINIMAL),
     spyOn(userCache, "getCachedBlacklistStatus").mockResolvedValue(false),
     spyOn(blockCache, "getCachedActiveBlocksForPersona").mockResolvedValue([]),
-    spyOn(naturalNudgeRepository, "loadAgendas").mockResolvedValue(new Map()),
+    spyOn(naturalNudgeRepository, "loadAgendas").mockResolvedValue(
+      options.agenda ? new Map([["persona-last", options.agenda]]) : new Map(),
+    ),
     spyOn(contextBuilder, "buildContext").mockImplementation(async (params) => {
       const contextItems =
         options.conditioningInteraction || options.gestureHistory
@@ -185,6 +188,13 @@ async function buildTurnContext(
 const CONTINUE_DIRECTIVE = "Continue your last message without repeating it";
 
 describe("Natural Nudges turn context", () => {
+  it("marks a historical agenda as a system notice without changing the opener's identity", async () => {
+    const { context } = await buildTurnContext(undefined, { agenda: "Check the map" });
+    const agenda = context.simplifiedMessages.find((message) => message.id === "synthetic-nudge-agenda-persona-last");
+    expect(agenda?.isSystemNotice).toBe(true);
+    expect(context.simplifiedMessages.find((message) => message.id === "persona-last")?.isSystemNotice).toBe(false);
+  });
+
   it("admits the idle nudge's tools under Deliberate Tool Mode", async () => {
     const { context } = await buildTurnContext({ toolNames: ["web_search"] });
     expect(context.streamingContext.disableAllTools).not.toBe(true);

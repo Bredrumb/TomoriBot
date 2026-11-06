@@ -41,6 +41,10 @@ response cycle, which may contain several tool-loop steps. The tail slot is the 
 above the last 4 speaker turns. When history is shorter, adjacent sample dialogues supply the
 remaining turns; otherwise the slot sits above the earliest available turn.
 
+History speaker changes follow author IDs, so shared or changed display names do not change the
+count. Synthetic system notices do not count or interrupt a run. Adjacent example lines count by
+speaker role, with consecutive persona-only examples forming one run.
+
 `src/utils/text/context/promptLayout.ts` owns block order, system-message routing, preset flush
 membership, and positional inserts. Contributors build content; the registry orders it and the
 chat pipeline applies its insert rules after native or preset assembly. Page numbering follows
@@ -54,8 +58,9 @@ their saved item-based depths.
 
 The registry marks the last item above the slot as the cacheable-prefix boundary. Anthropic adapters
 use it alongside the system-message end for cache breakpoints; provider normalization must preserve
-that marker. Moving a context note deeper than the slot changes the prefix every chat turn. Date
-spacers with relative wording such as "yesterday" also change at server-day boundaries.
+that marker. Budget truncation retains the moved facts and reapplies their positions and the
+boundary to the surviving history. Moving a context note deeper than the slot changes the prefix
+every chat turn. Date spacers with relative wording such as "yesterday" also change at server-day boundaries.
 
 ## Stages
 

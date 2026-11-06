@@ -109,6 +109,7 @@ describe("persona-blocked authors in context", () => {
       expect(ids).toContain("synthetic-user-block-blocked-reward");
       expect(ids).toContain("other-user");
       const notice = result.simplifiedMessages.find((message) => message.id === "synthetic-user-block-blocked-reward");
+      expect(notice?.isSystemNotice).toBe(true);
       expect(notice?.content).toContain("<@blocked-user>");
     } finally {
       for (const spy of [sql, read, privacy, blacklist, blocks, builder]) spy.mockRestore();

@@ -63,8 +63,10 @@ buildContext() (context-build pipeline)        ──► assembles StructuredCon
   remains included. ID-only anchors survive idle release for five minutes; gateway reconnects,
   boundary deletions, changed limits, and unavailable starts can force a new anchor.
 - **Budget truncation**: `truncateDialogueHistory()` removes whole stride batches of oldest exchanges
-  when over budget, preserving samples, the newest user request, and reserved-tail accounting. Live
-  and inspection truncation both receive the configured limit.
+  when over budget, preserving samples, the newest user request, tail-slot facts, and reserved-tail
+  accounting. It reapplies the registry slot, saved STM depth and cacheable-prefix boundary against
+  surviving history. Inspection reads the same channel anchor without changing its state, and both
+  truncation paths receive the configured limit.
 - **History auxiliary reads**: proxy identities use the unfiltered history; sprite records, minimal
   notice bodies, and agendas use visible messages after blacklist and block filtering. These reads
   run concurrently before simplification.

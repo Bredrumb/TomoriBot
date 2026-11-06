@@ -130,10 +130,13 @@ export async function appendDialogueHistoryContext(params: {
         : params.isUserImpersonation || !isCurrentPersonaMessage
           ? "user"
           : "model";
-    const sender: StructuredContextItem["sender"] = {
-      name: msg.personaName ?? msg.authorName,
-      type: msg.authorType,
-    };
+    const sender: StructuredContextItem["sender"] = msg.isSystemNotice
+      ? undefined
+      : {
+          id: String(msg.authorPersonaId ?? msg.authorId),
+          name: msg.personaName ?? msg.authorName,
+          type: msg.authorType,
+        };
 
     if (params.dateSpacerTemplate && previousCreatedAt !== undefined && msg.createdAt !== undefined) {
       const spacer = buildDateSpacer(

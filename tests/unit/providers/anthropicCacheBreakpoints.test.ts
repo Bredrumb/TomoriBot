@@ -28,7 +28,11 @@ function prompt(withTail = true, systemChars = 20000, turns = 11): StructuredCon
       { length: turns },
       (_, index): StructuredContextItem => ({
         role: index % 2 ? "model" : "user",
-        sender: { name: index % 2 ? "Mirri" : "Juno", type: index % 2 ? "persona" : "user" },
+        sender: {
+          id: index % 2 ? "Mirri" : "Juno",
+          name: index % 2 ? "Mirri" : "Juno",
+          type: index % 2 ? "persona" : "user",
+        },
         metadataTag: ContextItemTag.DIALOGUE_HISTORY,
         parts: [{ type: "text", text: `History ${index}` }],
       }),

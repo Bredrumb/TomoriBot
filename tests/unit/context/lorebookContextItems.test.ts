@@ -262,7 +262,7 @@ describe("lorebook context items", () => {
             role: "user",
             parts: [{ type: "text", text: "Alice: I found the vault." }],
             metadataTag: ContextItemTag.DIALOGUE_HISTORY,
-            sender: { name: "Juno", type: "user" },
+            sender: { id: "Juno", name: "Juno", type: "user" },
           },
         ],
         tailDirectives: [],

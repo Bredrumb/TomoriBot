@@ -196,6 +196,27 @@ describe("busy channel history window", () => {
     expect(selected.at(-1)?.id).toBe("100");
   });
 
+  it("lets inspection share the live selection without creating, advancing, expiring or replacing its anchor", () => {
+    const messages = (size: number) => Array.from({ length: size }, (_, index) => ({ id: String(index + 1) }));
+    const inspect = (size: number, limit = 20, reset?: string) =>
+      selectAnchoredHistory(CHANNEL_ID, messages(size).slice(-limit), limit, reset, undefined, "inspect");
+    setSystemTime(100_000);
+    expect(inspect(20)).toEqual(messages(20));
+    expect(selectAnchoredHistory(CHANNEL_ID, messages(22).slice(-20), 20)[0]?.id).toBe("3");
+    setHistoryWindowGatewayConnected(0, true);
+    selectAnchoredHistory(CHANNEL_ID, messages(20), 20);
+    expect(inspect(22)[0]?.id).toBe("7");
+    expect(selectAnchoredHistory(CHANNEL_ID, messages(20), 20)[0]?.id).toBe("1");
+    expect(inspect(22, 21)[0]?.id).toBe("2");
+    expect(inspect(22, 20, "15")[0]?.id).toBe("3");
+    expect(selectAnchoredHistory(CHANNEL_ID, messages(20), 20)[0]?.id).toBe("1");
+    setSystemTime(399_999);
+    inspect(20);
+    setSystemTime(400_000);
+    expect(inspect(22)[0]?.id).toBe("3");
+    expect(selectAnchoredHistory(CHANNEL_ID, messages(22).slice(-20), 20)[0]?.id).toBe("3");
+  });
+
   it("evicts the oldest anchor at capacity and prunes expired channels on the next selection", () => {
     const fixture = createHistoryFixture();
     const initial = [...fixture.rest.values()];

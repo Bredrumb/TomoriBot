@@ -17,10 +17,12 @@ export type PromptAnchor =
 export const TAIL_SLOT_SPEAKER_TURNS = 4;
 export const STM_TAIL_SLOT = Symbol("stmTailSlot");
 export const CACHEABLE_PREFIX_END = Symbol("cacheablePrefixEnd");
+const APPLIED_LAYOUT_INSERT = Symbol("appliedLayoutInsert");
 
 export type PromptLayoutItem = StructuredContextItem & {
   [STM_TAIL_SLOT]?: true;
   [CACHEABLE_PREFIX_END]?: true;
+  [APPLIED_LAYOUT_INSERT]?: Pick<PromptLayoutInsert, "tag" | "depth">;
 };
 
 export type PromptInsertTag =
@@ -271,6 +273,13 @@ export interface PromptLayoutInsert {
   emitted?: boolean;
 }
 
+export function getPromptLayoutInsert(item: StructuredContextItem): PromptLayoutInsert | undefined {
+  const applied = (item as PromptLayoutItem)[APPLIED_LAYOUT_INSERT];
+  if (applied) return { ...applied, items: [item] };
+  if (isPromptTailSlotItem(item)) return { tag: item.metadataTag as ContextItemTag, items: [item] };
+  return undefined;
+}
+
 export function applyPromptLayoutInserts(
   items: StructuredContextItem[],
   inserts: PromptLayoutInsert[],
@@ -280,8 +289,9 @@ export function applyPromptLayoutInserts(
     const inlineInserts: PromptLayoutInsert[] = [];
     for (let index = 0; index < items.length; ) {
       const item = items[index];
-      if (isPromptTailSlotItem(item)) {
-        inlineInserts.push({ tag: item.metadataTag as ContextItemTag, items: [item] });
+      const insert = getPromptLayoutInsert(item);
+      if (insert) {
+        inlineInserts.push(insert);
         items.splice(index, 1);
       } else index++;
     }
@@ -302,6 +312,7 @@ export function applyPromptLayoutInserts(
       } else if (!messagePosition) {
         for (const item of insert.items) {
           if (entry.role && item.role !== entry.role) continue;
+          (item as PromptLayoutItem)[APPLIED_LAYOUT_INSERT] = { tag: insert.tag, depth: insert.depth };
           if (entry.anchor.kind === "before-latest-pair") insertBeforeLatestDialoguePair(items, item);
           else if (entry.anchor.kind === "tailSlot") {
             const tailIndex = slotItem ? items.indexOf(slotItem) : items.length;
@@ -337,7 +348,7 @@ export function speakerTurnStartIndexes(items: StructuredContextItem[]): number[
   let previous: StructuredContextItem["sender"];
   for (const [index, item] of items.entries()) {
     if (item.metadataTag !== ContextItemTag.DIALOGUE_HISTORY || !item.sender) continue;
-    if (item.sender.name !== previous?.name || item.sender.type !== previous?.type) starts.push(index);
+    if (item.sender.id !== previous?.id || item.sender.type !== previous?.type) starts.push(index);
     previous = item.sender;
   }
   return starts;
@@ -364,9 +375,15 @@ function resolveTailSlotIndex(items: StructuredContextItem[]): number {
   }
   let index = starts.length > 0 ? rewindHistoryInserts(items, starts[0]) : items.length;
   let remaining = TAIL_SLOT_SPEAKER_TURNS - starts.length;
-  while (remaining > 0 && index > 0 && items[index - 1].metadataTag === ContextItemTag.DIALOGUE_SAMPLE) {
+  let previousRole = starts.length > 0 ? items[starts[0]].role : undefined;
+  while (
+    index > 0 &&
+    items[index - 1].metadataTag === ContextItemTag.DIALOGUE_SAMPLE &&
+    (remaining > 0 || items[index - 1].role === previousRole)
+  ) {
     index--;
-    remaining--;
+    if (items[index].role !== previousRole) remaining--;
+    previousRole = items[index].role;
   }
   return index;
 }

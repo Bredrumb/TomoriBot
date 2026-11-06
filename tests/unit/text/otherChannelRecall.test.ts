@@ -136,7 +136,7 @@ describe("other-channel short-term recall", () => {
     const items = Array.from({ length: 8 }, (_, index) => ({
       role: "user" as const,
       metadataTag: ContextItemTag.DIALOGUE_HISTORY,
-      sender: { name: index % 2 ? "Mirri" : "Juno", type: "user" as const },
+      sender: { id: index % 2 ? "Mirri" : "Juno", name: index % 2 ? "Mirri" : "Juno", type: "user" as const },
       parts: [{ type: "text" as const, text: `Message ${index}` }],
     }));
     applyPromptLayoutInserts(items, [

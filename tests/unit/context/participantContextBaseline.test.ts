@@ -274,7 +274,7 @@ describe("participant context Phase 0 baseline", () => {
             { type: "text", text: "Tomori: Here is the map." },
             { type: "image", uri: "https://example.test/map.png", mimeType: "image/png" },
           ],
-          sender: { name: "Tomori", type: "persona" },
+          sender: { id: "Tomori", name: "Tomori", type: "persona" },
           metadataTag: ContextItemTag.DIALOGUE_HISTORY,
           conversationUsers: item.conversationUsers,
           participantTargetIndex: item.participantTargetIndex,

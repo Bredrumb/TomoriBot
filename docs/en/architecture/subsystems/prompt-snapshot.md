@@ -29,9 +29,9 @@ Prompt assembly mirrors the production `messageCreate → tomoriChat` pipeline t
 - **UI exclusion**: Diagnostic embeds and internal debug notices are omitted because they represent interface elements rather than model prompt input.
 - **Hidden agendas**: A Natural Nudges agenda renders above its opener only when the answering persona owns it, as in live context building, so the snapshot shows what that persona sees.
 
-Inspection fetches the newest raw history independently in `assemble.ts`; it does not select the
-live channel's history anchor. Budget truncation shares the live stride rule, but a reconstructed
-snapshot can therefore start at a different message than the next live request.
+Inspection fetches raw history independently, then uses the live channel's history anchor after
+reset slicing. This read does not create, advance, invalidate, or renew the anchor. Budget
+truncation shares the live stride rule and preserves the tail-slot facts and their prefix boundary.
 
 NovelAI inspection uses native context captured before preset reassembly, the resolved personal or
 server credential, and the saved response prefill. It runs the provider's allowlist, renderer, and

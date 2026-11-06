@@ -1,6 +1,11 @@
 import type { StructuredContextItem } from "@/types/misc/context";
 import { ContextItemTag } from "@/types/misc/context";
 import { DEFAULT_MESSAGE_FETCH_LIMIT, historyWindowStride } from "@/utils/discord/messageFetchLimit";
+import {
+  applyPromptLayoutInserts,
+  getCacheablePrefixBoundary,
+  getPromptLayoutInsert,
+} from "@/utils/text/context/promptLayout";
 
 /**
  * Estimates the input token count from a list of context items.
@@ -54,7 +59,11 @@ export function truncateDialogueHistory(
 
   const findNewestDialogueUserIndex = (): number => {
     for (let i = items.length - 1; i >= 0; i--) {
-      if (items[i].metadataTag === ContextItemTag.DIALOGUE_HISTORY && items[i].role === "user") {
+      if (
+        items[i].metadataTag === ContextItemTag.DIALOGUE_HISTORY &&
+        items[i].role === "user" &&
+        !getPromptLayoutInsert(items[i])
+      ) {
         return i;
       }
     }
@@ -69,7 +78,8 @@ export function truncateDialogueHistory(
       if (
         i !== newestDialogueUserIdx &&
         items[i].metadataTag === ContextItemTag.DIALOGUE_HISTORY &&
-        items[i].role === "user"
+        items[i].role === "user" &&
+        !getPromptLayoutInsert(items[i])
       ) {
         oldestDroppableUserIdx = i;
         break;
@@ -92,7 +102,10 @@ export function truncateDialogueHistory(
     }
 
     if (followingModelIdx !== -1) {
-      items.splice(oldestDroppableUserIdx, followingModelIdx - oldestDroppableUserIdx + 1);
+      const retained = items
+        .slice(oldestDroppableUserIdx, followingModelIdx + 1)
+        .filter((item) => getPromptLayoutInsert(item) !== undefined);
+      items.splice(oldestDroppableUserIdx, followingModelIdx - oldestDroppableUserIdx + 1, ...retained);
     } else {
       items.splice(oldestDroppableUserIdx, 1);
     }
@@ -109,6 +122,8 @@ export function truncateDialogueHistory(
     }
     if (dropped === 0) break;
   }
+  if (historyPairsDropped > 0 && (getCacheablePrefixBoundary(contextItems) || contextItems.some(getPromptLayoutInsert)))
+    applyPromptLayoutInserts(items, []);
 
   return {
     truncated: items,

@@ -30,12 +30,16 @@ import { getNovelAIProfile } from "@/providers/novelai/modelProfiles";
 import { createNovelAITokenizerEncoder } from "@/utils/provider/localTokenizerRegistry";
 import type { StreamConfig, StreamContext } from "@/types/stream/interfaces";
 import { applyProviderContextTruncation } from "@/utils/provider/contextBudget";
+import { selectAnchoredHistory, setHistoryWindowGatewayConnected } from "@/utils/chat/historyWindow";
+import { applyPromptLayoutInserts } from "@/utils/text/context/promptLayout";
+import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
 
 const restores: Array<() => void> = [];
 beforeAll(initializeLocalizer);
 afterEach(() => {
   for (const restore of restores.splice(0).reverse()) restore();
   clearNovelaiSubscriptionCache();
+  setHistoryWindowGatewayConnected(0, true);
 });
 
 describe("NovelAI prompt inspection credentials", () => {
@@ -162,7 +166,11 @@ describe("NovelAI prompt inspection credentials", () => {
     for (const item of items)
       item.completionText = item.parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n");
     let builtItems: StructuredContextItem[] = [];
+    let inspectedHistoryStart: string | undefined;
+    let inspectedAgenda: boolean | undefined;
+    const agendas = new Map<string, string>();
     const spies = [
+      spyOn(naturalNudgeRepository, "loadAgendas").mockImplementation(async () => agendas),
       spyOn(channelLlm, "getCachedChannelLlm").mockResolvedValue(null),
       spyOn(channelPrompt, "getCachedChannelPrompt").mockResolvedValue(null),
       spyOn(channelNote, "getCachedChannelContextNote").mockResolvedValue(null),
@@ -173,6 +181,10 @@ describe("NovelAI prompt inspection credentials", () => {
       spyOn(userRepository, "isBlacklisted").mockResolvedValue(false),
       spyOn(participants, "prepareParticipantContext").mockResolvedValue(prepared),
       spyOn(contextBuilder, "buildContext").mockImplementation(async (params) => {
+        inspectedHistoryStart = params.simplifiedMessageHistory[0]?.id;
+        inspectedAgenda = params.simplifiedMessageHistory.find(
+          (message) => message.id === "synthetic-nudge-agenda-12",
+        )?.isSystemNotice;
         const contextItems = [...items];
         await appendDialogueHistoryContext({
           contextItems,
@@ -238,6 +250,7 @@ describe("NovelAI prompt inspection credentials", () => {
       components: [],
       createdTimestamp: 1000,
     };
+    let fetchedMessages = new Map([[message.id, message]]);
     const request = {
       client,
       guild: { id: "guild-1", name: "Test guild" },
@@ -245,7 +258,7 @@ describe("NovelAI prompt inspection credentials", () => {
         id: "channel-1",
         name: "test",
         isThread: () => false,
-        messages: { fetch: async () => new Map([[message.id, message]]) },
+        messages: { fetch: async () => fetchedMessages },
       },
       user,
       userData,
@@ -342,6 +355,31 @@ describe("NovelAI prompt inspection credentials", () => {
       personas: [budgetPersona],
     });
     expect(budgetSnapshot?.historyPairsDropped).toBe(3);
+    applyPromptLayoutInserts(builtItems, []);
     expect(budgetSnapshot?.contextItems).toEqual(await applyProviderContextTruncation(builtItems, budgetPersona));
+    const rawHistory = Array.from({ length: 22 }, (_, index) => ({
+      ...message,
+      id: String(index + 1),
+      embeds: [],
+      content: String(index + 1),
+    }));
+    fetchedMessages = new Map(
+      rawHistory
+        .slice(-20)
+        .reverse()
+        .map((item) => [item.id, item]),
+    );
+    selectAnchoredHistory(request.channel.id, rawHistory.slice(0, 20), 20);
+    const liveHistory = selectAnchoredHistory(request.channel.id, rawHistory.slice(-20), 20);
+    agendas.set("12", "Check the map");
+    await assemblePromptInspection({
+      ...request,
+      tomoriState: budgetPersona,
+      selectedPersona: budgetPersona,
+      personas: [budgetPersona],
+    });
+    expect(inspectedHistoryStart).toBe(liveHistory[0]?.id);
+    expect(inspectedHistoryStart).toBe("7");
+    expect(inspectedAgenda).toBe(true);
   });
 });

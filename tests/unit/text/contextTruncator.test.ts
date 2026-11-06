@@ -5,6 +5,12 @@ import { log } from "@/utils/misc/logger";
 import { applyProviderContextTruncation } from "@/utils/provider/contextBudget";
 import * as modelLimits from "@/utils/provider/modelLimits";
 import { truncateDialogueHistory } from "@/utils/text/contextTruncator";
+import {
+  applyPromptLayoutInserts,
+  getCacheablePrefixBoundary,
+  STM_TAIL_SLOT,
+  type PromptLayoutItem,
+} from "@/utils/text/context/promptLayout";
 import { createLlmRow, createPersona } from "../../helpers/fixtures";
 
 function history(count: number): StructuredContextItem[] {
@@ -63,4 +69,77 @@ it("budgets reserved tail content before deciding whether to drop a stride", () 
   expect(result.historyPairsDropped).toBe(3);
   expect(result.truncated).toEqual(items.slice(6));
   expect(result.truncated).not.toContain(tail[0]);
+});
+
+it("retains tail-slot facts across removed exchanges and repositions them above surviving samples", () => {
+  for (const depth of [-1, 0, 1, 20]) {
+    const fixed: StructuredContextItem = {
+      role: "system",
+      metadataTag: ContextItemTag.SYSTEM_PERSONALITY,
+      parts: [{ type: "text", text: "s".repeat(100) }],
+    };
+    const samples: StructuredContextItem[] = (["user", "model"] as const).map((role) => ({
+      role,
+      metadataTag: ContextItemTag.DIALOGUE_SAMPLE,
+      parts: [{ type: "text", text: role }],
+    }));
+    const dialogue = history(11).map((item, index) => ({
+      ...item,
+      messageId: String(index),
+      sender: {
+        id: index % 2 ? "persona" : "user",
+        name: index % 2 ? "Mirri" : "Juno",
+        type: index % 2 ? ("persona" as const) : ("user" as const),
+      },
+      parts: [{ type: "text" as const, text: "h".repeat(1000) }],
+    }));
+    const facts: StructuredContextItem[] = [
+      ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE,
+      ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER,
+      ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS,
+      ContextItemTag.KNOWLEDGE_USER_STATUS,
+      ContextItemTag.KNOWLEDGE_CURRENT_CONTEXT,
+    ].map((metadataTag) => ({ role: "user", metadataTag, parts: [{ type: "text", text: "f".repeat(100) }] }));
+    const memory: PromptLayoutItem = {
+      role: "user",
+      metadataTag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
+      parts: [{ type: "text", text: "m".repeat(100) }],
+      [STM_TAIL_SLOT]: true,
+    };
+    const items = [fixed, ...samples, ...dialogue, ...facts];
+    const directive = (text: string): StructuredContextItem => ({
+      role: "user",
+      metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+      parts: [{ type: "text", text }],
+    });
+    const lower = directive("lower");
+    const nudge: PromptLayoutItem = { ...memory, [STM_TAIL_SLOT]: undefined, completionText: "" };
+    const generationTail = [directive("combined"), directive("queued"), directive("uncensor")];
+    applyPromptLayoutInserts(items, [
+      { tag: "lower_priority_tail", items: [lower] },
+      { tag: "stm_content", items: [memory], depth },
+      { tag: "stm_nudge", items: [nudge], depth: 1 },
+      { tag: "combined_tail", items: [generationTail[0]] },
+      { tag: "queued_reply", items: [generationTail[1]] },
+      { tag: "uncensor", items: [generationTail[2]] },
+    ]);
+    const originalBoundary = getCacheablePrefixBoundary(items);
+    const result = truncateDialogueHistory(items, 1000, 100, [], 20);
+    expect(
+      result.truncated.filter((item) => item.metadataTag === ContextItemTag.DIALOGUE_HISTORY && item.sender),
+    ).toEqual([dialogue.at(-1) as StructuredContextItem]);
+    expect(result.truncated.filter((item) => facts.some((fact) => fact.metadataTag === item.metadataTag))).toEqual(
+      facts,
+    );
+    expect(result.truncated).toContain(memory);
+    expect(result.truncated.indexOf(facts[0])).toBe(1 + (depth === -1 ? 1 : 0));
+    if (depth === 0) expect(result.truncated.indexOf(memory)).toBe(result.truncated.length - generationTail.length - 1);
+    else if (depth === -1) expect(result.truncated.indexOf(memory)).toBe(1);
+    else expect(result.truncated.indexOf(memory)).toBeLessThan(result.truncated.indexOf(dialogue[10]));
+    expect(result.truncated.slice(-generationTail.length)).toEqual(generationTail);
+    expect(result.truncated).toContain(lower);
+    expect(result.truncated).toContain(nudge);
+    expect(getCacheablePrefixBoundary(result.truncated)?.metadataTag).toBe(ContextItemTag.SYSTEM_PERSONALITY);
+    expect(getCacheablePrefixBoundary(items)).toBe(originalBoundary);
+  }
 });

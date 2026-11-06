@@ -1,5 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
+import { appendDialogueHistoryContext } from "@/utils/text/context/dialogueHistory";
+import { buildSampleDialogueContextItems } from "@/utils/text/context/templates";
+import { UNPAIRED_SAMPLE_DIALOGUE_SENTINEL } from "@/types/preset/presetExport";
+import { createPersona } from "../../helpers/fixtures";
+import { createParticipantContextFixture } from "./fixtures/participantContextFixture";
 import {
   PROMPT_LAYOUT,
   applyPromptLayoutInserts,
@@ -19,7 +24,10 @@ function item(metadataTag: ContextItemTag, role: StructuredContextItem["role"] =
 }
 
 function dialogue(name: string, type: "user" | "persona" = "user"): StructuredContextItem {
-  return { ...item(ContextItemTag.DIALOGUE_HISTORY, type === "persona" ? "model" : "user"), sender: { name, type } };
+  return {
+    ...item(ContextItemTag.DIALOGUE_HISTORY, type === "persona" ? "model" : "user"),
+    sender: { id: name, name, type },
+  };
 }
 
 function freshMemory(): PromptLayoutItem {
@@ -27,6 +35,56 @@ function freshMemory(): PromptLayoutItem {
 }
 
 describe("prompt layout registry", () => {
+  it("counts author identities across renamed profiles while ignoring synthetic notices", async () => {
+    const fixture = createParticipantContextFixture();
+    const persona = createPersona({ config: { humanizer_degree: 0, context_note: null } });
+    try {
+      const messages = [
+        { id: "1", authorId: "first-user", authorName: "Juno" },
+        { id: "2", authorId: "second-user", authorName: "Juno" },
+        { id: "agenda", authorId: "synthetic-nudge-agenda", authorName: "System", isSystemNotice: true },
+        { id: "3", authorId: "second-user", authorName: "Bau" },
+        { id: "4", authorId: "third-user", authorName: "System" },
+        { id: "5", authorId: "first-user", authorName: "Juno" },
+        { id: "6", authorId: "second-user", authorName: "Bau" },
+      ];
+      const blocks: StructuredContextItem[] = [];
+      await appendDialogueHistoryContext({
+        contextItems: blocks,
+        client: fixture.client,
+        guildId: "fixture-guild",
+        simplifiedMessageHistory: messages.map((message) => ({
+          ...message,
+          authorType: "user",
+          content: message.id,
+          imageAttachments: [],
+          videoAttachments: [],
+        })),
+        botName: persona.persona_nickname,
+        tomoriConfig: persona.config,
+        tomoriState: persona,
+        documentHintTemplate: "",
+        includeTimestamps: false,
+        isUserImpersonation: false,
+        triggererFormattedName: "Juno",
+        uncensorInputOptions: { unicodeSpacesEnabled: false, sanitizeEnabled: false },
+        convertMentions: async (text) => text,
+      });
+      expect(speakerTurnStartIndexes(blocks).map((index) => blocks[index].messageId)).toEqual([
+        "1",
+        "2",
+        "4",
+        "5",
+        "6",
+      ]);
+      expect(blocks.find((block) => block.messageId === "agenda")?.sender).toBeUndefined();
+      applyPromptLayoutInserts(blocks, []);
+      expect(getCacheablePrefixBoundary(blocks)?.messageId).toBe("1");
+    } finally {
+      fixture.restoreRepositories();
+    }
+  });
+
   it("counts speaker changes across media splits and day spacers while ignoring directives and notes", () => {
     const media = dialogue("Juno");
     media.mediaDescriptors = [
@@ -88,7 +146,7 @@ describe("prompt layout registry", () => {
     expect(getCacheablePrefixBoundary(blocks)).toBe(blocks[4]);
   });
 
-  it("continues into directly preceding samples, counting each sample line separately", () => {
+  it("continues speaker runs into directly preceding samples", () => {
     const prefix = item(ContextItemTag.SYSTEM_PERSONALITY, "system");
     const samples = Array.from({ length: 4 }, (_, index) =>
       item(ContextItemTag.DIALOGUE_SAMPLE, index % 2 ? "model" : "user"),
@@ -99,6 +157,39 @@ describe("prompt layout registry", () => {
     applyPromptLayoutInserts(blocks, [{ tag: "stm_content", items: [memory] }]);
     expect(blocks.indexOf(memory)).toBe(3);
     expect(blocks.slice(4)).toEqual([...samples.slice(2), item(ContextItemTag.DIALOGUE_HISTORY), ...history]);
+  });
+
+  it("keeps consecutive unpaired persona samples in one run, including a following persona message", async () => {
+    const fixture = createParticipantContextFixture();
+    const persona = createPersona({
+      persona_nickname: "Mirri",
+      sample_dialogues_in: Array(4).fill(UNPAIRED_SAMPLE_DIALOGUE_SENTINEL),
+      sample_dialogues_out: Array.from({ length: 4 }, (_, index) => String(index)),
+      config: { humanizer_degree: 0 },
+    });
+    try {
+      const samples = await buildSampleDialogueContextItems({
+        client: fixture.client,
+        guildId: "fixture-guild",
+        triggererName: "Juno",
+        botName: persona.persona_nickname,
+        tomoriState: persona,
+        tomoriConfig: persona.config,
+        isUserImpersonation: false,
+        uncensorInputOptions: { unicodeSpacesEnabled: false, sanitizeEnabled: false },
+        convertMentions: async (text) => text,
+      });
+      for (const history of [[dialogue("Juno")], [dialogue("Mirri", "persona"), dialogue("Juno")]]) {
+        const prefix = item(ContextItemTag.SYSTEM_PERSONALITY, "system");
+        const blocks = [prefix, ...samples, ...history];
+        const memory = freshMemory();
+        applyPromptLayoutInserts(blocks, [{ tag: "stm_content", items: [memory] }]);
+        expect(blocks.indexOf(memory)).toBe(1);
+        expect(getCacheablePrefixBoundary(blocks)).toBe(blocks[0]);
+      }
+    } finally {
+      fixture.restoreRepositories();
+    }
   });
 
   it("clamps the slot above the earliest counted item when history and adjacent samples are short", () => {

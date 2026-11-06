@@ -1,5 +1,6 @@
 import { applyPromptLayoutInserts } from "@/utils/text/context/promptLayout";
 import { applyAssistantPrefill } from "@/utils/chat/assistantPrefill";
+import { selectAnchoredHistory } from "@/utils/chat/historyWindow";
 import { NovelAIPreparationError } from "@/providers/novelai/preparationError";
 import { prepareNovelAIRequest, type PreparedNovelAIRequest } from "@/providers/novelai/promptFitting";
 import { verifyMessageWebhook } from "@/utils/chat/webhookIdentity";
@@ -461,7 +462,15 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
   const allMessagesArray = Array.from(fetchedMessages.values()).reverse();
 
   // Respect /refresh and /compact_refresh boundaries with the same slicing tomoriChat.ts uses.
-  const { sliced: messagesArray } = sliceMessagesAtResetMarker(allMessagesArray);
+  const { sliced, markerIndex } = sliceMessagesAtResetMarker(allMessagesArray);
+  const messagesArray = selectAnchoredHistory(
+    textChannel.id,
+    sliced,
+    messageFetchLimit,
+    allMessagesArray[markerIndex]?.id,
+    undefined,
+    "inspect",
+  );
 
   const personaByNickname = new Map<string, TomoriState>();
   for (const p of personas) {
@@ -632,6 +641,7 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
         authorId: AGENDA_NOTICE_AUTHOR_ID,
         authorName: "System",
         authorType: "user",
+        isSystemNotice: true,
         personaName: null,
         content: formatAgendaNotice(answeringState.persona_nickname, agenda),
         completionContent: "",
@@ -683,6 +693,7 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
         content: messageContent,
         completionContent,
         completionSpeaker,
+        isSystemNotice: completionSpeaker === false,
         mediaSourceMessageIds,
         imageAttachments,
         videoAttachments,

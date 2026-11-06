@@ -46,7 +46,7 @@ function taggedItem(tag: ContextItemTag, text: string, role: "system" | "user" =
     role,
     parts: [{ type: "text", text }],
     metadataTag: tag,
-    ...(tag === ContextItemTag.DIALOGUE_HISTORY ? { sender: { name: "Juno", type: "user" as const } } : {}),
+    ...(tag === ContextItemTag.DIALOGUE_HISTORY ? { sender: { id: "Juno", name: "Juno", type: "user" as const } } : {}),
   };
 }
 

@@ -36,17 +36,22 @@ export function selectAnchoredHistory<T extends { id: string }>(
   fetchLimit: number,
   resetMessageId?: string,
   requiredMessageId?: string,
+  mode: "update" | "inspect" = "update",
 ): T[] {
   const now = Date.now();
-  for (const [id, anchor] of historyAnchors) {
-    if (anchor.expiresAt <= now) historyAnchors.delete(id);
+  if (mode === "update") {
+    for (const [id, anchor] of historyAnchors) {
+      if (anchor.expiresAt <= now) historyAnchors.delete(id);
+    }
   }
   let anchor = historyAnchors.get(channelId);
   if (
     anchor &&
-    (anchor.fetchLimit !== fetchLimit || (resetMessageId && compareIds(resetMessageId, anchor.startId) > 0))
+    (anchor.expiresAt <= now ||
+      anchor.fetchLimit !== fetchLimit ||
+      (resetMessageId && compareIds(resetMessageId, anchor.startId) > 0))
   ) {
-    historyAnchors.delete(channelId);
+    if (mode === "update") historyAnchors.delete(channelId);
     anchor = undefined;
   }
   const ordered = messages;
@@ -62,6 +67,7 @@ export function selectAnchoredHistory<T extends { id: string }>(
   if (required && !selected.includes(required)) {
     selected = [required, ...selected.slice(-(fetchLimit - 1))].sort((left, right) => compareIds(left.id, right.id));
   }
+  if (mode === "inspect") return selected;
   const startId = selected[0]?.id;
   if (!startId) {
     historyAnchors.delete(channelId);
