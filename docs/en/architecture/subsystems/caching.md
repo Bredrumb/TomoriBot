@@ -69,6 +69,12 @@ Application caches are partitioned by domain ownership, lifetime, and storage ba
 
 ### Content and conversation memory
 
+- **History anchors (`src/utils/chat/historyWindow.ts`)**: owner-process, channel-keyed ID metadata
+  keeps the live history start stable between stride jumps. Entries expire five minutes after a new
+  start, without read renewal; selection sweeps expired entries and caps the map at 2,000, evicting
+  the oldest inserted key. Idle release discards fetched messages but retains anchors. Boundary
+  deletion and gateway connection changes invalidate anchors. This is runtime state, outside the
+  database invalidation bus. See [Build Context](/architecture/pipelines/chat/06-per-turn/01-build-context/).
 - **Short-term memory cache (`shortTermMemoryCache.ts`)**: stores recent conversation dialogue turns and generated summaries. Keyed by user-channel or server-channel identifiers, with persona-scoped variants. Fixed lifetimes: 12 hours for raw dialogue (`CRUDE_CONVERSATION_TTL_HOURS`) and 24 hours for summaries (`SUMMARY_TTL_HOURS`). Raw dialogue is volatile. Summaries, categories, and cadence state are backed by PostgreSQL; category-only entries use the 12-hour cache lifetime.
 - **Emoji and sticker cache (`emojiStickerCache.ts`)**: keyed by internal `server_id`. Stores native server expressions and registered custom expressions. Tracks category synchronization state so initial emoji fetches do not mask sticker data on later turns. Uses a 10-minute TTL.
 - **Markdown table cache (`markdownTableCache.ts`)**: keyed by Discord message ID. Stores original markdown text behind rendered table images. Uses a 120-minute TTL, matching the expiration window of the interactive `Show Markdown` component button.

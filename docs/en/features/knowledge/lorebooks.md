@@ -32,7 +32,8 @@ words or phrases. Matching ignores case and full-width/half-width differences.
 
 Leave keywords blank for background facts that need no keyword match. Add keywords again to restore
 keyword matching. New entries use the after-persona placement; imported entries keep their placement.
-A SillyTavern preset's world info slots control where the before and after groups appear.
+A SillyTavern preset's world info slots position the Always On groups. Entries activated by keywords
+or chance stay near the latest messages.
 
 ## When entries activate
 
@@ -52,9 +53,10 @@ regular expressions.
 
 ## What reaches the prompt
 
-Activated entries are sent in one `World Info` block per placement, in insertion order. Both blocks
-share a limit of 8,000 characters; an entry that would exceed it is skipped so later entries can still
-fit.
+Always On entries go in the system part of the prompt. Keyword- or chance-activated entries go just
+above the latest four speaker turns, before retrieved documents. Each group keeps before/after
+placement and insertion order. All groups share an 8,000-character budget, with Always On entries
+considered first; an entry that would exceed the budget is skipped so later entries can still fit.
 
 Content may use `{{user}}`, `{{char}}`, and `{{bot}}`. TomoriBot replaces them with the current names.
 Other `{{...}}` macros and conditional blocks stay as written.

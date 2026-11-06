@@ -152,7 +152,7 @@ conditionals apply to preset instructions. Lorebook entries expand only `{{user}
 ### Compatibility Notes
 
 - Nodes disabled in `prompt_order` remain inactive until enabled in `/config` > Plugins > SillyTavern Presets. Empty and comment-only nodes are never sent.
-- Block order is literal: placing `chatHistory` ahead of `dialogueExamples` places chat history first in the prompt.
+- Marker order is literal: placing `chatHistory` ahead of `dialogueExamples` places chat history first. World info markers position Always On lore; activated lore, retrieved documents, presence, and the clock stay near the latest four speaker turns. Fresh or cross-channel short-term memory also stays near those messages, or closer if configured.
 - Post-history injections merge into existing conversation history rather than sending as standalone messages.
 - Regex post-processing, preset-defined sampling parameters (temperature, top-p), and layered presets are not supported. Legacy text-completion presets import with ST-only blocks dropped.
 

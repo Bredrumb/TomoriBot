@@ -46,7 +46,9 @@ system prompt. Turn the preset off to edit the saved server prompt again.
 - `/config` > Behavior > General Behavior: response humanizer degree. Adjust how casually she
   texts. The setting applies server-wide by default, or to an individual persona.
 - `/config` > Behavior > General Behavior: message history limit. Raise it for deeper
-  conversational context, or lower it to save tokens.
+  conversational context, or lower it to save tokens. This is a maximum: recent history grows, then
+  drops older messages in batches. See [Inside The Prompt](/features/knowledge/inside-the-prompt/)
+  for the window and placement rules.
 
 ## Capabilities
 <!-- anchor: capabilities-what-shes-allowed-to-do -->

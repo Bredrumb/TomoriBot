@@ -130,6 +130,11 @@ and at no other time, so a busy channel where nobody talks to her leaves no memo
 short-term memory expires after 24 hours by default. If you opt out under `/personal config`, your
 messages are excluded from short-term memory.
 
+Fresh short-term memory and memory carrying other channels' content sit just above the latest four
+speaker turns. Older memory from this channel stays above the conversation at the default setting.
+A configured shallower depth can keep the content closer to the latest message. See
+[Inside The Prompt](/features/knowledge/inside-the-prompt/) for the full layout.
+
 ### Cross-channel example
 
 - **Public channels:** You discuss an album recommendation with TomoriBot in `#music`. A few minutes
