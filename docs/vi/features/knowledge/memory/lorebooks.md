@@ -109,6 +109,6 @@ với `Tất cả persona`. `Persona chính` và `Persona đã chọn` chỉ xu�
 
 ## Các trang liên quan
 
-- [Bộ nhớ](/features/knowledge/memory/)
+- [Bộ nhớ](/features/knowledge/memory/long-term-memory/)
 - [Bên trong prompt](/features/knowledge/inside-the-prompt/)
 - [Xử lý dữ liệu](/features/knowledge/data-handling/)

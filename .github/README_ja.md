@@ -128,7 +128,7 @@ TomoriBotは、SillyTavernとDiscordの廃止されたClydeにインスパイア
 - `/config` および `/personal config` - 現在のDiscordサーバーまたは個人向けにTomoriBotを調整する複数の方法
 - `/providers` および `/personal providers` - モデルエンドポイントやクラウドプロバイダーの追加
 - `/persona` - 性格を与えたり、新しいキャラクターを追加したりできます（[複数ペルソナ](https://docs.tomoribot.app/ja/features/chatting-personality/multiple-personas/)を参照）
-- `/memories` - 会話を通じて事実を教えます（[記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/)を参照）
+- `/memories` - 会話を通じて事実を教えます（[記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/long-term-memory/)を参照）
 
 すべてのスラッシュコマンドについては、[コマンドリファレンス](https://docs.tomoribot.app/ja/features/command-reference/)を参照してください。
 

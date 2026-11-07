@@ -105,6 +105,18 @@ const groupDirectoryConfig = {
       vi: "Tri thức",
     },
   },
+  "features/knowledge/memory": {
+    label: "Memory",
+    order: 1,
+    translations: {
+      ja: "記憶",
+      "zh-TW": "記憶",
+      "zh-CN": "记忆",
+      "es-419": "Memoria",
+      "pt-BR": "Memória",
+      vi: "Bộ nhớ",
+    },
+  },
   "features/capabilities": {
     label: "Capabilities",
     order: 3,
@@ -508,6 +520,14 @@ export default defineConfig({
     "/": "/en/introduction/",
     ...localeRootRedirects,
     ...bareRouteRedirects,
+    // Bot messages in every locale linked these paths before Memory became a folder with no index page.
+    ...Object.fromEntries(
+      [
+        ["features/knowledge/lorebooks/", "features/knowledge/memory/lorebooks/"],
+        ["features/knowledge/memory/", "features/knowledge/memory/long-term-memory/"],
+      ].flatMap(([from, to]) => sidebarLocales.map((locale) => [`/${locale.id}/${from}`, `/${locale.id}/${to}`])),
+    ),
+    "/features/knowledge/lorebooks/": "/en/features/knowledge/memory/lorebooks/",
     "/architecture/entry-point/": "/en/architecture/entry-point/",
     "/architecture/integrations/discord/message-components-v2/": "/en/architecture/integrations/discord/message-components-v2/",
     "/architecture/integrations/discord/modal-input-components/": "/en/architecture/integrations/discord/modal-input-components/",
@@ -641,7 +661,7 @@ export default defineConfig({
     "/features/integrations/matrix-bridge/": "/en/features/integrations/matrix-bridge/",
     "/features/integrations/sillytavern-support/": "/en/features/integrations/sillytavern-support/",
     "/features/knowledge/data-handling/": "/en/features/knowledge/data-handling/",
-    "/features/knowledge/memory/": "/en/features/knowledge/memory/",
+    "/features/knowledge/memory/": "/en/features/knowledge/memory/long-term-memory/",
     "/features/knowledge/personalization/": "/en/features/knowledge/personalization/",
     "/features/setup-administration/age-restricted-commands/": "/en/features/setup-administration/age-restricted-commands/",
     "/features/setup-administration/providers-and-models/": "/en/features/setup-administration/providers-and-models/",
@@ -679,7 +699,7 @@ export default defineConfig({
     "/features/chatting-and-triggers": "/en/features/chatting-personality/chatting-and-triggers/",
     "/features/multiple-personas": "/en/features/chatting-personality/multiple-personas/",
     "/features/behavior-tweaking": "/en/features/chatting-personality/behavior-tweaking/",
-    "/features/memory": "/en/features/knowledge/memory/",
+    "/features/memory": "/en/features/knowledge/memory/long-term-memory/",
     "/features/personalization": "/en/features/knowledge/personalization/",
     "/features/data-handling": "/en/features/knowledge/data-handling/",
     "/features/tools-and-extensions": "/en/features/capabilities/tools-and-extensions/",
@@ -765,7 +785,7 @@ export default defineConfig({
           // The agent-facing sets stay English: `starlight-llms-txt` selects the default locale's
           // entries only, and `scripts/checkLlmsOutput.ts` fails the build if that ever changes.
           details:
-            "AI agents should begin with the [Introduction](https://docs.tomoribot.app/en/introduction/) and [Features](https://docs.tomoribot.app/en/features/) indexes. For a specific question, fetch the smallest relevant page instead of a combined documentation set; common starting points are [Tools & Extensions](https://docs.tomoribot.app/en/features/capabilities/tools-and-extensions/built-in-tools/), [Memory](https://docs.tomoribot.app/en/features/knowledge/memory/), [Inside the Prompt](https://docs.tomoribot.app/en/features/knowledge/inside-the-prompt/), and [Providers & Models](https://docs.tomoribot.app/en/features/setup-administration/providers-and-models/). Current runtime capability reports and assembled context override general documentation. Contributor, architecture, self-hosting, and other public pages remain available for deeper investigation. Internal wiki pages are intentionally omitted from every machine-readable documentation set.",
+            "AI agents should begin with the [Introduction](https://docs.tomoribot.app/en/introduction/) and [Features](https://docs.tomoribot.app/en/features/) indexes. For a specific question, fetch the smallest relevant page instead of a combined documentation set; common starting points are [Tools & Extensions](https://docs.tomoribot.app/en/features/capabilities/tools-and-extensions/built-in-tools/), [Memory](https://docs.tomoribot.app/en/features/knowledge/memory/long-term-memory/), [Inside the Prompt](https://docs.tomoribot.app/en/features/knowledge/inside-the-prompt/), and [Providers & Models](https://docs.tomoribot.app/en/features/setup-administration/providers-and-models/). Current runtime capability reports and assembled context override general documentation. Contributor, architecture, self-hosting, and other public pages remain available for deeper investigation. Internal wiki pages are intentionally omitted from every machine-readable documentation set.",
           exclude: [
             ...nonDefaultLocalePatterns("/**"),
             "en/wiki",

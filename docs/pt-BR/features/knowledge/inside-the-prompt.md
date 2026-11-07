@@ -43,7 +43,7 @@ Para provedores com suporte a chamadas de ferramentas, o TomoriBot envia as defi
 | Ela esqueceu algo em outro canal | Mensagens recentes são específicas por canal. Memórias do servidor, memórias de participantes e memória de curto prazo fornecem informações selecionadas de outros canais. |
 | `/refresh` a fez esquecer | O refresh interrompe as mensagens recentes e limpa a memória de curto prazo deste canal, mas não deve remover a memória de longo prazo. Exclua o embed de refresh para remover o corte. |
 
-Se você deseja que algo sobreviva a todos os itens acima, isso deve se tornar uma memória de longo prazo. Consulte [Memória](/pt-BR/features/knowledge/memory/#long-term-memory).
+Se você deseja que algo sobreviva a todos os itens acima, isso deve se tornar uma memória de longo prazo. Consulte [Memória](/pt-BR/features/knowledge/memory/long-term-memory/).
 
 ## Dicas e Truques
 

@@ -65,7 +65,7 @@ TomoriBot sẽ xem bạn như người dùng mới từ tin nhắn tiếp theo.`
       persona_memory_count_one: `1 bộ nhớ`,
       persona_memory_count_shared: `{count} bộ nhớ, dùng chung giữa {personas} persona`,
       persona_memory_count_one_shared: `1 bộ nhớ, dùng chung giữa {personas} persona`,
-      stm_title: `[Bộ nhớ ngắn hạn](https://docs.tomoribot.app/vi/features/knowledge/memory/#short-term-memory-stm)`,
+      stm_title: `[Bộ nhớ ngắn hạn](https://docs.tomoribot.app/vi/features/knowledge/memory/short-term-memory/)`,
       stm_active_count: `Tóm tắt đang hoạt động về bạn: \`{count}\``,
       stm_clear_button: `Xóa bộ nhớ ngắn hạn của bạn`,
       stm_crossserver_hint: "Cấu hình cho phép mình mang hội thoại gần đây qua các máy chủ bằng `/personal config`.",
@@ -200,7 +200,7 @@ TomoriBot sẽ xem bạn như người dùng mới từ tin nhắn tiếp theo.`
       memories_manage_hint: `Dùng \`/personal memories\` để quản lý bộ nhớ của mình về bạn`,
       stm_count_label: `Hiện đang lưu tạm \`{count}\` STM về bạn`,
       stm_clear_hint: `Dùng \`/personal memories\` để xóa những gì mình đang nhớ.`,
-      crossserver_section_title: `[STM](https://docs.tomoribot.app/vi/features/knowledge/memory/#short-term-memory-stm) liên máy chủ`,
+      crossserver_section_title: `[STM](https://docs.tomoribot.app/vi/features/knowledge/memory/short-term-memory/) liên máy chủ`,
       crossserver_stm_off: "Mình không thể nhớ hội thoại gần đây với bạn qua các máy chủ vì STM liên máy chủ đang tắt.",
       crossserver_stm_on:
         "Mình có thể lưu bộ nhớ hội thoại gần đây với bạn qua các máy chủ vì STM liên máy chủ đang bật.",

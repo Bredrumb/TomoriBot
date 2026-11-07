@@ -9,7 +9,7 @@ TomoriBot可以記住你在與她共享的每台伺服器上追蹤你的個人�
 
 ## 個人記憶
 
-她了解到或記住的有關你的事實會在伺服器之間跟隨你。[記憶體](/zh-TW/features/knowledge/memory/#personal-vs-server-memories) 頁面介紹了管理它們（新增、刪除、匯出或清除上下文）。
+她了解到或記住的有關你的事實會在伺服器之間跟隨你。[記憶體](/zh-TW/features/knowledge/memory/long-term-memory/#personal-vs-server-memories) 頁面介紹了管理它們（新增、刪除、匯出或清除上下文）。
 
 ## 個人檔案與人格感知稱呼
 

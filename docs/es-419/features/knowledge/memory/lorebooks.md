@@ -68,6 +68,6 @@ Para un respaldo del servidor que conserve estas restricciones y los ajustes de 
 
 ## Páginas relacionadas
 
-- [Memoria](/features/knowledge/memory/)
+- [Memoria](/features/knowledge/memory/long-term-memory/)
 - [Dentro del prompt](/features/knowledge/inside-the-prompt/)
 - [Manejo de datos](/features/knowledge/data-handling/)

@@ -58,7 +58,7 @@ export default {
       persona_memory_count_one: `1件の記憶`,
       persona_memory_count_shared: `{count}件の記憶（{personas}体のペルソナで共有）`,
       persona_memory_count_one_shared: `1件の記憶（{personas}体のペルソナで共有）`,
-      stm_title: `[短期記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#short-term-memory-stm)`,
+      stm_title: `[短期記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/short-term-memory/)`,
       stm_active_count: `あなたに関するアクティブな要約：\`{count}\``,
       stm_clear_button: `自分の短期記憶を消去`,
       stm_crossserver_hint: "`/personal config` から、最近の会話をサーバー間で 引き継ぐかどうかを設定できます。",
@@ -193,7 +193,7 @@ export default {
       memories_manage_hint: `\`/personal memories\` を使用して、あなたに関する記憶を管理できます`,
       stm_count_label: `現在、あなたの短期記憶が \`{count}\` 件キャッシュされています`,
       stm_clear_hint: `\`/personal memories\` を使用して、現在覚えていることを消去できます。`,
-      crossserver_section_title: `サーバー間 [短期記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#short-term-memory-stm)`,
+      crossserver_section_title: `サーバー間 [短期記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/short-term-memory/)`,
       crossserver_stm_off:
         "サーバー間短期記憶がオフになっているため、 サーバーを越えて最近の会話を覚えていることはできません。",
       crossserver_stm_on:

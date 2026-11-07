@@ -9,7 +9,7 @@ TomoriBot pode lembrar detalhes pessoais, nomes personalizados e credenciais de 
 
 ## Memórias Pessoais
 
-Fatos que ela aprende ou lembra sobre você o seguem entre os servidores. O gerenciamento deles (adicionar, remover, exportar ou limpar contexto) é abordado na página [Memória](/pt-BR/features/knowledge/memory/#personal-vs-server-memories).
+Fatos que ela aprende ou lembra sobre você o seguem entre os servidores. O gerenciamento deles (adicionar, remover, exportar ou limpar contexto) é abordado na página [Memória](/pt-BR/features/knowledge/memory/long-term-memory/#personal-vs-server-memories).
 
 ## Perfil e Nomes com Reconhecimento de Persona
 

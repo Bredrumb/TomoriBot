@@ -68,6 +68,6 @@ aiGenerated: false
 
 ## 関連ページ
 
-- [記憶](/features/knowledge/memory/)
+- [記憶](/features/knowledge/memory/long-term-memory/)
 - [プロンプトの中身](/features/knowledge/inside-the-prompt/)
 - [データ処理](/features/knowledge/data-handling/)

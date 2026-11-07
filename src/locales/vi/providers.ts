@@ -262,33 +262,42 @@ Model đã chọn yêu cầu cấp quyền dữ liệu để huấn luyện tr�
       unknown_default_message: `Đã xảy ra lỗi ngoài dự kiến`,
     },
     self_teach: {
+      memory_forgotten_description: `Đã quên một bộ nhớ tạm nghỉ để nhường chỗ:
+\`\`\`
+{forgotten_content}
+\`\`\``,
+      memory_saved_with_eviction_content: `Đã lưu:
+{memory_content}
+
+Đã quên:
+{forgotten_content}`,
       server_memory_learned_title: `🧠 {persona_nickname} đã học được điều mới!`,
-      server_memory_learned_description: `Một **[Bộ nhớ máy chủ](https://docs.tomoribot.app/vi/features/knowledge/memory/#long-term-memory)** đã được lưu:
+      server_memory_learned_description: `Một **[Bộ nhớ máy chủ](https://docs.tomoribot.app/vi/features/knowledge/memory/long-term-memory/)** đã được lưu:
 \`\`\`
 {memory_content}
 \`\`\``,
       server_memory_updated_title: `📝 {persona_nickname} đã cập nhật một bộ nhớ!`,
-      server_memory_updated_description: `Một **[Bộ nhớ máy chủ](https://docs.tomoribot.app/vi/features/knowledge/memory/#long-term-memory)** đã được cập nhật:
+      server_memory_updated_description: `Một **[Bộ nhớ máy chủ](https://docs.tomoribot.app/vi/features/knowledge/memory/long-term-memory/)** đã được cập nhật:
 \`\`\`
 {memory_content}
 \`\`\``,
       server_memory_deleted_title: `🗑️ {persona_nickname} đã xóa một bộ nhớ!`,
-      server_memory_deleted_description: `Một **[Bộ nhớ máy chủ](https://docs.tomoribot.app/vi/features/knowledge/memory/#long-term-memory)** đã được xóa:
+      server_memory_deleted_description: `Một **[Bộ nhớ máy chủ](https://docs.tomoribot.app/vi/features/knowledge/memory/long-term-memory/)** đã được xóa:
 \`\`\`
 {memory_content}
 \`\`\``,
       personal_memory_learned_title: `💡 {persona_nickname} đã học được điều mới về {user_nickname}!`,
-      personal_memory_learned_description: `Một **[Bộ nhớ cá nhân](https://docs.tomoribot.app/vi/features/knowledge/memory/#long-term-memory)** về {user_nickname} đã được lưu:
+      personal_memory_learned_description: `Một **[Bộ nhớ cá nhân](https://docs.tomoribot.app/vi/features/knowledge/memory/long-term-memory/)** về {user_nickname} đã được lưu:
 \`\`\`
 {memory_content}
 \`\`\``,
       personal_memory_updated_title: `📝 {persona_nickname} đã cập nhật một bộ nhớ về {user_nickname}!`,
-      personal_memory_updated_description: `Một **[Bộ nhớ cá nhân](https://docs.tomoribot.app/vi/features/knowledge/memory/#long-term-memory)** về {user_nickname} đã được cập nhật:
+      personal_memory_updated_description: `Một **[Bộ nhớ cá nhân](https://docs.tomoribot.app/vi/features/knowledge/memory/long-term-memory/)** về {user_nickname} đã được cập nhật:
 \`\`\`
 {memory_content}
 \`\`\``,
       personal_memory_deleted_title: `🗑️ {persona_nickname} đã xóa một bộ nhớ về {user_nickname}!`,
-      personal_memory_deleted_description: `Một **[Bộ nhớ cá nhân](https://docs.tomoribot.app/vi/features/knowledge/memory/#long-term-memory)** về {user_nickname} đã được xóa:
+      personal_memory_deleted_description: `Một **[Bộ nhớ cá nhân](https://docs.tomoribot.app/vi/features/knowledge/memory/long-term-memory/)** về {user_nickname} đã được xóa:
 \`\`\`
 {memory_content}
 \`\`\``,

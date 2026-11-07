@@ -2,7 +2,7 @@
 title: "Manuseio de Dados"
 sidebar:
   order: 4
-aiGenerated: true
+aiGenerated: false
 ---
 
 Exporte, faça backup, importe ou exclua suas configurações, memórias e personas usando comandos de barra Discord. Para termos de serviço e detalhes de privacidade, consulte `/legal terms-of-service` e `/legal privacy-policy`.
@@ -15,19 +15,21 @@ Esta página aborda os controles do usuário no Discord. Em instâncias auto-hos
 
 ### Dados armazenados
 
-- Servidor e memórias pessoais
+- Memórias do servidor e pessoais, seus dados de busca e registros de uso recente, e lorebooks criados
 - Perfis de personalidade, características e exemplos de diálogo
 - Definições de configuração do servidor
-- Chaves API do provedor criptografado
+- Chaves API do provedor criptografadas
 - Metadados de expressão, regras de acesso de persona e mídia de expressão carregada
 
 ### Não armazenado
 
 - Histórico de mensagens Discord (as mensagens não são arquivadas em um log de mensagens persistente)
 
-### Enviado para seu provedor de IA
+### Enviado para seus provedores de IA
 
 Sempre que acionado, TomoriBot busca mensagens recentes no canal junto com memórias relevantes como contexto para o modelo. Ela não lê nem processa mensagens fora desses gatilhos.
+
+Quando um modelo de embedding está configurado, o provedor dele recebe a mensagem mais recente e o texto de documentos e memórias pesquisado. Este pode ser um provedor diferente daquele que escreve as respostas. Memórias pessoais ocultas por configurações de privacidade ficam fora da busca. Os dados de busca são excluídos junto com a respectiva memória; consulte [Decaimento de memória](/features/knowledge/memory/memory-decay/) para saber mais sobre o repouso e a substituição automáticos.
 
 :::note
 O provedor de IA escolhido (Google, OpenRouter, NovelAI,…) processa mensagens de acordo com sua própria política de privacidade. Evite compartilhar credenciais pessoais confidenciais ou dados confidenciais.
@@ -90,4 +92,4 @@ Para tabelas exatas de banco de dados e listas de colunas preservadas, consulte 
 - `/personal config`: controle sua visibilidade, até a invisibilidade total (optando por sair do contexto de memória), e desative as [Menções de Personas](/features/chatting-personality/natural-nudges/#ping-user), os toques ociosos em que uma persona menciona você para iniciar uma conversa.
 - `/config` > `Permissões`: os gerenciadores de servidores podem desativar os recursos de autoaprendizado e memória.
 
-Consulte [Memória](/pt-BR/features/knowledge/memory/) para gerenciamento diário de memória.
+Consulte [Memória](/features/knowledge/memory/long-term-memory/) para gerenciamento diário de memória.

@@ -43,7 +43,7 @@ conversion mechanics, see the
 [card-support architecture](/architecture/integrations/sillytavern/card-support/).
 
 :::tip
-A card's Character Book becomes that persona's [lorebook](/features/knowledge/lorebooks/). Disabled entries stay disabled. Re-importing the card replaces the persona's whole lorebook, including entries you added yourself.
+A card's Character Book becomes that persona's [lorebook](/features/knowledge/memory/lorebooks/). Disabled entries stay disabled. Re-importing the card replaces the persona's whole lorebook, including entries you added yourself.
 :::
 
 ## Prompt Presets

@@ -184,7 +184,7 @@ export default {
 - 用 \`/config\` 调整我的行为和能力。
 - 用 \`/memories\` 教我关于你的事。`,
       receipt_learn_more:
-        "阅读[官方 Wiki](https://docs.tomoribot.app/zh-CN/features/)，或打开 {help} （然后选功能），了解更多我能做的事。\n- [多个人格](https://docs.tomoribot.app/zh-CN/features/chatting-personality/multiple-personas/) = 外观、声音和触发设置\n- [聊天与触发](https://docs.tomoribot.app/zh-CN/features/chatting-personality/chatting-and-triggers/) = 我何时以及如何加入\n- [记忆](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/) = 人物、事实和上下文\n- [个性化](https://docs.tomoribot.app/zh-CN/features/knowledge/personalization/) = 你希望被如何对待\n- [媒体生成](https://docs.tomoribot.app/zh-CN/features/capabilities/media-generation/image-generation/) = 图像、视频和语音\n- [工具与扩展](https://docs.tomoribot.app/zh-CN/features/capabilities/tools-and-extensions/built-in-tools/) = 网络搜索和自定义工具",
+        "阅读[官方 Wiki](https://docs.tomoribot.app/zh-CN/features/)，或打开 {help} （然后选功能），了解更多我能做的事。\n- [多个人格](https://docs.tomoribot.app/zh-CN/features/chatting-personality/multiple-personas/) = 外观、声音和触发设置\n- [聊天与触发](https://docs.tomoribot.app/zh-CN/features/chatting-personality/chatting-and-triggers/) = 我何时以及如何加入\n- [记忆](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/long-term-memory/) = 人物、事实和上下文\n- [个性化](https://docs.tomoribot.app/zh-CN/features/knowledge/personalization/) = 你希望被如何对待\n- [媒体生成](https://docs.tomoribot.app/zh-CN/features/capabilities/media-generation/image-generation/) = 图像、视频和语音\n- [工具与扩展](https://docs.tomoribot.app/zh-CN/features/capabilities/tools-and-extensions/built-in-tools/) = 网络搜索和自定义工具",
       permission_denied: `你需要有管理服务器权限才能进行设置。`,
       env_mismatch: `环境配置已变更。请重新开始设置。`,
       forbidden: `这次设置会话属于其他用户或频道。`,

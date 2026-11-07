@@ -43,7 +43,7 @@ Một số model sử dụng thông tin ở gần đầu hoặc cuối của m�
 | Cô ấy quên cái gì đó ở kênh khác | Tin nhắn gần đây là riêng cho từng kênh. Bộ nhớ máy chủ, bộ nhớ người tham gia và bộ nhớ ngắn hạn cung cấp thông tin được chọn từ các kênh khác. |
 | `/refresh` khiến cô ấy quên mất | Làm mới sẽ cắt các tin nhắn gần đây và xóa bộ nhớ ngắn hạn của kênh này, nhưng không nên xóa bộ nhớ dài hạn. Xóa phần nhúng làm mới để loại bỏ phần giới hạn. |
 
-Nếu bạn muốn thứ gì đó tồn tại được sau tất cả những điều trên thì nó phải trở thành trí nhớ lâu dài. Xem [Bộ nhớ](/features/knowledge/memory/#long-term-memory).
+Nếu bạn muốn thứ gì đó tồn tại được sau tất cả những điều trên thì nó phải trở thành trí nhớ lâu dài. Xem [Bộ nhớ](/features/knowledge/memory/long-term-memory/).
 
 ## Mẹo và thủ thuật
 

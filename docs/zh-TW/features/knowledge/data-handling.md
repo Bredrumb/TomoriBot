@@ -13,13 +13,13 @@ aiGenerated: true
 
 ## 她儲存什麼
 
-### 儲存數據
+### 儲存資料
 
-- 伺服器和個人記憶
+- 伺服器與個人記憶、它們的搜尋資料與近期使用紀錄，以及編寫的世界書
 - 人格簡介、特徵和對話範例
 - 伺服器配置設定
 - 加密供應商API金鑰
-- 表情元資料、人格存取規則和上傳的表情媒體
+- 表情中繼資料、人格存取規則和上傳的表情媒體
 
 ### 未儲存
 
@@ -27,7 +27,9 @@ aiGenerated: true
 
 ### 發送給你的AI供應商
 
-每當觸發時，TomoriBot都會取得通道中的最新消息以及相關記憶體作為模型的上下文。她不會閱讀或處理這些觸發器之外的消息。
+每當觸發時，TomoriBot都會取得頻道中的最新訊息以及相關記憶作為模型的脈絡。她不會閱讀或處理這些觸發器之外的訊息。
+
+當設定了嵌入模型時，其供應商會收到最新訊息，以及它所搜尋的文件與記憶文字。這可以與撰寫回覆的供應商不同。因隱私設定而隱藏的個人記憶不會進入搜尋。搜尋資料會隨其記憶一同刪除；自動休眠與替換請參閱[記憶衰退](/features/knowledge/memory/memory-decay/)。
 
 :::note
 你選擇的AI供應商（Google、OpenRouter、NovelAI等）根據自己的隱私權政策處理訊息。避免共享敏感的個人憑證或機密資料。
@@ -62,8 +64,8 @@ aiGenerated: true
 
 - `/import config`：伺服器設定（需要管理伺服器）。選擇要應用的部分。
 - `/import personal config`：個人設定。選擇要套用的偵測到的部分。
-- `/import memories`：伺服器記憶體（需要管理伺服器）。合併或取代並映射人格。
-- `/import personal memories`：個人回憶。合併或取代並映射人格。
+- `/import memories`：伺服器記憶（需要管理伺服器）。合併或取代並映射人格。
+- `/import personal memories`：個人記憶。合併或取代並映射人格。
 - `/persona import`：恢復人格。也匯入SillyTavern PNG卡、JSON卡和`.charx`檔案（請參閱 [SillyTavern支援](/zh-TW/features/integrations/sillytavern-support/)）。
 
 ## 刪除你的資料
@@ -71,12 +73,12 @@ aiGenerated: true
 這些操作永久刪除或重置儲存的資料：
 
 - `/personal memories`：管理或刪除個人記憶。
-- `/memories`：管理或刪除伺服器記憶體（需要管理伺服器）。
+- `/memories`：管理或刪除伺服器記憶（需要管理伺服器）。
 - `/personal nuke`：永久刪除所有跨伺服器的個人資料。
 - `/nuke`：擦除伺服器數據，包括自訂表達式和人格存取規則。設定`preserve_personas: true`以保留人格，同時刪除自訂表達式和媒體。
 - `/reset config`：將伺服器配置還原為資料庫預設值。
-  - **保留**：活動模型分配、API金鑰、自訂端點、人格、伺服器記憶體和整合。
-  - **清除**：通道覆蓋、自動觸發規則、使用者黑名單和通道白名單。
+  - **保留**：活動模型分配、API金鑰、自訂端點、人格、伺服器記憶和整合。
+  - **清除**：頻道覆寫、自動觸發規則、使用者黑名單和頻道白名單。
   - 需要伺服器中的管理伺服器權限；也可在DM中使用。
 - `/reset personal config`：將個人資料設定和頻道對焦恢復為預設值。
   - **保留**：使用者身分、個人記憶、已儲存的供應商API金鑰、自訂端點和排程任務。
@@ -88,6 +90,6 @@ aiGenerated: true
 ## 選擇退出
 
 - `/personal config`：控制你的可見性，直至完全不可見（選擇退出記憶脈絡），並關閉[來自人格的標註](/features/chatting-personality/natural-nudges/#ping-user)（即人格主動 @標註 你發起對話的閒置搭話）。
-- `/config` > `權限`：伺服器管理員可以關閉自學習和記憶體功能。
+- `/config` > `權限`：伺服器管理員可以關閉自我教導與記憶功能。
 
-日常記憶體管理請參考[記憶體](/zh-TW/features/knowledge/memory/)。
+日常記憶管理請參閱[記憶](/features/knowledge/memory/long-term-memory/)。

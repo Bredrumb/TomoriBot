@@ -34,7 +34,7 @@ TomoriBot可以从 [SillyTavern](https://github.com/SillyTavern/SillyTavern) 导
 导入在保存前会进行校验（默认限制：每个文本字段5,000个字符、200个属性、每侧100对示例对话、100个触发词）。有关字段映射和转换机制，请参阅[卡片支持架构](/architecture/integrations/sillytavern/card-support/)。
 
 :::tip
-卡片中的角色书会成为该人格的[世界书](/features/knowledge/lorebooks/)。已停用的条目会保持停用状态。重新导入卡片会替换该人格的整本世界书，包括你自己添加的条目。
+卡片中的角色书会成为该人格的[世界书](/features/knowledge/memory/lorebooks/)。已停用的条目会保持停用状态。重新导入卡片会替换该人格的整本世界书，包括你自己添加的条目。
 :::
 
 ## 提示词预设集

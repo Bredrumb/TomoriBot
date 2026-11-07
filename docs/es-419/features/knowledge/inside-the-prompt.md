@@ -55,7 +55,7 @@ Para los proveedores que admiten llamadas a herramientas, TomoriBot envía las d
 | `/refresh` la hizo olvidar | Refresh corta los mensajes recientes y borra la memoria a corto plazo de este canal, pero no debería eliminar la memoria a largo plazo. Elimina el embed de refresh para quitar el corte. |
 | Olvidó algo después de reiniciar | Los mensajes recientes nunca sobreviven a los reinicios |
 
-Si quieres que algo sobreviva a todo lo anterior, tiene que convertirse en una memoria a largo plazo. Consulta [Memoria](/es-419/features/knowledge/memory/#long-term-memory).
+Si quieres que algo sobreviva a todo lo anterior, tiene que convertirse en una memoria a largo plazo. Consulta [Memoria](/es-419/features/knowledge/memory/long-term-memory/).
 
 ## Consejos y trucos
 

@@ -12,7 +12,7 @@ the `/personal` commands without altering any server's shared configuration.
 
 Facts she learns or remembers about you follow you between servers. Managing them (adding,
 removing, exporting, or clearing context) is covered on the
-[Memory](/features/knowledge/memory/#personal-vs-server-memories) page.
+[Memory](/features/knowledge/memory/long-term-memory/#personal-vs-server-memories) page.
 
 ## Profile and names
 

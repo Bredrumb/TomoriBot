@@ -143,7 +143,7 @@ Or slide into TomoriBot's DMs and say hi!
 - `/config` and `/personal config` - Multiple ways to tweak TomoriBot in the current Discord server or for yourself
 - `/providers` and `/personal providers` - Add more model endpoints or cloud providers
 - `/persona` - Give her a personality or add new characters (see [Multiple Personas](https://docs.tomoribot.app/en/features/chatting-personality/multiple-personas/))
-- `/memories` - Teach her facts across conversations (see [Memory](https://docs.tomoribot.app/en/features/knowledge/memory/))
+- `/memories` - Teach her facts across conversations (see [Memory](https://docs.tomoribot.app/en/features/knowledge/memory/long-term-memory/))
 
 See the full [command reference](https://docs.tomoribot.app/en/features/command-reference/) for every slash command.
 

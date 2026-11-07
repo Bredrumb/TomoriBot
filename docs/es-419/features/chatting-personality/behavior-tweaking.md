@@ -4,7 +4,7 @@ sidebar:
   order: 3
 ---
 
-Puedes ajustar lo que TomoriBot puede hacer y cómo genera respuestas en `/config`, incluida la página de permisos. Para la personalidad, consulta [Múltiples personas](/es-419/features/chatting-personality/multiple-personas/); para el conocimiento, consulta [Memoria](/es-419/features/knowledge/memory/). Esta página cubre los ajustes más comunes.
+Puedes ajustar lo que TomoriBot puede hacer y cómo genera respuestas en `/config`, incluida la página de permisos. Para la personalidad, consulta [Múltiples personas](/es-419/features/chatting-personality/multiple-personas/); para el conocimiento, consulta [Memoria](/es-419/features/knowledge/memory/long-term-memory/). Esta página cubre los ajustes más comunes.
 
 ## Capacidades: lo que puede hacer
 <!-- anchor: capabilities-what-shes-allowed-to-do -->

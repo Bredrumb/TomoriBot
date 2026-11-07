@@ -35,7 +35,9 @@ Mantemos memórias pessoais e do Servidor, personalizações de personas, lembre
 
 Quando uma persona inicia uma conversa por conta própria (Natural Nudges), registramos qual persona falou, o canal, se alguém respondeu e o membro mencionado. Também salvamos o objetivo privado da persona para aquela conversa, que pode mencionar esse membro.
 
-A memória de curto prazo opcional salva resumos de conversas. Outras memórias salvas ficam até serem excluídas e podem descrever pessoas que não as escreveram.
+A memória de curto prazo opcional salva resumos de conversas. Outras memórias salvas podem descrever pessoas que não as escreveram. Elas permanecem até serem excluídas, com a exceção de que o decaimento de memória pode remover uma memória não utilizada para abrir espaço quando o bot salva uma nova. Memórias que alguém adicionou ou editou com `/memories` ou `/personal memories` nunca são removidas dessa forma.
+
+O decaimento de memória se aplica a memórias do Servidor e pessoais. Se um modelo de embedding estiver configurado, armazenamos dados de busca calculados a partir de cada memória e registramos quão recentemente cada uma surgiu em conversa, para que o bot possa recordar memórias relevantes. Os dados de busca são excluídos junto com a respectiva memória. Configurações de privacidade que impedem o uso de memória pessoal também mantêm essas memórias fora da busca.
 
 ### 2.3) Chaves de API e serviços conectados
 

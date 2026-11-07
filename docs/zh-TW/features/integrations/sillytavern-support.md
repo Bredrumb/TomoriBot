@@ -33,7 +33,7 @@ TomoriBot可以從 [SillyTavern](https://github.com/SillyTavern/SillyTavern) 匯
 匯入在儲存前會進行驗證（預設限制：每個文字欄位5,000個字元、200個屬性、每側100組範例對話、100個觸發詞）。有關欄位對應與轉換機制，請參閱[卡片支援架構](/architecture/integrations/sillytavern/card-support/)。
 
 :::tip
-卡片中的角色書會成為該人格的[世界書](/features/knowledge/lorebooks/)。已停用的條目會保持停用狀態。重新匯入卡片會取代該人格的整本世界書，包含你自己新增的條目。
+卡片中的角色書會成為該人格的[世界書](/features/knowledge/memory/lorebooks/)。已停用的條目會保持停用狀態。重新匯入卡片會取代該人格的整本世界書，包含你自己新增的條目。
 :::
 
 ## 提示詞預設集

@@ -9,7 +9,7 @@ TomoriBot có thể ghi nhớ thông tin cá nhân, tên tùy chỉnh và thông
 
 ## Bộ nhớ cá nhân
 
-Những thông tin cô ấy biết hoặc nhớ về bạn sẽ theo bạn giữa các máy chủ. Việc quản lý chúng (thêm, xóa, xuất hoặc xóa ngữ cảnh) được đề cập trên trang [Bộ nhớ](/vi/features/knowledge/memory/#personal-vs-server-memories).
+Những thông tin cô ấy biết hoặc nhớ về bạn sẽ theo bạn giữa các máy chủ. Việc quản lý chúng (thêm, xóa, xuất hoặc xóa ngữ cảnh) được đề cập trên trang [Bộ nhớ](/vi/features/knowledge/memory/long-term-memory/#personal-vs-server-memories).
 
 ## Hồ sơ và tên theo persona
 

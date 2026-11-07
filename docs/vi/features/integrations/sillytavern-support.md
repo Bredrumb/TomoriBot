@@ -26,7 +26,7 @@ Nếu tệp đã tải lên là thẻ SillyTavern hợp lệ không có siêu d�
 Quá trình nhập được xác thực trước khi lưu (giới hạn mặc định: 5.000 ký tự cho mỗi trường văn bản, 200 thuộc tính, 100 đoạn hội thoại mẫu mỗi bên, 100 từ kích hoạt). Để biết cơ chế chuyển đổi và ánh xạ trường, hãy xem [kiến trúc hỗ trợ thẻ](/architecture/integrations/sillytavern/card-support/).
 
 :::tip
-Character Book của thẻ sẽ trở thành [lorebook](/features/knowledge/lorebooks/) của persona đó. Các mục đã tắt vẫn sẽ ở trạng thái tắt. Việc nhập lại thẻ sẽ thay thế toàn bộ lorebook của persona, bao gồm cả các mục bạn tự thêm.
+Character Book của thẻ sẽ trở thành [lorebook](/features/knowledge/memory/lorebooks/) của persona đó. Các mục đã tắt vẫn sẽ ở trạng thái tắt. Việc nhập lại thẻ sẽ thay thế toàn bộ lorebook của persona, bao gồm cả các mục bạn tự thêm.
 :::
 
 ## Preset prompt

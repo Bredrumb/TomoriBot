@@ -110,6 +110,6 @@ de destino intacto quando importados.
 
 ## Páginas relacionadas
 
-- [Memória](/features/knowledge/memory/)
+- [Memória](/features/knowledge/memory/long-term-memory/)
 - [Por Dentro do Prompt](/features/knowledge/inside-the-prompt/)
 - [Manuseio de Dados](/features/knowledge/data-handling/)

@@ -36,7 +36,7 @@ triggers.
 When an embedding model is set up, its provider receives the latest message and the document and
 memory text it searches. This can be a different provider from the one writing replies. Personal
 memories hidden by privacy settings stay out of search. Search data is deleted with its memory;
-see [Memory](/features/knowledge/memory/) for automatic resting and replacement.
+see [Memory decay](/features/knowledge/memory/memory-decay/) for automatic resting and replacement.
 
 :::note
 Your chosen AI provider (Google, OpenRouter, NovelAI, …) processes messages under their own
@@ -117,4 +117,4 @@ For exact database tables and preserved column lists, see the
   idle nudges where a persona pings you to start a conversation.
 - `/config` > Permissions: server managers can toggle self-learning and memory features off.
 
-See [Memory](/features/knowledge/memory/) for day-to-day memory management.
+See [Memory](/features/knowledge/memory/long-term-memory/) for day-to-day memory management.

@@ -64,7 +64,7 @@ Brave Search与你的AI提供商分开，并通过图像、视频和新闻结果
 
 - **文本**：主要聊天模型。
 - **视觉**：当聊天模型无法读取图像时。
-- **嵌入**：为[文档知识库](/features/knowledge/memory/#document-knowledge-base-rag)提供支持。
+- **嵌入**：为[文档知识库](/features/knowledge/memory/documents/)提供支持。
 - **判定**：已注册的[判定模型](#decision-models)。[Natural Nudges](/features/chatting-personality/natural-nudges/#active-nudges)使用它来决定何时加入对话。
 - **标准图像**：标准图像生成（参见[图像生成](/features/capabilities/media-generation/image-generation/)）。
 - **NovelAI 图像**：[NovelAI 图像生成](/features/integrations/novelai/#image-generation)。

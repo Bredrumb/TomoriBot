@@ -35,7 +35,7 @@ Se um arquivo carregado for um cartão SillyTavern válido sem metadados TomoriB
 As importações são validadas antes de serem salvas (limites padrão: 5.000 caracteres por campo de texto, 200 atributos, 100 exemplos de diálogos por lado, 100 palavras de gatilho). Para mapeamento de campo e mecânica de conversão, consulte [arquitetura de suporte de cartão](/architecture/integrations/sillytavern/card-support/).
 
 :::tip
-O Character Book de um card se torna o [lorebook](/features/knowledge/lorebooks/) dessa persona. Entradas desativadas permanecem desativadas. Importar o card novamente substitui todo o lorebook da persona, incluindo as entradas que você adicionou.
+O Character Book de um card se torna o [lorebook](/features/knowledge/memory/lorebooks/) dessa persona. Entradas desativadas permanecem desativadas. Importar o card novamente substitui todo o lorebook da persona, incluindo as entradas que você adicionou.
 :::
 
 ## Predefinições de Prompt

@@ -66,7 +66,7 @@ TomoriBot will treat you as a new user from your next message.`,
       persona_memory_count_one: `1 memory`,
       persona_memory_count_shared: `{count} memories, shared across {personas} personas`,
       persona_memory_count_one_shared: `1 memory, shared across {personas} personas`,
-      stm_title: `[Short-Term Memory](https://docs.tomoribot.app/en/features/knowledge/memory/#short-term-memory-stm)`,
+      stm_title: `[Short-Term Memory](https://docs.tomoribot.app/en/features/knowledge/memory/short-term-memory/)`,
       stm_active_count: `Active summaries about you: \`{count}\``,
       stm_clear_button: `Clear My Short-Term Memory`,
       stm_crossserver_hint:
@@ -203,7 +203,7 @@ TomoriBot will treat you as a new user from your next message.`,
       memories_manage_hint: `Use \`/personal memories\` to manage my memories about you`,
       stm_count_label: `There are currently \`{count}\` STMs of you cached`,
       stm_clear_hint: `Use \`/personal memories\` to clear what I currently remember.`,
-      crossserver_section_title: `Cross-Server [STM](https://docs.tomoribot.app/en/features/knowledge/memory/#short-term-memory-stm)`,
+      crossserver_section_title: `Cross-Server [STM](https://docs.tomoribot.app/en/features/knowledge/memory/short-term-memory/)`,
       crossserver_stm_off:
         "I cannot remember recent conversations with you across servers because Cross-Server STM is off.",
       crossserver_stm_on:

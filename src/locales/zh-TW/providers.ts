@@ -257,33 +257,42 @@ export default {
       unknown_default_message: `發生未預期的錯誤`,
     },
     self_teach: {
+      memory_forgotten_description: `已遺忘一則休眠記憶以騰出空間：
+\`\`\`
+{forgotten_content}
+\`\`\``,
+      memory_saved_with_eviction_content: `已儲存：
+{memory_content}
+
+已遺忘：
+{forgotten_content}`,
       server_memory_learned_title: `🧠 {persona_nickname} 學到了新東西！`,
-      server_memory_learned_description: `已儲存一則 **[伺服器記憶](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/#long-term-memory)**：
+      server_memory_learned_description: `已儲存一則 **[伺服器記憶](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/long-term-memory/)**：
 \`\`\`
 {memory_content}
 \`\`\``,
       server_memory_updated_title: `📝 {persona_nickname} 更新了一則記憶！`,
-      server_memory_updated_description: `已更新一則 **[伺服器記憶](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/#long-term-memory)**：
+      server_memory_updated_description: `已更新一則 **[伺服器記憶](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/long-term-memory/)**：
 \`\`\`
 {memory_content}
 \`\`\``,
       server_memory_deleted_title: `🗑️ {persona_nickname} 刪除了一則記憶！`,
-      server_memory_deleted_description: `已刪除一則 **[伺服器記憶](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/#long-term-memory)**：
+      server_memory_deleted_description: `已刪除一則 **[伺服器記憶](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/long-term-memory/)**：
 \`\`\`
 {memory_content}
 \`\`\``,
       personal_memory_learned_title: `💡 {persona_nickname} 學到了關於 {user_nickname} 的新東西！`,
-      personal_memory_learned_description: `已儲存一則關於 {user_nickname} 的 **[個人記憶](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/#long-term-memory)**：
+      personal_memory_learned_description: `已儲存一則關於 {user_nickname} 的 **[個人記憶](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/long-term-memory/)**：
 \`\`\`
 {memory_content}
 \`\`\``,
       personal_memory_updated_title: `📝 {persona_nickname} 更新了一則關於 {user_nickname} 的記憶！`,
-      personal_memory_updated_description: `已更新一則關於 {user_nickname} 的 **[個人記憶](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/#long-term-memory)**：
+      personal_memory_updated_description: `已更新一則關於 {user_nickname} 的 **[個人記憶](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/long-term-memory/)**：
 \`\`\`
 {memory_content}
 \`\`\``,
       personal_memory_deleted_title: `🗑️ {persona_nickname} 刪除了一則關於 {user_nickname} 的記憶！`,
-      personal_memory_deleted_description: `已刪除一則關於 {user_nickname} 的 **[個人記憶](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/#long-term-memory)**：
+      personal_memory_deleted_description: `已刪除一則關於 {user_nickname} 的 **[個人記憶](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/long-term-memory/)**：
 \`\`\`
 {memory_content}
 \`\`\``,

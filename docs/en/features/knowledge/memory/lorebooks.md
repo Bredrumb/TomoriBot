@@ -1,7 +1,7 @@
 ---
 title: "Lorebooks"
 sidebar:
-  order: 2
+  order: 4
 aiGenerated: false
 ---
 
@@ -114,6 +114,6 @@ lore untouched when imported.
 
 ## Related pages
 
-- [Memory](/features/knowledge/memory/)
+- [Memory](/features/knowledge/memory/long-term-memory/)
 - [Inside The Prompt](/features/knowledge/inside-the-prompt/)
 - [Data Handling](/features/knowledge/data-handling/)
