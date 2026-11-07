@@ -8,6 +8,7 @@ import { log } from "@/utils/misc/logger";
 import * as credentialResolver from "@/utils/provider/credentialResolver";
 import { memoryGuard } from "@/utils/security/rateLimiter";
 import { buildServerDocumentContextItem } from "@/utils/text/context/rag";
+import { startQueryRetrieval } from "@/utils/text/context/queryRetrieval";
 import type { SimplifiedMessageForContext } from "@/utils/text/context/types";
 import { embeddingModelSchema, savedProviderConfigSchema } from "@/types/db/schema";
 import { ContextItemTag } from "@/types/misc/context";
@@ -86,10 +87,14 @@ function userMessage(content: string): SimplifiedMessageForContext {
 
 async function render(chunks: RetrievedDocumentChunk[]): Promise<string> {
   spies.retrieve.mockResolvedValue(chunks);
-  const item = await buildServerDocumentContextItem({
+  const params = {
     tomoriState: createPersona({ config: { embedding_model_id: 3 } }),
     simplifiedMessageHistory: [userMessage("fixture query")],
     channelId: "fixture-channel",
+  };
+  const item = await buildServerDocumentContextItem({
+    ...params,
+    retrieval: startQueryRetrieval(params, { enabled: true, demand: Promise.resolve(false) }),
   });
   expect(item?.metadataTag).toBe(ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS);
   if (!item) throw new Error("Expected a document context item");

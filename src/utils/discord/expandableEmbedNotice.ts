@@ -427,7 +427,6 @@ export async function sendMemoryEmbedWithExpand(
   embedOptions: StandardEmbedOptions,
   fullMemoryContent: string,
   ref?: MinimalNoticeRef,
-  containsEviction = false,
 ): Promise<void> {
   const config: ExpandableNoticeConfig = {
     customId: "memory_notice_expand",
@@ -436,18 +435,6 @@ export async function sendMemoryEmbedWithExpand(
     truncationThreshold: MEMORY_NOTICE_PREVIEW_LIMIT,
     timeoutMs: EXPAND_BUTTON_TIMEOUT_MS,
   };
-  // Automatic eviction must show the removed content even when ordinary notices are hidden or minimal.
-  if (containsEviction) {
-    await sendEmbedWithExpand(
-      context.channel,
-      context.locale,
-      { ...embedOptions, minimal: false },
-      fullMemoryContent,
-      config,
-      buildToolPersonaPostContext(context, context.tomoriState),
-    );
-    return;
-  }
   await sendToolEmbedWithExpand(context, "memory_update", embedOptions, fullMemoryContent, config, ref);
 }
 

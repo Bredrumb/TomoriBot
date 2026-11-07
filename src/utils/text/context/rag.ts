@@ -3,11 +3,10 @@ import { metricSampleRepository } from "@/utils/db/repositories/MetricSampleRepo
 import { log } from "@/utils/misc/logger";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import type { TomoriState } from "@/types/db/schema";
-import type { SimplifiedMessageForContext } from "./types";
 import { channelScopeCandidates } from "@/utils/discord/channelScope";
 import { charsToTokensText } from "@/utils/text/tokenEstimate";
 import type { RetrievalTimings } from "@/utils/documents/documentService";
-import { startQueryRetrieval, type QueryRetrieval } from "@/utils/text/context/queryRetrieval";
+import type { QueryRetrieval } from "@/utils/text/context/queryRetrieval";
 
 const DOCUMENT_MAX_RESULTS = 10;
 const DOCUMENT_MIN_SIMILARITY = 0.5;
@@ -64,17 +63,14 @@ function skipRetrieval(
 
 export async function buildServerDocumentContextItem(params: {
   tomoriState: TomoriState | null | undefined;
-  simplifiedMessageHistory: SimplifiedMessageForContext[];
-  triggererUserId?: number;
   channelId: string;
   parentChannelId?: string | null;
-  retrieval?: QueryRetrieval;
+  retrieval: QueryRetrieval;
 }): Promise<StructuredContextItem | null> {
   const startedAt = performance.now();
   const timings: RetrievalTimings = {};
   try {
-    const { tomoriState, channelId, parentChannelId } = params;
-    const retrieval = params.retrieval ?? startQueryRetrieval(params);
+    const { tomoriState, channelId, parentChannelId, retrieval } = params;
     const ready = await retrieval.prepared;
     const skip = ready.documentSkip ?? ready.skip;
     if (skip) return skipRetrieval(skip, startedAt, timings);

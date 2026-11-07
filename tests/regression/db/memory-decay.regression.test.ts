@@ -2,12 +2,15 @@ import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "bun:test";
 import {
   exportRepository,
+  llmProviderRepo,
   memoryDecayRepository,
   personalMemoryRepository,
   serverMemoryRepository,
 } from "@/utils/db/repositories";
 import { detectRagAvailability, resetRagAvailabilityCache } from "@/utils/db/ragAvailability";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
+import { registerCustomEndpoint } from "@/utils/provider/customEndpointService";
+import { createServerConfig } from "../../helpers/fixtures";
 import { useEnvSandbox } from "../../helpers/env";
 import { cleanupFixtures, FIXTURE_IDS, insertFixtures, type FixtureRefs } from "./setup/fixtures";
 import { DB_TESTS_AVAILABLE, executeTestSqlFile, setupTestDb, testSql } from "./setup/testDb";
@@ -94,6 +97,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("memory decay storage", () => {
   });
 
   it("evicts the least reinforced eligible server memory and serializes two saves at the cap", async () => {
+    if (!rag) return;
     process.env.MAX_SERVER_MEMORIES = "4";
     const human = await insertServer(40);
     const reinforced = await insertServer(20, true);
@@ -107,6 +111,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("memory decay storage", () => {
         refs.personaLineageId,
         refs.userId,
         content,
+        true,
       );
     process.env.MEMORY_DECAY_ENABLED = "false";
     expect(await save("disabled save")).toEqual({ status: "refused", currentCount: 4, limit: 4 });
@@ -129,13 +134,14 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("memory decay storage", () => {
   });
 
   it("counts global personal rows but evicts only the saving lineage and obeys the global switch", async () => {
+    if (!rag) return;
     process.env.MAX_PERSONAL_MEMORIES = "3";
     const global = await insertPersonal(40, false, 0);
     const human = await insertPersonal(40);
     const evictable = await insertPersonal(14, true);
     await insertPersonal(30, true, refs.personaLineageId + 1);
     process.env.MEMORY_DECAY_ENABLED = "false";
-    const save = () => personalMemoryRepository.addWithEviction(refs.userId, refs.personaLineageId, "model fact");
+    const save = () => personalMemoryRepository.addWithEviction(refs.userId, refs.personaLineageId, "model fact", true);
     expect(await save()).toEqual({ status: "refused", currentCount: 3, limit: 3 });
     delete process.env.MEMORY_DECAY_ENABLED;
     const results = await Promise.all([save(), save()]);
@@ -146,7 +152,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("memory decay storage", () => {
     const rows = await personalMemoryRepository.loadForUserLineage(refs.userId, refs.personaLineageId);
     expect(rows).toHaveLength(3);
     expect(rows.map((row) => row.personal_memory_id)).toEqual(expect.arrayContaining([global, human]));
-    await expect(personalMemoryRepository.addWithEviction(refs.userId, 0, "invalid scope")).rejects.toThrow();
+    await expect(personalMemoryRepository.addWithEviction(refs.userId, 0, "invalid scope", true)).rejects.toThrow();
   });
 
   it("preserves human and pre-release memories at the cap and saves below it with decay disabled", async () => {
@@ -169,9 +175,10 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("memory decay storage", () => {
         refs.personaLineageId,
         refs.userId,
         "model server fact",
+        true,
       );
     const savePersonal = () =>
-      personalMemoryRepository.addWithEviction(refs.userId, refs.personaLineageId, "model personal fact");
+      personalMemoryRepository.addWithEviction(refs.userId, refs.personaLineageId, "model personal fact", true);
     const refused = { status: "refused", currentCount: 2, limit: 2 } as const;
     expect(await saveServer()).toEqual(refused);
     expect(await savePersonal()).toEqual(refused);
@@ -190,6 +197,129 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("memory decay storage", () => {
     process.env.MEMORY_DECAY_ENABLED = "false";
     for (const result of [await saveServer(), await savePersonal()]) {
       expect(result).toMatchObject({ status: "saved", evicted: null, memory: { model_written: true, decay_days: 0 } });
+    }
+  });
+
+  it("protects aged model saves when turn embeddings or RAG are unavailable", async () => {
+    process.env.MAX_SERVER_MEMORIES = "1";
+    process.env.MAX_PERSONAL_MEMORIES = "1";
+    const server = await insertServer(20, true);
+    const personal = await insertPersonal(20, true);
+    try {
+      for (const embeddingResolved of [false, true]) {
+        if (embeddingResolved) resetRagAvailabilityCache();
+        expect(
+          await serverMemoryRepository.addWithEviction(
+            refs.serverId,
+            refs.personaId,
+            refs.personaLineageId,
+            refs.userId,
+            "new server fact",
+            embeddingResolved,
+          ),
+        ).toMatchObject({ status: "refused" });
+        expect(
+          await personalMemoryRepository.addWithEviction(
+            refs.userId,
+            refs.personaLineageId,
+            "new personal fact",
+            embeddingResolved,
+          ),
+        ).toMatchObject({ status: "refused" });
+      }
+      expect(
+        (await serverMemoryRepository.loadServerMemoriesScoped(refs.serverId, refs.personaLineageId))[0]
+          ?.server_memory_id,
+      ).toBe(server);
+      expect(
+        (await personalMemoryRepository.loadForUserLineage(refs.userId, refs.personaLineageId))[0]?.personal_memory_id,
+      ).toBe(personal);
+      process.env.MAX_SERVER_MEMORIES = "2";
+      process.env.MAX_PERSONAL_MEMORIES = "2";
+      expect(
+        await serverMemoryRepository.addWithEviction(
+          refs.serverId,
+          refs.personaId,
+          refs.personaLineageId,
+          refs.userId,
+          "new server fact",
+          false,
+        ),
+      ).toMatchObject({ status: "saved", evicted: null });
+      expect(
+        await personalMemoryRepository.addWithEviction(refs.userId, refs.personaLineageId, "new personal fact", false),
+      ).toMatchObject({ status: "saved", evicted: null });
+    } finally {
+      await detectRagAvailability();
+    }
+  });
+
+  it("repairs legacy vector constraints and deletes server and personal endpoints without deleting memories", async () => {
+    if (!rag) return;
+    const schemaPath = path.join(process.cwd(), "src/db/schema_rag.sql");
+    await executeTestSqlFile(schemaPath);
+    await testSql`ALTER TABLE memory_embeddings DROP CONSTRAINT memory_embeddings_embedding_model_id_fkey`;
+    await testSql`ALTER TABLE memory_embeddings ADD CONSTRAINT memory_embeddings_embedding_model_id_fkey
+      FOREIGN KEY (embedding_model_id) REFERENCES embedding_models(embedding_model_id) ON DELETE RESTRICT`;
+    try {
+      await executeTestSqlFile(schemaPath);
+      await executeTestSqlFile(schemaPath);
+      const server = await insertServer();
+      const personal = await insertPersonal();
+      for (const kind of ["server", "personal"] as const) {
+        const saved = await registerCustomEndpoint({
+          scope:
+            kind === "server"
+              ? { kind, ownerId: refs.serverId, baseConfig: createServerConfig() }
+              : { kind, ownerId: refs.userId },
+          label: "memory-vectors",
+          capability: "embedding",
+          apiStyle: "openai-compatible",
+          endpointUrl: "https://embeddings.example.invalid/v1",
+          modelName: "fixture-embedding",
+        });
+        if (!saved?.modelId || !saved.customEndpoint.connection_id) throw new Error("Missing endpoint fixture");
+        const modelId = saved.modelId;
+        for (const memory of [
+          { kind: "server" as const, id: server },
+          { kind: "personal" as const, id: personal },
+        ]) {
+          expect(
+            await memoryDecayRepository.upsertVector(
+              memory,
+              saved.provider,
+              modelId,
+              [1, 0, 0],
+              memory.kind === "server" ? "stored fact" : "personal fact",
+            ),
+          ).toBe(true);
+        }
+        const deleted =
+          kind === "server"
+            ? await llmProviderRepo.deleteServerCustomEndpointConnectionGroup(refs.serverId, [
+                saved.customEndpoint.connection_id,
+              ])
+            : await llmProviderRepo.deleteUserCustomEndpointConnectionGroup(refs.userId, [
+                saved.customEndpoint.connection_id,
+              ]);
+        expect(deleted).toBe(true);
+        expect(await testSql`SELECT 1 FROM embedding_models WHERE embedding_model_id = ${modelId}`).toHaveLength(0);
+        expect(await testSql`SELECT 1 FROM memory_embeddings WHERE embedding_model_id = ${modelId}`).toHaveLength(0);
+        const config =
+          kind === "server"
+            ? await llmProviderRepo.loadSavedProviderConfig(refs.serverId, saved.provider)
+            : await llmProviderRepo.loadUserSavedProviderConfig(refs.userId, saved.provider);
+        expect(config).toBeNull();
+      }
+      expect(
+        (await serverMemoryRepository.loadServerMemoriesScoped(refs.serverId, refs.personaLineageId))[0]
+          ?.server_memory_id,
+      ).toBe(server);
+      expect(
+        (await personalMemoryRepository.loadForUserLineage(refs.userId, refs.personaLineageId))[0]?.personal_memory_id,
+      ).toBe(personal);
+    } finally {
+      await executeTestSqlFile(schemaPath);
     }
   });
 

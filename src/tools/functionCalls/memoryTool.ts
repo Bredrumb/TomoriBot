@@ -273,6 +273,7 @@ export class MemoryTool extends BaseTool {
           tomoriState.persona_lineage_id,
           userRow.user_id,
           memoryContent,
+          context.memoryEmbeddingResolved === true,
         );
         if (saveResult.status === "refused") {
           return {
@@ -332,7 +333,6 @@ export class MemoryTool extends BaseTool {
             dbResult.server_memory_id === undefined
               ? undefined
               : { kind: "server_memory", id: dbResult.server_memory_id },
-            saveResult.evicted !== null,
           );
         } catch (embedError) {
           log.warn("Failed to send server memory notification notice (non-fatal)", embedError as Error);
@@ -428,6 +428,7 @@ export class MemoryTool extends BaseTool {
           targetUserRow.user_id,
           tomoriState.persona_lineage_id,
           memoryContent,
+          context.memoryEmbeddingResolved === true,
         );
         if (saveResult.status === "refused") {
           return {
@@ -509,7 +510,6 @@ export class MemoryTool extends BaseTool {
             dbResult.personal_memory_id === undefined
               ? undefined
               : { kind: "personal_memory", id: dbResult.personal_memory_id },
-            saveResult.evicted !== null,
           );
         } catch (embedError) {
           log.warn("Failed to send personal memory notification notice (non-fatal)", embedError as Error);

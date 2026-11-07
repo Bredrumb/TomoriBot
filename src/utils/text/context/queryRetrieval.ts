@@ -7,6 +7,8 @@ import {
   resolveCapabilityCredentials,
   getResolvedCapabilityModelId,
   type ResolvedCredentials,
+  CredentialUnavailableError,
+  PersonalProviderRequiredError,
 } from "@/utils/provider/credentialResolver";
 import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 import { createProviderUsageRecorder, withProviderUsageContext } from "@/utils/provider/providerUsage";
@@ -138,6 +140,14 @@ export function startQueryRetrieval(
         : { skip: "no_model" as const }),
     };
   })().catch(async (error: unknown) => {
+    if (
+      (error instanceof PersonalProviderRequiredError && error.capability === "embedding") ||
+      (error instanceof CredentialUnavailableError &&
+        error.capability === "embedding" &&
+        (error.reason === "missing_model_id" || error.reason === "no_saved_config"))
+    ) {
+      return { skip: "no_model" as const };
+    }
     await reportProviderFailure({
       summary: "Failed to prepare context retrieval",
       errorType: "ContextRetrievalError",

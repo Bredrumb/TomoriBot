@@ -19,8 +19,3 @@ export function getMemoryStage(
 ): MemoryStage {
   return switchEnabled && ragAvailable && embeddingResolved && decayDays >= MEMORY_DORMANT_DAYS ? 2 : 1;
 }
-
-/** Only dormant model saves qualify for eviction, preserving all human and pre-release memories. */
-export function isMemoryEvictable(switchEnabled: boolean, modelWritten: boolean, decayDays: number): boolean {
-  return switchEnabled && modelWritten && decayDays >= MEMORY_DORMANT_DAYS;
-}

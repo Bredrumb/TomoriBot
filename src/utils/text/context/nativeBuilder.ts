@@ -152,8 +152,6 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
   const documentItemPromise = buildServerDocumentContextItem({
     retrieval,
     tomoriState,
-    simplifiedMessageHistory,
-    triggererUserId,
     channelId,
     parentChannelId,
   }).catch((error: unknown) => {

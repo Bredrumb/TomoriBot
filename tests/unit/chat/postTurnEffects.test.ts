@@ -118,6 +118,7 @@ describe("post-turn memory persistence", () => {
       recalled: [],
       missing: [],
       queryTimings: { queryTokens: 0 },
+      embeddingResolved: false,
       dormantTokens: 0,
       recalledTokens: 0,
     };

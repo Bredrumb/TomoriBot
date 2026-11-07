@@ -9,6 +9,7 @@ import { log } from "@/utils/misc/logger";
 import * as credentialResolver from "@/utils/provider/credentialResolver";
 import { memoryGuard } from "@/utils/security/rateLimiter";
 import { buildServerDocumentContextItem } from "@/utils/text/context/rag";
+import { startQueryRetrieval } from "@/utils/text/context/queryRetrieval";
 import type { SimplifiedMessageForContext } from "@/utils/text/context/types";
 import { charsToTokensText } from "@/utils/text/tokenEstimate";
 import { embeddingModelSchema, savedProviderConfigSchema } from "@/types/db/schema";
@@ -95,12 +96,20 @@ function userMessage(content: string): SimplifiedMessageForContext {
   };
 }
 
-function build(overrides: Partial<Parameters<typeof buildServerDocumentContextItem>[0]> = {}) {
-  return buildServerDocumentContextItem({
+function build(
+  overrides: Partial<
+    Parameters<typeof startQueryRetrieval>[0] & Parameters<typeof buildServerDocumentContextItem>[0]
+  > = {},
+) {
+  const params = {
     tomoriState: createPersona({ config: { embedding_model_id: 3 } }),
     simplifiedMessageHistory: [userMessage("fixture query")],
     channelId: "fixture-channel",
     ...overrides,
+  };
+  return buildServerDocumentContextItem({
+    ...params,
+    retrieval: startQueryRetrieval(params, { enabled: true, demand: Promise.resolve(false) }),
   });
 }
 

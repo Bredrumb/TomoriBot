@@ -32,6 +32,7 @@ export type MemoryRecallLabel =
 export type RecallCandidate = MemoryRef & { decayDays: number; line: string };
 export interface MemoryRecallOutcome {
   outcome: MemoryRecallLabel;
+  embeddingResolved: boolean;
   totalMs: number;
   candidateCount: number;
   scored: MemoryRef[];
@@ -87,6 +88,7 @@ export function createMemoryRecall(
       signalDemand(candidates.size > 0);
       const outcome: MemoryRecallOutcome = {
         outcome: "disabled",
+        embeddingResolved: false,
         totalMs: 0,
         candidateCount: candidates.size,
         scored: [],
@@ -107,6 +109,7 @@ export function createMemoryRecall(
       try {
         if (!enabled) return { outcome, item };
         const ready = await retrieval.prepared;
+        outcome.embeddingResolved = Boolean(ready.embedding);
         if (!ready.skip && !candidates.size) {
           outcome.outcome = "no_candidates";
           return { outcome, item };
@@ -170,9 +173,9 @@ export function createMemoryRecall(
         outcome.recalled = recalled.map(({ kind, id }) => ({ kind, id }));
         outcome.missing = result.missing;
         return { outcome, item };
-      } catch {
+      } catch (error) {
         outcome.outcome = "provider_error";
-        log.warn("Memory recall failed");
+        log.warn("Memory recall failed", error);
         return { outcome, item };
       } finally {
         if (timer) clearTimeout(timer);
@@ -200,9 +203,9 @@ export async function persistMemoryRecall(outcome: MemoryRecallOutcome): Promise
           recalledKeys.has(memoryKey(memory)) &&
           memory.previous_decay_days <= MEMORY_DORMANT_DAYS + MEMORY_QUICK_RETURN_DAYS,
       ).length;
-    } catch {
+    } catch (error) {
       persistenceFailed = true;
-      log.warn("Failed to record memory recall day");
+      log.warn("Failed to record memory recall day", error);
     }
     if (outcome.missing.length) {
       try {
@@ -225,11 +228,13 @@ export async function persistMemoryRecall(outcome: MemoryRecallOutcome): Promise
           )
             filledCount += 1;
         }
-      } catch {
+      } catch (error) {
         persistenceFailed = true;
         filledCount = 0;
         fillTokens = 0;
-        log.warn("Failed to fill memory vectors");
+        log.warn("Failed to fill memory vectors", error, undefined, {
+          redactValues: [outcome.embedding.credentials.apiKey],
+        });
       }
     }
   }
@@ -257,7 +262,7 @@ export async function persistMemoryRecall(outcome: MemoryRecallOutcome): Promise
   log.metric("memory_recall", fields);
   try {
     await metricSampleRepository.recordSample("memory_recall", fields);
-  } catch {
-    log.warn("Failed to record memory recall metric");
+  } catch (error) {
+    log.warn("Failed to record memory recall metric", error);
   }
 }

@@ -64,7 +64,8 @@ memories count toward each persona's personal limit. Self-hosters can change the
 
 When a scope is full, an automatic save may forget an unused, resting memory the bot saved on its
 own to make room. It never chooses one a person wrote. The confirmation shows what was saved and
-forgotten, even if ordinary memory notices are hidden. If no memory qualifies, the save is refused.
+forgotten, following the server's memory-notice visibility setting. If no memory qualifies, the save
+is refused.
 
 :::tip
 Prefer more short memories over fewer long ones. A memory that uses a raised `MAX_MEMORY_LENGTH` is

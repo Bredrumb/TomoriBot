@@ -1,5 +1,6 @@
 import { memoryDecayRepository, type MemorySaveResult } from "@/utils/db/repositories/MemoryDecayRepository";
 import { MEMORY_DORMANT_DAYS, isMemoryDecayEnabled } from "@/utils/memory/memoryDecay";
+import { isRagAvailable } from "@/utils/db/ragAvailability";
 /**
  * PersonalMemoryRepository: manages the `personal_memories` table.
  *
@@ -469,6 +470,7 @@ class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape>
     userId: number,
     personaLineageId: number,
     content: string,
+    embeddingResolved: boolean,
     tags: string[] = [],
   ): Promise<MemorySaveResult<PersonalMemoryRow>> {
     const validation = validateMemoryContent(content);
@@ -483,7 +485,8 @@ class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape>
       const currentCount = Number(count.count);
       let evicted: { id: number; content: string; decay_days: number } | null = null;
       if (currentCount >= limit) {
-        if (!isMemoryDecayEnabled()) return { status: "refused", currentCount, limit };
+        if (!isMemoryDecayEnabled() || !isRagAvailable() || !embeddingResolved)
+          return { status: "refused", currentCount, limit };
         const [candidate] = await tx`
           SELECT m.personal_memory_id AS id, m.content, m.decay_days FROM personal_memories m
           WHERE m.user_id = ${userId} AND m.persona_lineage_id = ${personaLineageId}

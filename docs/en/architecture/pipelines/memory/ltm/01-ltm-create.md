@@ -22,16 +22,19 @@ Execution proceeds through several validation and routing steps:
 6. **Atomic capacity and persistence:** both scopes call their repository's `addWithEviction`.
    Under an owner lock, the repository recounts the scope against `MAX_SERVER_MEMORIES` or
    `MAX_PERSONAL_MEMORIES` (both default to 100). Personal counts include global rows. Below the
-   cap it inserts normally; at the cap, enabled decay permits replacing the least recently
+   cap it inserts normally; at the cap, enabled decay with available RAG and resolved embedding
+   credentials and model for the turn permits replacing the least recently
    reinforced dormant model-written memory in that exact lineage. Never-reinforced rows come
    first, with creation time and ID breaking ties. Human-written, imported, pre-release, and
-   global rows are protected. If decay is off or no eligible row exists, the save is refused.
+   global rows are protected. If retrieval prerequisites are missing or no eligible row exists,
+   the save is refused.
    Deletion and insertion share one transaction, so a failed save preserves the old memory.
 7. **Cache invalidation and notification:** both scopes invalidate their existing state cache after
    successful persistence, before sending the confirmation. Notification failure is non-fatal.
-   An eviction always shows both saved and forgotten content in the conversation, even when ordinary
-   notices are hidden or minimal. Expanded content exceeding Discord's embed limit is delivered
-   as an ephemeral `notice.txt` attachment.
+   Eviction confirmations include saved and forgotten content and follow the memory-notice visibility
+   setting. Hidden notices go to the thought log; Minimal notices show only the title in conversation
+   and mirror the full card to the thought log when configured. Expanded content exceeding Discord's
+   embed limit is delivered as an ephemeral `notice.txt` attachment.
 
 Ordinary saves return `memory_saved_successfully` with the new memory ID. Replacement saves return
 `memory_saved_with_eviction` and `content_forgotten`, so the model also receives the removed text.

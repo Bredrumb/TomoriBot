@@ -1,5 +1,6 @@
 import { memoryDecayRepository, type MemorySaveResult } from "@/utils/db/repositories/MemoryDecayRepository";
 import { MEMORY_DORMANT_DAYS, isMemoryDecayEnabled } from "@/utils/memory/memoryDecay";
+import { isRagAvailable } from "@/utils/db/ragAvailability";
 import { documentHeadingText, type DocumentHeadingPath } from "@/utils/documents/documentChunker";
 import { buildDocumentLexicalText } from "@/utils/documents/lexicalText";
 import { lorebookRepository } from "@/modules/lorebooks/db/repositories";
@@ -1149,6 +1150,7 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     personaLineageId: number,
     taughtByUserId: number,
     content: string,
+    embeddingResolved: boolean,
     channelDiscIds: string[] = [],
   ): Promise<MemorySaveResult<ServerMemoryRow>> {
     const validation = validateMemoryContent(content);
@@ -1162,7 +1164,8 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
       const currentCount = Number(count.count);
       let evicted: { id: number; content: string; decay_days: number } | null = null;
       if (currentCount >= limit) {
-        if (!isMemoryDecayEnabled()) return { status: "refused", currentCount, limit };
+        if (!isMemoryDecayEnabled() || !isRagAvailable() || !embeddingResolved)
+          return { status: "refused", currentCount, limit };
         const [candidate] = await tx`
           SELECT m.server_memory_id AS id, m.content, m.decay_days FROM server_memories m
           WHERE m.server_id = ${serverId} AND m.persona_lineage_id = ${personaLineageId}

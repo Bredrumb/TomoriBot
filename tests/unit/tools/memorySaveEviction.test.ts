@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, mock, type Mock, spyOn } from "bun:test";
-import type { AttachmentBuilder, ButtonInteraction, Message } from "discord.js";
+import type { AttachmentBuilder, ButtonInteraction, Message, TextChannel } from "discord.js";
 import { MemoryTool } from "@/tools/functionCalls/memoryTool";
 import { personalMemorySchema, PrivacyLevel, serverMemorySchema } from "@/types/db/schema";
 import type { ToolContext } from "@/types/tool/interfaces";
@@ -10,6 +10,8 @@ import { metricSampleRepository } from "@/utils/db/repositories/MetricSampleRepo
 import * as targetResolver from "@/utils/discord/targetResolver";
 import * as interactionLocale from "@/utils/discord/interactionLocale";
 import * as personaPost from "@/utils/discord/webhook/personaPost";
+import * as noticeRouting from "@/utils/discord/toolProgressNotice";
+import * as minimalNotices from "@/utils/discord/minimalNoticeBodies";
 import * as hostProtection from "@/utils/messageProxy/hostProtection";
 import { log } from "@/utils/misc/logger";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
@@ -45,6 +47,7 @@ describe("model memory save eviction", () => {
     const user = createUserRow({ user_id: 7, user_disc_id: USER_ID, user_nickname: "Juno" });
     context = {
       userId: USER_ID,
+      memoryEmbeddingResolved: true,
       guildId: SERVER_ID,
       locale: "en-US",
       channel: { id: "444444444444444444", guild: { id: SERVER_ID }, isThread: () => false },
@@ -158,10 +161,10 @@ describe("model memory save eviction", () => {
     });
     expect(events).toEqual(["write", `invalidate-${metricScope}`, "notify"]);
     if (scope === "server_wide") {
-      expect(serverMemoryRepository.addWithEviction).toHaveBeenCalledWith(5, 6, 8, 7, newContent);
+      expect(serverMemoryRepository.addWithEviction).toHaveBeenCalledWith(5, 6, 8, 7, newContent, true);
       expect(serverCache.invalidateTomoriStateCache).toHaveBeenCalledWith(SERVER_ID);
     } else {
-      expect(personalMemoryRepository.addWithEviction).toHaveBeenCalledWith(7, 8, newContent);
+      expect(personalMemoryRepository.addWithEviction).toHaveBeenCalledWith(7, 8, newContent, true);
       expect(userCache.invalidateUserCache).toHaveBeenCalledWith(USER_ID);
     }
     const payload = postSpy.mock.calls[0]?.[1];
@@ -237,15 +240,41 @@ describe("model memory save eviction", () => {
     expect(log.error).toHaveBeenCalled();
   });
 
-  it("shows the forgotten content even with hidden or minimal memory notices", async () => {
-    for (const hidden of [[], ["memory_update"]] as const) {
+  it.each(scopes)("routes %s eviction content through Hidden, Minimal, and Verbose settings", async (scope) => {
+    const thoughtLog = { id: "666666666666666666", isThread: () => false } as TextChannel;
+    spyOn(noticeRouting, "resolveHiddenNoticeTarget").mockResolvedValue({
+      channel: thoughtLog,
+      webhookContext: { persona: context.tomoriState },
+    });
+    spyOn(minimalNotices, "recordMinimalNoticeRef").mockResolvedValue(undefined);
+    for (const mode of ["hidden", "minimal", "verbose"] as const) {
       postSpy.mockClear();
-      context.tomoriState.config.tool_notice_hidden_keys = [...hidden];
-      context.tomoriState.config.tool_notice_verbosity = "minimal";
-      await save("server_wide");
-      const text = collectTextDisplays(postSpy.mock.calls[0]?.[1]).join("\n");
-      expect(text).toContain("Juno asked Mirri to greet Mirri.");
+      context.tomoriState.config.tool_notice_hidden_keys = mode === "hidden" ? ["memory_update"] : [];
+      context.tomoriState.config.tool_notice_verbosity = mode === "verbose" ? "verbose" : "minimal";
+      await save(scope);
+      const conversation = postSpy.mock.calls.filter(([target]) => target.channel.id === context.channel.id);
+      const mirrored = postSpy.mock.calls.filter(([target]) => target.channel.id === thoughtLog.id);
+      expect(conversation).toHaveLength(mode === "hidden" ? 0 : 1);
+      expect(mirrored).toHaveLength(mode === "verbose" ? 0 : 1);
+      const fullCard = mode === "verbose" ? conversation[0] : mirrored[0];
+      expect(collectTextDisplays(fullCard?.[1]).join("\n")).toContain("Juno asked Mirri to greet Mirri.");
+      if (mode === "minimal") {
+        expect(collectTextDisplays(conversation[0]?.[1]).join("\n")).not.toContain("Juno asked Mirri to greet Mirri.");
+      }
     }
+  });
+
+  it.each(scopes)("passes missing turn embedding readiness to the %s save", async (scope) => {
+    context.memoryEmbeddingResolved = undefined;
+    await save(scope);
+    const repository = scope === "server_wide" ? serverMemoryRepository : personalMemoryRepository;
+    expect(repository.addWithEviction).toHaveBeenCalled();
+    const call =
+      scope === "server_wide"
+        ? (serverMemoryRepository.addWithEviction as Mock<typeof serverMemoryRepository.addWithEviction>).mock.calls[0]
+        : (personalMemoryRepository.addWithEviction as Mock<typeof personalMemoryRepository.addWithEviction>).mock
+            .calls[0];
+    expect(call?.at(-1)).toBe(false);
   });
 
   it("bounds both longest-memory previews and preserves the expanded content", async () => {

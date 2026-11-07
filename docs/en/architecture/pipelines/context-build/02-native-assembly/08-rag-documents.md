@@ -20,6 +20,8 @@ The contributor `buildServerDocumentContextItem` in `src/utils/text/context/rag.
    - Checks `serverMemoryRepository.hasDocumentInScope(serverId, personaId)`. An empty document scope returns `null` with outcome `no_documents`, but visible memory candidates can still require the shared embedding. A failed lookup records `error`.
    - Resolves embedding credentials via `resolveCapabilityCredentials`, supporting server and personal providers, including registered managed options.
    - Loads the configured embedding model via `llmModelRepo.loadEmbeddingModelById`.
+   - Missing embedding configuration, including a required personal provider, skips with `no_model`
+     without reporting a provider failure; credential decryption and unexpected failures still warn.
 4. **Hybrid retrieval**:
    - Calls `ragRepository.retrieveRelevantChunks` with a similarity threshold of `DOCUMENT_MIN_SIMILARITY` (0.5) and a result limit of `DOCUMENT_MAX_RESULTS` (10 chunks).
    - Builds candidate lists from vector distance and full-text rank, each limited to `maxResults * 4` (40), then fuses them by reciprocal rank fusion with k = 60.

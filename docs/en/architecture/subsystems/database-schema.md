@@ -76,8 +76,8 @@ omit these fields and imports use defaults.
 
 The optional RAG schema owns `memory_embeddings`: each vector belongs to exactly one server or
 personal memory, with cascading deletion and one row per memory and embedding family. Its model
-reference restricts deletion. Content edits remove all families transactionally; fill checks live
-content before inserting. There is no vector cache. See the
+reference cascades deletion to its rebuildable vectors. Content edits remove all families
+transactionally; fill checks live content before inserting. There is no vector cache. See the
 [decay lifecycle](/architecture/pipelines/memory/ltm/#decay-lifecycle) for accounting ownership.
 
 Migration 135 initializes each server lineage's newest 100 rows as active and older rows as dormant.

@@ -177,8 +177,8 @@ beforeEach(() => {
 afterEach(() => {
   for (const spy of Object.values(spies)) if ("mockRestore" in spy) spy.mockRestore();
 });
-async function persisted() {
-  const built = await buildContext(params());
+async function persisted(buildParams = params()) {
+  const built = await buildContext(buildParams);
   if (!built.memoryRecall) throw new Error("Missing recall outcome");
   await persistMemoryRecall(built.memoryRecall);
   const samples = spies.sample.mock.calls.filter(([name]) => name === "memory_recall");
@@ -345,6 +345,57 @@ describe("memory recall pipeline", () => {
     expect(spies.day).not.toHaveBeenCalled();
   });
 
+  it("keeps memories active and records no_model without provider failures for missing embedding configuration", async () => {
+    for (const failure of [
+      new credentials.CredentialUnavailableError("unknown", "embedding", "missing_model_id"),
+      new credentials.CredentialUnavailableError("openrouter", "embedding", "no_saved_config"),
+      new credentials.PersonalProviderRequiredError("embedding"),
+    ]) {
+      spies.sample.mockClear();
+      spies.credentials.mockRejectedValue(failure);
+      const { built, fields } = await persisted();
+      expect(fields.outcome).toBe("no_model");
+      expect(built.memoryRecall?.embeddingResolved).toBe(false);
+      expect(
+        text(built.contextItems.find((item) => item.metadataTag === ContextItemTag.KNOWLEDGE_SERVER_MEMORIES)),
+      ).toContain(formatMemoryWithId(2, row(2, 14).content));
+    }
+    expect(spies.embed).not.toHaveBeenCalled();
+    expect(spies.warn).not.toHaveBeenCalled();
+    expect(spies.metric.mock.calls.some(([name]) => name === "provider_failure")).toBe(false);
+    expect(spies.day).not.toHaveBeenCalled();
+  });
+
+  it("uses personal embedding readiness even when the server has no embedding model", async () => {
+    const buildParams = params();
+    buildParams.tomoriConfig.embedding_model_id = null;
+    const { built, fields } = await persisted(buildParams);
+    expect(fields.outcome).toBe("scored");
+    expect(built.memoryRecall?.embeddingResolved).toBe(true);
+    expect(spies.embed.mock.calls[0][0].apiKey).toBe(resolved.apiKey);
+  });
+
+  it("continues reporting credential decryption failures", async () => {
+    const error = new credentials.CredentialUnavailableError("openrouter", "embedding", "decryption_failed");
+    spies.credentials.mockRejectedValue(error);
+    const { fields } = await persisted();
+    expect(fields.outcome).toBe("provider_error");
+    expect(spies.warn.mock.calls.some(([, cause]) => cause === error)).toBe(true);
+    expect(spies.metric.mock.calls.some(([name]) => name === "provider_failure")).toBe(true);
+  });
+
+  it.each([
+    "score",
+    "missing",
+  ] as const)("logs the error when recall %s fails without losing embedding readiness", async (operation) => {
+    const error = new Error("fixture database failure");
+    spies[operation].mockRejectedValue(error);
+    const { built, fields } = await persisted();
+    expect(fields.outcome).toBe("provider_error");
+    expect(built.memoryRecall?.embeddingResolved).toBe(true);
+    expect(spies.warn.mock.calls.some(([, cause]) => cause === error)).toBe(true);
+  });
+
   it("leaves memories active with the switch off or pgvector unavailable, while switch-off document retrieval still works", async () => {
     for (const mode of ["disabled", "rag_unavailable"] as const) {
       process.env.MEMORY_DECAY_ENABLED = mode === "disabled" ? "false" : "true";
@@ -409,15 +460,29 @@ describe("memory recall pipeline", () => {
   });
 
   it("emits a sample after failed post-turn writes settle", async () => {
-    spies.day.mockRejectedValue(new Error("database unavailable"));
+    const accountingError = new Error("fixture accounting failure");
+    const fillError = new Error(`fixture fill failure ${resolved.apiKey}`);
+    spies.day.mockRejectedValue(accountingError);
     spies.missing.mockResolvedValue([{ kind: "server", id: 5, content: "raw fact" }]);
-    spies.upsert.mockRejectedValue(new Error("database unavailable"));
+    spies.upsert.mockRejectedValue(fillError);
     const { fields } = await persisted();
     expect(fields).toMatchObject({ persistence_failed: 1, filled_count: 0, fill_tokens: 0 });
-    expect(spies.warn).toHaveBeenCalled();
+    expect(spies.warn.mock.calls.some(([, cause]) => cause === accountingError)).toBe(true);
+    expect(spies.warn.mock.calls.find(([, cause]) => cause === fillError)?.[3]?.redactValues).toContain(
+      resolved.apiKey,
+    );
     expect(
       spies.error.mock.calls.filter(([message]) => /embedding|memory recall|memory vectors/i.test(message)),
     ).toEqual([]);
+  });
+
+  it("logs the error when the recall metric sink fails", async () => {
+    const built = await buildContext(params());
+    if (!built.memoryRecall) throw new Error("Missing recall outcome");
+    const error = new Error("fixture metric failure");
+    spies.sample.mockRejectedValue(error);
+    await persistMemoryRecall(built.memoryRecall);
+    expect(spies.warn.mock.calls.some(([, cause]) => cause === error)).toBe(true);
   });
 
   it("attributes personal recall lines to their participant", async () => {
