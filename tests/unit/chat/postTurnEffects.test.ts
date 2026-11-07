@@ -2,8 +2,12 @@ import * as memoryRecallPersistence from "@/utils/text/context/memoryRecall";
 import { stubAllShardOwnership } from "../../helpers/shardOwnership";
 stubAllShardOwnership();
 import { afterEach, beforeAll, describe, expect, it, mock, spyOn } from "bun:test";
-import { REST } from "discord.js";
-import type { TomoriState } from "@/types/db/schema";
+import { ChannelType, DMChannel, REST } from "discord.js";
+import * as chat from "@/events/messageCreate/tomoriChat";
+import { evaluateChatAdmission, normalizeChatInvocation } from "@/utils/chat/admission";
+import * as stateCache from "@/utils/cache/tomoriStateCache";
+import * as userCache from "@/utils/cache/userCache";
+import { PrivacyLevel, type TomoriState } from "@/types/db/schema";
 import type { ChatIncoming, ChatTurn, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import { runPostTurnEffects, shouldRetryEmptyResponse } from "@/utils/chat/postTurnEffects";
 import { recordReunionPresence, resolveReunionNote, type ReunionPresenceStore } from "@/utils/chat/reunionPresence";
@@ -145,6 +149,47 @@ describe("empty-response post-turn handling", () => {
     expect(shouldRetryEmptyResponse(incoming, emptyResponseResult)).toBe(true);
     incoming.retryCount = 2;
     expect(shouldRetryEmptyResponse(incoming, emptyResponseResult)).toBe(false);
+  });
+
+  it("keeps a scheduled DM owner's identity when retrying a borrowed message", async () => {
+    const { context } = makeContext({ shouldSurfaceUserErrors: false });
+    const incoming = context.turn.lockedTurn.admission.incoming;
+    incoming.retryCount = 0;
+    incoming.borrowsTriggerMessage = true;
+    incoming.systemTriggerIdentity = { serverDiscId: "scheduled-owner", userDiscId: "scheduled-owner" };
+    const channel = Object.assign(Object.create(DMChannel.prototype), {
+      id: "scheduled-dm",
+      type: ChannelType.DM,
+      recipientId: "bystander",
+    });
+    Object.assign(context.message, {
+      channel,
+      author: { id: "bystander", username: "Mirri", bot: false },
+      content: "hello",
+      mentions: { users: new Map(), roles: new Map(), everyone: false },
+      attachments: new Map(),
+      embeds: [],
+      webhookId: null,
+      reference: null,
+    });
+    Object.assign(incoming.client, { user: { id: "fixture-bot" } });
+    context.isDMChannel = true;
+    const states = spyOn(stateCache, "getCachedAllPersonas").mockResolvedValue([context.tomoriState]);
+    const privacy = spyOn(userCache, "getCachedPrivacyLevel").mockResolvedValue(PrivacyLevel.MINIMAL);
+    const user = spyOn(userCache, "getCachedUserRow").mockResolvedValue(null);
+    const admissions: Array<{ userDiscId?: string; serverDiscId?: string }> = [];
+    const dispatch = spyOn(chat, "tomoriChat").mockImplementation(async (input) => {
+      const admission = await evaluateChatAdmission(normalizeChatInvocation(input));
+      expect(admission.disposition).toBe("run");
+      if (admission.disposition === "run") admissions.push(admission);
+      return admission.disposition;
+    });
+    try {
+      await runPostTurnEffects(context, emptyResponseResult);
+      expect(admissions).toMatchObject([{ userDiscId: "scheduled-owner", serverDiscId: "scheduled-owner" }]);
+    } finally {
+      for (const spy of [dispatch, states, privacy, user]) spy.mockRestore();
+    }
   });
 
   it("surfaces the localized terminal warning with recovery tips for a deliberate turn", async () => {

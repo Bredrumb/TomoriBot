@@ -67,6 +67,11 @@ For opted-in users, admission creates a service-scoped expectation before checki
 
 A persona's webhook post is posted by the channel's shared managed webhook, so its author ID is never a person. An organic persona-to-persona reply is credited to the person who started the self-reply chain (`getSelfReplyChainOriginUser`); with no recorded originator, admission ignores the message as `persona_chain_without_origin`. A system turn (Natural Nudges, scheduled tasks) that anchors on any webhook post other than a Matrix relay is credited to the bot account instead, and `getTopUsers` leaves the bot off leaderboards. Neither path greets anyone with a reunion note.
 
+`/impersonate persona` resets the cascade budget and records the command invoker before posting,
+so a gateway echo can start a chain even after a restart or an idle period. The Discord message event
+processes the post once; trigger matching and the configured cascade limit still apply.
+The command's ephemeral acknowledgement does not affect attribution of the public persona post.
+
 ### Audio transcription
 
 When a message contains audio attachments and voice transcription is enabled,

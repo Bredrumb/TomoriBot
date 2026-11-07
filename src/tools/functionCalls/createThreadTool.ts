@@ -463,6 +463,16 @@ export class CreateThreadTool extends BaseTool {
         personaId: context.activePersonaId ?? context.tomoriState.persona_id ?? undefined,
         isUserImpersonation: context.isUserImpersonation === true,
         impersonatedUserId: context.impersonatedUserId,
+        borrowsTriggerMessage: context.borrowsTriggerMessage === true,
+        manualTriggerInvoker:
+          !context.borrowsTriggerMessage && context.userId
+            ? {
+                userDiscId: context.userId,
+                username: invokingMember.user.username,
+                locale: context.locale,
+                member: invokingMember,
+              }
+            : undefined,
         targetChannelMessages: threadMessages,
         introText:
           `You have just finished creating a new thread named \`${thread.name}\` in \`#${targetChannel.name}\`. ` +
