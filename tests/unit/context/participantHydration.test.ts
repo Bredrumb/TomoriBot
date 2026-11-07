@@ -226,6 +226,10 @@ function createFixture(
       return [
         {
           personal_memory_id: lineageId,
+          decay_days: 0,
+          decay_counted_on: null,
+          reinforced_on: null,
+          model_written: false,
           user_id: userId,
           persona_lineage_id: lineageId,
           content: `Lineage ${lineageId} remembers maps.`,
@@ -586,6 +590,10 @@ describe("participant hydration", () => {
     fixture.dependencies.loadPersonalMemories = async (userId, lineageId) => [
       {
         personal_memory_id: 1,
+        decay_days: 0,
+        decay_counted_on: null,
+        reinforced_on: null,
+        model_written: false,
         user_id: userId,
         persona_lineage_id: lineageId,
         content: "Matching memory",
@@ -593,6 +601,10 @@ describe("participant hydration", () => {
       },
       {
         personal_memory_id: 2,
+        decay_days: 0,
+        decay_counted_on: null,
+        reinforced_on: null,
+        model_written: false,
         user_id: userId,
         persona_lineage_id: lineageId,
         content: "Wrong channel",
@@ -600,6 +612,10 @@ describe("participant hydration", () => {
       },
       {
         personal_memory_id: 3,
+        decay_days: 0,
+        decay_counted_on: null,
+        reinforced_on: null,
+        model_written: false,
         user_id: userId,
         persona_lineage_id: lineageId,
         content: "Wrong content tag",

@@ -131,3 +131,18 @@ CREATE TRIGGER trg_document_chunks_tsv
 BEFORE INSERT OR UPDATE OF content, lex_text
 ON document_chunks
 FOR EACH ROW EXECUTE FUNCTION document_chunks_tsv_update();
+
+CREATE TABLE IF NOT EXISTS memory_embeddings (
+  memory_embedding_id SERIAL PRIMARY KEY,
+  server_memory_id INT REFERENCES server_memories(server_memory_id) ON DELETE CASCADE,
+  personal_memory_id INT REFERENCES personal_memories(personal_memory_id) ON DELETE CASCADE,
+  embedding_family TEXT NOT NULL,
+  embedding_model_id INT NOT NULL REFERENCES embedding_models(embedding_model_id) ON DELETE RESTRICT,
+  embedding VECTOR NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (num_nonnulls(server_memory_id, personal_memory_id) = 1)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_memory_embeddings_server_family
+  ON memory_embeddings(server_memory_id, embedding_family) WHERE server_memory_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_memory_embeddings_personal_family
+  ON memory_embeddings(personal_memory_id, embedding_family) WHERE personal_memory_id IS NOT NULL;

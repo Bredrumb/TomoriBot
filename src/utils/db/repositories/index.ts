@@ -56,3 +56,5 @@ export {
 
 export type { UnsyncedMainPointer } from "./PersonaRepository";
 export type { ReminderSelectionRow } from "./ServerScheduleRepository";
+
+export { memoryDecayRepository } from "./MemoryDecayRepository";
