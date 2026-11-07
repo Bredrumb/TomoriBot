@@ -1,3 +1,5 @@
+import { memoryDecayRepository, type MemorySaveResult } from "@/utils/db/repositories/MemoryDecayRepository";
+import { MEMORY_DORMANT_DAYS, isMemoryDecayEnabled } from "@/utils/memory/memoryDecay";
 import { documentHeadingText, type DocumentHeadingPath } from "@/utils/documents/documentChunker";
 import { buildDocumentLexicalText } from "@/utils/documents/lexicalText";
 import { lorebookRepository } from "@/modules/lorebooks/db/repositories";
@@ -83,10 +85,7 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     }
   }
 
-  /**
-   * @param userId - If provided, only returns memories owned by this user
-   * @returns Memories ordered newest first
-   */
+  /** Returns newest-first scoped rows including decay counters and UTC days for stage derivation. */
   async loadServerMemoriesScoped(
     serverId: number,
     personaLineageId: number,
@@ -101,7 +100,7 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
                    WHERE l.source_table = 'server_memories'
                      AND l.row_id = server_memories.server_memory_id
                      AND l.resolved_at IS NULL
-                 ) AS channel_scope_pending, created_at, updated_at
+                 ) AS channel_scope_pending, decay_days, decay_counted_on, reinforced_on, model_written, created_at, updated_at
           FROM server_memories
           WHERE server_id = ${serverId}
             AND persona_lineage_id = ${personaLineageId}
@@ -116,7 +115,7 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
                    WHERE l.source_table = 'server_memories'
                      AND l.row_id = server_memories.server_memory_id
                      AND l.resolved_at IS NULL
-                 ) AS channel_scope_pending, created_at, updated_at
+                 ) AS channel_scope_pending, decay_days, decay_counted_on, reinforced_on, model_written, created_at, updated_at
         FROM server_memories
         WHERE server_id = ${serverId}
           AND persona_lineage_id = ${personaLineageId}
@@ -358,10 +357,13 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     return rows.length > 0;
   }
 
-  /** Saving the form is the admin's channel choice, so it also settles a pending legacy scope. */
+  /** Edits preserve decay state, remove all vector families on content changes, and settle pending channel scope in the same transaction. */
   async edit(serverMemoryId: number, content: string, channelDiscIds: string[]): Promise<boolean> {
     try {
       return await sql.transaction(async (tx) => {
+        const [previous] =
+          await tx`SELECT content FROM server_memories WHERE server_memory_id = ${serverMemoryId} FOR UPDATE`;
+        if (!previous) return false;
         const [updated] = await tx`
           UPDATE server_memories
           SET content = ${content},
@@ -371,6 +373,12 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
           RETURNING server_memory_id
         `;
         if (!updated) return false;
+        await memoryDecayRepository.deleteVectorsForEdit(
+          tx,
+          { kind: "server", id: serverMemoryId },
+          previous.content,
+          content,
+        );
         await tx`
           UPDATE legacy_channel_scope_tags SET resolved_at = NOW()
           WHERE source_table = 'server_memories' AND row_id = ${serverMemoryId} AND resolved_at IS NULL
@@ -1041,20 +1049,17 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
       : null;
   }
 
-  /**
-   * Update a server memory's content, scoped to server + persona lineage.
-   * Used by the updateLongTermMemoryTool function call handler.
-   *
-   * @param personaLineageId - Persona lineage scope guard
-   * @returns Row with server_memory_id, content, user_id or null when not found
-   */
+  /** Scoped content edits preserve decay state and delete every vector family atomically when optional vector storage exists. */
   async updateByIdWithLineage(
     memoryId: number,
     content: string,
     serverId: number,
     personaLineageId: number,
   ): Promise<{ server_memory_id: number; content: string; user_id: number } | null> {
-    const [row] = await sql`
+    return await sql.transaction(async (tx) => {
+      const [previous] = await tx`SELECT content FROM server_memories WHERE server_memory_id = ${memoryId} FOR UPDATE`;
+      if (!previous) return null;
+      const [row] = await tx`
       UPDATE server_memories
       SET content = ${content}, updated_at = CURRENT_TIMESTAMP
       WHERE server_memory_id = ${memoryId}
@@ -1062,13 +1067,21 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
         AND persona_lineage_id = ${personaLineageId}
       RETURNING server_memory_id, content, user_id
     `;
-    return row
-      ? {
-          server_memory_id: row.server_memory_id as number,
-          content: row.content as string,
-          user_id: row.user_id as number,
-        }
-      : null;
+      if (row)
+        await memoryDecayRepository.deleteVectorsForEdit(
+          tx,
+          { kind: "server", id: memoryId },
+          previous.content,
+          content,
+        );
+      return row
+        ? {
+            server_memory_id: row.server_memory_id as number,
+            content: row.content as string,
+            user_id: row.user_id as number,
+          }
+        : null;
+    });
   }
 
   private async addServerMemoryRow(
@@ -1128,6 +1141,50 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
       await log.error(`Error adding server memory for server ID ${serverId}`, error, context);
       return null;
     }
+  }
+  /** Locks the server before rechecking its lineage cap and atomically evicts the least reinforced dormant model save only when the global switch is on. */
+  async addWithEviction(
+    serverId: number,
+    personaId: number,
+    personaLineageId: number,
+    taughtByUserId: number,
+    content: string,
+    channelDiscIds: string[] = [],
+  ): Promise<MemorySaveResult<ServerMemoryRow>> {
+    const validation = validateMemoryContent(content);
+    if (!validation.isValid) throw new Error(`Invalid memory content: ${validation.error}`);
+    const limit = getMemoryLimits().maxServerMemories;
+    const result = await sql.transaction(async (tx): Promise<MemorySaveResult<ServerMemoryRow>> => {
+      const [owner] = await tx`SELECT server_id FROM servers WHERE server_id = ${serverId} FOR UPDATE`;
+      if (!owner) throw new Error("Memory owner does not exist");
+      const [count] = await tx`SELECT count(*) AS count FROM server_memories
+        WHERE server_id = ${serverId} AND persona_lineage_id = ${personaLineageId}`;
+      const currentCount = Number(count.count);
+      let evicted: { id: number; content: string; decay_days: number } | null = null;
+      if (currentCount >= limit) {
+        if (!isMemoryDecayEnabled()) return { status: "refused", currentCount, limit };
+        const [candidate] = await tx`
+          SELECT m.server_memory_id AS id, m.content, m.decay_days FROM server_memories m
+          WHERE m.server_id = ${serverId} AND m.persona_lineage_id = ${personaLineageId}
+            AND m.model_written AND m.decay_days >= ${MEMORY_DORMANT_DAYS}
+          ORDER BY m.reinforced_on ASC NULLS FIRST, m.created_at ASC, m.server_memory_id ASC
+          LIMIT 1 FOR UPDATE
+        `;
+        if (!candidate) return { status: "refused", currentCount, limit };
+        evicted = { id: candidate.id, content: candidate.content, decay_days: candidate.decay_days };
+        await tx`DELETE FROM server_memories WHERE server_memory_id = ${evicted.id}`;
+      }
+      const [inserted] = await tx`INSERT INTO server_memories
+        (server_id, persona_id, persona_lineage_id, user_id, content, channel_disc_ids, model_written)
+        VALUES (${serverId}, ${personaId}, ${personaLineageId}, ${taughtByUserId}, ${content}, ${sql.array(channelDiscIds, "TEXT")}, true)
+        RETURNING *`;
+      return { status: "saved", memory: serverMemorySchema.parse(inserted), evicted };
+    });
+    if (result.status === "saved") {
+      const [server] = await sql`SELECT server_disc_id FROM servers WHERE server_id = ${serverId}`;
+      if (server) invalidateTomoriStateCache(server.server_disc_id);
+    }
+    return result;
   }
 }
 

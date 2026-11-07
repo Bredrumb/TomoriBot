@@ -1,3 +1,5 @@
+import { memoryDecayRepository, type MemorySaveResult } from "@/utils/db/repositories/MemoryDecayRepository";
+import { MEMORY_DORMANT_DAYS, isMemoryDecayEnabled } from "@/utils/memory/memoryDecay";
 /**
  * PersonalMemoryRepository: manages the `personal_memories` table.
  *
@@ -21,15 +23,7 @@ type PersonalMemoryExportShape = {
 };
 
 class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape> {
-  /**
-   * Loads personal memories for a user scoped to a persona lineage.
-   * When includeGlobalMemories is true (default), lineage-0 memories are also included.
-   *
-   * @param userId            - Internal user DB ID
-   * @param personaLineageId  - Persona lineage to load for (0 = global)
-   * @param includeGlobalMemories - Whether to also include lineage-0 memories
-   * @returns Array of PersonalMemoryRow, newest first
-   */
+  /** Returns validated newest-first rows with decay inputs, including lineage zero when requested. */
   async loadForUserLineage(
     userId: number,
     personaLineageId: number,
@@ -156,15 +150,28 @@ class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape>
     }
   }
 
+  /** Edits preserve decay state and remove every vector family atomically on content changes when optional vector storage exists. */
   async edit(personalMemoryId: number, content: string, tags: string[] = []): Promise<boolean> {
     try {
-      const [updated] = await sql`
+      return await sql.transaction(async (tx) => {
+        const [previous] =
+          await tx`SELECT content FROM personal_memories WHERE personal_memory_id = ${personalMemoryId} FOR UPDATE`;
+        if (!previous) return false;
+        const [updated] = await tx`
         UPDATE personal_memories
         SET content = ${content}, tags = ${sql.array(tags, "TEXT")}, updated_at = NOW()
         WHERE personal_memory_id = ${personalMemoryId}
         RETURNING personal_memory_id
       `;
-      return !!updated;
+        if (updated)
+          await memoryDecayRepository.deleteVectorsForEdit(
+            tx,
+            { kind: "personal", id: personalMemoryId },
+            previous.content,
+            content,
+          );
+        return !!updated;
+      });
     } catch (error) {
       log.error(`Error editing personal memory ${personalMemoryId}:`, error);
       return false;
@@ -217,23 +224,18 @@ class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape>
       : null;
   }
 
-  /**
-   * Update a personal memory scoped to user + persona lineage.
-   * Used by the updateLongTermMemoryTool function call handler.
-   *
-   * @param memoryId         - Primary key of the personal memory
-   * @param content          - New memory content
-   * @param userId           - Internal user DB ID
-   * @param personaLineageId - Persona lineage scope guard; lineage 0 also matches
-   * @returns Row with personal_memory_id and content, or null when not found
-   */
+  /** User and lineage guarded edits preserve decay state and remove every vector family atomically when content changes. */
   async updateByIdForUserAndLineage(
     memoryId: number,
     content: string,
     userId: number,
     personaLineageId: number,
   ): Promise<{ personal_memory_id: number; content: string } | null> {
-    const [row] = await sql`
+    return await sql.transaction(async (tx) => {
+      const [previous] =
+        await tx`SELECT content FROM personal_memories WHERE personal_memory_id = ${memoryId} FOR UPDATE`;
+      if (!previous) return null;
+      const [row] = await tx`
       UPDATE personal_memories
       SET content = ${content}, updated_at = CURRENT_TIMESTAMP
       WHERE personal_memory_id = ${memoryId}
@@ -244,12 +246,20 @@ class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape>
         )
       RETURNING personal_memory_id, content
     `;
-    return row
-      ? {
-          personal_memory_id: row.personal_memory_id as number,
-          content: row.content as string,
-        }
-      : null;
+      if (row)
+        await memoryDecayRepository.deleteVectorsForEdit(
+          tx,
+          { kind: "personal", id: memoryId },
+          previous.content,
+          content,
+        );
+      return row
+        ? {
+            personal_memory_id: row.personal_memory_id as number,
+            content: row.content as string,
+          }
+        : null;
+    });
   }
 
   /**
@@ -453,6 +463,44 @@ class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape>
    */
   async fromExportShape(_ownerId: string | number, _data: PersonalMemoryExportShape): Promise<boolean> {
     return false;
+  }
+  /** Serializes model saves on the owner row, rechecks the cap including shared personal rows, and atomically evicts only the least reinforced dormant model save when the global switch is on. */
+  async addWithEviction(
+    userId: number,
+    personaLineageId: number,
+    content: string,
+    tags: string[] = [],
+  ): Promise<MemorySaveResult<PersonalMemoryRow>> {
+    const validation = validateMemoryContent(content);
+    if (!validation.isValid) throw new Error(`Invalid memory content: ${validation.error}`);
+    if (personaLineageId === 0) throw new Error("Model saves require a specific persona lineage");
+    const limit = getMemoryLimits().maxPersonalMemories;
+    const result = await sql.transaction(async (tx): Promise<MemorySaveResult<PersonalMemoryRow>> => {
+      const [owner] = await tx`SELECT user_id FROM users WHERE user_id = ${userId} FOR UPDATE`;
+      if (!owner) throw new Error("Memory owner does not exist");
+      const [count] = await tx`SELECT count(*) AS count FROM personal_memories
+        WHERE user_id = ${userId} AND (persona_lineage_id = ${personaLineageId} OR persona_lineage_id = 0)`;
+      const currentCount = Number(count.count);
+      let evicted: { id: number; content: string; decay_days: number } | null = null;
+      if (currentCount >= limit) {
+        if (!isMemoryDecayEnabled()) return { status: "refused", currentCount, limit };
+        const [candidate] = await tx`
+          SELECT m.personal_memory_id AS id, m.content, m.decay_days FROM personal_memories m
+          WHERE m.user_id = ${userId} AND m.persona_lineage_id = ${personaLineageId}
+            AND m.model_written AND m.decay_days >= ${MEMORY_DORMANT_DAYS}
+          ORDER BY m.reinforced_on ASC NULLS FIRST, m.created_at ASC, m.personal_memory_id ASC
+          LIMIT 1 FOR UPDATE
+        `;
+        if (!candidate) return { status: "refused", currentCount, limit };
+        evicted = { id: candidate.id, content: candidate.content, decay_days: candidate.decay_days };
+        await tx`DELETE FROM personal_memories WHERE personal_memory_id = ${evicted.id}`;
+      }
+      const [inserted] =
+        await tx`INSERT INTO personal_memories (user_id, persona_lineage_id, content, tags, model_written)
+        VALUES (${userId}, ${personaLineageId}, ${content}, ${sql.array(tags, "TEXT")}, true) RETURNING *`;
+      return { status: "saved", memory: personalMemorySchema.parse(inserted), evicted };
+    });
+    return result;
   }
 }
 

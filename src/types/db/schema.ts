@@ -1369,6 +1369,10 @@ export const serverMemorySchema = z.object({
     return value;
   }, z.number().int().nonnegative()),
   user_id: z.number().nullable(), // NULL if user was deleted
+  decay_days: z.number().int().nonnegative().default(0),
+  decay_counted_on: z.coerce.date().nullable().default(null),
+  reinforced_on: z.coerce.date().nullable().default(null),
+  model_written: z.boolean().default(false),
   content: z.string(),
   tags: z.preprocess((v) => (Array.isArray(v) ? v : []), z.array(z.string().max(32)).max(5)),
   /** Discord channel IDs the memory is limited to; empty means every channel. */
@@ -1417,6 +1421,10 @@ export const personalMemorySchema = z.object({
     }
     return value;
   }, z.number().int().nonnegative()),
+  decay_days: z.number().int().nonnegative().default(0),
+  decay_counted_on: z.coerce.date().nullable().default(null),
+  reinforced_on: z.coerce.date().nullable().default(null),
+  model_written: z.boolean().default(false),
   content: z.string(),
   tags: z.preprocess((v) => (Array.isArray(v) ? v : []), z.array(z.string().max(32)).max(5)),
   created_at: z.date().optional(),

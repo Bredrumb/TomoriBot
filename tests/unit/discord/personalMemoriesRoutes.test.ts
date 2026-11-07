@@ -113,6 +113,10 @@ function requireRoute(customId: string): ParsedInteractionRoute {
 function makeMemory(id: number, overrides: Partial<PersonalMemoryRow> = {}): PersonalMemoryRow {
   return {
     personal_memory_id: id,
+    decay_days: 0,
+    decay_counted_on: null,
+    reinforced_on: null,
+    model_written: false,
     user_id: 1,
     persona_lineage_id: 0,
     content: `Memory content ${id}`,
