@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, spyOn } from "bun:test";
+import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
 import type { Client } from "discord.js";
 import type { ServerMemoryRow } from "@/types/db/schema";
 import { serverMemoryRepository } from "@/utils/db/repositories";
@@ -125,6 +125,28 @@ describe("server memory channel scope", () => {
     const text = await memoryTextIn(OTHER_CHANNEL, null);
     expect(text).toContain("everywhere fact");
     expect(text).not.toContain("channel-only fact");
+  });
+
+  it("omits the memory block when row preparation fails instead of exposing cached unscoped content", async () => {
+    loadRows();
+    const convertMentions = mock(async (text: string) => text).mockRejectedValueOnce(
+      new Error("fixture mention lookup failure"),
+    );
+    const item = await buildServerMemoryContextItem({
+      tomoriState: createPersona({ server_memories: ["everywhere fact", "channel-only fact"] }),
+      guildId: "guild-1",
+      serverName: "Server",
+      isDMChannel: false,
+      botName: "Mirri",
+      personalMemoriesEnabled: true,
+      channelId: OTHER_CHANNEL,
+      parentChannelId: null,
+      channelMemoryEnabled: true,
+      client: {} as Client,
+      convertMentions,
+      memoryRecall: { include: async () => true },
+    });
+    expect(item).toBeNull();
   });
 
   it("treats a memory with an unresolved legacy scope as active in every channel", async () => {

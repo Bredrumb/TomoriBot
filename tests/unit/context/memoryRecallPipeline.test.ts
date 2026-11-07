@@ -359,9 +359,9 @@ describe("memory recall pipeline", () => {
       expect(
         text(built.contextItems.find((item) => item.metadataTag === ContextItemTag.KNOWLEDGE_SERVER_MEMORIES)),
       ).toContain(formatMemoryWithId(2, row(2, 14).content));
+      expect(spies.warn.mock.calls.some(([, cause]) => cause === failure)).toBe(false);
     }
     expect(spies.embed).not.toHaveBeenCalled();
-    expect(spies.warn).not.toHaveBeenCalled();
     expect(spies.metric.mock.calls.some(([name]) => name === "provider_failure")).toBe(false);
     expect(spies.day).not.toHaveBeenCalled();
   });

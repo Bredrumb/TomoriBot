@@ -201,9 +201,8 @@ export async function buildServerMemoryContextItem(params: {
       formatMemoryWithId(row.server_memory_id!, row.content),
     );
   } catch (error) {
-    log.warn("Failed to load server memories with IDs for context", error);
-    serverMemoryLines = params.tomoriState.server_memories;
-    memoryEntries = serverMemoryLines.map((text, index) => ({ id: `server:${index}`, text }));
+    log.warn("Failed to build server memory context", error);
+    return null;
   }
 
   if (serverMemoryLines.length === 0) {
