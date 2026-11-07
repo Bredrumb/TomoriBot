@@ -7,7 +7,7 @@ The RAG document contributor injects relevant text chunks from server-uploaded d
 
 ## Flow and ownership
 
-The contributor `buildServerDocumentContextItem` in `src/utils/text/context/rag.ts` retrieves document chunks for the user's latest query. Native assembly starts it right after the persona state resolves and awaits it at its insertion point, so its embedding round trip and database query overlap the rest of assembly while prompt order stays unchanged.
+The contributor `buildServerDocumentContextItem` in `src/utils/text/context/rag.ts` retrieves document chunks for the user's latest query. Native assembly starts shared query retrieval right after the persona state resolves. Documents and memory recall consume the same query-vector promise, so one query embedding serves both searches while the rest of assembly proceeds. The embedding provider can differ from the reply provider. See the [memory recall lifecycle](/architecture/pipelines/memory/ltm/#decay-lifecycle).
 
 1. **Preconditions**:
    - `isRagAvailable()` must return true (pgvector support enabled).
@@ -15,9 +15,9 @@ The contributor `buildServerDocumentContextItem` in `src/utils/text/context/rag.
    - Returns `null` if system memory pressure is `critical` (`memoryGuard.getStatus() === "critical"`).
 2. **Query extraction**:
    - Scans recent history for the latest non-system user message.
-   - Truncates query text to `DOCUMENT_QUERY_MAX_LENGTH` (1,000 characters). Queries shorter than `DOCUMENT_QUERY_MIN_LENGTH` (3 characters) return `null`.
+   - Truncates query text to `QUERY_MAX_LENGTH` (1,000 characters). Queries shorter than `QUERY_MIN_LENGTH` (3 characters) return `null`.
 3. **Scope and credentials**:
-   - Checks `serverMemoryRepository.hasDocumentInScope(serverId, personaId)`. An empty scope returns `null` with outcome `no_documents`; a failed lookup reaches the contributor's error handler and records `error`.
+   - Checks `serverMemoryRepository.hasDocumentInScope(serverId, personaId)`. An empty document scope returns `null` with outcome `no_documents`, but visible memory candidates can still require the shared embedding. A failed lookup records `error`.
    - Resolves embedding credentials via `resolveCapabilityCredentials`, supporting server and personal providers, including registered managed options.
    - Loads the configured embedding model via `llmModelRepo.loadEmbeddingModelById`.
 4. **Hybrid retrieval**:
@@ -97,7 +97,8 @@ applies before retrieval, even though the lexical stage supports shorter CJK ter
 
 ## Source pointers
 
-- `src/utils/text/context/rag.ts`: `buildServerDocumentContextItem` and query extraction.
+- `src/utils/text/context/rag.ts`: `buildServerDocumentContextItem`.
+- `src/utils/text/context/queryRetrieval.ts`: query extraction, credentials, and the shared embedding promise.
 - `src/utils/db/repositories/RagRepository.ts`: `retrieveRelevantChunks` and chunk formatting.
 - `src/utils/db/ragAvailability.ts`: `isRagAvailable` capability check.
 - `src/utils/security/rateLimiter.ts`: `memoryGuard` memory pressure status.

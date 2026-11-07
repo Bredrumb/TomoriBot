@@ -10,9 +10,12 @@ Server memories provide persona-scoped long-term memories stored for the active 
 The contributor `buildServerMemoryContextItem` in `src/utils/text/context/memories.ts` loads and formats memories for the current persona lineage:
 
 1. **Precondition check**: Returns `null` if `tomoriState.server_memories` is empty or undefined. In `nativeBuilder.ts`, the contributor is skipped entirely during user impersonation.
-2. **Database retrieval**: Queries `serverMemoryRepository.loadServerMemoriesScoped(serverId, personaLineageId)` for all active memories scoped to the server and persona lineage. If loading fails or scoping IDs are missing, it falls back to the in-memory `tomoriState.server_memories` array.
+2. **Database retrieval**: Queries `serverMemoryRepository.loadServerMemoriesScoped(serverId, personaLineageId)` for all memory rows scoped to the server and persona lineage. Missing scoping IDs yield no rows. If loading fails, it falls back to the in-memory `tomoriState.server_memories` content array, which bypasses row-based decay filtering.
 3. **Channel scope filtering**: When `channelMemoryEnabled` is enabled, a memory with a non-empty `channel_disc_ids` is filtered out unless it contains the current channel ID or, inside a thread, the parent channel ID (`channelScopeAdmits` in `src/utils/discord/channelScope.ts`). An empty scope applies in every channel. A memory whose legacy `#name` scope from migration 111 is still unresolved (`channel_scope_pending`, read from `legacy_channel_scope_tags`) has an empty scope, so it applies in every channel until the backfill or an admin narrows it.
-4. **Formatting and emission**: Surviving rows are formatted as `ID:${id} ${content}` using `formatMemoryWithId` and wrapped in a section header:
+4. **Decay filtering**: Visible rows enter the shared recall collector. Dormant rows are withheld
+   from this block and may return beside documents in the uncached tail; active rows retain their
+   existing formatting. See the [decay lifecycle](/architecture/pipelines/memory/ltm/#decay-lifecycle).
+5. **Formatting and emission**: Surviving rows are formatted as `ID:${id} ${content}` using `formatMemoryWithId` and wrapped in a section header:
    - Guild channels: `## {botName}'s Memories about {serverName}`
    - Direct messages: `## {botName}'s Memories about this conversation with User`
 

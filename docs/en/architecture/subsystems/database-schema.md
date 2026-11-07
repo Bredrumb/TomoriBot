@@ -12,7 +12,7 @@ specialized caches also execute SQL. Write paths must pair durable changes with 
 TomoriBot organizes database schema across three SQL definitions, a numbered migration runner, and typed seed catalogs:
 
 - **Baseline schema (`src/db/schema.sql`)**: core tables, explicit constraints, performance indexes, and stored functions.
-- **RAG schema (`src/db/schema_rag.sql`)**: document and chunk vector tables (`documents`, `document_chunks`), loaded when the `pgvector` extension is available.
+- **RAG schema (`src/db/schema_rag.sql`)**: document and memory vector tables (`documents`, `document_chunks`, `memory_embeddings`), loaded when the `pgvector` extension is available.
 - **Preset schema (`src/db/schema_stpreset.sql`)**: SillyTavern character card and preset integration tables.
 - **Migration runner (`src/db/migrationRunner.ts`)**: executes structural version upgrades from `src/db/migrations/`.
 - **Seed catalogs (`src/db/seed/catalog/`)**: code-defined catalogs for LLMs, diffusion models, video models, speech models, embeddings, persona presets, and system prompts.
@@ -66,6 +66,24 @@ searchable through raw content. After login, `06_backfillDocumentLexicalText.ts`
 locks each document name for validation, and writes only still-pending chunks whose content
 and document name match the snapshot. Skipped edits retry on the next batch; failures retry
 on a timer. Chunk reads bypass caches, so these writes require no cache invalidation.
+
+## Memory decay storage
+
+Both memory tables store `decay_days` (integer, default 0), nullable `decay_counted_on` and
+`reinforced_on` UTC dates, and `model_written` (boolean, default false). Stage is derived, never
+stored. Only model saves mark new rows as model-written; edits preserve that flag. Portable exports
+omit these fields and imports use defaults.
+
+The optional RAG schema owns `memory_embeddings`: each vector belongs to exactly one server or
+personal memory, with cascading deletion and one row per memory and embedding family. Its model
+reference restricts deletion. Content edits remove all families transactionally; fill checks live
+content before inserting. There is no vector cache. See the
+[decay lifecycle](/architecture/pipelines/memory/ltm/#decay-lifecycle) for accounting ownership.
+
+Migration 135 initializes each server lineage's newest 100 rows as active and older rows as dormant.
+Personal ranking includes global memories in each lineage; a global row becomes dormant only if
+it exceeds 100 in every containing scope. The rollback removes counters and vectors while retaining
+memory content. `schema_rag.sql` creates vector storage when pgvector becomes available later.
 
 ## Data access boundary
 
@@ -321,12 +339,15 @@ The reset subsystem in `src/utils/db/repositories/ResetRepository.ts` categorize
 - **Preserved server domains**: personas and persona settings, server memories, short-term memories, expressions (emojis, stickers, and custom expressions), recorded quota consumption, saved provider configurations, and external integrations (Matrix, MCP, and message-proxy instances).
 - **Personal reset**: restores `users.language_pref` ('en-US') and `users.privacy_level` (0), restores every configuration column in `user_personalization_configs` to its schema default except `natural_nudge_opt_out`, which a reset must never silently turn back on, deletes `user_persona_naming_preferences`, and removes all `personal_spotlights` (cascading to `personal_spotlight_personas`). Preserves user account identity, message-proxy selection and host links, personal memories, saved provider credentials, custom endpoints, and scheduled reminders.
 
+Memory decay metadata and vectors belong to the preserved memory domains, so configuration resets
+leave them intact. The installation-wide switch is not a resettable configuration field.
+
 Message-proxy tables link service instances, external identities, namespaces, authorized host accounts, and immutable message attribution. PluralBuddy OAuth credentials are encrypted with separate version tags for each field. See [message-proxy persistence](/architecture/integrations/message-proxy/#persistence) for table ownership.
 
 ## Source pointers
 
 - `src/db/schema.sql`: baseline tables, constraints, indexes, and stored procedures.
-- `src/db/schema_rag.sql`: optional `pgvector` document storage.
+- `src/db/schema_rag.sql`: optional `pgvector` document and memory storage.
 - `src/db/migrationRunner.ts`: migration discovery, ordering, and execution.
 - `src/utils/db/initializeDatabase.ts`: startup initialization, rename bridges, and catalog seeding.
 - `src/utils/db/repositories/`: domain repositories managing data access and cache invalidation.

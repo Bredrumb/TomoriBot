@@ -17,7 +17,7 @@ and restores are host-side operations; see [Maintenance & Backups](/self-hosting
 
 ### Stored data
 
-- Server and personal memories, and authored lorebooks
+- Server and personal memories, their search data and recent-use records, and authored lorebooks
 - Persona profiles, traits, and dialogue examples
 - Server configuration settings
 - Encrypted provider API keys
@@ -27,11 +27,16 @@ and restores are host-side operations; see [Maintenance & Backups](/self-hosting
 
 - Discord message history (messages are not archived in a persistent message log)
 
-### Sent to your AI provider
+### Sent to your AI providers
 
 Whenever triggered, TomoriBot fetches recent messages in the channel along with relevant
 memories as context for the model. She does not read or process messages outside of those
 triggers.
+
+When an embedding model is set up, its provider receives the latest message and the document and
+memory text it searches. This can be a different provider from the one writing replies. Personal
+memories hidden by privacy settings stay out of search. Search data is deleted with its memory;
+see [Memory](/features/knowledge/memory/) for automatic resting and replacement.
 
 :::note
 Your chosen AI provider (Google, OpenRouter, NovelAI, …) processes messages under their own
