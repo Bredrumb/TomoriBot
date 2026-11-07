@@ -20,7 +20,7 @@ const QUERY_MAX_LENGTH = 1000;
 const QUERY_MIN_LENGTH = 3;
 const EMBEDDING_BATCH_SIZE = 16;
 
-export type RetrievalSkip =
+type RetrievalSkip =
   | "rag_unavailable"
   | "memory_critical"
   | "no_server"

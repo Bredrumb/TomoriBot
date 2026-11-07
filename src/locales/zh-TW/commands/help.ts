@@ -1,6 +1,7 @@
 export default {
   help: {
     description: `瀏覽設定、功能、供應商、記憶、行為、工具、媒體與整合的說明。`,
+    page_description: `要開啟的說明。`,
     dashboard: {
       categories: {
         setup: `設定`,

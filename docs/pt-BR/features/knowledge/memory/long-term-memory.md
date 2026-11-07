@@ -33,7 +33,7 @@ Prefira mais memórias curtas em vez de poucas longas. Uma memória que usa um `
 
 ### Decaimento de memória
 
-Com um modelo de embedding configurado, uma memória que passa 14 dias de conversa contabilizados sem corresponder à conversa entra em repouso: ela continua salva, mas sai do prompt comum até que uma mensagem posterior a traga de volta. Quando a lista está cheia, um salvamento automático pode esquecer uma memória em repouso, mas nunca uma memória pessoal Global ou uma memória adicionada ou editada por alguém com `/memories` ou `/personal memories`. Veja [Decaimento de memória](/features/knowledge/memory/memory-decay/).
+Com um modelo de embedding configurado, uma memória que passa 7 dias de conversa contabilizados sem corresponder à conversa entra em repouso: ela continua salva, mas sai do prompt comum até que uma mensagem posterior a traga de volta. Quando a lista está cheia, um salvamento automático pode esquecer uma memória em repouso, mas nunca uma memória pessoal Global ou uma memória adicionada ou editada por alguém com `/memories` ou `/personal memories`. Veja [Decaimento de memória](/features/knowledge/memory/memory-decay/).
 
 Para instruções que devem ser aplicadas sempre, use [atributos de persona](/features/chatting-personality/multiple-personas/#attributes), o prompt da persona ou uma [entrada de lorebook Sempre Ativa](/features/knowledge/memory/lorebooks/).
 

@@ -1,6 +1,8 @@
 export default {
   memories: {
     description: `Kiểm tra và quản lý bộ nhớ máy chủ, tài liệu, lorebook và bộ nhớ ngắn hạn.`,
+    page_description: `Danh mục hiển thị khi mở bảng điều khiển.`,
+    persona_description: `Persona có bộ nhớ, tài liệu hoặc lorebook cần mở.`,
     category_memories: `Bộ nhớ`,
     category_documents: `Tài liệu`,
     category_lorebooks: `Lorebook`,

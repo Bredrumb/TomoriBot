@@ -9,6 +9,7 @@ import {
   serverMemoryRepository,
 } from "@/utils/db/repositories";
 import { detectRagAvailability, resetRagAvailabilityCache } from "@/utils/db/ragAvailability";
+import { MEMORY_DORMANT_DAYS } from "@/utils/memory/memoryDecay";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { registerCustomEndpoint } from "@/utils/provider/customEndpointService";
 import { createServerConfig } from "../../helpers/fixtures";
@@ -56,8 +57,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("memory decay storage", () => {
   }
 
   it("counts once per UTC day, resets reinforced rows, and leaves unscored days paused", async () => {
-    const server = await insertServer(13);
-    const personal = await insertPersonal(18);
+    const server = await insertServer(MEMORY_DORMANT_DAYS - 1);
+    const personal = await insertPersonal(MEMORY_DORMANT_DAYS + 4);
     const paused = await insertPersonal(6);
     const scored = { serverMemoryIds: [server], personalMemoryIds: [personal] };
     const reinforced = { ...empty, personalMemoryIds: [personal] };
@@ -66,7 +67,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("memory decay storage", () => {
     expect(await memoryDecayRepository.recordRecallDay(scored, reinforced)).toEqual([]);
     const [s] =
       await testSql`SELECT decay_days, decay_counted_on = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date AS today FROM server_memories WHERE server_memory_id = ${server}`;
-    expect(s).toMatchObject({ decay_days: 14, today: true });
+    expect(s).toMatchObject({ decay_days: MEMORY_DORMANT_DAYS, today: true });
     const rows = await personalMemoryRepository.loadForUserLineage(refs.userId, refs.personaLineageId);
     expect(rows.find((row) => row.personal_memory_id === personal)?.decay_days).toBe(0);
     expect(rows.find((row) => row.personal_memory_id === paused)).toMatchObject({
@@ -75,21 +76,21 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("memory decay storage", () => {
     });
     expect(
       (await serverMemoryRepository.loadServerMemoriesScoped(refs.serverId, refs.personaLineageId))[0]?.decay_days,
-    ).toBe(14);
+    ).toBe(MEMORY_DORMANT_DAYS);
     await testSql`UPDATE server_memories SET decay_counted_on = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date - 7 WHERE server_memory_id = ${server}`;
     await Promise.all([
       memoryDecayRepository.recordRecallDay(scored, empty),
       memoryDecayRepository.recordRecallDay(scored, empty),
     ]);
     const [once] = await testSql`SELECT decay_days FROM server_memories WHERE server_memory_id = ${server}`;
-    expect(once.decay_days).toBe(15);
+    expect(once.decay_days).toBe(MEMORY_DORMANT_DAYS + 1);
     await Promise.all([
       memoryDecayRepository.recordRecallDay(scored, { ...empty, serverMemoryIds: [server] }),
       memoryDecayRepository.recordRecallDay(scored, empty),
     ]);
     const [reset] = await testSql`SELECT decay_days FROM server_memories WHERE server_memory_id = ${server}`;
     expect(reset.decay_days).toBe(0);
-    await testSql`UPDATE server_memories SET decay_days = 13, decay_counted_on = NULL, reinforced_on = NULL WHERE server_memory_id = ${server}`;
+    await testSql`UPDATE server_memories SET decay_days = ${MEMORY_DORMANT_DAYS - 1}, decay_counted_on = NULL, reinforced_on = NULL WHERE server_memory_id = ${server}`;
     const crossings = await Promise.all([
       memoryDecayRepository.recordRecallDay(scored, empty),
       memoryDecayRepository.recordRecallDay(scored, empty),
@@ -466,9 +467,17 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("memory decay storage", () => {
     await executeTestSqlFile(path.join(process.cwd(), "src/db/migrations/135_memory_decay.sql"));
     const serverRows = await serverMemoryRepository.loadServerMemoriesScoped(refs.serverId, refs.personaLineageId);
     expect(serverRows.every((row) => !row.manually_written)).toBe(true);
-    expect(serverRows.map((row) => row.decay_days)).toEqual([...Array(100).fill(0), 14, 14]);
+    expect(serverRows.map((row) => row.decay_days)).toEqual([
+      ...Array(100).fill(0),
+      MEMORY_DORMANT_DAYS,
+      MEMORY_DORMANT_DAYS,
+    ]);
     let personalRows = await personalMemoryRepository.loadForUserLineage(refs.userId, 0);
-    expect(personalRows.map((row) => row.decay_days)).toEqual([...Array(100).fill(0), 14, 14]);
+    expect(personalRows.map((row) => row.decay_days)).toEqual([
+      ...Array(100).fill(0),
+      MEMORY_DORMANT_DAYS,
+      MEMORY_DORMANT_DAYS,
+    ]);
     await testSql`INSERT INTO personal_memories (user_id, persona_lineage_id, content, created_at)
       SELECT ${refs.userId}, ${refs.personaLineageId}, 'specific fact', NOW() + (n + 200) * INTERVAL '1 second' FROM generate_series(1, 101) n`;
     await insertPersonal(0, false, refs.personaLineageId + 1);
@@ -479,12 +488,14 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("memory decay storage", () => {
       (await personalMemoryRepository.loadForUserLineage(refs.userId, refs.personaLineageId, false)).map(
         (row) => row.decay_days,
       ),
-    ).toEqual([...Array(100).fill(0), 14]);
+    ).toEqual([...Array(100).fill(0), MEMORY_DORMANT_DAYS]);
     await testSql`INSERT INTO personal_memories (user_id, persona_lineage_id, content, created_at)
       SELECT ${refs.userId}, ${refs.personaLineageId + 1}, 'another specific fact', NOW() + (n + 400) * INTERVAL '1 second' FROM generate_series(1, 100) n`;
     await executeTestSqlFile(path.join(process.cwd(), "src/db/migrations/135_memory_decay.sql"));
     expect(
-      (await personalMemoryRepository.loadForUserLineage(refs.userId, 0)).every((row) => row.decay_days === 14),
+      (await personalMemoryRepository.loadForUserLineage(refs.userId, 0)).every(
+        (row) => row.decay_days === MEMORY_DORMANT_DAYS,
+      ),
     ).toBe(true);
   });
 

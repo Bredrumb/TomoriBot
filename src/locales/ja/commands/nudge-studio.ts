@@ -1,6 +1,7 @@
 export default {
   "nudge-studio": {
     description: "このサーバーで使用するアイドルナッジを選択したり、独自に作成したりします。",
+    page_description: `パネルを開くときのカテゴリ。`,
     unavailable: "現在ナッジスタジオを読み込めませんでした。しばらくしてからもう一度お試しください。",
     title_advanced: "ナッジの詳細設定",
     advanced_description: "仕組みを十分に理解している場合のみ、これらの設定を変更してください。",

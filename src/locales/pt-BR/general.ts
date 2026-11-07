@@ -10,6 +10,8 @@ export default {
       limit_heading: `Limite atingido`,
       not_available_heading: `Indisponível`,
       invalid_heading: `Escolha inválida`,
+      page_not_found_detail: `Nenhuma página que você possa abrir aqui corresponde a esse nome, então o painel foi aberto na primeira página.`,
+      persona_not_found_detail: `Nenhuma persona aqui tem exatamente esse nome, então o painel foi aberto na persona principal.`,
     },
     oauth: {
       invalid_callback: `Este link de login é inválido ou expirou. Inicie o login novamente pelo TomoriBot.`,

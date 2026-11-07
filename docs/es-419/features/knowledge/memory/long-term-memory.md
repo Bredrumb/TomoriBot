@@ -53,7 +53,7 @@ se envía completa cada vez que está activa, mientras que las ranuras adicional
 
 ### Decaimiento de memoria
 
-Con un modelo de incrustación configurado, una memoria que pasa 14 días contados de conversación sin coincidir
+Con un modelo de incrustación configurado, una memoria que pasa 7 días contados de conversación sin coincidir
 con la charla entra en reposo: permanece guardada pero sale del prompt habitual hasta que un mensaje posterior la
 trae de vuelta. Cuando la lista está llena, un guardado automático puede olvidar una memoria en reposo, pero nunca
 una memoria personal Global ni una que alguien haya agregado o editado con `/memories` o `/personal memories`.

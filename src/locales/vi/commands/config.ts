@@ -1,6 +1,8 @@
 export default {
   config: {
     description: `Cấu hình persona, hành vi, kênh, quyền hạn và cài đặt model.`,
+    page_description: `Trang hiển thị khi mở bảng điều khiển.`,
+    persona_description: `Persona được chọn khi mở bảng điều khiển.`,
     options: {
       enable: `Bật`,
       disable: `Tắt`,

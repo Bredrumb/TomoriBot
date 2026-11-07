@@ -1,6 +1,7 @@
 export default {
   moderation: {
     description: `Administra permisos de miembros, lista negra, lista blanca de canales y roles, y ajustes de cuota.`,
+    page_description: `Página en la que se abre el panel.`,
     title: `Moderación del servidor`,
     outdated_panel: `Este panel de moderación está desactualizado. Ejecuta /moderation de nuevo.`,
     permission_denied: `Necesitas el permiso \`Administrar servidor\` para usar este panel de moderación.`,

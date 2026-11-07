@@ -27,8 +27,8 @@ The sub-pipeline provides two operational stages:
 ## Decay lifecycle
 
 `MEMORY_DECAY_ENABLED` defaults to on; only the literal `false` disables it installation-wide.
-There are no panel controls. Stage is derived from `decay_days`, never stored: below 14 is active,
-and 14 or more is dormant when pgvector and an embedding model are available. Without those
+There are no panel controls. Stage is derived from `decay_days`, never stored: below 7 is active,
+and 7 or more is dormant when pgvector and an embedding model are available. Without those
 prerequisites, memories remain active. Disabling decay also stops recall accounting and automatic
 eviction; document search remains independent.
 
@@ -76,14 +76,14 @@ and `metricSampleRepository` after accounting and fill settle. Read-only builds 
 | `total_ms`, optional `embedding_ms` | Recall plus persistence duration, and shared query embedding duration |
 | `candidate_count`, `scored_count` | Visible candidates and candidates with vectors in the resolved family |
 | `reinforced_count`, `recalled_count` | Winners selected and dormant winners injected |
-| `quick_return_count` | Recalled memories whose committed reinforcement crossed the dormant threshold with a prior counter of at most 21 |
+| `quick_return_count` | Recalled memories whose committed reinforcement crossed the dormant threshold with a prior counter of at most 14 |
 | `dormant_tokens`, `recalled_tokens` | Estimated withheld memory lines and rendered recall block tokens |
 | `query_tokens`, `fill_tokens`, `filled_count` | Estimated query and missing-vector input tokens, and inserted vectors |
 | `persistence_failed` | Numeric 0/1 flag for accounting or fill failure |
 
 Net prompt savings are `dormant_tokens - recalled_tokens`, measured against embedding work of
 `query_tokens + fill_tokens`. A high share of `quick_return_count` against `recalled_count` means
-memories are thrashing between stages and the flat 14-day rule needs review. Metrics contain no
+memories are thrashing between stages and the flat 7-day rule needs review. Metrics contain no
 content, names, identifiers, keys, provider/model names, or vectors. Local selection and accounting
 algorithms live in `src/utils/text/context/memoryRecall.ts` and
 `src/utils/db/repositories/MemoryDecayRepository.ts`.

@@ -7,9 +7,9 @@ import { MEMORY_DORMANT_DAYS, MEMORY_RECALL_LIMIT, MEMORY_RECALL_MIN_SIMILARITY 
 
 export type MemoryRef = { kind: "server" | "personal"; id: number };
 export type MemoryCandidateIds = { serverMemoryIds: number[]; personalMemoryIds: number[] };
-export type ScoredMemory = MemoryRef & { similarity: number };
+type ScoredMemory = MemoryRef & { similarity: number };
 export type MissingMemoryVector = MemoryRef & { content: string };
-export type MemoryStageChange = MemoryRef & { decay_days: number; previous_decay_days: number };
+type MemoryStageChange = MemoryRef & { decay_days: number; previous_decay_days: number };
 export type MemorySaveResult<T> =
   | { status: "saved"; memory: T; evicted: { id: number; content: string; decay_days: number } | null }
   | { status: "refused"; currentCount: number; limit: number };

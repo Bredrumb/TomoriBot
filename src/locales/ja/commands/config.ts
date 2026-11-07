@@ -1,5 +1,7 @@
 export default {
   config: {
+    page_description: `パネルを開くときのページ。`,
+    persona_description: `パネルを開いたときに選択するペルソナ。`,
     options: {
       enable: `有効化`,
       disable: `無効化`,

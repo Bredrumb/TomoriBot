@@ -28,6 +28,7 @@ TomoriBot sẽ xem bạn như người dùng mới từ tin nhắn tiếp theo.`
     },
     memories: {
       description: `Quản lý bộ nhớ dài hạn cá nhân và ngữ cảnh hội thoại ngắn hạn.`,
+      persona_description: `Persona có bộ nhớ về bạn cần mở thay cho bộ nhớ toàn cục.`,
       identity_description: `Danh tính proxy tin nhắn cần chỉnh sửa. Hoạt động ngay cả khi proxy tin nhắn đang tắt.`,
       outdated_panel: `Bảng điều khiển này đã cũ. Dùng {command} để mở bảng điều khiển mới.`,
       category_global: `Toàn cục`,
@@ -111,6 +112,7 @@ TomoriBot sẽ xem bạn như người dùng mới từ tin nhắn tiếp theo.`
     },
     config: {
       description: `Quản lý tùy chọn cá nhân, quyền riêng tư, model và hồ sơ.`,
+      page_description: `Trang hiển thị khi mở bảng điều khiển.`,
       identity_description: `Danh tính proxy tin nhắn cần chỉnh sửa. Hoạt động ngay cả khi proxy tin nhắn đang tắt.`,
       outdated_panel: `Bảng điều khiển này đã cũ. Dùng {command} để mở bảng điều khiển mới.`,
       category_profile: `Hồ sơ`,

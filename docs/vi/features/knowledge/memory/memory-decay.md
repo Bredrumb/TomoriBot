@@ -15,7 +15,7 @@ Suy giảm bộ nhớ cần có model embedding; xem [Nhà cung cấp & model](/
 2. Với mỗi câu trả lời, TomoriBot thực hiện một lượt tìm kiếm. Bot chuyển tin nhắn mới nhất thành một embedding (danh sách các con số mô tả ý nghĩa của tin nhắn; xem [Cách tìm kiếm hoạt động](/features/knowledge/memory/documents/#how-search-works)) và so sánh nó với từng bộ nhớ mà bot có thể sử dụng trong cuộc trò chuyện đó.
 3. Tối đa 3 mục khớp nhất, trên cả bộ nhớ máy chủ và bộ nhớ cá nhân, được tính là đã sử dụng nếu chúng khớp ở mức hợp lý. Bộ đếm của chúng quay về 0.
 4. Mọi bộ nhớ khác trong lượt tìm kiếm đó tăng thêm một ngày. Việc này diễn ra tối đa một lần mỗi ngày (UTC), bất kể có bao nhiêu tin nhắn được gửi đi.
-5. Khi đủ 14 ngày được tính, bộ nhớ sẽ tạm nghỉ. Nó không còn được gửi kèm trong mỗi câu trả lời, nhưng vẫn được lưu và có thể tìm kiếm được.
+5. Khi đủ 7 ngày được tính, bộ nhớ sẽ tạm nghỉ. Nó không còn được gửi kèm trong mỗi câu trả lời, nhưng vẫn được lưu và có thể tìm kiếm được.
 6. Khi một tin nhắn sau đó khớp với một bộ nhớ đang tạm nghỉ, bot sẽ thêm nó vào câu trả lời đó và bộ đếm của nó được đặt lại, do đó nó hoạt động trở lại.
 
 Đang hoạt động khác với được sử dụng. Một bộ nhớ chỉ duy trì trạng thái hoạt động khi nó tiếp tục là một trong những kết quả khớp hàng đầu cho một tin nhắn nào đó.
@@ -29,14 +29,14 @@ Một bộ nhớ máy chủ, "Mèo của Juno tên là Mochi":
 | Ngày trò chuyện | Điều diễn ra | Bộ đếm | Trạng thái |
 |---|---|---|---|
 | Ngày được lưu | Đã lưu | 0 | Đang hoạt động |
-| 13 ngày trò chuyện tiếp theo | Trò chuyện về game; Mochi không bao giờ được nhắc đến | 13 | Đang hoạt động |
-| Một tuần yên tĩnh | Không ai trò chuyện | 13 | Đang hoạt động, tạm dừng |
-| Ngày trò chuyện tiếp theo | Một cuộc trò chuyện khác không có Mochi | 14 | Tạm nghỉ |
+| 6 ngày trò chuyện tiếp theo | Trò chuyện về game; Mochi không bao giờ được nhắc đến | 6 | Đang hoạt động |
+| Một tuần yên tĩnh | Không ai trò chuyện | 6 | Đang hoạt động, tạm dừng |
+| Ngày trò chuyện tiếp theo | Một cuộc trò chuyện khác không có Mochi | 7 | Tạm nghỉ |
 | Một ngày trò chuyện sau đó | Juno hỏi "Mochi dạo này thế nào rồi?" | 0 | Được gợi lại cho câu trả lời đó, sau đó hoạt động |
 
 ## Cuộc trò chuyện của ai được tính
 
-Bộ nhớ máy chủ tính tuổi vào những ngày persona trò chuyện trong máy chủ đó. Bộ nhớ cá nhân chỉ được tìm kiếm khi chủ sở hữu của chúng tham gia vào cuộc trò chuyện, vì vậy chúng chỉ tính tuổi vào những ngày đó. Bau ghé thăm mỗi tháng một lần, do đó các bộ nhớ của Bau cần 14 lần ghé thăm mà chúng không bao giờ được nhắc đến trước khi tạm nghỉ, và những ngày bận rộn của các thành viên quen thuộc không làm hao mòn chúng.
+Bộ nhớ máy chủ tính tuổi vào những ngày persona trò chuyện trong máy chủ đó. Bộ nhớ cá nhân chỉ được tìm kiếm khi chủ sở hữu của chúng tham gia vào cuộc trò chuyện, vì vậy chúng chỉ tính tuổi vào những ngày đó. Bau ghé thăm mỗi tháng một lần, do đó các bộ nhớ của Bau cần 7 lần ghé thăm mà chúng không bao giờ được nhắc đến trước khi tạm nghỉ, và những ngày bận rộn của các thành viên quen thuộc không làm hao mòn chúng.
 
 Các bộ nhớ bị ẩn bởi cài đặt quyền riêng tư, danh sách đen, giới hạn kênh hoặc thẻ sẽ không bao giờ được tìm kiếm, vì vậy chúng không tính tuổi cũng như không quay trở lại.
 

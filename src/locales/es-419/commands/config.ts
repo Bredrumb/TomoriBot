@@ -1,6 +1,8 @@
 export default {
   config: {
     description: `Configura ajustes de persona, comportamiento, canal, permisos y modelo.`,
+    page_description: `Página en la que se abre el panel.`,
+    persona_description: `Persona que se selecciona al abrir el panel.`,
     options: {
       enable: `Habilitar`,
       disable: `Deshabilitar`,

@@ -22,6 +22,7 @@ export default {
     },
     memories: {
       description: `個人の長期記憶や短期間の会話コンテキストを管理します。`,
+      persona_description: `グローバルの記憶ではなく、あなたについての記憶を開くペルソナ。`,
       identity_description: `編集するメッセージプロキシのアイデンティティ。メッセージプロキシが無効の場合でも機能します。`,
       outdated_panel: `このパネルは古くなっています。{command} を使用して新しいパネルを開いてください。`,
       category_global: `グローバル`,
@@ -104,6 +105,7 @@ export default {
     },
     config: {
       description: `個人の設定、プライバシー、モデル、プロフィールを管理します。`,
+      page_description: `パネルを開くときのページ。`,
       identity_description: `編集するメッセージプロキシのアイデンティティ。メッセージプロキシが無効の場合でも機能します。`,
       outdated_panel: `このパネルは古くなっています。{command} を使用して新しいパネルを開いてください。`,
       category_profile: `プロフィール`,

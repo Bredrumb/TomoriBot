@@ -20,6 +20,7 @@ export default {
     },
     manage: {
       description: `管理表情符號、貼圖、自訂表情及人格存取權。`,
+      page_description: `面板開啟時顯示的分類。`,
       title: `伺服器表情`,
       emojis: `表情符號`,
       stickers: `貼圖`,

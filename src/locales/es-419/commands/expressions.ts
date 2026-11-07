@@ -20,6 +20,7 @@ export default {
     },
     manage: {
       description: `Administra emojis, stickers, expresiones personalizadas y acceso de las personas.`,
+      page_description: `Categoría en la que se abre el panel.`,
       title: `Expresiones del servidor`,
       emojis: `Emojis`,
       stickers: `Stickers`,

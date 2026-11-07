@@ -1,6 +1,8 @@
 export default {
   memories: {
     description: `查看與管理伺服器記憶、文件、世界書與短期記憶。`,
+    page_description: `面板開啟時顯示的分類。`,
+    persona_description: `要開啟其記憶、文件或世界書的人格。`,
     category_memories: `記憶`,
     category_documents: `文件`,
     category_lorebooks: `世界書`,

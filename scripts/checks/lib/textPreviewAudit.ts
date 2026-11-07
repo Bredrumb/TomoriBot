@@ -27,7 +27,7 @@ import { Glob } from "bun";
 export const REQUIRED_HELPER = "buildTextPreview";
 
 /** Domain wrappers that apply the required preview before rendering their result. */
-export const SAFE_PREVIEW_WRAPPERS = ["renderMemoryNoticeContent"] as const;
+export const SAFE_PREVIEW_WRAPPERS = ["renderMemorySaveNoticeContent"] as const;
 
 /**
  * Every locale audited for rule 1. Both are scanned because `check-locales`

@@ -2,6 +2,8 @@ export default {
   status: {
     prompt_hidden: `提示詞文字已隱藏。成員需要擁有「管理伺服器」權限或已啟用的提示詞檢視設定才能查看。`,
     description: `顯示目前的個人、伺服器或人格狀態。`,
+    page_description: `儀表板開啟時顯示的分類。`,
+    persona_description: `要在「人格」頁面顯示的人格。`,
     scope_choice_behavior: `行為`,
     scope_choice_models: `模型`,
     scope_choice_access: `存取權`,

@@ -51,7 +51,7 @@ sent in full every time it is active, while extra slots in `MAX_PERSONAL_MEMORIE
 
 ### Memory decay
 
-With an embedding model set up, a memory that goes 14 counted conversation days without matching
+With an embedding model set up, a memory that goes 7 counted conversation days without matching
 the conversation rests: it stays saved but leaves the usual prompt until a later message brings it
 back. When the list is full, an automatic save can forget a resting memory, but never a Global
 personal memory or one someone added or edited with `/memories` or `/personal memories`. See

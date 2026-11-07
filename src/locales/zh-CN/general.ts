@@ -10,6 +10,8 @@ export default {
       limit_heading: `已达上限`,
       not_available_heading: `不可用`,
       invalid_heading: `选择无效`,
+      page_not_found_detail: `这里没有你能打开且与该名称匹配的页面，所以面板已在第一页打开。`,
+      persona_not_found_detail: `这里没有名称完全一致的人格，所以面板已在主人格上打开。`,
     },
     oauth: {
       invalid_callback: `此登录链接无效或已过期。请从TomoriBot重新发起登录。`,

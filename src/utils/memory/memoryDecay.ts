@@ -3,7 +3,7 @@ export function isMemoryDecayEnabled(): boolean {
   return process.env.MEMORY_DECAY_ENABLED !== "false";
 }
 
-export const MEMORY_DORMANT_DAYS = 14;
+export const MEMORY_DORMANT_DAYS = 7;
 export const MEMORY_RECALL_LIMIT = 3;
 export const MEMORY_RECALL_MIN_SIMILARITY = 0.5;
 export const MEMORY_RECALL_TIMEOUT_MS = 1_500;

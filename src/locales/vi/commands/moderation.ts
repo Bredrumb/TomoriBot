@@ -1,6 +1,7 @@
 export default {
   moderation: {
     description: `Quản lý quyền thành viên, blacklist, whitelist kênh và vai trò, cùng cài đặt hạn ngạch.`,
+    page_description: `Trang hiển thị khi mở bảng điều khiển.`,
     title: `Quản trị máy chủ`,
     outdated_panel: `Bảng quản trị này đã cũ. Hãy chạy lại /moderation.`,
     permission_denied: `Bạn cần quyền \`Quản lý Máy chủ\` để dùng bảng quản trị này.`,

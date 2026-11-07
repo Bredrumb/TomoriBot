@@ -1,6 +1,8 @@
 export default {
   config: {
     description: `Configure as configurações de persona, comportamento, canal, permissão e modelo.`,
+    page_description: `Página em que o painel será aberto.`,
+    persona_description: `Persona selecionada quando o painel abrir.`,
     options: {
       enable: `Ativar`,
       disable: `Desativar`,

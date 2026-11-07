@@ -33,7 +33,7 @@ aiGenerated: false
 
 ### 记忆衰退
 
-配置了嵌入模型后，一条记忆如果在计数的 14 个对话日内未与对话匹配，就会进入休眠状态：它依然处于保存状态，但不再进入日常提示词，直到后续消息再次将其召回。当列表已满时，自动保存可以遗忘一条休眠记忆，但绝不会遗忘全局个人记忆，或是某人通过 `/memories` 或 `/personal memories` 添加或编辑过的记忆。请参阅[记忆衰退](/features/knowledge/memory/memory-decay/)。
+配置了嵌入模型后，一条记忆如果在计数的 7 个对话日内未与对话匹配，就会进入休眠状态：它依然处于保存状态，但不再进入日常提示词，直到后续消息再次将其召回。当列表已满时，自动保存可以遗忘一条休眠记忆，但绝不会遗忘全局个人记忆，或是某人通过 `/memories` 或 `/personal memories` 添加或编辑过的记忆。请参阅[记忆衰退](/features/knowledge/memory/memory-decay/)。
 
 对于应该始终生效的指令，请使用[人格属性](/features/chatting-personality/multiple-personas/#attributes)、人格提示词，或[常开（Always On）世界书条目](/features/knowledge/memory/lorebooks/)。
 

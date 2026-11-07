@@ -1,6 +1,7 @@
 export default {
   help: {
     description: `セットアップ、機能、プロバイダー、メモリ、動作、ツール、メディア、連携のガイドを表示します。`,
+    page_description: `開くガイド。`,
     dashboard: {
       categories: {
         setup: `セットアップ`,

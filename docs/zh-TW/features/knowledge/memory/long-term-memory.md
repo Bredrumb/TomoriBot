@@ -33,7 +33,7 @@ aiGenerated: false
 
 ### 記憶衰退
 
-在設定了嵌入模型的情況下，一則記憶如果連續 14 個計算對話日都沒有與對話相符，就會進入休眠：它依然會被保留，但會離開日常的提示詞，直到後續的訊息重新將其喚回。當清單已滿時，自動儲存可以遺忘一則休眠記憶以騰出空間，但絕不會遺忘全域個人記憶，或是某人透過 `/memories` 或 `/personal memories` 新增或編輯過的記憶。請參閱[記憶衰退](/features/knowledge/memory/memory-decay/)。
+在設定了嵌入模型的情況下，一則記憶如果連續 7 個計算對話日都沒有與對話相符，就會進入休眠：它依然會被保留，但會離開日常的提示詞，直到後續的訊息重新將其喚回。當清單已滿時，自動儲存可以遺忘一則休眠記憶以騰出空間，但絕不會遺忘全域個人記憶，或是某人透過 `/memories` 或 `/personal memories` 新增或編輯過的記憶。請參閱[記憶衰退](/features/knowledge/memory/memory-decay/)。
 
 對於應該隨時生效的指示，請使用[人格屬性](/features/chatting-personality/multiple-personas/#attributes)、人格提示詞，或是[常駐（Always On）世界書條目](/features/knowledge/memory/lorebooks/)。
 

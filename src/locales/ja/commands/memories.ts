@@ -1,6 +1,8 @@
 export default {
   memories: {
     description: `サーバーの記憶、ドキュメント、ロアブック、短期記憶を確認・管理します。`,
+    page_description: `パネルを開くときのカテゴリ。`,
+    persona_description: `記憶、ドキュメント、ロアブックを開く対象のペルソナ。`,
     category_memories: `記憶`,
     category_documents: `ドキュメント`,
     category_lorebooks: `ロアブック`,

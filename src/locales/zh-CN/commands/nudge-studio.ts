@@ -1,6 +1,7 @@
 export default {
   "nudge-studio": {
     description: "选择我在此服务器中使用的空闲搭话，或自行撰写。",
+    page_description: `面板打开时显示的分类。`,
     unavailable: "我现在无法加载 Nudge Studio。请稍后再试。",
     title_advanced: "搭话高级设置",
     advanced_description: "仅在你明确知晓其运作方式时再调整这些设置。",

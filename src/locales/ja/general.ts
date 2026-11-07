@@ -10,6 +10,8 @@ export default {
       limit_heading: `上限に達しました`,
       not_available_heading: `利用できません`,
       invalid_heading: `無効な選択です`,
+      page_not_found_detail: `その名前に一致する、ここで開けるページがないため、最初のページでパネルを開きました。`,
+      persona_not_found_detail: `その名前と完全に一致するペルソナがここにはないため、メインペルソナでパネルを開きました。`,
     },
     oauth: {
       invalid_callback: `このサインインリンクは無効か、有効期限が切れています。TomoriBotからもう一度サインインしてください。`,

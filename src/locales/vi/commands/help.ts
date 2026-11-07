@@ -1,6 +1,7 @@
 export default {
   help: {
     description: `Xem hướng dẫn thiết lập, tính năng, nhà cung cấp, bộ nhớ, hành vi, công cụ, media và tích hợp.`,
+    page_description: `Hướng dẫn cần mở.`,
     dashboard: {
       categories: {
         setup: `Thiết lập`,

@@ -1930,7 +1930,11 @@ describe("config Behavior pages", () => {
       buttonFor(dmNotices, { action: "behavior-speech-transcripts-set", locale: "en-US", enabled: false }),
     ).toBeDefined();
     expect(buttonFor(memory, { action: "behavior-stm-categories-open", locale: "en-US" })?.disabled).toBe(false);
-    expect(walk(memory).some((component) => component.content?.includes("memory/#stm-configuration"))).toBe(true);
+    expect(
+      walk(memory).some((component) =>
+        component.content?.includes("memory/short-term-memory/#managing-short-term-memory"),
+      ),
+    ).toBe(true);
     expect(buttonFor(memory, { action: "behavior-stm-enabled-set", locale: "en-US", enabled: false })?.disabled).toBe(
       false,
     );

@@ -2,6 +2,8 @@ export default {
   status: {
     prompt_hidden: `プロンプトのテキストは非表示です。閲覧するには「サーバーの管理」権限または有効化されたプロンプト確認設定が必要です。`,
     description: `現在の個人、サーバー、またはペルソナのステータスを表示します。`,
+    page_description: `ダッシュボードを開くときのカテゴリ。`,
+    persona_description: `「ペルソナ」ページに表示するペルソナ。`,
     scope_choice_behavior: `動作`,
     scope_choice_models: `モデル`,
     scope_choice_access: `アクセス`,

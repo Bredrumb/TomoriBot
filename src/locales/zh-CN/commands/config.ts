@@ -1,6 +1,8 @@
 export default {
   config: {
     description: `配置人格、行为、频道、权限与模型设置。`,
+    page_description: `面板打开时显示的页面。`,
+    persona_description: `面板打开时要选中的人格。`,
     options: {
       enable: `开启`,
       disable: `关闭`,

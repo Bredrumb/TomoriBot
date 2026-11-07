@@ -33,7 +33,7 @@ Nên ưu tiên nhiều bộ nhớ ngắn thay vì ít bộ nhớ dài. Bộ nh�
 
 ### Suy giảm bộ nhớ
 
-Khi đã thiết lập một model embedding, một bộ nhớ trải qua 14 ngày trò chuyện được tính mà không khớp với cuộc trò chuyện sẽ tạm nghỉ: nó vẫn được lưu nhưng rời khỏi prompt thông thường cho đến khi một tin nhắn sau đó gợi lại. Khi danh sách đầy, thao tác tự động lưu có thể quên một bộ nhớ tạm nghỉ, nhưng không bao giờ quên bộ nhớ cá nhân Toàn cục hoặc bộ nhớ mà ai đó đã thêm hoặc chỉnh sửa bằng `/memories` hoặc `/personal memories`. Xem [Suy giảm bộ nhớ](/features/knowledge/memory/memory-decay/).
+Khi đã thiết lập một model embedding, một bộ nhớ trải qua 7 ngày trò chuyện được tính mà không khớp với cuộc trò chuyện sẽ tạm nghỉ: nó vẫn được lưu nhưng rời khỏi prompt thông thường cho đến khi một tin nhắn sau đó gợi lại. Khi danh sách đầy, thao tác tự động lưu có thể quên một bộ nhớ tạm nghỉ, nhưng không bao giờ quên bộ nhớ cá nhân Toàn cục hoặc bộ nhớ mà ai đó đã thêm hoặc chỉnh sửa bằng `/memories` hoặc `/personal memories`. Xem [Suy giảm bộ nhớ](/features/knowledge/memory/memory-decay/).
 
 Đối với các chỉ dẫn luôn cần áp dụng, hãy sử dụng [thuộc tính persona](/features/chatting-personality/multiple-personas/#attributes), prompt persona hoặc [mục lorebook luôn bật](/features/knowledge/memory/lorebooks/).
 

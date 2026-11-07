@@ -1,6 +1,7 @@
 export default {
   help: {
     description: `浏览设置、功能、提供方、记忆、行为、工具、媒体与集成指南。`,
+    page_description: `要打开的指南。`,
     dashboard: {
       categories: {
         setup: `设置`,

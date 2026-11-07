@@ -1,6 +1,8 @@
 export default {
   memories: {
     description: `Inspecciona y administra las memorias del servidor, documentos, lorebooks y memoria a corto plazo.`,
+    page_description: `Categoría en la que se abre el panel.`,
+    persona_description: `Persona cuyas memorias, documentos o lorebook se abren.`,
     category_memories: `Memorias`,
     category_documents: `Documentos`,
     category_lorebooks: `Lorebooks`,

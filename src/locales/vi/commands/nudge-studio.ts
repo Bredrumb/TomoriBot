@@ -1,6 +1,7 @@
 export default {
   "nudge-studio": {
     description: "Chọn gợi ý nhàn rỗi mình sẽ dùng trong máy chủ này và tự viết gợi ý của bạn.",
+    page_description: `Danh mục hiển thị khi mở bảng điều khiển.`,
     unavailable: "Mình không thể tải Nudge Studio lúc này. Vui lòng thử lại sau giây lát.",
     title_advanced: "Cài đặt gợi ý nâng cao",
     advanced_description: "Chỉ điều chỉnh các cài đặt này nếu bạn hiểu rõ cách hoạt động của chúng.",

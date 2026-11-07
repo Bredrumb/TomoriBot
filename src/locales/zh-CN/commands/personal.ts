@@ -28,6 +28,7 @@ export default {
     },
     memories: {
       description: `管理你的个人长期记忆和短期对话上下文。`,
+      persona_description: `改为打开此人格关于你的记忆，而非全局记忆。`,
       identity_description: `要编辑的消息代理身份。即使消息代理处于关闭状态也可以使用。`,
       outdated_panel: `这个面板已过期。请用 {command} 打开新面板。`,
       category_global: `全局`,
@@ -109,6 +110,7 @@ export default {
     },
     config: {
       description: `管理你的个人偏好、隐私、模型和资料。`,
+      page_description: `面板打开时显示的页面。`,
       identity_description: `要编辑的消息代理身份。即使消息代理处于关闭状态也可以使用。`,
       outdated_panel: `这个面板已过期。请用 {command} 打开新面板。`,
       category_profile: `资料`,

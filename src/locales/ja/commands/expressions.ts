@@ -20,6 +20,7 @@ export default {
     },
     manage: {
       description: `絵文字、スタンプ、カスタム表現とペルソナのアクセス権を管理します。`,
+      page_description: `パネルを開くときのカテゴリ。`,
       title: `サーバーの表現`,
       emojis: `絵文字`,
       stickers: `スタンプ`,

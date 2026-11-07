@@ -25,7 +25,7 @@ memory stays active.
    reasonable match. Their counters go back to 0.
 4. Every other memory in that search gains one day. This happens at most once per day (UTC),
    however many messages are sent.
-5. At 14 counted days, the memory rests. It is no longer sent with every reply, but it stays saved
+5. At 7 counted days, the memory rests. It is no longer sent with every reply, but it stays saved
    and searchable.
 6. When a later message matches a resting memory, she adds it to that reply and its counter resets,
    so it is active again.
@@ -43,16 +43,16 @@ One server memory, "Juno's cat is named Mochi":
 | Chat days | What happens | Counter | State |
 |---|---|---|---|
 | The day it is saved | Saved | 0 | Active |
-| The next 13 chat days | Chats about games; Mochi never comes up | 13 | Active |
-| A quiet week | Nobody talks | 13 | Active, paused |
-| The next chat day | Another chat without Mochi | 14 | Resting |
+| The next 6 chat days | Chats about games; Mochi never comes up | 6 | Active |
+| A quiet week | Nobody talks | 6 | Active, paused |
+| The next chat day | Another chat without Mochi | 7 | Resting |
 | A later chat day | Juno asks "how's Mochi doing?" | 0 | Recalled for that reply, then active |
 
 ## Whose conversations count
 
 Server memories age on days the persona talks in that server. Personal memories are searched only
 when their owner takes part in the conversation, so they age only on those days. Bau visits once a
-month, so Bau's memories need 14 visits where they never come up before they rest, and the regulars'
+month, so Bau's memories need 7 visits where they never come up before they rest, and the regulars'
 busy days do not wear them down.
 
 Memories hidden by privacy settings, a blacklist, channel limits, or tags are never searched, so they

@@ -1,6 +1,7 @@
 export default {
   moderation: {
     description: `管理成员权限、黑名单、频道与身份组白名单，以及配额设置。`,
+    page_description: `面板打开时显示的页面。`,
     title: `服务器管理`,
     outdated_panel: `这个管理面板已经过期。请重新运行 /moderation。`,
     permission_denied: `你需要 \`Manage Server\` 权限才能使用这个管理面板。`,

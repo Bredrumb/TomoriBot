@@ -28,6 +28,7 @@ O TomoriBot o tratará como um novo usuário a partir de sua próxima mensagem.`
     },
     memories: {
       description: `Gerencie suas memórias pessoais de longo prazo e contexto conversacional de curto prazo.`,
+      persona_description: `Persona cujas memórias sobre você serão abertas em vez das memórias globais.`,
       identity_description: `Identidade de proxy para editar. Funciona mesmo com o proxy de mensagens desativado.`,
       outdated_panel: `Este painel está desatualizado. Use {command} para abrir um painel atualizado.`,
       category_global: `Global`,
@@ -113,6 +114,7 @@ O TomoriBot o tratará como um novo usuário a partir de sua próxima mensagem.`
     },
     config: {
       description: `Gerencie suas preferências pessoais, privacidade, modelos e perfil.`,
+      page_description: `Página em que o painel será aberto.`,
       identity_description: `Identidade de proxy para editar. Funciona mesmo com o proxy de mensagens desativado.`,
       outdated_panel: `Este painel está desatualizado. Use {command} para abrir um painel atualizado.`,
       category_profile: `Perfil`,

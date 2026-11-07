@@ -15,7 +15,7 @@ O decaimento necessita de um modelo de embedding; consulte [Provedores & Modelos
 2. A cada resposta, a TomoriBot realiza uma busca. Ela transforma a mensagem mais recente em um embedding (uma lista de números que descreve seu significado; consulte [Como funciona a busca](/features/knowledge/memory/documents/#how-search-works)) e o compara com cada memória que ela pode usar naquela conversa.
 3. Até 3 das correspondências mais próximas, entre memórias do servidor e pessoais, contam como usadas se forem uma correspondência razoável. Seus contadores voltam para 0.
 4. Todas as outras memórias nessa busca ganham um dia. Isso acontece no máximo uma vez por dia (UTC), não importa quantas mensagens sejam enviadas.
-5. Aos 14 dias contabilizados, a memória entra em repouso. Ela não é mais enviada com todas as respostas, mas permanece salva e pesquisável.
+5. Aos 7 dias contabilizados, a memória entra em repouso. Ela não é mais enviada com todas as respostas, mas permanece salva e pesquisável.
 6. Quando uma mensagem posterior corresponde a uma memória em repouso, ela a adiciona àquela resposta e seu contador é zerado, tornando-a ativa novamente.
 
 Estar ativa é diferente de ser usada. Uma memória permanece ativa apenas enquanto continuar sendo uma das principais correspondências para alguma mensagem.
@@ -29,14 +29,14 @@ Uma memória do servidor: "O gato de Juno se chama Mochi":
 | Dias de chat | O que acontece | Contador | Estado |
 |---|---|---|---|
 | O dia em que é salva | Salva | 0 | Ativa |
-| Os 13 dias de chat seguintes | Conversas sobre jogos; Mochi nunca é mencionado | 13 | Ativa |
-| Uma semana calma | Ninguém conversa | 13 | Ativa, pausada |
-| O próximo dia de chat | Outra conversa sem Mochi | 14 | Em repouso |
+| Os 6 dias de chat seguintes | Conversas sobre jogos; Mochi nunca é mencionado | 6 | Ativa |
+| Uma semana calma | Ninguém conversa | 6 | Ativa, pausada |
+| O próximo dia de chat | Outra conversa sem Mochi | 7 | Em repouso |
 | Um dia de chat posterior | Juno pergunta "como vai o Mochi?" | 0 | Recordada para essa resposta, depois ativa |
 
 ## Quais conversas são contabilizadas
 
-As memórias do servidor envelhecem nos dias em que a persona conversa naquele servidor. As memórias pessoais são pesquisadas apenas quando o proprietário delas participa da conversa, portanto, envelhecem apenas nesses dias. Bau visita uma vez por mês, portanto as memórias de Bau precisam de 14 visitas em que nunca sejam mencionadas antes de entrarem em repouso, e os dias movimentados dos membros regulares não as desgastam.
+As memórias do servidor envelhecem nos dias em que a persona conversa naquele servidor. As memórias pessoais são pesquisadas apenas quando o proprietário delas participa da conversa, portanto, envelhecem apenas nesses dias. Bau visita uma vez por mês, portanto as memórias de Bau precisam de 7 visitas em que nunca sejam mencionadas antes de entrarem em repouso, e os dias movimentados dos membros regulares não as desgastam.
 
 Memórias ocultadas por configurações de privacidade, uma lista de bloqueio, limites de canal ou tags nunca são pesquisadas, portanto não envelhecem nem retornam.
 

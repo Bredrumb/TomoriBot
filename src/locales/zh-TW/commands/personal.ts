@@ -28,6 +28,7 @@ export default {
     },
     memories: {
       description: `管理你的個人長期記憶與短期對話脈絡。`,
+      persona_description: `改為開啟此人格關於你的記憶，而非全域記憶。`,
       identity_description: `要編輯的訊息代理身分。即使訊息代理功能關閉時也能運作。`,
       outdated_panel: `這個面板已經過期。請用 {command} 開啟新的面板。`,
       category_global: `全域`,
@@ -109,6 +110,7 @@ export default {
     },
     config: {
       description: `管理你的個人偏好、隱私、模型與個人檔案。`,
+      page_description: `面板開啟時顯示的頁面。`,
       identity_description: `要編輯的訊息代理身分。即使訊息代理功能關閉時也能運作。`,
       outdated_panel: `這個面板已經過期。請用 {command} 開啟新的面板。`,
       category_profile: `個人檔案`,

@@ -1,6 +1,7 @@
 export default {
   moderation: {
     description: `Gerencie permissões de membros, lista negra, lista branca de canais e cargos e cotas.`,
+    page_description: `Página em que o painel será aberto.`,
     title: `Moderação do Servidor`,
     outdated_panel: `Este painel de moderação está desatualizado. Rode /moderation.`,
     permission_denied: `Você precisa da permissão \`Manage Server\` para usar este painel.`,
