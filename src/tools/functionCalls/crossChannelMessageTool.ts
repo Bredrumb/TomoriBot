@@ -21,6 +21,7 @@ import { getCachedPrivacyLevel } from "@/utils/cache/userCache";
 import { resolveMessageProxyMessageIdentitiesForHistory } from "@/utils/messageProxy/historyAttribution";
 import { captureDiscordOwnership } from "@/utils/discord/webhook/webhookCore";
 import { sendChannelMessageOnce } from "@/utils/discord/webhook/singleAttemptMessage";
+import type { ManualTriggerInvoker } from "@/utils/chat/types";
 
 // Stores pending boomerang data keyed by source channel ID.
 // After tomoriChat() completes in the target channel, the source channel
@@ -46,6 +47,8 @@ export interface PendingBoomerang {
   isUserImpersonation?: boolean;
   /** Impersonated Discord user ID to preserve across boomerang follow-up */
   impersonatedUserId?: string;
+  manualTriggerInvoker?: ManualTriggerInvoker;
+  borrowsTriggerMessage: boolean;
   /** Recent messages from the target channel (newest first) */
   targetChannelMessages: Array<{
     author: string;
@@ -555,14 +558,16 @@ export class CrossChannelMessageTool extends BaseTool {
     const sourcePersonaId = context.activePersonaId ?? context.tomoriState.persona_id ?? undefined;
     const isSourceUserImpersonation = context.isUserImpersonation === true;
     const sourceImpersonatedUserId = context.impersonatedUserId;
-    const manualTriggerInvoker = context.userId
-      ? {
-          userDiscId: context.userId,
-          username: context.message?.author.username ?? "System",
-          locale: context.locale,
-          member: invokingMember,
-        }
-      : undefined;
+    const borrowsTriggerMessage = context.borrowsTriggerMessage === true;
+    const manualTriggerInvoker =
+      !borrowsTriggerMessage && context.userId
+        ? {
+            userDiscId: context.userId,
+            username: context.message?.author.username ?? "System",
+            locale: context.locale,
+            member: invokingMember,
+          }
+        : undefined;
 
     try {
       assertActive();
@@ -580,6 +585,7 @@ export class CrossChannelMessageTool extends BaseTool {
         textQuotaSource: "system",
         injectedContextItems: [taskInjection],
         manualTriggerInvoker,
+        borrowsTriggerMessage,
         manualStreamingContextOverrides: { disableCrossChannelMessage: true },
       });
 
@@ -619,6 +625,8 @@ export class CrossChannelMessageTool extends BaseTool {
           personaId: sourcePersonaId,
           isUserImpersonation: isSourceUserImpersonation,
           impersonatedUserId: sourceImpersonatedUserId,
+          manualTriggerInvoker,
+          borrowsTriggerMessage,
           targetChannelMessages: targetMessages,
         });
 
@@ -669,6 +677,8 @@ export class CrossChannelMessageTool extends BaseTool {
           personaId: sourcePersonaId,
           isUserImpersonation: isSourceUserImpersonation,
           impersonatedUserId: sourceImpersonatedUserId,
+          manualTriggerInvoker,
+          borrowsTriggerMessage,
           targetChannelMessages: [],
         });
       }

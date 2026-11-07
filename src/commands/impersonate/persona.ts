@@ -27,7 +27,7 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
     );
 
 export async function execute(
-  client: Client,
+  _client: Client,
   interaction: ChatInputCommandInteraction,
   userData: UserRow,
   locale: string,
@@ -45,5 +45,5 @@ export async function execute(
     return;
   }
 
-  await executePersonaImpersonation(client, interaction, userData, locale, personaId, message);
+  await executePersonaImpersonation(interaction, userData, locale, personaId, message);
 }

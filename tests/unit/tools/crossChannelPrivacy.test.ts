@@ -1,6 +1,13 @@
 import { afterEach, beforeAll, describe, expect, it, mock, spyOn } from "bun:test";
 import { stubAllShardOwnership } from "../../helpers/shardOwnership";
-import { Collection, EmbedBuilder, type Client, type GuildTextBasedChannel, type Message } from "discord.js";
+import {
+  ChannelType,
+  Collection,
+  EmbedBuilder,
+  type Client,
+  type GuildTextBasedChannel,
+  type Message,
+} from "discord.js";
 import { CrossChannelMessageTool, consumePendingBoomerang } from "@/tools/functionCalls/crossChannelMessageTool";
 import { PrivacyLevel } from "@/types/db/schema";
 import type { ToolContext } from "@/types/tool/interfaces";
@@ -11,7 +18,20 @@ import * as proxyHistory from "@/utils/messageProxy/historyAttribution";
 import * as contextBuilder from "@/utils/text/contextBuilder";
 import * as chat from "@/events/messageCreate/tomoriChat";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
-import { createPersona } from "../../helpers/fixtures";
+import { createPersona, createUserRow } from "../../helpers/fixtures";
+import * as stateCache from "@/utils/cache/tomoriStateCache";
+import * as admissionGuards from "@/utils/chat/admissionGuards";
+import * as errorVisibility from "@/utils/chat/errorVisibility";
+import * as credentialResolver from "@/utils/provider/credentialResolver";
+import * as textModels from "@/utils/provider/textModelSelection";
+import { DatabaseUnavailableError } from "@/types/errors";
+import { evaluateChatAdmission, normalizeChatInvocation } from "@/utils/chat/admission";
+import { planChatTurns } from "@/utils/chat/turnPlanner";
+import { runPostTurnEffects } from "@/utils/chat/postTurnEffects";
+import type { ChatTurnContext } from "@/utils/chat/types";
+import { CreateThreadTool } from "@/tools/functionCalls/createThreadTool";
+import * as toolDelivery from "@/utils/discord/webhook/toolPersonaDelivery";
+import * as authoredText from "@/utils/discord/modelAuthoredText";
 
 const restores: Array<() => void> = [];
 const sourceId = "source-channel";
@@ -98,7 +118,224 @@ function fixture(history: Message[], anchorLookup?: () => Promise<Collection<str
   return { context, target, privacy, proxies, labels, mentions, dispatch, fetches };
 }
 
+describe("cross-channel request attribution", () => {
+  for (const borrowed of [true, false]) {
+    it(`stores ${borrowed ? "system" : "human"} attribution when creating a thread`, async () => {
+      const f = fixture([]);
+      f.context.borrowsTriggerMessage = borrowed;
+      f.context.tomoriState.config.thread_creation_enabled = true;
+      const thread = {
+        id: "created-thread",
+        name: "garden-chat",
+        messages: { fetch: async () => new Collection<string, Message>() },
+      };
+      const posted = message("thread-starter", "bot");
+      Object.assign(f.target, { type: ChannelType.GuildText, threads: { create: async () => thread } });
+      Object.assign(f.context.client.guilds, {
+        cache: new Collection(),
+        fetch: async () => ({
+          members: { me: {}, fetch: async (id: string) => ({ id, user: { username: "Mirri" } }) },
+        }),
+      });
+      const names = spyOn(authoredText, "getKnownPersonaSpeakerNames").mockResolvedValue(new Set());
+      const delivery = spyOn(toolDelivery, "sendToolPersonaPost").mockResolvedValue({
+        status: "sent",
+        message: posted,
+        receipt: {
+          messageId: posted.id,
+          channelId: thread.id,
+          route: "bot",
+          webhookId: null,
+          identity: { username: "Mirri" },
+          speaker: null,
+        },
+      });
+      for (const spy of [names, delivery]) restores.push(() => spy.mockRestore());
+
+      const result = await new CreateThreadTool().execute(
+        { channel_name: "garden", thread_name: thread.name, first_message: "Hello" },
+        f.context,
+      );
+
+      expect(result.success).toBe(true);
+      const pending = consumePendingBoomerang(sourceId);
+      expect(pending?.borrowsTriggerMessage).toBe(borrowed);
+      expect(pending?.manualTriggerInvoker?.userDiscId).toBe(borrowed ? undefined : f.context.userId);
+    });
+  }
+
+  for (const borrowed of [true, false]) {
+    for (const failedDispatch of [true, false]) {
+      it(`preserves ${borrowed ? "system" : "human"} attribution through a ${failedDispatch ? "failed" : "successful"} dispatch and report`, async () => {
+        const f = fixture([]);
+        const persona = f.context.tomoriState;
+        const requester = createUserRow({ user_id: 42, user_disc_id: "invoker" });
+        const bystander = createUserRow({ user_id: 77, user_disc_id: "source-bystander" });
+        const guild = {
+          id: "guild",
+          members: {
+            me: {},
+            cache: new Collection(),
+            fetch: async (id: string) => ({ id, user: { username: id }, roles: { cache: new Collection() } }),
+          },
+        };
+        const source = Object.assign(f.context.channel, {
+          type: ChannelType.PublicThread,
+          isThread: () => true,
+          guild,
+        });
+        Object.assign(f.target, { type: ChannelType.PublicThread, isThread: () => true, guild });
+        const sourceAnchor = {
+          ...message("source-anchor", bystander.user_disc_id),
+          channel: source,
+          channelId: sourceId,
+          guild,
+          client: f.context.client,
+          mentions: { users: new Collection(), roles: new Collection(), everyone: false },
+          attachments: new Collection(),
+          reference: null,
+        } as unknown as Message;
+        const targetAnchor = {
+          ...sourceAnchor,
+          ...message("target-anchor", "target-bystander"),
+          channel: f.target,
+          channelId: f.target.id,
+        } as unknown as Message;
+        Object.assign(f.target.messages, {
+          fetch: async ({ limit }: { limit: number }) =>
+            new Collection(limit === 1 ? [[targetAnchor.id, targetAnchor]] : []),
+        });
+        Object.assign(f.context.client, {
+          guilds: { fetch: async () => guild },
+          channels: {
+            fetch: async () => ({
+              isTextBased: () => true,
+              messages: { fetch: async () => new Collection([[sourceAnchor.id, sourceAnchor]]) },
+            }),
+          },
+        });
+        f.context.userId = borrowed ? bystander.user_disc_id : requester.user_disc_id;
+        f.context.borrowsTriggerMessage = borrowed;
+        f.context.message = borrowed
+          ? sourceAnchor
+          : ({ ...sourceAnchor, ...message("request", requester.user_disc_id) } as Message);
+        const credentialUsers: Array<number | null | undefined> = [];
+        const admissions: string[] = [];
+        const invokers: Array<string | undefined> = [];
+        const finished = Promise.withResolvers<void>();
+        const probes = [
+          spyOn(stateCache, "getCachedAllPersonas").mockResolvedValue([persona]),
+          spyOn(userCache, "getCachedUserRow").mockImplementation(async (id) =>
+            id === requester.user_disc_id ? requester : bystander,
+          ),
+          spyOn(userCache, "getCachedBlacklistStatus").mockImplementation(
+            async (_guild, id) => id !== requester.user_disc_id,
+          ),
+          spyOn(admissionGuards, "validateDirectChatTrigger").mockResolvedValue({
+            shouldContinue: true,
+            isReplyToBot: false,
+            replyPersona: null,
+            isBotMentioned: false,
+            isDirectUserIntent: false,
+            isUserImpersonation: false,
+          }),
+          spyOn(admissionGuards, "evaluateChatAccess").mockResolvedValue({
+            whitelistStatus: null,
+            personalSpotlightStatus: null,
+            allowedPersonaIds: null,
+            blockedPersonaIds: new Set(),
+            rejectedByWhitelist: borrowed,
+          }),
+          spyOn(errorVisibility, "shouldSurfaceChatUserErrors").mockReturnValue(false),
+          spyOn(textModels, "resolveServerTextModel").mockImplementation(async (state) => state.llm),
+          spyOn(credentialResolver, "resolvePersonalCapabilityCredentials").mockResolvedValue(null),
+          spyOn(credentialResolver, "resolveCapabilityCredentials").mockImplementation(
+            async (_serverId, _kind, scope) => {
+              credentialUsers.push(scope?.userId);
+              throw new DatabaseUnavailableError("stop before generation");
+            },
+          ),
+        ];
+        for (const spy of probes) restores.push(() => spy.mockRestore());
+        f.dispatch.mockImplementation(async (input) => {
+          const isReport = input.message.channelId === sourceId;
+          try {
+            invokers.push(input.manualTriggerInvoker?.userDiscId);
+            const admission = await evaluateChatAdmission(normalizeChatInvocation({ ...input, skipLock: true }));
+            admissions.push(admission.disposition);
+            if (admission.disposition === "run")
+              await planChatTurns({
+                admission,
+                channelId: input.message.channelId,
+                lockedAt: Date.now(),
+                queueDepth: 0,
+                skipLock: true,
+              });
+            if (!isReport && failedDispatch) throw new Error("dispatch unavailable");
+            return admission.disposition;
+          } finally {
+            if (isReport) finished.resolve();
+          }
+        });
+
+        const result = await new CrossChannelMessageTool().execute(
+          { target_channel: "garden", task: "Check the conversation", boomerang: true },
+          f.context,
+        );
+        const incoming = normalizeChatInvocation({
+          client: f.context.client,
+          message: f.context.message,
+          isFromQueue: false,
+          isManuallyTriggered: true,
+          borrowsTriggerMessage: borrowed,
+        });
+        const context = {
+          client: f.context.client,
+          channel: source,
+          message: f.context.message,
+          locale: "en-US",
+          turn: { lockedTurn: { admission: { incoming } } },
+          currentPersona: persona,
+          tomoriState: persona,
+          shouldSurfaceUserErrors: false,
+          shouldApplyTextQuota: false,
+          isDMChannel: false,
+          isStopResponse: false,
+          isUserImpersonation: false,
+          reunionPresence: null,
+          streamingContext: {},
+          contextItems: [],
+          simplifiedMessages: [],
+        } as unknown as ChatTurnContext;
+        await runPostTurnEffects(context, { status: "completed", streamResults: [], personaResponses: [] });
+        await finished.promise;
+
+        expect(result.success).toBe(!failedDispatch);
+        expect(admissions).toEqual(["run", "run"]);
+        expect(invokers).toEqual(borrowed ? [undefined, undefined] : [requester.user_disc_id, requester.user_disc_id]);
+        expect(credentialUsers).toEqual(borrowed ? [null, null] : [requester.user_id, requester.user_id]);
+        if (borrowed) expect(credentialResolver.resolvePersonalCapabilityCredentials).not.toHaveBeenCalled();
+      });
+    }
+  }
+});
+
 describe("cross-channel full privacy", () => {
+  it("retains the invoker for a failed dispatch's boomerang", async () => {
+    const f = fixture([]);
+    f.dispatch.mockRejectedValue(new Error("dispatch unavailable"));
+
+    const result = await new CrossChannelMessageTool().execute(
+      { target_channel: "garden", task: "Check the conversation", boomerang: true },
+      f.context,
+    );
+
+    expect(result.success).toBe(false);
+    const pending = consumePendingBoomerang(sourceId);
+    expect(pending?.success).toBe(false);
+    expect(pending?.manualTriggerInvoker?.userDiscId).toBe(f.context.userId);
+  });
+
   it.each([true, false])("cancels pending target lookup before placeholder or dispatch (empty: %s)", async (empty) => {
     const reached = Promise.withResolvers<void>();
     const lookup = Promise.withResolvers<Collection<string, Message>>();
@@ -159,9 +396,9 @@ describe("cross-channel full privacy", () => {
         expect(fixtureState.dispatch).not.toHaveBeenCalled();
         expect(fixtureState.fetches).toEqual([35]);
       } else {
-        expect(consumePendingBoomerang(sourceId)?.targetChannelMessages.map((entry) => entry.content)).toEqual(
-          expectedContents,
-        );
+        const pending = consumePendingBoomerang(sourceId);
+        expect(pending?.manualTriggerInvoker?.userDiscId).toBe(fixtureState.context.userId);
+        expect(pending?.targetChannelMessages.map((entry) => entry.content)).toEqual(expectedContents);
         expect(fixtureState.dispatch).toHaveBeenCalledTimes(1);
         expect(fixtureState.fetches).toEqual([1, 10]);
       }

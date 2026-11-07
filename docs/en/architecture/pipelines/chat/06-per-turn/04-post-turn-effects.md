@@ -58,7 +58,10 @@ ChatTurnContext & GenerationTurnResult
    undeterminable audience.
 7. **Boomerang follow-up**: if the turn invoked the cross-channel message tool, `scheduleBoomerangFollowUp()`
    consumes the pending boomerang. It schedules a re-entry in the source channel via `setImmediate`,
-   calling `suppressNextSelfReply()` so the follow-up does not trigger self-reply suppression.
+   retaining the original invoker for human requests. Cross-channel dispatches and thread-creation
+   reports preserve the source turn's `borrowsTriggerMessage` flag. Borrowed system turns carry no
+   human invoker, so an anchor author's blacklist, role whitelist, and personal credentials do not
+   govern generation in either channel. `suppressNextSelfReply()` suppresses the follow-up's gateway echo.
 8. **Last reply token cache**: `rememberLastReplyUsage()` caches the prompt token count in `lastReplyUsageCache`
    so the `/context` command can display prompt token consumption.
 9. **Usage statistics**: `recordUsageStats()` dispatches fire-and-forget database writes recording model

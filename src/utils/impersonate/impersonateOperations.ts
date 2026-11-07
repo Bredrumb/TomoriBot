@@ -43,11 +43,11 @@ import {
   UserImpersonationReportedProviderError,
 } from "@/utils/chat/userImpersonationCompletion";
 import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
+import { setSelfReplyChainOriginUser, updateSelfReplyChainState } from "@/utils/chat/selfReplyState";
 
 type ImpersonationInteraction = ChatInputCommandInteraction;
 
 export async function executePersonaImpersonation(
-  client: Client,
   interaction: ImpersonationInteraction,
   userData: UserRow,
   locale: string,
@@ -201,9 +201,15 @@ export async function executePersonaImpersonation(
       embeds.push(noticeEmbed);
     }
 
-    let sentMessage: import("discord.js").Message | null = null;
+    // Seed the human origin before posting because a gateway echo can arrive before the send resolves.
+    const startPersonaChain = () => {
+      updateSelfReplyChainState(channel.id, false);
+      setSelfReplyChainOriginUser(channel.id, interaction.user.id);
+    };
+
     if (!selectedPersona.is_alter && !spriteRenderTarget) {
-      sentMessage = await sendChannelMessageOnce(
+      startPersonaChain();
+      const sentMessage = await sendChannelMessageOnce(
         channel,
         { content: effectiveMessageContent, embeds },
         () => undefined,
@@ -262,6 +268,7 @@ export async function executePersonaImpersonation(
               spriteRenderTarget.record.spriteName,
               channel.lastMessageId,
             );
+      startPersonaChain();
       const delivery = await dispatchWebhookWithIdentity(webhook, identity, (selected) =>
         sendSelectedWebhookMessageOnce(
           selected,
@@ -273,7 +280,7 @@ export async function executePersonaImpersonation(
           () => undefined,
         ),
       );
-      sentMessage = delivery.result;
+      const sentMessage = delivery.result;
       recordPersonaDelivery({
         messageId: sentMessage.id,
         channelId: sentMessage.channelId,
@@ -287,10 +294,6 @@ export async function executePersonaImpersonation(
         sprite: spriteRenderTarget?.record,
         serverDiscId: serverId,
       });
-    }
-
-    if (sentMessage) {
-      void tomoriChat({ client, message: sentMessage, isFromQueue: false });
     }
 
     await replyInfoEmbed(interaction, locale, {

@@ -24,7 +24,7 @@ cross-channel boomerang follow-ups.
 
 Other fields pass through without alteration:
 - `systemTriggerIdentity`: carries authoritative server and user snowflakes from scheduled reminder rows,
-  preventing ambiguous DM channel key lookups.
+  preventing ambiguous DM channel key lookups; empty-response retries preserve this identity.
 - `carriedExpressionDelivery`: forwards expression delivery state to empty-response retries so visible
   expressions are not re-sent.
 - `onGenerationResult` and `onQueueDiscard`: callback handlers allowing command callers to observe completion

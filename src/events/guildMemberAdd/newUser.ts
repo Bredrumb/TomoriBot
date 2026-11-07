@@ -394,6 +394,7 @@ async function sendWelcome(params: {
     isUserImpersonation: false,
     textQuotaSource: "system",
     textQuotaTriggerKey: `welcome:${member.guild.id}:${member.id}:${lastMessage.id}`,
+    borrowsTriggerMessage: true,
     injectedContextItems: [welcomeContextItem],
     forcedMentions: forcedMentions.length > 0 ? forcedMentions : undefined,
   });
