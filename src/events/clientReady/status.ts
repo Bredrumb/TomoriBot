@@ -105,7 +105,7 @@ const handler = async (client: Client): Promise<void> => {
       } else {
         const normalStatus: ActivityOptions[] = [
           {
-            name: "Playful Interactions! /update",
+            name: "Optimized! /update",
             type: ActivityType.Playing,
           },
         ];
