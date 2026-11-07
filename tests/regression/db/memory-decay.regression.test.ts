@@ -149,6 +149,50 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("memory decay storage", () => {
     await expect(personalMemoryRepository.addWithEviction(refs.userId, 0, "invalid scope")).rejects.toThrow();
   });
 
+  it("preserves human and pre-release memories at the cap and saves below it with decay disabled", async () => {
+    process.env.MAX_SERVER_MEMORIES = "2";
+    process.env.MAX_PERSONAL_MEMORIES = "2";
+    const humanServer = await serverMemoryRepository.add(
+      refs.serverId,
+      refs.personaId,
+      refs.personaLineageId,
+      refs.userId,
+      "human server fact",
+    );
+    const humanPersonal = await personalMemoryRepository.add(refs.userId, refs.personaLineageId, "human personal fact");
+    const legacyServer = await insertServer(40);
+    const legacyPersonal = await insertPersonal(40);
+    const saveServer = () =>
+      serverMemoryRepository.addWithEviction(
+        refs.serverId,
+        refs.personaId,
+        refs.personaLineageId,
+        refs.userId,
+        "model server fact",
+      );
+    const savePersonal = () =>
+      personalMemoryRepository.addWithEviction(refs.userId, refs.personaLineageId, "model personal fact");
+    const refused = { status: "refused", currentCount: 2, limit: 2 } as const;
+    expect(await saveServer()).toEqual(refused);
+    expect(await savePersonal()).toEqual(refused);
+    expect(
+      (await serverMemoryRepository.loadServerMemoriesScoped(refs.serverId, refs.personaLineageId)).map(
+        (row) => row.server_memory_id,
+      ),
+    ).toEqual(expect.arrayContaining([humanServer?.server_memory_id, legacyServer]));
+    expect(
+      (await personalMemoryRepository.loadForUserLineage(refs.userId, refs.personaLineageId)).map(
+        (row) => row.personal_memory_id,
+      ),
+    ).toEqual(expect.arrayContaining([humanPersonal?.personal_memory_id, legacyPersonal]));
+    process.env.MAX_SERVER_MEMORIES = "3";
+    process.env.MAX_PERSONAL_MEMORIES = "3";
+    process.env.MEMORY_DECAY_ENABLED = "false";
+    for (const result of [await saveServer(), await savePersonal()]) {
+      expect(result).toMatchObject({ status: "saved", evicted: null, memory: { model_written: true, decay_days: 0 } });
+    }
+  });
+
   it("edits preserve decay metadata on databases without vector storage", async () => {
     const server = await insertServer(9, true);
     const personal = await insertPersonal(11, true);

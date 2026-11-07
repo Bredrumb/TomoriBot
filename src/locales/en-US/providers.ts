@@ -262,6 +262,15 @@ The selected model requires allowing data for paid model training, but your Open
       unknown_default_message: `An unexpected error occurred`,
     },
     self_teach: {
+      memory_forgotten_description: `Forgot a dormant memory to make room:
+\`\`\`
+{forgotten_content}
+\`\`\``,
+      memory_saved_with_eviction_content: `Saved:
+{memory_content}
+
+Forgotten:
+{forgotten_content}`,
       server_memory_learned_title: `🧠 {persona_nickname} learned something new!`,
       server_memory_learned_description: `A **[Server Memory](https://docs.tomoribot.app/en/features/knowledge/memory/#long-term-memory)** has been saved:
 \`\`\`
