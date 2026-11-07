@@ -72,6 +72,8 @@ export async function loadSecrets(environment: AppEnvironment): Promise<void> {
   if (secrets.TOMORI_PUBLIC_BASE_URL) process.env.TOMORI_PUBLIC_BASE_URL = secrets.TOMORI_PUBLIC_BASE_URL;
 
   if (secrets.TOPGG_TOKEN) process.env.TOPGG_TOKEN = secrets.TOPGG_TOKEN;
+  // An empty list must survive loading because it admits no one, while dropping it would read as unset and admit everyone.
+  if (secrets.VERTEX_ALLOWED_OWNERS !== undefined) process.env.VERTEX_ALLOWED_OWNERS = secrets.VERTEX_ALLOWED_OWNERS;
 
   // Must be set before any module reads MEMORY_PROTECTION(). Deployment env wins: a stale bundle
   // value could otherwise restore a limit above physical memory, leaving the guard unreachable.

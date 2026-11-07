@@ -58,7 +58,7 @@ import type {
   StreamContext,
 } from "../../types/stream/interfaces";
 import { fetchAndOptimizeImage } from "../../utils/image/imageProcessor";
-import { parseVertexCompositeKey, createVertexClient } from "./vertexClient";
+import { createVertexClient, parseVertexCompositeKey, VERTEX_CONFIG_ERROR_CODE } from "./vertexClient";
 
 const VIDEO_CONTEXT_MAX_INLINE_MB = Math.max(
   1,
@@ -811,7 +811,7 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
       return {
         type: "api_error",
         message: `Vertex configuration error: ${errorMessage}`,
-        code: "vertex_config_error",
+        code: VERTEX_CONFIG_ERROR_CODE,
         retryable: false,
         originalError: error,
       };
@@ -950,7 +950,7 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
   createErrorDescription(error: ProviderError, locale: string): string | null {
     // The configuration message quotes the stored composite key, and the authentication message
     // carries SDK text, so both use fixed copy.
-    if (error.code === "vertex_config_error") {
+    if (error.code === VERTEX_CONFIG_ERROR_CODE) {
       return localizer(locale, "genai.vertex.config_error_message");
     }
 

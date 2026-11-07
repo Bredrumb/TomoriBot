@@ -110,6 +110,8 @@ export default {
     validation_failed: `Nhà cung cấp đã từ chối API key đó hoặc không thể xác thực. Chưa lưu thông tin nào.`,
     validation_no_balance:
       "Nhà cung cấp đã nhận diện API key đó, nhưng tài khoản hết số dư nên chưa thể trả lời tin nhắn. Hãy nạp tiền trên trang web của nhà cung cấp rồi gửi lại cùng key đó. Chưa lưu thông tin nào.",
+    host_restricted: `Người host TomoriBot chỉ cho phép Google Vertex AI cho một số máy chủ và người dùng nhất định, và đây không phải là một trong số đó. Hãy chọn nhà cung cấp khác. Chưa lưu thông tin nào.`,
+    vertex_config_invalid: `Cài đặt Google Vertex AI phải có dạng \`project-id::location\`, ví dụ \`my-project::global\`. Project và vị trí chỉ được dùng chữ cái, số và dấu gạch nối. Chưa lưu thông tin nào.`,
     missing_default_model: `Thông tin xác thực đã được lưu, nhưng nhà cung cấp này không có model văn bản mặc định để kích hoạt.`,
     write_failed: `Không thể lưu hoặc kích hoạt nhà cung cấp. Hãy thử lại.`,
     add_endpoint_modal_title: `Thêm endpoint tùy chỉnh`,

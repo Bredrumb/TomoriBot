@@ -127,6 +127,7 @@ describe("Xialong access", () => {
     restores.push(serverWrite, personalWrite);
     const base = {
       serverDiscId: "guild",
+      actorDiscId: "actor",
       provider: "novelai",
       state: createPersona({ llm: xialong }),
       apiKey: "tablet-credential",
@@ -313,6 +314,7 @@ describe("Xialong access", () => {
     restores.push(encrypt, serverWrite, personalWrite);
     const base = {
       serverDiscId: "guild",
+      actorDiscId: "actor",
       provider: "novelai",
       state: createPersona({ llm: xialong }),
       apiKey: "tablet-credential",

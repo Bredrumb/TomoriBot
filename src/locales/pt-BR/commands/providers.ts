@@ -110,6 +110,8 @@ export default {
     validation_failed: `O provedor rejeitou essa chave de API ou não pôde validá-la. Nada foi salvo.`,
     validation_no_balance:
       "O provedor reconheceu essa chave de API, mas a conta está sem saldo, então ainda não pode responder a mensagens. Adicione créditos no site do provedor e envie a mesma chave novamente. Nada foi salvo.",
+    host_restricted: `Quem hospeda o TomoriBot só permite o Google Vertex AI para certos servidores e usuários, e este não é um deles. Escolha um provedor diferente. Nada foi salvo.`,
+    vertex_config_invalid: `As configurações do Google Vertex AI devem seguir o formato \`project-id::location\`, por exemplo \`my-project::global\`. O projeto e a localização só podem usar letras, números e hífens. Nada foi salvo.`,
     missing_default_model: `As credenciais foram salvas, mas este provedor não tem modelo de texto padrão.`,
     write_failed: `O provedor não pôde ser salvo ou ativado. Tente novamente.`,
     add_endpoint_modal_title: `Adicionar Endpoint Personalizado`,

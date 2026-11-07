@@ -92,7 +92,7 @@ describe("provider panel mutations", () => {
   it("validates, saves, and auto-activates a curated provider", async () => {
     const calls: string[] = [];
     const result = await addServerProvider(
-      { serverDiscId: "guild", state: state(), provider: "google", apiKey: "valid-api-key" },
+      { serverDiscId: "guild", actorDiscId: "actor", state: state(), provider: "google", apiKey: "valid-api-key" },
       dependencies(calls),
     );
 
@@ -109,7 +109,7 @@ describe("provider panel mutations", () => {
   it("registers both ElevenLabs capabilities and returns their stable panel entry", async () => {
     const calls: string[] = [];
     const result = await addServerProvider(
-      { serverDiscId: "guild", state: state(), provider: "elevenlabs", apiKey: "valid-api-key" },
+      { serverDiscId: "guild", actorDiscId: "actor", state: state(), provider: "elevenlabs", apiKey: "valid-api-key" },
       dependencies(calls),
     );
 
@@ -125,7 +125,7 @@ describe("provider panel mutations", () => {
   it("validates and stores Brave without creating a model", async () => {
     const calls: string[] = [];
     const result = await addServerProvider(
-      { serverDiscId: "guild", state: state(), provider: "brave", apiKey: "valid-api-key" },
+      { serverDiscId: "guild", actorDiscId: "actor", state: state(), provider: "brave", apiKey: "valid-api-key" },
       dependencies(calls),
     );
 
@@ -147,7 +147,13 @@ describe("provider panel mutations", () => {
     for (const { response, status } of cases) {
       const calls: string[] = [];
       const result = await addServerProvider(
-        { serverDiscId: "guild", state: state(), provider: "deepseek", apiKey: "sk-candidate-key" },
+        {
+          serverDiscId: "guild",
+          actorDiscId: "actor",
+          state: state(),
+          provider: "deepseek",
+          apiKey: "sk-candidate-key",
+        },
         {
           ...dependencies(calls),
           getProvider: async () =>
@@ -170,7 +176,7 @@ describe("provider panel mutations", () => {
   it("rejects short keys before any validation or write", async () => {
     const calls: string[] = [];
     const result = await addServerProvider(
-      { serverDiscId: "guild", state: state(), provider: "google", apiKey: "short" },
+      { serverDiscId: "guild", actorDiscId: "actor", state: state(), provider: "google", apiKey: "short" },
       dependencies(calls),
     );
 

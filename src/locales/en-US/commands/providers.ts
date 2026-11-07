@@ -108,6 +108,8 @@ export default {
     unsupported_provider: `That provider is not supported. Reopen the panel and choose a current option.`,
     validation_failed: `The provider rejected that API key or could not validate it. Nothing was saved.`,
     validation_no_balance: `The provider recognized that API key, but its account has no balance, so it can't answer messages yet. Add credit on the provider's website, then submit the same key again. Nothing was saved.`,
+    host_restricted: `Whoever hosts TomoriBot only allows Google Vertex AI for certain servers and users, and this isn't one of them. Choose a different provider. Nothing was saved.`,
+    vertex_config_invalid: `Google Vertex AI settings must look like \`project-id::location\`, for example \`my-project::global\`. The project and the location can only use letters, numbers, and hyphens. Nothing was saved.`,
     missing_default_model: `The credentials were saved, but this provider has no default text model to activate.`,
     write_failed: `The provider could not be saved or activated. Try again.`,
     add_endpoint_modal_title: `Add Custom Endpoint`,

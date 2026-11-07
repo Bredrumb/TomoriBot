@@ -112,6 +112,8 @@ export default {
     validation_failed: `El proveedor rechazó esa clave de API o no pudo validarla. No se guardó nada.`,
     validation_no_balance:
       "El proveedor reconoció esa clave de API, pero la cuenta no tiene saldo, así que aún no puede responder mensajes. Agrega crédito en el sitio web del proveedor y vuelve a enviar la misma clave. No se guardó nada.",
+    host_restricted: `Quien aloja TomoriBot solo permite Google Vertex AI para ciertos servidores y usuarios, y este no es uno de ellos. Elige un proveedor diferente. No se guardó nada.`,
+    vertex_config_invalid: `La configuración de Google Vertex AI debe tener el formato \`project-id::location\`, por ejemplo \`my-project::global\`. El proyecto y la ubicación solo pueden usar letras, números y guiones. No se guardó nada.`,
     missing_default_model: `Las credenciales se guardaron, pero este proveedor no tiene un modelo de texto predeterminado para activar.`,
     write_failed: `El proveedor no se pudo guardar ni activar. Inténtalo de nuevo.`,
     add_endpoint_modal_title: `Agregar punto de conexión personalizado`,

@@ -16,6 +16,7 @@ import {
   type SetupDraftRecord,
 } from "@/types/discord/setupWizard";
 import type { PanelReceipt } from "@/types/discord/panel";
+import { rejectedKeyStatus } from "@/utils/provider/providerPanelOperations";
 import { setGuildBotAvatar } from "@/utils/discord/guildIdentity";
 import {
   claimSetupDraft,
@@ -91,7 +92,6 @@ import {
   validateCustomEndpointReachability,
 } from "@/utils/provider/customEndpointService";
 import { ProviderFactory } from "@/utils/provider/providerFactory";
-import { isAccountBalanceExhaustedError } from "@/utils/provider/providerErrorClassification";
 import { encryptApiKey } from "@/utils/security/crypto";
 import { parseNonce } from "@/utils/discord/panelRouteCodec";
 import { createNonce, parseLocale } from "@/utils/discord/panelRouteTokens";
@@ -1708,17 +1708,29 @@ export const setupInteractionRoute: GlobalInteractionRoute = {
           return;
         }
 
-        const validation = await providerInstance.validateApiKey(apiKey);
+        const validation = await providerInstance.validateApiKey(apiKey, workspaceKey);
         if (!validation.valid) {
+          const rejection = rejectedKeyStatus(validation);
           await repaintSetupWizard(interaction, draft, locale, nonce, {
             method: "editReply",
-            receipt: await withRegistrationFailureCopy(
-              validation.error && isAccountBalanceExhaustedError(validation.error)
-                ? providerNoBalanceReceipt(locale)
-                : providerValidationFailureReceipt(locale),
-              locale,
-              actorDiscId,
-            ),
+            receipt:
+              rejection === "host-restricted" || rejection === "vertex-config-invalid"
+                ? setupFailureReceipt(
+                    locale,
+                    localizer(
+                      locale,
+                      rejection === "host-restricted"
+                        ? "commands.providers.host_restricted"
+                        : "commands.providers.vertex_config_invalid",
+                    ),
+                  )
+                : await withRegistrationFailureCopy(
+                    rejection === "no-balance"
+                      ? providerNoBalanceReceipt(locale)
+                      : providerValidationFailureReceipt(locale),
+                    locale,
+                    actorDiscId,
+                  ),
           });
           return;
         }

@@ -66,7 +66,13 @@ import type {
   SupportsStructuredOutput,
 } from "../../types/provider/featureInterfaces";
 import { getVertexToolAdapter } from "./vertexToolAdapter";
-import { checkVertexTextModel, parseVertexCompositeKey, createVertexClient } from "./vertexClient";
+import {
+  checkVertexTextModel,
+  createVertexClient,
+  isVertexOwnerAllowed,
+  parseVertexCompositeKey,
+  VERTEX_OWNER_NOT_ALLOWED_CODE,
+} from "./vertexClient";
 import { reportModelLookupFailure } from "@/utils/provider/modelCatalogLookup";
 import { getCachedDefaultLLM, isLLMCacheReady } from "../../utils/cache/llmCache";
 import { llmModelRepo } from "@/utils/db/repositories";
@@ -183,7 +189,23 @@ export class VertexProvider
     return createVertexClient(config);
   }
 
-  async validateApiKey(compositeKey: string): Promise<ApiKeyValidationResult> {
+  async validateApiKey(compositeKey: string, ownerDiscordId?: string): Promise<ApiKeyValidationResult> {
+    // Refuse before building a client: the setup probe itself calls Google with the host identity.
+    if (!isVertexOwnerAllowed(ownerDiscordId)) {
+      log.warn("Vertex configuration refused for an owner outside VERTEX_ALLOWED_OWNERS", {
+        metadata: { ownerDiscordId: ownerDiscordId ?? null },
+      });
+      return {
+        valid: false,
+        error: {
+          type: "api_error",
+          code: VERTEX_OWNER_NOT_ALLOWED_CODE,
+          message: "This host does not allow Vertex AI for this owner.",
+          retryable: false,
+        },
+      };
+    }
+
     let genAI: GoogleGenAI;
     try {
       genAI = this.buildClient(compositeKey);

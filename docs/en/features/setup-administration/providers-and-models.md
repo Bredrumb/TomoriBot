@@ -56,7 +56,9 @@ Vertex AI authenticates with Application Default Credentials (ADC) rather than a
 For local hosting, ADC can come from `gcloud`; hosted deployments should use a workload identity
 or service account. An AI Studio API key alone does not authenticate full Vertex AI. The selected
 Google Cloud project must have billing and the Vertex AI API enabled, and the host identity needs
-Vertex access. The setup guide is available from Google Vertex AI on the `API Keys` page in `/help`.
+Vertex access. Whoever hosts TomoriBot can limit Vertex AI to certain servers and users; everyone else
+is asked to choose a different provider. The setup guide is available from Google Vertex AI on the
+`API Keys` page in `/help`.
 
 Brave Search is separate from your AI provider. Add its key in `/providers` to enable more search
 categories; see [Web search](/features/capabilities/tools-and-extensions/web-search/).
