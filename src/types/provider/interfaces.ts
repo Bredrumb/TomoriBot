@@ -231,9 +231,10 @@ export interface LLMProvider {
   /**
    * Validate an API key by making a test request
    * @param apiKey - The API key to validate
+   * @param ownerDiscordId - The guild (the user in DMs) or personal user the key is being saved for, for providers that gate owners.
    * @returns Promise<ApiKeyValidationResult> - Validation result with detailed error info if failed
    */
-  validateApiKey(apiKey: string): Promise<ApiKeyValidationResult>;
+  validateApiKey(apiKey: string, ownerDiscordId?: string): Promise<ApiKeyValidationResult>;
 
   /**
    * Looks a text model up in the provider's own catalog before it is registered.
@@ -315,7 +316,7 @@ export interface LLMProvider {
  */
 export abstract class BaseLLMProvider implements LLMProvider {
   abstract getInfo(): ProviderInfo;
-  abstract validateApiKey(apiKey: string): Promise<ApiKeyValidationResult>;
+  abstract validateApiKey(apiKey: string, ownerDiscordId?: string): Promise<ApiKeyValidationResult>;
   abstract formatErrorDescription(error: ProviderError, locale: string): string | null;
   abstract getTools(
     tomoriState: TomoriState,

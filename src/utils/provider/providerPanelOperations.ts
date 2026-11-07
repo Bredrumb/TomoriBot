@@ -4,6 +4,7 @@ import {
 } from "@/utils/provider/openrouterModelRegistry";
 import { getNovelAIModelAccessError } from "@/providers/novelai/modelAccess";
 import { isNovelAITextModel } from "@/providers/novelai/modelProfiles";
+import { VERTEX_CONFIG_ERROR_CODE, VERTEX_OWNER_NOT_ALLOWED_CODE } from "@/providers/vertex/vertexClient";
 import { supportsSpeechMode } from "@/utils/speech/voiceSourceCapabilities";
 import type {
   CustomEndpointConnectionRow,
@@ -153,12 +154,15 @@ export type AddServerProviderResult =
         | "unsupported-provider"
         | "validation-failed"
         | "no-balance"
+        | "host-restricted"
+        | "vertex-config-invalid"
         | "missing-model"
         | "write-failed";
     };
 
 export type AddServerProviderInput = ProviderPanelOwner & {
   serverDiscId: string;
+  actorDiscId: string;
   provider: string;
   apiKey: string;
 };
@@ -247,10 +251,20 @@ export type EditProviderResult =
   | { status: "success"; entryId: string; changed: string[] }
   | { status: "unchanged"; entryId: string }
   | { status: "novelai-unavailable"; descriptionKey: string }
-  | { status: "invalid-key" | "invalid-combination" | "not-found" | "validation-failed" | "write-failed" };
+  | {
+      status:
+        | "invalid-key"
+        | "invalid-combination"
+        | "not-found"
+        | "validation-failed"
+        | "host-restricted"
+        | "vertex-config-invalid"
+        | "write-failed";
+    };
 
 type EditProviderInput = ProviderPanelOwner & {
   serverDiscId: string;
+  actorDiscId: string;
   provider: string;
   apiKey: string;
   rotationKey: string;
@@ -974,7 +988,11 @@ async function loadPersonalProviderPanelScope(
   };
 }
 
-function rejectedKeyStatus(validation: ApiKeyValidationResult): "validation-failed" | "no-balance" {
+export type KeyRejectionStatus = "validation-failed" | "no-balance" | "host-restricted" | "vertex-config-invalid";
+
+export function rejectedKeyStatus(validation: ApiKeyValidationResult): KeyRejectionStatus {
+  if (validation.error?.code === VERTEX_OWNER_NOT_ALLOWED_CODE) return "host-restricted";
+  if (validation.error?.code === VERTEX_CONFIG_ERROR_CODE) return "vertex-config-invalid";
   return validation.error && isAccountBalanceExhaustedError(validation.error) ? "no-balance" : "validation-failed";
 }
 
@@ -1059,7 +1077,7 @@ async function addCuratedProvider(
     });
     return { status: "unsupported-provider" };
   }
-  const validation = await providerInstance.validateApiKey(input.apiKey);
+  const validation = await providerInstance.validateApiKey(input.apiKey, input.serverDiscId);
   if (!validation.valid) return { status: rejectedKeyStatus(validation) };
 
   const existingConfig = await dependencies.loadSavedConfig(input.state.server_id, provider);
@@ -1164,7 +1182,7 @@ async function addPersonalProvider(
     });
     return { status: "unsupported-provider" };
   }
-  const validation = await instance.validateApiKey(apiKey);
+  const validation = await instance.validateApiKey(apiKey, input.actorDiscId);
   if (!validation.valid) return { status: rejectedKeyStatus(validation) };
   const existingConfig = await llmProviderRepo.loadUserSavedProviderConfig(userId, provider);
   const encryption = await encryptApiKey(apiKey);
@@ -1841,12 +1859,19 @@ async function novelAISavedModelAccessError(
   return null;
 }
 
-async function validateProviderCredential(provider: string, apiKey: string): Promise<boolean> {
+async function rejectProviderCredential(
+  provider: string,
+  apiKey: string,
+  ownerDiscordId: string,
+): Promise<Exclude<KeyRejectionStatus, "no-balance"> | null> {
   try {
     const instance = await ProviderFactory.getProviderByName(provider);
-    return (await instance.validateApiKey(apiKey)).valid;
+    const validation = await instance.validateApiKey(apiKey, ownerDiscordId);
+    if (validation.valid) return null;
+    const status = rejectedKeyStatus(validation);
+    return status === "no-balance" ? "validation-failed" : status;
   } catch {
-    return false;
+    return "validation-failed";
   }
 }
 
@@ -1864,7 +1889,8 @@ async function editServerProvider(input: EditProviderInput): Promise<EditProvide
     if (!existing || parseCustomProvider(provider)) return { status: "not-found" };
     if (!apiKey) return { status: "unchanged", entryId };
     if (apiKey.length < 10) return { status: "invalid-key" };
-    if (!(await validateProviderCredential(provider, apiKey))) return { status: "validation-failed" };
+    const rejection = await rejectProviderCredential(provider, apiKey, input.actorDiscId);
+    if (rejection) return { status: rejection };
     const accessError = await novelAISavedModelAccessError(provider, [existing.llm_id], apiKey);
     if (accessError) return { status: "novelai-unavailable", descriptionKey: accessError };
     const encryption = await encryptApiKey(apiKey);
@@ -1905,7 +1931,8 @@ async function editServerProvider(input: EditProviderInput): Promise<EditProvide
 
   const credentials = [apiKey, rotationKey].filter(Boolean);
   for (const credential of credentials) {
-    if (!(await validateProviderCredential(provider, credential))) return { status: "validation-failed" };
+    const rejection = await rejectProviderCredential(provider, credential, input.serverDiscId);
+    if (rejection) return { status: rejection };
     const accessError = await novelAISavedModelAccessError(
       provider,
       [existing.llm_id, input.state.llm.llm_provider === provider ? input.state.llm.llm_id : null],

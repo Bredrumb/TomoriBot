@@ -50,8 +50,7 @@ export class GoogleVoiceCreationError extends HostedSpeechError {
 
 export function createGoogleSpeechTransport(provider: "google" | "vertex", apiKey: string): GoogleSpeechTransport {
   const config = provider === "vertex" ? parseVertexCompositeKey(apiKey) : null;
-  if (config && (!/^[a-zA-Z0-9-]+$/.test(config.projectId) || config.location !== "global"))
-    throw new HostedSpeechError("invalid_request");
+  if (config && config.location !== "global") throw new HostedSpeechError("invalid_request");
   const vertexClient = config ? createVertexClient(config) : null;
   const base = config
     ? `https://aiplatform.googleapis.com/v1beta1/projects/${config.projectId}/locations/${config.location}`

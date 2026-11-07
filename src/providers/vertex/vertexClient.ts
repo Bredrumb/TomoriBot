@@ -27,8 +27,24 @@ export interface VertexConfig {
 
 const COMPOSITE_KEY_SEPARATOR = "::";
 
-// The SDK interpolates location into the request hostname and attaches the host's ADC token, so anything beyond a DNS label redirects that token.
-const VERTEX_LOCATION_PATTERN = /^[a-z0-9-]+$/i;
+// The SDK interpolates location into the request hostname and the project into its path, both beside the host's ADC token, so anything beyond a plain label redirects or re-scopes that token.
+const VERTEX_SEGMENT_PATTERN = /^[a-z0-9-]+$/i;
+
+export const VERTEX_OWNER_NOT_ALLOWED_CODE = "vertex_owner_not_allowed";
+export const VERTEX_CONFIG_ERROR_CODE = "vertex_config_error";
+
+/**
+ * Admits every owner while `VERTEX_ALLOWED_OWNERS` is unset; once set, even to an empty value, only
+ * listed IDs pass, so clearing the list cannot reopen the host's ADC identity to every server.
+ *
+ * @param ownerDiscordId - The guild ID for a server configuration (the user ID in DMs), or the user ID for a personal one.
+ */
+export function isVertexOwnerAllowed(ownerDiscordId: string | undefined): boolean {
+  const configured = process.env.VERTEX_ALLOWED_OWNERS;
+  if (configured === undefined) return true;
+  if (!ownerDiscordId) return false;
+  return configured.split(",").some((entry) => entry.trim() === ownerDiscordId);
+}
 
 /**
  * Parse the composite key string stored as the "API key" for Vertex.
@@ -61,7 +77,13 @@ export function parseVertexCompositeKey(compositeKey: string): VertexConfig {
     throw new Error(`Vertex composite key has an empty location. Expected format: {project_id}::{location}`);
   }
 
-  if (!VERTEX_LOCATION_PATTERN.test(location)) {
+  if (!VERTEX_SEGMENT_PATTERN.test(projectId)) {
+    throw new Error(
+      `Vertex composite key has an invalid project ID. Use the Google Cloud project ID or number, such as "my-project".`,
+    );
+  }
+
+  if (!VERTEX_SEGMENT_PATTERN.test(location)) {
     throw new Error(
       `Vertex composite key has an invalid location. Use a Google Cloud location such as "global" or "us-central1".`,
     );

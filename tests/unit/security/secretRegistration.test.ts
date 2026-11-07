@@ -31,6 +31,7 @@ interface ScenarioResult {
   value?: string;
   unregistered?: string;
   lateRegistrationRejected?: boolean;
+  ownerRefused?: boolean;
 }
 
 async function runScenario(
@@ -116,6 +117,32 @@ describe("registered application secret names", () => {
 
       expect(result.value).toBe("from-secret-file");
       expect(result.unregistered).toBeUndefined();
+    } finally {
+      await rm(secretDir, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps an empty Vertex owner list from a mounted secret file so it admits no one", async () => {
+    const secretDir = await mkdtemp(path.join(os.tmpdir(), "tomoribot-secret-file-"));
+    const secretFile = path.join(secretDir, "secrets.json");
+    try {
+      await writeFile(secretFile, JSON.stringify({ ...BASE_SECRETS, VERTEX_ALLOWED_OWNERS: "" }));
+
+      const result = await runScenario(
+        `import { loadSecrets } from "./src/init/secrets";
+         import { isVertexOwnerAllowed } from "./src/providers/vertex/vertexClient";
+         await loadSecrets("production");
+         console.log(JSON.stringify({
+           marker: "secret-registration",
+           value: process.env.VERTEX_ALLOWED_OWNERS === undefined ? "unset" : "set",
+           ownerRefused: !isVertexOwnerAllowed("111111111111111111"),
+         }));`,
+        { ...BASE_DOTENV, RUN_ENV: "production", SECRET_FILE: secretFile },
+        ["GCP_SECRET_FILE", "TEST_PRODUCTION", "VERTEX_ALLOWED_OWNERS"],
+      );
+
+      expect(result.value).toBe("set");
+      expect(result.ownerRefused).toBe(true);
     } finally {
       await rm(secretDir, { recursive: true, force: true });
     }
