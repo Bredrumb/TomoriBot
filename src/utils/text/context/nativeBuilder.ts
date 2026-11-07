@@ -1,3 +1,6 @@
+import { createMemoryRecall, type MemoryRecallOutcome } from "./memoryRecall";
+import { startQueryRetrieval } from "./queryRetrieval";
+import { isMemoryDecayEnabled } from "@/utils/memory/memoryDecay";
 import { orderNativePromptBlocks, STM_TAIL_SLOT, type PromptLayoutItem } from "@/utils/text/context/promptLayout";
 import { personaRepository } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
@@ -26,6 +29,7 @@ import type { BuildContextParams } from "./types";
 import { SPACER_TEMPLATE } from "./timeAwareness";
 
 export type NativeBuildContextResult = {
+  memoryRecall?: MemoryRecallOutcome;
   contextItems: StructuredContextItem[];
   tailDirectives: string[];
   lowerPriorityTailDirectives: string[];
@@ -136,10 +140,17 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     sanitizeEnabled: tomoriConfig.uncensor_sanitize_enabled,
   };
   const tomoriState = snapshot?.tomoriState ?? (await personaRepository.loadState(guildId));
-  // Retrieval makes an embedding round trip plus a database query, so it starts here and is awaited at
-  // its insertion point to overlap the rest of assembly; the catch only stops a rejection becoming an
-  // unhandled rejection if assembly exits before that point.
+  const memoryDemand = Promise.withResolvers<boolean>();
+  const retrieval = startQueryRetrieval(
+    { tomoriState, simplifiedMessageHistory, triggererUserId },
+    {
+      enabled: isMemoryDecayEnabled(),
+      demand: memoryDemand.promise,
+    },
+  );
+  const memoryRecall = createMemoryRecall(retrieval, memoryDemand.resolve);
   const documentItemPromise = buildServerDocumentContextItem({
+    retrieval,
     tomoriState,
     simplifiedMessageHistory,
     triggererUserId,
@@ -244,6 +255,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
 
   if (!isUserImpersonation) {
     const serverMemoryItem = await buildServerMemoryContextItem({
+      memoryRecall,
       tomoriState,
       guildId,
       serverName,
@@ -307,6 +319,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
   );
   contextItems.push(
     ...(await buildParticipantContextItems({
+      memoryRecall,
       client,
       guildId,
       channelName,
@@ -385,7 +398,10 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       isUserImpersonation,
     }),
   );
+  const recallPromise = memoryRecall.finish();
   await appendOptionalItem(contextItems, documentItemPromise);
+  const recall = await recallPromise;
+  if (recall.item) contextItems.push(recall.item);
   contextItems.push(
     ...(await buildLorebookContextItems({
       tomoriState,
@@ -469,6 +485,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
 
   log.info(`Built ${contextItems.length} structured context items for guild ${guildId}.`);
   return {
+    memoryRecall: recall.outcome,
     contextItems,
     tailDirectives,
     lowerPriorityTailDirectives,

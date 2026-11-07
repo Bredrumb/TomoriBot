@@ -215,6 +215,7 @@ export const PROMPT_LAYOUT: readonly PromptLayoutEntry[] = [
     anchor: { kind: "tailSlot" },
     novelai: "lore",
   },
+  { tag: ContextItemTag.KNOWLEDGE_RECALLED_MEMORIES, zone: "tail", volatility: "turn", anchor: { kind: "tailSlot" } },
   { tag: ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS, zone: "tail", volatility: "turn", anchor: { kind: "tailSlot" } },
   { tag: ContextItemTag.KNOWLEDGE_USER_STATUS, zone: "tail", volatility: "clock", anchor: { kind: "tailSlot" } },
   { tag: ContextItemTag.KNOWLEDGE_CURRENT_CONTEXT, zone: "tail", volatility: "clock", anchor: { kind: "tailSlot" } },

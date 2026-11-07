@@ -760,6 +760,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     tomoriState: effectivePersona,
     requestSnapshot: { ...turn.requestSnapshot, tomoriState: effectivePersona },
     contextItems,
+    memoryRecall: contextBuild.memoryRecall,
     nativeContextItems: nativeContextItems
       ? attachPersonaMentionMapToContextItems(nativeContextItems, buildPersonaMentionCatalog(turn.allPersonas))
       : undefined,
