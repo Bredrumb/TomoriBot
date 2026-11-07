@@ -21,14 +21,14 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
     .setDescription(localizer("en-US", "commands.personal.memories.description"))
     .addStringOption((option) =>
       option
-        .setName("identity")
-        .setDescription(localizer("en-US", "commands.personal.memories.identity_description"))
+        .setName("persona")
+        .setDescription(localizer("en-US", "commands.personal.memories.persona_description"))
         .setAutocomplete(true),
     )
     .addStringOption((option) =>
       option
-        .setName("persona")
-        .setDescription(localizer("en-US", "commands.personal.memories.persona_description"))
+        .setName("identity")
+        .setDescription(localizer("en-US", "commands.personal.memories.identity_description"))
         .setAutocomplete(true),
     );
 

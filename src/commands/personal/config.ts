@@ -26,13 +26,13 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
     .setName("config")
     .setDescription(localizer("en-US", "commands.personal.config.description"))
     .addStringOption((option) =>
+      configurePanelPageOption(option, localizer("en-US", "commands.personal.config.page_description")),
+    )
+    .addStringOption((option) =>
       option
         .setName("identity")
         .setDescription(localizer("en-US", "commands.personal.config.identity_description"))
         .setAutocomplete(true),
-    )
-    .addStringOption((option) =>
-      configurePanelPageOption(option, localizer("en-US", "commands.personal.config.page_description")),
     );
 
 export async function autocomplete(_client: Client, interaction: AutocompleteInteraction): Promise<void> {
