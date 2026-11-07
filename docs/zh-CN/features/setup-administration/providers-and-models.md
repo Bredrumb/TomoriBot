@@ -42,7 +42,7 @@ TomoriBot连接到外部AI提供商，而不是托管内置模型。你可以连
 切勿与其他人共享你的API密钥。从`/providers`中的`编辑端点`操作添加或替换自定义端点的承载身份验证令牌。
 :::
 
-Vertex AI使用应用程序默认凭证 (ADC) 而不是存储的机密进行身份验证。对于本地托管，ADC可以来自`gcloud`； 托管部署应使用工作负载身份或服务帐户。AI Studio API密钥单独无法验证完整的Vertex AI。所选的Google云项目必须启用计费和Vertex AI API，并且主机身份需要Vertex访问权限。设置指南可从`/help`中的`API Keys`页面上的Google Vertex AI获取。
+Vertex AI使用应用程序默认凭证 (ADC) 而不是存储的机密进行身份验证。对于本地托管，ADC可以来自`gcloud`； 托管部署应使用工作负载身份或服务帐户。AI Studio API密钥单独无法验证完整的Vertex AI。所选的Google云项目必须启用计费和Vertex AI API，并且主机身份需要Vertex访问权限。部署 TomoriBot 的人可以将 Vertex AI 限制为仅供特定服务器和用户使用；其他人需要选择其他提供方。设置指南可从`/help`中的`API Keys`页面上的Google Vertex AI获取。
 
 Google Gemini 与 Vertex AI 的配置通过已认证的模型列表端点来验证凭据，Vertex AI Express 则使用 `countTokens` 验证 API 密钥，因此配置过程绝不会生成文本。
 

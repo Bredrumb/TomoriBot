@@ -92,6 +92,8 @@ export default {
     validation_failed: `供應商拒絕了這組 API 金鑰，或無法驗證它。沒有儲存任何內容。`,
     validation_no_balance:
       "供應商已識別這組API金鑰，但帳戶沒有餘額，暫時無法回覆訊息。請到供應商網站儲值，再重新提交同一組金鑰。沒有儲存任何內容。",
+    host_restricted: `架設 TomoriBot 的人只允許特定伺服器與使用者使用 Google Vertex AI，這裡不在其中。請選擇其他供應商。沒有儲存任何內容。`,
+    vertex_config_invalid: `Google Vertex AI 的設定格式必須為 \`project-id::location\`，例如 \`my-project::global\`。專案與位置只能使用字母、數字與連字號。沒有儲存任何內容。`,
     missing_default_model: `憑證已儲存，但這個供應商沒有可啟用的預設文字模型。`,
     write_failed: `無法儲存或啟用這個供應商。請再試一次。`,
     add_endpoint_modal_title: `新增自訂端點`,

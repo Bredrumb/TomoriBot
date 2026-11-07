@@ -92,6 +92,8 @@ export default {
     validation_failed: `提供方拒绝了这个 API 密钥，或无法验证它。没有保存任何内容。`,
     validation_no_balance:
       "提供方识别了这个API密钥，但账户没有余额，暂时无法回复消息。请在提供方网站充值，然后重新提交同一个密钥。没有保存任何内容。",
+    host_restricted: `部署 TomoriBot 的人只允许特定服务器和用户使用 Google Vertex AI，这里不在其中。请选择其他提供方。没有保存任何内容。`,
+    vertex_config_invalid: `Google Vertex AI 的设置格式必须是 \`project-id::location\`，例如 \`my-project::global\`。项目和位置只能使用字母、数字和连字符。没有保存任何内容。`,
     missing_default_model: `凭据已保存，但这个提供方没有可启用的默认文本模型。`,
     write_failed: `提供方无法保存或启用。请再试一次。`,
     add_endpoint_modal_title: `添加自定义端点`,

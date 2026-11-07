@@ -93,6 +93,8 @@ export default {
     validation_failed: `プロバイダーがそのAPIキーを拒否したか、検証できませんでした。何も保存されていません。`,
     validation_no_balance:
       "プロバイダーはそのAPIキーを認識しましたが、アカウントの残高がないため、まだメッセージに応答できません。プロバイダーのウェブサイトで残高を追加してから、同じキーを再送信してください。何も保存されていません。",
+    host_restricted: `TomoriBotのホスト管理者は、特定のサーバーやユーザーにのみGoogle Vertex AIの利用を許可しており、ここは対象に含まれていません。別のプロバイダーを選択してください。何も保存されていません。`,
+    vertex_config_invalid: `Google Vertex AIの設定は、\`project-id::location\`（例：\`my-project::global\`）の形式である必要があります。プロジェクトとロケーションには英数字とハイフンのみ使用できます。何も保存されていません。`,
     missing_default_model: `認証情報は保存されましたが、このプロバイダーには有効化できるデフォルトのテキストモデルがありません。`,
     write_failed: `プロバイダーを保存または有効化できませんでした。もう一度お試しください。`,
     add_endpoint_modal_title: `カスタムエンドポイントを追加`,
