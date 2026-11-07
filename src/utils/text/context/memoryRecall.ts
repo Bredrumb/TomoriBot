@@ -15,7 +15,7 @@ import {
 } from "@/utils/memory/memoryDecay";
 import { log } from "@/utils/misc/logger";
 import { charsToTokensText } from "@/utils/text/tokenEstimate";
-import { embedRetrievalInputs, type QueryRetrieval, type RetrievalModel } from "./queryRetrieval";
+import { embedRetrievalInputs, type QueryRetrieval, type RetrievalModel } from "@/utils/text/context/queryRetrieval";
 
 export const MEMORY_QUICK_RETURN_DAYS = 7;
 
@@ -42,7 +42,6 @@ export interface MemoryRecallOutcome {
   queryTimings: QueryRetrieval["timings"];
   dormantTokens: number;
   recalledTokens: number;
-  quickReturnCount: number;
 }
 
 export interface MemoryRecallCollector {
@@ -102,7 +101,6 @@ export function createMemoryRecall(
             .join("\n").length,
         ),
         recalledTokens: 0,
-        quickReturnCount: 0,
       };
       let item: StructuredContextItem | null = null;
       let timer: ReturnType<typeof setTimeout> | undefined;
@@ -171,9 +169,6 @@ export function createMemoryRecall(
         outcome.reinforced = winners.map(({ kind, id }) => ({ kind, id }));
         outcome.recalled = recalled.map(({ kind, id }) => ({ kind, id }));
         outcome.missing = result.missing;
-        outcome.quickReturnCount = recalled.filter(
-          (memory) => memory.decayDays <= MEMORY_DORMANT_DAYS + MEMORY_QUICK_RETURN_DAYS,
-        ).length;
         return { outcome, item };
       } catch {
         outcome.outcome = "provider_error";
@@ -190,11 +185,21 @@ export function createMemoryRecall(
 export async function persistMemoryRecall(outcome: MemoryRecallOutcome): Promise<void> {
   const startedAt = performance.now();
   let filledCount = 0;
+  let quickReturnCount = 0;
   let fillTokens = 0;
   let persistenceFailed = false;
   if (outcome.outcome === "scored" && outcome.embedding && isMemoryDecayEnabled() && isRagAvailable()) {
     try {
-      await memoryDecayRepository.recordRecallDay(candidateIds(outcome.scored), candidateIds(outcome.reinforced));
+      const changes = await memoryDecayRepository.recordRecallDay(
+        candidateIds(outcome.scored),
+        candidateIds(outcome.reinforced),
+      );
+      const recalledKeys = new Set(outcome.recalled.map(memoryKey));
+      quickReturnCount = changes.filter(
+        (memory) =>
+          recalledKeys.has(memoryKey(memory)) &&
+          memory.previous_decay_days <= MEMORY_DORMANT_DAYS + MEMORY_QUICK_RETURN_DAYS,
+      ).length;
     } catch {
       persistenceFailed = true;
       log.warn("Failed to record memory recall day");
@@ -235,7 +240,7 @@ export async function persistMemoryRecall(outcome: MemoryRecallOutcome): Promise
     scored_count: outcome.scored.length,
     recalled_count: outcome.recalled.length,
     reinforced_count: outcome.reinforced.length,
-    quick_return_count: outcome.quickReturnCount,
+    quick_return_count: quickReturnCount,
     dormant_tokens: outcome.dormantTokens,
     recalled_tokens: outcome.recalledTokens,
     query_tokens: outcome.queryTimings.queryTokens,

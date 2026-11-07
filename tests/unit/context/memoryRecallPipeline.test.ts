@@ -1,6 +1,7 @@
+import type { EmbeddingRequest } from "@/types/provider/featureInterfaces";
 import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import type { Client } from "discord.js";
-import { embeddingModelSchema, savedProviderConfigSchema, serverMemorySchema } from "@/types/db/schema";
+import { embeddingModelSchema, userSavedProviderConfigSchema, serverMemorySchema } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import * as ragAvailability from "@/utils/db/ragAvailability";
 import { llmModelRepo, ragRepository, serverMemoryRepository } from "@/utils/db/repositories";
@@ -32,8 +33,10 @@ const model = embeddingModelSchema.parse({
   codename: "fixture-embedding",
   model_family: "fixture-family",
 });
-const savedConfig = savedProviderConfigSchema.parse({
-  server_id: 1,
+const savedConfig = userSavedProviderConfigSchema.parse({
+  user_id: 7,
+  assigned_capabilities: ["embedding"],
+  enabled_capabilities: ["embedding"],
   provider: "openrouter",
   api_key: Buffer.from("fixture-ciphertext"),
   llm_id: null,
@@ -127,7 +130,7 @@ function text(item: StructuredContextItem | null | undefined): string {
   return item?.parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("") ?? "";
 }
 function installSpies() {
-  const embed = mock(async (request: { inputs: string[] }) => request.inputs.map(() => [1, 0, 0]));
+  const embed = mock(async (request: EmbeddingRequest) => request.inputs.map(() => [1, 0, 0]));
   return {
     embed,
     capability: spyOn(capabilities, "resolveEmbeddingsCapability").mockResolvedValue({
@@ -152,7 +155,10 @@ function installSpies() {
       { kind: "server", id: 3, similarity: 0.5 },
     ]),
     missing: spyOn(memoryDecayRepository, "findMissingVectors").mockResolvedValue([]),
-    day: spyOn(memoryDecayRepository, "recordRecallDay").mockResolvedValue([]),
+    day: spyOn(memoryDecayRepository, "recordRecallDay").mockResolvedValue([
+      { kind: "server", id: 2, previous_decay_days: 14, decay_days: 0 },
+      { kind: "server", id: 3, previous_decay_days: 22, decay_days: 0 },
+    ]),
     upsert: spyOn(memoryDecayRepository, "upsertVector").mockResolvedValue(true),
     sprites: spyOn(spriteCache, "getCachedPersonaSprites").mockResolvedValue([]),
     preset: spyOn(presetCache, "getCachedActivePreset").mockResolvedValue(null),
@@ -279,6 +285,11 @@ describe("memory recall pipeline", () => {
       { serverMemoryIds: [1, 2, 3], personalMemoryIds: [] },
     ]);
     expect(spies.embed.mock.calls[1][0].inputs).toEqual(["{bot} keeps raw stored content"]);
+    expect(spies.embed.mock.calls.map(([request]) => request.taskType)).toEqual([
+      "RETRIEVAL_QUERY",
+      "RETRIEVAL_DOCUMENT",
+    ]);
+    expect(spies.embed.mock.calls.every(([request]) => request.apiKey === resolved.apiKey)).toBe(true);
     expect(spies.upsert.mock.calls[0].slice(1)).toEqual([
       model.model_family,
       Number(model.embedding_model_id),
@@ -295,10 +306,34 @@ describe("memory recall pipeline", () => {
       filled_count: 1,
       fill_tokens: charsToTokensText("{bot} keeps raw stored content".length),
     });
+    expect(Object.keys(fields).sort()).toEqual(
+      [
+        "outcome",
+        "total_ms",
+        "embedding_ms",
+        "candidate_count",
+        "scored_count",
+        "recalled_count",
+        "reinforced_count",
+        "quick_return_count",
+        "dormant_tokens",
+        "recalled_tokens",
+        "query_tokens",
+        "filled_count",
+        "fill_tokens",
+        "persistence_failed",
+      ].sort(),
+    );
     expect(fields.dormant_tokens).toBe(built.memoryRecall?.dormantTokens ?? 0);
     expect(fields.recalled_tokens).toBe(built.memoryRecall?.recalledTokens ?? 0);
     expect(Object.entries(fields).filter(([key, value]) => key !== "outcome" && typeof value !== "number")).toEqual([]);
     expect(spies.metric.mock.calls.filter(([name]) => name === "memory_recall")).toHaveLength(1);
+  });
+
+  it("measures quick returns from the counter locked for reinforcement", async () => {
+    spies.day.mockResolvedValue([{ kind: "server", id: 2, previous_decay_days: 22, decay_days: 0 }]);
+    const { fields } = await persisted();
+    expect(fields.quick_return_count).toBe(0);
   });
 
   it("makes no embedding call when there are neither documents nor candidates", async () => {

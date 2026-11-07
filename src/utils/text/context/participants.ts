@@ -1,4 +1,4 @@
-import type { MemoryRecallCollector } from "./memoryRecall";
+import type { MemoryRecallCollector } from "@/utils/text/context/memoryRecall";
 import type { Client } from "discord.js";
 import { getCurrentTimeWithOffset, formatUTCOffset, getTimeOfDayPhrase } from "@/utils/text/timezoneHelper";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";

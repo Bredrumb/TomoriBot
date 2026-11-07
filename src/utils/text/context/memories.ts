@@ -1,4 +1,4 @@
-import type { MemoryRecallCollector } from "./memoryRecall";
+import type { MemoryRecallCollector } from "@/utils/text/context/memoryRecall";
 import type { Client } from "discord.js";
 import { getCachedUserRow } from "@/utils/cache/userCache";
 import {

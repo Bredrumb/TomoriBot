@@ -315,7 +315,7 @@ export async function reassembleWithPreset(
     nudgeInjectionDepth?: number;
     memoryInjectionItems?: StructuredContextItem[];
     memoryInjectionDepth?: number;
-    memoryRecall?: import("./context/memoryRecall").MemoryRecallOutcome;
+    memoryRecall?: import("@/utils/text/context/memoryRecall").MemoryRecallOutcome;
   },
   presetData: CachedPresetData,
   macroParams: PresetMacroParams,
@@ -329,7 +329,7 @@ export async function reassembleWithPreset(
   nudgeInjectionDepth?: number;
   memoryInjectionItems?: StructuredContextItem[];
   memoryInjectionDepth?: number;
-  memoryRecall?: import("./context/memoryRecall").MemoryRecallOutcome;
+  memoryRecall?: import("@/utils/text/context/memoryRecall").MemoryRecallOutcome;
 }> {
   const { nodes } = presetData;
 

@@ -1,5 +1,5 @@
-import { createMemoryRecall, type MemoryRecallOutcome } from "./memoryRecall";
-import { startQueryRetrieval } from "./queryRetrieval";
+import { createMemoryRecall, type MemoryRecallOutcome } from "@/utils/text/context/memoryRecall";
+import { startQueryRetrieval } from "@/utils/text/context/queryRetrieval";
 import { isMemoryDecayEnabled } from "@/utils/memory/memoryDecay";
 import { orderNativePromptBlocks, STM_TAIL_SLOT, type PromptLayoutItem } from "@/utils/text/context/promptLayout";
 import { personaRepository } from "@/utils/db/repositories";
