@@ -151,6 +151,10 @@ const PROVIDER_ACTIONS = new Set<"add-provider" | "add-endpoint" | "model" | "ed
 /** A stored memory at the length the memories panel truncates. */
 const MAX_CONTENT_MEMORY: ServerMemoryRow = {
   server_memory_id: 1,
+  decay_days: 0,
+  decay_counted_on: null,
+  reinforced_on: null,
+  manually_written: false,
   server_id: 1,
   persona_lineage_id: 100,
   user_id: 1,
@@ -182,6 +186,10 @@ const MAX_CONTENT_CHUNK: DocumentChunkRow = {
 function maxContentPersonalMemory(personaLineageId: number): PersonalMemoryRow {
   return {
     personal_memory_id: 1,
+    decay_days: 0,
+    decay_counted_on: null,
+    reinforced_on: null,
+    manually_written: false,
     user_id: 1,
     persona_lineage_id: personaLineageId,
     content: "M".repeat(10_000),

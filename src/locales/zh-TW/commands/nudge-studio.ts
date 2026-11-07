@@ -1,6 +1,7 @@
 export default {
   "nudge-studio": {
     description: "選擇我在此伺服器中使用的閒置搭話，或自行撰寫。",
+    page_description: `面板開啟時顯示的分類。`,
     unavailable: "我現在無法載入 Nudge Studio。請稍後再試。",
     title_advanced: "搭話進階設定",
     advanced_description: "只有在你清楚知道自己在做什麼時才調整這些設定。",

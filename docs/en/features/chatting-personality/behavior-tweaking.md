@@ -10,7 +10,7 @@ common behavior settings.
 
 Her personality
 ([Multiple Personas](/features/chatting-personality/multiple-personas/)) and knowledge
-([Memory](/features/knowledge/memory/)) are covered on their own pages, and admin and cost controls (quotas, whitelists, BYOK)
+([Memory](/features/knowledge/memory/long-term-memory/)) are covered on their own pages, and admin and cost controls (quotas, whitelists, BYOK)
 live under [Server Moderation](/features/setup-administration/server-moderation/). 
 
 ## System Prompt

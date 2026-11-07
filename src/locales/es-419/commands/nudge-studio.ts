@@ -1,6 +1,7 @@
 export default {
   "nudge-studio": {
     description: "Elige qué intervenciones espontáneas uso en este servidor y escribe las tuyas.",
+    page_description: `Categoría en la que se abre el panel.`,
     unavailable: "No pude cargar el Nudge Studio en este momento. Inténtalo de nuevo en un momento.",
     title_advanced: "Ajustes avanzados de intervenciones",
     advanced_description: "Solo modifica estos ajustes si sabes lo que estás haciendo.",

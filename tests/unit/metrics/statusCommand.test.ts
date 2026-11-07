@@ -320,6 +320,25 @@ describe("executeStatusCommand", () => {
     }
   });
 
+  it("builds the Persona pages for the persona the persona option names", async () => {
+    const alter = createPersona({ persona_id: 77, persona_nickname: "Juno", is_alter: true });
+    const { interaction } = createInteraction("guild-123");
+    const { dependencies, calls } = createDependencies(interaction, tomoriState);
+    dependencies.getCachedAllPersonas = async () => [tomoriState, alter];
+
+    await executeStatusCommand(
+      client,
+      interaction as unknown as ChatInputCommandInteraction,
+      userData,
+      "en-US",
+      dependencies,
+      { page: null, persona: "juno" },
+    );
+
+    expect(calls.buildPersonaPages[0]?.[0]).toBe(alter);
+    expect(calls.dashboard[0]?.[4]).toMatchObject({ selectedPersonaId: 77 });
+  });
+
   it("uses the DM user ID as the effective server ID", async () => {
     const { interaction } = createInteraction(null);
     const { dependencies, calls } = createDependencies(interaction, tomoriState);

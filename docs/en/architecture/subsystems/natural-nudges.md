@@ -425,7 +425,7 @@ persona-authored idle nudges share one shape: category, planner brief, agenda hi
 recommended tools. Prerequisites come from a
 fixed registry: `hanging_conversation`, the three target facts (`relationship_user`, `recent_memory`,
 `presence_activity`), `two_personas`, and `tool:<name>`, where tool availability is what the persona's
-turn would be offered. Each category implies one prerequisite (`CATEGORY_IMPLIED_PREREQUISITES`): Ping
+turn would be offered on that channel's text model. Each category implies one prerequisite (`CATEGORY_IMPLIED_PREREQUISITES`): Ping
 User needs a drawn target, Revive Topic a hanging conversation, and Play Scene a partner, even for a
 custom idle nudge that omits it, and `/nudge-studio` neither offers nor stores that prerequisite. Any
 idle nudge listing one of the three target facts needs a target too; outside a scene, such an idle

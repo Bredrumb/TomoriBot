@@ -5,6 +5,8 @@ import { afterEach, beforeAll, describe, expect, mock, spyOn, test } from "bun:t
 import { llmModelRepo, ragRepository, serverMemoryRepository } from "@/utils/db/repositories";
 import * as ragAvailability from "@/utils/db/ragAvailability";
 import { buildServerDocumentContextItem } from "@/utils/text/context/rag";
+import { startQueryRetrieval } from "@/utils/text/context/queryRetrieval";
+import * as capabilityResolver from "@/utils/provider/providerCapabilityResolver";
 import { REST, type Client, type EmbedBuilder, type TextChannel } from "discord.js";
 import { embeddingModelSchema, savedProviderConfigSchema } from "@/types/db/schema";
 import type { ToolContext } from "@/types/tool/interfaces";
@@ -161,30 +163,38 @@ describe("provider usage and denial request integration", () => {
           model_family: "fixture",
         }),
       ),
-      spyOn(ragRepository, "retrieveRelevantChunks").mockImplementation(async (request) => {
-        expect(currentProviderUsageContext()).toBe(firstContext);
-        request.onUsage?.({ inputTokens: 12, outputTokens: 0, costUsd: 0.01 });
-        return [];
-      }),
+      spyOn(capabilityResolver, "resolveEmbeddingsCapability").mockResolvedValue({
+        generateEmbeddings: async (request) => {
+          expect(currentProviderUsageContext()).toBe(firstContext);
+          request.onUsage?.({ inputTokens: 12, outputTokens: 0, costUsd: 0.01 });
+          return [[1, 0]];
+        },
+        supportsEmbeddingTaskType: () => true,
+      } as Awaited<ReturnType<typeof capabilityResolver.resolveEmbeddingsCapability>>),
+      spyOn(ragRepository, "retrieveRelevantChunks").mockResolvedValue([]),
       spyOn(ragRepository, "formatChunksForPrompt").mockReturnValue("fixture document"),
     ];
     for (const spy of spies) restores.push(() => spy.mockRestore());
     await withProviderUsageContext(otherContext, async () => {
+      const params = {
+        tomoriState: createPersona({ config: { embedding_model_id: 3 } }),
+        simplifiedMessageHistory: [
+          {
+            id: "fixture",
+            authorId: "1",
+            authorName: "Juno",
+            authorType: "user" as const,
+            content: "fixture query",
+            imageAttachments: [],
+            videoAttachments: [],
+          },
+        ],
+        channelId: "fixture-channel",
+      };
       expect(
         await buildServerDocumentContextItem({
-          tomoriState: createPersona({ config: { embedding_model_id: 3 } }),
-          simplifiedMessageHistory: [
-            {
-              id: "fixture",
-              authorId: "1",
-              authorName: "Juno",
-              authorType: "user",
-              content: "fixture query",
-              imageAttachments: [],
-              videoAttachments: [],
-            },
-          ],
-          channelId: "fixture-channel",
+          ...params,
+          retrieval: startQueryRetrieval(params, { enabled: true, demand: Promise.resolve(false) }),
         }),
       ).not.toBeNull();
       expect(currentProviderUsageContext()).toBe(otherContext);

@@ -97,8 +97,14 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("legacy channel scope backfill", () => {
   });
 
   it("settles a pending row when an admin saves the memory form", async () => {
-    expect(await serverMemoryRepository.edit(memoryIds.missing ?? 0, "missing", [GENERAL])).toBe(true);
+    expect(
+      await serverMemoryRepository.edit(memoryIds.missing ?? 0, "missing", [GENERAL], { manuallyWritten: true }),
+    ).toBe(true);
     expect(await scopeOf("missing")).toMatchObject({ channel_disc_ids: [GENERAL], resolved: true });
+    const row = (await serverMemoryRepository.loadServerMemoriesScoped(refs.serverId, refs.personaLineageId)).find(
+      (memory) => memory.server_memory_id === memoryIds.missing,
+    );
+    expect(row?.manually_written).toBe(true);
   });
 
   it("resolves a returning guild's pending row when dispatched as (client, guild)", async () => {

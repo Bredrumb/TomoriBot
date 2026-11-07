@@ -13,7 +13,7 @@ sidebar:
 aiGenerated: true
 ---
 
-TomoriBot的名稱、頭像、性格、說話風格與行為都保存在人格中。你可以同時使用多個人格，讓每個角色透過自己的觸發詞與網路鉤子頭像參與對話。這一頁介紹人格的行為；知識與記憶請見[記憶](/zh-TW/features/knowledge/memory/)。
+TomoriBot的名稱、頭像、性格、說話風格與行為都保存在人格中。你可以同時使用多個人格，讓每個角色透過自己的觸發詞與網路鉤子頭像參與對話。這一頁介紹人格的行為；知識與記憶請見[記憶](/zh-TW/features/knowledge/memory/long-term-memory/)。
 
 ## 建立人格
 

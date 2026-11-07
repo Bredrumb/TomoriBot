@@ -1,6 +1,8 @@
 export default {
   memories: {
     description: `Inspect and manage server memories, documents, lorebooks, and short-term memory.`,
+    page_description: `Category to open the panel on.`,
+    persona_description: `Persona whose memories, documents, or lorebook to open.`,
     category_memories: `Memories`,
     category_documents: `Documents`,
     category_lorebooks: `Lorebooks`,
@@ -10,7 +12,7 @@ export default {
     stale_warning:
       "Saved data may be out of date because the read failed. Write actions are unavailable until a fresh read succeeds.",
     retry: `Retry`,
-    memories_title: `[Server Memories](https://docs.tomoribot.app/en/features/knowledge/memory/#personal-vs-server-memories)`,
+    memories_title: `[Server Memories](https://docs.tomoribot.app/en/features/knowledge/memory/long-term-memory/#personal-vs-server-memories)`,
     memories_description: "These memories apply across this server whenever this persona is active.",
     persona_default_name: `Persona`,
     persona_select_placeholder: `Select a persona to view memories...`,
@@ -79,7 +81,7 @@ export default {
     owner_scope_notice:
       "You are seeing only the memories you taught on this server. Members with Manage Server can see and edit every member's memories.",
     no_personas: `No personas are configured for this server.`,
-    documents_title: `[Documents](https://docs.tomoribot.app/en/features/knowledge/memory/#document-knowledge-base-rag)`,
+    documents_title: `[Documents](https://docs.tomoribot.app/en/features/knowledge/memory/documents/)`,
     documents_description: "Reference documents attached to this server or to a single persona.",
     documents_teaching_disabled: `Member document access is disabled on this server.`,
     document_scope_persona: `Persona Scope`,
@@ -175,7 +177,7 @@ export default {
     embedding_credentials_missing_detail: `Configure an embedding provider before continuing.`,
     embedding_model_missing_heading: `Embedding Model Missing`,
     embedding_model_missing_detail: `Configure an embedding model before continuing.`,
-    lorebooks_title: `[Lorebooks](https://docs.tomoribot.app/en/features/knowledge/lorebooks/)`,
+    lorebooks_title: `[Lorebooks](https://docs.tomoribot.app/en/features/knowledge/memory/lorebooks/)`,
     lorebooks_description: `Advanced memory for roleplay worlds, characters, and recurring story details. Use Memories for everyday conversations.`,
     lorebook_scope_serverwide: `Serverwide`,
     lorebook_scope_persona: `Persona`,
@@ -319,7 +321,7 @@ export default {
     lorebook_import_invalid_detail: `One or more entries are outside the lorebook limits. Nothing was imported.`,
     lorebook_import_failed_heading: `Import Failed`,
     lorebook_import_failed_detail: `The import failed. Nothing was changed.`,
-    stm_title: `[Short-Term Memory](https://docs.tomoribot.app/en/features/knowledge/memory/#short-term-memory-stm)`,
+    stm_title: `[Short-Term Memory](https://docs.tomoribot.app/en/features/knowledge/memory/short-term-memory/)`,
     stm_empty: `No active short-term memory entries for this server.`,
     stm_active_count: `{count} active short-term memory entries.`,
     stm_manager_only: "You need Manage Server permission to view server short-term memory.",

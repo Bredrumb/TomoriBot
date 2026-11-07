@@ -16,6 +16,7 @@ import {
 import {
   AttachmentBuilder,
   MessageFlags,
+  type AutocompleteInteraction,
   type ChannelSelectMenuInteraction,
   type ChatInputCommandInteraction,
   type ModalSubmitInteraction,
@@ -178,7 +179,15 @@ import {
   outdatedConfigPanelReceipt,
 } from "@/utils/discord/interactions/configRouteContext";
 import type { GlobalInteractionRoute, GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
-import type { ConfigPanelView } from "@/utils/discord/ui/configPanel";
+import { CATEGORY_LOCALE_KEYS, PAGE_LOCALE_KEYS, type ConfigPanelView } from "@/utils/discord/ui/configPanel";
+import {
+  panelPageNotFoundReceipt,
+  panelPersonaNotFoundReceipt,
+  resolvePanelPage,
+  respondWithPanelPages,
+  type PanelPageDestination,
+} from "@/utils/discord/autocomplete/panelPageAutocomplete";
+import { resolveSelectedPersona as resolvePersonaOption } from "@/utils/persona/personaOptionValue";
 import { createNonce } from "@/utils/discord/panelRouteTokens";
 import { resolvePersonaPanelAvatar, resolvePersonaPanelAvatarReference } from "@/utils/discord/personaPanelAvatar";
 import { resolvePersonaPanelCharacterReference } from "@/utils/discord/personaPanelCharacterReference";
@@ -4106,15 +4115,38 @@ export function createConfigInteractionRoute(overrides: Partial<ConfigRouteDepen
 
 export const configInteractionRoute = createConfigInteractionRoute();
 
+/** Pages `/config page:` may open for this actor, in panel order. */
+export function listConfigPageDestinations(
+  locale: string,
+  actor: ConfigActor,
+): PanelPageDestination<ConfigCategory, ConfigPage>[] {
+  return CONFIG_CATEGORY_ORDER.flatMap((category) =>
+    visibleConfigPages(category, actor).map((page) => ({
+      category,
+      page,
+      categoryLabel: localizer(locale, CATEGORY_LOCALE_KEYS[category]),
+      pageLabel: localizer(locale, PAGE_LOCALE_KEYS[category][page]),
+    })),
+  );
+}
+
+export async function autocompleteConfigPage(interaction: AutocompleteInteraction): Promise<void> {
+  await respondWithPanelPages(
+    interaction,
+    listConfigPageDestinations(interaction.locale, resolveConfigActor(interaction)),
+  );
+}
+
 /**
- * Opens the panel from the bare `/config` root.
+ * Opens `/config` on the requested page and persona when they resolve for this actor.
  *
- * The opening destination comes from `resolveConfigLanding` rather than the landing constants, so the
+ * The default destination comes from `resolveConfigLanding` rather than the landing constants, so the
  * page the panel opens on is always one this actor may also navigate back to after a denial.
  */
 export async function executeConfigCommand(
   interaction: ChatInputCommandInteraction,
   locale: string,
+  request: { page: string | null; persona: string | null },
   dependenciesOverride: Partial<ConfigRouteDependencies> = {},
 ): Promise<void> {
   const dependencies: ConfigRouteDependencies = { ...defaultDependencies, ...dependenciesOverride };
@@ -4126,13 +4158,23 @@ export async function executeConfigCommand(
     return;
   }
 
-  const landing = resolveConfigLanding(scope.actor);
+  const destination = request.page
+    ? resolvePanelPage(listConfigPageDestinations(locale, scope.actor), request.page)
+    : null;
+  const opening = destination ?? resolveConfigLanding(scope.actor);
+  const persona = request.persona ? resolvePersonaOption(scope.personas, request.persona) : null;
   await repaint(interaction, {
     locale,
     scope,
-    category: landing.category,
-    page: landing.page,
-    selectedPersonaId: resolveSelectedPersona(scope.personas, null)?.persona_id ?? null,
+    category: opening.category,
+    page: opening.page,
+    selectedPersonaId: (persona ?? resolveSelectedPersona(scope.personas, null))?.persona_id ?? null,
+    receipt:
+      request.persona && !persona
+        ? panelPersonaNotFoundReceipt(locale)
+        : request.page && !destination
+          ? panelPageNotFoundReceipt(locale)
+          : undefined,
     dependencies,
   });
 }

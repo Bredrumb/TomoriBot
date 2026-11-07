@@ -1,3 +1,4 @@
+import type { MemoryRecallCollector } from "@/utils/text/context/memoryRecall";
 import type { Client } from "discord.js";
 import { getCachedUserRow } from "@/utils/cache/userCache";
 import {
@@ -38,13 +39,13 @@ const STM_FRESH_WINDOW_MS = 60 * 60 * 1000;
 // `_FALLBACK` variants are byte-stable literals used when no macro resolver is wired.
 
 export const SEED_SUMMARY_UPDATE_HINT =
-  "[System: Use the {short_term_memory_tool} tool AFTER you respond to create or update your short-term memory for this conversation. Do NOT use {short_term_memory_tool} when a user explicitly asks you to remember/save/store something for future conversations; use {memory_tool} or {memory_update_tool} instead.]";
+  "[System: Use the {short_term_memory_tool} tool AFTER you respond to create or update your short-term memory for this conversation.{{if tool:create_long_term_memory}} Do NOT use {short_term_memory_tool} when a user explicitly asks you to remember/save/store something for future conversations; use {memory_tool}{{if tool:update_long_term_memory}} or {memory_update_tool}{{/if}} instead.{{/if}}]";
 
 const SEED_SUMMARY_UPDATE_HINT_FALLBACK =
   "[System: Use the update_short_term_memory tool AFTER you respond to create or update your short-term memory for this conversation. Do NOT use update_short_term_memory when a user explicitly asks you to remember/save/store something for future conversations; use create_long_term_memory or update_long_term_memory instead.]";
 
 export const SEED_CATEGORY_UPDATE_HINT =
-  "[System: Use the {short_term_memory_tool} tool AFTER you respond to create or update your short-term memory fields: {category_labels}. Do NOT use {short_term_memory_tool} when a user explicitly asks you to remember/save/store something for future conversations; use {memory_tool} or {memory_update_tool} instead.]";
+  "[System: Use the {short_term_memory_tool} tool AFTER you respond to create or update your short-term memory fields: {category_labels}.{{if tool:create_long_term_memory}} Do NOT use {short_term_memory_tool} when a user explicitly asks you to remember/save/store something for future conversations; use {memory_tool}{{if tool:update_long_term_memory}} or {memory_update_tool}{{/if}} instead.{{/if}}]";
 
 const SEED_CATEGORY_UPDATE_HINT_FALLBACK =
   "[System: Use the update_short_term_memory tool AFTER you respond to create or update your short-term memory fields: {category_labels}. Do NOT use update_short_term_memory when a user explicitly asks you to remember/save/store something for future conversations; use create_long_term_memory or update_long_term_memory instead.]";
@@ -137,6 +138,7 @@ export async function buildServerMemoryContextItem(params: {
   channelMemoryEnabled: boolean;
   client: Client;
   convertMentions: MentionConverter;
+  memoryRecall?: MemoryRecallCollector;
 }): Promise<StructuredContextItem | null> {
   if (
     !params.tomoriState?.server_memories ||
@@ -168,19 +170,39 @@ export async function buildServerMemoryContextItem(params: {
       (row) => !params.channelMemoryEnabled || channelScopeAdmits(row.channel_disc_ids, channelCandidates),
     );
 
-    memoryEntries = filteredServerRows.map((row) => ({
+    const admitted = await Promise.all(
+      filteredServerRows.map(
+        async (row) =>
+          !params.memoryRecall ||
+          (await params.memoryRecall.include({
+            kind: "server",
+            id: row.server_memory_id as number,
+            decayDays: row.decay_days,
+            line: await params.convertMentions(
+              formatMemoryWithId(row.server_memory_id as number, row.content),
+              params.client,
+              params.guildId,
+              "User",
+              params.botName,
+              params.personalMemoriesEnabled,
+            ),
+          })),
+      ),
+    );
+    const activeRows = filteredServerRows.filter((_row, index) => admitted[index]);
+
+    memoryEntries = activeRows.map((row) => ({
       id: `server:${row.server_memory_id}`,
       text: row.content,
       createdAt: row.created_at?.getTime(),
     }));
-    serverMemoryLines = filteredServerRows.map((row) =>
+    serverMemoryLines = activeRows.map((row) =>
       // biome-ignore lint/style/noNonNullAssertion: a loaded server-memory row always carries its PK.
       formatMemoryWithId(row.server_memory_id!, row.content),
     );
   } catch (error) {
-    log.warn("Failed to load server memories with IDs for context", error);
-    serverMemoryLines = params.tomoriState.server_memories;
-    memoryEntries = serverMemoryLines.map((text, index) => ({ id: `server:${index}`, text }));
+    log.warn("Failed to build server memory context", error);
+    return null;
   }
 
   if (serverMemoryLines.length === 0) {
@@ -508,6 +530,7 @@ export async function buildShortTermMemoryContext(params: {
             },
           ],
           metadataTag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
+          requiresToolCalling: true,
         });
       }
 
@@ -550,6 +573,7 @@ export async function buildShortTermMemoryContext(params: {
             },
           ],
           metadataTag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
+          requiresToolCalling: true,
         };
       }
     }

@@ -53,6 +53,9 @@ English file layout, so a key lives at the same path in every tree.
 - A page at `docs/en/<path>` translates to `docs/<locale>/<path>` for every locale with a published
   docs tree (`docsTree: true` in `src/constants/docsLocales.ts`). `README.md` translates to
   `.github/README_<locale>.md`.
+- `README_ja.md` shows Japanese screenshots from `assets/img/scs/ja/`; keep those paths. When
+  English adds or renames a screenshot, keep the English image there and report that it has no
+  Japanese version yet.
 - `architecture/`, `contributing/`, and `wiki/` stay English. Never translate or create them; the
   command already leaves them out.
 - `features/command-reference.md` is generated in every locale from the command description keys.
@@ -65,7 +68,7 @@ English file layout, so a key lives at the same path in every tree.
   field marks substantive content nobody has reviewed. AI translation alone does not change that
   status or certify translation quality. Keep every other field as the translated
   file already has it.
-- Links: keep the English source's unprefixed route (`/features/knowledge/memory/`). The build adds
+- Links: keep the English source's unprefixed route (`/features/knowledge/memory/long-term-memory/`). The build adds
   the locale prefix, or `/en/` for an untranslated page; a hand-written prefix stays fixed after the
   target gets translated.
 - Keep every `<!-- anchor: english-slug -->` (in MDX, `{/* anchor: english-slug */}`) comment under

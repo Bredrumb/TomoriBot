@@ -108,7 +108,7 @@ function fixture(category: NaturalNudgeCategory = "start_topic") {
   const readMessages = spyOn(channelsModule, "fetchRecentMessages").mockImplementation(async (channel) =>
     channel.id === CHANNEL_IDS[0] ? messages : [],
   );
-  const tools = spyOn(toolsModule, "loadAvailableToolNames").mockResolvedValue(new Set(["generate_image"]));
+  const tools = spyOn(toolsModule, "loadChannelAvailableToolNames").mockResolvedValue(new Set(["generate_image"]));
   const customs = spyOn(naturalNudgeRepository, "listCustomIdleNudges").mockResolvedValue([]);
   const scopes = spyOn(naturalNudgeRepository, "loadPersonaScopes").mockResolvedValue(new Map());
   const run = spyOn(runnerModule, "runIdleNudgeAttempt").mockResolvedValue("aborted");

@@ -1,3 +1,4 @@
+import * as memoryRecallPersistence from "@/utils/text/context/memoryRecall";
 import { stubAllShardOwnership } from "../../helpers/shardOwnership";
 stubAllShardOwnership();
 import { afterEach, beforeAll, describe, expect, it, mock, spyOn } from "bun:test";
@@ -102,6 +103,34 @@ function makeContext(options: {
     send,
   };
 }
+
+describe("post-turn memory persistence", () => {
+  it("starts recall persistence without waiting for its writes or metric", async () => {
+    const pending = Promise.withResolvers<void>();
+    const persist = spyOn(memoryRecallPersistence, "persistMemoryRecall").mockImplementation(() => pending.promise);
+    const { context } = makeContext({ shouldSurfaceUserErrors: false });
+    context.memoryRecall = {
+      outcome: "disabled",
+      totalMs: 0,
+      candidateCount: 0,
+      scored: [],
+      reinforced: [],
+      recalled: [],
+      missing: [],
+      queryTimings: { queryTokens: 0 },
+      embeddingResolved: false,
+      dormantTokens: 0,
+      recalledTokens: 0,
+    };
+    try {
+      await runPostTurnEffects(context, { status: "completed", streamResults: [], personaResponses: [] });
+      expect(persist).toHaveBeenCalledWith(context.memoryRecall);
+    } finally {
+      pending.resolve();
+      persist.mockRestore();
+    }
+  });
+});
 
 describe("empty-response post-turn handling", () => {
   beforeAll(async () => {

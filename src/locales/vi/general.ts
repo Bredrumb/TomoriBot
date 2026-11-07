@@ -10,6 +10,8 @@ export default {
       limit_heading: `Đã đạt giới hạn`,
       not_available_heading: `Không khả dụng`,
       invalid_heading: `Lựa chọn không hợp lệ`,
+      page_not_found_detail: `Không có trang nào bạn có thể mở ở đây khớp với tên đó, nên bảng điều khiển đã mở ở trang đầu tiên.`,
+      persona_not_found_detail: `Không có persona nào ở đây có đúng tên đó, nên bảng điều khiển đã mở ở persona chính.`,
     },
     oauth: {
       invalid_callback: `Liên kết đăng nhập này không hợp lệ hoặc đã hết hạn. Vui lòng đăng nhập lại từ TomoriBot.`,

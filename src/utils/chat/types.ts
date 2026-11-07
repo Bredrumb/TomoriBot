@@ -275,6 +275,7 @@ export interface ChatTurn {
 }
 
 export interface ChatTurnContext {
+  memoryRecall?: import("@/utils/text/context/memoryRecall").MemoryRecallOutcome;
   usageContext?: ProviderUsageContext;
   responseReview?: import("@/utils/chat/responseReview").ResponseReviewState;
   /** Successful tool calls by request identity, kept across key rotation and model fallback. */

@@ -8,6 +8,7 @@
  * unrelated wave and pressure a later slice into editing a gate it does not own.
  */
 import { beforeAll, describe, expect, it } from "bun:test";
+import { ApplicationCommandOptionType } from "discord.js";
 import { loadCommandData, ROOT_COMMAND_EXECUTION_KEY } from "@/utils/discord/commandLoader";
 import { initializeLocalizer } from "@/utils/text/localizer";
 
@@ -133,7 +134,13 @@ describe("Config command registration", () => {
     expect(configCommand.default_member_permissions).toBeUndefined();
     // Undefined contexts keeps the DM-backed workspace reachable.
     expect(configCommand.contexts).toBeUndefined();
-    expect(configCommand.options ?? []).toHaveLength(0);
+    expect(configCommand.options).toEqual([
+      expect.objectContaining({ name: "page", type: ApplicationCommandOptionType.String, autocomplete: true }),
+      expect.objectContaining({ name: "persona", type: ApplicationCommandOptionType.String, autocomplete: true }),
+    ]);
+    for (const option of configCommand.options ?? []) {
+      expect((option as { required?: boolean }).required ?? false).toBe(false);
+    }
 
     expect([...(executionMap.get("config") ?? new Map()).keys()]).toEqual([ROOT_COMMAND_EXECUTION_KEY]);
   });

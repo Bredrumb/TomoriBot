@@ -96,7 +96,7 @@ Link a product term (Short-Term Memory, spotlight, lineage) to its docs the firs
 it. A panel has no room to define it, and a link in a heading costs no width:
 
 ```ts
-stm_title: `[Short-Term Memory](https://docs.tomoribot.app/en/features/knowledge/memory/#short-term-memory-stm)`,
+stm_title: `[Short-Term Memory](https://docs.tomoribot.app/en/features/knowledge/memory/short-term-memory/)`,
 ```
 
 Keep the `/en/` segment, as every docs link in `src/locales/en-US/` does.

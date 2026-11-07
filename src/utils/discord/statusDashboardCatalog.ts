@@ -14,7 +14,17 @@ export const STATUS_ROUTE_NAMESPACE = "status";
 export const STATUS_ROUTE_VERSION = "v1";
 export const STATUS_PERSONA_SELECT_PAGE_SIZE = 25;
 
-export type StatusCategory = "persona" | "behavior" | "models" | "access" | "personal";
+/** In dashboard button order; both the dashboard and its `page` option read the categories from here. */
+export const STATUS_CATEGORIES = ["persona", "behavior", "access", "personal", "models"] as const;
+export type StatusCategory = (typeof STATUS_CATEGORIES)[number];
+
+export const STATUS_CATEGORY_LABEL_KEYS: Record<StatusCategory, string> = {
+  persona: "commands.status.scope_choice_persona",
+  behavior: "commands.status.scope_choice_behavior",
+  access: "commands.status.scope_choice_access",
+  personal: "commands.status.scope_choice_personal",
+  models: "commands.status.scope_choice_models",
+};
 
 export type StatusDashboardRoute =
   | { action: "category"; locale: string; category: StatusCategory; personaId?: number }
@@ -37,10 +47,7 @@ type StatusDashboardRouteCodecs = {
 };
 
 function parseCategory(value: string | undefined): StatusCategory | null {
-  if (value === "persona" || value === "behavior" || value === "models" || value === "access" || value === "personal") {
-    return value;
-  }
-  return null;
+  return STATUS_CATEGORIES.find((category) => category === value) ?? null;
 }
 
 const categoryField: RouteFieldCodec<"category", StatusCategory> = {

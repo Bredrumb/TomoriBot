@@ -35,6 +35,19 @@ export const PERSONAL_CONFIG_PAGES_BY_CATEGORY: Record<PersonalConfigCategory, r
   advanced: ["response-modes", "impersonation", "spotlight"],
 };
 
+/** A managed identity edits only its profile; the other categories hold the invoker's own account state. */
+export function visiblePersonalConfigCategories(identityMode: boolean): readonly PersonalConfigCategory[] {
+  return identityMode ? ["profile"] : PERSONAL_CONFIG_CATEGORIES;
+}
+
+/** Spotlights limit personas in guild channels, so a DM workspace has no Spotlight page. */
+export function visiblePersonalConfigPages(
+  category: PersonalConfigCategory,
+  guildId: string | null,
+): PersonalConfigPage[] {
+  return PERSONAL_CONFIG_PAGES_BY_CATEGORY[category].filter((page) => page !== "spotlight" || guildId !== null);
+}
+
 export const DEFAULT_PAGE_FOR_CATEGORY: Record<PersonalConfigCategory, PersonalConfigPage> = {
   profile: "general",
   privacy: "controls",

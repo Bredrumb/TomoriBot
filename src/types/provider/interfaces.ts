@@ -242,6 +242,9 @@ export interface LLMProvider {
    */
   checkTextModel?(apiKey: string, codename: string): Promise<boolean | null>;
 
+  /** {@link checkTextModel} for an image model, offered only where the same catalog serves image models. */
+  checkImageModel?(apiKey: string, codename: string): Promise<boolean | null>;
+
   /**
    * Create a localized provider-specific error description for user-facing embeds.
    * This keeps formatting logic inside the provider abstraction instead of command switches.

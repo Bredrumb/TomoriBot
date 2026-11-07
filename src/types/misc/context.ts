@@ -45,6 +45,7 @@ export enum ContextItemTag {
   KNOWLEDGE_PERSONA_SPRITES = "knowledge_persona_sprites",
   KNOWLEDGE_SERVER_MEMORIES = "knowledge_server_memories",
   KNOWLEDGE_SERVER_DOCUMENTS = "knowledge_server_documents",
+  KNOWLEDGE_RECALLED_MEMORIES = "knowledge_recalled_memories",
   KNOWLEDGE_LOREBOOK_BEFORE = "knowledge_lorebook_before",
   KNOWLEDGE_LOREBOOK_AFTER = "knowledge_lorebook_after",
   KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS = "knowledge_verbatim_tool_definitions", // Available tool JSON schemas, injected only for a model with verbatim tool calling enabled
@@ -93,6 +94,8 @@ export type StructuredContextItem = {
   conversationUsers?: ConversationUserReference[]; // Hidden metadata for user resolution and mention handling
   participantTargetIndex?: import("@/utils/text/participants/targetIndex").ParticipantTargetIndex;
   personaMentionMap?: Map<string, string>; // Hidden metadata for preserving known persona @trigger text
+  /** Built only when the context model can call tools, so a generation attempt that sends none drops it. */
+  requiresToolCalling?: true;
 };
 
 /**

@@ -128,7 +128,7 @@ Hoặc nhắn tin trực tiếp (DM) cho TomoriBot và nói lời chào!
 - `/config` và `/personal config` - Nhiều cách để tùy biến TomoriBot trong máy chủ Discord hiện tại hoặc cho riêng bạn
 - `/providers` và `/personal providers` - Thêm các endpoint model hoặc nhà cung cấp đám mây
 - `/persona` - Tạo tính cách hoặc thêm nhân vật mới (xem [Nhiều persona](https://docs.tomoribot.app/vi/features/chatting-personality/multiple-personas/))
-- `/memories` - Dạy bot ghi nhớ thông tin qua các cuộc trò chuyện (xem [Bộ nhớ](https://docs.tomoribot.app/vi/features/knowledge/memory/))
+- `/memories` - Dạy bot ghi nhớ thông tin qua các cuộc trò chuyện (xem [Bộ nhớ](https://docs.tomoribot.app/vi/features/knowledge/memory/long-term-memory/))
 
 Xem [danh mục lệnh](https://docs.tomoribot.app/vi/features/command-reference/) đầy đủ để biết mọi lệnh slash.
 

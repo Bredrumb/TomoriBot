@@ -4,7 +4,7 @@ sidebar:
   order: 3
 ---
 
-你可以在`/config`中調整TomoriBot能執行哪些動作，以及如何產生回覆，包括權限設定。人格設定請見[多個人格](/zh-TW/features/chatting-personality/multiple-personas/)，知識設定請見[記憶](/zh-TW/features/knowledge/memory/)。這一頁介紹常用的行為設定。
+你可以在`/config`中調整TomoriBot能執行哪些動作，以及如何產生回覆，包括權限設定。人格設定請見[多個人格](/zh-TW/features/chatting-personality/multiple-personas/)，知識設定請見[記憶](/zh-TW/features/knowledge/memory/long-term-memory/)。這一頁介紹常用的行為設定。
 
 ## 功能：她被允許做什麼
 <!-- anchor: capabilities-what-shes-allowed-to-do -->

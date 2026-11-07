@@ -62,20 +62,20 @@ TomoriBotは、SillyTavernとDiscordの廃止されたClydeにインスパイア
 ## 機能紹介
 
 
-![Screenshots 1](../assets/img/scs/1-agentic.png)
+![Screenshots 1](../assets/img/scs/ja/1-agentic.png)
 <h3 align="center"><a href="https://docs.tomoribot.app/ja/features/capabilities/tools-and-extensions/">エージェント型AI駆動の会話</a></h3>
-<p align="center">TomoriBotはチャットするだけにとどまらない多彩なツールを備えています。Web検索、繰り返しタスク/リマインダーの設定、サーバーの絵文字/スタンプの活用、メディア生成、そしてチャンネルやサーバーをまたいでコンテキストを記憶できる永続的な記憶機能が使えます。</p>
+<p align="center">TomoriBotはチャットするだけにとどまらない多彩なツールを備えています。Web検索、繰り返しタスク/リマインダーの設定、サーバーの絵文字/スタンプの活用、画像/動画/音声生成、そしてチャンネルやサーバーをまたいでコンテキストを記憶できる永続的な記憶機能が使えます。</p>
 
 <br />
 
 
-![Screenshots 2](../assets/img/scs/2-multipersona.png)
+![Screenshots 2](../assets/img/scs/ja/2-multipersona.png)
 <h3 align="center"><a href="https://docs.tomoribot.app/ja/features/chatting-personality/multiple-personas/">マルチペルソナサポート</a></h3>
 <p align="center">TomoriBotのサーバー内でのパーソナリティ、行動、アバターは簡単に変更・作成でき、ペルソナとして他のユーザーへエクスポートすることもできます（共有可能なAIキャラクターカードのようなもの）。<code>/persona generate</code>でお気に入りのSillyTavernカードをインポート・変換することも可能です。1つのサーバーに無制限のペルソナを持たせることができ、それぞれが独自の記憶とアジェンダを持ちます。さらに、複数のペルソナを連携させてサーバー内で協働させる（あるいはただじゃれ合わせる）こともできます。</p>
 
 <br />
 
-![Screenshots 3](../assets/img/scs/3-commands.png)
+![Screenshots 3](../assets/img/scs/ja/3-commands.png)
 <h3 align="center"><a href="https://docs.tomoribot.app/ja/features/command-reference/">設定と実行のためのネイティブスラッシュコマンド</a></h3>
 <p align="center">Discordから離れることなくTomoriBotをセットアップ・カスタマイズできます。スラッシュコマンドとインタラクティブメニューを使って、ペルソナの作成、プロンプトやモデル設定の微調整、MCPサーバーの接続、記憶の管理、権限や利用制限の管理が可能です。ご自身でコマンドを実行して画像や音声メッセージの生成、ダイスロール、その他の楽しい機能を試すこともできます。</p>
 
@@ -87,9 +87,9 @@ TomoriBotは、SillyTavernとDiscordの廃止されたClydeにインスパイア
 
 <br />
 
-![Screenshots 5](../assets/img/scs/5-features.png)
+![Screenshots 5](../assets/img/scs/ja/5-features.png)
 <h3 align="center"><a href="https://docs.tomoribot.app/ja/features/">さらに多くの機能が続々追加中！</a></h3>
-<p align="center">新メンバーへの実用的な自動挨拶やボイスチャットから、ダイスロールやアクションなどのロールプレイ向け機能まで、楽しい機能が盛りだくさんです。新機能は常に開発中ですので、バグ（や楽しい提案）はGitHub Issuesまたは公式Discordでお気軽にお知らせください。</p>
+<p align="center">新メンバーへの実用的な自動挨拶、ボイスチャット、利用統計から、自発的なDMやダイスロール、アクションなどのロールプレイ向け機能まで、楽しい機能が盛りだくさんです。新機能は常に開発中ですので、バグ（や楽しい提案）はGitHub Issuesまたは公式Discordでお気軽にお知らせください。</p>
 
 <!-- GETTING STARTED -->
 # はじめに
@@ -128,7 +128,7 @@ TomoriBotは、SillyTavernとDiscordの廃止されたClydeにインスパイア
 - `/config` および `/personal config` - 現在のDiscordサーバーまたは個人向けにTomoriBotを調整する複数の方法
 - `/providers` および `/personal providers` - モデルエンドポイントやクラウドプロバイダーの追加
 - `/persona` - 性格を与えたり、新しいキャラクターを追加したりできます（[複数ペルソナ](https://docs.tomoribot.app/ja/features/chatting-personality/multiple-personas/)を参照）
-- `/memories` - 会話を通じて事実を教えます（[記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/)を参照）
+- `/memories` - 会話を通じて事実を教えます（[記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/long-term-memory/)を参照）
 
 すべてのスラッシュコマンドについては、[コマンドリファレンス](https://docs.tomoribot.app/ja/features/command-reference/)を参照してください。
 

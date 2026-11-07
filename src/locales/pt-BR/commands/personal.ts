@@ -28,6 +28,7 @@ O TomoriBot o tratará como um novo usuário a partir de sua próxima mensagem.`
     },
     memories: {
       description: `Gerencie suas memórias pessoais de longo prazo e contexto conversacional de curto prazo.`,
+      persona_description: `Persona cujas memórias sobre você serão abertas em vez das memórias globais.`,
       identity_description: `Identidade de proxy para editar. Funciona mesmo com o proxy de mensagens desativado.`,
       outdated_panel: `Este painel está desatualizado. Use {command} para abrir um painel atualizado.`,
       category_global: `Global`,
@@ -35,7 +36,7 @@ O TomoriBot o tratará como um novo usuário a partir de sua próxima mensagem.`
       global_title: `Memórias Pessoais Globais`,
       global_description: `Essas memórias seguem você entre servidores e personas.`,
       persona_title: `Memórias Pessoais por Persona`,
-      persona_description:
+      persona_scope_description:
         "Estas memórias valem apenas quando esta persona fala em uma conversa da qual você participa.",
       selector_guidance: `Selecione ou adicione uma memória pessoal abaixo:`,
       no_memories: `Nenhuma memória salva ainda.`,
@@ -66,7 +67,7 @@ O TomoriBot o tratará como um novo usuário a partir de sua próxima mensagem.`
       persona_memory_count_one: `1 memória`,
       persona_memory_count_shared: `{count} memórias, compartilhadas entre {personas} personas`,
       persona_memory_count_one_shared: `1 memória, compartilhada entre {personas} personas`,
-      stm_title: `[Memória de Curto Prazo](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/#short-term-memory-stm)`,
+      stm_title: `[Memória de Curto Prazo](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/short-term-memory/)`,
       stm_active_count: `Resumos ativos sobre você: \`{count}\``,
       stm_clear_button: `Limpar Minha Memória de Curto Prazo`,
       stm_crossserver_hint:
@@ -113,6 +114,7 @@ O TomoriBot o tratará como um novo usuário a partir de sua próxima mensagem.`
     },
     config: {
       description: `Gerencie suas preferências pessoais, privacidade, modelos e perfil.`,
+      page_description: `Página em que o painel será aberto.`,
       identity_description: `Identidade de proxy para editar. Funciona mesmo com o proxy de mensagens desativado.`,
       outdated_panel: `Este painel está desatualizado. Use {command} para abrir um painel atualizado.`,
       category_profile: `Perfil`,
@@ -202,7 +204,7 @@ O TomoriBot o tratará como um novo usuário a partir de sua próxima mensagem.`
       memories_manage_hint: `Use \`/personal memories\` para gerenciar minhas memórias sobre você`,
       stm_count_label: `Existem atualmente \`{count}\` STMs seus armazenados`,
       stm_clear_hint: `Use \`/personal memories\` para limpar o que eu me lembro atualmente.`,
-      crossserver_section_title: `[STM](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/#short-term-memory-stm) Entre Servidores`,
+      crossserver_section_title: `[STM](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/short-term-memory/) Entre Servidores`,
       crossserver_stm_off:
         "Eu não posso lembrar de conversas recentes com você entre servidores porque o STM Entre Servidores está desativado.",
       crossserver_stm_on:

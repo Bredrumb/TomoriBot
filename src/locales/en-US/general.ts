@@ -10,6 +10,8 @@ export default {
       limit_heading: `Limit Reached`,
       not_available_heading: `Not Available`,
       invalid_heading: `Invalid Choice`,
+      page_not_found_detail: `No page you can open here matches that name, so the panel opened on its first page.`,
+      persona_not_found_detail: `No persona here has exactly that name, so the panel opened on the main persona.`,
     },
     oauth: {
       invalid_callback: `This sign-in link is invalid or expired. Start sign-in again from TomoriBot.`,

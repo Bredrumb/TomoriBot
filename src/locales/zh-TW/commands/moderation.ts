@@ -1,6 +1,7 @@
 export default {
   moderation: {
     description: `管理成員權限、黑名單、頻道與身分組白名單，以及額度設定。`,
+    page_description: `面板開啟時顯示的頁面。`,
     title: `伺服器管理`,
     outdated_panel: `這個管理面板已過期。請重新執行 /moderation。`,
     permission_denied: `你需要 \`管理伺服器\` 權限才能使用這個管理面板。`,

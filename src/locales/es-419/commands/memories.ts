@@ -1,6 +1,8 @@
 export default {
   memories: {
     description: `Inspecciona y administra las memorias del servidor, documentos, lorebooks y memoria a corto plazo.`,
+    page_description: `Categoría en la que se abre el panel.`,
+    persona_description: `Persona cuyas memorias, documentos o lorebook se abren.`,
     category_memories: `Memorias`,
     category_documents: `Documentos`,
     category_lorebooks: `Lorebooks`,
@@ -10,7 +12,7 @@ export default {
     stale_warning:
       "Los datos guardados pueden estar desactualizados porque la lectura falló. Las acciones de escritura no estarán disponibles hasta que una lectura reciente tenga éxito.",
     retry: `Reintentar`,
-    memories_title: `[Memorias del servidor](https://docs.tomoribot.app/es-419/features/knowledge/memory/#personal-vs-server-memories)`,
+    memories_title: `[Memorias del servidor](https://docs.tomoribot.app/es-419/features/knowledge/memory/long-term-memory/#personal-vs-server-memories)`,
     memories_description: "Estas memorias aplican en todo este servidor siempre que esta persona esté activa.",
     persona_default_name: `Persona`,
     persona_select_placeholder: `Selecciona una persona para ver sus memorias...`,
@@ -80,7 +82,7 @@ export default {
     owner_scope_notice:
       "Solo ves las memorias que enseñaste en este servidor. Los miembros con Administrar servidor pueden ver y editar las memorias de todos los miembros.",
     no_personas: `No hay personas configuradas para este servidor.`,
-    documents_title: `[Documentos](https://docs.tomoribot.app/es-419/features/knowledge/memory/#document-knowledge-base-rag)`,
+    documents_title: `[Documentos](https://docs.tomoribot.app/es-419/features/knowledge/memory/documents/)`,
     documents_description: "Documentos de referencia adjuntos a este servidor o a una sola persona.",
     documents_teaching_disabled: `El acceso a documentos de miembros está desactivado en este servidor.`,
     document_scope_persona: `Alcance de persona`,
@@ -178,7 +180,7 @@ export default {
     embedding_credentials_missing_detail: `Configura un proveedor de embedding antes de continuar.`,
     embedding_model_missing_heading: `Falta el modelo de embedding`,
     embedding_model_missing_detail: `Configura un modelo de embedding antes de continuar.`,
-    lorebooks_title: `[Lorebooks](https://docs.tomoribot.app/es-419/features/knowledge/lorebooks/)`,
+    lorebooks_title: `[Lorebooks](https://docs.tomoribot.app/es-419/features/knowledge/memory/lorebooks/)`,
     lorebooks_description: `Memoria avanzada para mundos de juego de rol, personajes y detalles recurrentes de la historia. Usa Memorias para conversaciones cotidianas.`,
     lorebook_scope_serverwide: `Todo el servidor`,
     lorebook_scope_persona: `Persona`,
@@ -322,7 +324,7 @@ export default {
     lorebook_import_invalid_detail: `Una o más entradas están fuera de los límites de lorebook. No se importó nada.`,
     lorebook_import_failed_heading: `Importación fallida`,
     lorebook_import_failed_detail: `La importación falló. No se cambió nada.`,
-    stm_title: `[Memoria a corto plazo](https://docs.tomoribot.app/es-419/features/knowledge/memory/#short-term-memory-stm)`,
+    stm_title: `[Memoria a corto plazo](https://docs.tomoribot.app/es-419/features/knowledge/memory/short-term-memory/)`,
     stm_empty: "No hay entradas activas de memoria a corto plazo para este servidor.",
     stm_active_count: `{count} entradas activas de memoria a corto plazo.`,
     stm_manager_only: "Necesitas el permiso Administrar servidor para ver la memoria a corto plazo del servidor.",

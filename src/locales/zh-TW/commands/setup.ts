@@ -188,7 +188,7 @@ export default {
 - 用 \`/config\` 調整我的行為與我能做的事。
 - 用 \`/memories\` 教我有關你的事。`,
       receipt_learn_more:
-        "閱讀[官方 Wiki](https://docs.tomoribot.app/zh-TW/features/)，或開啟 {help} （然後選功能），了解我還能做什麼。\n- [多個人格](https://docs.tomoribot.app/zh-TW/features/chatting-personality/multiple-personas/) = 外觀、聲音與觸發詞\n- [聊天與觸發](https://docs.tomoribot.app/zh-TW/features/chatting-personality/chatting-and-triggers/) = 我何時、如何加入對話\n- [記憶](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/) = 人物、事實與脈絡\n- [個人化](https://docs.tomoribot.app/zh-TW/features/knowledge/personalization/) = 你希望被怎麼對待\n- [媒體生成](https://docs.tomoribot.app/zh-TW/features/capabilities/media-generation/image-generation/) = 圖片、影片與語音\n- [工具與擴充](https://docs.tomoribot.app/zh-TW/features/capabilities/tools-and-extensions/built-in-tools/) = 網頁搜尋與自訂工具",
+        "閱讀[官方 Wiki](https://docs.tomoribot.app/zh-TW/features/)，或開啟 {help} （然後選功能），了解我還能做什麼。\n- [多個人格](https://docs.tomoribot.app/zh-TW/features/chatting-personality/multiple-personas/) = 外觀、聲音與觸發詞\n- [聊天與觸發](https://docs.tomoribot.app/zh-TW/features/chatting-personality/chatting-and-triggers/) = 我何時、如何加入對話\n- [記憶](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/long-term-memory/) = 人物、事實與脈絡\n- [個人化](https://docs.tomoribot.app/zh-TW/features/knowledge/personalization/) = 你希望被怎麼對待\n- [媒體生成](https://docs.tomoribot.app/zh-TW/features/capabilities/media-generation/image-generation/) = 圖片、影片與語音\n- [工具與擴充](https://docs.tomoribot.app/zh-TW/features/capabilities/tools-and-extensions/built-in-tools/) = 網頁搜尋與自訂工具",
       permission_denied: `你需要「管理伺服器」權限才能進行設定。`,
       env_mismatch: `環境設定已變更。請重新開始設定。`,
       forbidden: `這個設定工作階段屬於其他使用者或頻道。`,

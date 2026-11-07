@@ -25,8 +25,11 @@ import type { ProxyMessageAttestation } from "@/utils/messageProxy/types";
 
 const originalProxyWaitMs = process.env.MESSAGE_PROXY_WAIT_MS;
 const originalExpectationTtlMs = process.env.MESSAGE_PROXY_EXPECTATION_TTL_MS;
+// The expiry sits far above the 15ms wait, because a busy parallel test lane can stall timers by tens of
+// milliseconds and a nearby expiry sweeps an expectation the next assertion still reads.
+const SUITE_EXPECTATION_TTL_MS = "1000";
 process.env.MESSAGE_PROXY_WAIT_MS = "15";
-process.env.MESSAGE_PROXY_EXPECTATION_TTL_MS = "45";
+process.env.MESSAGE_PROXY_EXPECTATION_TTL_MS = SUITE_EXPECTATION_TTL_MS;
 
 afterAll(() => {
   if (originalProxyWaitMs === undefined) delete process.env.MESSAGE_PROXY_WAIT_MS;
@@ -37,6 +40,7 @@ afterAll(() => {
 
 afterEach(() => {
   clearMessageProxyExpectationStateForTests();
+  process.env.MESSAGE_PROXY_EXPECTATION_TTL_MS = SUITE_EXPECTATION_TTL_MS;
 });
 
 function sleep(ms: number): Promise<void> {
@@ -76,7 +80,6 @@ describe("message-proxy lookup budget", () => {
   afterEach(() => {
     if (originalLookupTimeoutMs === undefined) delete process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS;
     else process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS = originalLookupTimeoutMs;
-    process.env.MESSAGE_PROXY_EXPECTATION_TTL_MS = "45";
   });
 
   it("defaults to 5000ms, honors a smaller value, and falls back on garbage", () => {
@@ -180,6 +183,7 @@ describe("message-proxy expectations", () => {
   });
 
   it("cleans up expired expectations after the TTL", async () => {
+    process.env.MESSAGE_PROXY_EXPECTATION_TTL_MS = "30";
     createExpectation({ channelId: "channel_ttl", originalMessageId: "original_ttl" });
 
     await sleep(getMessageProxyExpectationTtlMs() + 10);

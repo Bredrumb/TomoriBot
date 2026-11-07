@@ -20,6 +20,7 @@ export default {
     },
     manage: {
       description: `Quản lý emoji, sticker, biểu cảm tùy chỉnh và quyền truy cập của persona.`,
+      page_description: `Danh mục hiển thị khi mở bảng điều khiển.`,
       title: `Biểu cảm của máy chủ`,
       emojis: `Emoji`,
       stickers: `Sticker`,

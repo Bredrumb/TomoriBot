@@ -10,6 +10,8 @@ export default {
       limit_heading: `Límite alcanzado`,
       not_available_heading: `No disponible`,
       invalid_heading: `Opción no válida`,
+      page_not_found_detail: `Ninguna página que puedas abrir aquí coincide con ese nombre, así que el panel se abrió en su primera página.`,
+      persona_not_found_detail: `Ninguna persona aquí tiene exactamente ese nombre, así que el panel se abrió en la persona principal.`,
     },
     oauth: {
       invalid_callback: `Este enlace de inicio de sesión no es válido o caducó. Inicia sesión de nuevo desde TomoriBot.`,

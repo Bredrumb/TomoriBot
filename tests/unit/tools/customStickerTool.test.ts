@@ -146,7 +146,7 @@ describe("custom sticker selection", () => {
         preloadedCustomExpressions: [createCustomExpression()],
         toolPromptMacroResolver: createToolPromptMacroResolver({
           provider: state.llm.llm_provider,
-          capabilities: resolvePromptCapabilityValues(state.config),
+          capabilities: resolvePromptCapabilityValues(state.config, state.llm.has_tools),
           stateForContext: { ...state, server_id: String(state.server_id), activePersonaHasElevenlabsVoice: false },
           availableToolNames: new Set(["select_sticker_for_response"]),
           ...overrides,

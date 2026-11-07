@@ -15,22 +15,24 @@ Esta página cubre los controles de usuario en-Discord. En instancias autohosped
 
 ### Datos almacenados
 
-- Servidor y recuerdos personales.
-- Perfiles de personas, rasgos y ejemplos de diálogo.
+- Memorias del servidor y personales, sus datos de búsqueda y registros de uso reciente, y lorebooks creados
+- Perfiles de personas, rasgos y ejemplos de diálogo
 - Ajustes de configuración del servidor
-- Claves cifradas del proveedor API
-- Metadatos de expresión, reglas de acceso de personas y medios de expresión cargados
+- Claves de API de proveedores cifradas
+- Metadatos de expresión, reglas de acceso de personas y archivos multimedia de expresión subidos
 
 ### No almacenado
 
-- Historial de mensajes Discord (los mensajes no se archivan en un registro de mensajes persistentes)
+- Historial de mensajes de Discord (los mensajes no se archivan en un registro de mensajes persistente)
 
-### Enviado a su proveedor de IA
+### Enviado a tus proveedores de IA
 
-Siempre que se activa, TomoriBot recupera mensajes recientes en el canal junto con recuerdos relevantes como contexto para el modelo. Ella no lee ni procesa mensajes fuera de esos desencadenantes.
+Siempre que se activa, TomoriBot recupera mensajes recientes en el canal junto con memorias relevantes como contexto para el modelo. Ella no lee ni procesa mensajes fuera de esas activaciones.
+
+Cuando se configura un modelo de incrustación (embedding), su proveedor recibe el mensaje más reciente y el texto de documentos y memorias en los que busca. Este puede ser un proveedor diferente al que redacta las respuestas. Las memorias personales ocultas por la configuración de privacidad quedan fuera de la búsqueda. Los datos de búsqueda se eliminan junto con su memoria; consulta [Decaimiento de memoria](/features/knowledge/memory/memory-decay/) para conocer el reposo y reemplazo automáticos.
 
 :::note
-El proveedor de IA que elija (Google, OpenRouter, NovelAI,…) procesa los mensajes según su propia política de privacidad. Evite compartir credenciales personales sensibles o datos confidenciales.
+El proveedor de IA que elijas (Google, OpenRouter, NovelAI, …) procesa los mensajes según su propia política de privacidad. Evita compartir credenciales personales confidenciales o datos sensibles.
 :::
 
 ### Opciones de Revisión de respuestas
@@ -90,4 +92,4 @@ Para obtener tablas de bases de datos exactas y listas de columnas conservadas, 
 - `/personal config`: controla tu visibilidad, hasta la invisibilidad total (excluirte del contexto de memoria), y desactiva las [Menciones de personas](/features/chatting-personality/natural-nudges/#ping-user), las intervenciones espontáneas donde una persona te menciona para iniciar una conversación.
 - `/config` > `Permisos`: los administradores del servidor pueden desactivar las funciones de memoria y autoaprendizaje.
 
-Consulta [Memoria](/es-419/features/knowledge/memory/) para conocer la administración de la memoria diaria.
+Consulta [Memoria](/features/knowledge/memory/long-term-memory/) para conocer la administración de la memoria diaria.

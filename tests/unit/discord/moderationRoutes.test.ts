@@ -1080,6 +1080,32 @@ describe("moderation interaction routes", () => {
     expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.member_access_title"));
   });
 
+  it("opens the Whitelist page named by the page option", async () => {
+    const mockInteraction = {
+      guildId: "guild-1",
+      memberPermissions: { has: () => true },
+    } as unknown as ChatInputCommandInteraction;
+
+    const payload = await buildInitialModerationPanel(
+      mockInteraction,
+      "en-US",
+      { resolveScope: async () => createScopeData() },
+      "whitelist:roles",
+    );
+
+    const selected: unknown[] = [];
+    const visit = (node: unknown): void => {
+      if (Array.isArray(node)) node.forEach(visit);
+      else if (node && typeof node === "object") {
+        const record = node as Record<string, unknown>;
+        if (record.default === true) selected.push(record.value);
+        Object.values(record).forEach(visit);
+      }
+    };
+    visit(payload);
+    expect(selected).toEqual(["roles"]);
+  });
+
   it("executes moderation command with ephemeral deferReply", async () => {
     const log: string[] = [];
     const mockInteraction = {
@@ -1094,6 +1120,7 @@ describe("moderation interaction routes", () => {
     await executeModerationCommand(
       mockInteraction,
       "en-US",
+      null,
       async () => ({ components: [], flags: MessageFlags.IsComponentsV2 }) as never,
     );
 

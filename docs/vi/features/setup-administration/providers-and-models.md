@@ -69,7 +69,7 @@ Trong `/config` > `Model` > `Chuyển đổi model`, bạn có thể chỉ đị
 
 - **Văn bản**: model trò chuyện chính.
 - **Tầm nhìn**: đọc hình ảnh khi model trò chuyện không thể đọc được.
-- **Phần nhúng**: hỗ trợ [cơ sở kiến thức tài liệu](/vi/features/knowledge/memory/#document-knowledge-base-rag).
+- **Phần nhúng**: hỗ trợ [cơ sở kiến thức tài liệu](/vi/features/knowledge/memory/documents/).
 - **Quyết định**: một [model quyết định](#decision-models) đã đăng ký. [Natural Nudges](/features/chatting-personality/natural-nudges/#active-nudges) sử dụng nó để quyết định thời điểm tham gia cuộc trò chuyện.
 - **Hình ảnh tiêu chuẩn**: tạo hình ảnh tiêu chuẩn (xem [Tạo hình ảnh](/vi/features/capabilities/media-generation/image-generation/)).
 - **Hình ảnh NovelAI**: [Tạo hình ảnh NovelAI](/features/integrations/novelai/#image-generation).

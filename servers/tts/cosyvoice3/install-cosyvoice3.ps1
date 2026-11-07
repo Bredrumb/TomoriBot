@@ -5,7 +5,7 @@ $RuntimeDir = Join-Path $ScriptDir "CosyVoice"
 $ModelDir = if ($env:COSYVOICE3_MODEL_DIR) { $env:COSYVOICE3_MODEL_DIR } else { Join-Path $RuntimeDir "pretrained_models\Fun-CosyVoice3-0.5B" }
 $ModelId = "FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
 $RuntimeRepo = "https://github.com/QwenAudio/CosyVoice.git"
-# The wrapper depends on this runtime's AutoModel and inference signatures. Bump both pins together after testing.
+# The wrapper depends on this runtime's AutoModel, inference signatures, and private frontend extractor names. Bump both pins together after testing.
 $RuntimeCommit = "074ca6dc9e80a2f424f1f74b48bdd7d3fea531cc"
 $ModelRevision = "29e01c4e8d000f4bcd70751be16fa94bf3d85a18"
 $Python = if ($env:PYTHON) { $env:PYTHON } else { "python" }

@@ -30,6 +30,7 @@ import {
   DOCUMENT_RESULT_RECEIPT_KEYS,
   LOREBOOK_RESULT_RECEIPT_KEYS,
   MEMORIES_RECEIPT_KEYS,
+  openMemoriesPanel,
   serverMemoriesOperations,
   type MemoriesRouteDependencies,
 } from "@/utils/discord/interactions/memoriesRoutes";
@@ -68,6 +69,10 @@ function requireRoute(customId: string): ParsedInteractionRoute {
 function makeMemory(id: number, overrides: Partial<ServerMemoryRow> = {}): ServerMemoryRow {
   return {
     server_memory_id: id,
+    decay_days: 0,
+    decay_counted_on: null,
+    reinforced_on: null,
+    manually_written: false,
     server_id: 1,
     persona_id: 10,
     persona_lineage_id: 1770,
@@ -673,6 +678,36 @@ describe("memories permissions and scoping", () => {
 
     return { dependencies, calls, memories };
   }
+
+  it("opens each category on the persona the persona option names", async () => {
+    const lorebookLineages: (number | null)[] = [];
+    const { dependencies, calls } = createTestDependencies({
+      loadLorebooks: async (_serverId, lineageId) => {
+        lorebookLineages.push(lineageId);
+        return { status: "fresh" as const, entries: [] };
+      },
+    });
+    const open = (page: string) =>
+      openMemoriesPanel(
+        {
+          user: { id: "user-42", username: "user42" },
+          guildId: "guild-123",
+          memberPermissions: { has: () => true },
+          editReply: async () => undefined,
+        } as unknown as ChatInputCommandInteraction,
+        "en-US",
+        { page, persona: "anon" },
+        dependencies,
+      );
+
+    await open("memories");
+    await open("documents");
+    await open("lorebooks");
+
+    expect(calls).toContain("loadMemories:1:1880:undefined");
+    expect(calls).toContain("loadDocuments:1:20");
+    expect(lorebookLineages).toEqual([1880]);
+  });
 
   it("retries an unavailable initial panel after scope recovery", async () => {
     const { dependencies, calls } = createTestDependencies();
@@ -2439,6 +2474,53 @@ describe("memories permissions and scoping", () => {
 });
 
 describe("memories teaching gate on edit and remove", () => {
+  it("requests manual protection for single adds, batches, and every unprotected edit-form save", async () => {
+    const row = makeMemory(7, { content: "stored", channel_disc_ids: [], manually_written: false });
+    const add = spyOn(serverMemoryRepository, "add").mockResolvedValue(makeMemory(8, { manually_written: true }));
+    const batch = spyOn(serverMemoryRepository, "addBatch").mockResolvedValue(true);
+    const edit = spyOn(serverMemoryRepository, "edit").mockResolvedValue(true);
+    const load = spyOn(serverMemoryRepository, "loadServerMemoriesScoped").mockResolvedValue([row]);
+    const contents = spyOn(serverMemoryRepository, "loadServerMemoryContents").mockResolvedValue([]);
+    const limit = spyOn(serverMemoryRepository, "checkServerMemoryLimit").mockResolvedValue({
+      isValid: true,
+      currentCount: 0,
+      maxAllowed: 100,
+    });
+    const invalidate = spyOn(tomoriStateCache, "invalidateTomoriStateCache").mockImplementation(() => {});
+    const scope = {
+      serverId: 1,
+      personaId: 10,
+      personaLineageId: 1770,
+      taughtByUserId: 42,
+      workspaceId: "guild-123",
+      isBlacklisted: false,
+      canManage: true,
+      memteachingEnabled: true,
+    };
+    try {
+      expect((await serverMemoriesOperations.add({ ...scope, content: "new fact", channelDiscIds: [] })).status).toBe(
+        "success",
+      );
+      expect(add).toHaveBeenCalledWith(1, 10, 1770, 42, "new fact", "guild-123", [], { manuallyWritten: true });
+      expect(
+        (await serverMemoriesOperations.addBatch({ ...scope, contents: ["uploaded line"], channelDiscIds: [] })).status,
+      ).toBe("success");
+      expect(batch).toHaveBeenCalledWith(1, 10, 1770, 42, ["uploaded line"], [], { manuallyWritten: true });
+      for (const input of [
+        { content: "updated", channelDiscIds: [] },
+        { content: "stored", channelDiscIds: ["111111111111111111"] },
+        { content: "stored", channelDiscIds: [] },
+      ]) {
+        expect(await serverMemoriesOperations.edit({ ...scope, memoryId: 7, ...input })).toMatchObject({
+          status: "success",
+          row: { manually_written: true },
+        });
+        expect(edit).toHaveBeenLastCalledWith(7, input.content, input.channelDiscIds, { manuallyWritten: true });
+      }
+    } finally {
+      for (const spy of [add, batch, edit, load, contents, limit, invalidate]) spy.mockRestore();
+    }
+  });
   /**
    * Server memory edit and remove operations independently gate on `server_memteaching_enabled`
    * and on the server blacklist, not just memory addition. The two guards are asserted separately
@@ -2537,7 +2619,7 @@ describe("saving an item with an unresolved legacy channel scope", () => {
         channelDiscIds: [],
       });
       expect(result.status).toBe("success");
-      expect(editSpy).toHaveBeenCalledWith(7, "Same", []);
+      expect(editSpy).toHaveBeenCalledWith(7, "Same", [], { manuallyWritten: true });
     } finally {
       loadSpy.mockRestore();
       editSpy.mockRestore();

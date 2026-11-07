@@ -59,6 +59,7 @@ let toolExecuteCalls: Array<{
   name: string;
   args: Record<string, unknown>;
   usageContext?: ToolContext["usageContext"];
+  memoryEmbeddingResolved?: boolean;
 }> = [];
 let toolExecuteQueue: ToolResult[] = [];
 let requiresFollowUp = false;
@@ -176,7 +177,14 @@ scopedMock.module("@/tools/toolRegistry", () => ({
   // than spread or the remaining registry methods vanish for later files.
   ToolRegistry: overrideMembers(realToolRegistry.ToolRegistry, {
     executeTool: async (name: string, args: Record<string, unknown>, context: ToolContext) => {
-      toolExecuteCalls.push({ name, args, usageContext: context.usageContext });
+      toolExecuteCalls.push({
+        name,
+        args,
+        usageContext: context.usageContext,
+        ...(context.memoryEmbeddingResolved === undefined
+          ? {}
+          : { memoryEmbeddingResolved: context.memoryEmbeddingResolved }),
+      });
       const next = toolExecuteQueue.shift();
       return next ?? { success: true, data: { result: "ok" } };
     },
@@ -495,6 +503,19 @@ describe("runToolLoop — contract tests", () => {
 
     const context = makeContext();
     context.usageContext = { credentialProvider: "test-option", credentialScope: "personal" };
+    context.memoryRecall = {
+      outcome: "provider_error",
+      embeddingResolved: true,
+      totalMs: 0,
+      candidateCount: 1,
+      scored: [],
+      reinforced: [],
+      recalled: [],
+      missing: [],
+      queryTimings: { queryTokens: 1 },
+      dormantTokens: 1,
+      recalledTokens: 0,
+    };
     const result = await runToolLoop(makeParams(context, provider));
 
     expect(result.status).toBe("completed");
@@ -505,6 +526,7 @@ describe("runToolLoop — contract tests", () => {
     expect(toolExecuteCalls[0]?.name).toBe("echo_tool");
     expect(toolExecuteCalls[0]?.args).toEqual({ text: "hello" });
     expect(toolExecuteCalls[0]?.usageContext).toBe(context.usageContext);
+    expect(toolExecuteCalls[0]?.memoryEmbeddingResolved).toBe(true);
 
     expect(capturedHistories).toHaveLength(2);
 

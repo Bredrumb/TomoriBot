@@ -40,7 +40,8 @@ whether the active model supports tool calling, which usually names the setting 
 :::note[For prompt authors]
 When customizing her system prompt or persona instructions, reference tools by their **prompt
 macros** from the table above rather than hardcoding tool names, because the macros expand to the
-correct names at context-assembly time and degrade gracefully when a tool is not available.
+correct names at context-assembly time. When a tool is not available, its macro reads "an unavailable
+tool", so wrap the sentence in a `{{if tool:...}}` block (shown below) to leave it out entirely.
 `{pin_tool}` and `{timestamp_refresh_tool}` still work as compatibility aliases for
 `{manage_message_tool}` and `{message_metadata_tool}`. The web search and URL tools below
 have macros too: `{web_search_tool}`, `{image_search_tool}`, `{video_search_tool}`,
@@ -54,7 +55,7 @@ dynamically to the best available engine, including server MCP replacements.
 Prompt text that supports the tool macros above also supports scoped conditionals:
 
 ```text
-{{if capability:self_teaching}}
+{{if tool:create_long_term_memory}}
 Use {memory_tool} when a detail is worth remembering.
 {{else}}
 Do not promise to save long-term memories.
@@ -70,7 +71,8 @@ and may contain one `{{else}}`; general `and`/`or` expressions are not supported
 The supported capability names are `tool_use`, `self_teaching`, `personal_memories`,
 `emoji_usage`, `sticker_usage`, `web_search`, `manage_message`, `thread_creation`,
 `image_generation`, `video_generation`, `voice_message`, `user_blocking`,
-`short_term_memory`, and `time_awareness`.
+`short_term_memory`, and `time_awareness`. `tool_use` is also off when the active model cannot call
+tools.
 
 Tool conditions reflect provider/model support, server configuration, configured backends,
 MCP replacements, and the current Deliberate Tool Mode allowlist. They do not bypass or

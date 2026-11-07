@@ -89,7 +89,7 @@ READMEs and knows nothing of the docs router, so a root-relative link there poin
 
 | Where | Link to a page that exists in that locale | Link to a page that does not |
 |---|---|---|
-| `docs/{locale}/**` | `/features/knowledge/memory/` | `/self-hosting/...` |
+| `docs/{locale}/**` | `/features/knowledge/memory/long-term-memory/` | `/self-hosting/...` |
 | `.github/README_{code}.md` | Full `docs.tomoribot.app` URL with the locale prefix | Full URL with `/en/` |
 | `src/locales/{code}/**` strings | Absolute URL with the locale prefix | Absolute English URL |
 

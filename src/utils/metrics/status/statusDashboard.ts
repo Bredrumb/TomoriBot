@@ -9,6 +9,11 @@ import { buildServerChannelPages } from "@/utils/metrics/status/serverChannelPag
 import { buildServerConfigPages } from "@/utils/metrics/status/serverConfigPages";
 import { buildServerModelPages } from "@/utils/metrics/status/serverModelPages";
 import type { StatusPageCategory } from "@/utils/metrics/status/statusPageRenderer";
+import {
+  STATUS_CATEGORIES,
+  STATUS_CATEGORY_LABEL_KEYS,
+  type StatusCategory,
+} from "@/utils/discord/statusDashboardCatalog";
 import { canViewPromptText } from "@/utils/text/promptInspection/delivery";
 
 export interface StatusDashboardBuildDependencies {
@@ -46,33 +51,17 @@ export async function resolveStatusDashboardCategories(
     dependencies.buildPersonalStatusPages(interaction, userData, locale),
   ]);
 
-  const categories: StatusPageCategory[] = [
-    {
-      id: "persona",
-      labelKey: "commands.status.scope_choice_persona",
-      pages: [],
-    },
-    {
-      id: "behavior",
-      labelKey: "commands.status.scope_choice_behavior",
-      pages: [configPages[0], configPages[3], channelPages[0]],
-    },
-    {
-      id: "access",
-      labelKey: "commands.status.scope_choice_access",
-      pages: [configPages[1], configPages[2], modelPages[2]],
-    },
-    {
-      id: "personal",
-      labelKey: "commands.status.scope_choice_personal",
-      pages: personalPages,
-    },
-    {
-      id: "models",
-      labelKey: "commands.status.scope_choice_models",
-      pages: [modelPages[0], modelPages[1], modelPages[3], configPages[4]],
-    },
-  ];
+  const pagesByCategory: Record<StatusCategory, StatusPageCategory["pages"]> = {
+    persona: [],
+    behavior: [configPages[0], configPages[3], channelPages[0]],
+    access: [configPages[1], configPages[2], modelPages[2]],
+    personal: personalPages,
+    models: [modelPages[0], modelPages[1], modelPages[3], configPages[4]],
+  };
 
-  return categories;
+  return STATUS_CATEGORIES.map((id) => ({
+    id,
+    labelKey: STATUS_CATEGORY_LABEL_KEYS[id],
+    pages: pagesByCategory[id],
+  }));
 }

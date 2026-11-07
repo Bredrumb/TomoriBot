@@ -15,19 +15,21 @@ Trang này bao gồm các điều khiển của người dùng trong Discord. Tr
 
 ### Dữ liệu được lưu trữ
 
-- Máy chủ và ký ức cá nhân
-- Hồ sơ cá nhân, đặc điểm và ví dụ đối thoại
+- Bộ nhớ máy chủ và bộ nhớ cá nhân, dữ liệu tìm kiếm và bản ghi sử dụng gần đây của chúng, cùng các lorebook tự tạo
+- Hồ sơ persona, đặc điểm và ví dụ đối thoại
 - Cài đặt cấu hình máy chủ
 - Khóa API của nhà cung cấp được mã hóa
-- Siêu dữ liệu biểu thức, quy tắc truy cập cá nhân và phương tiện biểu thức được tải lên
+- Siêu dữ liệu biểu cảm, quy tắc truy cập persona và phương tiện biểu cảm đã tải lên
 
 ### Không được lưu trữ
 
 - Lịch sử tin nhắn Discord (tin nhắn không được lưu trữ trong nhật ký tin nhắn liên tục)
 
-### Đã gửi tới nhà cung cấp AI của bạn
+### Đã gửi tới các nhà cung cấp AI của bạn
 
-Bất cứ khi nào được kích hoạt, TomoriBot sẽ tìm nạp các tin nhắn gần đây trong kênh cùng với các bộ nhớ có liên quan làm bối cảnh cho model. Cô ấy không đọc hoặc xử lý tin nhắn bên ngoài những yếu tố kích hoạt đó.
+Bất cứ khi nào được kích hoạt, TomoriBot sẽ tìm nạp các tin nhắn gần đây trong kênh cùng với các bộ nhớ có liên quan làm ngữ cảnh cho model. Bot không đọc hoặc xử lý tin nhắn bên ngoài những lần kích hoạt đó.
+
+Khi một model embedding được thiết lập, nhà cung cấp của nó sẽ nhận tin nhắn mới nhất cùng văn bản tài liệu và bộ nhớ mà nó tìm kiếm. Đây có thể là nhà cung cấp khác với nhà cung cấp tạo câu trả lời. Bộ nhớ cá nhân bị ẩn bởi cài đặt quyền riêng tư sẽ không được đưa vào tìm kiếm. Dữ liệu tìm kiếm được xóa cùng với bộ nhớ tương ứng; xem [Suy giảm bộ nhớ](/features/knowledge/memory/memory-decay/) để biết về việc tự động tạm nghỉ và thay thế.
 
 :::note
 Nhà cung cấp AI mà bạn đã chọn (Google, OpenRouter, NovelAI, …) xử lý tin nhắn theo chính sách quyền riêng tư của riêng họ. Tránh chia sẻ thông tin cá nhân nhạy cảm hoặc dữ liệu bí mật.
@@ -90,4 +92,4 @@ Những hành động này sẽ xóa vĩnh viễn hoặc đặt lại dữ liệ
 - `/personal config`: kiểm soát mức hiển thị của bạn, đến mức ẩn hoàn toàn (không tham gia vào ngữ cảnh bộ nhớ), và tắt [Persona tag bạn](/features/chatting-personality/natural-nudges/#ping-user), những gợi ý nhàn rỗi mà persona tag bạn để bắt đầu cuộc trò chuyện.
 - `/config` > `Quyền hạn`: người quản lý máy chủ có thể tắt các tính năng tự học và bộ nhớ.
 
-Xem [Bộ nhớ](/vi/features/knowledge/memory/) để biết cách quản lý bộ nhớ hàng ngày.
+Xem [Bộ nhớ](/features/knowledge/memory/long-term-memory/) để biết cách quản lý bộ nhớ hàng ngày.

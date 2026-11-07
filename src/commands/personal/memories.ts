@@ -8,6 +8,7 @@ import {
 import type { UserRow } from "@/types/db/schema";
 import { buildInitialPersonalMemoriesPanel } from "@/utils/discord/interactions/personalMemoriesRoutes";
 import { deliverGuardedPanel } from "@/utils/discord/interactions/panelController";
+import { handleWorkspacePersonaAutocomplete } from "@/utils/discord/autocomplete/personaAutocomplete";
 import { localizer } from "@/utils/text/localizer";
 import {
   autocompleteManagedIdentity,
@@ -20,12 +21,22 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
     .setDescription(localizer("en-US", "commands.personal.memories.description"))
     .addStringOption((option) =>
       option
+        .setName("persona")
+        .setDescription(localizer("en-US", "commands.personal.memories.persona_description"))
+        .setAutocomplete(true),
+    )
+    .addStringOption((option) =>
+      option
         .setName("identity")
         .setDescription(localizer("en-US", "commands.personal.memories.identity_description"))
         .setAutocomplete(true),
     );
 
-export async function autocomplete(_client: Client, interaction: AutocompleteInteraction): Promise<void> {
+export async function autocomplete(client: Client, interaction: AutocompleteInteraction): Promise<void> {
+  if (interaction.options.getFocused(true).name === "persona") {
+    await handleWorkspacePersonaAutocomplete(client, interaction);
+    return;
+  }
   await autocompleteManagedIdentity(interaction);
 }
 
@@ -46,6 +57,7 @@ export async function execute(
       undefined,
       undefined,
       rawIdentity ? (identityId ?? -1) : undefined,
+      interaction.options.getString("persona"),
     ),
     {
       method: "editReply",

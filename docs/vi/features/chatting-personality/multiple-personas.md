@@ -9,7 +9,7 @@ sidebar:
 aiGenerated: true
 ---
 
-Tên, avatar, đặc điểm, phong cách nói chuyện và hành vi của TomoriBot được lưu trong persona. Bạn có thể dùng nhiều persona cùng lúc, mỗi persona là một nhân vật riêng với từ kích hoạt và avatar webhook riêng. Trang này giải thích hành vi của persona. Xem [Bộ nhớ](/vi/features/knowledge/memory/) để quản lý kiến thức và bộ nhớ.
+Tên, avatar, đặc điểm, phong cách nói chuyện và hành vi của TomoriBot được lưu trong persona. Bạn có thể dùng nhiều persona cùng lúc, mỗi persona là một nhân vật riêng với từ kích hoạt và avatar webhook riêng. Trang này giải thích hành vi của persona. Xem [Bộ nhớ](/vi/features/knowledge/memory/long-term-memory/) để quản lý kiến thức và bộ nhớ.
 
 ## Tạo persona
 

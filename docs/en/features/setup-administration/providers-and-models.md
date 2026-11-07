@@ -79,7 +79,7 @@ In `/config` > Models > Switch Models, you can assign models and endpoints acros
 
 - **Text**: the main chat model.
 - **Vision**: reads images when the chat model cannot.
-- **Embeddings**: powers the [document knowledge base](/features/knowledge/memory/#document-knowledge-base-rag).
+- **Embeddings**: powers the [document knowledge base](/features/knowledge/memory/documents/).
 - **Decision**: a registered [Decision model](#decision-models). [Natural Nudges](/features/chatting-personality/natural-nudges/#active-nudges) uses it to decide when to join a conversation.
 - **Standard Image**: standard image generation (see [Image Generation](/features/capabilities/media-generation/image-generation/)).
 - **NovelAI Image**: [NovelAI image generation](/features/integrations/novelai/#image-generation).

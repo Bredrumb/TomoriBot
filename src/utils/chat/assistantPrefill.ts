@@ -112,6 +112,9 @@ export function resolvePrefillMode(source: PrefillSource, blocker: PrefillBlocke
   return source === "server" ? "skip" : "instruction";
 }
 
+const TRAILING_OWN_MESSAGE_DIRECTIVE =
+  "Your own message above is the latest one in the chat and has already been sent. Write your next message without repeating it.";
+
 /**
  * Applies the turn prefill to one attempt's context. Runs per attempt because a fallback model can
  * differ from the primary: a prefill baked into the shared base would 400 when a model that
@@ -120,6 +123,10 @@ export function resolvePrefillMode(source: PrefillSource, blocker: PrefillBlocke
  * `outputPrefill` is the exact `{bot}: {text}` string the trailing turn carries. The segment
  * processor strips an echo of it, and the prefix-completion adapters only stamp `prefix: true`
  * when the trailing assistant content equals it.
+ *
+ * A context that still ends on the persona's own delivered message gets a trailing user directive,
+ * because no chat backend accepts that turn as intended: Gemini rejects it, DeepSeek rejects it
+ * without `prefix: true`, and a backend that continues it splices onto text already in the channel.
  */
 export async function applyAssistantPrefill(args: {
   contextItems: StructuredContextItem[];
@@ -127,6 +134,24 @@ export async function applyAssistantPrefill(args: {
   tomoriState: TomoriState;
   forceReason?: boolean;
 }): Promise<{ contextItems: StructuredContextItem[]; outputPrefill: string | undefined }> {
+  const applied = await applyTurnPrefill(args);
+  if (
+    args.tomoriState.llm.llm_provider === "novelai" ||
+    applied.contextItems.at(-1)?.role !== "model" ||
+    endsWithNativePrefill(applied.contextItems, applied.outputPrefill)
+  ) {
+    return applied;
+  }
+
+  const { buildTailDirectiveMessage } = await import("@/utils/chat/contextAnnotations");
+  const directive = buildTailDirectiveMessage(TRAILING_OWN_MESSAGE_DIRECTIVE);
+  return directive ? { ...applied, contextItems: [...applied.contextItems, directive] } : applied;
+}
+
+async function applyTurnPrefill(args: Parameters<typeof applyAssistantPrefill>[0]): Promise<{
+  contextItems: StructuredContextItem[];
+  outputPrefill: string | undefined;
+}> {
   if (!args.prefill) return { contextItems: args.contextItems, outputPrefill: undefined };
 
   const llm = args.tomoriState.llm;

@@ -20,7 +20,13 @@ import {
   type StatusCategory,
 } from "@/utils/discord/statusDashboardCatalog";
 import { validateAndFallbackPanelPayload } from "@/utils/discord/ui/interactionCore";
-import { buildCategoryButtonRow, buildPaginationRow, buildPanelContainer } from "@/utils/discord/ui/panel";
+import {
+  buildCategoryButtonRow,
+  buildPaginationRow,
+  buildPanelContainer,
+  buildPanelReceiptContainer,
+} from "@/utils/discord/ui/panel";
+import type { PanelReceipt } from "@/types/discord/panel";
 import { ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
@@ -392,6 +398,7 @@ export async function renderStatusPageDashboard(
   categories: StatusPageCategory[],
   initialCategory: StatusCategory,
   identity: StatusDashboardIdentity = {},
+  receipt?: PanelReceipt,
 ): Promise<void> {
   const initial = categories.find((category) => category.id === initialCategory);
   if (!initial || initial.pages.length === 0) return;
@@ -401,5 +408,8 @@ export async function renderStatusPageDashboard(
   const render = (disabled = false) =>
     dashboardPayload(interaction.id, locale, categories, activeCategory, activePage, disabled, identity);
 
-  await interaction.editReply(render());
+  const payload = render();
+  await interaction.editReply(
+    receipt ? { ...payload, components: [...payload.components, buildPanelReceiptContainer(receipt)] } : payload,
+  );
 }

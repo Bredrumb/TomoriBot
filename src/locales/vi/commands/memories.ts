@@ -1,6 +1,8 @@
 export default {
   memories: {
     description: `Kiểm tra và quản lý bộ nhớ máy chủ, tài liệu, lorebook và bộ nhớ ngắn hạn.`,
+    page_description: `Danh mục hiển thị khi mở bảng điều khiển.`,
+    persona_description: `Persona có bộ nhớ, tài liệu hoặc lorebook cần mở.`,
     category_memories: `Bộ nhớ`,
     category_documents: `Tài liệu`,
     category_lorebooks: `Lorebook`,
@@ -10,7 +12,7 @@ export default {
     stale_warning:
       "Dữ liệu đã lưu có thể đã cũ do đọc dữ liệu thất bại. Không thể ghi dữ liệu cho đến khi đọc lại thành công.",
     retry: `Thử lại`,
-    memories_title: `[Bộ nhớ máy chủ](https://docs.tomoribot.app/vi/features/knowledge/memory/#personal-vs-server-memories)`,
+    memories_title: `[Bộ nhớ máy chủ](https://docs.tomoribot.app/vi/features/knowledge/memory/long-term-memory/#personal-vs-server-memories)`,
     memories_description: "Các bộ nhớ này áp dụng trên toàn máy chủ này mỗi khi persona này đang hoạt động.",
     persona_default_name: `Persona`,
     persona_select_placeholder: `Chọn một persona để xem bộ nhớ...`,
@@ -79,7 +81,7 @@ export default {
     owner_scope_notice:
       "Bạn chỉ thấy các bộ nhớ mà bạn đã dạy trên máy chủ này. Thành viên có quyền Quản lý Máy chủ có thể xem và sửa bộ nhớ của mọi thành viên.",
     no_personas: `Chưa cấu hình persona nào cho máy chủ này.`,
-    documents_title: `[Tài liệu](https://docs.tomoribot.app/vi/features/knowledge/memory/#document-knowledge-base-rag)`,
+    documents_title: `[Tài liệu](https://docs.tomoribot.app/vi/features/knowledge/memory/documents/)`,
     documents_description: "Tài liệu tham khảo đính kèm với máy chủ này hoặc với một persona cụ thể.",
     documents_teaching_disabled: `Quyền truy cập tài liệu của thành viên đang bị tắt trên máy chủ này.`,
     document_scope_persona: `Phạm vi persona`,
@@ -175,7 +177,7 @@ export default {
     embedding_credentials_missing_detail: `Cấu hình nhà cung cấp embedding trước khi tiếp tục.`,
     embedding_model_missing_heading: `Thiếu model embedding`,
     embedding_model_missing_detail: `Cấu hình model embedding trước khi tiếp tục.`,
-    lorebooks_title: `[Lorebook](https://docs.tomoribot.app/vi/features/knowledge/lorebooks/)`,
+    lorebooks_title: `[Lorebook](https://docs.tomoribot.app/vi/features/knowledge/memory/lorebooks/)`,
     lorebooks_description: `Bộ nhớ nâng cao cho thế giới nhập vai, nhân vật và chi tiết cốt truyện định kỳ. Dùng Bộ nhớ cho các cuộc trò chuyện hàng ngày.`,
     lorebook_scope_serverwide: `Toàn máy chủ`,
     lorebook_scope_persona: `Persona`,
@@ -320,7 +322,7 @@ export default {
     lorebook_import_invalid_detail: `Một hoặc nhiều mục nằm ngoài giới hạn lorebook. Không có gì được nhập.`,
     lorebook_import_failed_heading: `Nhập tệp thất bại`,
     lorebook_import_failed_detail: `Quá trình nhập thất bại. Không có gì bị thay đổi.`,
-    stm_title: `[Bộ nhớ ngắn hạn](https://docs.tomoribot.app/vi/features/knowledge/memory/#short-term-memory-stm)`,
+    stm_title: `[Bộ nhớ ngắn hạn](https://docs.tomoribot.app/vi/features/knowledge/memory/short-term-memory/)`,
     stm_empty: `Không có mục bộ nhớ ngắn hạn nào đang hoạt động cho máy chủ này.`,
     stm_active_count: `{count} mục bộ nhớ ngắn hạn đang hoạt động.`,
     stm_manager_only: "Bạn cần quyền Quản lý Máy chủ để xem bộ nhớ ngắn hạn của máy chủ.",

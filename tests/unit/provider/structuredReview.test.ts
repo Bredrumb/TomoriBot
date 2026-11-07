@@ -443,10 +443,12 @@ describe("private structured review transports", () => {
     for (const testProduction of ["false", "true"]) {
       const child = Bun.spawn([process.execPath, "--eval", script], {
         cwd: process.cwd(),
+        // Bun loads `.env` into the child unless the key is present, so an empty LOG_LEVEL keeps the default level.
         env: {
           ...process.env,
           RUN_ENV: "production",
           TEST_PRODUCTION: testProduction,
+          LOG_LEVEL: "",
           ERROR_DB_LOGGING_ENABLED: "false",
         },
         stdout: "pipe",

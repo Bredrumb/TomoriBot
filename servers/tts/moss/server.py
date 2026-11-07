@@ -4,6 +4,7 @@ import argparse
 import base64
 import binascii
 import gc
+import hashlib
 import importlib.util
 import io
 import json
@@ -11,6 +12,7 @@ import os
 import sys
 import tempfile
 import threading
+from collections import OrderedDict
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
@@ -57,11 +59,14 @@ MAX_REF_AUDIO_BYTES = 10 * 1024 * 1024
 MAX_NEW_TOKENS = int(os.getenv("MOSS_TTS_MAX_NEW_TOKENS", "4096"))
 DEFAULT_LANGUAGE = os.getenv("MOSS_TTS_DEFAULT_LANGUAGE", "").strip()
 LANGUAGE_NAMES = {"en": "English", "ja": "Japanese", "zh": "Chinese"}
+# Codes take about 1.2 KB per reference second, so even 32 maximum-size clips stay under 10 MB.
+REFERENCE_CACHE_LIMIT = 32
 
 model = None
 processor = None
 active_mode: Optional[str] = None
 model_lock = threading.Lock()
+reference_codes_cache: OrderedDict[str, torch.Tensor] = OrderedDict()
 
 
 class SynthesizeRequest(BaseModel):
@@ -181,9 +186,19 @@ def encode_reference(path: str) -> torch.Tensor:
   # torchcodec and needs FFmpeg shared DLLs that a Windows venv rarely has. Decoding with soundfile and
   # handing the processor pre-encoded codes keeps FFmpeg out of the clone path.
   assert processor is not None
-  samples, sampling_rate = sf.read(path, dtype="float32", always_2d=True)
+  audio_bytes = Path(path).read_bytes()
+  key = hashlib.sha256(audio_bytes).hexdigest()
+  cached = reference_codes_cache.get(key)
+  if cached is not None:
+    reference_codes_cache.move_to_end(key)
+    return cached
+  samples, sampling_rate = sf.read(io.BytesIO(audio_bytes), dtype="float32", always_2d=True)
   waveform = torch.from_numpy(samples.T.copy())
-  return processor.encode_audios_from_wav([waveform], sampling_rate)[0]
+  codes = processor.encode_audios_from_wav([waveform], sampling_rate)[0]
+  reference_codes_cache[key] = codes
+  if len(reference_codes_cache) > REFERENCE_CACHE_LIMIT:
+    reference_codes_cache.popitem(last=False)
+  return codes
 
 
 def generate_audio(mode: str, text: str, instruct: Optional[str], language: Optional[str], reference: Optional[str]) -> bytes:

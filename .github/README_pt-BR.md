@@ -128,7 +128,7 @@ Ou mande uma mensagem direta (DM) para a TomoriBot e diga oi!
 - `/config` e `/personal config` - Várias maneiras de ajustar a TomoriBot no servidor atual do Discord ou para você
 - `/providers` e `/personal providers` - Adicione mais endpoints de modelos ou provedores em nuvem
 - `/persona` - Dê a ela uma personalidade ou adicione novos personagens (veja [Múltiplas Personas](https://docs.tomoribot.app/pt-BR/features/chatting-personality/multiple-personas/))
-- `/memories` - Ensine fatos a ela através de conversas (veja [Memória](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/))
+- `/memories` - Ensine fatos a ela através de conversas (veja [Memória](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/long-term-memory/))
 
 Consulte a [referência de comandos](https://docs.tomoribot.app/pt-BR/features/command-reference/) completa para todos os comandos slash.
 

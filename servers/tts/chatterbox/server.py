@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import os
 import tempfile
 import threading
+from collections import OrderedDict
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
@@ -25,9 +27,13 @@ FAST_MODEL = os.getenv("CHATTERBOX_FAST_MODEL", "turbo").strip().lower()
 if FAST_MODEL not in {"turbo", "nano"}:
   raise ValueError("CHATTERBOX_FAST_MODEL must be 'turbo' or 'nano'.")
 
+# Each entry holds about 170 KB of model-device tensors (speaker embedding plus 10 s of prompt features), so 32 cost about 5 MB of VRAM.
+CONDITIONALS_CACHE_LIMIT = 32
+
 turbo_model = None
 standard_model = None
 model_lock = threading.Lock()
+conditionals_cache: OrderedDict[tuple[bool, str], object] = OrderedDict()
 
 
 class SynthesizeRequest(BaseModel):
@@ -54,6 +60,22 @@ def decode_ref_audio(raw_base64: str, directory: str) -> str:
 
 def clamp_nonnegative(value: float) -> float:
   return max(0.0, value)
+
+
+def apply_reference(active_model, turbo: bool, ref_path: str) -> None:
+  key = (turbo, hashlib.sha256(Path(ref_path).read_bytes()).hexdigest())
+  cached = conditionals_cache.get(key)
+  if cached is not None:
+    conditionals_cache.move_to_end(key)
+    active_model.conds = cached
+    return
+  # Without no_grad the S3Gen speaker embedding keeps its autograd graph, about 287 MB of VRAM per cached voice.
+  with torch.no_grad():
+    # 0.0 is what Turbo's generate() prepares; standard generate() swaps in the request's exaggeration itself.
+    active_model.prepare_conditionals(ref_path, exaggeration=0.0)
+  conditionals_cache[key] = active_model.conds
+  if len(conditionals_cache) > CONDITIONALS_CACHE_LIMIT:
+    conditionals_cache.popitem(last=False)
 
 
 def load_model() -> None:
@@ -116,14 +138,13 @@ def synthesize(payload: SynthesizeRequest) -> Response:
     output_path = Path(temp_dir) / "output.wav"
 
     with model_lock:
+      active_model = turbo_model if payload.chatterbox_turbo else load_standard_model()
+      apply_reference(active_model, payload.chatterbox_turbo, ref_path)
       if payload.chatterbox_turbo:
-        active_model = turbo_model
-        wav = active_model.generate(text, audio_prompt_path=ref_path)
+        wav = active_model.generate(text)
       else:
-        active_model = load_standard_model()
         wav = active_model.generate(
           text,
-          audio_prompt_path=ref_path,
           cfg_weight=clamp_nonnegative(payload.cfg_weight),
           exaggeration=clamp_nonnegative(payload.exaggeration),
         )

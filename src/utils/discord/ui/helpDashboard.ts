@@ -30,7 +30,8 @@ import {
 } from "@/utils/discord/helpProviderGuides";
 import { SUPPORT_SERVER_URL, buildDocsUrl } from "@/utils/discord/docsLinks";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
-import { buildPanelContainer } from "@/utils/discord/ui/panel";
+import { buildPanelContainer, buildPanelReceiptContainer } from "@/utils/discord/ui/panel";
+import type { PanelReceipt } from "@/types/discord/panel";
 import { isHostedPolicyEnvironment } from "@/utils/misc/hostedPolicy";
 import {
   DISCORD_BUTTON_LABEL_MAX,
@@ -256,6 +257,7 @@ export function buildHelpDashboardPayload(
   categoryId?: string,
   pageId?: string,
   variantId?: string,
+  receipt?: PanelReceipt,
 ): HelpDashboardPayload {
   const { category, page, variant } = resolveHelpSelection(categoryId, pageId, variantId);
   const activeVariant = variant ?? page.variants?.[0];
@@ -358,7 +360,11 @@ export function buildHelpDashboardPayload(
 
   const container = buildPanelContainer(content, TOMORI_TURQUOISE);
   return {
-    components: [container, buildPersistentFooterRow(locale, activeVariant?.docsPath ?? page.docsPath)],
+    components: [
+      container,
+      buildPersistentFooterRow(locale, activeVariant?.docsPath ?? page.docsPath),
+      ...(receipt ? [buildPanelReceiptContainer(receipt)] : []),
+    ],
     flags: MessageFlags.IsComponentsV2,
   };
 }

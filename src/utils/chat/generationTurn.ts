@@ -5,7 +5,7 @@ import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context
 import type { LLMProvider, ProviderConfig, StreamResult } from "@/types/provider/interfaces";
 import type { ProviderError } from "@/types/stream/interfaces";
 import type { ToolContext } from "@/types/tool/interfaces";
-import { resolveServerTextModel } from "@/utils/provider/textModelSelection";
+import { resolveRouteTextModel } from "@/utils/provider/textModelSelection";
 import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import { loadSpeechRoutingPolicy } from "@/utils/db/repositories/SpeechRepository";
 import { type FallbackNoticeAttempt, sendFallbackModelUsageNotice } from "@/utils/discord/fallbackModelNotice";
@@ -17,7 +17,6 @@ import { buildCustomProviderName } from "@/utils/provider/customProviderUtils";
 import { getProviderForTomori, ProviderFactory } from "@/utils/provider/providerFactory";
 import { formatProviderErrorCodeForDisplay, isStreamInterruption } from "@/utils/provider/providerErrorClassification";
 import { applyProviderContextTruncation } from "@/utils/provider/contextBudget";
-import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { withSavedProviderConfig } from "@/utils/provider/savedProviderConfig";
 import { decryptApiKey } from "@/utils/security/crypto";
 import {
@@ -203,6 +202,7 @@ async function runGenerationAttempts(
         isUserImpersonation: context.isUserImpersonation,
         tomoriState: attempt.tomoriState,
         deliberateToolAllowedNames: context.streamingContext.deliberateToolAllowedNames,
+        sendsTools: (attempt.providerConfig.tools?.length ?? 0) > 0,
       });
 
       // Key rotation inner loop: try multiple keys for this attempt before giving up.
@@ -957,40 +957,24 @@ function shouldSendFallbackNotice(context: ChatTurnContext, result: GenerationTu
   return false;
 }
 
-/**
- * Which routing rules a resolved state should draw on.
- *
- * `planned` is the route the turn was planned on: a personal text route applies the
- * personal-provider overlay and ignores the channel override, and every other turn resolves the
- * server route exactly as `server` does. `server` is the route a personal turn falls back to, which
- * never applies the overlay.
- */
-type TextRoute = "planned" | "server";
-
-async function resolveTomoriStateForRoute(context: ChatTurnContext, route: TextRoute): Promise<TomoriState> {
+async function resolveTomoriStateForRoute(context: ChatTurnContext, route: "planned" | "server"): Promise<TomoriState> {
   const incoming = context.turn.lockedTurn.admission.incoming;
-  if (incoming.sceneTurn?.modelSelection) return context.currentPersona;
   const funding = context.supporterFunding;
-  const usePersonalRoute =
-    route === "planned" && (context.textCredentialSource === "personal" || funding?.fundingScope === "personal");
-  const base = usePersonalRoute
-    ? (
-        await applyPersonalProviderSelectionsToTomoriState(
-          context.currentPersona,
-          context.personalRoutingUserId,
-          context.personalTextProvider === "supporter",
-        )
-      ).tomoriState
-    : context.currentPersona;
-  const overriddenLlm = usePersonalRoute
-    ? incoming.llmOverrideCodename
-      ? ((await llmModelRepo.loadByProviderAndCodename(base.llm.llm_provider, incoming.llmOverrideCodename)) ?? {
-          ...base.llm,
-          llm_codename: incoming.llmOverrideCodename,
-        })
-      : base.llm
-    : await resolveServerTextModel(base, context.channel, context.isUserImpersonation, incoming.llmOverrideCodename);
+  const hasSceneModelSelection = Boolean(incoming.sceneTurn?.modelSelection);
+  const { base, llm: overriddenLlm } = await resolveRouteTextModel({
+    state: context.currentPersona,
+    route,
+    textCredentialSource: context.textCredentialSource,
+    personalRoutingUserId: context.personalRoutingUserId,
+    personalTextProvider: context.personalTextProvider,
+    supporterFundingScope: funding?.fundingScope ?? null,
+    channel: context.channel,
+    isUserImpersonation: context.isUserImpersonation,
+    hasSceneModelSelection,
+    llmOverrideCodename: incoming.llmOverrideCodename,
+  });
   if (
+    !hasSceneModelSelection &&
     route === "planned" &&
     context.textCredentialSource === "supporter" &&
     overriddenLlm.llm_provider === "openrouter"
@@ -1004,7 +988,6 @@ async function resolveTomoriStateForRoute(context: ChatTurnContext, route: TextR
     }
     return { ...base, llm: overriddenLlm, config: { ...base.config, api_key: null } };
   }
-
   let state: TomoriState = { ...base, llm: overriddenLlm };
 
   if (overriddenLlm.llm_provider.toLowerCase() !== base.llm.llm_provider.toLowerCase()) {
@@ -1271,8 +1254,13 @@ async function prepareProviderContextItems(args: {
   isUserImpersonation: boolean;
   tomoriState: TomoriState;
   deliberateToolAllowedNames: string[] | undefined;
+  /** Read from the built provider config, because a provider's live capability catalog can withdraw tools the state still allows. */
+  sendsTools: boolean;
 }): Promise<StructuredContextItem[]> {
   let contextItems = await resolveMediaForModel(args.contextItems, args.tomoriState, args.deliberateToolAllowedNames);
+  if (!args.sendsTools) {
+    contextItems = contextItems.filter((item) => !item.requiresToolCalling);
+  }
 
   // Verbatim prompt scaffolding is decided once, against the primary model, but every attempt
   // carries its own provider and parser. Adapt the shared base per attempt so a fallback in either

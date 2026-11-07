@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import io
 import os
 import re
@@ -8,6 +9,7 @@ import sys
 import tempfile
 import threading
 import time
+from collections import OrderedDict
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
@@ -49,6 +51,10 @@ MAX_REF_AUDIO_BYTES = 25 * 1024 * 1024
 # The speech tokenizer's trained prompt window. A longer clip is trimmed to the leading window
 # rather than refused, so the local server adapts to whatever reference the caller stored.
 MAX_REF_AUDIO_SECONDS = 30.0
+# Each entry holds at most about 0.5 MB of model-device tensors (30 s of prompt features), so 32 cost about 16 MB of VRAM.
+REFERENCE_CACHE_LIMIT = 32
+# Private upstream frontend methods; the installer's runtime pin keeps these names stable.
+REFERENCE_EXTRACTORS = ("_extract_speech_feat", "_extract_speech_token", "_extract_spk_embedding")
 
 SYSTEM_PROMPT = "You are a helpful assistant."
 END_OF_PROMPT = "<|endofprompt|>"
@@ -72,6 +78,7 @@ TAG_REGEX = re.compile(r"\[([^\]\r\n]{1,40})\]")
 
 model = None
 model_lock = threading.Lock()
+reference_feature_cache: OrderedDict[str, dict[str, object]] = OrderedDict()
 
 
 class SynthesizeRequest(BaseModel):
@@ -127,7 +134,43 @@ def load_model() -> None:
         load_vllm=LOAD_VLLM,
         fp16=FP16,
     )
+    cache_reference_features(model.frontend)
     log_info(f"Model loaded in {time.perf_counter() - started_at:.2f}s")
+
+
+def clone_features(value):
+    if isinstance(value, tuple):
+        return tuple(tensor.clone() for tensor in value)
+    return value.clone()
+
+
+def memoize_by_content(name: str, extract):
+    def extract_cached(prompt_wav: str):
+        key = hashlib.sha256(Path(prompt_wav).read_bytes()).hexdigest()
+        entry = reference_feature_cache.get(key)
+        if entry is None:
+            entry = reference_feature_cache[key] = {}
+            if len(reference_feature_cache) > REFERENCE_CACHE_LIMIT:
+                reference_feature_cache.popitem(last=False)
+        else:
+            reference_feature_cache.move_to_end(key)
+        if name not in entry:
+            entry[name] = extract(prompt_wav)
+        # frontend_zero_shot trims the returned length tensors in place, so callers get copies.
+        return clone_features(entry[name])
+
+    return extract_cached
+
+
+def cache_reference_features(frontend) -> None:
+    """Memoize the frontend's reference extractors by clip content.
+
+    Upstream reruns all three for every text segment, and on Windows the speech tokenizer runs on CPU ONNX
+    Runtime at about 1.4 s per call. Caching them separately from the prompt text keeps instruction requests,
+    whose prompt changes per message, on the cached path.
+    """
+    for name in REFERENCE_EXTRACTORS:
+        setattr(frontend, name, memoize_by_content(name, getattr(frontend, name)))
 
 
 @asynccontextmanager

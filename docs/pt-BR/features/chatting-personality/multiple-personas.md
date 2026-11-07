@@ -15,7 +15,7 @@ sidebar:
 aiGenerated: true
 ---
 
-A personalidade da TomoriBot fica em uma persona: nome, avatar, traços, jeito de falar e comportamento. Você pode usar várias personas ao mesmo tempo, cada uma como um personagem distinto com suas próprias palavras-gatilho e avatar de webhook. Esta página explica o comportamento das personas. Para fatos e memórias, veja [Memória](/pt-BR/features/knowledge/memory/).
+A personalidade da TomoriBot fica em uma persona: nome, avatar, traços, jeito de falar e comportamento. Você pode usar várias personas ao mesmo tempo, cada uma como um personagem distinto com suas próprias palavras-gatilho e avatar de webhook. Esta página explica o comportamento das personas. Para fatos e memórias, veja [Memória](/pt-BR/features/knowledge/memory/long-term-memory/).
 
 ## Criando uma Persona
 

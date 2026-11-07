@@ -58,7 +58,7 @@ interface.
 | She forgot something in another channel | Recent messages are channel-specific. Server memories, participant memories, and short-term memory provide selected information from other channels. |
 | `/refresh` made her forget | Refresh cuts off Recent messages and clears this channel's Short-term memory, but shouldn't remove long-term memory. Delete the refresh embed to remove the cut-off. |
 
-If you want something to survive all of the above, it has to become a long-term memory. See [Memory](/features/knowledge/memory/#long-term-memory).
+If you want something to survive all of the above, it has to become a long-term memory. See [Memory](/features/knowledge/memory/long-term-memory/).
 
 :::tip
 A larger message limit does not guarantee that more history reaches the model. When the prompt is

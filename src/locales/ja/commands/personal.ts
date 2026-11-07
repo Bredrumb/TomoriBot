@@ -22,6 +22,7 @@ export default {
     },
     memories: {
       description: `個人の長期記憶や短期間の会話コンテキストを管理します。`,
+      persona_description: `グローバルの記憶ではなく、あなたについての記憶を開くペルソナ。`,
       identity_description: `編集するメッセージプロキシのアイデンティティ。メッセージプロキシが無効の場合でも機能します。`,
       outdated_panel: `このパネルは古くなっています。{command} を使用して新しいパネルを開いてください。`,
       category_global: `グローバル`,
@@ -29,7 +30,7 @@ export default {
       global_title: `グローバルな個人の記憶`,
       global_description: `これらの記憶は、サーバーやペルソナを越えてあなたに引き継がれます。`,
       persona_title: `ペルソナ別・個人の記憶`,
-      persona_description:
+      persona_scope_description:
         "これらの記憶は、あなたが参加している 会話でこのペルソナが話している 場合にのみ適用されます。",
       selector_guidance: `下から個人の記憶を選択または追加してください：`,
       no_memories: `まだ記憶は保存されていません。`,
@@ -58,7 +59,7 @@ export default {
       persona_memory_count_one: `1件の記憶`,
       persona_memory_count_shared: `{count}件の記憶（{personas}体のペルソナで共有）`,
       persona_memory_count_one_shared: `1件の記憶（{personas}体のペルソナで共有）`,
-      stm_title: `[短期記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#short-term-memory-stm)`,
+      stm_title: `[短期記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/short-term-memory/)`,
       stm_active_count: `あなたに関するアクティブな要約：\`{count}\``,
       stm_clear_button: `自分の短期記憶を消去`,
       stm_crossserver_hint: "`/personal config` から、最近の会話をサーバー間で 引き継ぐかどうかを設定できます。",
@@ -104,6 +105,7 @@ export default {
     },
     config: {
       description: `個人の設定、プライバシー、モデル、プロフィールを管理します。`,
+      page_description: `パネルを開くときのページ。`,
       identity_description: `編集するメッセージプロキシのアイデンティティ。メッセージプロキシが無効の場合でも機能します。`,
       outdated_panel: `このパネルは古くなっています。{command} を使用して新しいパネルを開いてください。`,
       category_profile: `プロフィール`,
@@ -193,7 +195,7 @@ export default {
       memories_manage_hint: `\`/personal memories\` を使用して、あなたに関する記憶を管理できます`,
       stm_count_label: `現在、あなたの短期記憶が \`{count}\` 件キャッシュされています`,
       stm_clear_hint: `\`/personal memories\` を使用して、現在覚えていることを消去できます。`,
-      crossserver_section_title: `サーバー間 [短期記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#short-term-memory-stm)`,
+      crossserver_section_title: `サーバー間 [短期記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/short-term-memory/)`,
       crossserver_stm_off:
         "サーバー間短期記憶がオフになっているため、 サーバーを越えて最近の会話を覚えていることはできません。",
       crossserver_stm_on:

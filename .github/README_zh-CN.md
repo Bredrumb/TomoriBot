@@ -128,7 +128,7 @@ TomoriBot 是一套免费开源的 Discord 个人 AI 助理与角色扮演系统
 - `/config` 与 `/personal config` - 在当前 Discord 服务器或为你个人调整 TomoriBot 的多种方式
 - `/providers` 与 `/personal providers` - 添加更多模型端点或云端提供方
 - `/persona` - 为她赋予性格或添加新角色（参见[多个人格](https://docs.tomoribot.app/zh-CN/features/chatting-personality/multiple-personas/)）
-- `/memories` - 跨对话教导她记住事实（参见[记忆](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/)）
+- `/memories` - 跨对话教导她记住事实（参见[记忆](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/long-term-memory/)）
 
 查看完整的[指令参考](https://docs.tomoribot.app/zh-CN/features/command-reference/)以了解所有斜杠指令。
 

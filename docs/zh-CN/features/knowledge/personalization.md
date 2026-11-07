@@ -9,7 +9,7 @@ TomoriBot可以记住你在与她共享的每台服务器上跟踪你的个人�
 
 ## 个人记忆
 
-她了解到或记住的有关你的事实会在服务器之间跟随你。[内存](/zh-CN/features/knowledge/memory/#personal-vs-server-memories) 页面介绍了管理它们（添加、删除、导出或清除上下文）。
+她了解到或记住的有关你的事实会在服务器之间跟随你。[内存](/zh-CN/features/knowledge/memory/long-term-memory/#personal-vs-server-memories) 页面介绍了管理它们（添加、删除、导出或清除上下文）。
 
 ## 资料与人格感知称呼
 

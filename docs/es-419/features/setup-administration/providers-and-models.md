@@ -69,7 +69,7 @@ En `/config` > `Modelos` > Modelos de conmutador, puede asignar modelos y puntos
 
 - **Texto**: el modelo de chat principal.
 - **Visión**: lee imágenes cuando el modelo de chat no puede.
-- **Incrustaciones**: potencia la [base de conocimiento de documentos](/es-419/features/knowledge/memory/#document-knowledge-base-rag).
+- **Incrustaciones**: potencia la [base de conocimiento de documentos](/es-419/features/knowledge/memory/documents/).
 - **Decisión**: un [modelo de decisión](#decision-models) registrado. [Natural Nudges](/features/chatting-personality/natural-nudges/#active-nudges) lo utiliza para decidir cuándo unirse a una conversación.
 - **Imagen estándar**: generación de imágenes estándar (consulte [Generación de imágenes](/es-419/features/capabilities/media-generation/image-generation/)).
 - **Imagen NovelAI**: [generación de imágenes de NovelAI](/features/integrations/novelai/#image-generation).

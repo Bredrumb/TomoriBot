@@ -1,6 +1,8 @@
 export default {
   memories: {
     description: `サーバーの記憶、ドキュメント、ロアブック、短期記憶を確認・管理します。`,
+    page_description: `パネルを開くときのカテゴリ。`,
+    persona_description: `記憶、ドキュメント、ロアブックを開く対象のペルソナ。`,
     category_memories: `記憶`,
     category_documents: `ドキュメント`,
     category_lorebooks: `ロアブック`,
@@ -10,7 +12,7 @@ export default {
     stale_warning:
       "読み込みに失敗したため、保存済みデータが古い可能性があります。 再読み込みが成功するまで書き込み操作は利用できません。",
     retry: `再試行`,
-    memories_title: `[サーバーの記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#personal-vs-server-memories)`,
+    memories_title: `[サーバーの記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/long-term-memory/#personal-vs-server-memories)`,
     memories_description: "これらの記憶は、このペルソナが有効な間 このサーバー全体に適用されます。",
     persona_default_name: `ペルソナ`,
     persona_select_placeholder: `記憶を表示するペルソナを選択...`,
@@ -79,7 +81,7 @@ export default {
     owner_scope_notice:
       "あなたがこのサーバーで教えた記憶のみが表示されています。 「サーバー管理」を持つメンバーは、全メンバーの記憶を 表示・編集できます。",
     no_personas: `このサーバーにはペルソナが設定されていません。`,
-    documents_title: `[ドキュメント](https://docs.tomoribot.app/ja/features/knowledge/memory/#document-knowledge-base-rag)`,
+    documents_title: `[ドキュメント](https://docs.tomoribot.app/ja/features/knowledge/memory/documents/)`,
     documents_description: "このサーバーまたは単一のペルソナに紐づいた 参照ドキュメントです。",
     documents_teaching_disabled: `このサーバーではメンバーによるドキュメントアクセスが無効になっています。`,
     document_scope_persona: `ペルソナ単位`,
@@ -175,7 +177,7 @@ export default {
     embedding_credentials_missing_detail: `続行する前に埋め込みプロバイダーを設定してください。`,
     embedding_model_missing_heading: `埋め込みモデルがありません`,
     embedding_model_missing_detail: `続行する前に埋め込みモデルを設定してください。`,
-    lorebooks_title: `[ロアブック](https://docs.tomoribot.app/ja/features/knowledge/lorebooks/)`,
+    lorebooks_title: `[ロアブック](https://docs.tomoribot.app/ja/features/knowledge/memory/lorebooks/)`,
     lorebooks_description: `ロールプレイのワールド、キャラクター、繰り返し登場するストーリーの詳細に向けた高度な記憶機能です。日常会話には「記憶」を使用してください。`,
     lorebook_scope_serverwide: `サーバー全体`,
     lorebook_scope_persona: `ペルソナ`,
@@ -318,7 +320,7 @@ export default {
     lorebook_import_invalid_detail: `1つ以上のエントリがロアブックの制限を超えています。何もインポートされませんでした。`,
     lorebook_import_failed_heading: `インポートに失敗しました`,
     lorebook_import_failed_detail: `インポートに失敗しました。何も変更されませんでした。`,
-    stm_title: `[短期記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#short-term-memory-stm)`,
+    stm_title: `[短期記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/short-term-memory/)`,
     stm_empty: `このサーバーには有効な短期記憶エントリがありません。`,
     stm_active_count: `有効な短期記憶エントリ {count} 件。`,
     stm_manager_only: "サーバーの短期記憶を表示するには 「サーバー管理」権限が必要です。",

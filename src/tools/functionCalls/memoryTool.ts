@@ -9,7 +9,8 @@ import { invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import { invalidateUserCache } from "../../utils/cache/userCache";
 import { resolveTriggererDiscordId, resolveUserTarget } from "@/utils/discord/targetResolver";
 import { getMessageProxyHostProtection } from "@/utils/messageProxy/hostProtection";
-import { renderMemoryNoticeContent, memoryServerDiscId } from "./memoryNoticeContent";
+import { renderMemorySaveNoticeContent, memoryServerDiscId } from "@/tools/functionCalls/memoryNoticeContent";
+import { metricSampleRepository } from "@/utils/db/repositories/MetricSampleRepository";
 
 /**
  * Tool for remembering and learning new information during conversations
@@ -266,52 +267,57 @@ export class MemoryTool extends BaseTool {
 
     if (effectiveScope === "server_wide") {
       try {
-        const serverLimitCheck = await serverMemoryRepository.checkServerMemoryLimit(
-          tomoriState.server_id,
-          tomoriState.persona_lineage_id,
-        );
-        if (!serverLimitCheck.isValid) {
-          return {
-            success: false,
-            error: `Server memory limit reached. This server can have up to ${serverLimitCheck.maxAllowed} memories (currently: ${serverLimitCheck.currentCount}).`,
-            data: {
-              status: "memory_save_failed_limit_exceeded",
-              scope: "server_wide",
-              current_count: serverLimitCheck.currentCount,
-              max_allowed: serverLimitCheck.maxAllowed,
-              reason: `Server memory limit of ${serverLimitCheck.maxAllowed} memories has been reached. Please inform the user that they need to use '/memories' to remove some memories before I can learn new ones.`,
-            },
-          };
-        }
-
-        const dbResult = await serverMemoryRepository.add(
+        const saveResult = await serverMemoryRepository.addWithEviction(
           tomoriState.server_id,
           tomoriState.persona_id,
           tomoriState.persona_lineage_id,
           userRow.user_id,
           memoryContent,
+          context.memoryEmbeddingResolved === true,
+        );
+        if (saveResult.status === "refused") {
+          return {
+            success: false,
+            error: `Server memory limit reached. This server can have up to ${saveResult.limit} memories (currently: ${saveResult.currentCount}).`,
+            data: {
+              status: "memory_save_failed_limit_exceeded",
+              scope: "server_wide",
+              current_count: saveResult.currentCount,
+              max_allowed: saveResult.limit,
+              reason: `Server memory limit of ${saveResult.limit} memories has been reached. Please inform the user that they need to use '/memories' to remove some memories before I can learn new ones.`,
+            },
+          };
+        }
+
+        const dbResult = saveResult.memory;
+        const singleServerId = memoryServerDiscId(
+          context,
+          "Critical security error: No valid server or user ID available for memory processing",
+        );
+        invalidateTomoriStateCache(singleServerId);
+        if (saveResult.evicted) {
+          const fields = { scope: "server", decay_days: saveResult.evicted.decay_days };
+          log.metric("memory_eviction", fields);
+          void metricSampleRepository.recordSample("memory_eviction", fields);
+        }
+
+        log.success(
+          `Tomori self-taught a server memory for her own persona lineage (ID: ${dbResult.server_memory_id}): "${memoryContent}"`,
         );
 
-        if (dbResult) {
-          log.success(
-            `Tomori self-taught a server memory for her own persona lineage (ID: ${dbResult.server_memory_id}): "${memoryContent}"`,
-          );
-
-          const singleServerId = memoryServerDiscId(
-            context,
-            "Critical security error: No valid server or user ID available for memory processing",
-          );
-          const { processedContent: processedMemoryContent, preview: memoryPreview } = await renderMemoryNoticeContent({
+        try {
+          const notice = await renderMemorySaveNoticeContent({
             content: memoryContent,
             client: context.client,
             serverId: singleServerId,
             userName: userRow.user_nickname ?? context.message?.author.displayName ?? userRow.user_disc_id,
             botNickname: tomoriState.persona_nickname,
             personalMemoriesEnabled: tomoriState?.config.personal_memories_enabled,
+            locale: context.locale,
+            descriptionKey: "genai.self_teach.server_memory_learned_description",
+            forgottenContent: saveResult.evicted?.content,
           });
 
-          // The expand helper uses the same preview limit, letting users read
-          // the full memory ephemerally without channel clutter.
           await sendMemoryEmbedWithExpand(
             context,
             {
@@ -320,41 +326,27 @@ export class MemoryTool extends BaseTool {
               titleVars: {
                 persona_nickname: personaNickname,
               },
-              descriptionKey: "genai.self_teach.server_memory_learned_description",
-              descriptionVars: {
-                memory_content: memoryPreview.text,
-              },
+              description: notice.description,
               footerKey: "genai.self_teach.server_memory_footer",
             },
-            processedMemoryContent,
+            notice.fullContent,
             dbResult.server_memory_id === undefined
               ? undefined
               : { kind: "server_memory", id: dbResult.server_memory_id },
           );
-
-          // Invalidate TomoriState cache so next message includes new memory
-          invalidateTomoriStateCache(singleServerId);
-
-          return {
-            success: true,
-            message: "Memory saved successfully",
-            data: {
-              status: "memory_saved_successfully",
-              scope: "server_wide",
-              content_saved: memoryContent,
-              memory_id: dbResult.server_memory_id,
-            },
-          };
+        } catch (embedError) {
+          log.warn("Failed to send server memory notification notice (non-fatal)", embedError as Error);
         }
 
-        log.error("Failed to save server memory via self-teach (DB error)");
         return {
-          success: false,
-          error: "Database operation failed to save server memory",
+          success: true,
+          message: "Memory saved successfully",
           data: {
-            status: "memory_save_failed_db_error",
+            status: saveResult.evicted ? "memory_saved_with_eviction" : "memory_saved_successfully",
             scope: "server_wide",
-            reason: "Database operation failed to save server memory",
+            content_saved: memoryContent,
+            memory_id: dbResult.server_memory_id,
+            ...(saveResult.evicted ? { content_forgotten: saveResult.evicted.content } : {}),
           },
         };
       } catch (error) {
@@ -432,51 +424,55 @@ export class MemoryTool extends BaseTool {
           };
         }
 
-        // Check personal memory limit before adding
-        const personalLimitCheck = await personalMemoryRepository.checkPersonalMemoryLimit(
+        const saveResult = await personalMemoryRepository.addWithEviction(
           targetUserRow.user_id,
           tomoriState.persona_lineage_id,
-          true,
+          memoryContent,
+          context.memoryEmbeddingResolved === true,
         );
-        if (!personalLimitCheck.isValid) {
+        if (saveResult.status === "refused") {
           return {
             success: false,
-            error: `Personal memory limit reached. Users can have up to ${personalLimitCheck.maxAllowed} personal memories (currently: ${personalLimitCheck.currentCount}).`,
+            error: `Personal memory limit reached. Users can have up to ${saveResult.limit} personal memories (currently: ${saveResult.currentCount}).`,
             data: {
               status: "memory_save_failed_limit_exceeded",
               scope: "target_user",
               target_user: targetUserDisplayName,
-              current_count: personalLimitCheck.currentCount,
-              max_allowed: personalLimitCheck.maxAllowed,
-              reason: `Personal memory limit of ${personalLimitCheck.maxAllowed} memories has been reached for this user. Please inform the user that they need to use '/personal memories' to remove some of their memories before I can learn new ones about them.`,
+              current_count: saveResult.currentCount,
+              max_allowed: saveResult.limit,
+              reason: `Personal memory limit of ${saveResult.limit} memories has been reached for this user. Please inform the user that they need to use '/personal memories' to remove some of their memories before I can learn new ones about them.`,
             },
           };
         }
 
-        // Save personal memory (from tomoriChat.ts:1262-1335)
-        const dbResult = await personalMemoryRepository.add(
-          targetUserRow.user_id,
-          tomoriState.persona_lineage_id,
-          memoryContent,
+        const dbResult = saveResult.memory;
+        invalidateUserCache(resolvedTargetUserId as string);
+        if (saveResult.evicted) {
+          const fields = { scope: "personal", decay_days: saveResult.evicted.decay_days };
+          log.metric("memory_eviction", fields);
+          void metricSampleRepository.recordSample("memory_eviction", fields);
+        }
+
+        log.success(
+          `Tomori self-taught a personal memory for ${targetUserDisplayName} (Discord ID: ${resolvedTargetUserId}, Internal ID: ${targetUserRow.user_id}): "${memoryContent}"`,
         );
 
-        if (dbResult) {
-          log.success(
-            `Tomori self-taught a personal memory for ${targetUserDisplayName} (Discord ID: ${resolvedTargetUserId}, Internal ID: ${targetUserRow.user_id}): "${memoryContent}"`,
-          );
-
-          // Security: Ensure we have a valid server ID to prevent user data mixing
+        try {
           const serverId = memoryServerDiscId(
             context,
             "Critical security error: No valid server or user ID available for memory processing",
           );
-          const { processedContent: processedMemoryContent, preview: memoryPreview } = await renderMemoryNoticeContent({
+          const notice = await renderMemorySaveNoticeContent({
             content: memoryContent,
             client: context.client,
             serverId,
             userName: targetUserDisplayName,
             botNickname: tomoriState.persona_nickname,
             personalMemoriesEnabled: tomoriState?.config.personal_memories_enabled,
+            locale: context.locale,
+            descriptionKey: "genai.self_teach.personal_memory_learned_description",
+            descriptionVars: { user_nickname: targetUserDisplayName },
+            forgottenContent: saveResult.evicted?.content,
           });
 
           // Determine footer key based on personalization settings
@@ -498,58 +494,37 @@ export class MemoryTool extends BaseTool {
             personalMemoryFooterKey = "genai.self_teach.personal_memory_footer_manage";
           }
 
-          // Invalidate user cache so next message includes new memory
-          // Done before the notification notice so cache is always fresh even if the send fails
-          invalidateUserCache(resolvedTargetUserId as string);
-
-          // Send notification notice (non-fatal: missing permissions won't block the memory save).
-          try {
-            await sendMemoryEmbedWithExpand(
-              context,
-              {
-                color: ColorCode.SUCCESS,
-                titleKey: "genai.self_teach.personal_memory_learned_title",
-                titleVars: {
-                  user_nickname: targetUserDisplayName,
-                  persona_nickname: personaNickname,
-                },
-                descriptionKey: "genai.self_teach.personal_memory_learned_description",
-                descriptionVars: {
-                  user_nickname: targetUserDisplayName,
-                  memory_content: memoryPreview.text,
-                },
-                footerKey: personalMemoryFooterKey,
+          await sendMemoryEmbedWithExpand(
+            context,
+            {
+              color: ColorCode.SUCCESS,
+              titleKey: "genai.self_teach.personal_memory_learned_title",
+              titleVars: {
+                user_nickname: targetUserDisplayName,
+                persona_nickname: personaNickname,
               },
-              processedMemoryContent,
-              dbResult.personal_memory_id === undefined
-                ? undefined
-                : { kind: "personal_memory", id: dbResult.personal_memory_id },
-            );
-          } catch (embedError) {
-            log.warn("Failed to send personal memory notification notice (non-fatal)", embedError as Error);
-          }
-
-          return {
-            success: true,
-            message: "Memory saved successfully",
-            data: {
-              status: "memory_saved_successfully",
-              scope: "target_user",
-              target_user: targetUserDisplayName,
-              memory_id: dbResult.personal_memory_id,
-              content_saved: memoryContent,
+              description: notice.description,
+              footerKey: personalMemoryFooterKey,
             },
-          };
+            notice.fullContent,
+            dbResult.personal_memory_id === undefined
+              ? undefined
+              : { kind: "personal_memory", id: dbResult.personal_memory_id },
+          );
+        } catch (embedError) {
+          log.warn("Failed to send personal memory notification notice (non-fatal)", embedError as Error);
         }
 
-        log.error(`Failed to save personal memory for ${targetUserDisplayName} via self-teach (DB error)`);
         return {
-          success: false,
-          error: "Database operation failed to save personal memory for the target user",
+          success: true,
+          message: "Memory saved successfully",
           data: {
-            status: "memory_save_failed_db_error",
+            status: saveResult.evicted ? "memory_saved_with_eviction" : "memory_saved_successfully",
             scope: "target_user",
-            reason: "Database operation failed to save personal memory for the target user",
+            target_user: targetUserDisplayName,
+            memory_id: dbResult.personal_memory_id,
+            content_saved: memoryContent,
+            ...(saveResult.evicted ? { content_forgotten: saveResult.evicted.content } : {}),
           },
         };
       } catch (error) {

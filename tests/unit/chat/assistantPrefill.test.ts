@@ -232,6 +232,48 @@ describe("applyAssistantPrefill", () => {
     expect(result.outputPrefill).toBeUndefined();
   });
 
+  // Regression: a turn started without new user input after the persona's own message sent Gemini a
+  // request ending on that message, which it rejects as "Requests ending with a model turn".
+  it("never lets the persona's own delivered message end the request outside text completion", async () => {
+    const ownMessage: StructuredContextItem = {
+      role: "model",
+      parts: [{ type: "text", text: "Mirri: Apples and pears." }],
+      metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+    };
+    for (const llm of [
+      createLlmRow({ llm_provider: "google", llm_codename: "gemini-3.5-flash-lite" }),
+      createLlmRow({ llm_provider: "deepseek", llm_codename: "deepseek-chat", has_tools: false }),
+      createLlmRow({ llm_provider: "anthropic", llm_codename: "claude-haiku-4-5", supports_assistant_prefill: true }),
+    ]) {
+      for (const prefill of [null, { text: "Sure, here", source: "server" as const }]) {
+        const result = await applyAssistantPrefill({
+          contextItems: [userTurn, ownMessage],
+          prefill,
+          tomoriState: createPersona({ llm }),
+        });
+        const last = result.contextItems.at(-1);
+        const endsOnNativePrefill =
+          last?.role === "model" && last.parts[0]?.type === "text" && last.parts[0].text === result.outputPrefill;
+        expect({
+          provider: llm.llm_provider,
+          prefill: Boolean(prefill),
+          ok: last?.role === "user" || endsOnNativePrefill,
+        }).toEqual({
+          provider: llm.llm_provider,
+          prefill: Boolean(prefill),
+          ok: true,
+        });
+      }
+    }
+
+    const novelai = await applyAssistantPrefill({
+      contextItems: [userTurn, ownMessage],
+      prefill: null,
+      tomoriState: createPersona({ llm: createLlmRow({ llm_provider: "novelai", llm_codename: "glm-4-6" }) }),
+    });
+    expect(novelai.contextItems).toEqual([userTurn, ownMessage]);
+  });
+
   // Regression: the producer of `outputPrefill` was deleted while its readers stayed, so DeepSeek
   // received a bare trailing assistant turn without `prefix: true`.
   it("hands a prefix-completion provider an outputPrefill that stamps prefix on the built body", async () => {

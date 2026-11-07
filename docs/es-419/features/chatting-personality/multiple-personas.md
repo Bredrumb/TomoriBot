@@ -15,7 +15,7 @@ sidebar:
 aiGenerated: true
 ---
 
-La personalidad de TomoriBot se guarda en una persona: su nombre, avatar, rasgos, forma de hablar y comportamiento. Puedes usar varias personas a la vez, cada una como un personaje distinto con sus propias palabras de activación y avatar de webhook. Esta página explica cómo se comportan las personas. Para hechos y recuerdos, consulta [Memoria](/es-419/features/knowledge/memory/).
+La personalidad de TomoriBot se guarda en una persona: su nombre, avatar, rasgos, forma de hablar y comportamiento. Puedes usar varias personas a la vez, cada una como un personaje distinto con sus propias palabras de activación y avatar de webhook. Esta página explica cómo se comportan las personas. Para hechos y recuerdos, consulta [Memoria](/es-419/features/knowledge/memory/long-term-memory/).
 
 ## Crear una persona
 

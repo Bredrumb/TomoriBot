@@ -7,12 +7,14 @@ import * as managedProvider from "@/modules/supporter-billing/runtime/managedPro
 import { OpenrouterProvider } from "@/providers/openrouter/openrouterProvider";
 import { ToolRegistry } from "@/tools/toolRegistry";
 import { embeddingModelSchema, speechModelSchema } from "@/types/db/schema";
+import type { EmbeddingRequest } from "@/types/provider/featureInterfaces";
 import { ContextItemTag } from "@/types/misc/context";
 import * as prompts from "@/utils/cache/channelPromptCache";
 import * as personas from "@/utils/cache/tomoriStateCache";
 import { llmModelRepo, ragRepository, serverMemoryRepository } from "@/utils/db/repositories";
 import * as ragAvailability from "@/utils/db/ragAvailability";
 import { log } from "@/utils/misc/logger";
+import * as capabilityResolver from "@/utils/provider/providerCapabilityResolver";
 import * as credentials from "@/utils/provider/credentialResolver";
 import { runHiddenImageTurn, type HiddenImageTurnParams } from "@/utils/provider/hiddenImageTurn";
 import * as factory from "@/utils/provider/providerFactory";
@@ -26,6 +28,7 @@ import { synthesizeVoiceMessage } from "@/utils/speech/voiceMessageSynthesis";
 import * as context from "@/utils/text/contextBuilder";
 import * as mediaResolver from "@/utils/text/context/mediaResolver";
 import { buildServerDocumentContextItem } from "@/utils/text/context/rag";
+import { startQueryRetrieval } from "@/utils/text/context/queryRetrieval";
 import type { SimplifiedMessageForContext } from "@/utils/text/context/types";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 import * as participants from "@/utils/text/participants/preparation";
@@ -522,12 +525,18 @@ function installRagHarness(funding: ReturnType<typeof createServerFunding> | nul
     ),
   );
   trackSpy(spyOn(llmModelRepo, "loadEmbeddingModelById").mockResolvedValue(embeddingModel));
-  const retrieve = trackSpy(
-    spyOn(ragRepository, "retrieveRelevantChunks").mockImplementation(async (params) => {
-      params.onUsage?.({ inputTokens: 8, outputTokens: 0, costUsd: 0.004 });
-      return [retrievedChunk];
-    }),
+  const embeddingRequests: EmbeddingRequest[] = [];
+  trackSpy(
+    spyOn(capabilityResolver, "resolveEmbeddingsCapability").mockResolvedValue({
+      generateEmbeddings: async (request: EmbeddingRequest) => {
+        embeddingRequests.push(request);
+        request.onUsage?.({ inputTokens: 8, outputTokens: 0, costUsd: 0.004 });
+        return [[1, 0]];
+      },
+      supportsEmbeddingTaskType: () => true,
+    } as Awaited<ReturnType<typeof capabilityResolver.resolveEmbeddingsCapability>>),
   );
+  trackSpy(spyOn(ragRepository, "retrieveRelevantChunks").mockResolvedValue([retrievedChunk]));
   const history: SimplifiedMessageForContext[] = [
     {
       id: "fixture-message",
@@ -539,7 +548,15 @@ function installRagHarness(funding: ReturnType<typeof createServerFunding> | nul
       videoAttachments: [],
     },
   ];
-  return { state, history, retrieve };
+  return { state, history, embeddingRequests };
+}
+
+function buildHarnessDocumentContext(state: ReturnType<typeof createPersona>, history: SimplifiedMessageForContext[]) {
+  return buildServerDocumentContextItem({
+    tomoriState: state,
+    channelId: "fixture-channel",
+    retrieval: startQueryRetrieval({ tomoriState: state, simplifiedMessageHistory: history }),
+  });
 }
 
 describe("server document context usage recording", () => {
@@ -549,11 +566,7 @@ describe("server document context usage recording", () => {
     trackCleanup(capture.restore);
     const { state, history } = installRagHarness(funding);
 
-    const item = await buildServerDocumentContextItem({
-      tomoriState: state,
-      simplifiedMessageHistory: history,
-      channelId: "fixture-channel",
-    });
+    const item = await buildHarnessDocumentContext(state, history);
     await settleUsage();
 
     expect(item?.role).toBe("user");
@@ -577,19 +590,16 @@ describe("server document context usage recording", () => {
   it("passes no usage reporter and records nothing when the embedding credentials are unfunded", async () => {
     const capture = captureUsageRecords();
     trackCleanup(capture.restore);
-    const { state, history, retrieve } = installRagHarness(null);
+    const { state, history, embeddingRequests } = installRagHarness(null);
 
-    const item = await buildServerDocumentContextItem({
-      tomoriState: state,
-      simplifiedMessageHistory: history,
-      channelId: "fixture-channel",
-    });
+    const item = await buildHarnessDocumentContext(state, history);
     await settleUsage();
 
     expect(item?.metadataTag).toBe(ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS);
     const part = item?.parts[0];
     expect(part?.type === "text" ? part.text : "").toContain(retrievedChunk.content);
-    expect(retrieve.mock.calls[0]?.[0].onUsage).toBeUndefined();
+    expect(embeddingRequests).toHaveLength(1);
+    expect(embeddingRequests[0]?.onUsage).toBeUndefined();
     expect(capture.rows).toHaveLength(0);
   });
 });

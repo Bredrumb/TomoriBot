@@ -28,6 +28,7 @@ TomoriBot sẽ xem bạn như người dùng mới từ tin nhắn tiếp theo.`
     },
     memories: {
       description: `Quản lý bộ nhớ dài hạn cá nhân và ngữ cảnh hội thoại ngắn hạn.`,
+      persona_description: `Persona có bộ nhớ về bạn cần mở thay cho bộ nhớ toàn cục.`,
       identity_description: `Danh tính proxy tin nhắn cần chỉnh sửa. Hoạt động ngay cả khi proxy tin nhắn đang tắt.`,
       outdated_panel: `Bảng điều khiển này đã cũ. Dùng {command} để mở bảng điều khiển mới.`,
       category_global: `Toàn cục`,
@@ -35,7 +36,7 @@ TomoriBot sẽ xem bạn như người dùng mới từ tin nhắn tiếp theo.`
       global_title: `Bộ nhớ cá nhân toàn cục`,
       global_description: `Các bộ nhớ này đi theo bạn qua mọi máy chủ và persona.`,
       persona_title: `Bộ nhớ cá nhân theo persona`,
-      persona_description:
+      persona_scope_description:
         "Các bộ nhớ này chỉ áp dụng khi persona này đang nói chuyện trong cuộc đối thoại mà bạn tham gia.",
       selector_guidance: `Chọn hoặc thêm một bộ nhớ cá nhân bên dưới:`,
       no_memories: `Chưa có bộ nhớ nào được lưu.`,
@@ -65,7 +66,7 @@ TomoriBot sẽ xem bạn như người dùng mới từ tin nhắn tiếp theo.`
       persona_memory_count_one: `1 bộ nhớ`,
       persona_memory_count_shared: `{count} bộ nhớ, dùng chung giữa {personas} persona`,
       persona_memory_count_one_shared: `1 bộ nhớ, dùng chung giữa {personas} persona`,
-      stm_title: `[Bộ nhớ ngắn hạn](https://docs.tomoribot.app/vi/features/knowledge/memory/#short-term-memory-stm)`,
+      stm_title: `[Bộ nhớ ngắn hạn](https://docs.tomoribot.app/vi/features/knowledge/memory/short-term-memory/)`,
       stm_active_count: `Tóm tắt đang hoạt động về bạn: \`{count}\``,
       stm_clear_button: `Xóa bộ nhớ ngắn hạn của bạn`,
       stm_crossserver_hint: "Cấu hình cho phép mình mang hội thoại gần đây qua các máy chủ bằng `/personal config`.",
@@ -111,6 +112,7 @@ TomoriBot sẽ xem bạn như người dùng mới từ tin nhắn tiếp theo.`
     },
     config: {
       description: `Quản lý tùy chọn cá nhân, quyền riêng tư, model và hồ sơ.`,
+      page_description: `Trang hiển thị khi mở bảng điều khiển.`,
       identity_description: `Danh tính proxy tin nhắn cần chỉnh sửa. Hoạt động ngay cả khi proxy tin nhắn đang tắt.`,
       outdated_panel: `Bảng điều khiển này đã cũ. Dùng {command} để mở bảng điều khiển mới.`,
       category_profile: `Hồ sơ`,
@@ -200,7 +202,7 @@ TomoriBot sẽ xem bạn như người dùng mới từ tin nhắn tiếp theo.`
       memories_manage_hint: `Dùng \`/personal memories\` để quản lý bộ nhớ của mình về bạn`,
       stm_count_label: `Hiện đang lưu tạm \`{count}\` STM về bạn`,
       stm_clear_hint: `Dùng \`/personal memories\` để xóa những gì mình đang nhớ.`,
-      crossserver_section_title: `[STM](https://docs.tomoribot.app/vi/features/knowledge/memory/#short-term-memory-stm) liên máy chủ`,
+      crossserver_section_title: `[STM](https://docs.tomoribot.app/vi/features/knowledge/memory/short-term-memory/) liên máy chủ`,
       crossserver_stm_off: "Mình không thể nhớ hội thoại gần đây với bạn qua các máy chủ vì STM liên máy chủ đang tắt.",
       crossserver_stm_on:
         "Mình có thể lưu bộ nhớ hội thoại gần đây với bạn qua các máy chủ vì STM liên máy chủ đang bật.",

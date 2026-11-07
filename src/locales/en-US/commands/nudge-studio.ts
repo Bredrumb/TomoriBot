@@ -1,6 +1,7 @@
 export default {
   "nudge-studio": {
     description: `Choose which idle nudges I use in this server, and write your own.`,
+    page_description: `Category to open the panel on.`,
     unavailable: `I couldn't load the Nudge Studio right now. Try again in a moment.`,
     title_advanced: `Advanced Nudge Settings`,
     advanced_description: `Only adjust these settings if you know what you are doing.`,

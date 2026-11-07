@@ -149,6 +149,7 @@ export interface BuildContextParams {
 
 /** Return type for both buildContext variants. */
 export type BuildContextResult = {
+  memoryRecall?: import("@/utils/text/context/memoryRecall").MemoryRecallOutcome;
   nativeContextItems?: StructuredContextItem[];
   contextItems: StructuredContextItem[];
   tailDirectives: string[];

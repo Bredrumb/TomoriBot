@@ -69,7 +69,7 @@ Brave Search與你的AI供應商分開，並透過圖像、影片和新聞結果
 
 - **文字**：主要聊天模型。
 - **視覺**：當聊天模型無法讀取影像時。
-- **嵌入**：為[文件知識庫](/zh-TW/features/knowledge/memory/#document-knowledge-base-rag)提供支援。
+- **嵌入**：為[文件知識庫](/zh-TW/features/knowledge/memory/documents/)提供支援。
 - **判定**：已註冊的[判定模型](#decision-models)。[Natural Nudges](/features/chatting-personality/natural-nudges/#active-nudges)使用它來決定何時加入對話。
 - **標準影像**：標準影像產生（請參閱[影像生成](/zh-TW/features/capabilities/media-generation/image-generation/)）。
 - **NovelAI 圖片**：[NovelAI 影像生成](/features/integrations/novelai/#image-generation)。

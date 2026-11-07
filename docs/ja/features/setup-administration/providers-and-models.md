@@ -69,7 +69,7 @@ Brave SearchはAIプロバイダーとは別のもので、画像、ビデオ、
 
 - **テキスト**: メインのチャットモデル。
 - **ビジョン**: チャットモデルが画像を読み取ることができない場合に画像を読み取ります。
-- **埋め込み**: [ドキュメントナレッジベース](/ja/features/knowledge/memory/#document-knowledge-base-rag) を強化します。
+- **埋め込み**: [ドキュメントナレッジベース](/ja/features/knowledge/memory/documents/) を強化します。
 - **判定**: 登録済みの [判定モデル](#decision-models)。[Natural Nudges](/features/chatting-personality/natural-nudges/#active-nudges) が会話に参加するタイミングを決定するために使用します。
 - **標準イメージ**: 標準イメージの生成 ([イメージ生成](/ja/features/capabilities/media-generation/image-generation/) を参照)。
 - **NovelAIイメージ**: [NovelAIイメージの生成](/features/integrations/novelai/#image-generation)。

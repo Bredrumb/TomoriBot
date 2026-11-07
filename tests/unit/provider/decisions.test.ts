@@ -482,7 +482,14 @@ describe("Decision transports", () => {
       if(network.status !== "failed" || !network.errorLogged) process.exit(1);`;
     const child = Bun.spawn([process.execPath, "--eval", script], {
       cwd: process.cwd(),
-      env: { ...process.env, RUN_ENV: "production", TEST_PRODUCTION: "false", ERROR_DB_LOGGING_ENABLED: "false" },
+      // Bun loads `.env` into the child unless the key is present, so an empty LOG_LEVEL keeps the production default.
+      env: {
+        ...process.env,
+        RUN_ENV: "production",
+        TEST_PRODUCTION: "false",
+        LOG_LEVEL: "",
+        ERROR_DB_LOGGING_ENABLED: "false",
+      },
       stdout: "pipe",
       stderr: "pipe",
     });

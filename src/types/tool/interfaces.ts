@@ -193,6 +193,7 @@ export interface StreamingContext {
  * Contains all necessary Discord and Tomori state information
  */
 export interface ToolContext {
+  memoryEmbeddingResolved?: boolean;
   deliveryMode?: import("@/utils/discord/webhook/personaPost").PersonaDeliveryMode;
   usageContext?: ProviderUsageContext;
   channel: BaseGuildTextChannel | BaseGuildVoiceChannel | DMChannel | NewsChannel | TextChannel | AnyThreadChannel;

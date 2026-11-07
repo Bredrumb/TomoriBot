@@ -129,15 +129,20 @@ const DYNAMIC_TOOL_PROMPT_MACROS = {
 
 const STATIC_TOOL_PROMPT_MACRO_KEYS = Object.keys(STATIC_TOOL_PROMPT_MACROS);
 const DYNAMIC_TOOL_PROMPT_MACRO_KEYS = Object.keys(DYNAMIC_TOOL_PROMPT_MACROS);
-const ALL_TOOL_PROMPT_MACRO_KEYS = [...STATIC_TOOL_PROMPT_MACRO_KEYS, ...DYNAMIC_TOOL_PROMPT_MACRO_KEYS];
 
-function hasToolPromptMacros(text: string): boolean {
-  return ALL_TOOL_PROMPT_MACRO_KEYS.some((macro) => text.includes(macro));
-}
+// Names no tool, because a model shown a tool it cannot call tends to write the call out as chat text.
+export const UNAVAILABLE_TOOL_TEXT = "an unavailable tool";
 
-export function resolvePromptCapabilityValues(config: AssembledServerConfig): PromptCapabilityValues {
+/**
+ * @param hasTools - The active model's narrowed flag, which carries the Deliberate Tool Mode kill switch that
+ *   `tool_use_enabled` alone does not.
+ */
+export function resolvePromptCapabilityValues(
+  config: AssembledServerConfig,
+  hasTools: boolean,
+): PromptCapabilityValues {
   return {
-    tool_use: config.tool_use_enabled ?? true,
+    tool_use: hasTools && (config.tool_use_enabled ?? true),
     self_teaching: config.self_teaching_enabled,
     personal_memories: config.personal_memories_enabled,
     emoji_usage: config.emoji_usage_enabled,
@@ -212,23 +217,22 @@ export function createToolPromptMacroResolver(context?: ToolPromptMacroContext |
         warn: warnOnce,
       });
 
-      if (!hasToolPromptMacros(expanded)) {
-        return expanded;
-      }
-
-      for (const [macro, toolName] of Object.entries(STATIC_TOOL_PROMPT_MACROS)) {
-        if (expanded.includes(macro)) {
-          expanded = expanded.replaceAll(macro, formatResolvedToolName(toolName));
-        }
-      }
-
+      const presentStaticMacros = STATIC_TOOL_PROMPT_MACRO_KEYS.filter((macro) => expanded.includes(macro));
       const presentDynamicMacros = DYNAMIC_TOOL_PROMPT_MACRO_KEYS.filter((macro) => expanded.includes(macro));
-      if (presentDynamicMacros.length === 0) {
+      if (presentStaticMacros.length === 0 && presentDynamicMacros.length === 0) {
         return expanded;
       }
 
       availabilityPromise ??= loadToolPromptMacroAvailability(context);
       const availability = await availabilityPromise;
+
+      for (const macro of presentStaticMacros) {
+        const toolName = STATIC_TOOL_PROMPT_MACROS[macro];
+        expanded = expanded.replaceAll(
+          macro,
+          availability.availableToolNames.has(toolName) ? formatResolvedToolName(toolName) : UNAVAILABLE_TOOL_TEXT,
+        );
+      }
 
       for (const macro of presentDynamicMacros) {
         const definition = DYNAMIC_TOOL_PROMPT_MACROS[macro as keyof typeof DYNAMIC_TOOL_PROMPT_MACROS];
@@ -426,7 +430,7 @@ export function createToolPromptMacroResolverForState(
   return createToolPromptMacroResolver({
     provider: tomoriState.llm.llm_provider,
     deliberateToolAllowedNames,
-    capabilities: resolvePromptCapabilityValues(tomoriState.config),
+    capabilities: resolvePromptCapabilityValues(tomoriState.config, tomoriState.llm.has_tools),
     stateForContext:
       tomoriState.server_id && tomoriState.llm
         ? {

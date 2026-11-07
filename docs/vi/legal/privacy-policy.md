@@ -35,7 +35,9 @@ Chúng tôi giữ bộ nhớ cá nhân và máy chủ, tùy chỉnh persona, l�
 
 Khi một persona tự mình bắt đầu cuộc trò chuyện (Natural Nudges), chúng tôi ghi lại persona nào đã nói, kênh, liệu có ai trả lời hay không và thành viên được tag. Chúng tôi cũng lưu mục tiêu riêng của persona cho cuộc trò chuyện đó, mục tiêu này có thể đề cập đến thành viên đó.
 
-Bộ nhớ ngắn hạn tùy chọn lưu bản tóm tắt cuộc trò chuyện. Các bộ nhớ khác được giữ đến khi xóa và có thể mô tả người không viết chúng.
+Bộ nhớ ngắn hạn tùy chọn lưu bản tóm tắt cuộc trò chuyện. Các bộ nhớ đã lưu khác có thể mô tả những người không viết chúng. Chúng được giữ lại cho đến khi bị xóa, ngoại trừ việc tính năng suy giảm bộ nhớ có thể xóa một bộ nhớ không dùng để nhường chỗ khi bot lưu một bộ nhớ mới. Các bộ nhớ mà ai đó đã thêm hoặc chỉnh sửa bằng `/memories` hoặc `/personal memories` không bao giờ bị xóa theo cách này.
+
+Tính năng suy giảm bộ nhớ áp dụng cho bộ nhớ máy chủ và bộ nhớ cá nhân. Nếu một model embedding được thiết lập, chúng tôi lưu trữ dữ liệu tìm kiếm được tính toán từ từng bộ nhớ và ghi lại mức độ gần đây của từng bộ nhớ khi xuất hiện trong cuộc trò chuyện, để bot có thể gợi lại các bộ nhớ có liên quan. Dữ liệu tìm kiếm được xóa cùng với bộ nhớ tương ứng. Cài đặt quyền riêng tư ngăn chặn việc dùng bộ nhớ cá nhân cũng đồng thời loại trừ những bộ nhớ đó khỏi tính năng tìm kiếm.
 
 ### 2.3) Khóa API và dịch vụ kết nối
 

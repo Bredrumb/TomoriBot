@@ -18,7 +18,7 @@ export const MODERATION_ROUTE_VERSION = "v2";
 export const MODERATION_CATEGORIES = ["member-access", "user-blacklist", "whitelist", "quotas"] as const;
 export type ModerationCategory = (typeof MODERATION_CATEGORIES)[number];
 
-const WHITELIST_PAGES = ["channels", "persona-channels", "roles"] as const;
+export const WHITELIST_PAGES = ["channels", "persona-channels", "roles"] as const;
 export type WhitelistPage = (typeof WHITELIST_PAGES)[number];
 
 const QUOTA_TYPES = ["image", "text", "video"] as const;

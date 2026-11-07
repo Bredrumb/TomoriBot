@@ -67,6 +67,10 @@ function requireRoute(customId: string): ParsedInteractionRoute {
 function makeMemory(id: number, overrides: Partial<ServerMemoryRow> = {}): ServerMemoryRow {
   return {
     server_memory_id: id,
+    decay_days: 0,
+    decay_counted_on: null,
+    reinforced_on: null,
+    manually_written: false,
     server_id: 1,
     persona_id: 10,
     persona_lineage_id: 1770,

@@ -1,6 +1,7 @@
 export default {
   moderation: {
     description: `メンバー権限、ブラックリスト、チャンネル・ロールのホワイトリスト、クォータ設定を管理します。`,
+    page_description: `パネルを開くときのページ。`,
     title: `サーバーモデレーション`,
     outdated_panel: `このモデレーションパネルは古くなっています。/moderation をもう一度実行してください。`,
     permission_denied: `このモデレーションパネルを使用するには「サーバー管理」権限が必要です。`,

@@ -20,6 +20,7 @@ export default {
     },
     manage: {
       description: `Gerencie emojis, figurinhas, expressões personalizadas e acesso das personas.`,
+      page_description: `Categoria em que o painel será aberto.`,
       title: `Expressões do servidor`,
       emojis: `Emojis`,
       stickers: `Figurinhas`,

@@ -4,7 +4,7 @@ description: How the official hosted TomoriBot instance collects, uses, and dele
 aiGenerated: false
 ---
 
-Last updated: 2026-10-22
+Last updated: 2026-11-07
 
 This policy covers the official hosted TomoriBot on Discord, including personal use, Server use, and sponsored requests. If you self-host TomoriBot, you control your own data; this policy does not govern your copy.
 
@@ -33,7 +33,9 @@ We keep personal and Server memories, persona customizations, reminders, and Ser
 
 When a persona starts a conversation on its own (Natural Nudges), we record which persona spoke, the channel, whether anyone answered, and the member it pinged. We also save the persona's private goal for that conversation, which may mention that member.
 
-Optional short-term memory saves conversation summaries. Other saved memories remain until deleted and may describe people who did not write them.
+Optional short-term memory saves conversation summaries. Other saved memories may describe people who did not write them. They remain until deleted, except that memory decay may remove an unused memory to make room when the bot saves a new one. Memories someone added or edited with `/memories` or `/personal memories` are never removed this way.
+
+Memory decay applies to Server and personal memories. If an embedding model is set up, we store search data computed from each memory and record how recently each one came up in conversation, so the bot can recall relevant memories. Search data is deleted with its memory. Privacy settings that stop personal memory use also keep those memories out of search.
 
 ### 2.3) API keys and connected services
 
@@ -61,7 +63,7 @@ TomoriBot temporarily reads recent messages, relevant media, Server and channel 
 
 ## 4) Who receives your data
 
-- **AI providers:** your selected provider receives the prompt, relevant conversation context, persona information, and media needed for text, images, video, voice, or document search. Before a persona pings someone, the Server's model also receives that member's name, current activity, and recent personal memories, unless their privacy level hides those. Subscription requests use OpenRouter and the selected model's providers. We check spending with OpenRouter to enforce your allowance.
+- **AI providers:** your selected providers receive the prompt, relevant conversation context, persona information, and media needed for text, images, video, voice, or search. The provider that searches documents and memories can be different from the one that writes replies. It receives the latest message and the text of the documents and memories it searches. Before a persona pings someone, the Server's model also receives that member's name, current activity, and recent personal memories, unless their privacy level hides those. Subscription requests use OpenRouter and the selected model's providers. We check spending with OpenRouter to enforce your allowance.
 - **Patreon:** linking authorizes us to verify your membership. Patreon provides account and membership updates; Patreon and its payment providers handle payments and payment details.
 - **Search providers:** when web search is used, the search provider receives search queries and relevant context.
 - **Matrix:** when a bridge is configured, messages are shared between the linked Discord channel and Matrix room.

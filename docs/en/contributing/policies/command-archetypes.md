@@ -92,6 +92,17 @@ its add and remove buttons. Budget the row: an action row holding one select cou
 Other departures need a verified Discord limit, a different archetype, or a recorded product decision,
 added here.
 
+## Opening on a page
+
+Every Categorized Control Panel, Entity Pages panel, and Paginated Reference with categories takes an
+optional `page` option that opens it on a named page or category, so users learn one shortcut that
+works everywhere: `/config`, `/personal config`, `/moderation`, `/memories`, `/expressions manage`,
+`/nudge-studio`, `/help`, and `/status`. Collection Panels, Guided Wizards, and roots already split into
+one subcommand per view (`/stats`) take none. Panels whose pages belong to a persona (`/config`,
+`/memories`, `/personal memories`, `/status`) also take an optional `persona` option; in
+`/personal memories` it replaces `page`, because naming a persona already picks its only other
+category. Wiring is in [Adding a Panel](/contributing/extending/panel/#opening-on-a-page).
+
 ## Destructive actions
 
 Confirmation scales with the damage: removing one recoverable entry needs less than resetting a server.

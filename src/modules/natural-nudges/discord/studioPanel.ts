@@ -77,7 +77,7 @@ export const NUDGE_STUDIO_PAGE_SIZE = 12;
 
 type CategoryKeys = Record<NaturalNudgeCategory, string>;
 
-const TAB_KEYS: CategoryKeys = {
+export const NUDGE_STUDIO_TAB_LOCALE_KEYS: CategoryKeys = {
   ping_user: "commands.nudge-studio.tab_ping_user",
   revive_topic: "commands.nudge-studio.tab_revive_topic",
   start_topic: "commands.nudge-studio.tab_start_topic",
@@ -370,7 +370,7 @@ export function buildNudgeStudioPayload(input: NudgeStudioRenderInput): {
     buildCategoryButtonRow(
       NATURAL_NUDGE_CATEGORIES.map((id) => ({
         id,
-        label: t(TAB_KEYS[id]),
+        label: t(NUDGE_STUDIO_TAB_LOCALE_KEYS[id]),
         customId: buildNudgeStudioRouteId({ action: "view", locale, category: id }),
       })),
       category,

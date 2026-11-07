@@ -40,6 +40,8 @@ import {
   parsePersonalMemoryTags,
 } from "@/utils/discord/ui/personalMemoriesPanel";
 import { personaRepresentativeForLineage } from "@/utils/persona/lineage";
+import { resolveSelectedPersona } from "@/utils/persona/personaOptionValue";
+import { panelPersonaNotFoundReceipt } from "@/utils/discord/autocomplete/panelPageAutocomplete";
 import {
   type PersonaPanelAvatarData,
   resolveInvokerAvatarUrl,
@@ -209,7 +211,9 @@ export const personalMemoriesOperations: PersonalMemoriesOperations = {
     if (!limitCheck.isValid) {
       return { status: "limit-reached" };
     }
-    const inserted = await personalMemoryRepository.add(userId, personaLineageId, trimmed, tags);
+    const inserted = await personalMemoryRepository.add(userId, personaLineageId, trimmed, tags, {
+      manuallyWritten: true,
+    });
     if (!inserted) {
       return { status: "write-failed" };
     }
@@ -248,7 +252,9 @@ export const personalMemoriesOperations: PersonalMemoriesOperations = {
       return { status: "batch-limit-reached", available, requested: toInsert.length };
     }
 
-    const inserted = await personalMemoryRepository.addBatch(userId, personaLineageId, toInsert, tags);
+    const inserted = await personalMemoryRepository.addBatch(userId, personaLineageId, toInsert, tags, {
+      manuallyWritten: true,
+    });
     if (!inserted) {
       return { status: "write-failed" };
     }
@@ -277,15 +283,15 @@ export const personalMemoriesOperations: PersonalMemoriesOperations = {
     }
     const existingTags = target.tags ?? [];
     const tagsUnchanged = tags.length === existingTags.length && tags.every((t, i) => t === existingTags[i]);
-    if (trimmed === target.content.trim() && tagsUnchanged) {
+    if (trimmed === target.content.trim() && tagsUnchanged && target.manually_written) {
       return { status: "unchanged", row: target };
     }
-    const ok = await personalMemoryRepository.edit(memoryId, trimmed, tags);
+    const ok = await personalMemoryRepository.edit(memoryId, trimmed, tags, { manuallyWritten: true });
     if (!ok) {
       return { status: "write-failed" };
     }
     invalidateUserCache(userDiscId);
-    return { status: "success", row: { ...target, content: trimmed, tags } };
+    return { status: "success", row: { ...target, content: trimmed, tags, manually_written: true } };
   },
 
   async remove({ userId, userDiscId, personaLineageId, memoryId }) {
@@ -1239,12 +1245,17 @@ export type PersonalMemoriesPanelPayloadOrTerminal =
   | ReturnType<typeof buildPersonalMemoriesPanelPayload>
   | InteractionEditReplyOptions;
 
+/**
+ * @param requestedLineageId - Lineage another panel links to; a `rawPersona` that resolves takes precedence
+ * @param rawPersona - Untrusted `persona` slash option; with none, the panel opens on Global memories
+ */
 export async function buildInitialPersonalMemoriesPanel(
   interaction: GlobalRoutableInteraction | ChatInputCommandInteraction,
   locale: string,
   dependenciesOverride?: Partial<PersonalMemoriesRouteDependencies>,
   requestedLineageId?: number,
   identityId?: number,
+  rawPersona: string | null = null,
 ): Promise<PersonalMemoriesPanelPayloadOrTerminal> {
   const dependencies: PersonalMemoriesRouteDependencies = {
     ...defaultDependencies,
@@ -1256,10 +1267,12 @@ export async function buildInitialPersonalMemoriesPanel(
   if (!scope) {
     return terminalPayload(locale, "commands.personal.memories.unavailable") as PersonalMemoriesPanelPayloadOrTerminal;
   }
+  const optionPersona = rawPersona ? resolveSelectedPersona(scope.personas, rawPersona) : null;
   const selectedPersona =
-    requestedLineageId === undefined
+    optionPersona ??
+    (requestedLineageId === undefined
       ? undefined
-      : scope.personas.find((persona) => persona.persona_lineage_id === requestedLineageId);
+      : scope.personas.find((persona) => persona.persona_lineage_id === requestedLineageId));
   const selectedLineageId = selectedPersona?.persona_lineage_id ?? 0;
   const memories = await dependencies.loadMemories(scope.userId, selectedLineageId);
   const stmCount = selectedLineageId === 0 && !scope.identityId ? await dependencies.getStmCount(scope.userDiscId) : 0;
@@ -1290,6 +1303,7 @@ export async function buildInitialPersonalMemoriesPanel(
         privacyLevel: scope.privacyLevel,
         readStatus: scope.readStatus,
         page: { kind: "main" },
+        receipt: rawPersona && !optionPersona ? panelPersonaNotFoundReceipt(locale) : undefined,
       },
       scope,
     ),

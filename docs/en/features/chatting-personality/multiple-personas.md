@@ -18,7 +18,7 @@ sidebar:
 TomoriBot's personality lives in a persona: her name, avatar, traits, speaking style,
 and behavior. You can run multiple personas at once, each as a distinct character with
 its own trigger words and webhook avatar. For
-facts and memories that each persona can hold, see [Memory](/features/knowledge/memory/).
+facts and memories that each persona can hold, see [Memory](/features/knowledge/memory/long-term-memory/).
 
 ## Persona Management
 - `/config` > Persona: configure existing personas

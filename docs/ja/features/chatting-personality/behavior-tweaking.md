@@ -4,7 +4,7 @@ sidebar:
   order: 3
 ---
 
-TomoriBotに許可する操作や返答の生成方法は、`/config`の設定で調整できます。性格は[複数のペルソナ](/ja/features/chatting-personality/multiple-personas/)、知識は[記憶](/ja/features/knowledge/memory/)のページを参照してください。このページでは、よく使う動作設定を紹介します。
+TomoriBotに許可する操作や返答の生成方法は、`/config`の設定で調整できます。性格は[複数のペルソナ](/ja/features/chatting-personality/multiple-personas/)、知識は[記憶](/ja/features/knowledge/memory/long-term-memory/)のページを参照してください。このページでは、よく使う動作設定を紹介します。
 
 ## 機能の有効化：許可する操作
 <!-- anchor: capabilities-what-shes-allowed-to-do -->

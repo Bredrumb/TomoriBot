@@ -1,7 +1,6 @@
 import { beforeAll, describe, expect, it } from "bun:test";
-import { resolveLearnerPersona, resolveLearnerScope } from "@/commands/learn/history";
+import { resolveLearnerScope } from "@/commands/learn/history";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
-import { createPersona } from "../../helpers/fixtures";
 import { expectForEveryLocale } from "../../helpers/localeCases";
 
 beforeAll(async () => {
@@ -22,18 +21,5 @@ describe("/learn history learner", () => {
   it("treats a blank learner or any other text as persona scope", () => {
     expect(resolveLearnerScope(null)).toBe("persona");
     expect(resolveLearnerScope("Mirri")).toBe("persona");
-  });
-
-  it("finds a persona by picked ID or by a nickname only one persona has", () => {
-    const personas = [
-      createPersona({ persona_id: 41, persona_nickname: "Mirri" }),
-      createPersona({ persona_id: 42, persona_nickname: "Juno" }),
-      createPersona({ persona_id: 43, persona_nickname: "Juno" }),
-    ];
-
-    expect(resolveLearnerPersona(personas, "42")?.persona_id).toBe(42);
-    expect(resolveLearnerPersona(personas, "mirri")?.persona_id).toBe(41);
-    expect(resolveLearnerPersona(personas, "Juno")).toBeNull();
-    expect(resolveLearnerPersona(personas, "Bau")).toBeNull();
   });
 });

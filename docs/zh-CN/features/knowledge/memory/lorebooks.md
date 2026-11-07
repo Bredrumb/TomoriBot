@@ -68,6 +68,6 @@ aiGenerated: false
 
 ## 相关页面
 
-- [记忆](/features/knowledge/memory/)
+- [记忆](/features/knowledge/memory/long-term-memory/)
 - [提示词内部](/features/knowledge/inside-the-prompt/)
 - [数据处理](/features/knowledge/data-handling/)

@@ -143,6 +143,12 @@ function renderModerationName(locale: string, value: string): string {
   return `${rendered}\n-# ${localizer(locale, footerKey, textPreviewFooterVars(preview, locale))}`;
 }
 
+export const MODERATION_WHITELIST_PAGE_LOCALE_KEYS: Record<WhitelistPage, string> = {
+  channels: "commands.moderation.page_channels",
+  "persona-channels": "commands.moderation.page_personas",
+  roles: "commands.moderation.page_roles",
+};
+
 export const MODERATION_CATEGORY_LOCALE_KEYS: Record<ModerationCategory, string> = {
   "member-access": "commands.moderation.category_member_access",
   "user-blacklist": "commands.moderation.category_user_blacklist",
@@ -605,19 +611,19 @@ export function buildModerationPanelPayload(input: ModerationPanelRenderInput): 
           placeholder: localizer(locale, "commands.moderation.select_page_placeholder"),
           options: [
             {
-              label: localizer(locale, "commands.moderation.page_channels"),
+              label: localizer(locale, MODERATION_WHITELIST_PAGE_LOCALE_KEYS.channels),
               value: "channels",
               description: localizer(locale, "commands.moderation.page_channels_description"),
               default: whitelistPage === "channels",
             },
             {
-              label: localizer(locale, "commands.moderation.page_personas"),
+              label: localizer(locale, MODERATION_WHITELIST_PAGE_LOCALE_KEYS["persona-channels"]),
               value: "persona-channels",
               description: localizer(locale, "commands.moderation.page_persona_channels_description"),
               default: whitelistPage === "persona-channels",
             },
             {
-              label: localizer(locale, "commands.moderation.page_roles"),
+              label: localizer(locale, MODERATION_WHITELIST_PAGE_LOCALE_KEYS.roles),
               value: "roles",
               description: localizer(locale, "commands.moderation.page_roles_description"),
               default: whitelistPage === "roles",

@@ -835,6 +835,7 @@ async function executeToolCall(
 
   const turnAbortSignal = getChannelTurnAbortSignal(params.context.channel.id);
   const toolContext: ToolContext = {
+    memoryEmbeddingResolved: params.context.memoryRecall?.embeddingResolved,
     channel: params.context.channel as ToolContext["channel"],
     client: params.context.client,
     message: params.context.message,

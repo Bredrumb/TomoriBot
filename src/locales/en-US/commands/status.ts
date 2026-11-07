@@ -2,6 +2,8 @@ export default {
   status: {
     prompt_hidden: `Prompt text is hidden. Members need Manage Server permission or enabled prompt inspection to view it.`,
     description: `Show current personal, server, or persona status.`,
+    page_description: `Category to open the dashboard on.`,
+    persona_description: `Persona to show on the Persona pages.`,
     scope_choice_behavior: `Behavior`,
     scope_choice_models: `Models`,
     scope_choice_access: `Access`,

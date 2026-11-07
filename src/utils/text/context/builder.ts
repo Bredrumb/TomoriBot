@@ -27,7 +27,10 @@ export async function buildContext(params: BuildContextParams): Promise<BuildCon
           params.simplifiedMessageHistory.filter((message) => message.authorType === "user").at(-1)?.content ?? "";
         const presetToolPromptMacroResolver = createToolPromptMacroResolver({
           provider: tomoriStateForPreset?.llm?.llm_provider,
-          capabilities: resolvePromptCapabilityValues(params.tomoriConfig),
+          capabilities: resolvePromptCapabilityValues(
+            params.tomoriConfig,
+            Boolean(tomoriStateForPreset?.llm?.has_tools),
+          ),
           deliberateToolAllowedNames: params.deliberateToolAllowedNames,
           stateForContext:
             tomoriStateForPreset?.server_id && tomoriStateForPreset.llm

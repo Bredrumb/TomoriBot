@@ -69,7 +69,7 @@ Em `/config` > `Modelos` > Switch Models, você pode atribuir modelos e endpoint
 
 - **Texto**: o modelo de chat principal.
 - **Visão**: lê imagens quando o modelo de chat não consegue.
-- **Incorporações**: alimenta a [base de conhecimento de documentos](/pt-BR/features/knowledge/memory/#document-knowledge-base-rag).
+- **Incorporações**: alimenta a [base de conhecimento de documentos](/pt-BR/features/knowledge/memory/documents/).
 - **Decisão**: um [modelo de Decisão](#decision-models) registrado. O [Natural Nudges](/features/chatting-personality/natural-nudges/#active-nudges) o utiliza para decidir quando entrar em uma conversa.
 - **Imagem padrão**: geração de imagem padrão (consulte [Geração de imagem](/pt-BR/features/capabilities/media-generation/image-generation/)).
 - **Imagem NovelAI**: [geração de imagem NovelAI](/features/integrations/novelai/#image-generation).

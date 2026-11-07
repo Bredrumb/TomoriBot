@@ -18,7 +18,7 @@ import type { TomoriState, UserRow } from "../../types/db/schema";
 import { personaRepository } from "@/utils/db/repositories";
 import { deletePersonaAvatarFromStorage } from "../../utils/storage/avatarStorage";
 import { respondWithPersonaChoices } from "@/utils/discord/autocomplete/personaAutocomplete";
-import { resolveSelectedPersona } from "@/utils/persona/personaOptionValue";
+import { parsePersonaOptionId } from "@/utils/persona/personaOptionValue";
 
 function isDuplicateTaggedName(name: string): boolean {
   return /\[dup-\d+\]\s*$/i.test(name.trim());
@@ -92,7 +92,9 @@ export async function execute(
       return;
     }
 
-    const personaToRemove = resolveSelectedPersona(removablePersonas, interaction.options.getString("persona", true));
+    // Removal has no confirmation step, so only a picked suggestion's ID selects a persona, never typed text.
+    const pickedId = parsePersonaOptionId(interaction.options.getString("persona", true));
+    const personaToRemove = removablePersonas.find((persona) => persona.persona_id === pickedId);
     if (!personaToRemove?.persona_id) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.invalid_option_title",

@@ -20,6 +20,7 @@ export default {
     },
     manage: {
       description: `管理表情符号、贴纸、自定义表情及人格访问权限。`,
+      page_description: `面板打开时显示的分类。`,
       title: `服务器表情`,
       emojis: `表情`,
       stickers: `贴纸`,

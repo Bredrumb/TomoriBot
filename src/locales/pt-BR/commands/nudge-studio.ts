@@ -1,6 +1,7 @@
 export default {
   "nudge-studio": {
     description: "Escolha quais toques ociosos eu uso neste servidor e escreva os seus.",
+    page_description: `Categoria em que o painel será aberto.`,
     unavailable: "Não consegui carregar o Nudge Studio agora. Tente novamente em instantes.",
     title_advanced: "Configurações Avançadas de Toques",
     advanced_description: "Só altere estas configurações se souber o que está fazendo.",

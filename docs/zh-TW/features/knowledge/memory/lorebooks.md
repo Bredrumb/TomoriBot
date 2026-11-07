@@ -68,6 +68,6 @@ Always On 條目會進入提示詞的系統部分。關鍵字或機率觸發的�
 
 ## 相關頁面
 
-- [記憶](/features/knowledge/memory/)
+- [記憶](/features/knowledge/memory/long-term-memory/)
 - [提示詞內部](/features/knowledge/inside-the-prompt/)
 - [資料處理](/features/knowledge/data-handling/)

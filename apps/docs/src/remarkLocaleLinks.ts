@@ -58,7 +58,7 @@ export function localizeDocsLink(
 /**
  * Rewrites root-absolute docs links to the page's own locale at build time.
  *
- * Authors write `/features/knowledge/memory/` once for every locale (see "Links" in the docs
+ * Authors write `/features/knowledge/memory/long-term-memory/` once for every locale (see "Links" in the docs
  * authoring guide), and this plugin is what makes that URL resolve. It covers Markdown links and the
  * `href` prop of MDX components such as `LinkCard`.
  *

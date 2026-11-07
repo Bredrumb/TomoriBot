@@ -582,6 +582,7 @@ const fakeProvider = {
       apiKey,
       model: tomoriState.llm.llm_codename,
       temperature: tomoriState.config.llm_temperature ?? 0.7,
+      ...(tomoriState.llm.has_tools && { tools: [{ name: "update_short_term_memory" }] }),
     };
   },
   getInfo: () => ({ name: "google" }),
@@ -2349,6 +2350,40 @@ describe("runGenerationTurn fallback behavior", () => {
       expect(
         fallbackItems.some((item) => item.metadataTag === ContextItemTag.KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS),
       ).toBe(true);
+    });
+
+    it("drops the same-channel STM block and nudge on an attempt that sends no tools", async () => {
+      const context = makeContext(
+        { ...makeLlm(1, "primary-model"), has_tools: true } as LlmRow,
+        makeLlm(2, "toolless-fallback"),
+      );
+      context.contextItems = [
+        {
+          role: "user",
+          parts: [{ type: "text", text: "other channel" }],
+          metadataTag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
+        },
+        {
+          role: "user",
+          parts: [{ type: "text", text: "this channel" }],
+          metadataTag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
+          requiresToolCalling: true,
+        },
+        { role: "user", parts: [{ type: "text", text: "hello" }], metadataTag: ContextItemTag.DIALOGUE_HISTORY },
+      ];
+      enqueuePrimaryFailure();
+      queuedResults.push(fallbackSuccess);
+
+      const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+      await runGenerationTurn(context, okSink);
+
+      expect(
+        toolLoopCalls.map((call) =>
+          call.contextItems
+            .filter((item) => item.metadataTag === ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY)
+            .map(contextItemText),
+        ),
+      ).toEqual([["other channel", "this channel"], ["other channel"]]);
     });
   });
 });

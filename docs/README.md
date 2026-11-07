@@ -30,8 +30,12 @@ Pages are bucketed into task-based sub-categories:
   - [`behavior-tweaking.md`](./en/features/chatting-personality/behavior-tweaking/)
   - [`natural-nudges.md`](./en/features/chatting-personality/natural-nudges/)
 - **Knowledge**:
-  - [`memory.md`](./en/features/knowledge/memory/)
-  - [`lorebooks.md`](./en/features/knowledge/lorebooks/)
+  - `memory/`
+    - [`long-term-memory.md`](./en/features/knowledge/memory/long-term-memory/)
+    - [`memory-decay.md`](./en/features/knowledge/memory/memory-decay/)
+    - [`documents.md`](./en/features/knowledge/memory/documents/)
+    - [`lorebooks.md`](./en/features/knowledge/memory/lorebooks/)
+    - [`short-term-memory.md`](./en/features/knowledge/memory/short-term-memory/)
   - [`inside-the-prompt.md`](./en/features/knowledge/inside-the-prompt/)
   - [`personalization.md`](./en/features/knowledge/personalization/)
   - [`data-handling.md`](./en/features/knowledge/data-handling/)
