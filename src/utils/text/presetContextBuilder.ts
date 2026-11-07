@@ -315,6 +315,7 @@ export async function reassembleWithPreset(
     nudgeInjectionDepth?: number;
     memoryInjectionItems?: StructuredContextItem[];
     memoryInjectionDepth?: number;
+    memoryRecall?: import("./context/memoryRecall").MemoryRecallOutcome;
   },
   presetData: CachedPresetData,
   macroParams: PresetMacroParams,
@@ -328,6 +329,7 @@ export async function reassembleWithPreset(
   nudgeInjectionDepth?: number;
   memoryInjectionItems?: StructuredContextItem[];
   memoryInjectionDepth?: number;
+  memoryRecall?: import("./context/memoryRecall").MemoryRecallOutcome;
 }> {
   const { nodes } = presetData;
 
@@ -558,5 +560,6 @@ export async function reassembleWithPreset(
     nudgeInjectionDepth: nativeOutput.nudgeInjectionDepth,
     memoryInjectionItems: nativeOutput.memoryInjectionItems,
     memoryInjectionDepth: nativeOutput.memoryInjectionDepth,
+    memoryRecall: nativeOutput.memoryRecall,
   };
 }

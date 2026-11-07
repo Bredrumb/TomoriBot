@@ -289,6 +289,7 @@ export async function retrieveRelevantDocumentChunks(params: {
   serverId: number;
   personaId?: number | null;
   query: string;
+  queryEmbedding?: number[];
   embeddingModel: EmbeddingModelRow;
   apiKey: string;
   onUsage?: EmbeddingRequest["onUsage"];
@@ -322,17 +323,19 @@ export async function retrieveRelevantDocumentChunks(params: {
   }
 
   const embeddingStartedAt = performance.now();
-  const queryEmbeddings = await generateEmbeddingsBatched({
-    provider: embeddingModel.provider,
-    apiKey,
-    model: embeddingModel.codename,
-    modelId: embeddingModel.embedding_model_id,
-    inputs: [query],
-    taskType: (await providerSupportsEmbeddingTaskType(embeddingModel.provider)) ? "RETRIEVAL_QUERY" : undefined,
-    batchSize,
-    onUsage,
-  });
-  if (timings) timings.embeddingMs = performance.now() - embeddingStartedAt;
+  const queryEmbeddings = params.queryEmbedding
+    ? [params.queryEmbedding]
+    : await generateEmbeddingsBatched({
+        provider: embeddingModel.provider,
+        apiKey,
+        model: embeddingModel.codename,
+        modelId: embeddingModel.embedding_model_id,
+        inputs: [query],
+        taskType: (await providerSupportsEmbeddingTaskType(embeddingModel.provider)) ? "RETRIEVAL_QUERY" : undefined,
+        batchSize,
+        onUsage,
+      });
+  if (timings && !params.queryEmbedding) timings.embeddingMs = performance.now() - embeddingStartedAt;
 
   if (queryEmbeddings.length === 0) {
     return [];

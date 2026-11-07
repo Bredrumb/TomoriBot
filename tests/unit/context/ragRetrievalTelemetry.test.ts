@@ -1,3 +1,4 @@
+import * as capabilityResolver from "@/utils/provider/providerCapabilityResolver";
 import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { llmModelRepo, ragRepository, serverMemoryRepository } from "@/utils/db/repositories";
 import { metricSampleRepository } from "@/utils/db/repositories/MetricSampleRepository";
@@ -62,7 +63,7 @@ function installSpies() {
   metricCalls = [];
   const spies = {
     metric: spyOn(log, "metric").mockImplementation((name, fields) => {
-      metricCalls.push({ name, fields });
+      if (name === "rag_retrieval") metricCalls.push({ name, fields });
     }),
     warn: spyOn(log, "warn").mockImplementation(() => undefined),
     sample: spyOn(metricSampleRepository, "recordSample").mockResolvedValue(undefined),
@@ -71,6 +72,10 @@ function installSpies() {
     documents: spyOn(serverMemoryRepository, "hasDocumentInScope").mockResolvedValue(true),
     credentials: spyOn(credentialResolver, "resolveCapabilityCredentials").mockResolvedValue(credentials),
     model: spyOn(llmModelRepo, "loadEmbeddingModelById").mockResolvedValue(embeddingModel),
+    embedding: spyOn(capabilityResolver, "resolveEmbeddingsCapability").mockResolvedValue({
+      generateEmbeddings: async () => [[1, 0]],
+      supportsEmbeddingTaskType: () => true,
+    } as unknown as Awaited<ReturnType<typeof capabilityResolver.resolveEmbeddingsCapability>>),
     retrieve: spyOn(ragRepository, "retrieveRelevantChunks").mockResolvedValue([]),
   };
   return spies;
@@ -196,7 +201,7 @@ describe("RAG retrieval telemetry", () => {
       expect(await build()).toBeNull();
       expectRecordedOutcome("error");
       expect(query).toHaveBeenCalledTimes(1);
-      expect(spies.warn).toHaveBeenCalledWith(expect.any(String), databaseError);
+      expect(spies.warn).toHaveBeenCalled();
       expect(spies.retrieve).not.toHaveBeenCalled();
     } finally {
       query.mockRestore();

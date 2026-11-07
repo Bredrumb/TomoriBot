@@ -354,6 +354,25 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("memory decay storage", () => {
     });
     expect(top.map((row) => row.id)).toEqual(similarIds.slice(-3).reverse());
     expect(top.every((row) => row.similarity >= 0.5)).toBe(true);
+    expect(
+      await memoryDecayRepository.scoreCandidates([1, 0, 0], "test-family", {
+        ...empty,
+        serverMemoryIds: [similarIds[0]],
+      }),
+    ).toEqual([]);
+    const floorId = await insertServer();
+    await memoryDecayRepository.upsertVector(
+      { kind: "server", id: floorId },
+      "test-family",
+      model.embedding_model_id,
+      [0.5, Math.sqrt(0.75), 0],
+      "stored fact",
+    );
+    const floor = await memoryDecayRepository.scoreCandidates([1, 0, 0], "test-family", {
+      ...empty,
+      serverMemoryIds: [floorId],
+    });
+    expect(floor.map((memory) => memory.id)).toEqual([floorId]);
     resetRagAvailabilityCache();
     expect(await memoryDecayRepository.scoreCandidates([], "test-family", candidates)).toEqual([]);
     expect(await memoryDecayRepository.findMissingVectors(candidates, "test-family")).toEqual([]);

@@ -1,3 +1,4 @@
+import type { MemoryRecallCollector } from "@/utils/text/context/memoryRecall";
 import type { ContextMemoryEntry } from "@/types/misc/context";
 import { GatewayIntentBits, type Client, type Guild, type GuildMember, type User } from "discord.js";
 import {
@@ -186,6 +187,7 @@ export interface ParticipantHydrationDependencies {
 }
 
 export interface ParticipantHydrationParams {
+  memoryRecall?: MemoryRecallCollector;
   client: Client;
   guildId: string;
   channelName: string;
@@ -866,15 +868,26 @@ async function hydratePersonalMemoryEntries(
         params.botName,
         params.tomoriConfig.personal_memories_enabled,
       );
+      const formattedText = formatMemoryWithId(memory.personal_memory_id ?? index + 1, processed, memory.tags ?? []);
+      if (
+        params.memoryRecall &&
+        !(await params.memoryRecall.include({
+          kind: "personal",
+          id: memory.personal_memory_id as number,
+          decayDays: memory.decay_days,
+          line: `- Memories about ${displayName}: ${formattedText}`,
+        }))
+      )
+        return null;
       return {
         id: `personal:${memory.personal_memory_id ?? index + 1}`,
         text: processed,
-        formattedText: formatMemoryWithId(memory.personal_memory_id ?? index + 1, processed, memory.tags ?? []),
+        formattedText,
         createdAt: memory.created_at?.getTime(),
       };
     }),
   );
-  return processedMemories;
+  return processedMemories.filter((memory) => memory !== null);
 }
 
 function memoryMatchesContext(memory: PersonalMemoryRow, params: ParticipantHydrationParams): boolean {

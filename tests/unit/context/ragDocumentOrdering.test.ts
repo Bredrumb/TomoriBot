@@ -1,3 +1,4 @@
+import * as capabilityResolver from "@/utils/provider/providerCapabilityResolver";
 import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { llmModelRepo, ragRepository, serverMemoryRepository } from "@/utils/db/repositories";
 import { metricSampleRepository } from "@/utils/db/repositories/MetricSampleRepository";
@@ -61,6 +62,10 @@ function installSpies() {
     documents: spyOn(serverMemoryRepository, "hasDocumentInScope").mockResolvedValue(true),
     credentials: spyOn(credentialResolver, "resolveCapabilityCredentials").mockResolvedValue(credentials),
     model: spyOn(llmModelRepo, "loadEmbeddingModelById").mockResolvedValue(embeddingModel),
+    embedding: spyOn(capabilityResolver, "resolveEmbeddingsCapability").mockResolvedValue({
+      generateEmbeddings: async () => [[1, 0]],
+      supportsEmbeddingTaskType: () => true,
+    } as unknown as Awaited<ReturnType<typeof capabilityResolver.resolveEmbeddingsCapability>>),
     retrieve: spyOn(ragRepository, "retrieveRelevantChunks").mockResolvedValue([]),
   };
 }

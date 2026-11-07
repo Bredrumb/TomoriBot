@@ -1,3 +1,5 @@
+import * as embeddingCapabilities from "@/utils/provider/providerCapabilityResolver";
+import { memoryDecayRepository } from "@/utils/db/repositories/MemoryDecayRepository";
 import { afterEach, expect, it, setSystemTime, spyOn } from "bun:test";
 import { ActivityType, type Activity } from "discord.js";
 import { AnthropicStreamAdapter } from "@/providers/anthropic/anthropicStreamAdapter";
@@ -197,6 +199,12 @@ it("preserves serialized prefixes across volatile updates and appended exchanges
         model_family: "fixture",
       }),
     ),
+    spyOn(embeddingCapabilities, "resolveEmbeddingsCapability").mockResolvedValue({
+      generateEmbeddings: async () => [[1, 0]],
+      supportsEmbeddingTaskType: () => true,
+    } as unknown as Awaited<ReturnType<typeof embeddingCapabilities.resolveEmbeddingsCapability>>),
+    spyOn(memoryDecayRepository, "scoreCandidates").mockResolvedValue([]),
+    spyOn(memoryDecayRepository, "findMissingVectors").mockResolvedValue([]),
     spyOn(ragRepository, "retrieveRelevantChunks").mockImplementation(async () => [
       {
         document_id: variant + 1,
