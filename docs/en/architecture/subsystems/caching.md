@@ -122,8 +122,9 @@ updates both stores after successful delivery. Held response drafts update neith
 Caches derive their state from PostgreSQL. To prevent serving stale data, write operations must invalidate affected cache keys directly after a database transaction commits successfully.
 
 Repositories or their calling workflows own database writes and paired invalidation. Check both
-when changing a write path; the [memory creation stage](/architecture/pipelines/memory/ltm/01-ltm-create/)
-records an existing notification-ordering limitation. Domain invalidators include:
+when changing a write path. Memory creation invalidates both scopes before notification. Scoped
+memory rows and vectors used by [recall](/architecture/pipelines/memory/ltm/#decay-lifecycle) load
+fresh; daily accounting invalidates affected server snapshots after commit. Domain invalidators include:
 
 - Server or persona updates: `invalidateTomoriStateCache(serverDiscId)`.
 - User setting or memory writes: `invalidateUserCache(userDiscId)`.
