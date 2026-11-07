@@ -53,6 +53,7 @@ const TAG_LABELS: Readonly<Record<ContextItemTag, TagLabel>> = {
   [ContextItemTag.KNOWLEDGE_PERSONA_SPRITES]: { title: "Persona Sprites", hint: "/config > Persona > Sprites" },
   [ContextItemTag.KNOWLEDGE_SERVER_MEMORIES]: { title: "Server Memories", hint: "/memories" },
   [ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS]: { title: "Server Documents", hint: "/memories" },
+  [ContextItemTag.KNOWLEDGE_RECALLED_MEMORIES]: { title: "Recalled Memories", hint: "/memories, /personal memories" },
   [ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE]: { title: "Lorebook (Before)", hint: "/memories" },
   [ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER]: { title: "Lorebook (After)", hint: "/memories" },
   [ContextItemTag.KNOWLEDGE_SERVER_CONDITIONING]: { title: "Conditioning Log", hint: "/conditioning" },

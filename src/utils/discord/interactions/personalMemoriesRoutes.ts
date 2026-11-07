@@ -211,7 +211,9 @@ export const personalMemoriesOperations: PersonalMemoriesOperations = {
     if (!limitCheck.isValid) {
       return { status: "limit-reached" };
     }
-    const inserted = await personalMemoryRepository.add(userId, personaLineageId, trimmed, tags);
+    const inserted = await personalMemoryRepository.add(userId, personaLineageId, trimmed, tags, {
+      manuallyWritten: true,
+    });
     if (!inserted) {
       return { status: "write-failed" };
     }
@@ -250,7 +252,9 @@ export const personalMemoriesOperations: PersonalMemoriesOperations = {
       return { status: "batch-limit-reached", available, requested: toInsert.length };
     }
 
-    const inserted = await personalMemoryRepository.addBatch(userId, personaLineageId, toInsert, tags);
+    const inserted = await personalMemoryRepository.addBatch(userId, personaLineageId, toInsert, tags, {
+      manuallyWritten: true,
+    });
     if (!inserted) {
       return { status: "write-failed" };
     }
@@ -279,15 +283,15 @@ export const personalMemoriesOperations: PersonalMemoriesOperations = {
     }
     const existingTags = target.tags ?? [];
     const tagsUnchanged = tags.length === existingTags.length && tags.every((t, i) => t === existingTags[i]);
-    if (trimmed === target.content.trim() && tagsUnchanged) {
+    if (trimmed === target.content.trim() && tagsUnchanged && target.manually_written) {
       return { status: "unchanged", row: target };
     }
-    const ok = await personalMemoryRepository.edit(memoryId, trimmed, tags);
+    const ok = await personalMemoryRepository.edit(memoryId, trimmed, tags, { manuallyWritten: true });
     if (!ok) {
       return { status: "write-failed" };
     }
     invalidateUserCache(userDiscId);
-    return { status: "success", row: { ...target, content: trimmed, tags } };
+    return { status: "success", row: { ...target, content: trimmed, tags, manually_written: true } };
   },
 
   async remove({ userId, userDiscId, personaLineageId, memoryId }) {

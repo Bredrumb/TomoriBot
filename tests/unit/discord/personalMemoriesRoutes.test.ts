@@ -113,6 +113,10 @@ function requireRoute(customId: string): ParsedInteractionRoute {
 function makeMemory(id: number, overrides: Partial<PersonalMemoryRow> = {}): PersonalMemoryRow {
   return {
     personal_memory_id: id,
+    decay_days: 0,
+    decay_counted_on: null,
+    reinforced_on: null,
+    manually_written: false,
     user_id: 1,
     persona_lineage_id: 0,
     content: `Memory content ${id}`,
@@ -1645,6 +1649,43 @@ describe("router wiring & outdated version fallback", () => {
 // guards, so it would pass unchanged if the real ones were deleted. These exercise the exported
 // singleton itself, which is where owner scoping and the privacy asymmetry actually live.
 describe("personalMemoriesOperations enforces its own guards", () => {
+  it("requests manual protection for single adds, batches, and every unprotected edit-form save", async () => {
+    const row = makeMemory(7, { content: "stored", persona_lineage_id: 100, tags: [], manually_written: false });
+    const add = spyOn(personalMemoryRepository, "add").mockResolvedValue(makeMemory(8, { manually_written: true }));
+    const batch = spyOn(personalMemoryRepository, "addBatch").mockResolvedValue(true);
+    const edit = spyOn(personalMemoryRepository, "edit").mockResolvedValue(true);
+    const load = spyOn(personalMemoryRepository, "loadForUserLineage").mockResolvedValue([row]);
+    const limit = spyOn(personalMemoryRepository, "checkPersonalMemoryLimit").mockResolvedValue({
+      isValid: true,
+      currentCount: 1,
+      maxAllowed: 100,
+    });
+    const privacy = spyOn(userRepository, "getPrivacyLevel").mockResolvedValue(PrivacyLevel.MINIMAL);
+    const scope = { userId: 1, userDiscId: "user-1", personaLineageId: 100 };
+    try {
+      expect((await personalMemoriesOperations.add({ ...scope, content: "new fact", tags: [] })).status).toBe(
+        "success",
+      );
+      expect(add).toHaveBeenCalledWith(1, 100, "new fact", [], { manuallyWritten: true });
+      expect(
+        (await personalMemoriesOperations.addBatch({ ...scope, contents: ["uploaded line"], tags: [] })).status,
+      ).toBe("success");
+      expect(batch).toHaveBeenCalledWith(1, 100, ["uploaded line"], [], { manuallyWritten: true });
+      for (const input of [
+        { content: "updated", tags: [] },
+        { content: "stored", tags: ["archive"] },
+        { content: "stored", tags: [] },
+      ]) {
+        expect(await personalMemoriesOperations.edit({ ...scope, memoryId: 7, ...input })).toMatchObject({
+          status: "success",
+          row: { manually_written: true },
+        });
+        expect(edit).toHaveBeenLastCalledWith(7, input.content, input.tags, { manuallyWritten: true });
+      }
+    } finally {
+      for (const spy of [add, batch, edit, load, limit, privacy]) spy.mockRestore();
+    }
+  });
   const scopedInput = { userId: 1, userDiscId: "123456789", personaLineageId: 0 };
 
   it("refuses to edit or remove an id absent from the caller's own freshly loaded scope", async () => {

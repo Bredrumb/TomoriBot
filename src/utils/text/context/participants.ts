@@ -1,3 +1,4 @@
+import type { MemoryRecallCollector } from "@/utils/text/context/memoryRecall";
 import type { Client } from "discord.js";
 import { getCurrentTimeWithOffset, formatUTCOffset, getTimeOfDayPhrase } from "@/utils/text/timezoneHelper";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
@@ -14,6 +15,7 @@ export { formatPendingReminderForContext } from "@/utils/text/participants/hydra
 
 export async function buildParticipantContextItems(params: {
   client: Client;
+  memoryRecall?: MemoryRecallCollector;
   guildId: string;
   channelName: string;
   channelId: string;
@@ -53,6 +55,7 @@ export async function buildParticipantContextItems(params: {
   }
 
   const hydrated = await hydrateParticipantProfiles({
+    memoryRecall: params.memoryRecall,
     client: params.client,
     guildId: params.guildId,
     channelName: params.channelName,

@@ -33,9 +33,9 @@ We keep personal and Server memories, persona customizations, reminders, and Ser
 
 When a persona starts a conversation on its own (Natural Nudges), we record which persona spoke, the channel, whether anyone answered, and the member it pinged. We also save the persona's private goal for that conversation, which may mention that member.
 
-Optional short-term memory saves conversation summaries. Other saved memories may describe people who did not write them. They remain until deleted, except that memory decay may remove an unused memory the bot saved on its own to make room for a new one.
+Optional short-term memory saves conversation summaries. Other saved memories may describe people who did not write them. They remain until deleted, except that memory decay may remove an unused memory to make room when the bot saves a new one. Memories someone added or edited with `/memories` or `/personal memories` are never removed this way.
 
-Memory decay is on by default for Server and personal memories. If an embedding model is set up, we store search data computed from each memory and record how recently each one came up in conversation, so the bot can recall relevant memories. Search data is deleted with its memory. Section 6 shows where to turn memory decay off.
+Memory decay applies to Server and personal memories. If an embedding model is set up, we store search data computed from each memory and record how recently each one came up in conversation, so the bot can recall relevant memories. Search data is deleted with its memory. Privacy settings that stop personal memory use also keep those memories out of search.
 
 ### 2.3) API keys and connected services
 
@@ -97,7 +97,6 @@ Removing the bot keeps Server data for re-invitation; run `/nuke` first to delet
 | What you want | Where to do it |
 |---|---|
 | Control message visibility and personal memory use | `/personal config` |
-| Turn memory decay on or off | `/personal config` > `Advanced` > `Memory Decay` for personal memories; `/config` > `Behavior` > `Advanced Memory` for Server memories (managers only) |
 | Stop personas pinging you to start a conversation | `/personal config` > `Privacy` > `Pings from Personas` |
 | Review or remove personal memories | `/personal memories` |
 | Review or remove Server memories and documents | `/memories` |

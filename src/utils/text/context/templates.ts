@@ -89,6 +89,7 @@ export function resolveRandomChoiceMacrosInBuildOutput(output: {
   nudgeInjectionDepth?: number;
   memoryInjectionItems?: StructuredContextItem[];
   memoryInjectionDepth?: number;
+  memoryRecall?: import("@/utils/text/context/memoryRecall").MemoryRecallOutcome;
 }): {
   contextItems: StructuredContextItem[];
   tailDirectives: string[];
@@ -98,8 +99,10 @@ export function resolveRandomChoiceMacrosInBuildOutput(output: {
   nudgeInjectionDepth?: number;
   memoryInjectionItems?: StructuredContextItem[];
   memoryInjectionDepth?: number;
+  memoryRecall?: import("@/utils/text/context/memoryRecall").MemoryRecallOutcome;
 } {
   return {
+    memoryRecall: output.memoryRecall,
     contextItems: output.contextItems.map(resolveRandomChoiceMacrosInContextItem),
     tailDirectives: output.tailDirectives.map(resolveRandomChoiceMacros),
     lowerPriorityTailDirectives: output.lowerPriorityTailDirectives.map(resolveRandomChoiceMacros),

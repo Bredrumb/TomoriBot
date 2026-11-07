@@ -44,12 +44,30 @@ remains in the conversation history rather than long-term memory.
 If you want her to save something, ask her to remember it or add it yourself. Server managers can
 disable automatic saving under `/config` > `Permissions`.
 
+### Memories that rest
+
+With an embedding model set up, an unused personal or server memory rests after 14 days of
+conversations where it could be searched. Days without those conversations do not count. Resting
+memories stay saved and return when the conversation needs them.
+
+Decay is automatic. Self-hosters can turn it off for the whole installation with
+`MEMORY_DECAY_ENABLED=false`. A memory that must always apply, such as an instruction, belongs in
+the persona prompt or an [Always On lorebook entry](/features/knowledge/lorebooks/), because a memory
+that never comes up in conversation can rest.
+
 ### Memory limits
 <!-- anchor: how-many-memories -->
 
 Each persona can hold 100 personal memories and 100 server memories by default. Global personal
 memories count toward each persona's personal limit. Self-hosters can change the limits with
 `MAX_PERSONAL_MEMORIES`, `MAX_SERVER_MEMORIES`, and `MAX_MEMORY_LENGTH`.
+
+When a scope is full, an automatic save may forget a resting memory to make room, including imported
+and older memories. It never chooses a Global personal memory or one someone added or edited with
+`/memories` or `/personal memories`. Editing and saving a memory once keeps it from being forgotten
+this way; it can still rest and return through recall. The confirmation shows what was saved and
+forgotten, following the server's memory-notice visibility setting. If no memory qualifies, the save
+is refused.
 
 :::tip
 Prefer more short memories over fewer long ones. A memory that uses a raised `MAX_MEMORY_LENGTH` is
@@ -92,8 +110,9 @@ managers can disable the tool under `/config` > `Plugins` > `Available Tools`.
 
 ## Controlling when memories activate
 
-By default, memories are included whenever their owner and scope match the conversation. Channel
-restrictions narrow where they apply, and personal memories can also use keyword tags.
+Active memories are included when their owner and scope match the conversation. Resting memories
+return through search when relevant. Channel restrictions narrow where they apply, and personal
+memories can also use keyword tags.
 
 ### Personal memory tags
 <!-- anchor: keyword-tags -->

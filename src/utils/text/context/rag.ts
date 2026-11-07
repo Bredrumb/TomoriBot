@@ -1,19 +1,13 @@
-import { createProviderUsageRecorder, withProviderUsageContext } from "@/utils/provider/providerUsage";
-import { isRagAvailable } from "@/utils/db/ragAvailability";
-import { llmModelRepo, ragRepository, serverMemoryRepository } from "@/utils/db/repositories";
+import { ragRepository } from "@/utils/db/repositories";
 import { metricSampleRepository } from "@/utils/db/repositories/MetricSampleRepository";
 import { log } from "@/utils/misc/logger";
-import { resolveCapabilityCredentials, getResolvedCapabilityModelId } from "@/utils/provider/credentialResolver";
-import { memoryGuard } from "@/utils/security/rateLimiter";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import type { TomoriState } from "@/types/db/schema";
-import type { SimplifiedMessageForContext } from "./types";
 import { channelScopeCandidates } from "@/utils/discord/channelScope";
 import { charsToTokensText } from "@/utils/text/tokenEstimate";
 import type { RetrievalTimings } from "@/utils/documents/documentService";
+import type { QueryRetrieval } from "@/utils/text/context/queryRetrieval";
 
-const DOCUMENT_QUERY_MAX_LENGTH = 1000;
-const DOCUMENT_QUERY_MIN_LENGTH = 3;
 const DOCUMENT_MAX_RESULTS = 10;
 const DOCUMENT_MIN_SIMILARITY = 0.5;
 const RAG_RETRIEVAL_METRIC = "rag_retrieval";
@@ -67,74 +61,42 @@ function skipRetrieval(
   return null;
 }
 
-function getLatestUserQuery(messages: SimplifiedMessageForContext[]): string | null {
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    const msg = messages[i];
-    if (msg.authorType !== "user") continue;
-    if (!msg.content) continue;
-    if (msg.authorId === "0") continue;
-    const trimmed = msg.content.trim();
-    if (!trimmed) continue;
-    if (trimmed.startsWith("[System:")) continue;
-    return trimmed.slice(0, DOCUMENT_QUERY_MAX_LENGTH);
-  }
-
-  return null;
-}
-
 export async function buildServerDocumentContextItem(params: {
   tomoriState: TomoriState | null | undefined;
-  simplifiedMessageHistory: SimplifiedMessageForContext[];
-  triggererUserId?: number;
   channelId: string;
   parentChannelId?: string | null;
+  retrieval: QueryRetrieval;
 }): Promise<StructuredContextItem | null> {
   const startedAt = performance.now();
   const timings: RetrievalTimings = {};
   try {
-    const { tomoriState, simplifiedMessageHistory, triggererUserId, channelId, parentChannelId } = params;
-    if (!isRagAvailable()) return skipRetrieval("rag_unavailable", startedAt, timings);
-    if (memoryGuard.getStatus() === "critical") return skipRetrieval("memory_critical", startedAt, timings);
-    if (!tomoriState?.server_id) return skipRetrieval("no_server", startedAt, timings);
-
-    const queryText = getLatestUserQuery(simplifiedMessageHistory);
-    if (!queryText) return skipRetrieval("no_query", startedAt, timings);
-    if (queryText.length < DOCUMENT_QUERY_MIN_LENGTH) return skipRetrieval("query_too_short", startedAt, timings);
-
-    const hasDocument = await serverMemoryRepository.hasDocumentInScope(
-      tomoriState.server_id,
-      tomoriState.persona_id ?? null,
-    );
-    if (!hasDocument) return skipRetrieval("no_documents", startedAt, timings);
-
-    const creds = await resolveCapabilityCredentials(tomoriState.server_id, "embedding", {
-      userId: triggererUserId ?? null,
-    });
-    const resolvedEmbeddingModelId =
-      getResolvedCapabilityModelId(creds, "embedding") ?? tomoriState.config.embedding_model_id;
-    const embeddingModel = resolvedEmbeddingModelId
-      ? await llmModelRepo.loadEmbeddingModelById(resolvedEmbeddingModelId)
-      : null;
-    if (!embeddingModel) return skipRetrieval("no_model", startedAt, timings);
+    const { tomoriState, channelId, parentChannelId, retrieval } = params;
+    const ready = await retrieval.prepared;
+    const skip = ready.documentSkip ?? ready.skip;
+    if (skip) return skipRetrieval(skip, startedAt, timings);
+    if (!ready.embedding || !tomoriState?.server_id || !retrieval.query)
+      return skipRetrieval("no_model", startedAt, timings);
+    const queryEmbedding = await retrieval.vector;
+    timings.embeddingMs = retrieval.timings.embeddingMs;
+    if (!queryEmbedding) return skipRetrieval("error", startedAt, timings);
+    const { model: embeddingModel, credentials: creds } = ready.embedding;
 
     const channelFilter = tomoriState.config.channel_memory_enabled
       ? channelScopeCandidates(channelId, parentChannelId)
       : null;
 
-    const chunks = await withProviderUsageContext(creds.usageContext, async () =>
-      ragRepository.retrieveRelevantChunks({
-        serverId: tomoriState.server_id,
-        personaId: tomoriState.persona_id ?? null,
-        query: queryText,
-        embeddingModel,
-        apiKey: creds.apiKey,
-        onUsage: createProviderUsageRecorder(creds.usageContext, embeddingModel.codename),
-        maxResults: DOCUMENT_MAX_RESULTS,
-        minSimilarity: DOCUMENT_MIN_SIMILARITY,
-        channelIds: channelFilter,
-        timings,
-      }),
-    );
+    const chunks = await ragRepository.retrieveRelevantChunks({
+      serverId: tomoriState.server_id,
+      personaId: tomoriState.persona_id ?? null,
+      query: retrieval.query,
+      queryEmbedding,
+      embeddingModel,
+      apiKey: creds.apiKey,
+      maxResults: DOCUMENT_MAX_RESULTS,
+      minSimilarity: DOCUMENT_MIN_SIMILARITY,
+      channelIds: channelFilter,
+      timings,
+    });
 
     // Selection stays score-ordered; document and chunk order makes the rendered bytes independent of rank changes.
     const selectedChunks = [...chunks].sort((a, b) => a.document_id - b.document_id || a.chunk_index - b.chunk_index);

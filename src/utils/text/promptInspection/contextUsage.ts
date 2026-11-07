@@ -62,6 +62,7 @@ const TAG_SEGMENTS: Readonly<Record<ContextItemTag, ContextSegmentId>> = {
   [ContextItemTag.KNOWLEDGE_SERVER_CONDITIONING]: "server",
   [ContextItemTag.KNOWLEDGE_SERVER_MEMORIES]: "memory",
   [ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS]: "memory",
+  [ContextItemTag.KNOWLEDGE_RECALLED_MEMORIES]: "memory",
   [ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE]: "memory",
   [ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER]: "memory",
   [ContextItemTag.KNOWLEDGE_USER_MEMORIES]: "memory",

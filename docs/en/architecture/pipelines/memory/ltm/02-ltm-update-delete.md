@@ -34,6 +34,13 @@ Following parameter and scope checks, execution routes to the matching repositor
    - Server deletion: `serverMemoryRepository.removeByIdWithLineage()` removes the row and returns its prior content.
    - Personal update: `personalMemoryRepository.updateByIdForUserAndLineage()` updates content in `personal_memories`.
    - Personal deletion: `personalMemoryRepository.removeByIdForUserAndLineage()` removes the row and returns its prior content.
+   Content-changing updates from either the tool or memory panels delete every embedding family
+   in the same transaction while preserving decay metadata. Model edits leave `manually_written`
+   unchanged. Every successful edit-form save through `/memories` or `/personal memories` sets it
+   to true in the content-update transaction, including channel-only, tag-only, and unchanged-content
+   saves. This protects the memory from automatic eviction while allowing it to become dormant.
+   Unchanged content keeps its vectors. Deleting a memory cascades to its vectors; post-turn fill
+   rebuilds edited content only when it is visible to recall.
 2. **Cache invalidation:**
    - Server operations call `invalidateTomoriStateCache(serverDiscId)` immediately after successful database execution.
    - Personal operations call `invalidateUserCache(targetUserId)` immediately after successful database execution.

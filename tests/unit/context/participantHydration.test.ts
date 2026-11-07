@@ -1,3 +1,4 @@
+import type { RecallCandidate } from "@/utils/text/context/memoryRecall";
 import { describe, expect, it, mock, spyOn } from "bun:test";
 import { Collection, type Client, type GuildMember, type User } from "discord.js";
 import {
@@ -226,6 +227,10 @@ function createFixture(
       return [
         {
           personal_memory_id: lineageId,
+          decay_days: 0,
+          decay_counted_on: null,
+          reinforced_on: null,
+          manually_written: false,
           user_id: userId,
           persona_lineage_id: lineageId,
           content: `Lineage ${lineageId} remembers maps.`,
@@ -581,11 +586,46 @@ describe("participant hydration", () => {
     expect(profile?.fields.every((candidate) => candidate.owner === profile.key)).toBe(true);
   });
 
+  it("collects only visible personal memories after tag filtering and withholds dormant entries", async () => {
+    const fixture = createFixture();
+    const baseline = await hydrateParticipantProfiles(fixture.params, fixture.dependencies);
+    const baselineField = baseline.profiles[0]?.fields.find((candidate) => candidate.kind === "personal_memories");
+    const load = fixture.dependencies.loadPersonalMemories;
+    fixture.dependencies.loadPersonalMemories = async (userId, lineageId) => {
+      const [active] = await load(userId, lineageId);
+      return [
+        active,
+        { ...active, personal_memory_id: 71, decay_days: 14 },
+        { ...active, personal_memory_id: 72, decay_days: 14, tags: ["#off-topic"] },
+      ];
+    };
+    const candidates: RecallCandidate[] = [];
+    fixture.params.memoryRecall = {
+      include: async (memory) => {
+        candidates.push(memory);
+        return memory.decayDays < 14;
+      },
+    };
+    const result = await hydrateParticipantProfiles(fixture.params, fixture.dependencies);
+    const memoryField = result.profiles[0]?.fields.find((candidate) => candidate.kind === "personal_memories");
+    expect(memoryField).toEqual(baselineField);
+    expect(candidates.map((memory) => memory.id)).toEqual([70, 71]);
+    expect(candidates[1].line).toContain(result.profiles[0]?.displayName ?? "missing participant");
+    candidates.length = 0;
+    fixture.params.tomoriConfig.personal_memories_enabled = false;
+    await hydrateParticipantProfiles(fixture.params, fixture.dependencies);
+    expect(candidates).toEqual([]);
+  });
+
   it("preserves channel and content tag filtering", async () => {
     const fixture = createFixture();
     fixture.dependencies.loadPersonalMemories = async (userId, lineageId) => [
       {
         personal_memory_id: 1,
+        decay_days: 0,
+        decay_counted_on: null,
+        reinforced_on: null,
+        manually_written: false,
         user_id: userId,
         persona_lineage_id: lineageId,
         content: "Matching memory",
@@ -593,6 +633,10 @@ describe("participant hydration", () => {
       },
       {
         personal_memory_id: 2,
+        decay_days: 0,
+        decay_counted_on: null,
+        reinforced_on: null,
+        manually_written: false,
         user_id: userId,
         persona_lineage_id: lineageId,
         content: "Wrong channel",
@@ -600,6 +644,10 @@ describe("participant hydration", () => {
       },
       {
         personal_memory_id: 3,
+        decay_days: 0,
+        decay_counted_on: null,
+        reinforced_on: null,
+        manually_written: false,
         user_id: userId,
         persona_lineage_id: lineageId,
         content: "Wrong content tag",
