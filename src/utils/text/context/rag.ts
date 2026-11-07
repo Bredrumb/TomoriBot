@@ -7,7 +7,7 @@ import type { SimplifiedMessageForContext } from "./types";
 import { channelScopeCandidates } from "@/utils/discord/channelScope";
 import { charsToTokensText } from "@/utils/text/tokenEstimate";
 import type { RetrievalTimings } from "@/utils/documents/documentService";
-import { startQueryRetrieval, type QueryRetrieval } from "./queryRetrieval";
+import { startQueryRetrieval, type QueryRetrieval } from "@/utils/text/context/queryRetrieval";
 
 const DOCUMENT_MAX_RESULTS = 10;
 const DOCUMENT_MIN_SIMILARITY = 0.5;

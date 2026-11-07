@@ -12,7 +12,7 @@ import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 import { createProviderUsageRecorder, withProviderUsageContext } from "@/utils/provider/providerUsage";
 import { memoryGuard } from "@/utils/security/rateLimiter";
 import { charsToTokensText } from "@/utils/text/tokenEstimate";
-import type { SimplifiedMessageForContext } from "./types";
+import type { SimplifiedMessageForContext } from "@/utils/text/context/types";
 
 const QUERY_MAX_LENGTH = 1000;
 const QUERY_MIN_LENGTH = 3;
@@ -38,7 +38,7 @@ export interface QueryRetrieval {
   timings: { embeddingMs?: number; embeddingStartedAt?: number; queryTokens: number };
 }
 
-export function getLatestUserQuery(messages: SimplifiedMessageForContext[]): string | null {
+function getLatestUserQuery(messages: SimplifiedMessageForContext[]): string | null {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     const msg = messages[i];
     if (msg.authorType !== "user" || msg.authorId === "0") continue;

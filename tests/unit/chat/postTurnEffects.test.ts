@@ -120,7 +120,6 @@ describe("post-turn memory persistence", () => {
       queryTimings: { queryTokens: 0 },
       dormantTokens: 0,
       recalledTokens: 0,
-      quickReturnCount: 0,
     };
     try {
       await runPostTurnEffects(context, { status: "completed", streamResults: [], personaResponses: [] });
