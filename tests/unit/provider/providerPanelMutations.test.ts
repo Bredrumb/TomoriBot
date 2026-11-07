@@ -450,6 +450,38 @@ describe("provider panel mutations", () => {
     }
   });
 
+  // Regression: image registration skipped the catalog, so a Google image model named "NovelAI" was
+  // saved and failed every generation with a 400.
+  it("refuses an image model the provider's catalog confirms is absent", async () => {
+    const checkImageModel = mock(async () => false);
+    const checkTextModel = mock(async () => true);
+    const spies = [
+      spyOn(ProviderFactory, "getProviderByName").mockResolvedValue({ checkImageModel, checkTextModel } as never),
+      spyOn(llmProviderRepo, "loadSavedProviderConfig").mockResolvedValue({
+        api_key: Buffer.from("encrypted"),
+        key_version: 1,
+      } as never),
+      spyOn(crypto, "decryptApiKey").mockResolvedValue("decrypted-key"),
+      spyOn(llmModelRepo, "loadDiffusionModelByProviderAndCodename").mockResolvedValue(null as never),
+    ];
+    const upsert = spyOn(llmModelRepo, "upsertScopedDiffusionModel").mockResolvedValue(null as never);
+    try {
+      const result = await saveProviderModel({
+        serverDiscId: "guild",
+        state: state(),
+        entryId: "provider:google",
+        capability: "image",
+        codeName: "NovelAI",
+      });
+      expect(result.status).toBe("invalid-model");
+      expect(checkImageModel).toHaveBeenCalledWith("decrypted-key", "NovelAI");
+      expect(checkTextModel).not.toHaveBeenCalled();
+      expect(upsert).not.toHaveBeenCalled();
+    } finally {
+      for (const spy of [...spies, upsert]) spy.mockRestore();
+    }
+  });
+
   // Regression: decryption is a database query, and its failure turned a model save into a command error.
   it("saves a text model unchecked when the catalog lookup cannot be prepared", async () => {
     const checkTextModel = mock(async () => false);

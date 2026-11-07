@@ -22,7 +22,7 @@ import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories
 import { toolRepository } from "@/utils/db/repositories/ToolRepository";
 import { userRepository } from "@/utils/db/repositories/UserRepository";
 import { configRepository } from "./ConfigRepository";
-import { sql } from "@/utils/db/client";
+import { sql, withTransientDbRetry } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 import { normalizeCustomEndpointUrlForStorage } from "@/utils/provider/customEndpointService";
 import { buildCustomProviderName, buildSyntheticCustomModelCodename } from "@/utils/provider/customProviderUtils";
@@ -1580,13 +1580,17 @@ class ServerRepository implements IRepository<ServerExportShape> {
     if (!channelDiscId) return null;
 
     try {
-      const [row] = await sql`
-        SELECT managed_webhook_id, guild_disc_id, kind, channel_disc_id, webhook_disc_id,
-               webhook_token, key_version, avatar_fingerprint, discord_avatar_hash, created_at, updated_at
-        FROM discord_managed_webhooks
-        WHERE channel_disc_id = ${channelDiscId} AND kind = ${kind}
-        LIMIT 1
-      `;
+      const [row] = await withTransientDbRetry(
+        async () =>
+          await sql`
+          SELECT managed_webhook_id, guild_disc_id, kind, channel_disc_id, webhook_disc_id,
+                 webhook_token, key_version, avatar_fingerprint, discord_avatar_hash, created_at, updated_at
+          FROM discord_managed_webhooks
+          WHERE channel_disc_id = ${channelDiscId} AND kind = ${kind}
+          LIMIT 1
+        `,
+        `load managed webhook for channel ${channelDiscId}`,
+      );
 
       return (row as ManagedDiscordWebhookRow | undefined) ?? null;
     } catch (error) {
@@ -1603,15 +1607,19 @@ class ServerRepository implements IRepository<ServerExportShape> {
     if (!channelDiscId || !webhookDiscId) return null;
 
     try {
-      const [row] = await sql`
-        SELECT managed_webhook_id, guild_disc_id, kind, channel_disc_id, webhook_disc_id,
-               webhook_token, key_version, avatar_fingerprint, discord_avatar_hash, created_at, updated_at
-        FROM discord_managed_webhooks
-        WHERE channel_disc_id = ${channelDiscId}
-          AND webhook_disc_id = ${webhookDiscId}
-          AND kind IN ${sql(kind ? [kind] : [...MANAGED_WEBHOOK_KINDS])}
-        LIMIT 1
-      `;
+      const [row] = await withTransientDbRetry(
+        async () =>
+          await sql`
+          SELECT managed_webhook_id, guild_disc_id, kind, channel_disc_id, webhook_disc_id,
+                 webhook_token, key_version, avatar_fingerprint, discord_avatar_hash, created_at, updated_at
+          FROM discord_managed_webhooks
+          WHERE channel_disc_id = ${channelDiscId}
+            AND webhook_disc_id = ${webhookDiscId}
+            AND kind IN ${sql(kind ? [kind] : [...MANAGED_WEBHOOK_KINDS])}
+          LIMIT 1
+        `,
+        `load managed webhook ${webhookDiscId} for channel ${channelDiscId}`,
+      );
 
       return (row as ManagedDiscordWebhookRow | undefined) ?? null;
     } catch (error) {

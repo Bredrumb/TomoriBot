@@ -1524,7 +1524,10 @@ async function registerSharedProviderModel(
           ? await llmModelRepo.loadDiffusionModelByProviderAndCodename(provider, codeName)
           : await llmModelRepo.loadVideoGenerationModelByProviderAndCodename(provider, codeName);
   if (existing && !existing.is_scoped_registration) return { status: "already-available" };
-  if (input.capability === "text" && (await isTextModelRejectedByCatalog(input, provider, codeName))) {
+  if (
+    (input.capability === "text" || input.capability === "image") &&
+    (await isModelRejectedByCatalog(input, input.capability, provider, codeName))
+  ) {
     return { status: "invalid-model" };
   }
 
@@ -1585,14 +1588,17 @@ async function registerSharedProviderModel(
  * without a lookup, a scope without a saved key, an unreachable catalog, or a failure while
  * preparing the lookup all leave registration unchecked.
  */
-async function isTextModelRejectedByCatalog(
+async function isModelRejectedByCatalog(
   input: SaveProviderModelInput,
+  capability: "text" | "image",
   provider: string,
   codeName: string,
 ): Promise<boolean> {
   try {
     const instance = await ProviderFactory.getProviderByName(provider);
-    if (!instance.checkTextModel) return false;
+    const checkModel =
+      capability === "text" ? instance.checkTextModel?.bind(instance) : instance.checkImageModel?.bind(instance);
+    if (!checkModel) return false;
     const saved =
       input.scopeKind === "personal"
         ? await llmProviderRepo.loadUserSavedProviderConfig(input.ownerId, provider)
@@ -1600,7 +1606,7 @@ async function isTextModelRejectedByCatalog(
     if (!saved?.api_key) return false;
     // Decryption is itself a database round trip, so a retired pool connection can fail it too.
     const apiKey = await decryptApiKey(saved.api_key, saved.key_version);
-    return (await instance.checkTextModel(apiKey, codeName)) === false;
+    return (await checkModel(apiKey, codeName)) === false;
   } catch (error) {
     await reportModelLookupFailure(provider, error);
     return false;

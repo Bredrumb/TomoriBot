@@ -19,13 +19,12 @@ import type { EnhancedImageContent } from "@/types/tool/enhancedContextTypes";
 import { stashEnhancedContextItem } from "@/utils/chat/pendingEnhancedContext";
 import { resolveAvatarByIdentity } from "@/utils/discord/avatarResolver";
 import { sendToolProgressNotice } from "@/utils/discord/toolProgressNotice";
-import { ZAI_CODING_CHAT_COMPLETIONS_URL, ZAI_GENERAL_CHAT_COMPLETIONS_URL } from "@/providers/zai/zaiShared";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
 import { ContextItemTag, type StructuredContextItem } from "../../types/misc/context";
 import { ColorCode } from "@/utils/misc/logger";
 import { llmModelRepo } from "@/utils/db/repositories";
 import { getResolvedCapabilityModelId, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
-import { resolveVisionApiModelName } from "@/utils/provider/visionCaption";
+import { resolveChatCompletionsUrl, resolveVisionApiModelName } from "@/utils/provider/visionCaption";
 import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAttribution";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
@@ -35,17 +34,6 @@ import { readOpenRouterLimitError } from "@/providers/openrouter/openrouterLimit
 import { fetchWithProviderRequest } from "@/utils/provider/providerRequestHook";
 import { normalizeProviderUsage, type TokenUsage } from "@/utils/text/tokenEstimate";
 import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
-
-/**
- * Provider-to-chat-completions-URL mapping for OpenAI-compatible providers.
- * Google uses its own SDK and is handled separately.
- */
-const PROVIDER_CHAT_COMPLETIONS_URLS: Record<string, string> = {
-  openrouter: "https://openrouter.ai/api/v1/chat/completions",
-  zai: ZAI_GENERAL_CHAT_COMPLETIONS_URL,
-  zaicoding: ZAI_CODING_CHAT_COMPLETIONS_URL,
-  deepseek: "https://api.deepseek.com/chat/completions",
-};
 
 /** Default prompt sent to the vision model when analyzing a profile picture */
 const DEFAULT_AVATAR_ANALYSIS_PROMPT =
@@ -415,7 +403,13 @@ export class PeekProfilePictureTool extends BaseTool {
     if (provider === "google") {
       analysisResult = await this.callGoogleVisionWithBase64(apiKey, apiModelName, images, prompt);
     } else {
-      const endpointUrl = this.getVisionEndpointUrl(provider, context, creds.customEndpoint?.endpoint_url ?? null);
+      const endpointUrl = resolveChatCompletionsUrl(creds.provider, creds.customEndpoint?.endpoint_url ?? null);
+      if (!endpointUrl) {
+        return {
+          success: false,
+          error: `Provider "${provider}" has no vision transport for profile picture analysis.`,
+        };
+      }
       try {
         analysisResult = await withProviderUsageContext(creds.usageContext, async () =>
           this.callOpenAICompatibleVisionWithBase64(
@@ -445,23 +439,6 @@ export class PeekProfilePictureTool extends BaseTool {
         vision_provider: provider,
       },
     };
-  }
-
-  /**
-   * Resolve the chat completions endpoint URL for a given provider.
-   * @param context - Tool context (for custom endpoint URL)
-   * @returns Chat completions URL
-   */
-  private getVisionEndpointUrl(provider: string, context: ToolContext, customEndpointUrl?: string | null): string {
-    const knownUrl = PROVIDER_CHAT_COMPLETIONS_URLS[provider];
-    if (knownUrl) return knownUrl;
-
-    const customUrl = customEndpointUrl ?? context.tomoriState.config.custom_endpoint_url;
-    if (customUrl) {
-      return customUrl.endsWith("/chat/completions") ? customUrl : `${customUrl}/chat/completions`;
-    }
-
-    return "https://api.openai.com/v1/chat/completions";
   }
 
   /**
@@ -553,7 +530,7 @@ export class PeekProfilePictureTool extends BaseTool {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${apiKey}`,
-          ...(endpointUrl === PROVIDER_CHAT_COMPLETIONS_URLS.openrouter && buildOpenRouterAttributionHeaders()),
+          ...(endpointUrl === resolveChatCompletionsUrl("openrouter") && buildOpenRouterAttributionHeaders()),
         },
         body: JSON.stringify(requestBody),
       },

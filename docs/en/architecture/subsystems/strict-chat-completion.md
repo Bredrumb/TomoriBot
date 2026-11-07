@@ -28,6 +28,7 @@ A single bundled toggle would prevent configuring backends that need only one of
 
 - **Tool conflicts on DeepSeek**: DeepSeek rejects `prefix: true` in requests that also carry `tools`. When tool calling is active, the prefill resolver (`resolvePrefillBlocker` in `src/utils/chat/assistantPrefill.ts`) skips server prefills and converts `/respond` prefills into written prompt instructions.
 - **Tool loop folding**: When a model initiates a tool call, trailing prefill text is folded into the first tool call's assistant message (`foldPrefillIntoToolHistory`). This prevents consecutive assistant turns that strict-alternation backends would reject.
+- **Persona's own message last**: A turn that starts without new user input (a self-triggered or system-initiated turn) can build history that ends on the persona's own delivered message. `applyAssistantPrefill` then appends a user directive asking for the next message, because only this attempt's own prefill may end the request. NovelAI is exempt: text completion continues from a trailing persona line by design.
 
 ### Media relocation
 
