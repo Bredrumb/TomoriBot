@@ -18,6 +18,7 @@
  */
 
 import {
+  AttachmentBuilder,
   ButtonStyle,
   ComponentType,
   MessageFlags,
@@ -66,6 +67,8 @@ const DEFAULT_TRUNCATION_THRESHOLD = 200;
 // Both notice types offer their expand button for a day: long enough that the button
 // outlives the message it was attached to in the channel's scrollback.
 const EXPAND_BUTTON_TIMEOUT_MS = 86_400_000;
+// Discord limits an embed description to 4096 characters.
+const MAX_EXPANDED_DESCRIPTION_LENGTH = 4096;
 
 /**
  * Characters of memory content shown inline before the notice truncates and
@@ -285,11 +288,19 @@ async function sendEmbedWithExpand(
 
   collector.on("collect", async (interaction) => {
     try {
+      const description = `\`\`\`\n${fenceSafeContent}\n\`\`\``;
+      if (description.length > MAX_EXPANDED_DESCRIPTION_LENGTH) {
+        await interaction.reply({
+          files: [new AttachmentBuilder(Buffer.from(fullContent, "utf8"), { name: "notice.txt" })],
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
       // Fenced so markdown inside stored content renders literally instead of formatting the reply.
       const fullEmbed = createStandardEmbed(await resolveUserLocale(interaction), {
         color: embedOptions.color ?? ColorCode.INFO,
         titleKey: config.expandTitleKey,
-        description: `\`\`\`\n${fenceSafeContent}\n\`\`\``,
+        description,
       });
       await interaction.reply({
         embeds: [fullEmbed],
@@ -416,21 +427,28 @@ export async function sendMemoryEmbedWithExpand(
   embedOptions: StandardEmbedOptions,
   fullMemoryContent: string,
   ref?: MinimalNoticeRef,
+  containsEviction = false,
 ): Promise<void> {
-  await sendToolEmbedWithExpand(
-    context,
-    "memory_update",
-    embedOptions,
-    fullMemoryContent,
-    {
-      customId: "memory_notice_expand",
-      buttonLabelKey: "genai.self_teach.expand_memory_button",
-      expandTitleKey: "genai.self_teach.expand_memory_title",
-      truncationThreshold: MEMORY_NOTICE_PREVIEW_LIMIT,
-      timeoutMs: EXPAND_BUTTON_TIMEOUT_MS,
-    },
-    ref,
-  );
+  const config: ExpandableNoticeConfig = {
+    customId: "memory_notice_expand",
+    buttonLabelKey: "genai.self_teach.expand_memory_button",
+    expandTitleKey: "genai.self_teach.expand_memory_title",
+    truncationThreshold: MEMORY_NOTICE_PREVIEW_LIMIT,
+    timeoutMs: EXPAND_BUTTON_TIMEOUT_MS,
+  };
+  // Automatic eviction must show the removed content even when ordinary notices are hidden or minimal.
+  if (containsEviction) {
+    await sendEmbedWithExpand(
+      context.channel,
+      context.locale,
+      { ...embedOptions, minimal: false },
+      fullMemoryContent,
+      config,
+      buildToolPersonaPostContext(context, context.tomoriState),
+    );
+    return;
+  }
+  await sendToolEmbedWithExpand(context, "memory_update", embedOptions, fullMemoryContent, config, ref);
 }
 
 /**
