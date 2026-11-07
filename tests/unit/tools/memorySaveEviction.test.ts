@@ -69,7 +69,7 @@ describe("model memory save eviction", () => {
         persona_lineage_id: 8,
         user_id: 7,
         content: newContent,
-        model_written: true,
+        manually_written: false,
       }),
       evicted: { id: 9, content: forgottenContent, decay_days: 17 },
     };
@@ -80,7 +80,7 @@ describe("model memory save eviction", () => {
         user_id: 7,
         persona_lineage_id: 8,
         content: newContent,
-        model_written: true,
+        manually_written: false,
       }),
       evicted: { id: 11, content: forgottenContent, decay_days: 17 },
     };

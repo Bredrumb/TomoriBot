@@ -62,8 +62,10 @@ Each persona can hold 100 personal memories and 100 server memories by default. 
 memories count toward each persona's personal limit. Self-hosters can change the limits with
 `MAX_PERSONAL_MEMORIES`, `MAX_SERVER_MEMORIES`, and `MAX_MEMORY_LENGTH`.
 
-When a scope is full, an automatic save may forget an unused, resting memory the bot saved on its
-own to make room. It never chooses one a person wrote. The confirmation shows what was saved and
+When a scope is full, an automatic save may forget a resting memory to make room, including imported
+and older memories. It never chooses a Global personal memory or one someone added or edited with
+`/memories` or `/personal memories`. Editing and saving a memory once keeps it from being forgotten
+this way; it can still rest and return through recall. The confirmation shows what was saved and
 forgotten, following the server's memory-notice visibility setting. If no memory qualifies, the save
 is refused.
 

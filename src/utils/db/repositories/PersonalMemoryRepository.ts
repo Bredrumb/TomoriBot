@@ -152,7 +152,12 @@ class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape>
   }
 
   /** Edits preserve decay state and remove every vector family atomically on content changes when optional vector storage exists. */
-  async edit(personalMemoryId: number, content: string, tags: string[] = []): Promise<boolean> {
+  async edit(
+    personalMemoryId: number,
+    content: string,
+    tags: string[] = [],
+    options?: { manuallyWritten: true },
+  ): Promise<boolean> {
     try {
       return await sql.transaction(async (tx) => {
         const [previous] =
@@ -160,7 +165,8 @@ class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape>
         if (!previous) return false;
         const [updated] = await tx`
         UPDATE personal_memories
-        SET content = ${content}, tags = ${sql.array(tags, "TEXT")}, updated_at = NOW()
+        SET content = ${content}, tags = ${sql.array(tags, "TEXT")},
+          manually_written = manually_written OR ${options?.manuallyWritten ?? false}, updated_at = NOW()
         WHERE personal_memory_id = ${personalMemoryId}
         RETURNING personal_memory_id
       `;
@@ -274,15 +280,21 @@ class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape>
    * @param tags             - Optional classification tags applied to all memories
    * @returns true on full success, false if the transaction was rolled back
    */
-  async addBatch(userId: number, personaLineageId: number, memories: string[], tags: string[] = []): Promise<boolean> {
+  async addBatch(
+    userId: number,
+    personaLineageId: number,
+    memories: string[],
+    tags: string[] = [],
+    options?: { manuallyWritten: true },
+  ): Promise<boolean> {
     if (memories.length === 0) return true;
 
     try {
       await sql.transaction(async (tx) => {
         for (const memory of memories) {
           await tx`
-            INSERT INTO personal_memories (user_id, persona_lineage_id, content, tags)
-            VALUES (${userId}, ${personaLineageId}, ${memory}, ${sql.array(tags, "TEXT")})
+            INSERT INTO personal_memories (user_id, persona_lineage_id, content, tags, manually_written)
+            VALUES (${userId}, ${personaLineageId}, ${memory}, ${sql.array(tags, "TEXT")}, ${options?.manuallyWritten ?? false})
           `;
         }
       });
@@ -322,6 +334,7 @@ class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape>
     personaLineageId: number,
     content: string,
     tags: string[] = [],
+    options?: { manuallyWritten: true },
   ): Promise<PersonalMemoryRow | null> {
     log.info(
       `Attempting to learn a personal memory for user ${userId} in lineage ${personaLineageId}: "${content.substring(0, 50)}..."`,
@@ -343,8 +356,8 @@ class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape>
 
     try {
       const [insertedMemory] = await sql`
-        INSERT INTO personal_memories (user_id, persona_lineage_id, content, tags)
-        VALUES (${userId}, ${personaLineageId}, ${content}, ${sql.array(tags, "TEXT")})
+        INSERT INTO personal_memories (user_id, persona_lineage_id, content, tags, manually_written)
+        VALUES (${userId}, ${personaLineageId}, ${content}, ${sql.array(tags, "TEXT")}, ${options?.manuallyWritten ?? false})
         RETURNING *
       `;
 
@@ -465,7 +478,7 @@ class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape>
   async fromExportShape(_ownerId: string | number, _data: PersonalMemoryExportShape): Promise<boolean> {
     return false;
   }
-  /** Serializes model saves on the owner row, rechecks the cap including shared personal rows, and atomically evicts only the least reinforced dormant model save when the global switch is on. */
+  /** Serializes model saves on the owner row, rechecks the cap including shared personal rows, and atomically evicts only the least reinforced dormant unprotected memory when the global switch is on. */
   async addWithEviction(
     userId: number,
     personaLineageId: number,
@@ -490,7 +503,7 @@ class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape>
         const [candidate] = await tx`
           SELECT m.personal_memory_id AS id, m.content, m.decay_days FROM personal_memories m
           WHERE m.user_id = ${userId} AND m.persona_lineage_id = ${personaLineageId}
-            AND m.model_written AND m.decay_days >= ${MEMORY_DORMANT_DAYS}
+            AND NOT m.manually_written AND m.decay_days >= ${MEMORY_DORMANT_DAYS}
           ORDER BY m.reinforced_on ASC NULLS FIRST, m.created_at ASC, m.personal_memory_id ASC
           LIMIT 1 FOR UPDATE
         `;
@@ -499,8 +512,8 @@ class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape>
         await tx`DELETE FROM personal_memories WHERE personal_memory_id = ${evicted.id}`;
       }
       const [inserted] =
-        await tx`INSERT INTO personal_memories (user_id, persona_lineage_id, content, tags, model_written)
-        VALUES (${userId}, ${personaLineageId}, ${content}, ${sql.array(tags, "TEXT")}, true) RETURNING *`;
+        await tx`INSERT INTO personal_memories (user_id, persona_lineage_id, content, tags, manually_written)
+        VALUES (${userId}, ${personaLineageId}, ${content}, ${sql.array(tags, "TEXT")}, false) RETURNING *`;
       return { status: "saved", memory: personalMemorySchema.parse(inserted), evicted };
     });
     return result;

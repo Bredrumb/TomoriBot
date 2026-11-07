@@ -280,6 +280,7 @@ export const serverMemoriesOperations: ServerMemoriesOperations = {
       trimmed,
       workspaceId,
       channelDiscIds,
+      { manuallyWritten: true },
     );
     if (!inserted) {
       return { status: "write-failed" };
@@ -336,6 +337,7 @@ export const serverMemoriesOperations: ServerMemoriesOperations = {
       taughtByUserId,
       toInsert,
       channelDiscIds,
+      { manuallyWritten: true },
     );
     if (!ok) {
       return { status: "write-failed" };
@@ -383,17 +385,28 @@ export const serverMemoriesOperations: ServerMemoriesOperations = {
     const existingScope = new Set(target.channel_disc_ids);
     const scopeUnchanged =
       channelDiscIds.length === existingScope.size && channelDiscIds.every((id) => existingScope.has(id));
-    if (trimmed === target.content.trim() && scopeUnchanged && !target.channel_scope_pending) {
+    if (
+      trimmed === target.content.trim() &&
+      scopeUnchanged &&
+      !target.channel_scope_pending &&
+      target.manually_written
+    ) {
       return { status: "unchanged", row: target };
     }
-    const ok = await serverMemoryRepository.edit(memoryId, trimmed, channelDiscIds);
+    const ok = await serverMemoryRepository.edit(memoryId, trimmed, channelDiscIds, { manuallyWritten: true });
     if (!ok) {
       return { status: "write-failed" };
     }
     invalidateTomoriStateCache(workspaceId);
     return {
       status: "success",
-      row: { ...target, content: trimmed, channel_disc_ids: channelDiscIds, channel_scope_pending: false },
+      row: {
+        ...target,
+        content: trimmed,
+        channel_disc_ids: channelDiscIds,
+        channel_scope_pending: false,
+        manually_written: true,
+      },
     };
   },
 

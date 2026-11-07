@@ -1,4 +1,8 @@
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it, spyOn } from "bun:test";
+import { personalMemorySchema } from "@/types/db/schema";
+import { personalMemoryRepository } from "@/utils/db/repositories/PersonalMemoryRepository";
+import * as hostProtection from "@/utils/messageProxy/hostProtection";
+import * as userCache from "@/utils/cache/userCache";
 import {
   composeMessageProxyBioSeedContent,
   seedMessageProxyIdentityBio,
@@ -54,6 +58,37 @@ describe("composeMessageProxyBioSeedContent", () => {
 });
 
 describe("seedMessageProxyIdentityBio", () => {
+  it("uses the ordinary repository insert without requesting manual protection", async () => {
+    const add = spyOn(personalMemoryRepository, "add").mockResolvedValue(
+      personalMemorySchema.parse({
+        personal_memory_id: 1,
+        user_id: 42,
+        persona_lineage_id: 0,
+        content: "A short bio",
+        tags: [],
+        manually_written: false,
+      }),
+    );
+    const protection = spyOn(hostProtection, "getMessageProxyHostProtection").mockResolvedValue({
+      protected: false,
+      isMessageProxyIdentity: true,
+    });
+    const invalidate = spyOn(userCache, "invalidateUserCache").mockImplementation(() => {});
+    try {
+      await seedMessageProxyIdentityBio({
+        isNewIdentity: true,
+        identityUserDiscId: "fixture:identity-1",
+        identityUserId: 42,
+        description: "A short bio",
+        serverDiscId: "server_1",
+      });
+      expect(add).toHaveBeenCalledWith(42, 0, "A short bio");
+    } finally {
+      add.mockRestore();
+      protection.mockRestore();
+      invalidate.mockRestore();
+    }
+  });
   it("inserts a memory and invalidates the cache on a new member with a bio", async () => {
     const { deps, addCalls, invalidateCalls } = makeDeps();
 

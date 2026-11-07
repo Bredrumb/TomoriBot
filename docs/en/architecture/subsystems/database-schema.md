@@ -70,9 +70,11 @@ on a timer. Chunk reads bypass caches, so these writes require no cache invalida
 ## Memory decay storage
 
 Both memory tables store `decay_days` (integer, default 0), nullable `decay_counted_on` and
-`reinforced_on` UTC dates, and `model_written` (boolean, default false). Stage is derived, never
-stored. Only model saves mark new rows as model-written; edits preserve that flag. Portable exports
-omit these fields and imports use defaults.
+`reinforced_on` UTC dates, and `manually_written` (boolean, default false). Stage is derived, never
+stored. Adds and edits through `/memories` and `/personal memories` set the flag to true, protecting
+the row from automatic eviction without changing dormancy. Model edits preserve it. Model saves,
+imports, transfers, and message-proxy bio seeding insert unprotected rows. Portable exports omit
+these fields and imports use defaults.
 
 The optional RAG schema owns `memory_embeddings`: each vector belongs to exactly one server or
 personal memory, with cascading deletion and one row per memory and embedding family. Its model
@@ -80,7 +82,8 @@ reference cascades deletion to its rebuildable vectors. Content edits remove all
 transactionally; fill checks live content before inserting. There is no vector cache. See the
 [decay lifecycle](/architecture/pipelines/memory/ltm/#decay-lifecycle) for accounting ownership.
 
-Migration 135 initializes each server lineage's newest 100 rows as active and older rows as dormant.
+Migration 135 leaves pre-release rows unprotected and initializes each server lineage's newest 100
+rows as active and older rows as dormant.
 Personal ranking includes global memories in each lineage; a global row becomes dormant only if
 it exceeds 100 in every containing scope. The rollback removes counters and vectors while retaining
 memory content. `schema_rag.sql` creates vector storage when pgvector becomes available later.

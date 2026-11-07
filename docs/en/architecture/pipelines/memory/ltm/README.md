@@ -57,7 +57,7 @@ eviction; document search remains independent.
 
 Recall has a 1,500 ms scoring budget. A timeout or failure returns no recalled block and performs
 no day accounting or fill. Once an embedding model resolves, dormancy still applies if its query
-embedding fails. Failures warn and let the reply continue. Full scopes use the dormant model-save
+embedding fails. Failures warn and let the reply continue. Full scopes use the dormant-memory
 replacement contract in the [creation stage](/architecture/pipelines/memory/ltm/01-ltm-create/).
 
 Scoped memory rows load fresh on each build; vectors and derived stages have no runtime cache.

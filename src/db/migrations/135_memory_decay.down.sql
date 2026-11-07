@@ -8,6 +8,6 @@ BEGIN
 END;
 $$;
 ALTER TABLE server_memories DROP COLUMN IF EXISTS decay_days, DROP COLUMN IF EXISTS decay_counted_on,
-  DROP COLUMN IF EXISTS reinforced_on, DROP COLUMN IF EXISTS model_written;
+  DROP COLUMN IF EXISTS reinforced_on, DROP COLUMN IF EXISTS manually_written;
 ALTER TABLE personal_memories DROP COLUMN IF EXISTS decay_days, DROP COLUMN IF EXISTS decay_counted_on,
-  DROP COLUMN IF EXISTS reinforced_on, DROP COLUMN IF EXISTS model_written;
+  DROP COLUMN IF EXISTS reinforced_on, DROP COLUMN IF EXISTS manually_written;

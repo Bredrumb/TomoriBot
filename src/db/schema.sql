@@ -1131,7 +1131,7 @@ CREATE TABLE IF NOT EXISTS server_memories (
   decay_days INT NOT NULL DEFAULT 0,
   decay_counted_on DATE,
   reinforced_on DATE,
-  model_written BOOLEAN NOT NULL DEFAULT false,
+  manually_written BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE SET NULL,
@@ -1140,7 +1140,7 @@ CREATE TABLE IF NOT EXISTS server_memories (
 SELECT add_column_if_not_exists('server_memories', 'decay_days', 'INT', '0', 'NOT NULL');
 SELECT add_column_if_not_exists('server_memories', 'decay_counted_on', 'DATE');
 SELECT add_column_if_not_exists('server_memories', 'reinforced_on', 'DATE');
-SELECT add_column_if_not_exists('server_memories', 'model_written', 'BOOLEAN', 'false', 'NOT NULL');
+SELECT add_column_if_not_exists('server_memories', 'manually_written', 'BOOLEAN', 'false', 'NOT NULL');
 
 -- Add persona_id column for existing databases
 SELECT add_column_if_not_exists('server_memories', 'persona_id', 'INTEGER');
@@ -1352,7 +1352,7 @@ CREATE TABLE IF NOT EXISTS personal_memories (
   decay_days INT NOT NULL DEFAULT 0,
   decay_counted_on DATE,
   reinforced_on DATE,
-  model_written BOOLEAN NOT NULL DEFAULT false,
+  manually_written BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
@@ -1360,7 +1360,7 @@ CREATE TABLE IF NOT EXISTS personal_memories (
 SELECT add_column_if_not_exists('personal_memories', 'decay_days', 'INT', '0', 'NOT NULL');
 SELECT add_column_if_not_exists('personal_memories', 'decay_counted_on', 'DATE');
 SELECT add_column_if_not_exists('personal_memories', 'reinforced_on', 'DATE');
-SELECT add_column_if_not_exists('personal_memories', 'model_written', 'BOOLEAN', 'false', 'NOT NULL');
+SELECT add_column_if_not_exists('personal_memories', 'manually_written', 'BOOLEAN', 'false', 'NOT NULL');
 
 -- Add tags column for existing databases
 SELECT add_column_if_not_exists('personal_memories', 'tags', 'TEXT[]', 'ARRAY[]::TEXT[]');

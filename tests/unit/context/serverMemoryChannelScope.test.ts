@@ -24,7 +24,7 @@ function memoryRow(
     decay_days: 0,
     decay_counted_on: null,
     reinforced_on: null,
-    model_written: false,
+    manually_written: false,
     server_id: 1,
     persona_id: 1,
     persona_lineage_id: 100,

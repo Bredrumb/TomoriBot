@@ -101,7 +101,7 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
                    WHERE l.source_table = 'server_memories'
                      AND l.row_id = server_memories.server_memory_id
                      AND l.resolved_at IS NULL
-                 ) AS channel_scope_pending, decay_days, decay_counted_on, reinforced_on, model_written, created_at, updated_at
+                 ) AS channel_scope_pending, decay_days, decay_counted_on, reinforced_on, manually_written, created_at, updated_at
           FROM server_memories
           WHERE server_id = ${serverId}
             AND persona_lineage_id = ${personaLineageId}
@@ -116,7 +116,7 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
                    WHERE l.source_table = 'server_memories'
                      AND l.row_id = server_memories.server_memory_id
                      AND l.resolved_at IS NULL
-                 ) AS channel_scope_pending, decay_days, decay_counted_on, reinforced_on, model_written, created_at, updated_at
+                 ) AS channel_scope_pending, decay_days, decay_counted_on, reinforced_on, manually_written, created_at, updated_at
         FROM server_memories
         WHERE server_id = ${serverId}
           AND persona_lineage_id = ${personaLineageId}
@@ -359,7 +359,12 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
   }
 
   /** Edits preserve decay state, remove all vector families on content changes, and settle pending channel scope in the same transaction. */
-  async edit(serverMemoryId: number, content: string, channelDiscIds: string[]): Promise<boolean> {
+  async edit(
+    serverMemoryId: number,
+    content: string,
+    channelDiscIds: string[],
+    options?: { manuallyWritten: true },
+  ): Promise<boolean> {
     try {
       return await sql.transaction(async (tx) => {
         const [previous] =
@@ -369,6 +374,7 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
           UPDATE server_memories
           SET content = ${content},
               channel_disc_ids = ${sql.array(channelDiscIds, "TEXT")},
+              manually_written = manually_written OR ${options?.manuallyWritten ?? false},
               updated_at = NOW()
           WHERE server_memory_id = ${serverMemoryId}
           RETURNING server_memory_id
@@ -414,6 +420,7 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     taughtByUserId: number,
     memories: string[],
     channelDiscIds: string[] = [],
+    options?: { manuallyWritten: true },
   ): Promise<boolean> {
     if (memories.length === 0) return true;
 
@@ -421,10 +428,10 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
       await sql.transaction(async (tx) => {
         for (const memory of memories) {
           await tx`
-            INSERT INTO server_memories (server_id, persona_id, persona_lineage_id, user_id, content, channel_disc_ids)
+            INSERT INTO server_memories (server_id, persona_id, persona_lineage_id, user_id, content, channel_disc_ids, manually_written)
             VALUES (
               ${serverId}, ${personaId}, ${personaLineageId}, ${taughtByUserId}, ${memory},
-              ${sql.array(channelDiscIds, "TEXT")}
+              ${sql.array(channelDiscIds, "TEXT")}, ${options?.manuallyWritten ?? false}
             )
           `;
         }
@@ -467,6 +474,7 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     content: string,
     serverDiscId?: string,
     channelDiscIds: string[] = [],
+    options?: { manuallyWritten: true },
   ): Promise<ServerMemoryRow | null> {
     log.info(
       `Attempting to learn a server memory for server ID ${serverId}, tomori ID ${personaId}, lineage ${personaLineageId} (triggered by user ID ${taughtByUserId}): "${content.substring(0, 50)}..."`,
@@ -493,6 +501,7 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
       taughtByUserId,
       content,
       channelDiscIds,
+      options?.manuallyWritten ?? false,
     );
     if (row && serverDiscId) invalidateTomoriStateCache(serverDiscId);
     return row;
@@ -1092,13 +1101,14 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     taughtByUserId: number,
     content: string,
     channelDiscIds: string[],
+    manuallyWritten: boolean,
   ): Promise<ServerMemoryRow | null> {
     try {
       const [newMemory] = await sql`
-        INSERT INTO server_memories (server_id, persona_id, persona_lineage_id, user_id, content, channel_disc_ids)
+        INSERT INTO server_memories (server_id, persona_id, persona_lineage_id, user_id, content, channel_disc_ids, manually_written)
         VALUES (
           ${serverId}, ${personaId}, ${personaLineageId}, ${taughtByUserId}, ${content},
-          ${sql.array(channelDiscIds, "TEXT")}
+          ${sql.array(channelDiscIds, "TEXT")}, ${manuallyWritten}
         )
         RETURNING *
       `;
@@ -1143,7 +1153,7 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
       return null;
     }
   }
-  /** Locks the server before rechecking its lineage cap and atomically evicts the least reinforced dormant model save only when the global switch is on. */
+  /** Locks the server before rechecking its lineage cap and atomically evicts the least reinforced dormant unprotected memory only when the global switch is on. */
   async addWithEviction(
     serverId: number,
     personaId: number,
@@ -1169,7 +1179,7 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
         const [candidate] = await tx`
           SELECT m.server_memory_id AS id, m.content, m.decay_days FROM server_memories m
           WHERE m.server_id = ${serverId} AND m.persona_lineage_id = ${personaLineageId}
-            AND m.model_written AND m.decay_days >= ${MEMORY_DORMANT_DAYS}
+            AND NOT m.manually_written AND m.decay_days >= ${MEMORY_DORMANT_DAYS}
           ORDER BY m.reinforced_on ASC NULLS FIRST, m.created_at ASC, m.server_memory_id ASC
           LIMIT 1 FOR UPDATE
         `;
@@ -1178,8 +1188,8 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
         await tx`DELETE FROM server_memories WHERE server_memory_id = ${evicted.id}`;
       }
       const [inserted] = await tx`INSERT INTO server_memories
-        (server_id, persona_id, persona_lineage_id, user_id, content, channel_disc_ids, model_written)
-        VALUES (${serverId}, ${personaId}, ${personaLineageId}, ${taughtByUserId}, ${content}, ${sql.array(channelDiscIds, "TEXT")}, true)
+        (server_id, persona_id, persona_lineage_id, user_id, content, channel_disc_ids, manually_written)
+        VALUES (${serverId}, ${personaId}, ${personaLineageId}, ${taughtByUserId}, ${content}, ${sql.array(channelDiscIds, "TEXT")}, false)
         RETURNING *`;
       return { status: "saved", memory: serverMemorySchema.parse(inserted), evicted };
     });

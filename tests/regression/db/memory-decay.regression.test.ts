@@ -2,6 +2,7 @@ import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "bun:test";
 import {
   exportRepository,
+  importRepository,
   llmProviderRepo,
   memoryDecayRepository,
   personalMemoryRepository,
@@ -40,17 +41,17 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("memory decay storage", () => {
     await cleanupFixtures(testSql);
   });
 
-  async function insertServer(decay = 0, model = false, content = "stored fact") {
+  async function insertServer(decay = 0, manuallyWritten = false, content = "stored fact") {
     const [row] =
-      await testSql`INSERT INTO server_memories (server_id, persona_id, persona_lineage_id, user_id, content, decay_days, model_written)
-      VALUES (${refs.serverId}, ${refs.personaId}, ${refs.personaLineageId}, ${refs.userId}, ${content}, ${decay}, ${model}) RETURNING server_memory_id`;
+      await testSql`INSERT INTO server_memories (server_id, persona_id, persona_lineage_id, user_id, content, decay_days, manually_written)
+      VALUES (${refs.serverId}, ${refs.personaId}, ${refs.personaLineageId}, ${refs.userId}, ${content}, ${decay}, ${manuallyWritten}) RETURNING server_memory_id`;
     return row.server_memory_id as number;
   }
 
-  async function insertPersonal(decay = 0, model = false, lineage = refs.personaLineageId) {
+  async function insertPersonal(decay = 0, manuallyWritten = false, lineage = refs.personaLineageId) {
     const [row] =
-      await testSql`INSERT INTO personal_memories (user_id, persona_lineage_id, content, decay_days, model_written)
-      VALUES (${refs.userId}, ${lineage}, 'personal fact', ${decay}, ${model}) RETURNING personal_memory_id`;
+      await testSql`INSERT INTO personal_memories (user_id, persona_lineage_id, content, decay_days, manually_written)
+      VALUES (${refs.userId}, ${lineage}, 'personal fact', ${decay}, ${manuallyWritten}) RETURNING personal_memory_id`;
     return row.personal_memory_id as number;
   }
 
@@ -99,11 +100,11 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("memory decay storage", () => {
   it("evicts the least reinforced eligible server memory and serializes two saves at the cap", async () => {
     if (!rag) return;
     process.env.MAX_SERVER_MEMORIES = "4";
-    const human = await insertServer(40);
-    const reinforced = await insertServer(20, true);
+    const human = await insertServer(40, true);
+    const reinforced = await insertServer(20);
     await testSql`UPDATE server_memories SET reinforced_on = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date - 20 WHERE server_memory_id = ${reinforced}`;
-    const oldest = await insertServer(14, true);
-    const other = await insertServer(18, true);
+    const oldest = await insertServer(14);
+    const other = await insertServer(18);
     const save = (content: string) =>
       serverMemoryRepository.addWithEviction(
         refs.serverId,
@@ -120,7 +121,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("memory decay storage", () => {
     expect(first.status).toBe("saved");
     if (first.status !== "saved") throw new Error("Expected save");
     expect(first.evicted).toMatchObject({ id: oldest, decay_days: 14 });
-    expect(first.memory.model_written).toBe(true);
+    expect(first.memory.manually_written).toBe(false);
     const results = await Promise.all([save("second model save"), save("third model save")]);
     expect(results.every((result) => result.status === "saved")).toBe(true);
     const ids = (await serverMemoryRepository.loadServerMemoriesScoped(refs.serverId, refs.personaLineageId)).map(
@@ -137,9 +138,9 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("memory decay storage", () => {
     if (!rag) return;
     process.env.MAX_PERSONAL_MEMORIES = "3";
     const global = await insertPersonal(40, false, 0);
-    const human = await insertPersonal(40);
-    const evictable = await insertPersonal(14, true);
-    await insertPersonal(30, true, refs.personaLineageId + 1);
+    const human = await insertPersonal(40, true);
+    const evictable = await insertPersonal(14);
+    await insertPersonal(30, false, refs.personaLineageId + 1);
     process.env.MEMORY_DECAY_ENABLED = "false";
     const save = () => personalMemoryRepository.addWithEviction(refs.userId, refs.personaLineageId, "model fact", true);
     expect(await save()).toEqual({ status: "refused", currentCount: 3, limit: 3 });
@@ -155,56 +156,175 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("memory decay storage", () => {
     await expect(personalMemoryRepository.addWithEviction(refs.userId, 0, "invalid scope", true)).rejects.toThrow();
   });
 
-  it("preserves human and pre-release memories at the cap and saves below it with decay disabled", async () => {
+  async function saveModel(kind: "server" | "personal", content: string) {
+    return kind === "server"
+      ? serverMemoryRepository.addWithEviction(
+          refs.serverId,
+          refs.personaId,
+          refs.personaLineageId,
+          refs.userId,
+          content,
+          true,
+        )
+      : personalMemoryRepository.addWithEviction(refs.userId, refs.personaLineageId, content, true);
+  }
+
+  async function loadScope(kind: "server" | "personal") {
+    return kind === "server"
+      ? serverMemoryRepository.loadServerMemoriesScoped(refs.serverId, refs.personaLineageId)
+      : personalMemoryRepository.loadForUserLineage(refs.userId, refs.personaLineageId, false);
+  }
+
+  it.each([
+    ["server", "model"],
+    ["server", "imported"],
+    ["server", "default"],
+    ["personal", "model"],
+    ["personal", "imported"],
+    ["personal", "default"],
+  ] as const)("evicts a resting %s %s memory at the cap", async (kind, origin) => {
+    if (!rag) throw new Error("Eviction coverage requires pgvector");
+    process.env.MAX_SERVER_MEMORIES = "1";
+    process.env.MAX_PERSONAL_MEMORIES = "1";
+    if (origin === "model") {
+      expect(await saveModel(kind, "original fact")).toMatchObject({
+        status: "saved",
+        memory: { manually_written: false },
+      });
+    } else if (origin === "imported") {
+      const memories = [{ content: "original fact", tags: [] }];
+      const result =
+        kind === "server"
+          ? await importRepository.importWorkspaceMemoryBundle(
+              FIXTURE_IDS.serverDiscId,
+              FIXTURE_IDS.userDiscId,
+              [{ bucketName: "Archive", personaId: refs.personaId, memories }],
+              "merge",
+            )
+          : await importRepository.importPersonalMemoryBundle(
+              FIXTURE_IDS.userDiscId,
+              [{ bucketName: "Archive", personaLineageId: refs.personaLineageId, memories }],
+              "merge",
+            );
+      expect(result.success).toBe(true);
+    } else if (kind === "server") {
+      await testSql`INSERT INTO server_memories (server_id, persona_id, persona_lineage_id, user_id, content)
+        VALUES (${refs.serverId}, ${refs.personaId}, ${refs.personaLineageId}, ${refs.userId}, 'original fact')`;
+    } else {
+      await testSql`INSERT INTO personal_memories (user_id, persona_lineage_id, content)
+        VALUES (${refs.userId}, ${refs.personaLineageId}, 'original fact')`;
+    }
+    const [original] = await loadScope(kind);
+    if (!original) throw new Error("Missing memory fixture");
+    const id = "server_id" in original ? original.server_memory_id : original.personal_memory_id;
+    if (id === undefined) throw new Error("Missing memory ID");
+    expect(original.manually_written).toBe(false);
+    if (kind === "server") await testSql`UPDATE server_memories SET decay_days = 14 WHERE server_memory_id = ${id}`;
+    else await testSql`UPDATE personal_memories SET decay_days = 14 WHERE personal_memory_id = ${id}`;
+    const result = await saveModel(kind, "replacement fact");
+    expect(result).toMatchObject({ status: "saved", evicted: { id }, memory: { manually_written: false } });
+    expect((await loadScope(kind)).map((row) => row.content)).toEqual(["replacement fact"]);
+  });
+
+  it.each([
+    "server",
+    "personal",
+  ] as const)("protects manual %s additions and edit-form saves while model edits preserve protection", async (kind) => {
+    if (!rag) throw new Error("Eviction coverage requires pgvector");
     process.env.MAX_SERVER_MEMORIES = "2";
     process.env.MAX_PERSONAL_MEMORIES = "2";
-    const humanServer = await serverMemoryRepository.add(
-      refs.serverId,
-      refs.personaId,
-      refs.personaLineageId,
-      refs.userId,
-      "human server fact",
-    );
-    const humanPersonal = await personalMemoryRepository.add(refs.userId, refs.personaLineageId, "human personal fact");
-    const legacyServer = await insertServer(40);
-    const legacyPersonal = await insertPersonal(40);
-    const saveServer = () =>
-      serverMemoryRepository.addWithEviction(
-        refs.serverId,
-        refs.personaId,
-        refs.personaLineageId,
-        refs.userId,
-        "model server fact",
-        true,
-      );
-    const savePersonal = () =>
-      personalMemoryRepository.addWithEviction(refs.userId, refs.personaLineageId, "model personal fact", true);
-    const refused = { status: "refused", currentCount: 2, limit: 2 } as const;
-    expect(await saveServer()).toEqual(refused);
-    expect(await savePersonal()).toEqual(refused);
-    expect(
-      (await serverMemoryRepository.loadServerMemoriesScoped(refs.serverId, refs.personaLineageId)).map(
-        (row) => row.server_memory_id,
-      ),
-    ).toEqual(expect.arrayContaining([humanServer?.server_memory_id, legacyServer]));
-    expect(
-      (await personalMemoryRepository.loadForUserLineage(refs.userId, refs.personaLineageId)).map(
-        (row) => row.personal_memory_id,
-      ),
-    ).toEqual(expect.arrayContaining([humanPersonal?.personal_memory_id, legacyPersonal]));
-    process.env.MAX_SERVER_MEMORIES = "3";
-    process.env.MAX_PERSONAL_MEMORIES = "3";
-    process.env.MEMORY_DECAY_ENABLED = "false";
-    for (const result of [await saveServer(), await savePersonal()]) {
-      expect(result).toMatchObject({ status: "saved", evicted: null, memory: { model_written: true, decay_days: 0 } });
+    const manual =
+      kind === "server"
+        ? await serverMemoryRepository.add(
+            refs.serverId,
+            refs.personaId,
+            refs.personaLineageId,
+            refs.userId,
+            "manual fact",
+            FIXTURE_IDS.serverDiscId,
+            [],
+            { manuallyWritten: true },
+          )
+        : await personalMemoryRepository.add(refs.userId, refs.personaLineageId, "manual fact", [], {
+            manuallyWritten: true,
+          });
+    expect(manual?.manually_written).toBe(true);
+    const model = await saveModel(kind, "model fact");
+    if (model.status !== "saved") throw new Error("Missing model fixture");
+    for (const row of await loadScope(kind)) {
+      const id = "server_id" in row ? row.server_memory_id : row.personal_memory_id;
+      if (id === undefined) throw new Error("Missing memory ID");
+      const updated =
+        kind === "server"
+          ? await serverMemoryRepository.updateByIdWithLineage(
+              id,
+              `${row.content} revised`,
+              refs.serverId,
+              refs.personaLineageId,
+            )
+          : await personalMemoryRepository.updateByIdForUserAndLineage(
+              id,
+              `${row.content} revised`,
+              refs.userId,
+              refs.personaLineageId,
+            );
+      expect(updated).not.toBeNull();
+    }
+    const rows = await loadScope(kind);
+    expect(rows.find((row) => row.content === "manual fact revised")?.manually_written).toBe(true);
+    const unprotected = rows.find((row) => row.content === "model fact revised");
+    expect(unprotected?.manually_written).toBe(false);
+    if (!unprotected) throw new Error("Missing unprotected memory");
+    const modelId = "server_id" in unprotected ? unprotected.server_memory_id : unprotected.personal_memory_id;
+    if (modelId === undefined) throw new Error("Missing model ID");
+    const edited =
+      kind === "server"
+        ? await serverMemoryRepository.edit(modelId, unprotected.content, ["222222222222222222"], {
+            manuallyWritten: true,
+          })
+        : await personalMemoryRepository.edit(modelId, unprotected.content, ["archive"], { manuallyWritten: true });
+    expect(edited).toBe(true);
+    if (kind === "server") await testSql`UPDATE server_memories SET decay_days = 20 WHERE server_id = ${refs.serverId}`;
+    else await testSql`UPDATE personal_memories SET decay_days = 20 WHERE user_id = ${refs.userId}`;
+    expect((await loadScope(kind)).every((row) => row.manually_written && row.decay_days === 20)).toBe(true);
+    expect(await saveModel(kind, "cannot fit")).toMatchObject({ status: "refused", currentCount: 2, limit: 2 });
+    expect((await loadScope(kind)).map((row) => row.content).sort()).toEqual([
+      "manual fact revised",
+      "model fact revised",
+    ]);
+  });
+
+  it.each([
+    "server",
+    "personal",
+  ] as const)("marks manual %s batches protected while ordinary batches stay unprotected", async (kind) => {
+    process.env.MAX_SERVER_MEMORIES = "4";
+    process.env.MAX_PERSONAL_MEMORIES = "4";
+    for (const manual of [false, true]) {
+      const options = manual ? { manuallyWritten: true as const } : undefined;
+      const content = manual ? "manual batch fact" : "ordinary batch fact";
+      const inserted =
+        kind === "server"
+          ? await serverMemoryRepository.addBatch(
+              refs.serverId,
+              refs.personaId,
+              refs.personaLineageId,
+              refs.userId,
+              [content],
+              [],
+              options,
+            )
+          : await personalMemoryRepository.addBatch(refs.userId, refs.personaLineageId, [content], [], options);
+      expect(inserted).toBe(true);
+      expect((await loadScope(kind)).find((row) => row.content === content)?.manually_written).toBe(manual);
     }
   });
 
   it("protects aged model saves when turn embeddings or RAG are unavailable", async () => {
     process.env.MAX_SERVER_MEMORIES = "1";
     process.env.MAX_PERSONAL_MEMORIES = "1";
-    const server = await insertServer(20, true);
-    const personal = await insertPersonal(20, true);
+    const server = await insertServer(20);
+    const personal = await insertPersonal(20);
     try {
       for (const embeddingResolved of [false, true]) {
         if (embeddingResolved) resetRagAvailabilityCache();
@@ -236,6 +356,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("memory decay storage", () => {
       ).toBe(personal);
       process.env.MAX_SERVER_MEMORIES = "2";
       process.env.MAX_PERSONAL_MEMORIES = "2";
+      process.env.MEMORY_DECAY_ENABLED = "false";
       expect(
         await serverMemoryRepository.addWithEviction(
           refs.serverId,
@@ -330,10 +451,10 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("memory decay storage", () => {
     expect(await personalMemoryRepository.edit(personal, "edited personal fact")).toBe(true);
     expect(
       (await serverMemoryRepository.loadServerMemoriesScoped(refs.serverId, refs.personaLineageId))[0],
-    ).toMatchObject({ decay_days: 9, model_written: true });
+    ).toMatchObject({ decay_days: 9, manually_written: true });
     expect((await personalMemoryRepository.loadForUserLineage(refs.userId, refs.personaLineageId))[0]).toMatchObject({
       decay_days: 11,
-      model_written: true,
+      manually_written: true,
     });
   });
 
@@ -344,6 +465,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("memory decay storage", () => {
       SELECT ${refs.userId}, 0, 'global fact', NOW() + n * INTERVAL '1 second' FROM generate_series(1, 102) n`;
     await executeTestSqlFile(path.join(process.cwd(), "src/db/migrations/135_memory_decay.sql"));
     const serverRows = await serverMemoryRepository.loadServerMemoriesScoped(refs.serverId, refs.personaLineageId);
+    expect(serverRows.every((row) => !row.manually_written)).toBe(true);
     expect(serverRows.map((row) => row.decay_days)).toEqual([...Array(100).fill(0), 14, 14]);
     let personalRows = await personalMemoryRepository.loadForUserLineage(refs.userId, 0);
     expect(personalRows.map((row) => row.decay_days)).toEqual([...Array(100).fill(0), 14, 14]);
@@ -378,7 +500,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("memory decay storage", () => {
     for (const exported of exports) {
       expect(exported.success).toBe(true);
       const text = JSON.stringify(exported.data);
-      for (const key of ["decay_days", "decay_counted_on", "reinforced_on", "model_written", "embedding"])
+      for (const key of ["decay_days", "decay_counted_on", "reinforced_on", "manually_written", "embedding"])
         expect(text).not.toContain(`"${key}"`);
     }
   });
