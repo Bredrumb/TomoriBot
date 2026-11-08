@@ -7,7 +7,8 @@ sidebar:
 
 `deploy/hetzner/` prepares an 8 GB ARM64 or AMD64 host with four vCPUs. A single bot process owns four
 gateway shards. PostgreSQL 16 accepts Unix-socket connections only. SearXNG and the bot share
-an outbound network; Caddy exposes the OAuth and Patreon routes over HTTPS.
+an outbound network. A Cloudflare Tunnel connector carries the OAuth and Patreon routes, so the
+host accepts no inbound HTTP or HTTPS.
 
 These files need staging and data rehearsals before production use. Start preparation while
 Azure serves users. Choose the cutover window after every check below passes.
@@ -19,7 +20,7 @@ Azure serves users. Choose the cutover window after every check below passes.
 | Bot | 3072 MiB | 1024 MiB |
 | PostgreSQL | 2048 MiB | None |
 | SearXNG | 512 MiB | None |
-| Caddy | 256 MiB | None |
+| cloudflared | 128 MiB | None |
 
 The remaining host memory covers the kernel, Docker, backup work, and transient allocations.
 The host has 1 GiB of zram and no disk swap. PostgreSQL uses 512 MiB shared buffers, 4 MiB
@@ -40,8 +41,8 @@ Confirm the live price and availability in the console before ordering. CAX21 pr
 resources on ARM64; CX33 and CPX32 provide them on AMD64. Images must match the chosen architecture.
 
 1. Choose Ubuntu 24.04 and fill in the operator SSH key and `OPERATOR_CIDRS` in a private copy of
-   `deploy/hetzner/cloud-init.yaml`. Create a Cloud Firewall that permits TCP 22 from those CIDRs,
-   TCP 80 and 443 publicly for HTTPS, and ICMP. Attach the firewall during server creation.
+   `deploy/hetzner/cloud-init.yaml`. Create a Cloud Firewall that permits only TCP 22 from those
+   CIDRs and ICMP. Attach the firewall during server creation.
 2. Provision with that cloud-init file. Enable delete and rebuild protection. Enable server-image
    backups for the production host. Preserve the smaller disk when upgrading CPU and RAM if you
    want to retain the option of downgrading later.
@@ -70,8 +71,8 @@ docker buildx build --platform linux/arm64 --push \
 
 Record the pushed digest for each image and inspect its platform with
 `docker buildx imagetools inspect`. Put the immutable references in the host's `.env`; the
-existing Azure image digests identify AMD64 builds. The pinned Bun, PostgreSQL, Caddy, and
-SearXNG base images support ARM64. PostgreSQL builds on the host's native architecture.
+existing Azure image digests identify AMD64 builds. The pinned Bun, PostgreSQL, cloudflared,
+and SearXNG base images support ARM64. PostgreSQL builds on the host's native architecture.
 
 Verify native image conversion, font rendering, audio conversion, tokenizers, schema initialization,
 and search on the chosen architecture before production use. Local emulation can check compatibility;
@@ -93,7 +94,7 @@ Authenticate to the image registry for the pull, then log out. As root:
 ```bash
 cd /etc/tomoribot
 bash bootstrap.sh
-docker compose pull tomoribot caddy
+docker compose pull tomoribot cloudflared
 bash verify-host.sh
 ```
 
@@ -115,7 +116,8 @@ after a successful Vertex chat.
 
 ## Staging rehearsal
 
-Use a separate Discord application in a test guild and the empty database. Build a staging
+Use a separate Discord application in a test guild, with the empty database or a copy of that
+application's development database. Build a staging
 runtime bundle containing the staging Discord token, local runtime database fields, and the
 required encryption/provider keys. Exclude production billing, Top.gg, Matrix, and other
 outbound integrations. Never start a bot against restored production data during rehearsal:
@@ -140,22 +142,35 @@ enables billing. Run it before each image deployment, then apply the runtime gra
 
 ## HTTPS callbacks
 
-Point a staging hostname at the new host before testing Caddy. Publish an A record; add an AAAA
-record only after IPv6 listeners and firewall rules are configured and tested. Start Caddy with:
+Public routes reach the bot through a Cloudflare Tunnel, as on Azure. The connector dials out,
+so the host firewall admits no HTTP or HTTPS. Create a staging tunnel with its own hostname and
+give its published route the production route's path regex and the service
+`http://127.0.0.1:8081`. The connector uses host networking, so staging and production routes
+differ only in hostname. Install the token on the host from the operator workstation, then start
+the connector:
 
 ```bash
-docker compose --profile gateway up -d caddy
+ssh ops@<host> sudo /usr/local/sbin/tomoribot-install-tunnel-token < staging-tunnel-token
+docker compose --profile gateway up -d cloudflared
+curl -fsS http://127.0.0.1:20241/config |
+  jq '{version, rules: [.config.ingress[] | {hostname, path, service}]}'
 ```
 
-`Caddyfile` forwards GET `/oauth/callback`, `/oauth/mcp/start`, and `/oauth/client.json`, plus
-POST `/oauth/mcp/confirm` and `/supporter-billing/patreon/webhook`. Other requests return 404,
-including public health probes. Caddy access logging is disabled so OAuth query parameters
-stay out of access logs. The watchdog still reaches health on host loopback.
+Confirm the connector received the staging hostname, path regex, and loopback origin. A connected
+tunnel with no ingress rules returns 503; a DNS record alone does not configure its routes.
+
+The installer rejects input that does not decode to a tunnel token. Never pass the token as
+`--token`, because process listings and `docker inspect` would show it. The route forwards only
+the OAuth and Patreon paths; the bot accepts only each path's registered method, and every other
+request, including public health probes, returns 404. The watchdog still reaches health on host
+loopback.
 
 Before cutover, test Patreon linking and webhook signature validation with test credentials,
 and test MCP sign-in. Preserve the production callback hostname and verify that the effective
-`TOMORI_PUBLIC_BASE_URL` in the transferred bundle agrees with it. Reduce DNS TTL in advance;
-account for cached DNS during the maintenance window and rollback. Do not run production
+`TOMORI_PUBLIC_BASE_URL` in the transferred bundle agrees with it. Moving the hostname between
+tunnels or connectors takes effect at Cloudflare's edge, so it needs no DNS TTL planning. Never
+run connectors for the production hostname on both hosts at once, because Cloudflare splits
+requests across every active connector. Do not run production
 billing on both hosts during this check.
 
 ## Off-site backups
@@ -164,6 +179,11 @@ Use a Storage Box in a different region from the VM. Enable SSH support, a restr
 sub-account, and automatic Storage Box snapshots. Confirm the current product supports those
 features before purchase. Keep its account credentials off the VM; install only the sub-account
 SSH key and a verified server host key under `/etc/tomoribot/backup/`.
+
+Verify the Storage Box's ED25519, ECDSA, and RSA host-key fingerprints against
+[Hetzner's published fingerprints](https://docs.hetzner.com/storage/storage-box/general/) and pin
+them in `storagebox_known_hosts`. OpenSSH and rclone can negotiate different host-key types, so a
+successful OpenSSH login alone does not verify the backup service's connection.
 
 Create a passphrase-protected GPG encryption key on the trusted workstation. Keep two protected
 copies of the private key and encryption-key history outside the VM. Import only its public key
@@ -241,13 +261,13 @@ disable the Azure deploy workflow. Recheck the memory budget with the final shar
 1. Freeze releases, disable `deploy-azure.yml`, and announce maintenance. Save the exact running
    image digest and effective settings. Confirm sufficient disk space for dumps and restore work.
 2. Stop Azure's watchdog and recycle timers and services, then stop the bot with at least 40 seconds
-   of grace. Fence `tomoribot_runtime` with `NOLOGIN` and terminate its existing database sessions.
+   of grace. Stop Azure's `cloudflared.service`. Fence `tomoribot_runtime` with `NOLOGIN` and terminate its existing database sessions.
 3. Transfer the final secret bundle and local files, and take the final Azure dump. Keep the
    encryption-key history intact. Restore and verify as rehearsed; row counts and migration names
    must now match exactly because Azure writers are stopped and fenced.
 4. Install local files with UID/GID 1001, run `migrate.sh` using the same image digest, and verify
-   the restored credentials. Switch the production hostname to the new ingress. Start only the
-   Hetzner bot and Caddy with `docker compose --profile gateway up -d tomoribot caddy`.
+   the restored credentials. Install the production tunnel token, then start only the Hetzner
+   bot and connector with `docker compose --profile gateway up -d tomoribot cloudflared`.
 5. Verify health for four shards, slash commands, Vertex, saved provider keys, SearXNG, persona
    webhooks, local assets, Patreon linking/webhooks, MCP sign-in, and backup completion. Check
    application errors, memory pressure, and restarts during the observation window.
@@ -260,7 +280,8 @@ Roll back if gateway readiness does not recover within 15 minutes or a provider,
 billing failure cannot be resolved within the maintenance window. Repeated OOMs or restarts
 also fail the cutover.
 
-To roll back, stop Hetzner's timers, services, bot, and Caddy before restoring DNS to Azure.
+To roll back, stop Hetzner's timers, services, bot, and connector before starting Azure's
+`cloudflared.service`.
 Archive Hetzner data first if it accepted writes. Unfence Azure's runtime role, start the Azure
 bot and timers, verify health and callbacks, and re-enable its deployment workflow. Writes
 accepted only on Hetzner require reconciliation before resuming Azure to avoid losing user or

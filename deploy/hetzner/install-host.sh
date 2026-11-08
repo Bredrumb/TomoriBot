@@ -3,7 +3,7 @@ set -euo pipefail
 [[ $EUID -eq 0 ]] || { echo "Run as root." >&2; exit 1; }
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
 install -d -m 0700 /etc/tomoribot /etc/tomoribot/postgres /etc/tomoribot/backup
-install -m 0644 docker-compose.yml Caddyfile /etc/tomoribot/
+install -m 0644 docker-compose.yml /etc/tomoribot/
 install -m 0644 postgres/Dockerfile postgres/postgresql.conf postgres/pg_hba.conf /etc/tomoribot/postgres/
 install -m 0600 postgres/roles.sql postgres/grants.sql postgres/rowcounts.sql /etc/tomoribot/postgres/
 for script in bootstrap migrate verify-host; do
@@ -12,6 +12,7 @@ done
 install -m 0755 backup.sh /usr/local/bin/tomoribot-backup.sh
 install -m 0755 alert.sh /usr/local/sbin/tomoribot-alert
 install -m 0755 install-vertex-key.sh /usr/local/sbin/tomoribot-install-vertex-key
+install -m 0755 install-tunnel-token.sh /usr/local/sbin/tomoribot-install-tunnel-token
 install -m 0644 systemd/* /etc/systemd/system/
 python3 - ../../terraform/azure/cloud-init.yaml <<'PY'
 import pathlib

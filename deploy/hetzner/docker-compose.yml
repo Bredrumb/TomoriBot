@@ -135,30 +135,28 @@ services:
       retries: 5
       start_period: 60s
 
-  caddy:
+  cloudflared:
     profiles: [gateway]
-    image: caddy:2-alpine@sha256:70b3180738b46cd88e49b300d790ae448a0aca3f58edef0f000bb57d619a9ab3
+    image: cloudflare/cloudflared:2026.10.7@sha256:4955524aeaa379e154023d5a027c250f7b35041a2e7e950cf13f144bc9b9c5ba
+    command: [tunnel, --no-autoupdate, --metrics, "127.0.0.1:20241", run, --token-file, /run/secrets/cloudflared-token]
     restart: unless-stopped
     read_only: true
-    user: "1001:1001"
-    mem_limit: 256m
-    memswap_limit: 256m
-    pids_limit: 128
+    user: "65532:65532"
+    # Host networking keeps the tunnel route's origin at http://127.0.0.1:8081, identical to Azure's connector.
+    network_mode: host
+    mem_limit: 128m
+    memswap_limit: 128m
+    pids_limit: 64
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
-    cap_add: [NET_BIND_SERVICE]
-    networks: [app_net]
-    environment:
-      TOMORI_PUBLIC_HOST: ${TOMORI_PUBLIC_HOST:?TOMORI_PUBLIC_HOST is required}
-    ports:
-      - "0.0.0.0:80:80"
-      - "0.0.0.0:443:443"
     volumes:
-      - /etc/tomoribot/Caddyfile:/etc/caddy/Caddyfile:ro
-      - /var/lib/tomoribot/caddy/data:/data
-      - /var/lib/tomoribot/caddy/config:/config
-    tmpfs:
-      - /tmp:rw,noexec,nosuid,nodev,size=32m,uid=1001,gid=1001
+      - /etc/tomoribot/cloudflared-token:/run/secrets/cloudflared-token:ro
+    healthcheck:
+      test: [CMD, cloudflared, tunnel, --metrics, "127.0.0.1:20241", ready]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
 networks:
   app_net:
