@@ -113,8 +113,8 @@ Decision models answer structured questions, such as yes/no or a choice from a l
 from the chat model. [Natural Nudges](/features/chatting-personality/natural-nudges/#active-nudges)
 can use one to decide when a persona should join a conversation.
 
-Register an OpenRouter Decision model or a compatible custom endpoint in `/providers` or
-`/personal providers`. Select the server's model under `/config` > `Models` > `Switch Models`.
+Register an OpenRouter Decision model or a compatible custom endpoint in `/providers`, then select
+the server's model under `/config` > `Models` > `Switch Models`.
 Custom services must support System One or OpenAI Decisions compatibility. Register models from the
 service's documentation; a successful connection does not verify their capabilities.
 

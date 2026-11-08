@@ -348,6 +348,10 @@ describe("Decision registration controls", () => {
         (component) => component.type === 18 && component.component?.type === 21,
       )?.component;
       expect(compatibility?.options?.length).toBeLessThanOrEqual(10);
+      const personalModal = buildAddEndpointModal(locale, "fixture", PERSONAL_PROVIDERS_ROUTE_NAMESPACE);
+      const personalCompatibility = personalModal.components.find(
+        (component) => component.type === 18 && component.component?.type === 21,
+      )?.component;
       for (const style of ["system-one", "openai-decisions"]) {
         expect(compatibility?.options).toContainEqual(
           expect.objectContaining({
@@ -358,6 +362,7 @@ describe("Decision registration controls", () => {
             ),
           }),
         );
+        expect(personalCompatibility?.options).not.toContainEqual(expect.objectContaining({ value: style }));
       }
       const endpoint = endpointEntry(1);
       const chat = buildProvidersPanelPayload({

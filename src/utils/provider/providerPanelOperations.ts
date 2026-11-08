@@ -496,7 +496,9 @@ async function buildCuratedCapabilities(
       llmModelRepo.loadAvailableDiffusionModels(catalogProvider, false, context.scope),
       llmModelRepo.loadAvailableEmbeddingModels(catalogProvider, false, context.scope),
       llmModelRepo.loadAvailableVideoGenerationModels(catalogProvider, false, context.scope),
-      llmModelRepo.loadAvailableDecisionModels(catalogProvider, false, context.scope),
+      context.scope.kind === "personal"
+        ? Promise.resolve([])
+        : llmModelRepo.loadAvailableDecisionModels(catalogProvider, false, context.scope),
       llmModelRepo.loadAvailableSpeechModels(catalogProvider, context.scope),
       option ? Promise.resolve([]) : llmModelRepo.loadAvailableTranscriptionModels(provider, context.scope),
     ]);
@@ -618,7 +620,8 @@ async function buildCuratedCapabilities(
     if (
       (capability === "speech" && speechRows.length === 0) ||
       (capability === "transcription" && transcriptionRows.length === 0) ||
-      (capability === "decision" && !getStaticProviderInfo(catalogProvider)?.featureSupport.decisions) ||
+      (capability === "decision" &&
+        (context.scope.kind === "personal" || !getStaticProviderInfo(catalogProvider)?.featureSupport.decisions)) ||
       (option && !providerOptionOffersPanelCapability(option, capability))
     ) {
       return { capability, availability: "unavailable", models: [] };
@@ -642,7 +645,7 @@ function buildEndpointCapabilities(
     // supports, so a missing one means this endpoint cannot host that capability at all:
     // `registerEndpointModel` answers `not-found` for it. Reporting it unavailable keeps the panel
     // from offering a model modal that can only fail.
-    if (capabilityConnections.length === 0) {
+    if (capabilityConnections.length === 0 || (context.scope.kind === "personal" && capability === "decision")) {
       return { capability, availability: "unavailable", models: [] };
     }
 
@@ -1243,9 +1246,9 @@ export async function addCustomEndpointConnection(
   const capabilities = CUSTOM_ENDPOINT_CAPABILITIES_BY_API_STYLE[
     input.apiStyle as keyof typeof CUSTOM_ENDPOINT_CAPABILITIES_BY_API_STYLE
   ] as readonly CustomEndpointCapability[] | undefined;
-  if (!capabilities) return { status: "invalid-style" };
-
   const personal = input.scopeKind === "personal";
+  if (!capabilities || (personal && capabilities.includes("decision"))) return { status: "invalid-style" };
+
   const ownerId = personal ? input.ownerId : input.state.server_id;
   const scopeKind = personal ? "personal" : "server";
   const existingConnections = await dependencies.loadConnections(ownerId, scopeKind, label);
@@ -1821,6 +1824,9 @@ export async function saveProviderModel(input: SaveProviderModelInput): Promise<
       })}`,
     );
     return { status: "success", entryId: input.entryId, codeName: input.codeName, removed: true };
+  }
+  if (input.scopeKind === "personal" && input.capability === "decision") {
+    return { status: "unsupported-capability" };
   }
   const codeName = input.codeName.trim();
   if (!codeName || codeName.length > 200) return { status: "invalid-model" };

@@ -10,7 +10,7 @@ const UNKNOWN_MEMBER_ERROR_CODE = 10007;
  * could not be read, not that the member left, and the caller must not report it as a departure.
  */
 export type WelcomeMembershipCheck =
-  | { status: "active" }
+  | { status: "active"; member: GuildMember }
   | { status: "ended" }
   | { status: "unverified"; error: unknown };
 
@@ -21,9 +21,6 @@ export type WelcomeMembershipCheck =
  * pending, so a matching user ID is not enough: joinedTimestamp is what distinguishes the original
  * membership from a new one. The fetch is forced because the cache goes stale around
  * guildMemberRemove and Tomori also sweeps guild members from it.
- *
- * The fetched member is not returned. Both call sites run after the work that reads member state,
- * so nothing downstream can act on the fresher copy.
  *
  * @param originalMember - Membership instance that started the welcome flow
  */
@@ -44,5 +41,5 @@ export async function checkWelcomeMembership(originalMember: GuildMember): Promi
     return { status: "ended" };
   }
 
-  return { status: "active" };
+  return { status: "active", member: currentMember };
 }

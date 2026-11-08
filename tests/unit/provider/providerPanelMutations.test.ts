@@ -683,6 +683,29 @@ describe("provider panel mutations", () => {
       });
       expect(result.status).toBe("success");
       expect(calls).toEqual(["select:92", "remove:91"]);
+      expect(
+        await saveProviderModel({
+          serverDiscId: "guild",
+          scopeKind: "personal",
+          ownerId: 77,
+          state: selected,
+          entryId: "provider:openrouter",
+          capability: "decision",
+          codeName: "fixture/decider-v2",
+        }),
+      ).toEqual({ status: "unsupported-capability" });
+      expect(
+        await addCustomEndpointConnection({
+          serverDiscId: "guild",
+          scopeKind: "personal",
+          ownerId: 77,
+          state: selected,
+          label: "personal-decisions",
+          endpointUrl: "https://example.invalid/v1",
+          apiStyle: "system-one",
+          authToken: "",
+        }),
+      ).toEqual({ status: "invalid-style" });
     } finally {
       for (const spy of spies) spy.mockRestore();
     }

@@ -87,6 +87,9 @@ chosen channel. TomoriBot waits until the new member completes Discord's rules s
 onboarding before sending the greeting. If a member leaves before finishing screening, no greeting
 is sent. Click `Clear Welcome` on that same page to disable greetings.
 
+The welcome prompt receives the member's roles after onboarding, so you can ask TomoriBot to greet
+them in the language named by a role. Partial and Full privacy hide those roles from TomoriBot.
+
 :::tip
 Use the `Welcome prompt` to introduce new members to your server's rules. Include the rules or
 point to your rules channel, for example: "Welcome them and remind them to read #rules."
