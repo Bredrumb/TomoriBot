@@ -60,7 +60,7 @@ Kev prints a warning that `flash-linear-attention` is missing. It then uses a sl
 
 ## 2. Register it in Discord
 
-Run `/providers` (server-wide) or `/personal providers` (just you), choose `Add New Custom Endpoint`, and enter:
+Run `/providers`, choose `Add New Custom Endpoint`, and enter:
 
 | Field | Value |
 |---|---|

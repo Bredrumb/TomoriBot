@@ -382,6 +382,9 @@ export function buildAddEndpointModal(
   nonce: string,
   routeNamespace: ProvidersRouteNamespace = PROVIDERS_ROUTE_NAMESPACE,
 ): { custom_id: string; title: string; components: RawDiscordComponent[] } {
+  const endpointCapabilities = (Object.keys(ENDPOINT_API_STYLES) as CustomEndpointCapability[]).filter(
+    (capability) => routeNamespace === PROVIDERS_ROUTE_NAMESPACE || capability !== "decision",
+  );
   return {
     custom_id: buildProvidersRouteId(routeNamespace, { action: "endpoint-submit", locale, nonce }),
     title: safeSelectOptionText(localizer(locale, "commands.providers.add_endpoint_modal_title"), 45),
@@ -396,18 +399,20 @@ export function buildAddEndpointModal(
           type: 21,
           custom_id: buildAddEndpointModalFieldId("api-style", nonce),
           required: true,
-          options: [...new Set(Object.values(ENDPOINT_API_STYLES).flat())].map((style, index) => ({
-            value: style,
-            label: safeSelectOptionText(
-              localizer(locale, API_STYLE_KEYS[style].label),
-              DISCORD_SELECT_OPTION_LABEL_MAX,
-            ),
-            description: safeSelectOptionText(
-              localizer(locale, API_STYLE_KEYS[style].description),
-              DISCORD_SELECT_OPTION_DESCRIPTION_MAX,
-            ),
-            default: index === 0,
-          })),
+          options: [...new Set(endpointCapabilities.flatMap((capability) => ENDPOINT_API_STYLES[capability]))].map(
+            (style, index) => ({
+              value: style,
+              label: safeSelectOptionText(
+                localizer(locale, API_STYLE_KEYS[style].label),
+                DISCORD_SELECT_OPTION_LABEL_MAX,
+              ),
+              description: safeSelectOptionText(
+                localizer(locale, API_STYLE_KEYS[style].description),
+                DISCORD_SELECT_OPTION_DESCRIPTION_MAX,
+              ),
+              default: index === 0,
+            }),
+          ),
         },
       },
       endpointTextInput(locale, nonce, "auth-token", false),
