@@ -578,17 +578,17 @@ async function reviewCandidate(
   }
   const unavailable = async (
     category: string,
-    operational = false,
+    failureKind?: "operation" | "configuration",
     httpStatus?: number,
   ): Promise<DraftReviewResult> => {
     state.unavailable = true;
-    if (operational || category === "refusal")
+    if (failureKind || category === "refusal")
       await reportProviderFailure({
         summary: "Response review unavailable",
         error: new Error("Reviewer operation failed"),
         errorType: "ResponseReviewError",
         expected:
-          !operational ||
+          failureKind !== "operation" ||
           !isOperatorActionableProviderError({
             type: "api_error",
             message: category,
@@ -656,8 +656,8 @@ async function reviewCandidate(
       trace("cancelled");
       return { status: "cancelled" };
     }
-    if (timeout.aborted) return unavailable("timeout", true);
-    if (!resolved) return unavailable(resolutionCategory, true);
+    if (timeout.aborted) return unavailable("timeout", "operation");
+    if (!resolved) return unavailable(resolutionCategory, "configuration");
     if ("errorLogged" in resolved) return unavailable("credentials");
     requestScope = [resolved.usageContext];
     modelId = resolved.state.llm.llm_id;
@@ -671,13 +671,13 @@ async function reviewCandidate(
       trace("cancelled");
       return { status: "cancelled" };
     }
-    if (timeout.aborted) return unavailable("timeout", true);
+    if (timeout.aborted) return unavailable("timeout", "operation");
     const limits = await runUnderWatchdog(context.channel.id, () => wait(resolveModelLimits(resolved.state)));
     if (cancelled()) {
       trace("cancelled");
       return { status: "cancelled" };
     }
-    if (timeout.aborted || !limits) return unavailable("timeout", true);
+    if (timeout.aborted || !limits) return unavailable("timeout", "operation");
     const window = limits.contextWindow;
     // The chat reply budget, not a verdict-sized one: a reasoning model spends its thinking from the
     // same allowance before it writes the JSON, so a small cap ends in empty content.
@@ -711,7 +711,7 @@ async function reviewCandidate(
         ? config.tools
         : [];
     if (cancelled()) return { status: "cancelled" };
-    if (timeout.aborted) return unavailable("timeout", true);
+    if (timeout.aborted) return unavailable("timeout", "operation");
     const packet = buildReviewerPacket(context, candidate, inputTokens, tools ?? [], proposedCall);
     if (typeof packet === "string") return unavailable(packet);
     if (proposedCall && state.toolReviews >= MAX_TOOL_REVIEWS) return unavailable("tool_review_budget");
@@ -733,7 +733,7 @@ async function reviewCandidate(
           ),
         );
     if (cancelled() || rules?.status === "cancelled") return { status: "cancelled" };
-    if (timeout.aborted || !rules) return unavailable("timeout", true);
+    if (timeout.aborted || !rules) return unavailable("timeout", "operation");
     const ruleEvidence = "evidence" in rules ? rules.evidence : undefined;
     const userPrompt = renderReviewerPrompt(
       packet,
@@ -805,7 +805,7 @@ async function reviewCandidate(
       trace("cancelled", { usage });
       return { status: "cancelled" };
     }
-    if (!result || timeout.aborted) return unavailable("timeout", true);
+    if (!result || timeout.aborted) return unavailable("timeout", "operation");
     // One retry with reasoning off, because an exhausted reasoning budget is the usual cause of an
     // empty reply. It reuses this review's count and deadline, so a bad format cannot add a review.
     if (!result.success && result.failure === "malformed" && result.malformed) {
@@ -821,7 +821,7 @@ ${section("format_retry", formatStructuredRetryNote(result.malformed))}`,
         trace("cancelled", { usage });
         return { status: "cancelled" };
       }
-      if (!result || timeout.aborted) return unavailable("timeout", true);
+      if (!result || timeout.aborted) return unavailable("timeout", "operation");
     }
     if (!result.success) {
       const denied = findProviderRequestDeniedError(result.cause, resolved.usageContext);
@@ -830,12 +830,12 @@ ${section("format_retry", formatStructuredRetryNote(result.malformed))}`,
     if (!result.success)
       return unavailable(
         result.failure ?? "transport",
-        result.failure !== "refusal" && result.failure !== "cancelled",
+        result.failure !== "refusal" && result.failure !== "cancelled" ? "operation" : undefined,
         result.httpStatus,
       );
     log.info(`Response review reply ${correlation}\n${JSON.stringify(result.data, null, 2)}`);
     const validated = resultSchema.safeParse(result.data);
-    if (!validated.success) return unavailable("malformed", true);
+    if (!validated.success) return unavailable("malformed", "operation");
     state.verdict = { identity, result: validated.data };
     trace(validated.data.status, { usage });
     if (validated.data.status === "unavailable") state.unavailable = true;
@@ -855,7 +855,7 @@ ${section("format_retry", formatStructuredRetryNote(result.malformed))}`,
       }
       return unavailable("provider-denied");
     }
-    return unavailable("operation", true);
+    return unavailable("operation", "operation");
   } finally {
     unobserve();
   }

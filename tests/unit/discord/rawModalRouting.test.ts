@@ -11,6 +11,7 @@ import { createRouteInteraction } from "../../helpers/routeInteraction";
 import { localizedCopy } from "../../helpers/localeCases";
 import { stubGlobalFetch } from "../../helpers/fetchStub";
 import { beforeAll, describe, expect, it, spyOn } from "bun:test";
+import { log } from "@/utils/misc/logger";
 import type { GlobalDiscordState, RawDiscordWebSocketPacket, RawDiscordShard } from "@/types/discord/rawApiTypes";
 import {
   initializeRawModalInterception,
@@ -544,6 +545,40 @@ describe("routed raw modal gateway support", () => {
 
 describe("shutdown raw modal acknowledgement", () => {
   beforeAll(() => initializeLocalizer());
+
+  it("records modal preparation age separately from failed REST duration without logging the token", async () => {
+    const client = new Client({ intents: [] });
+    const patchState = (globalThis as GlobalDiscordState).__webSocketPatched;
+    const opener = Object.assign(createRouteInteraction(), {
+      client,
+      token: "PRIVATE_INTERACTION_TOKEN",
+      createdTimestamp: 10_000,
+    }) as unknown as ButtonInteraction;
+    let now = 11_000;
+    const clock = spyOn(Date, "now").mockImplementation(() => now);
+    const errors = spyOn(log, "error").mockResolvedValue(undefined);
+    const fetchSpy = stubGlobalFetch(async () => {
+      now += 2_000;
+      return Response.json({ message: "Expired interaction", code: 10062 }, { status: 404 });
+    });
+    try {
+      await expect(
+        showRoutedRawModal(opener, { custom_id: "fixture-modal", title: "Fixture", components: [] }),
+      ).rejects.toMatchObject({ code: 10062, status: 404 });
+      expect(errors.mock.calls[0]?.[2]).toMatchObject({
+        metadata: { interactionAgeAtRequestMs: 1_000, requestDurationMs: 2_000 },
+      });
+      expect(JSON.stringify(errors.mock.calls)).not.toContain("PRIVATE_INTERACTION_TOKEN");
+      expect(hasRawModalAcknowledgement(opener)).toBe(false);
+    } finally {
+      clock.mockRestore();
+      errors.mockRestore();
+      fetchSpy.mockRestore();
+      if (patchState === undefined) delete (globalThis as GlobalDiscordState).__webSocketPatched;
+      else (globalThis as GlobalDiscordState).__webSocketPatched = patchState;
+      await client.destroy();
+    }
+  });
 
   it("preserves a raw modal acknowledgement and rejects its submission before collectors", async () => {
     const client = new Client({ intents: [] });

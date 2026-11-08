@@ -1,9 +1,9 @@
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { ChannelType, Collection, type Client, type Guild } from "discord.js";
-import backfillLegacyChannelScopes from "@/events/clientReady/05_backfillLegacyChannelScopes";
 import guildAvailableBackfill from "@/events/guildAvailable/01_backfillLegacyChannelScopes";
 import { serverMemoryRepository } from "@/utils/db/repositories";
+import { backfillLegacyChannelScopes } from "@/utils/memory/legacyChannelScopeBackfill";
 import { cleanupFixtures, FIXTURE_IDS, insertFixtures, type FixtureRefs } from "./setup/fixtures";
 import { DB_TESTS_AVAILABLE, executeTestSqlFile, setupTestDb, testSql } from "./setup/testDb";
 
@@ -63,7 +63,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("legacy channel scope backfill", () => {
     await insertTaggedMemory(dm.server_id, "dm", ["#general"]);
     await executeTestSqlFile(path.join(process.cwd(), "src/db/migrations/111_channel_scope_ids.sql"));
 
-    await backfillLegacyChannelScopes(clientWithGuild(FIXTURE_IDS.serverDiscId));
+    const client = clientWithGuild(FIXTURE_IDS.serverDiscId);
+    await backfillLegacyChannelScopes((id) => client.guilds.cache.get(id));
   });
 
   afterAll(async () => {
@@ -140,7 +141,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("legacy channel scope backfill", () => {
     `;
     await testSql`DELETE FROM server_memories WHERE server_memory_id = ${row.server_memory_id}`;
 
-    await backfillLegacyChannelScopes(clientWithGuild(FIXTURE_IDS.serverDiscId));
+    const client = clientWithGuild(FIXTURE_IDS.serverDiscId);
+    await backfillLegacyChannelScopes((id) => client.guilds.cache.get(id));
 
     const [held] = await testSql`
       SELECT 1 FROM legacy_channel_scope_tags

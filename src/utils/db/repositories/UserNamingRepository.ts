@@ -117,24 +117,28 @@ class UserNamingRepository {
 
     const userIds = uniquePairs.map((pair) => pair.userId);
     const lineageIds = uniquePairs.map((pair) => pair.personaLineageId);
-    const rows = await sql`
-      WITH requested_pairs (user_id, persona_lineage_id) AS (
-        SELECT *
-        FROM unnest(${sql.array(userIds, "int4")}, ${sql.array(lineageIds, "int8")})
-      )
-      SELECT
-        upnp.user_id,
-        upnp.persona_lineage_id,
-        upnp.nickname_override,
-        upnp.prefix_override,
-        upnp.suffix_override,
-        upnp.created_at,
-        upnp.updated_at
-      FROM user_persona_naming_preferences upnp
-      JOIN requested_pairs requested
-        ON requested.user_id = upnp.user_id
-        AND requested.persona_lineage_id = upnp.persona_lineage_id
-    `;
+    const rows = await withTransientDbRetry(
+      async () =>
+        await sql`
+        WITH requested_pairs (user_id, persona_lineage_id) AS (
+          SELECT *
+          FROM unnest(${sql.array(userIds, "int4")}, ${sql.array(lineageIds, "int8")})
+        )
+        SELECT
+          upnp.user_id,
+          upnp.persona_lineage_id,
+          upnp.nickname_override,
+          upnp.prefix_override,
+          upnp.suffix_override,
+          upnp.created_at,
+          upnp.updated_at
+        FROM user_persona_naming_preferences upnp
+        JOIN requested_pairs requested
+          ON requested.user_id = upnp.user_id
+          AND requested.persona_lineage_id = upnp.persona_lineage_id
+      `,
+      "load user persona naming preferences",
+    );
 
     const preferences = new Map<string, UserPersonaNamingPreference>();
     for (const row of rows) {

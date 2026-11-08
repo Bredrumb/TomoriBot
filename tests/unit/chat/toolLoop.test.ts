@@ -1890,6 +1890,42 @@ describe("runToolLoop — contract tests", () => {
     }
   });
 
+  it("reports unsupported inherited reviewers once as configuration warnings without calling the provider", async () => {
+    const errors = spyOn(log, "error").mockImplementation(async () => {});
+    const warnings = spyOn(log, "warn").mockImplementation(() => {});
+    const metrics = spyOn(log, "metric").mockImplementation(() => {});
+    try {
+      for (const category of ["unsupported_model", "unsupported_provider"] as const) {
+        errors.mockClear();
+        warnings.mockClear();
+        metrics.mockClear();
+        const context = makeReviewContext();
+        context.tomoriState.llm.supports_structoutput = category !== "unsupported_model";
+        context.responseReview.pending = [held("PRIVATE_DRAFT", []).pendingResponse];
+        const { provider } = makeProvider([]);
+        const call = mock(async () => ({ success: true, data: { status: "pass" } }));
+        if (category === "unsupported_model") Object.assign(provider, { callStructuredJSON: call });
+
+        expect(await reviewResponseCandidate(context, provider, makeProviderConfig())).toEqual({
+          status: "unavailable",
+        });
+        await reviewResponseCandidate(context, provider, makeProviderConfig());
+
+        expect(call).not.toHaveBeenCalled();
+        expect(errors).not.toHaveBeenCalled();
+        expect(metrics).toHaveBeenCalledWith("provider_failure", expect.objectContaining({ category }));
+        expect(warnings).toHaveBeenCalledTimes(1);
+        expect(warnings.mock.calls[0]?.[2]).toMatchObject({ metadata: { category } });
+        expect(warnings.mock.calls[0]?.[3]).toMatchObject({ retain: true });
+        expect(JSON.stringify(warnings.mock.calls)).not.toContain("PRIVATE_DRAFT");
+      }
+    } finally {
+      errors.mockRestore();
+      warnings.mockRestore();
+      metrics.mockRestore();
+    }
+  });
+
   it("logs operational reviewer failures once with safe metadata and treats refusal as an ordinary outcome", async () => {
     const errorSpy = spyOn(log, "error").mockImplementation(async () => {});
     const infoSpy = spyOn(log, "info").mockImplementation(() => {});

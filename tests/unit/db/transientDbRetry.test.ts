@@ -9,6 +9,8 @@ import { log } from "@/utils/misc/logger";
 import { useEnvSandbox } from "../../helpers/env";
 import { shortTermMemoryRepository } from "@/utils/db/repositories/ShortTermMemoryRepository";
 import { serverStmConfigSchema } from "@/types/db/schema";
+import { userNamingRepository } from "@/utils/db/repositories/UserNamingRepository";
+import { userPersonaNamingPreferenceSchema } from "@/types/personaNaming";
 
 useEnvSandbox(["POSTGRES_TRANSIENT_RETRY_DELAY_MS", "POSTGRES_TRANSIENT_RETRY_ATTEMPTS"]);
 
@@ -24,6 +26,36 @@ it("recovers saved short-term memory settings after a connection lifetime timeou
   try {
     expect(await shortTermMemoryRepository.getStmConfig(1)).toEqual(row);
     expect(thunk.calls()).toBe(2);
+  } finally {
+    query.mockRestore();
+  }
+});
+
+it.each(["ERR_POSTGRES_LIFETIME_TIMEOUT", "23505"])("handles naming preference query failures: %s", async (code) => {
+  const row = userPersonaNamingPreferenceSchema.parse({
+    user_id: 1,
+    persona_lineage_id: 2,
+    nickname_override: "Mirri",
+    prefix_override: null,
+    suffix_override: null,
+    created_at: new Date(0),
+    updated_at: new Date(0),
+  });
+  const thunk = failOnceThen(code, [row]);
+  const array = dbClient.sql.array.bind(dbClient.sql);
+  const query = spyOn(dbClient, "sql").mockImplementation(thunk.run as unknown as typeof dbClient.sql);
+  Object.assign(dbClient.sql, { array });
+  try {
+    const result = userNamingRepository.loadPreferences([
+      { userId: row.user_id, personaLineageId: row.persona_lineage_id },
+    ]);
+    if (code === "ERR_POSTGRES_LIFETIME_TIMEOUT") {
+      expect([...(await result).values()]).toEqual([row]);
+      expect(thunk.calls()).toBe(2);
+    } else {
+      await expect(result).rejects.toMatchObject({ code });
+      expect(thunk.calls()).toBe(1);
+    }
   } finally {
     query.mockRestore();
   }
