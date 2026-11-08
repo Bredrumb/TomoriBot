@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
+[[ ! -e /etc/tomoribot/provider-fenced ]] || {
+  echo "Azure deployment is fenced on this host." >&2
+  exit 1
+}
 
 : "${runtimeSecretsB64:?runtimeSecretsB64 is required}"
 : "${vertexConfigB64:?vertexConfigB64 is required}"

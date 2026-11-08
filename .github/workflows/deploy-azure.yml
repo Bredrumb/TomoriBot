@@ -48,7 +48,7 @@ jobs:
   # ─── VALIDATION (lint, types, schema, locales, lifecycle) ─────────────────
 
   code-quality:
-    if: vars.ACTIVE_PROVIDER == 'azure' || github.event_name == 'workflow_dispatch'
+    if: github.ref == 'refs/heads/release' && vars.ACTIVE_PROVIDER == 'azure'
     uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
@@ -101,170 +101,12 @@ jobs:
 
   # ─── SECURITY SCANNING (identical to AWS workflow) ────────────────────────
 
-  security-sast:
-    runs-on: ubuntu-24.04
-    needs: build-image
-    outputs:
-      failed: ${{ steps.check-result.outputs.failed }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-
-      - name: Run Semgrep SAST scan
-        uses: returntocorp/semgrep-action@713efdd345f3035192eaa63f56867b88e63e4e5d
-        with:
-          config: >-
-            p/security-audit
-            p/typescript
-            p/docker
-        continue-on-error: true
-        id: semgrep
-
-      - name: Check Semgrep results
-        id: check-result
-        run: |
-          if [ "${{ steps.semgrep.outcome }}" == "failure" ]; then
-            echo "failed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "failed=false" >> "$GITHUB_OUTPUT"
-          fi
-
-  security-dependencies:
-    runs-on: ubuntu-24.04
-    needs: build-image
-    outputs:
-      failed: ${{ steps.check-result.outputs.failed }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: 1.4.0
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Run Bun audit
-        run: |
-          if ! bun run audit:clean > audit-output.txt 2>&1; then
-            cat audit-output.txt
-            exit 1
-          else
-            cat audit-output.txt
-          fi
-        continue-on-error: true
-        id: bun-audit
-
-      - name: Check audit results
-        id: check-result
-        run: |
-          if [ "${{ steps.bun-audit.outcome }}" == "failure" ]; then
-            echo "failed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "failed=false" >> "$GITHUB_OUTPUT"
-          fi
-
-  security-secrets:
-    runs-on: ubuntu-24.04
-    needs: build-image
-    outputs:
-      failed: ${{ steps.check-result.outputs.failed }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          fetch-depth: 0
-
-      - name: Run TruffleHog secret scan
-        uses: trufflesecurity/trufflehog@99dc7bd6c06427bcb32f32fe1641d7fb83583915
-        with:
-          path: ./
-          base: ${{ github.event.before }}
-          head: ${{ github.event.after }}
-          extra_args: --only-verified
-        continue-on-error: true
-        id: trufflehog
-
-      - name: Check TruffleHog results
-        id: check-result
-        run: |
-          if [ "${{ steps.trufflehog.outcome }}" == "failure" ]; then
-            echo "failed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "failed=false" >> "$GITHUB_OUTPUT"
-          fi
-
-  security-container:
-    runs-on: ubuntu-24.04
-    needs: build-image
-    outputs:
-      failed: ${{ steps.check-result.outputs.failed }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-
-      - name: Download Docker image artifact
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
-        with:
-          name: docker-image
-
-      - name: Load Docker image
-        run: docker load -i tomoribot-image.tar
-
-      - name: Run Trivy container scan
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
-        with:
-          image-ref: tomoribot:latest
-          format: table
-          exit-code: 1
-          severity: CRITICAL,HIGH
-          ignore-unfixed: true
-          trivyignores: .github/.trivyignore
-        continue-on-error: true
-        id: trivy
-
-      - name: Check Trivy results
-        id: check-result
-        run: |
-          if [ "${{ steps.trivy.outcome }}" == "failure" ]; then
-            echo "failed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "failed=false" >> "$GITHUB_OUTPUT"
-          fi
-
   security-gate:
-    runs-on: ubuntu-24.04
-    needs: [security-sast, security-dependencies, security-secrets, security-container]
-    steps:
-      - name: Check security scan results
-        run: |
-          echo "=========================================="
-          echo "Security Gate - Evaluating Scan Results"
-          echo "=========================================="
-
-          failed=false
-
-          echo "SAST Scan (Semgrep):           ${{ needs.security-sast.outputs.failed }}"
-          echo "Dependency Scan (Bun Audit):   ${{ needs.security-dependencies.outputs.failed }}"
-          echo "Secret Scan (TruffleHog):      ${{ needs.security-secrets.outputs.failed }}"
-          echo "Container Scan (Trivy):        ${{ needs.security-container.outputs.failed }}"
-
-          if [ "${{ needs.security-sast.outputs.failed }}" == "true" ];         then failed=true; fi
-          if [ "${{ needs.security-dependencies.outputs.failed }}" == "true" ]; then failed=true; fi
-          if [ "${{ needs.security-secrets.outputs.failed }}" == "true" ];      then failed=true; fi
-          if [ "${{ needs.security-container.outputs.failed }}" == "true" ];    then failed=true; fi
-
-          echo "=========================================="
-          if [ "$failed" == "true" ]; then
-            echo "DEPLOYMENT BLOCKED — security scans found issues"
-            exit 1
-          else
-            echo "ALL SECURITY SCANS PASSED — proceeding to Azure deployment"
-          fi
-
-  # ─── AZURE DEPLOYMENT ─────────────────────────────────────────────────────
+    needs: build-image
+    uses: ./.github/workflows/release-security.yml
+    with:
+      image_artifact: docker-image
+    secrets: inherit
 
   push-to-docker-hub:
     runs-on: ubuntu-24.04
@@ -446,7 +288,10 @@ jobs:
       # the last SUCCESSFUL deploy rather than the previous push. See that step for why.
       actions: read
     needs: push-to-docker-hub
-    if: needs['push-to-docker-hub'].outputs.deploy == 'true'
+    if: needs['push-to-docker-hub'].outputs.deploy == 'true' && vars.ACTIVE_PROVIDER == 'azure'
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
     outputs:
       deployment-status: ${{ steps.verify.outputs.status }}
       commit-hash: ${{ steps.commit-info.outputs.hash }}
@@ -1050,189 +895,12 @@ jobs:
 
   # ─── GITHUB RELEASES (identical to AWS workflow) ──────────────────────────
 
-  check-release-assets:
-    runs-on: ubuntu-24.04
+  publish-release:
     needs: deploy-with-terraform
     if: needs.deploy-with-terraform.outputs.deployment-status == 'success'
-    outputs:
-      has-assets: ${{ steps.check.outputs.has-assets }}
-      version: ${{ steps.version.outputs.version }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-
-      - name: Get version from package.json
-        id: version
-        run: |
-          echo "version=$(jq -r '.version' package.json)" >> "$GITHUB_OUTPUT"
-
-      - name: Check if version-specific release folder exists
-        id: check
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          versionFolder=".github/release/v$VERSION"
-          if [ -d "$versionFolder" ]; then
-            echo "has-assets=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has-assets=false" >> "$GITHUB_OUTPUT"
-          fi
-
-  create-release:
-    runs-on: ubuntu-24.04
-    environment: production
-    needs: [deploy-with-terraform, check-release-assets]
-    if: needs.deploy-with-terraform.outputs.deployment-status == 'success' && needs.check-release-assets.outputs.has-assets == 'true'
-    # Release creation publishes a GitHub Release; the default token needs write here.
+    uses: ./.github/workflows/release-publish.yml
     permissions:
       contents: write
-    outputs:
-      created: ${{ steps.release-check.outputs.exists != 'true' }}
-      image_name: ${{ steps.release-notes.outputs.image-name }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-
-      - name: Check if GitHub release already exists
-        id: release-check
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ needs.check-release-assets.outputs.version }}
-        run: |
-          if gh release view "v$VERSION" >/dev/null 2>&1; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Prepare release notes and Discord notification
-        id: release-notes
-        if: steps.release-check.outputs.exists != 'true'
-        env:
-          VERSION: ${{ needs.check-release-assets.outputs.version }}
-          COMMIT_HASH: ${{ needs.deploy-with-terraform.outputs.commit-hash }}
-        run: |
-          versionFolder=".github/release/v$VERSION"
-          releaseNotesPath=$(find "$versionFolder" -maxdepth 1 -name "*.md" ! -name "README.md" | head -n 1)
-
-          if [ -z "$releaseNotesPath" ]; then
-            echo "No .md files found in $versionFolder"
-            exit 1
-          fi
-
-          imageName=$(find "$versionFolder" -maxdepth 1 -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.gif" -o -name "*.webp" \) | head -n 1 | xargs -r basename)
-
-          releaseNotes=$(cat "$releaseNotesPath")
-          releaseNotes="${releaseNotes//\{VERSION\}/$VERSION}"
-          releaseNotes="${releaseNotes//\{TIMESTAMP\}/$(date -u +"%Y-%m-%d %H:%M:%S UTC")}"
-          releaseNotes="${releaseNotes//\{COMMIT_HASH\}/$COMMIT_HASH}"
-          releaseNotes="${releaseNotes//\{REPO_OWNER\}/${{ github.repository_owner }}}"
-          releaseNotes="${releaseNotes//\{REPO_NAME\}/${{ github.event.repository.name }}}"
-          # Published images use the tag created below so historical release bodies do not depend
-          # on files remaining at the release branch tip.
-          releaseNotes=$(printf '%s' "$releaseNotes" | sed "s|/raw/release/\\.github/release/|/raw/v$VERSION/.github/release/|g")
-
-          echo "$releaseNotes" > processed-release-notes.md
-          echo "image-name=$imageName" >> "$GITHUB_OUTPUT"
-
-      - name: Create GitHub Release
-        if: steps.release-check.outputs.exists != 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ needs.check-release-assets.outputs.version }}
-        run: |
-          # Without --target the tag is cut from the default branch, which no longer carries
-          # .github/release/ and is not the tree that just deployed. Both the release-note image
-          # URLs and the source archive read from this tag, so it has to be the deployed commit.
-          gh release create "v$VERSION" \
-            --target "${{ github.sha }}" \
-            --title "TomoriBot v$VERSION" \
-            --notes-file "processed-release-notes.md" \
-            --latest
-
-
-  notify-release:
-    runs-on: ubuntu-24.04
-    environment: production
-    needs: [deploy-with-terraform, check-release-assets, create-release]
-    if: needs.create-release.outputs.created == 'true'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-
-      - name: Prepare Discord notification
-        env:
-          VERSION: ${{ needs.check-release-assets.outputs.version }}
-          COMMIT_HASH: ${{ needs.deploy-with-terraform.outputs.commit-hash }}
-        run: |
-          versionFolder=".github/release/v$VERSION"
-          releaseNotesPath=$(find "$versionFolder" -maxdepth 1 -name "*.md" ! -name "README.md" | head -n 1)
-          releaseNotes=$(cat "$releaseNotesPath")
-          releaseNotes="${releaseNotes//\{VERSION\}/$VERSION}"
-          releaseNotes="${releaseNotes//\{TIMESTAMP\}/$(date -u +"%Y-%m-%d %H:%M:%S UTC")}"
-          releaseNotes="${releaseNotes//\{COMMIT_HASH\}/$COMMIT_HASH}"
-          releaseNotes="${releaseNotes//\{REPO_OWNER\}/${{ github.repository_owner }}}"
-          releaseNotes="${releaseNotes//\{REPO_NAME\}/${{ github.event.repository.name }}}"
-          printf '%s' "$releaseNotes" > processed-release-notes.md
-
-      - name: Send Discord notification
-        env:
-          VERSION: ${{ needs.check-release-assets.outputs.version }}
-          IMAGE_NAME: ${{ needs.create-release.outputs.image_name }}
-          MENTION_ROLE_ID: ${{ secrets.RELEASE_DISCORD_MENTION_ROLE_ID }}
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        run: |
-          releaseNotes=$(sed 's/!\[[^]]*\]([^)]*)//g' processed-release-notes.md)
-          printf '%s' "$releaseNotes" > discord_release_notes.txt
-          python3 .github/scripts/discord_split.py
-          chunkCount=$(cat discord_chunk_count.txt)
-
-          hasImage=false
-          imageFile=""
-          if [ -n "$IMAGE_NAME" ]; then
-            # Read from the release tag, not a branch: the tag is immutable, so a past release's
-            # image survives any future pruning of .github/release/ from the branch tip. Release
-            # creation always runs before this point, so the tag resolves.
-            imageUrl="https://github.com/${{ github.repository }}/raw/v$VERSION/.github/release/v$VERSION/$IMAGE_NAME"
-            imageFile="release-post-image.${IMAGE_NAME##*.}"
-            if curl -sL --max-time 30 "$imageUrl" -o "$imageFile" && [ -s "$imageFile" ]; then
-              hasImage=true
-            fi
-          fi
-
-          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
-            echo "DISCORD_WEBHOOK_URL not configured — skipping Discord notification"
-            exit 0
-          fi
-
-          threadTitle=$(head -1 processed-release-notes.md | sed 's/^# *//')
-          firstChunk=$(cat discord_chunk_0.txt)
-          firstPayload=$(jq -n --arg content "$firstChunk" --arg thread_name "$threadTitle" '{content: $content, thread_name: $thread_name}')
-
-          if [ "$hasImage" = true ]; then
-            response=$(curl -s -w "\n%{http_code}" -X POST -F "payload_json=$firstPayload" -F "files[0]=@$imageFile" "${DISCORD_WEBHOOK_URL}?wait=true")
-          else
-            response=$(curl -s -w "\n%{http_code}" -X POST -H "Content-Type: application/json" -d "$firstPayload" "${DISCORD_WEBHOOK_URL}?wait=true")
-          fi
-
-          httpCode=$(echo "$response" | tail -1)
-          responseBody=$(echo "$response" | sed '$d')
-          if [ "$httpCode" -lt 200 ] || [ "$httpCode" -ge 300 ]; then
-            echo "Failed to create Discord forum post (HTTP $httpCode)"
-            exit 1
-          fi
-
-          threadId=$(echo "$responseBody" | jq -r '.channel_id // empty')
-          if [ "$chunkCount" -gt 1 ] && [ -n "$threadId" ]; then
-            for i in $(seq 1 $((chunkCount - 1))); do
-              chunk=$(cat "discord_chunk_${i}.txt")
-              chunkPayload=$(jq -n --arg content "$chunk" '{content: $content}')
-              curl -s -X POST -H "Content-Type: application/json" -d "$chunkPayload" "${DISCORD_WEBHOOK_URL}?thread_id=${threadId}" >/dev/null
-              sleep 1
-            done
-          fi
-
-          if [ -n "$MENTION_ROLE_ID" ] && [ -n "$threadId" ]; then
-            mentionPayload=$(jq -n --arg content "<@&${MENTION_ROLE_ID}> Follow-up hotfixes or patches for this update will be posted in this Forum post!" '{content: $content}')
-            curl -s -X POST -H "Content-Type: application/json" -d "$mentionPayload" "${DISCORD_WEBHOOK_URL}?thread_id=${threadId}" >/dev/null
-          fi
+    with:
+      commit_hash: ${{ needs.deploy-with-terraform.outputs.commit-hash }}
+    secrets: inherit

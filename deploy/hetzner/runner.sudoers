@@ -1,0 +1,2 @@
+Defaults:tomori-ci env_reset,!setenv
+tomori-ci ALL=(root) NOPASSWD: /usr/local/lib/tomoribot/deploy-request.py ""

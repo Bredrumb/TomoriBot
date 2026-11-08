@@ -1,0 +1,187 @@
+name: Release security gates
+
+on:
+  workflow_call:
+    inputs:
+      image_artifact:
+        required: true
+        type: string
+      scan_searxng:
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  security-sast:
+    runs-on: ubuntu-24.04
+    outputs:
+      failed: ${{ steps.check-result.outputs.failed }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Run Semgrep SAST scan
+        uses: returntocorp/semgrep-action@713efdd345f3035192eaa63f56867b88e63e4e5d
+        with:
+          config: >-
+            p/security-audit
+            p/typescript
+            p/docker
+        continue-on-error: true
+        id: semgrep
+
+      - name: Check Semgrep results
+        id: check-result
+        run: |
+          if [ "${{ steps.semgrep.outcome }}" == "failure" ]; then
+            echo "failed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "failed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  security-dependencies:
+    runs-on: ubuntu-24.04
+    outputs:
+      failed: ${{ steps.check-result.outputs.failed }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.0
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run Bun audit
+        run: |
+          if ! bun run audit:clean > audit-output.txt 2>&1; then
+            cat audit-output.txt
+            exit 1
+          else
+            cat audit-output.txt
+          fi
+        continue-on-error: true
+        id: bun-audit
+
+      - name: Check audit results
+        id: check-result
+        run: |
+          if [ "${{ steps.bun-audit.outcome }}" == "failure" ]; then
+            echo "failed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "failed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  security-secrets:
+    runs-on: ubuntu-24.04
+    outputs:
+      failed: ${{ steps.check-result.outputs.failed }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+
+      - name: Run TruffleHog secret scan
+        uses: trufflesecurity/trufflehog@99dc7bd6c06427bcb32f32fe1641d7fb83583915
+        with:
+          path: ./
+          base: ${{ github.event.before }}
+          head: ${{ github.event.after }}
+          extra_args: --only-verified
+        continue-on-error: true
+        id: trufflehog
+
+      - name: Check TruffleHog results
+        id: check-result
+        run: |
+          if [ "${{ steps.trufflehog.outcome }}" == "failure" ]; then
+            echo "failed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "failed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  security-container:
+    runs-on: ubuntu-24.04
+    outputs:
+      failed: ${{ steps.check-result.outputs.failed }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: ${{ inputs.image_artifact }}
+
+      - name: Load Docker image
+        run: docker load -i tomoribot-image.tar
+
+      - name: Run Trivy container scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          image-ref: tomoribot:latest
+          format: table
+          exit-code: 1
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          trivyignores: .github/.trivyignore
+        continue-on-error: true
+        id: trivy
+
+      - name: Scan SearXNG image
+        if: inputs.scan_searxng
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          image-ref: tomoribot-searxng:latest
+          format: table
+          exit-code: 1
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          trivyignores: .github/.trivyignore
+        continue-on-error: true
+        id: trivy-searxng
+
+      - name: Check Trivy results
+        id: check-result
+        run: |
+          if [ "${{ steps.trivy.outcome }}" == "failure" ] || [ "${{ steps.trivy-searxng.outcome }}" == "failure" ]; then
+            echo "failed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "failed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  security-gate:
+    runs-on: ubuntu-24.04
+    needs: [security-sast, security-dependencies, security-secrets, security-container]
+    steps:
+      - name: Check security scan results
+        run: |
+          echo "=========================================="
+          echo "Security Gate - Evaluating Scan Results"
+          echo "=========================================="
+
+          failed=false
+
+          echo "SAST Scan (Semgrep):           ${{ needs.security-sast.outputs.failed }}"
+          echo "Dependency Scan (Bun Audit):   ${{ needs.security-dependencies.outputs.failed }}"
+          echo "Secret Scan (TruffleHog):      ${{ needs.security-secrets.outputs.failed }}"
+          echo "Container Scan (Trivy):        ${{ needs.security-container.outputs.failed }}"
+
+          if [ "${{ needs.security-sast.outputs.failed }}" == "true" ];         then failed=true; fi
+          if [ "${{ needs.security-dependencies.outputs.failed }}" == "true" ]; then failed=true; fi
+          if [ "${{ needs.security-secrets.outputs.failed }}" == "true" ];      then failed=true; fi
+          if [ "${{ needs.security-container.outputs.failed }}" == "true" ];    then failed=true; fi
+
+          echo "=========================================="
+          if [ "$failed" == "true" ]; then
+            echo "Deployment blocked: security scans found issues."
+            exit 1
+          else
+            echo "All security scans passed."
+          fi

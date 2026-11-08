@@ -6,9 +6,17 @@ install -d -m 0700 /etc/tomoribot /etc/tomoribot/postgres /etc/tomoribot/backup
 install -m 0644 docker-compose.yml /etc/tomoribot/
 install -m 0644 postgres/Dockerfile postgres/postgresql.conf postgres/pg_hba.conf /etc/tomoribot/postgres/
 install -m 0600 postgres/roles.sql postgres/grants.sql postgres/rowcounts.sql /etc/tomoribot/postgres/
-for script in bootstrap migrate verify-host; do
+for script in bootstrap migrate verify-host deploy; do
   install -m 0700 "$script.sh" "/etc/tomoribot/$script.sh"
 done
+install -d -m 0755 /usr/local/lib/tomoribot
+install -m 0755 deploy-request.py /usr/local/lib/tomoribot/deploy-request.py
+install -d -m 0700 /etc/tomoribot/deploy /var/lib/tomoribot-deploy
+if ! id tomori-ci >/dev/null 2>&1; then
+  useradd --system --create-home --home-dir /var/lib/tomoribot-runner --shell /usr/sbin/nologin tomori-ci
+fi
+install -m 0440 runner.sudoers /etc/sudoers.d/tomoribot-runner
+visudo -cf /etc/sudoers.d/tomoribot-runner
 install -m 0755 backup.sh /usr/local/bin/tomoribot-backup.sh
 install -m 0755 alert.sh /usr/local/sbin/tomoribot-alert
 install -m 0755 install-vertex-key.sh /usr/local/sbin/tomoribot-install-vertex-key

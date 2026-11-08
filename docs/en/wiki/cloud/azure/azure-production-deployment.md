@@ -59,6 +59,13 @@ environment-scoped Run Command deployment succeeds.
 
 The workflow deliberately separates recurring releases from one-time lifecycle operations.
 
+Automatic and manual Azure runs require `release` and `ACTIVE_PROVIDER=azure`. Azure and Hetzner
+share the `production-deploy` concurrency group, reusable security gates, release publishing,
+and notifications. During a provider cutover, the operator creates the root-only
+`/etc/tomoribot/provider-fenced` marker on Azure after stopping its gateway and timers. Bootstrap,
+migration, and deployment scripts refuse a fenced host even if provider selection changes.
+Remove the marker only during the [coordinated rollback procedure](../hetzner/migration#cutover-and-rollback).
+
 `deploy/azure/docker-compose.yml` sets `SHARD_COUNT=4` and leaves `SHARD_IDS` unset so the single
 bot process owns all four gateway shards. Deploy an image containing shard support before relying
 on this setting. Changing the shard count requires recreating the service; a container restart

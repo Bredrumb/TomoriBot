@@ -1,0 +1,197 @@
+name: Publish deployed release
+
+on:
+  workflow_call:
+    inputs:
+      commit_hash:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  check-release-assets:
+    runs-on: ubuntu-24.04
+    outputs:
+      has-assets: ${{ steps.check.outputs.has-assets }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Get version from package.json
+        id: version
+        run: |
+          echo "version=$(jq -r '.version' package.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Check if version-specific release folder exists
+        id: check
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          versionFolder=".github/release/v$VERSION"
+          if [ -d "$versionFolder" ]; then
+            echo "has-assets=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has-assets=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  create-release:
+    runs-on: ubuntu-24.04
+    environment: production
+    needs: check-release-assets
+    if: needs.check-release-assets.outputs.has-assets == 'true'
+    # Release creation publishes a GitHub Release; the default token needs write here.
+    permissions:
+      contents: write
+    outputs:
+      created: ${{ steps.release-check.outputs.exists != 'true' }}
+      image_name: ${{ steps.release-notes.outputs.image-name }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Check if GitHub release already exists
+        id: release-check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.check-release-assets.outputs.version }}
+        run: |
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Prepare release notes and Discord notification
+        id: release-notes
+        if: steps.release-check.outputs.exists != 'true'
+        env:
+          VERSION: ${{ needs.check-release-assets.outputs.version }}
+          COMMIT_HASH: ${{ inputs.commit_hash }}
+        run: |
+          versionFolder=".github/release/v$VERSION"
+          releaseNotesPath=$(find "$versionFolder" -maxdepth 1 -name "*.md" ! -name "README.md" | head -n 1)
+
+          if [ -z "$releaseNotesPath" ]; then
+            echo "No .md files found in $versionFolder"
+            exit 1
+          fi
+
+          imageName=$(find "$versionFolder" -maxdepth 1 -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.gif" -o -name "*.webp" \) | head -n 1 | xargs -r basename)
+
+          releaseNotes=$(cat "$releaseNotesPath")
+          releaseNotes="${releaseNotes//\{VERSION\}/$VERSION}"
+          releaseNotes="${releaseNotes//\{TIMESTAMP\}/$(date -u +"%Y-%m-%d %H:%M:%S UTC")}"
+          releaseNotes="${releaseNotes//\{COMMIT_HASH\}/$COMMIT_HASH}"
+          releaseNotes="${releaseNotes//\{REPO_OWNER\}/${{ github.repository_owner }}}"
+          releaseNotes="${releaseNotes//\{REPO_NAME\}/${{ github.event.repository.name }}}"
+          # Published images use the tag created below so historical release bodies do not depend
+          # on files remaining at the release branch tip.
+          releaseNotes=$(printf '%s' "$releaseNotes" | sed "s|/raw/release/\\.github/release/|/raw/v$VERSION/.github/release/|g")
+
+          echo "$releaseNotes" > processed-release-notes.md
+          echo "image-name=$imageName" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        if: steps.release-check.outputs.exists != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.check-release-assets.outputs.version }}
+        run: |
+          # Without --target the tag is cut from the default branch, which no longer carries
+          # .github/release/ and is not the tree that just deployed. Both the release-note image
+          # URLs and the source archive read from this tag, so it has to be the deployed commit.
+          gh release create "v$VERSION" \
+            --target "${{ github.sha }}" \
+            --title "TomoriBot v$VERSION" \
+            --notes-file "processed-release-notes.md" \
+            --latest
+
+
+  notify-release:
+    runs-on: ubuntu-24.04
+    environment: production
+    needs: [check-release-assets, create-release]
+    if: needs.create-release.outputs.created == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Prepare Discord notification
+        env:
+          VERSION: ${{ needs.check-release-assets.outputs.version }}
+          COMMIT_HASH: ${{ inputs.commit_hash }}
+        run: |
+          versionFolder=".github/release/v$VERSION"
+          releaseNotesPath=$(find "$versionFolder" -maxdepth 1 -name "*.md" ! -name "README.md" | head -n 1)
+          releaseNotes=$(cat "$releaseNotesPath")
+          releaseNotes="${releaseNotes//\{VERSION\}/$VERSION}"
+          releaseNotes="${releaseNotes//\{TIMESTAMP\}/$(date -u +"%Y-%m-%d %H:%M:%S UTC")}"
+          releaseNotes="${releaseNotes//\{COMMIT_HASH\}/$COMMIT_HASH}"
+          releaseNotes="${releaseNotes//\{REPO_OWNER\}/${{ github.repository_owner }}}"
+          releaseNotes="${releaseNotes//\{REPO_NAME\}/${{ github.event.repository.name }}}"
+          printf '%s' "$releaseNotes" > processed-release-notes.md
+
+      - name: Send Discord notification
+        env:
+          VERSION: ${{ needs.check-release-assets.outputs.version }}
+          IMAGE_NAME: ${{ needs.create-release.outputs.image_name }}
+          MENTION_ROLE_ID: ${{ secrets.RELEASE_DISCORD_MENTION_ROLE_ID }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          releaseNotes=$(sed 's/!\[[^]]*\]([^)]*)//g' processed-release-notes.md)
+          printf '%s' "$releaseNotes" > discord_release_notes.txt
+          python3 .github/scripts/discord_split.py
+          chunkCount=$(cat discord_chunk_count.txt)
+
+          hasImage=false
+          imageFile=""
+          if [ -n "$IMAGE_NAME" ]; then
+            # Read from the release tag, not a branch: the tag is immutable, so a past release's
+            # image survives any future pruning of .github/release/ from the branch tip. Release
+            # creation always runs before this point, so the tag resolves.
+            imageUrl="https://github.com/${{ github.repository }}/raw/v$VERSION/.github/release/v$VERSION/$IMAGE_NAME"
+            imageFile="release-post-image.${IMAGE_NAME##*.}"
+            if curl -sL --max-time 30 "$imageUrl" -o "$imageFile" && [ -s "$imageFile" ]; then
+              hasImage=true
+            fi
+          fi
+
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "DISCORD_WEBHOOK_URL not configured — skipping Discord notification"
+            exit 0
+          fi
+
+          threadTitle=$(head -1 processed-release-notes.md | sed 's/^# *//')
+          firstChunk=$(cat discord_chunk_0.txt)
+          firstPayload=$(jq -n --arg content "$firstChunk" --arg thread_name "$threadTitle" '{content: $content, thread_name: $thread_name}')
+
+          if [ "$hasImage" = true ]; then
+            response=$(curl -s -w "\n%{http_code}" -X POST -F "payload_json=$firstPayload" -F "files[0]=@$imageFile" "${DISCORD_WEBHOOK_URL}?wait=true")
+          else
+            response=$(curl -s -w "\n%{http_code}" -X POST -H "Content-Type: application/json" -d "$firstPayload" "${DISCORD_WEBHOOK_URL}?wait=true")
+          fi
+
+          httpCode=$(echo "$response" | tail -1)
+          responseBody=$(echo "$response" | sed '$d')
+          if [ "$httpCode" -lt 200 ] || [ "$httpCode" -ge 300 ]; then
+            echo "Failed to create Discord forum post (HTTP $httpCode)"
+            exit 1
+          fi
+
+          threadId=$(echo "$responseBody" | jq -r '.channel_id // empty')
+          if [ "$chunkCount" -gt 1 ] && [ -n "$threadId" ]; then
+            for i in $(seq 1 $((chunkCount - 1))); do
+              chunk=$(cat "discord_chunk_${i}.txt")
+              chunkPayload=$(jq -n --arg content "$chunk" '{content: $content}')
+              curl -s -X POST -H "Content-Type: application/json" -d "$chunkPayload" "${DISCORD_WEBHOOK_URL}?thread_id=${threadId}" >/dev/null
+              sleep 1
+            done
+          fi
+
+          if [ -n "$MENTION_ROLE_ID" ] && [ -n "$threadId" ]; then
+            mentionPayload=$(jq -n --arg content "<@&${MENTION_ROLE_ID}> Follow-up hotfixes or patches for this update will be posted in this Forum post!" '{content: $content}')
+            curl -s -X POST -H "Content-Type: application/json" -d "$mentionPayload" "${DISCORD_WEBHOOK_URL}?thread_id=${threadId}" >/dev/null
+          fi

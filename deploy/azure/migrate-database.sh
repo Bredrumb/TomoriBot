@@ -12,6 +12,10 @@
 # ALTER DEFAULT PRIVILEGES rules that bootstrap-database.sh installs for the admin role,
 # so this script deliberately does NOT touch roles or grants.
 set -euo pipefail
+[[ ! -e /etc/tomoribot/provider-fenced ]] || {
+  echo "Azure deployment is fenced on this host." >&2
+  exit 1
+}
 
 : "${migrationSecretsB64:?migrationSecretsB64 is required}"
 : "${dockerHubUsername:?dockerHubUsername is required}"

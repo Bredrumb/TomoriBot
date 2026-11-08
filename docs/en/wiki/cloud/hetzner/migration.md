@@ -57,10 +57,14 @@ not start the bot, reverse proxy, or timers. Database credentials remain outside
 
 ## Build images for the host
 
-The Azure release workflow builds AMD64 images. For ARM64, build the bot and SearXNG from the
-same release commit using the existing Dockerfiles. Prepare tokenizer assets as the release
-workflow does before building the bot. Authenticate to your registry and replace the example
-repository names below:
+`deploy-hetzner.yml` builds the bot and SearXNG on GitHub-hosted ARM64 runners after the reusable
+`ci.yml` checks pass. Azure continues to build AMD64 images. Both providers use
+`release-security.yml` for Semgrep, Bun audit, TruffleHog, and Trivy, and `release-publish.yml`
+for GitHub Releases and Discord notifications. Hetzner scans both images before publishing.
+
+For initial host preparation, the equivalent manual builds use the existing Dockerfiles and
+the same release commit. Prepare tokenizer assets as the workflow does, authenticate to your
+registry, and replace the example repository names below:
 
 ```bash
 docker buildx build --platform linux/arm64 --push \
@@ -136,9 +140,11 @@ curl -fsS http://127.0.0.1:8081/healthz
 Verify all four shards, a slash command, a Vertex chat, SearXNG search, a persona webhook,
 and local file storage. Stop and remove the staging bot before restoring production data.
 
-`migrate.sh` refuses a running gateway or active watchdog/recycle timer. It uses the existing
-`src/db/initializeCli.ts` entry point and includes `--supporter-billing` when the runtime bundle
-enables billing. Run it before each image deployment, then apply the runtime grants it installs.
+`migrate.sh` refuses a running gateway or active watchdog/recycle timer. Its `--check` mode runs
+the existing destructive-migration gate against the target database's pending migrations using
+the owner identity. Add `--recovery-point-opt-in` only after authorizing a recovery point.
+Without `--check`, it runs `src/db/initializeCli.ts`, includes `--supporter-billing` when the runtime
+bundle enables billing, and reapplies the runtime grants. Automated releases perform both calls.
 
 ## HTTPS callbacks
 
@@ -228,6 +234,142 @@ systemctl enable --now tomoribot-backup.timer
 systemctl list-timers tomoribot-backup.timer
 ```
 
+## Automated releases
+
+Keep `ACTIVE_PROVIDER=azure` until cutover. Both deploy workflows require the `release` branch,
+including manual runs. Their deploy jobs share the `production-deploy` concurrency group.
+A production run requires its provider to match `ACTIVE_PROVIDER`. Manual Hetzner runs may instead select
+`hetzner-staging` while Azure remains active. Each active release push builds and deploys the
+commit; an existing GitHub Release is reused rather than published again.
+
+Protect `release` and restrict the `production` and `hetzner-staging` GitHub environments to that
+branch. Give staging its own Discord application, safe database, callback hostname, tunnel,
+deployment encryption key, and environment secrets. A restored production database must keep
+its gateway stopped and must never be registered as an automated staging target.
+
+### Prepare deployment access
+
+Run the host installer from the reviewed release checkout before registering a runner. It
+creates `tomori-ci`, installs the root deployment entry point, and grants that account only
+passwordless execution of `/usr/local/lib/tomoribot/deploy-request.py` without arguments. Leave
+the account outside the Docker and sudo groups; it has no SSH login. SSH remains restricted
+to operator CIDRs, and the runner connects outbound to GitHub.
+
+[GitHub warns that public repository workflows can compromise a self-hosted runner](https://docs.github.com/en/actions/reference/security/secure-use).
+Require approval for outside contributors' workflow runs. The deployment job performs no
+checkout and receives no application secrets. Labels select a host; they do not authorize
+deployment. The root entry point independently requires a current `release` run of
+`deploy-hetzner.yml`, its successful `publish` job, the active deploy job, the current attempt,
+and an artifact whose downloaded SHA256 matches GitHub's artifact digest. It also checks the
+target, commit, and allowed image repositories. A different workflow or fork cannot supply
+commands, migration scripts, or an image repository to the root process.
+
+1. Copy `deployment.example.json` to `/etc/tomoribot/deploy/config.json`, mode 0600. Set the
+   repository, exact Docker Hub repository names, and `target` (`hetzner-staging` or `production`).
+   Initialize and verify the host's safe runtime bundle first. Deployments require the incoming
+   Discord token to match that bundle; rotate the token directly on the host before updating
+   GitHub's environment secret.
+2. Install a repository-scoped fine-grained GitHub token in root-only
+   `/etc/tomoribot/deploy/github-token`. Grant read access to Actions, Contents, and Variables
+   for this repository. The host uses it to verify runs, the release tip, artifacts, and
+   `ACTIVE_PROVIDER`; the runner never reads it. Renew it before expiry.
+3. Generate a separate unattended deployment decryption key on the host. As root:
+
+   ```bash
+   install -d -m 0700 /etc/tomoribot/deploy/gnupg
+   gpg --homedir /etc/tomoribot/deploy/gnupg --batch --pinentry-mode loopback \
+     --passphrase '' --quick-generate-key 'TomoriBot deployment' rsa3072 encr 0
+   gpg --homedir /etc/tomoribot/deploy/gnupg --list-keys --with-colons
+   ```
+
+   Export only its public key to the target GitHub environment's
+   `HETZNER_DEPLOY_PUBLIC_KEY` secret. Set that environment's `HETZNER_DEPLOY_KEY_FINGERPRINT`
+   variable to the full uppercase fingerprint. This key decrypts CI payloads on this host;
+   the off-site backup recovery private key stays off the host.
+4. Set `TOMORI_SECRETS_JSON`, `DOCKERHUB_USERNAME`, and `DOCKERHUB_TOKEN` in each target
+   environment. Use only staging integration credentials in `hetzner-staging`. Keep `HF_TOKEN`
+   available to the hosted build job. The workflow encrypts the application bundle on the
+   hosted runner and uploads ciphertext beside the image manifest. It uses distinct
+   `hetzner-<commit>-<run>-<attempt>` image tags and deploys the resulting digests.
+5. For private image pulls, create root-only `/etc/tomoribot/deploy/docker-config` and log in
+   with a Docker Hub token that permits reads only, using `DOCKER_CONFIG` pointed there and
+   `docker login --password-stdin`. Keep the registry publishing token off the host.
+6. Install the official GitHub runner for Linux ARM64, verify its published checksum, configure
+   it as `tomori-ci`, and install its service under that account. Use the label
+   `tomoribot-hetzner-staging` for staging or `tomoribot-hetzner-production` for production.
+   Limit the runner service to 512 MiB with a systemd `MemoryMax` setting; build work stays on
+   hosted runners. Confirm the account cannot read `/etc/tomoribot`, application data, backups,
+   or the Docker socket, and cannot run other sudo commands. Keep the runner updated.
+
+Application updates give `secrets.db.json` precedence over the incoming database settings.
+They retain all host-local `CRYPTO_SECRET` fields, including the current-version selector,
+and `VERTEX_ALLOWED_OWNERS`. Incoming encryption fields are ignored to prevent a versioned key
+from replacing the effective legacy V1 key. Rotate encryption keys and change the owner allowlist
+directly on the host through the existing key-rotation procedure. A production request requires
+a nonempty host owner allowlist. Vertex credentials and the tunnel token remain host-local.
+
+### Deployment transaction
+
+The runner submits only the run ID and attempt to the installed entry point. A root systemd
+unit verifies the request, decrypts it in a root-only directory, merges the protected settings,
+and invokes the installed `deploy.sh`. The unit continues independently if the Actions job
+disconnects. Inspect `systemctl status tomoribot-deploy.service` before retrying or cancelling.
+Changes to the installed Compose file, grants, or deployment scripts require an operator to
+rerun `install-host.sh` from the reviewed checkout; CI cannot replace host scripts.
+
+The transaction pulls and checks the ARM64 image digests before downtime. It saves the previous
+environment, runtime bundle, and active/enabled timer lists under
+`/var/lib/tomoribot-deploy/recovery/`. It disables the watchdog, recycle, and backup timers,
+waits for watchdog/recycle services to stop, and refuses to overlap an existing backup. It
+disables gateway restart policies and stops the connector and bot with 40 seconds of grace.
+
+A fresh off-site backup must finish successfully, including its download comparison and local
+checksum check, before the migration gate runs. Data-losing migrations require the existing
+`(Checkpoint)` commit marker or the manual `create_db_backup` input. Every deployment takes a
+backup; the opt-in authorizes the destructive change. Owner migrations run with the database-only
+bundle, followed by runtime grants and an encrypted-credential audit using the runtime bundle.
+
+The candidate starts with automatic restarts disabled. Verification requires the expected
+image, UID/GID configuration, exactly shards 0-3 ready with valid pings, and one minute without
+lost health, container restarts, or an OOM kill. Only then does the connector start and prove
+readiness. The transaction restores restart policies and the timers' previous enabled/active
+states, then prunes unused images. Previous digests remain in the recovery record and can be
+pulled again. A verified production deployment proceeds to the shared release and notification jobs.
+
+Run the isolated authorization and recovery checks locally before changing the host scripts:
+
+```bash
+docker build -f tests/deployment/Dockerfile -t hetzner-deployment-tests .
+docker run --rm --network none hetzner-deployment-tests
+bun run check
+bun run lint
+```
+
+The isolated checks simulate host commands and failures. They do not establish live Discord,
+GitHub artifact access, systemd behavior, or off-site storage connectivity. Rehearse the published
+workflow with safe staging data before production activation.
+
+### Failed release recovery
+
+A failure before migration restores the saved settings, restarts only the previously running
+gateway and connector, verifies gateway health, and restores timer state. A failed recovery
+leaves `/var/lib/tomoribot-deploy/recovery-required` and blocks further automated deployments.
+
+From the first migration attempt onward, any failure leaves the gateway stopped, its restart
+policy disabled, and the timers disabled across reboots. The same marker blocks retries.
+Read `/var/lib/tomoribot-deploy/last-deploy.log`, `last-request-error.log` in the same directory,
+the protected systemd journal, and the saved
+request, previous settings, and `backup-checksum` file in `recovery/`. Keep these files private.
+An interrupted transaction also needs operator inspection before removing the marker.
+
+Choose a reviewed forward fix or restore the complete pre-deploy database, local files, previous
+runtime bundle, and previous image references. Changing only the image does not undo schema or
+data migrations. Before restoring a backup, archive the failed state and reconcile any writes
+accepted by the candidate, especially billing writes. Use the off-site restore procedure above,
+reapply runtime grants, verify credential decryption and local files, then verify four-shard
+health and callbacks before restoring timers. Clear `recovery-required` only after resolving
+the failure and confirming the host is ready for the next release.
+
 ## Production data rehearsal
 
 Use verified TLS and PostgreSQL 16 clients for the Azure dump. Temporarily admit only the
@@ -258,10 +400,14 @@ Cutover requires observed single-process sharding on Azure, a passing staging re
 data rehearsals, verified off-site recovery, working HTTPS callbacks, and an operator who can
 disable the Azure deploy workflow. Recheck the memory budget with the final sharded image.
 
-1. Freeze releases, disable `deploy-azure.yml`, and announce maintenance. Save the exact running
+1. Freeze releases, disable `deploy-azure.yml`, wait for all production deployment runs and host
+   deployment units to finish, and announce maintenance. Save the exact running
    image digest and effective settings. Confirm sufficient disk space for dumps and restore work.
-2. Stop Azure's watchdog and recycle timers and services, then stop the bot with at least 40 seconds
-   of grace. Stop Azure's `cloudflared.service`. Fence `tomoribot_runtime` with `NOLOGIN` and terminate its existing database sessions.
+2. Disable and stop Azure's watchdog and recycle timers and services, then stop the bot with at
+   least 40 seconds of grace and disable its Docker restart policy. Disable and stop Azure's
+   `cloudflared.service`. Create root-only `/etc/tomoribot/provider-fenced`; Azure's bootstrap,
+   migration, and deploy scripts refuse this marker. Fence `tomoribot_runtime` with `NOLOGIN`
+   and terminate its existing database sessions.
 3. Transfer the final secret bundle and local files, and take the final Azure dump. Keep the
    encryption-key history intact. Restore and verify as rehearsed; row counts and migration names
    must now match exactly because Azure writers are stopped and fenced.
@@ -275,15 +421,25 @@ disable the Azure deploy workflow. Recheck the memory budget with the final shar
    mode; arm it after reviewing healthy operation across representative traffic. Keep Azure fenced
    and its deploy workflow disabled throughout the agreed rollback window.
 
+After the cutover checks pass, write `azure-fenced` to the root-only file
+`/etc/tomoribot/deploy/production-enabled`, set `ACTIVE_PROVIDER=hetzner`, and enable routine
+Hetzner releases. The root entry point requires both settings. Changing the repository variable
+alone cannot start a freshly prepared production target. Never change provider selection while
+a deployment is running. Leave Azure's workflow disabled while its host and database role are fenced.
+
 Roll back before starting the new bot if restore, exact data checks, or credential audits fail.
 Roll back if gateway readiness does not recover within 15 minutes or a provider, database, or
 billing failure cannot be resolved within the maintenance window. Repeated OOMs or restarts
 also fail the cutover.
 
-To roll back, stop Hetzner's timers, services, bot, and connector before starting Azure's
+To roll back, freeze releases, disable `deploy-hetzner.yml`, remove the target's
+`production-enabled` file, and wait for any deployment unit to finish. Stop Hetzner's timers,
+services, bot, and connector before starting Azure's
 `cloudflared.service`.
-Archive Hetzner data first if it accepted writes. Unfence Azure's runtime role, start the Azure
-bot and timers, verify health and callbacks, and re-enable its deployment workflow. Writes
+Archive Hetzner data first if it accepted writes. Remove Azure's `provider-fenced` marker,
+unfence its runtime role, restore its Docker restart policy, and start the Azure
+bot and timers, verify health and callbacks, set `ACTIVE_PROVIDER=azure`, and re-enable its
+deployment workflow. Writes
 accepted only on Hetzner require reconciliation before resuming Azure to avoid losing user or
 billing changes. Define that reconciliation or explicitly accept the loss before rollback.
 

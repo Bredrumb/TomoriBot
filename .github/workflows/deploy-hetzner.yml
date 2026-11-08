@@ -1,0 +1,155 @@
+name: "Deploy: Hetzner"
+
+on:
+  push:
+    branches: [release]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Deployment environment
+        type: choice
+        options: [production, hetzner-staging]
+        default: production
+      create_db_backup:
+        description: Authorize data-changing migrations with a verified pre-deploy backup
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hetzner-${{ inputs.target || 'production' }}
+  cancel-in-progress: false
+
+jobs:
+  code-quality:
+    if: >-
+      github.ref == 'refs/heads/release' &&
+      (vars.ACTIVE_PROVIDER == 'hetzner' ||
+      (github.event_name == 'workflow_dispatch' && inputs.target == 'hetzner-staging'))
+    uses: ./.github/workflows/ci.yml
+
+  build-image:
+    needs: code-quality
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
+      - name: Verify deployment authorization and failure recovery
+        run: |
+          docker build -f tests/deployment/Dockerfile -t hetzner-deployment-tests .
+          docker run --rm --network none hetzner-deployment-tests
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.0
+      - run: bun install --frozen-lockfile
+      - name: Prepare tokenizer assets
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: bun run setup:tokenizers
+      - name: Build ARM64 images
+        run: |
+          docker buildx build --platform linux/arm64 --load --tag tomoribot:latest .
+          docker buildx build --platform linux/arm64 --load --tag tomoribot-searxng:latest servers/searxng
+          docker run --rm --network none --read-only --cap-drop ALL \
+            --security-opt no-new-privileges:true tomoribot:latest bun run check-runtime-imports
+          docker save tomoribot:latest tomoribot-searxng:latest -o tomoribot-image.tar
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: docker-image-hetzner
+          path: tomoribot-image.tar
+          retention-days: 1
+
+  security-gate:
+    needs: build-image
+    uses: ./.github/workflows/release-security.yml
+    with:
+      image_artifact: docker-image-hetzner
+      scan_searxng: true
+    secrets: inherit
+
+  publish:
+    needs: security-gate
+    runs-on: ubuntu-24.04-arm
+    environment: ${{ inputs.target || 'production' }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: docker-image-hetzner
+      - run: docker load -i tomoribot-image.tar
+      - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Publish immutable images and encrypted deployment request
+        env:
+          REGISTRY_OWNER: ${{ secrets.DOCKERHUB_USERNAME }}
+          TOMORI_SECRETS_JSON: ${{ secrets.TOMORI_SECRETS_JSON }}
+          DEPLOY_PUBLIC_KEY: ${{ secrets.HETZNER_DEPLOY_PUBLIC_KEY }}
+          DEPLOY_KEY_FINGERPRINT: ${{ vars.HETZNER_DEPLOY_KEY_FINGERPRINT }}
+          TARGET: ${{ inputs.target || 'production' }}
+          RECOVERY_POINT_OPT_IN: ${{ inputs.create_db_backup == true || (github.event_name == 'push' && contains(github.event.head_commit.message, '(Checkpoint)')) }}
+        run: |
+          set -euo pipefail
+          umask 077
+          export GNUPGHOME
+          GNUPGHOME=$(mktemp -d)
+          trap 'rm -rf "$GNUPGHOME"' EXIT
+          printf '%s' "$DEPLOY_PUBLIC_KEY" | gpg --batch --import
+          [[ "$DEPLOY_KEY_FINGERPRINT" =~ ^[A-F0-9]{40}$ ]]
+          mkdir request
+          jq -e 'type == "object"' <<<"$TOMORI_SECRETS_JSON" >/dev/null
+          printf '%s' "$TOMORI_SECRETS_JSON" | gpg --batch --trust-model always \
+            --recipient "$DEPLOY_KEY_FINGERPRINT" --encrypt --output request/runtime-secrets.json.gpg
+          app="docker.io/$REGISTRY_OWNER/tomoribot"
+          search="docker.io/$REGISTRY_OWNER/tomoribot-searxng"
+          tag="hetzner-$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          docker tag tomoribot:latest "$app:$tag"
+          docker tag tomoribot-searxng:latest "$search:$tag"
+          docker push "$app:$tag"
+          docker push "$search:$tag"
+          app_digest=$(docker buildx imagetools inspect "$app:$tag" --format '{{json .Manifest.Digest}}' | tr -d '"')
+          search_digest=$(docker buildx imagetools inspect "$search:$tag" --format '{{json .Manifest.Digest}}' | tr -d '"')
+          [[ "$app_digest" =~ ^sha256:[0-9a-f]{64}$ && "$search_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          jq -n --arg sha "$GITHUB_SHA" --arg target "$TARGET" \
+            --arg app "$app@$app_digest" --arg search "$search@$search_digest" \
+            --argjson recovery "$RECOVERY_POINT_OPT_IN" \
+            '{sha: $sha, target: $target, app_image: $app, search_image: $search, recovery_point_opt_in: $recovery}' \
+            > request/request.json
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: hetzner-request-${{ github.run_attempt }}
+          path: request/*
+          retention-days: 7
+          if-no-files-found: error
+
+  deploy:
+    needs: publish
+    if: inputs.target == 'hetzner-staging' || vars.ACTIVE_PROVIDER == 'hetzner'
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+    runs-on: [self-hosted, linux, ARM64, "${{ inputs.target == 'hetzner-staging' && 'tomoribot-hetzner-staging' || 'tomoribot-hetzner-production' }}"]
+    environment: ${{ inputs.target || 'production' }}
+    timeout-minutes: 180
+    permissions: {}
+    steps:
+      - name: Request a verified deployment
+        env:
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          printf '%s %s\n' "$RUN_ID" "$RUN_ATTEMPT" | sudo -n /usr/local/lib/tomoribot/deploy-request.py
+
+  publish-release:
+    needs: deploy
+    if: inputs.target != 'hetzner-staging'
+    uses: ./.github/workflows/release-publish.yml
+    permissions:
+      contents: write
+    with:
+      commit_hash: ${{ github.sha }}
+    secrets: inherit

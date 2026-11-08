@@ -1,0 +1,6 @@
+{
+  "repository": "example/TomoriBot",
+  "target": "hetzner-staging",
+  "app_repository": "docker.io/example/tomoribot",
+  "search_repository": "docker.io/example/tomoribot-searxng"
+}
