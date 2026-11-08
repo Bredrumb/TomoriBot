@@ -1,6 +1,6 @@
 import type { MemoryRecallCollector } from "@/utils/text/context/memoryRecall";
 import type { ContextMemoryEntry } from "@/types/misc/context";
-import { GatewayIntentBits, type Client, type Guild, type GuildMember, type User } from "discord.js";
+import { GatewayIntentBits, type Client, type GuildMember, type User } from "discord.js";
 import {
   PrivacyLevel,
   type AssembledServerConfig,
@@ -19,6 +19,7 @@ import { isMessageProxyIdentityUserId } from "@/utils/messageProxy/identityUserI
 import { getProxyServicePresentation } from "@/utils/messageProxy/registry";
 import { messageProxyRepository } from "@/utils/db/repositories/MessageProxyRepository";
 import { resolvePreferredDiscordDisplayName } from "@/utils/discord/displayName";
+import { getMemberRoleNames } from "@/utils/discord/memberRoles";
 import { log } from "@/utils/misc/logger";
 import { formatMemoryWithId } from "@/utils/memory/memoryId";
 import { getUserPresenceDetails } from "@/utils/text/context/history";
@@ -709,8 +710,8 @@ function enrichIdentityField(base: HydratedDiscordUserBase): ParticipantProfileF
 }
 
 function enrichRolesField(base: HydratedDiscordUserBase, params: ParticipantHydrationParams): ParticipantProfileField {
-  const guild = params.client.guilds.cache.get(params.guildId);
-  const lines = base.policy.exposeRoles && base.member ? buildRoleLines(base.member, guild) : [];
+  const roles = base.policy.exposeRoles && base.member ? getMemberRoleNames(base.member, params.guildId) : [];
+  const lines = roles.length > 0 ? [`- Server Roles: ${roles.join(", ")}`] : [];
   return field(base.profile.key, "roles", 40, lines, base.policy.exposeRoles ? "missing_data" : "privacy");
 }
 
@@ -835,14 +836,6 @@ async function hydrateDiscordUser(
     await enrichHumanRemindersField(base, params, dependencies),
   ];
   return { profile: { ...base.profile, fields }, namespaceNoteSeed: messageProxyNamespaceNoteSeed(base) };
-}
-
-function buildRoleLines(member: GuildMember, guild: Guild | undefined): string[] {
-  const roles = member.roles.cache
-    .filter((role) => role.id !== guild?.id && role.name !== "@everyone")
-    .sort((left, right) => right.position - left.position)
-    .map((role) => role.name);
-  return roles.length > 0 ? [`- Server Roles: ${roles.join(", ")}`] : [];
 }
 
 async function hydratePersonalMemoryEntries(

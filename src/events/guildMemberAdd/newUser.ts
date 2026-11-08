@@ -3,10 +3,11 @@ import { GoogleGenAI } from "@google/genai";
 import type { Part } from "@google/genai";
 import type { StructuredContextItem } from "@/types/misc/context";
 import type { EnhancedImageContent } from "@/types/tool/enhancedContextTypes";
-import type { TomoriState } from "@/types/db/schema";
+import { PrivacyLevel, type TomoriState } from "@/types/db/schema";
 import { ContextItemTag } from "@/types/misc/context";
 import { tomoriChat, suppressNextSelfReply } from "@/events/messageCreate/tomoriChat";
 import { getCachedAllPersonas, getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
+import { getCachedPrivacyLevel } from "@/utils/cache/userCache";
 import { userRepository } from "@/utils/db/repositories";
 import {
   buildForcedMentionsForUser,
@@ -14,6 +15,7 @@ import {
   sendPersonaMention,
 } from "@/utils/discord/mentionHelper";
 import { resolvePreferredDiscordDisplayName } from "@/utils/discord/displayName";
+import { getMemberRoleNames } from "@/utils/discord/memberRoles";
 import { downloadImage } from "@/utils/image/avatarHelper";
 import { log } from "@/utils/misc/logger";
 import { decryptApiKey } from "@/utils/security/crypto";
@@ -182,6 +184,9 @@ async function buildWelcomeContextItem(params: {
   const sentences = [
     `${displayName} just joined the server ${member.guild.name}, greet them by mentioning them with @{${displayName}}!`,
   ];
+  if ((await getCachedPrivacyLevel(member.id)) === PrivacyLevel.MINIMAL) {
+    sentences.push(`Their current server roles are: ${JSON.stringify(getMemberRoleNames(member, member.guild.id))}.`);
+  }
   const parts: StructuredContextItem["parts"] = [];
 
   if (includeAvatarContext) {
@@ -252,13 +257,12 @@ async function triggerWelcomeMessage(client: Client, member: GuildMember): Promi
     );
     return;
   }
-  const greetedMember = gate.member;
-
   const graceMembership = await checkWelcomeMembership(member);
   if (graceMembership.status !== "active") {
     logSkippedWelcome(member, graceMembership, "after onboarding finished");
     return;
   }
+  const greetedMember = graceMembership.member;
 
   const tomoriState = await getCachedTomoriState(member.guild.id);
   if (!tomoriState) return;

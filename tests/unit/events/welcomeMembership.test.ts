@@ -32,7 +32,7 @@ describe("checkWelcomeMembership", () => {
     const currentMember = { id: "123456789012345678", joinedTimestamp: 1_000 } as GuildMember;
     const { member, fetch } = makeMember({ fetchedMember: currentMember });
 
-    expect(await checkWelcomeMembership(member)).toEqual({ status: "active" });
+    expect(await checkWelcomeMembership(member)).toEqual({ status: "active", member: currentMember });
     expect(fetch).toHaveBeenCalledWith({ user: member.id, force: true });
   });
 
