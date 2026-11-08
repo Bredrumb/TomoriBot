@@ -493,6 +493,7 @@ export async function showRoutedRawModal(
     log.warn("Raw modal text truncated to Discord limits", { customId: data.custom_id, truncatedPaths });
   }
   const restEndpoint = `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`;
+  const requestStartedAt = Date.now();
   const response = await fetch(restEndpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -500,7 +501,18 @@ export async function showRoutedRawModal(
   });
   if (!response.ok) {
     const errorText = await response.text();
-    log.error(`Failed to send raw modal via REST API: ${response.status} ${response.statusText} - ${errorText}`);
+    log.error(
+      `Failed to send raw modal via REST API: ${response.status} ${response.statusText} - ${errorText}`,
+      undefined,
+      {
+        metadata: {
+          customId: data.custom_id,
+          interactionId: interaction.id,
+          interactionAgeAtRequestMs: requestStartedAt - interaction.createdTimestamp,
+          requestDurationMs: Date.now() - requestStartedAt,
+        },
+      },
+    );
     throw createRawModalRestError(response, errorText);
   }
   rawModalAcknowledged.set(interaction, true);

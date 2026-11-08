@@ -104,7 +104,7 @@ Once the gateway connection is confirmed, `eventHandler` runs sorted handlers un
 2. `02_guildMcpLifecycle.ts`: Outside production, pre-connects enabled MCP servers for owned guilds while ownership remains safe. Shared shutdown owns cleanup. No local MCP process starts.
 3. `03_initCommandRegistry.ts`: Builds fast-lookup routing maps for slash commands.
 4. `04_syncCommandCatalog.ts`: Synchronizes command metadata and descriptions with database tables only on the live primary process.
-5. `05_backfillLegacyChannelScopes.ts`: Resolves the legacy `#name` channel scopes migration 111 set aside into channel IDs from the guild channel cache (`src/utils/memory/legacyChannelScopeBackfill.ts`). A row stays pending, and its item active in every channel, until a name matches or an admin saves the item. `src/events/guildAvailable/` reruns it for a guild that returns from an outage.
+5. `05_postReadyMaintenance.ts`: Resolves legacy channel scopes, starts the document lexical backfill in background batches, and merges queued webhook users into the bot account. Each task handles its own failures. Unmatched channel scopes stay pending and active in every channel until a name matches or an admin saves the item; `src/events/guildAvailable/` retries for a returning guild.
 6. `status.ts`: Configures the bot's user status and activity message.
 
 Deferred timers registered in `src/init/timers.ts` trigger on the same `clientReady` event.

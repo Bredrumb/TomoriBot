@@ -150,4 +150,20 @@ describe("Hosted transcription", () => {
     expect(result.failureReason).toBe("stt_failed");
     expect(log.error).not.toHaveBeenCalled();
   });
+
+  it("treats completed Google responses without steps as empty without trying the server target", async () => {
+    spies.push(
+      spyOn(speechEndpointResolver, "resolveTranscriptionTargets").mockResolvedValue([
+        hostedTarget("google", "gemini-3.5-transcribe", "personal"),
+        hostedTarget("openrouter", "openai/whisper-large-v3-turbo", "server"),
+      ]),
+    );
+    respond = () => Response.json({ status: "completed" });
+
+    const result = await transcribeMessageAudioAttachment(audioMessage(), SERVER_ID, USER_ID);
+
+    expect(result.failureReason).toBe("empty_transcript");
+    expect(requests).toHaveLength(1);
+    expect(log.error).not.toHaveBeenCalled();
+  });
 });

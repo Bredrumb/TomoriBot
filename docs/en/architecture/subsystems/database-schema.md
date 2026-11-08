@@ -63,7 +63,7 @@ configuration from `COALESCE(lex_text, content)`. A content change that retains 
 
 Migration 126 and `schema_rag.sql` install the same column and trigger; the migration skips
 databases without the optional RAG tables. Pending rows have null `lex_text` and remain
-searchable through raw content. After login, `06_backfillDocumentLexicalText.ts` schedules
+searchable through raw content. After login, `src/events/clientReady/05_postReadyMaintenance.ts` schedules
 50-row batches without blocking startup. It tokenizes before opening write transactions,
 locks each document name for validation, and writes only still-pending chunks whose content
 and document name match the snapshot. Skipped edits retry on the next batch; failures retry

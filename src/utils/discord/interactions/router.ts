@@ -64,6 +64,7 @@ export async function dispatchGlobalInteraction(
   client: Client,
   interaction: GlobalRoutableInteraction,
 ): Promise<boolean> {
+  const dispatchStartedAt = Date.now();
   try {
     const result = await registry.dispatchDetailed(client, interaction);
     if (result === "unmatched") {
@@ -116,6 +117,10 @@ export async function dispatchGlobalInteraction(
         customId: interaction.customId,
         interactionId: interaction.id,
         userDiscordId: interaction.user.id,
+        interactionAgeAtDispatchMs: dispatchStartedAt - interaction.createdTimestamp,
+        dispatchDurationMs: Date.now() - dispatchStartedAt,
+        deferred: interaction.deferred,
+        replied: interaction.replied,
       },
     });
 

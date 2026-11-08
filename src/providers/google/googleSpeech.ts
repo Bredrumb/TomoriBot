@@ -284,12 +284,14 @@ export function createGoogleSpeechTransport(provider: "google" | "vertex", apiKe
         : z
             .object({
               status: z.literal("completed"),
-              steps: z.array(
-                z.object({
-                  type: z.string(),
-                  content: z.array(z.object({ type: z.string(), text: z.string().optional() })).optional(),
-                }),
-              ),
+              steps: z
+                .array(
+                  z.object({
+                    type: z.string(),
+                    content: z.array(z.object({ type: z.string(), text: z.string().optional() })).optional(),
+                  }),
+                )
+                .default([]),
             })
             .parse(json)
             .steps.filter((step) => step.type === "model_output")

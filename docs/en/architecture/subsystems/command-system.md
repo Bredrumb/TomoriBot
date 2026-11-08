@@ -126,6 +126,10 @@ when neither target option is supplied.
 
 Discord requires interaction acknowledgement within approximately three seconds of generation (`interaction.createdTimestamp`). An acknowledgement taking longer than 1.5 seconds emits a rate-limited latency warning (`INTERACTION_ACK_WARN_MS`). After acknowledgement, the bot has up to 15 minutes to complete work.
 
+Routed interaction failures record the interaction's age at dispatch and the dispatch duration. Raw
+modal REST failures record its age before the request and the request duration, so logs distinguish
+late arrival from handler work and Discord request latency.
+
 ### Reply and deferral ownership
 
 A fast command can reply directly. Commands that need database, network, or other asynchronous work acknowledge first with `deferReply()`. Synchronous rejection checks can run before deferral.
