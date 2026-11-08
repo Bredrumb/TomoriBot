@@ -156,6 +156,9 @@ Supporting services that pipelines depend on.
 
 Production infrastructure on cloud provider services (Azure, AWS, GCP).
 
+- [`wiki/cloud/hetzner/`](./en/wiki/cloud/hetzner/README.md): host preparation and migration rehearsals
+  for the planned Azure replacement.
+
 These pages live on the `release` branch under `docs/en/wiki/cloud/`, next to the `terraform/` and
 `deploy/` trees they document. A `main` checkout omits them so a self-hoster's clone carries only
 the bot. Read one without switching branches:

@@ -1,0 +1,10 @@
+[Unit]
+Description=Hourly TomoriBot backup
+
+[Timer]
+OnCalendar=*-*-* *:30:00 UTC
+RandomizedDelaySec=1min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

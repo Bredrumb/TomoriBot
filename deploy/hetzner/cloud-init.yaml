@@ -1,0 +1,170 @@
+#cloud-config
+hostname: tomoribot-prod
+timezone: Etc/UTC
+locale: C.UTF-8
+
+package_update: true
+package_upgrade: true
+
+ssh_pwauth: false
+disable_root: true
+
+users:
+  - name: ops
+    gecos: TomoriBot operator
+    shell: /bin/bash
+    groups: [sudo]
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    lock_passwd: true
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIReplaceWithOperatorPublicKey ops@laptop
+
+apt:
+  sources:
+    docker.list:
+      source: "deb [signed-by=$KEY_FILE] https://download.docker.com/linux/ubuntu $RELEASE stable"
+      keyid: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
+      keyserver: hkps://keyserver.ubuntu.com
+
+packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - jq
+  - ufw
+  - rclone
+  - logrotate
+  - postgresql-client-16
+  - python3-yaml
+  - systemd-zram-generator
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-compose-plugin
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/00-tomoribot-hardening.conf
+    owner: root:root
+    permissions: "0644"
+    content: |
+      PermitRootLogin no
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PubkeyAuthentication yes
+      AuthenticationMethods publickey
+      AllowUsers ops
+      X11Forwarding no
+      AllowAgentForwarding no
+      AllowTcpForwarding local
+      MaxAuthTries 3
+      LoginGraceTime 20
+      ClientAliveInterval 300
+      ClientAliveCountMax 2
+
+  - path: /etc/sysctl.d/90-tomoribot.conf
+    owner: root:root
+    permissions: "0644"
+    content: |
+      vm.swappiness = 10
+      vm.page-cluster = 0
+      vm.max_map_count = 262144
+      fs.file-max = 2097152
+      kernel.dmesg_restrict = 1
+      kernel.kptr_restrict = 2
+      kernel.unprivileged_bpf_disabled = 1
+      net.core.bpf_jit_harden = 2
+      net.ipv4.conf.all.accept_redirects = 0
+      net.ipv4.conf.default.accept_redirects = 0
+      net.ipv4.conf.all.send_redirects = 0
+      net.ipv4.conf.all.accept_source_route = 0
+      net.ipv6.conf.all.accept_redirects = 0
+      net.ipv6.conf.default.accept_redirects = 0
+
+  - path: /etc/systemd/zram-generator.conf
+    owner: root:root
+    permissions: "0644"
+    content: |
+      [zram0]
+      zram-size = 1024
+      compression-algorithm = zstd
+      swap-priority = 100
+      fs-type = swap
+
+  - path: /etc/modules-load.d/zram.conf
+    owner: root:root
+    permissions: "0644"
+    content: |
+      zram
+
+  - path: /etc/security/limits.d/90-tomoribot-nofile.conf
+    owner: root:root
+    permissions: "0644"
+    content: |
+      *    soft nofile 65536
+      *    hard nofile 1048576
+      root soft nofile 65536
+      root hard nofile 1048576
+
+  - path: /etc/systemd/system.conf.d/90-tomoribot-nofile.conf
+    owner: root:root
+    permissions: "0644"
+    content: |
+      [Manager]
+      DefaultLimitNOFILE=65536:1048576
+
+  - path: /etc/docker/daemon.json
+    owner: root:root
+    permissions: "0644"
+    content: |
+      {
+        "log-driver": "json-file",
+        "log-opts": { "max-size": "10m", "max-file": "5" },
+        "live-restore": true,
+        "no-new-privileges": true,
+        "ip": "127.0.0.1",
+        "default-ulimits": {
+          "nofile": { "Name": "nofile", "Soft": 65536, "Hard": 65536 }
+        }
+      }
+
+  - path: /etc/logrotate.d/tomoribot-jsonl
+    owner: root:root
+    permissions: "0644"
+    content: |
+      /var/log/tomoribot/tomoribot.jsonl {
+          daily
+          rotate 14
+          maxsize 100M
+          missingok
+          notifempty
+          compress
+          delaycompress
+          copytruncate
+      }
+
+runcmd:
+  - [bash, -c, "groupadd --gid 1001 tomori && useradd --uid 1001 --gid 1001 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin tomori"]
+  - [bash, -c, "apt-get install -y linux-modules-extra-$(uname -r) || true"]
+  - modprobe zram
+  - systemctl daemon-reload
+  - systemctl start systemd-zram-setup@zram0.service
+  - sysctl --system
+  - install -d -m 0700 -o root -g root /etc/tomoribot /etc/tomoribot/postgres /etc/tomoribot/backup
+  - install -d -m 0755 -o root -g root /var/lib/tomoribot
+  - install -d -m 0700 -o root -g root /var/lib/tomoribot/postgres /var/backups/tomoribot
+  - install -d -m 0750 -o 1001 -g 1001 /var/log/tomoribot /var/lib/tomoribot/data /var/lib/tomoribot/backups
+  - install -d -m 0700 -o 1001 -g 1001 /var/lib/tomoribot/diagnostics
+  - systemctl enable --now docker
+  - |
+    set -eu
+    OPERATOR_CIDRS="203.0.113.10/32"
+    ufw default deny incoming
+    ufw default allow outgoing
+    for cidr in $OPERATOR_CIDRS; do
+      ufw allow in proto tcp from "$cidr" to any port 22 comment "ssh from operator"
+    done
+    ufw logging low
+    ufw --force enable
+  - install -d -m 0755 /run/sshd && /usr/sbin/sshd -t
+  - systemctl try-reload-or-restart ssh.service
