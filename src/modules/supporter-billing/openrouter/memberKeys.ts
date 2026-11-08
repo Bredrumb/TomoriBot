@@ -19,6 +19,8 @@ import {
   type MemberKeyProvider,
   MICROS_PER_DOLLAR,
   normalizeMemberKeyLimit,
+  sanitizeMemberKeyError,
+  isExpectedMemberKeyFailure,
 } from "@/modules/supporter-billing/openrouter/management";
 import { log } from "@/utils/misc/logger";
 import { supporterSpendGuard } from "@/modules/supporter-billing/runtime/spendGuard";
@@ -290,7 +292,7 @@ export async function cleanupDetachedMemberKeysLocked(
   memberId?: string,
 ): Promise<void> {
   const repository = new MemberKeyRepository(client);
-  let failed = false;
+  let failure: MemberKeyError | undefined;
   for (const row of await repository.listDetachedForCleanup(memberId)) {
     try {
       await drain(
@@ -300,22 +302,35 @@ export async function cleanupDetachedMemberKeysLocked(
         true,
         now,
       );
-    } catch {
-      log.warn("Supporter detached member-key cleanup failed", { metadata: { memberKeyId: row.member_key_id } });
-      failed = true;
+    } catch (error) {
+      const safeError = sanitizeMemberKeyError(error);
+      log.warn(
+        "Supporter detached member-key cleanup failed",
+        safeError,
+        {
+          metadata: {
+            ...safeError.diagnostics,
+            phase: "detached_cleanup",
+            memberKeyId: row.member_key_id,
+            pendingAction: row.pending_action,
+          },
+        },
+        { retain: true },
+      );
+      if (!failure || isExpectedMemberKeyFailure(failure)) failure = safeError;
     }
   }
-  if (failed) throw new MemberKeyError();
+  if (failure) throw failure;
 }
 
 export async function reconcileMemberKeys(options: MemberKeyLifecycleOptions): Promise<void> {
   await withMemberKeyLock(options.client ?? defaultSql, async (client) => {
     const provider = options.provider ?? createMemberKeyProvider(options.env);
-    let failed = false;
+    let failure: MemberKeyError | undefined;
     try {
       await cleanupDetachedMemberKeysLocked(client, provider, options.now ?? new Date());
-    } catch {
-      failed = true;
+    } catch (error) {
+      failure = sanitizeMemberKeyError(error);
     }
     for (const identity of await new SupporterIdentityRepository(client).listIdentitiesForPatreonReconcile()) {
       try {
@@ -326,14 +341,20 @@ export async function reconcileMemberKeys(options: MemberKeyLifecycleOptions): P
           now: options.now ?? new Date(),
           supporterIdentityId: identity.supporter_identity_id,
         });
-      } catch {
-        log.warn("Supporter member-key synchronization failed", {
-          metadata: { identityId: identity.supporter_identity_id },
-        });
-        failed = true;
+      } catch (error) {
+        const safeError = sanitizeMemberKeyError(error);
+        log.warn(
+          "Supporter member-key synchronization failed",
+          safeError,
+          {
+            metadata: { ...safeError.diagnostics, phase: "member_sync", identityId: identity.supporter_identity_id },
+          },
+          { retain: true },
+        );
+        if (!failure || isExpectedMemberKeyFailure(failure)) failure = safeError;
       }
     }
-    if (failed) throw new MemberKeyError();
+    if (failure) throw failure;
   });
 }
 

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, type Mock, spyOn } from "bun:test";
 import * as leases from "@/utils/cluster/shardLeases";
 import { log } from "@/utils/misc/logger";
+import { MemberKeyError } from "@/modules/supporter-billing/openrouter/management";
 import type {
   RecordWebhookEventParams,
   RecordWebhookEventReceiptResult,
@@ -744,6 +745,69 @@ describe("Patreon entitlement reconcile", () => {
         info.mockRestore();
         error.mockRestore();
       }
+    }
+  });
+
+  it("reports safe diagnostics and retains upstream reconciliation failures as warnings", async () => {
+    let tick: (() => void) | undefined;
+    const createTimer = globalThis.setInterval;
+    const timers: { setInterval: (callback: () => void, delay: number) => ReturnType<typeof globalThis.setInterval> } =
+      globalThis;
+    const timer = spyOn(timers, "setInterval").mockImplementation((callback) => {
+      tick = callback;
+      return createTimer(() => {}, 300_000);
+    });
+    const errors = spyOn(log, "error").mockResolvedValue(undefined);
+    const warnings = spyOn(log, "warn").mockImplementation(() => {});
+    const metrics = spyOn(log, "metric").mockImplementation(() => {});
+    let failure: unknown;
+    const job = startPatreonReconcileJob({
+      config: validSupporterConfig,
+      runEntitlementReconcile: async () => ({
+        checkedIdentities: 0,
+        fetchedMembers: 0,
+        activatedOrRenewed: 0,
+        deactivated: 0,
+        failed: 0,
+      }),
+      runMemberKeyReconcile: async () => {
+        throw failure;
+      },
+      runMaintenance: async () => ({ purgedOAuthStates: 0, purgedWebhookEvents: 0, purgedUsageStatistics: 0 }),
+    });
+    try {
+      if (!tick) throw new Error("Missing reconcile timer");
+      failure = Object.assign(new Error("synthetic-member-secret"), {
+        code: "ERR_POSTGRES_SERVER_ERROR",
+        errno: "23505",
+      });
+      tick();
+      for (let count = 0; count < 20; count++) await Promise.resolve();
+      expect(errors).toHaveBeenCalledTimes(1);
+      expect(errors.mock.calls[0]?.[2]).toMatchObject({
+        errorType: "MemberKeyError",
+        metadata: { category: "database", phase: "reconcile", code: "ERR_POSTGRES_SERVER_ERROR", sqlState: "23505" },
+      });
+      expect(JSON.stringify(errors.mock.calls)).not.toContain("synthetic-member-secret");
+      errors.mockClear();
+      failure = new MemberKeyError({ category: "http", operation: "get", providerStatus: 503 });
+      tick();
+      for (let count = 0; count < 20; count++) await Promise.resolve();
+      expect(errors).not.toHaveBeenCalled();
+      expect(warnings.mock.calls[0]?.[2]).toMatchObject({
+        metadata: { category: "http", operation: "get", providerStatus: 503, phase: "reconcile" },
+      });
+      expect(warnings.mock.calls[0]?.[3]).toMatchObject({ retain: true });
+      expect(metrics).toHaveBeenCalledWith(
+        "provider_failure",
+        expect.objectContaining({ category: "http", operation: "get" }),
+      );
+    } finally {
+      job.stop();
+      timer.mockRestore();
+      errors.mockRestore();
+      warnings.mockRestore();
+      metrics.mockRestore();
     }
   });
 

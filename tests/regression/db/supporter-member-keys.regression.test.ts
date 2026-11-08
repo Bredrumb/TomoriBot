@@ -56,6 +56,7 @@ import { scanEncryptedRows, verifyCiphertext } from "@/utils/security/encryptedC
 import { useFullEnvSandbox } from "../../helpers/env";
 import { loadSubscriptionAllowance } from "@/modules/supporter-billing/subscribe/usage";
 import { runSupporterBillingMaintenance } from "@/modules/supporter-billing/runtime/maintenance";
+import { log } from "@/utils/misc/logger";
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
 
 const config: SupporterBillingConfig = {
@@ -1276,10 +1277,39 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter member-key lifecycle", () => {
     expect(await repository.loadCredential(linked.identity.supporter_identity_id, renewal)).toBeNull();
   });
 
+  it("keeps actionable reconciliation errors visible when other members have transient failures", async () => {
+    const provider = new Provider();
+    const first = await link(snapshot("diagnostic-transient"), provider);
+    const second = await link(snapshot("diagnostic-database"), provider);
+    const firstKey = await repository.loadByIdentityId(first.identity.supporter_identity_id);
+    const list = spyOn(SupporterIdentityRepository.prototype, "listIdentitiesForPatreonReconcile");
+    const get = spyOn(provider, "get").mockImplementation(async (hash) => {
+      throw hash === firstKey?.key_hash
+        ? new MemberKeyError({ category: "http", operation: "get", providerStatus: 503 })
+        : new MemberKeyError({ category: "database", code: "ERR_POSTGRES_SERVER_ERROR", sqlState: "23505" });
+    });
+    const warnings = spyOn(log, "warn").mockImplementation(() => {});
+    try {
+      for (const order of [
+        [first.identity, second.identity],
+        [second.identity, first.identity],
+      ]) {
+        list.mockResolvedValue(order);
+        await expect(reconcileMemberKeys({ ...options, provider, now: renewal })).rejects.toMatchObject({
+          diagnostics: { category: "database", sqlState: "23505" },
+        });
+      }
+    } finally {
+      list.mockRestore();
+      get.mockRestore();
+      warnings.mockRestore();
+    }
+  });
+
   it("requires a confirmed renewal boundary and recovers provider usage-read failures without granting twice", async () => {
     const value = mappedSnapshot("missing_dates", now, null);
     const provider = new Provider();
-    await link(value, provider);
+    const linked = await link(value, provider);
     const key = await remote(value, provider);
     key.usage = 3;
     const edited = {
@@ -1300,6 +1330,24 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter member-key lifecycle", () => {
     provider.failGet = true;
     await expect(change(renewed, provider, true, renewal)).rejects.toBeInstanceOf(MemberKeyError);
     expect(key.limit).toBe(10);
+    const warnings = spyOn(log, "warn").mockImplementation(() => {});
+    const get = spyOn(provider, "get").mockRejectedValue(
+      new MemberKeyError({ category: "http", operation: "get", providerStatus: 503 }),
+    );
+    try {
+      await expect(reconcileMemberKeys({ ...options, provider, now: renewal })).rejects.toBeInstanceOf(MemberKeyError);
+      const diagnostic = warnings.mock.calls.find(
+        (call) => call[2]?.metadata?.identityId === linked.identity.supporter_identity_id,
+      );
+      expect(diagnostic?.[2]).toMatchObject({
+        metadata: { phase: "member_sync", category: "http", operation: "get", providerStatus: 503 },
+      });
+      expect(diagnostic?.[3]).toMatchObject({ retain: true });
+      expect(JSON.stringify(warnings.mock.calls)).not.toContain("synthetic-member-secret");
+    } finally {
+      warnings.mockRestore();
+      get.mockRestore();
+    }
     provider.failGet = false;
     await reconcileMemberKeys({ ...options, provider, now: renewal });
     expect(key.limit).toBe(23);

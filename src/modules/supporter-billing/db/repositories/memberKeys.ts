@@ -3,7 +3,7 @@ import { z } from "zod";
 import { isRetiredConnectionError, sql as defaultSql } from "@/utils/db/client";
 import { keyManager } from "@/utils/security/keyManager";
 import { lazyRotateEncryptedRow } from "@/utils/security/encryptedColumns";
-import { MemberKeyError } from "@/modules/supporter-billing/openrouter/management";
+import { MemberKeyError, sanitizeMemberKeyError } from "@/modules/supporter-billing/openrouter/management";
 import type { SupporterIdentityRow } from "@/modules/supporter-billing/db/types";
 import { SupporterUsageStatisticsRepository } from "@/modules/supporter-billing/db/repositories";
 
@@ -64,7 +64,7 @@ export async function withMemberKeyLock<T>(client: SQL, run: (client: SQL) => Pr
         return await run(connection as SQL);
       } catch (error) {
         // A retired connection carries no secret and must stay recognizable so idempotent callers can replay on a fresh one.
-        throw isRetiredConnectionError(error) ? error : new MemberKeyError();
+        throw isRetiredConnectionError(error) ? error : sanitizeMemberKeyError(error);
       } finally {
         try {
           await unlockMemberKeys(connection);
@@ -207,8 +207,8 @@ export class MemberKeyRepository {
       });
       onLoad?.(row.key_hash);
       return decrypted.credential;
-    } catch {
-      throw new MemberKeyError();
+    } catch (error) {
+      throw sanitizeMemberKeyError(error);
     }
   }
 }

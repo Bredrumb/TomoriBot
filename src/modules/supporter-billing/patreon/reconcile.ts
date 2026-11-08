@@ -30,6 +30,8 @@ import {
   PATREON_USER_AGENT,
 } from "@/modules/supporter-billing/patreon/settings";
 import { log } from "@/utils/misc/logger";
+import { isExpectedMemberKeyFailure, sanitizeMemberKeyError } from "@/modules/supporter-billing/openrouter/management";
+import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 import type { OAuthFetch } from "@/utils/oauth/oauthFetch";
 
 type EnvRecord = Readonly<Record<string, string | undefined>>;
@@ -473,8 +475,21 @@ export function startPatreonReconcileJob(options: {
       .finally(async () => {
         try {
           await runMemberKeyReconcileHook({ config: options.config, env: options.env });
-        } catch {
-          void log.error("Supporter member-key reconciliation failed", { errorType: "MemberKeyError" });
+        } catch (error) {
+          const failure = sanitizeMemberKeyError(error);
+          const diagnostics = failure.diagnostics;
+          await reportProviderFailure({
+            summary: "Supporter member-key reconciliation failed",
+            errorType: "MemberKeyError",
+            error: failure,
+            expected: isExpectedMemberKeyFailure(failure),
+            dimensions: {
+              provider: "openrouter",
+              operation: diagnostics.operation ?? "reconcile",
+              category: diagnostics.category,
+            },
+            metadata: { ...diagnostics, phase: "reconcile" },
+          });
         }
       });
 

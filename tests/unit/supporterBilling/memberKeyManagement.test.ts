@@ -108,19 +108,38 @@ describe("member-key management transport", () => {
     }
   });
 
-  it("rejects malformed provider data and strips provider, transport, and validation diagnostics", async () => {
-    for (const response of [
-      () => Response.json({ data: { ...metadata(), usage: -1 }, key: "synthetic-member-secret" }, { status: 201 }),
-      () =>
-        Response.json(
-          { error: { code: 503, message: "synthetic-management-secret synthetic-member-secret" } },
-          { status: 503 },
-        ),
-      () => {
-        throw new Error("synthetic-management-secret synthetic-member-secret");
+  it("keeps safe failure categories while stripping provider bodies and raw causes", async () => {
+    for (const { response, category } of [
+      {
+        response: (method: string) =>
+          Response.json(
+            { data: { ...metadata(), usage: -1 }, key: "synthetic-member-secret" },
+            { status: method === "POST" ? 201 : 200 },
+          ),
+        category: "validation",
+      },
+      {
+        response: () =>
+          Response.json(
+            { error: { code: 503, message: "synthetic-management-secret synthetic-member-secret" } },
+            { status: 503 },
+          ),
+        category: "http",
+      },
+      {
+        response: () => {
+          throw new Error("synthetic-management-secret synthetic-member-secret");
+        },
+        category: "transport",
+      },
+      {
+        response: () => {
+          throw new DOMException("synthetic-management-secret synthetic-member-secret", "TimeoutError");
+        },
+        category: "timeout",
       },
     ]) {
-      const provider = createMemberKeyProvider(env, async () => response());
+      const provider = createMemberKeyProvider(env, async (input, init) => response(new Request(input, init).method));
       for (const call of [() => provider.create("synthetic-operation"), () => provider.get("synthetic-hash")]) {
         try {
           await call();
@@ -129,8 +148,28 @@ describe("member-key management transport", () => {
           expect(error).toBeInstanceOf(MemberKeyError);
           expect(String(error)).not.toContain("synthetic-management-secret");
           expect(String(error)).not.toContain("synthetic-member-secret");
+          expect(error).toMatchObject({ diagnostics: { category, elapsedMs: expect.any(Number) } });
+          expect(error).not.toHaveProperty("cause");
+          expect(JSON.stringify(error)).not.toContain("synthetic-management-secret");
+          expect(JSON.stringify(error)).not.toContain("synthetic-member-secret");
         }
       }
+    }
+  });
+
+  it("identifies the failed management operation and HTTP status for every key operation", async () => {
+    const provider = createMemberKeyProvider(env, async () =>
+      Response.json({ error: { code: 503, message: "synthetic-member-secret" } }, { status: 503 }),
+    );
+    const calls = [
+      { operation: "create", call: () => provider.create("synthetic-operation") },
+      { operation: "list", call: () => provider.findByName("synthetic-operation") },
+      { operation: "get", call: () => provider.get("synthetic-hash") },
+      { operation: "update", call: () => provider.update("synthetic-hash", { disabled: true }) },
+      { operation: "delete", call: () => provider.delete("synthetic-hash") },
+    ];
+    for (const { operation, call } of calls) {
+      await expect(call()).rejects.toMatchObject({ diagnostics: { category: "http", operation, providerStatus: 503 } });
     }
   });
 });
@@ -203,6 +242,34 @@ describe("member-key lock on a retired connection", () => {
     await expect(withMemberKeyLock(client, async () => 1)).rejects.toMatchObject({
       code: "ERR_POSTGRES_LIFETIME_TIMEOUT",
     });
+  });
+
+  it("preserves safe provider diagnostics and database codes across the lifecycle lock", async () => {
+    for (const failure of [
+      new MemberKeyError(),
+      Object.assign(new Error("synthetic-member-secret"), {
+        code: "ERR_POSTGRES_SERVER_ERROR",
+        errno: "23505",
+        detail: "synthetic-member-secret",
+      }),
+    ]) {
+      const { client } = fakeClient(0);
+      try {
+        await withMemberKeyLock(client, async () => {
+          throw failure;
+        });
+        throw new Error("Unexpected success");
+      } catch (error) {
+        expect(error).toBeInstanceOf(MemberKeyError);
+        if (failure instanceof MemberKeyError) expect(error).toBe(failure);
+        else
+          expect(error).toMatchObject({
+            diagnostics: { category: "database", code: "ERR_POSTGRES_SERVER_ERROR", sqlState: "23505" },
+          });
+        expect(JSON.stringify(error)).not.toContain("synthetic-member-secret");
+        expect(error).not.toHaveProperty("cause");
+      }
+    }
   });
 
   it("replays the usage-statistics purge on a fresh connection instead of waiting for the next tick", async () => {
