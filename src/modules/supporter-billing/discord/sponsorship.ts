@@ -153,6 +153,7 @@ export async function activateSupporterDefaults(target: SupporterDefaultsTarget)
 
   const failed: SupporterCapability[] = [];
   for (const capability of SUPPORTER_DEFAULT_CAPABILITIES) {
+    if (target.kind === "personal" && capability === "decision") continue;
     const codename = funding.tier.defaultModelByCapability[capability];
     if (!codename || (await selectSupporterDefault(target, capability, codename))) continue;
     if (capability === "text")

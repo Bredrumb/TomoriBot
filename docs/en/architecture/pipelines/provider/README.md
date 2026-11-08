@@ -19,6 +19,8 @@ a `StreamConfig`, then delegates to `StreamOrchestrator.streamToDiscord()`.
 
 `SupportsDecisions` extends the optional capability map and resolver. `OpenrouterProvider` and
 `CustomProvider` own its implementations; other providers remain unsupported.
+Personal provider panels reject new Decision registrations and edits, and subscription defaults
+register Decisions only for servers; existing personal registrations remain executable and removable.
 `loadDecisionModelsForScope(scope)` in `providerFeatureExecutors.ts` supplies model menus and execution
 validation with `DecisionModelOption` records. Managed options must pass availability and their
 `selection.validateModel` entitlement check; availability alone does not admit a model. The repository

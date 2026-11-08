@@ -35,6 +35,7 @@ import {
   persistSupporterSponsorship,
 } from "@/modules/supporter-billing/discord/sponsorship";
 import { saveProviderModel } from "@/utils/provider/providerPanelOperations";
+import { registerOpenRouterModelForScope } from "@/utils/provider/openrouterModelRegistry";
 import {
   configModelOperations,
   loadConfigModelProviders,
@@ -648,12 +649,13 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
       ),
     );
     try {
-      await activateSupporterDefaults({
+      const failedDefaults = await activateSupporterDefaults({
         kind: "personal",
         userId: refs.userId,
         serverDiscId: FIXTURE_IDS.serverDiscId,
         state,
       });
+      expect(failedDefaults).not.toContain("decision");
       const subscription = await llmProviderRepo.loadUserSavedProviderConfig(refs.userId, "supporter");
       const preserved = await llmProviderRepo.loadUserSavedProviderConfig(refs.userId, "openrouter");
       expect(subscription?.api_key).toBeNull();
@@ -693,8 +695,11 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
         capability: "decision",
         codeName: "test/personal-decision",
       });
-      expect(registeredDecision.status).toBe("success");
+      expect(registeredDecision.status).toBe("unsupported-capability");
       const personalScope = { kind: "personal" as const, ownerId: refs.userId };
+      expect(await registerOpenRouterModelForScope(personalScope, "decision", "test/personal-decision")).toMatchObject({
+        status: "registered",
+      });
       const decision = (await loadDecisionModelsForScope(personalScope)).find(
         (option) => option.model.codename === "test/personal-decision",
       );
@@ -876,15 +881,11 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
         codeName: "test/personal-decision-edited",
         editingModelId: decision.model.decision_model_id,
       });
-      expect(editedDecision.status).toBe("success");
+      expect(editedDecision.status).toBe("unsupported-capability");
       const edited = (await loadDecisionModelsForScope(personalScope)).find(
         (option) => option.model.codename === "test/personal-decision-edited",
       );
-      if (!edited) throw new Error("Expected the edited Decision registration");
-      expect(await callDecisionsForProvider(decisionRequest)).toMatchObject({
-        status: "unavailable",
-        reason: "not-owned",
-      });
+      expect(edited).toBeUndefined();
       expect(
         (await loadDecisionModelsForScope(serverScope)).some(
           (option) => option.reference.modelId === decision.reference.modelId,
@@ -898,14 +899,14 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
           state,
           entryId: "provider:supporter",
           capability: "decision",
-          codeName: edited.model.codename,
-          editingModelId: edited.model.decision_model_id,
+          codeName: decision.model.codename,
+          editingModelId: decision.model.decision_model_id,
           removeDecisionModel: true,
         }),
       ).toMatchObject({ status: "success", removed: true });
       expect(
         (await loadDecisionModelsForScope(personalScope)).some(
-          (option) => option.reference.modelId === edited.reference.modelId,
+          (option) => option.reference.modelId === decision.reference.modelId,
         ),
       ).toBe(false);
       const registeredImage = await saveProviderModel({
@@ -1307,7 +1308,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
         (await loadDecisionModelsForScope({ kind: "personal", ownerId: refs.userId })).some(
           (option) => option.model.codename === "test/personal-decision",
         ),
-      ).toBe(true);
+      ).toBe(false);
 
       config.tiers.test_tier.defaultModelByCapability.image = "test/unlisted-image";
       process.env.TOMORI_SUPPORTER_CONFIG_JSON = JSON.stringify(config);
