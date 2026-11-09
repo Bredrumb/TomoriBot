@@ -142,6 +142,8 @@ translator can turn a provider failure into this error using the failed request'
 translation, and never translates a denial belonging to another context. Omit the context argument only
 for credential resolution or an already-scoped error propagating to its presentation owner. An
 explicit undefined context matches only an unscoped denial.
+Model-validation refusals before credential resolution omit a context. Modal callers handle
+revalidation denials separately from the previously resolved request's context.
 Check for denials before credential-specific and generic handling. `deferNotice` lets the stream
 state machine leave a notice to the retry owner rather than posting it before fallback completes.
 

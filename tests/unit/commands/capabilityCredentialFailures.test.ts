@@ -3,6 +3,7 @@ import type { ChatInputCommandInteraction, Client, ModalSubmitInteraction } from
 import { execute as generatePersona } from "@/commands/persona/generate";
 import { execute as initializeExpressions } from "@/commands/expressions/initialize";
 import { execute as estimateCost } from "@/commands/tool/estimate/cost";
+import { execute as generateImage } from "@/commands/generate/image";
 import { executeCompactCommand } from "@/utils/compaction/compact/commandImplementation";
 import { llmModelRepo, personaRepository, serverRepository } from "@/utils/db/repositories";
 import { userSavedProviderConfigSchema } from "@/types/db/schema";
@@ -19,6 +20,7 @@ import * as modals from "@/utils/discord/ui/modals";
 import * as emojiSync from "@/utils/cache/emojiLazySync";
 import * as stickerSync from "@/utils/cache/stickerLazySync";
 import * as capabilityResolver from "@/utils/provider/providerCapabilityResolver";
+import * as generationModels from "@/utils/provider/generationModels";
 import * as quotas from "@/utils/security/rateLimiter";
 import { ProviderRequestDeniedError } from "@/utils/provider/providerUsage";
 import { log } from "@/utils/misc/logger";
@@ -34,6 +36,79 @@ afterEach(() => {
 });
 
 describe("capability command credential failures", () => {
+  it.each(["initial", "post-modal"])("renders an image %s credential refusal without generation", async (stage) => {
+    const persona = createPersona({ config: { imagegen_enabled: true } });
+    const modal = makeFakeInteraction({ deferred: true });
+    const command = makeFakeInteraction({ channel: { id: "fixture-channel" } });
+    const selection: generationModels.GenerationModelChoice = {
+      source: "personal",
+      kind: "image",
+      provider: "openrouter",
+      modelId: 12,
+      name: "fixture/image",
+    };
+    command.interaction.options.getString = (name) =>
+      name === "model" ? generationModels.generationModelValue(selection) : "standard";
+    Object.assign(command.interaction.options, { getSubcommand: () => "image" });
+    const refusal = new ProviderRequestDeniedError(undefined, (locale) => ({
+      titleKey: "general.errors.api_key_error_title",
+      description: localizedCopy(locale, "general.errors.api_key_error_description"),
+    }));
+    const resolve = spyOn(credentials, "resolveCapabilityCredentials").mockRejectedValue(refusal);
+    if (stage === "post-modal") {
+      resolve.mockResolvedValueOnce({
+        provider: "openrouter",
+        apiKey: "fixture-key",
+        keyVersion: 1,
+        savedConfig: userSavedProviderConfigSchema.parse({
+          user_id: 1,
+          provider: "openrouter",
+          api_key: null,
+          llm_id: null,
+          diffusion_model_id: selection.modelId,
+          embedding_model_id: null,
+          nai_diffusion_model_id: null,
+          nai_preset_name: null,
+        }),
+        source: "personal",
+        modelId: selection.modelId,
+        usageContext: { credentialProvider: "fixture-payer", credentialScope: "personal" },
+      });
+    }
+    const errors = spyOn(log, "error").mockResolvedValue(undefined);
+    const fetch = spyOn(globalThis, "fetch").mockRejectedValue(new Error("Unexpected generation"));
+    spies.push(
+      resolve,
+      errors,
+      fetch,
+      spyOn(personaRepository, "loadState").mockResolvedValue(persona),
+      spyOn(personalProviders, "applyPersonalProviderSelectionsToTomoriState").mockResolvedValue({
+        tomoriState: persona,
+        activeConfigs: {},
+      }),
+      spyOn(generationModels, "loadGenerationModelChoices").mockResolvedValue([selection]),
+      spyOn(modals, "promptWithRawModal").mockResolvedValue({
+        outcome: "submit",
+        interaction: modal.interaction as unknown as ModalSubmitInteraction,
+        values: { prompt_input: "fixture prompt", aspect_ratio_select: "1:1" },
+      }),
+    );
+
+    await generateImage(
+      {} as Client,
+      command.interaction as unknown as ChatInputCommandInteraction,
+      createUserRow(),
+      "en-US",
+    );
+
+    const calls = stage === "initial" ? command.calls : modal.calls;
+    expect(JSON.stringify(calls)).toContain(localizedCopy("en-US", "general.errors.api_key_error_description"));
+    expect(JSON.stringify(calls)).not.toContain("error_full_detail");
+    expect(resolve).toHaveBeenCalledTimes(stage === "initial" ? 1 : 2);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(errors).not.toHaveBeenCalled();
+  });
+
   it("renders expected denials without operational errors and preserves persona modal input", async () => {
     const persona = createPersona({
       llm: createLlmRow({ llm_provider: "google", sees_images: true, supports_structoutput: true }),
