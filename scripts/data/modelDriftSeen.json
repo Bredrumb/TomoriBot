@@ -943,5 +943,40 @@
     "codename": "baseten/elephant-1",
     "releaseDate": null,
     "offeredAt": "2026-11-02"
+  },
+  {
+    "provider": "openrouter",
+    "table": "videoSections",
+    "codename": "google/gemini-omni-1.1-flash",
+    "releaseDate": "2026-08-27",
+    "offeredAt": "2026-11-09"
+  },
+  {
+    "provider": "openrouter",
+    "table": "videoSections",
+    "codename": "google/gemini-omni-1.2-flash",
+    "releaseDate": "2026-11-05",
+    "offeredAt": "2026-11-09"
+  },
+  {
+    "provider": "openrouter",
+    "table": "decisionSections",
+    "codename": "parallel/decisions-fast:free",
+    "releaseDate": null,
+    "offeredAt": "2026-11-09"
+  },
+  {
+    "provider": "openrouter",
+    "table": "decisionSections",
+    "codename": "morph/reflex",
+    "releaseDate": null,
+    "offeredAt": "2026-11-09"
+  },
+  {
+    "provider": "openrouter",
+    "table": "decisionSections",
+    "codename": "cloudflare/clairic",
+    "releaseDate": null,
+    "offeredAt": "2026-11-09"
   }
 ]
