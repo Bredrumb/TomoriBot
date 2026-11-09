@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it, spyOn } from "bun:test";
-import type { ChatInputCommandInteraction, Client, ModalSubmitInteraction } from "discord.js";
+import type { AttachmentBuilder, ChatInputCommandInteraction, Client, ModalSubmitInteraction } from "discord.js";
 import { execute as generatePersona } from "@/commands/persona/generate";
 import { execute as initializeExpressions } from "@/commands/expressions/initialize";
 import { execute as estimateCost } from "@/commands/tool/estimate/cost";
@@ -23,6 +23,7 @@ import * as capabilityResolver from "@/utils/provider/providerCapabilityResolver
 import * as generationModels from "@/utils/provider/generationModels";
 import * as quotas from "@/utils/security/rateLimiter";
 import { ProviderRequestDeniedError } from "@/utils/provider/providerUsage";
+import { IMAGE_GENERATION_INPUT_FILENAME } from "@/utils/image/imageGenerationInput";
 import { log } from "@/utils/misc/logger";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { createPersona, createUserRow, createLlmRow } from "../../helpers/fixtures";
@@ -36,7 +37,11 @@ afterEach(() => {
 });
 
 describe("capability command credential failures", () => {
-  it.each(["initial", "post-modal"])("renders an image %s credential refusal without generation", async (stage) => {
+  it.each([
+    { stage: "initial", failure: "denied" },
+    { stage: "post-modal", failure: "denied" },
+    { stage: "post-modal", failure: "unavailable" },
+  ])("renders an image $stage $failure refusal without generation", async ({ stage, failure }) => {
     const persona = createPersona({ config: { imagegen_enabled: true } });
     const modal = makeFakeInteraction({ deferred: true });
     const command = makeFakeInteraction({ channel: { id: "fixture-channel" } });
@@ -50,10 +55,13 @@ describe("capability command credential failures", () => {
     command.interaction.options.getString = (name) =>
       name === "model" ? generationModels.generationModelValue(selection) : "standard";
     Object.assign(command.interaction.options, { getSubcommand: () => "image" });
-    const refusal = new ProviderRequestDeniedError(undefined, (locale) => ({
-      titleKey: "general.errors.api_key_error_title",
-      description: localizedCopy(locale, "general.errors.api_key_error_description"),
-    }));
+    const refusal =
+      failure === "unavailable"
+        ? new generationModels.GenerationModelUnavailableError()
+        : new ProviderRequestDeniedError(undefined, (locale) => ({
+            titleKey: "general.errors.api_key_error_title",
+            description: localizedCopy(locale, "general.errors.api_key_error_description"),
+          }));
     const resolve = spyOn(credentials, "resolveCapabilityCredentials").mockRejectedValue(refusal);
     if (stage === "post-modal") {
       resolve.mockResolvedValueOnce({
@@ -90,7 +98,17 @@ describe("capability command credential failures", () => {
       spyOn(modals, "promptWithRawModal").mockResolvedValue({
         outcome: "submit",
         interaction: modal.interaction as unknown as ModalSubmitInteraction,
-        values: { prompt_input: "fixture prompt", aspect_ratio_select: "1:1" },
+        values: { prompt_input: "fixture prompt", aspect_ratio_select: "16:9" },
+        attachments: {
+          image_upload_1: {
+            id: "fixture-reference",
+            filename: "reference.png",
+            size: 1,
+            url: "https://cdn.example.com/reference.png",
+            proxy_url: "https://cdn.example.com/reference.png",
+            content_type: "image/png",
+          },
+        },
       }),
     );
 
@@ -102,7 +120,27 @@ describe("capability command credential failures", () => {
     );
 
     const calls = stage === "initial" ? command.calls : modal.calls;
-    expect(JSON.stringify(calls)).toContain(localizedCopy("en-US", "general.errors.api_key_error_description"));
+    expect(JSON.stringify(calls)).toContain(
+      localizedCopy(
+        "en-US",
+        failure === "unavailable"
+          ? "commands.generate.model_unavailable_description"
+          : "general.errors.api_key_error_description",
+      ),
+    );
+    const payload = calls.findLast((call) => ["reply", "editReply"].includes(call.method))?.args[0] as {
+      files?: AttachmentBuilder[];
+    };
+    if (stage === "post-modal") {
+      const file = payload.files?.find((attachment) => attachment.name === IMAGE_GENERATION_INPUT_FILENAME);
+      expect(file).toBeDefined();
+      expect(file?.attachment.toString()).toContain("fixture prompt");
+      expect(file?.attachment.toString()).toContain("16:9");
+      expect(file?.attachment.toString()).toContain("reference.png");
+      expect(JSON.stringify(calls)).toContain(localizedCopy("en-US", "commands.generate.image.recovery_file_footer"));
+    } else {
+      expect(payload.files).toBeUndefined();
+    }
     expect(JSON.stringify(calls)).not.toContain("error_full_detail");
     expect(resolve).toHaveBeenCalledTimes(stage === "initial" ? 1 : 2);
     expect(fetch).not.toHaveBeenCalled();
