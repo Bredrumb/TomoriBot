@@ -250,37 +250,38 @@ function createInteraction(personaOption: string | null) {
     permissionsFor: () => ({ has: () => true }),
   };
 
-  return {
-    replies,
+  const { interaction } = makeFakeInteraction({
     channel,
-    interaction: {
+    guild: {
+      id: "guild-1",
+      members: { me: { id: "bot" }, cache: { get: () => ({ roles: { cache: [] } }) } },
+      channels: { cache: { get: () => channel } },
+    },
+    options: {
+      getString: (name: string) => (name === "persona" ? personaOption : null),
+      getBoolean: () => null,
+    },
+    fetchReply: async () => ({
+      id: "interaction-reply",
+      createdTimestamp: Date.now(),
+      url: "https://discord.com/channels/guild-1/channel-1/interaction-reply",
       channel,
-      guild: {
-        id: "guild-1",
-        members: { me: { id: "bot" }, cache: { get: () => ({ roles: { cache: [] } }) } },
-        channels: { cache: { get: () => channel } },
-      },
-      user: { id: "user-1" },
-      options: {
-        getString: (name: string) => (name === "persona" ? personaOption : null),
-        getUser: () => null,
-      },
-      reply: async (payload: unknown) => {
-        replies.push(payload);
-      },
-      fetchReply: async () => ({
-        id: "interaction-reply",
-        url: "https://discord.com/channels/guild-1/channel-1/interaction-reply",
-        channel,
-      }),
-      deferReply: async () => undefined,
-      followUp: async (payload: unknown) => {
-        replies.push(payload);
-      },
-      replied: false,
-      deferred: false,
-    } as unknown as ChatInputCommandInteraction,
-  };
+    }),
+  });
+  interaction.user.id = "user-1";
+  Object.assign(interaction.options, { getUser: () => null });
+  Object.assign(interaction, {
+    deleteReply: async () => undefined,
+    editReply: async (payload: unknown) => {
+      replies.push(payload);
+      return await interaction.fetchReply();
+    },
+    followUp: async (payload: unknown) => {
+      replies.push(payload);
+      return await interaction.fetchReply();
+    },
+  });
+  return { replies, channel, interaction: interaction as unknown as ChatInputCommandInteraction };
 }
 
 /**
@@ -328,6 +329,23 @@ const userData = { user_id: 55 } as UserRow;
 const client = { user: { id: "bot" } } as unknown as Client;
 
 describe("conditioning persona resolution", () => {
+  it("acknowledges before persona reads and conditioning writes", async () => {
+    const record = stubWorkspace([MAIN, ALTER]);
+    const { interaction } = createInteraction("2");
+    track(
+      spyOn(personaRepository, "loadState").mockImplementation(async () => {
+        expect(interaction.deferred).toBe(true);
+        return MAIN;
+      }),
+    );
+    record.mockImplementation(async () => {
+      expect(interaction.deferred).toBe(true);
+      return null;
+    });
+
+    await createConditioningInteractionCommand("reward", "headpat").execute(client, interaction, userData, "en-US");
+    expect(record).toHaveBeenCalledTimes(1);
+  });
   it("anchors human reward and punish turns to their interaction rather than later channel messages", async () => {
     stubWorkspace([MAIN, ALTER]);
     const chatSpy = track(spyOn(tomoriChatModule, "tomoriChat").mockResolvedValue("run"));

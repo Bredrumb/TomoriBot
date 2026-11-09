@@ -10,6 +10,9 @@ import { computePersonaNudgeFingerprint, computePersonaNudgeListFingerprint } fr
  * expected answer instead of exercising the guard.
  */
 import { beforeAll, describe, expect, it, spyOn } from "bun:test";
+import { randomBytes } from "node:crypto";
+import sharp from "sharp";
+import { readSpriteArchive } from "@/utils/persona/spriteArchive";
 import { AttachmentBuilder, MessageFlags, type APIAttachment, type Client } from "discord.js";
 import type { PersonaSpriteRow, StmCategoryRow, TomoriState, TomoriPresetRow } from "@/types/db/schema";
 import type { ConditioningGroup } from "@/utils/db/repositories/ConditioningMemoryRepository";
@@ -4625,8 +4628,7 @@ describe("config Persona Sprites routes", () => {
           exported = true;
           return {
             status: "success",
-            buffer: Buffer.from("zip"),
-            filename: "aphel-sprites.zip",
+            files: [{ buffer: Buffer.from("zip"), filename: "aphel-sprites.zip" }],
             spriteCount: 2,
             skippedCount: 0,
           };
@@ -4651,8 +4653,10 @@ describe("config Persona Sprites routes", () => {
       spriteOperations: {
         exportSprites: async () => ({
           status: "success",
-          buffer: Buffer.from("zip"),
-          filename: "aphel-sprites.zip",
+          files: [
+            { buffer: Buffer.from("zip-one"), filename: "aphel-sprites-1.zip" },
+            { buffer: Buffer.from("zip-two"), filename: "aphel-sprites-2.zip" },
+          ],
           spriteCount: 2,
           skippedCount: 0,
         }),
@@ -4669,10 +4673,11 @@ describe("config Persona Sprites routes", () => {
 
     // The panel root defers ephemerally, so an `editReply` carrying the archive would silently make
     // a public export private. The archive must arrive on its own message with no Ephemeral flag.
-    expect(harness.followUps).toHaveLength(1);
-    const followUp = harness.followUps[0] as { files?: unknown[]; flags?: number };
-    expect(followUp.files).toHaveLength(1);
-    expect(followUp.flags ?? 0).toBe(0);
+    expect(harness.followUps).toHaveLength(2);
+    for (const followUp of harness.followUps as Array<{ files?: unknown[]; flags?: number }>) {
+      expect(followUp.files).toHaveLength(1);
+      expect(followUp.flags ?? 0).toBe(0);
+    }
     // The panel still repaints in place beside it.
     expect(harness.edits.length).toBeGreaterThan(0);
     expect(harness.telemetry).toContain("server-config.workspace.persona-sprite.export");
@@ -4892,6 +4897,57 @@ describe("config Persona Sprites routes", () => {
     expect(harness.replies).toHaveLength(1);
   });
 
+  it("splits exports into independently importable archives within the interaction's upload limit", async () => {
+    const stored = ["happy", "sad", "surprised"].map((key, index) =>
+      makeSprite({ sprite_id: index + 1, sprite_key: key, sprite_name: key }),
+    );
+    const png = await sharp(randomBytes(32 * 32 * 3), { raw: { width: 32, height: 32, channels: 3 } })
+      .png()
+      .toBuffer();
+    const list = spyOn(personaSpriteRepository, "listForPersona").mockResolvedValue(stored);
+    const load = spyOn(avatarStorage, "loadStoredPersonaAvatarBuffer").mockResolvedValue(png);
+    try {
+      const harness = makeHarness({ personas: [MAIN] });
+      const interaction = makeInteraction({
+        customId: buildConfigRouteId({ action: "sprite-export", locale: "en-US", personaId: 55 }),
+        harness,
+      });
+      interaction.attachmentSizeLimit = 4096;
+      await dispatch(harness, interaction);
+
+      expect(harness.followUps.length).toBeGreaterThan(1);
+      const keys: string[] = [];
+      for (const followUp of harness.followUps as Array<{ files: AttachmentBuilder[] }>) {
+        expect(followUp.files).toHaveLength(1);
+        const bytes = followUp.files[0].attachment;
+        expect(Buffer.isBuffer(bytes)).toBe(true);
+        if (!Buffer.isBuffer(bytes)) throw new Error("Expected archive bytes");
+        expect(bytes.length).toBeLessThanOrEqual(interaction.attachmentSizeLimit);
+        const parsed = await readSpriteArchive(bytes, { maxEntries: 50, maxFileBytes: 4096, maxTotalBytes: 12288 });
+        expect(parsed.ok).toBe(true);
+        if (parsed.ok) keys.push(...parsed.entries.map((entry) => entry.meta.sprite_key));
+      }
+      expect(keys.sort()).toEqual(stored.map((sprite) => sprite.sprite_key).sort());
+
+      const refused = makeHarness({ personas: [MAIN] });
+      const smallInteraction = makeInteraction({
+        customId: buildConfigRouteId({ action: "sprite-export", locale: "en-US", personaId: 55 }),
+        harness: refused,
+      });
+      smallInteraction.attachmentSizeLimit = 200;
+      await dispatch(refused, smallInteraction);
+      expect(refused.followUps).toHaveLength(0);
+      expect(JSON.stringify(refused.edits)).toMatch(
+        localizedProse("en-US", "commands.config.panel.sprite_export_image_too_large_detail", {
+          sprite: stored[0].sprite_name,
+        }),
+      );
+    } finally {
+      list.mockRestore();
+      load.mockRestore();
+    }
+  });
+
   it("round-trips a persona's sprites out through Export and back in through Import", async () => {
     const stored: PersonaSpriteRow[] = [
       makeSprite({ sprite_key: "happy", sprite_name: "Happy", usage_instructions: "When cheerful", is_identity: true }),
@@ -4905,7 +4961,7 @@ describe("config Persona Sprites routes", () => {
     // behavior: a real re-encode would make the two sides incomparable.
     const pngSpy = spyOn(imageProcessor, "convertToPNG").mockImplementation(async (buffer: Buffer) => buffer);
 
-    const exported = await configSpriteOperations.exportSprites({ persona: MAIN });
+    const exported = await configSpriteOperations.exportSprites({ persona: MAIN, maxArchiveBytes: 10 * 1024 * 1024 });
     expect(exported.status).toBe("success");
     if (exported.status !== "success") return;
     expect(exported.spriteCount).toBe(2);
@@ -4930,7 +4986,7 @@ describe("config Persona Sprites routes", () => {
     });
     const downloadSpy = spyOn(safeDownloadModule, "safeDownload").mockResolvedValue({
       success: true,
-      buffer: exported.buffer,
+      buffer: exported.files[0].buffer,
     } as Awaited<ReturnType<typeof safeDownloadModule.safeDownload>>);
     // The target persona starts empty, so every archive entry lands as a new sprite.
     listSpy.mockResolvedValue([]);
@@ -4942,7 +4998,7 @@ describe("config Persona Sprites routes", () => {
       attachment: {
         id: "a1",
         filename: "aphel-sprites.zip",
-        size: exported.buffer.byteLength,
+        size: exported.files[0].buffer.byteLength,
         url: "https://cdn.example.invalid/aphel-sprites.zip",
         proxy_url: "https://cdn.example.invalid/aphel-sprites.zip",
         content_type: "application/zip",

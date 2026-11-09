@@ -1,5 +1,5 @@
 import { personaSpriteMessageSchema, type PersonaSpriteMessageRow } from "@/types/db/schema";
-import { sql } from "@/utils/db/client";
+import { sql, withTransientDbRetry } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 
 export type PersonaSpriteMessageRecordInput = {
@@ -52,11 +52,14 @@ class PersonaSpriteMessageRepository {
     }
 
     try {
-      const rows = await sql<PersonaSpriteMessageRow[]>`
+      const rows = await withTransientDbRetry(
+        () => sql<PersonaSpriteMessageRow[]>`
         SELECT message_disc_id, persona_id, sprite_name, channel_disc_id, created_at
         FROM persona_sprite_messages
         WHERE message_disc_id = ANY(${sql.array(messageDiscIds, "TEXT")})
-      `;
+        `,
+        "load persona sprite messages",
+      );
 
       for (const row of rows) {
         const parsed = personaSpriteMessageSchema.safeParse(row);

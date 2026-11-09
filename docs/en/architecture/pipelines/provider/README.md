@@ -230,6 +230,10 @@ catalog separately and sends option writes to this callback, so personal options
 without built-in credentials. Built-in speech writes keep using the speech repository.
 The registry never adds storage of its own.
 
+Model registration and server or personal image selection validate the payer's model support before
+writing selections. A `ProviderRequestDeniedError` from validation keeps its localized refusal in the
+panel instead of becoming an invalid-model or write-failure message.
+
 An option's panel `handleAction` owns interaction acknowledgement. It may show a modal immediately,
 or acknowledge before awaiting its lazy `loadSelection()` callback, which loads the scope and edit
 entry. Returning false repaints an acknowledged interaction or sends a refusal on an unacknowledged

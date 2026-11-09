@@ -531,7 +531,7 @@ export function report(
     "4. Moving `isDefault` or `isSmartest` to a newer row is fine with a stated reason. Each provider keeps exactly one of each.",
     `5. Keep each provider at ${MAX_ACTIVE_ROWS_PER_PROVIDER} or fewer active rows per table, so its whole list fits one Discord select (25 options, with room for registered models). Decline extras, or set \`isDeprecated: true\` on older rows to retire them. Providers over the limit are marked below.`,
     "6. Decline a model by deleting its row but keeping its seen entry. Do not close this PR unmerged: that discards every seen entry, and the rows return next week.",
-    "7. CI stays red until every description is written and every provider fits the limit. If only **Check model drift review** fails, the rows work and only review remains.",
+    "7. Mark this PR ready for review after writing every description and bringing each provider within the limit. CI checks the rows and runs tests while this PR is a draft; marking it ready also enforces **Check model drift review**.",
     "",
     `## Drafted rows (${candidates.length})`,
     "",

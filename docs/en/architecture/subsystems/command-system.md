@@ -121,6 +121,8 @@ conditioning writes, or manual chat dispatch. A reason adds a playful footer wit
 Reasons appear in italics within the localized action sentence for both user and persona targets.
 Persona targets retain conditioning and manual chat behavior, including fallback persona selection
 when neither target option is supplied.
+They defer ephemerally before loading state or recording conditioning. Public action and blocked-user
+messages use a follow-up; webhook delivery keeps an ephemeral confirmation.
 
 ## Interaction timing rules
 

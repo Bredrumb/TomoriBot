@@ -11,7 +11,7 @@ import type {
 } from "@/types/tool/interfaces";
 import { assembleToolsForContext, createToolVariant } from "@/tools/assembly";
 import { ELEVENLABS_SERVICE_NAME } from "@/utils/audio/elevenLabsAccount";
-import { sql } from "@/utils/db/client";
+import { sql, withTransientDbRetry } from "@/utils/db/client";
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
 import { log } from "@/utils/misc/logger";
 import { resolveSpeechTargets, speechTargetSource } from "@/utils/provider/speechEndpointResolver";
@@ -250,9 +250,10 @@ export async function getAvailableToolsWithMCP(
         }).length > 0;
       // Read split-table model slots: diffusion_model_id/video_model_id live in
       //    server_model_configs; nai_diffusion_model_id lives in server_novelai_imagegen_configs.
-      const [toolConfigRow] = await sql<
-        [{ diffusion_model_id: number | null; nai_diffusion_model_id: number | null; video_model_id: number | null }]
-      >`
+      const [toolConfigRow] = await withTransientDbRetry(
+        () => sql<
+          [{ diffusion_model_id: number | null; nai_diffusion_model_id: number | null; video_model_id: number | null }]
+        >`
         SELECT smc.diffusion_model_id,
                snic.nai_diffusion_model_id,
                smc.video_model_id
@@ -260,7 +261,9 @@ export async function getAvailableToolsWithMCP(
         LEFT JOIN server_novelai_imagegen_configs snic ON snic.server_id = smc.server_id
         WHERE smc.server_id = ${serverIdNumber}
         LIMIT 1
-      `;
+        `,
+        "load tool model slots",
+      );
 
       const hasStandardImageSlot =
         stateForContext.diffusion_model_id != null || toolConfigRow?.diffusion_model_id != null;

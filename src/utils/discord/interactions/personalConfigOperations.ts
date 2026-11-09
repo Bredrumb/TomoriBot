@@ -30,6 +30,7 @@ import { parseAndValidateImageTags } from "@/utils/image/tagHelpers";
 import { log } from "@/utils/misc/logger";
 import { isCustomProvider, parseCustomProvider } from "@/utils/provider/customProviderUtils";
 import { findProviderOption } from "@/utils/provider/providerOptionRegistry";
+import { findProviderRequestDeniedError, type ProviderRequestDeniedError } from "@/utils/provider/providerUsage";
 import { getFallbackModelRefKey, getPrimaryFallbackRefKeys } from "@/utils/provider/fallbackModelIdentity";
 import {
   assignPersonalCapabilityToProvider,
@@ -125,6 +126,7 @@ export interface PersonalConfigOperations {
     | { status: "success" }
     | { status: "no-changes" | "write-failed" }
     | { status: "novelai-unavailable"; descriptionKey: string }
+    | { status: "provider-denied"; denied: ProviderRequestDeniedError }
   >;
   setCapabilityEnabled(input: {
     userId: number;
@@ -367,7 +369,25 @@ export const personalConfigOperations: PersonalConfigOperations = {
     if (!targetRow) return { status: "write-failed" };
 
     const availableModels = await loadAvailableModelsForCapability(userId, provider, capability);
-    if (!availableModels.some((model) => model.id === modelId)) return { status: "write-failed" };
+    const selectedModel = availableModels.find((model) => model.id === modelId);
+    if (!selectedModel) return { status: "write-failed" };
+    const option = findProviderOption(provider);
+    if (capability === "image" && option?.selection.validateModel) {
+      try {
+        if (
+          !(await option.selection.validateModel({
+            scope: { kind: "personal", ownerId: userId },
+            capability: "image",
+            modelCodename: selectedModel.name,
+          }))
+        )
+          return { status: "write-failed" };
+      } catch (error) {
+        const denied = findProviderRequestDeniedError(error);
+        if (denied) return { status: "provider-denied", denied };
+        throw error;
+      }
+    }
 
     if (capability === "transcription") {
       const selected = availableModels.find((model) => model.id === modelId);
