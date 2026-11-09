@@ -214,6 +214,11 @@ Decline an unshipped draft by removing its seed row and keeping its entry in
 `scripts/data/modelDriftSeen.json`, so drift does not offer it again. Curation alone is not evidence
 that a provider deprecated a model.
 
+CI runs structural catalog checks and tests on draft drift PRs. Only the final description and
+provider row-limit review is deferred for drafts from this repository's `automation/model-drift`
+branch. Marking the PR ready for review reruns CI with that review enforced; other PRs and deployment
+runs enforce it normally.
+
 Set `contextWindow` and `maxOutputTokens` from the vendor's official docs. Without a window, history
 truncation is skipped and a long channel fails with a context-length error instead of trimming. Add the
 provider to `LIMIT_REQUIRED_PROVIDERS` in `modelSeed.ts` so a future row cannot forget them.

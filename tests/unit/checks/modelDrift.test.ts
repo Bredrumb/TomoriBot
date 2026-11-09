@@ -29,6 +29,49 @@ const catalogSnapshot: Record<ModelTable, { provider: string; codename: string }
 const frozenCatalog: CatalogLookup = (table) => catalogSnapshot[table];
 
 describe("model drift", () => {
+  it("defers only review for same-repository automation drafts and reruns it when ready", async () => {
+    const workflow = Bun.YAML.parse(
+      await Bun.file(new URL("../../../.github/workflows/ci.yml", import.meta.url)).text(),
+    ) as {
+      on: { pull_request: { types: string[] } };
+      jobs: { validate: { if?: string; steps: { name?: string; run?: string; if?: string }[] } };
+    };
+    for (const event of ["opened", "synchronize", "reopened", "ready_for_review"]) {
+      expect(workflow.on.pull_request.types).toContain(event);
+    }
+    expect(workflow.jobs.validate.if).toBeUndefined();
+    const steps = workflow.jobs.validate.steps;
+    for (const name of ["Check seed catalogs", "Run unit/integration tests"]) {
+      const step = steps.find((step) => step.name === name);
+      expect(step).toBeDefined();
+      expect(step?.if).toBeUndefined();
+    }
+    expect(steps.find((step) => step.name === "Check seed catalogs")?.run).toContain("--defer-drift-review");
+    const review = steps.find((step) => step.name === "Check model drift review");
+    expect(review?.run).toBe("bun run check-seed-catalogs");
+    expect(review?.if).toBeDefined();
+    const shouldReview = new Function("github", `return (${review?.if});`) as (github: unknown) => boolean;
+    for (const [eventName, draft, headRepository, headRef, expected] of [
+      ["pull_request", true, "example/tomoribot", "automation/model-drift", false],
+      ["pull_request", false, "example/tomoribot", "automation/model-drift", true],
+      ["pull_request", true, "example/fork", "automation/model-drift", true],
+      ["pull_request", true, "example/tomoribot", "feature/models", true],
+      ["workflow_dispatch", false, "", "", true],
+      ["push", false, "", "", true],
+    ] as const) {
+      expect(
+        shouldReview({
+          event_name: eventName,
+          repository: "example/tomoribot",
+          event:
+            eventName === "pull_request"
+              ? { pull_request: { draft, head: { ref: headRef, repo: { full_name: headRepository } } } }
+              : {},
+        }),
+      ).toBe(expected);
+    }
+  });
+
   it("offers every valid Decision entry, including new families, aliases, and free variants", async () => {
     const source = await Bun.file(fixture).json();
     const payload = await Bun.file(new URL("../../fixtures/openrouterDecisionDrift.json", import.meta.url)).json();
