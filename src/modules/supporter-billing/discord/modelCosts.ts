@@ -1,6 +1,9 @@
 import type { SupporterCapability } from "@/modules/supporter-billing/config";
 import { resolveSupporterFunding } from "@/modules/supporter-billing/runtime/funding";
-import { NANO_BANANA_1K_IMAGE_TOKENS } from "@/modules/supporter-billing/runtime/spendEstimates";
+import {
+  GEMINI_2_5_IMAGE_TOKENS,
+  NANO_BANANA_1K_IMAGE_TOKENS,
+} from "@/modules/supporter-billing/runtime/spendEstimates";
 import { normalizeOpenRouterCodename } from "@/utils/cache/openrouterCatalog";
 import type { ChoicePricing, MediaPriceUnit, MediaRate } from "@/utils/provider/modelPricing";
 import type {
@@ -18,7 +21,7 @@ const TEXT_INPUT_TOKENS_PER_OUTPUT_TOKEN = 25;
  * models absent here show no ratio (GPT Image's "auto" quality spans roughly 270-23,700 tokens).
  */
 const IMAGE_TOKENS_PER_IMAGE: Readonly<Record<string, number>> = {
-  "google/gemini-2.5-flash-image": 1_290,
+  "google/gemini-2.5-flash-image": GEMINI_2_5_IMAGE_TOKENS,
   "google/gemini-3-pro-image": 1_120,
   "google/gemini-3-pro-image-preview": 1_120,
   "google/gemini-3.1-flash-image": 1_120,

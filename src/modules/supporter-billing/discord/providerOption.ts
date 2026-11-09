@@ -239,7 +239,7 @@ async function validateModel(input: {
     });
     return true;
   } catch (error) {
-    if (error instanceof SupporterRequestDeniedError) return false;
+    if (error instanceof SupporterRequestDeniedError && error.reason !== "pricing_unavailable") return false;
     throw error;
   }
 }

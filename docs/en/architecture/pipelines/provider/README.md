@@ -206,6 +206,11 @@ output can print the headers and body the hook accounts for. The OpenRouter embe
 The hook has no in-tree implementation on main. The release branch registers its deployment
 implementation at startup, and the registration returns a disposer like the usage and denial ones.
 
+Subscription image validation builds generation and reference-image requests with the same builder
+used for inference and checks them through the spending estimator. Validation reads catalogs only;
+it sends no generation request and reserves no allowance. The runtime guard checks each actual
+request again because pricing can change after registration.
+
 ## Provider options
 
 `ProviderInfo.defaultVisionModel` supplies the initial vision slot during server setup and new

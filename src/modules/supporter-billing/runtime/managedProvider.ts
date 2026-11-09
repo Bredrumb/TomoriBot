@@ -16,6 +16,8 @@ import { getOrFetchOpenRouterImageModel } from "@/utils/cache/openrouterImageMod
 import { llmModelRepo } from "@/utils/db/repositories";
 import { validateOpenRouterSpeechModel } from "@/utils/cache/openrouterSpeechModelCache";
 import { supporterSpendGuard } from "@/modules/supporter-billing/runtime/spendGuard";
+import { validateSupporterImagePricing } from "@/modules/supporter-billing/runtime/spendEstimates";
+import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 
 export async function resolveSupporterMemberKey(
   funding: SupporterFundingContext,
@@ -145,5 +147,26 @@ export async function validateSupporterModelRegistration(params: {
                 : undefined;
   if (!model)
     throw new SupporterRequestDeniedError("model_unavailable", undefined, params.capability, params.scope.kind);
+  if (params.capability === "image") {
+    try {
+      await validateSupporterImagePricing(codename);
+    } catch (error) {
+      await reportProviderFailure({
+        summary: "Subscription image model pricing validation failed",
+        errorType: "SupporterImageModelPricingUnavailable",
+        error,
+        expected: true,
+        dimensions: { provider: "openrouter", capability: "image", fundingScope: params.scope.kind },
+        metadata: { model: codename },
+      });
+      throw new SupporterRequestDeniedError(
+        "pricing_unavailable",
+        { modelCodename: codename },
+        "image",
+        params.scope.kind,
+        funding.context,
+      );
+    }
+  }
   return { funding, model };
 }

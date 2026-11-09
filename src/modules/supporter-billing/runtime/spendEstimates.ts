@@ -11,10 +11,13 @@ import { getOrFetchOpenRouterVideoModelCapabilities } from "@/utils/cache/openro
 import { getOrFetchOpenRouterImageEndpoints } from "@/utils/cache/openrouterImageModelCache";
 import { openRouterPriceSchema as priceSchema } from "@/utils/cache/openrouterCatalog";
 import { findOpenRouterSpeechModel } from "@/providers/openrouter/openrouterSpeechModels";
+import { buildOpenRouterImageRequest } from "@/providers/openrouter/openrouterImageGeneration";
 
 const ratesSchema = z.record(z.string(), priceSchema);
 // Gemini 3.1 Flash Image uses at most 2,520 image tokens through 4K; revisit this ceiling when its output sizes change.
 const GEMINI_FLASH_IMAGE_TOKENS = 2_520;
+// Gemini 2.5 Flash Image bills 1,290 tokens per output image: https://ai.google.dev/gemini-api/docs/pricing.
+export const GEMINI_2_5_IMAGE_TOKENS = 1_290;
 // Nano Banana 2.1 bills 1,120 image tokens at 1K; revise this bound before enabling larger output sizes.
 export const NANO_BANANA_1K_IMAGE_TOKENS = 1_120;
 // GPT Image 2's high-quality 96x96 grid and 8,294,400-pixel ceiling bound output at 23,719 tokens; revisit when its size or quality limits change.
@@ -23,6 +26,23 @@ const GPT_IMAGE_2_MAX_GRID_SIDE = 96;
 // Exa auto includes 10 results for $0.007 plus $0.001 per extra result: https://openrouter.ai/docs/guides/features/plugins/web-search.
 const EXA_SEARCH_REQUEST_COST = 0.007;
 const EXA_SEARCH_EXTRA_RESULT_COST = 0.001;
+
+export async function validateSupporterImagePricing(modelCodename: string): Promise<void> {
+  const reference = {
+    mimeType: "image/png",
+    data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aXZkAAAAASUVORK5CYII=",
+  };
+  for (const referenceImages of [undefined, [reference]]) {
+    const { url, body } = buildOpenRouterImageRequest({
+      modelCodename,
+      prompt: "Image pricing check",
+      aspectRatio: "1:1",
+      referenceImages,
+    });
+    const cost = await estimateSupporterRequestCost(new URL(url).pathname, body);
+    if (!Number.isFinite(cost) || cost < 0) throw new Error("Invalid image cost estimate");
+  }
+}
 
 export async function estimateSupporterRequestCost(path: string, body: Record<string, unknown>): Promise<number> {
   const model = z.string().min(1).parse(body.model);
@@ -91,11 +111,13 @@ export async function estimateSupporterRequestCost(path: string, body: Record<st
     );
   }
   if (path.endsWith("/images") || (Array.isArray(body.modalities) && body.modalities.includes("image"))) {
-    if (model === "google/gemini-nano-banana-2.1") {
+    if (model === "google/gemini-nano-banana-2.1" || model === "google/gemini-2.5-flash-image") {
       await getOrFetchOpenRouterCapabilities(model);
       const pricing = getOpenRouterPricing(model);
       if (!pricing) throw new Error("Image input and text-output pricing unavailable");
-      z.object({ image_size: z.literal("1K") }).parse(body.image_config);
+      if (model === "google/gemini-nano-banana-2.1") z.object({ image_size: z.literal("1K") }).parse(body.image_config);
+      const imageTokens =
+        model === "google/gemini-2.5-flash-image" ? GEMINI_2_5_IMAGE_TOKENS : NANO_BANANA_1K_IMAGE_TOKENS;
       const references = countImages(body.messages);
       // Until reference-image token counts are available, reserve the model's full context for image inputs.
       const inputTokens =
@@ -114,18 +136,25 @@ export async function estimateSupporterRequestCost(path: string, body: Record<st
         );
       const endpoints = await getOrFetchOpenRouterImageEndpoints(model);
       if (!endpoints) throw new Error("Image pricing unavailable");
-      const imageCost = Math.max(
-        ...endpoints.map((endpoint) =>
-          endpoint.pricing.reduce((sum, price) => {
-            if (price.cost_usd === 0) return sum;
-            if (price.unit !== "token" || price.billable !== "output_image") throw new Error("Unsupported image price");
-            return sum + price.cost_usd * NANO_BANANA_1K_IMAGE_TOKENS;
-          }, 0),
-        ),
-      );
-      return (
-        imageCost +
-        (inputTokens * pricing.promptPricePerMillion + textOutputTokens * pricing.completionPricePerMillion) / 1_000_000
+      return Math.max(
+        ...endpoints.map((endpoint) => {
+          let inputRate = pricing.promptPricePerMillion / 1_000_000;
+          let textOutputRate = pricing.completionPricePerMillion / 1_000_000;
+          let imageCost = 0;
+          for (const price of endpoint.pricing) {
+            if (price.cost_usd === 0) continue;
+            if (price.unit === "token" && price.billable === "output_image") imageCost += price.cost_usd * imageTokens;
+            else if (price.unit === "token" && ["input_text", "input_image"].includes(price.billable))
+              inputRate = Math.max(inputRate, price.cost_usd);
+            else if (price.unit === "token" && price.billable === "output_text")
+              textOutputRate = Math.max(textOutputRate, price.cost_usd);
+            else if (price.unit === "image" && ["output_image", "input_image"].includes(price.billable))
+              imageCost += price.cost_usd * (price.billable === "output_image" ? 1 : references);
+            else if (price.unit === "request") imageCost += price.cost_usd;
+            else throw new Error("Unsupported image price");
+          }
+          return imageCost + inputTokens * inputRate + textOutputTokens * textOutputRate;
+        }),
       );
     }
     const endpoints = await getOrFetchOpenRouterImageEndpoints(model);

@@ -77,6 +77,7 @@ import { resolveSupporterFunding } from "@/modules/supporter-billing/runtime/fun
 import { activatePersonalProviderTextModel } from "@/utils/provider/providerActivation";
 import { invalidateUserCache } from "@/utils/cache/userCache";
 import { loadConfigPersonaVoiceView } from "@/utils/discord/interactions/configPersonaVoiceLoader";
+import { personalConfigOperations } from "@/utils/discord/interactions/personalConfigOperations";
 
 const validSupporterConfig: import("@/modules/supporter-billing/config").SupporterBillingConfig = {
   patreon: {
@@ -607,7 +608,15 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
           }
           if (String(input).endsWith("/images/models"))
             return Response.json({
-              data: [{ id: "test/personal-image", architecture: { output_modalities: ["image"] } }],
+              data: ["test/personal-image", "test/unpriced-image"].map((id) => ({
+                id,
+                architecture: { output_modalities: ["image"] },
+              })),
+            });
+          if (String(input).endsWith("/images/models/test/unpriced-image/endpoints"))
+            return Response.json({
+              id: "test/unpriced-image",
+              endpoints: [{ pricing: [{ billable: "output_image", unit: "token", cost_usd: "0.001" }] }],
             });
           if (String(input).endsWith("/images/models/test/personal-image/endpoints"))
             return Response.json({
@@ -1063,6 +1072,72 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
         expect(personal.usageContext?.supporterFunding?.fundingScope).toBe("personal");
         expect(server.apiKey).toBe("synthetic-server-member-key");
         expect(server.usageContext?.supporterFunding?.fundingScope).toBe("server");
+      }
+      const pricingState = await personaRepository.loadState(FIXTURE_IDS.serverDiscId);
+      if (!pricingState) throw new Error("Missing pricing validation workspace");
+      for (const scopeKind of ["personal", "server"] as const) {
+        const ownerId = scopeKind === "personal" ? refs.userId : refs.serverId;
+        const register = (provider: string) =>
+          saveProviderModel({
+            serverDiscId: FIXTURE_IDS.serverDiscId,
+            ownerId,
+            scopeKind,
+            state: pricingState,
+            entryId: `provider:${provider}`,
+            capability: "image",
+            codeName: "test/unpriced-image",
+          });
+        const before =
+          scopeKind === "personal"
+            ? await llmProviderRepo.loadUserSavedProviderConfig(ownerId, "supporter")
+            : await llmProviderRepo.loadSavedProviderConfig(ownerId, "supporter");
+        expect(await register("supporter")).toMatchObject({
+          status: "provider-denied",
+          denied: { reason: "pricing_unavailable", fundingScope: scopeKind },
+        });
+        const after =
+          scopeKind === "personal"
+            ? await llmProviderRepo.loadUserSavedProviderConfig(ownerId, "supporter")
+            : await llmProviderRepo.loadSavedProviderConfig(ownerId, "supporter");
+        expect(after?.diffusion_model_id).toBe(before?.diffusion_model_id);
+        if (scopeKind === "personal") {
+          expect(await llmProviderRepo.upsertUserSavedProviderConfig(ownerId, byok)).toBe(true);
+        } else {
+          const ownKeyConfig = await buildSavedProviderConfigFromExistingOrDefaults({
+            serverId: refs.serverId,
+            provider: "openrouter",
+            apiKey: key.encrypted,
+            keyVersion: key.version,
+            baseConfig: pricingState.config,
+          });
+          expect(await llmProviderRepo.upsertSavedProviderConfig(ownerId, ownKeyConfig)).toBe(true);
+        }
+        expect(await register("openrouter")).toMatchObject({ status: "success" });
+        const model = await llmModelRepo.loadDiffusionModelByProviderAndCodename("openrouter", "test/unpriced-image");
+        if (!model?.diffusion_model_id) throw new Error("Missing BYOK image registration");
+        const selected =
+          scopeKind === "personal"
+            ? await personalConfigOperations.setCapabilityModel({
+                userId: refs.userId,
+                userDiscId: FIXTURE_IDS.userDiscId,
+                capability: "image",
+                provider: "supporter",
+                modelId: model.diffusion_model_id,
+              })
+            : await configModelOperations.setCapabilityModel({
+                tomoriState: pricingState,
+                serverDiscId: FIXTURE_IDS.serverDiscId,
+                capability: "image",
+                provider: "supporter",
+                modelId: model.diffusion_model_id,
+              });
+        expect(selected).toMatchObject({ status: "provider-denied", denied: { reason: "pricing_unavailable" } });
+        expect(
+          (scopeKind === "personal"
+            ? await llmProviderRepo.loadUserSavedProviderConfig(ownerId, "supporter")
+            : await llmProviderRepo.loadSavedProviderConfig(ownerId, "supporter")
+          )?.diffusion_model_id,
+        ).toBe(before?.diffusion_model_id);
       }
       const currentKey = await memberKeys.load(serverMember.patreon_member_id);
       if (!currentKey) throw new Error("Missing server member key");

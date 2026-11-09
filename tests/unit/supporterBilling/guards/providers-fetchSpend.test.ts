@@ -164,6 +164,83 @@ describe.each(IMAGE_VARIANTS)("openrouter image generation via $label", (variant
 });
 
 describe("subscription image pricing", () => {
+  it("funds Gemini 2.5 images and references while retaining allowance and unknown-price checks", async () => {
+    restoreEstimate();
+    const modelCodename = "google/gemini-2.5-flash-image";
+    const key = harness.register({
+      funding: createServerFunding({ capability: "image", modelCodename }),
+      appliedLimit: 0.3,
+    });
+    let outputRate = 0.00003;
+    let outputUnit = "token";
+    let sent = 0;
+    let withReference = false;
+    fetchSpy = stubGlobalFetch((input, init) => {
+      const url = String(input);
+      if (url.endsWith("/endpoints"))
+        return Response.json({
+          id: modelCodename,
+          endpoints: [
+            {
+              pricing: [
+                { billable: "output_image", unit: outputUnit, cost_usd: outputRate },
+                { billable: "input_text", unit: "token", cost_usd: 0.0000003 },
+                { billable: "input_image", unit: "token", cost_usd: 0.0000003 },
+                { billable: "output_text", unit: "token", cost_usd: 0.0000025 },
+              ],
+            },
+          ],
+        });
+      if (url.endsWith("/models"))
+        return Response.json({
+          data: [
+            {
+              id: modelCodename,
+              context_length: 32768,
+              top_provider: { max_completion_tokens: 32768 },
+              pricing: { prompt: "0.0000003", completion: "0.0000025" },
+            },
+          ],
+        });
+      expect(url).toBe("https://openrouter.ai/api/v1/chat/completions");
+      const body = JSON.parse(String(init?.body));
+      const inputTokens = withReference ? 32768 : Buffer.byteLength(JSON.stringify(body.messages));
+      expect(harness.pending(key.identityId)).toBeCloseTo(
+        1290 * outputRate + inputTokens * 0.0000003 + 32768 * 0.0000025,
+        5,
+      );
+      sent++;
+      return Response.json({
+        choices: [{ message: { images: [{ image_url: { url: "data:image/png;base64,QUJD" } }] } }],
+        usage: usage(USAGE_COST_USD),
+      });
+    });
+    resetOpenRouterCapabilityCache();
+    try {
+      await getOrFetchOpenRouterImageEndpoints(modelCodename, { fresh: true });
+      for (const referenceImages of [undefined, [{ mimeType: "image/png", data: "QUJD" }]]) {
+        withReference = Boolean(referenceImages);
+        const result = await generateOpenRouterImage({ ...imageRequest(key.apiKey, modelCodename), referenceImages });
+        expect(result.imageData).toBe("QUJD");
+        expect(harness.pending(key.identityId)).toBe(0);
+      }
+      outputRate *= 10;
+      await getOrFetchOpenRouterImageEndpoints(modelCodename, { fresh: true });
+      await expect(generateOpenRouterImage(imageRequest(key.apiKey, modelCodename))).rejects.toMatchObject({
+        reason: "allowance_exhausted",
+      });
+      outputUnit = "unknown";
+      await getOrFetchOpenRouterImageEndpoints(modelCodename, { fresh: true });
+      await expect(generateOpenRouterImage(imageRequest(key.apiKey, modelCodename))).rejects.toMatchObject({
+        reason: "pricing_unavailable",
+      });
+      expect(sent).toBe(2);
+      expect(harness.pending(key.identityId)).toBe(0);
+    } finally {
+      resetOpenRouterCapabilityCache();
+    }
+  });
+
   it("admits GPT Image 2 generation and editing with token prices and blocks an unaffordable quote", async () => {
     restoreEstimate();
     const modelCodename = "openai/gpt-5.4-image-2";
