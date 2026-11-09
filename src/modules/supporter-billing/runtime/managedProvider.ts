@@ -164,7 +164,6 @@ export async function validateSupporterModelRegistration(params: {
         { modelCodename: codename },
         "image",
         params.scope.kind,
-        funding.context,
       );
     }
   }

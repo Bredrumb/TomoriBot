@@ -78,6 +78,11 @@ import { activatePersonalProviderTextModel } from "@/utils/provider/providerActi
 import { invalidateUserCache } from "@/utils/cache/userCache";
 import { loadConfigPersonaVoiceView } from "@/utils/discord/interactions/configPersonaVoiceLoader";
 import { personalConfigOperations } from "@/utils/discord/interactions/personalConfigOperations";
+import type { Client } from "discord.js";
+import type { ToolContext } from "@/types/tool/interfaces";
+import { GenerateImageTool } from "@/tools/functionCalls/generateImageTool";
+import { findProviderRequestDeniedError } from "@/utils/provider/providerUsage";
+import { initializeLocalizer } from "@/utils/text/localizer";
 
 const validSupporterConfig: import("@/modules/supporter-billing/config").SupporterBillingConfig = {
   patreon: {
@@ -1091,10 +1096,13 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
           scopeKind === "personal"
             ? await llmProviderRepo.loadUserSavedProviderConfig(ownerId, "supporter")
             : await llmProviderRepo.loadSavedProviderConfig(ownerId, "supporter");
-        expect(await register("supporter")).toMatchObject({
+        const refused = await register("supporter");
+        expect(refused).toMatchObject({
           status: "provider-denied",
           denied: { reason: "pricing_unavailable", fundingScope: scopeKind },
         });
+        if (refused.status !== "provider-denied") throw new Error("Expected subscription pricing refusal");
+        expect(findProviderRequestDeniedError(refused.denied, undefined)).toBe(refused.denied);
         const after =
           scopeKind === "personal"
             ? await llmProviderRepo.loadUserSavedProviderConfig(ownerId, "supporter")
@@ -1132,6 +1140,37 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
                 modelId: model.diffusion_model_id,
               });
         expect(selected).toMatchObject({ status: "provider-denied", denied: { reason: "pricing_unavailable" } });
+        await initializeLocalizer();
+        const errors = spyOn(log, "error").mockResolvedValue(undefined);
+        try {
+          const result = await new GenerateImageTool().execute(
+            { prompt: "fixture pricing check" },
+            {
+              channel: { id: "fixture-channel" } as ToolContext["channel"],
+              client: {} as Client,
+              tomoriState: pricingState,
+              provider: "openrouter",
+              locale: "en-US",
+              userId: FIXTURE_IDS.userDiscId,
+              internalUserId: refs.userId,
+              isUserImpersonation: true,
+              streamContext: {
+                disableYouTubeProcessing: false,
+                imageModelSelection: {
+                  source: scopeKind,
+                  provider: "supporter",
+                  modelId: model.diffusion_model_id,
+                  kind: "image",
+                },
+              },
+            },
+          );
+          expect(result.success).toBe(false);
+          expect(result.failure?.code).toBe("provider_request_denied");
+          expect(errors).not.toHaveBeenCalled();
+        } finally {
+          errors.mockRestore();
+        }
         expect(
           (scopeKind === "personal"
             ? await llmProviderRepo.loadUserSavedProviderConfig(ownerId, "supporter")
