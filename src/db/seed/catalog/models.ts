@@ -4328,6 +4328,11 @@ export const videoSections: ModelSection<VideoInput>[] = [
           "zh-CN": "OpenAI Sora 2 Pro：最长 20 秒的高保真视频生成",
         },
       },
+      {
+        provider: "openrouter",
+        codename: "google/gemini-omni-1.2-flash",
+        desc: "Google Gemini Omni 1.2 Flash via OpenRouter: videos up to 15 seconds with optional native audio from text or a starting image",
+      },
     ],
   },
   {
