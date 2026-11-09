@@ -559,10 +559,22 @@ export async function execute(
 
     modalSubmitInteraction = modalResult.interaction;
     if (modelSelection) {
-      imageCreds = await resolveCapabilityCredentials(tomoriState.server_id, "image-standard", {
-        userId: userData.user_id ?? null,
-        modelSelection,
-      });
+      try {
+        imageCreds = await resolveCapabilityCredentials(tomoriState.server_id, "image-standard", {
+          userId: userData.user_id ?? null,
+          modelSelection,
+        });
+      } catch (error) {
+        const denied = findProviderRequestDeniedError(error);
+        if (!denied) throw error;
+        await replyInfoEmbed(modalSubmitInteraction ?? interaction, locale, {
+          ...getProviderRequestFailureCopy(denied, locale),
+          color: ColorCode.ERROR,
+          flags: MessageFlags.Ephemeral,
+          ...recoveryOptions(),
+        });
+        return;
+      }
       apiKey = imageCreds.apiKey;
       imageRoute = await resolveStandardImageRoute(imageCreds);
       if (!imageRoute) throw new GenerationModelUnavailableError();

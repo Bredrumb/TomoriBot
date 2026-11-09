@@ -14,9 +14,10 @@ import * as textDisplayModals from "@/utils/discord/textDisplayModal";
 import { executeAutoImageCommand } from "@/utils/image/autoImageCommand";
 import * as providerFactory from "@/utils/provider/providerFactory";
 import * as hiddenImageTurn from "@/utils/provider/hiddenImageTurn";
+import * as generationModels from "@/utils/provider/generationModels";
 import { log } from "@/utils/misc/logger";
 import { registerProviderOption } from "@/utils/provider/providerOptionRegistry";
-import { currentProviderUsageContext } from "@/utils/provider/providerUsage";
+import { currentProviderUsageContext, ProviderRequestDeniedError } from "@/utils/provider/providerUsage";
 import * as quota from "@/utils/quota/imageQuotaManager";
 import * as crypto from "@/utils/security/crypto";
 import * as context from "@/utils/text/contextBuilder";
@@ -222,6 +223,37 @@ async function execute(): Promise<void> {
 }
 
 describe("auto image planning credentials", () => {
+  it("renders a model validation refusal without starting the planner or logging an operational error", async () => {
+    const selection: generationModels.GenerationModelChoice = {
+      source: "server",
+      kind: "image",
+      provider: "openrouter",
+      modelId: 2,
+      name: "fixture/image",
+    };
+    command.interaction.options.getString = (name) =>
+      name === "model" ? generationModels.generationModelValue(selection) : null;
+    Object.assign(command.interaction.options, { getSubcommand: () => "image" });
+    const errors = spyOn(log, "error").mockResolvedValue(undefined);
+    restores.push(
+      errors,
+      spyOn(generationModels, "loadGenerationModelChoices").mockResolvedValue([selection]),
+      spyOn(generationModels, "validateGenerationModelSelection").mockRejectedValue(
+        new ProviderRequestDeniedError(undefined, (locale) => ({
+          titleKey: "general.errors.api_key_error_title",
+          description: localizedCopy(locale, "general.errors.api_key_error_description"),
+        })),
+      ),
+    );
+
+    await execute();
+
+    expect(JSON.stringify(modal.calls)).toContain(localizedCopy("en-US", "general.errors.api_key_error_description"));
+    expect(JSON.stringify(modal.calls)).not.toContain("error_full_detail");
+    expect(stream).not.toHaveBeenCalled();
+    expect(errors).not.toHaveBeenCalled();
+  });
+
   it("generates through a registered option without a stored text key", async () => {
     await execute();
 
