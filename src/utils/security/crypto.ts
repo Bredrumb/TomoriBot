@@ -67,9 +67,10 @@ export const decryptApiKey = async (
 
     // Use PostgreSQL's pgp_sym_decrypt function to decrypt the API key
     // No need for typecasting to bytea since encryptedKey is already a Buffer
-    const [result] = await sql`
-      SELECT pgp_sym_decrypt(${encryptedKey}, ${key}) AS decrypted_key
-    `;
+    const [result] = await withTransientDbRetry(
+      () => sql`SELECT pgp_sym_decrypt(${encryptedKey}, ${key}) AS decrypted_key`,
+      "decrypt API key",
+    );
 
     if (!result?.decrypted_key) {
       throw new Error("Decryption failed");

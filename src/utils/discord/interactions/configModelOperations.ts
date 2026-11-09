@@ -726,6 +726,23 @@ export const configModelOperations: ConfigModelOperations = {
     if (choices.length === 0) return { status: "no-models" };
     const choice = choices.find((candidate) => candidate.id === modelId);
     if (!choice) return { status: "not-found" };
+    const option = findProviderOption(savedConfig.provider);
+    if (capability === "image" && option?.selection.validateModel) {
+      try {
+        if (
+          !(await option.selection.validateModel({
+            scope: serverOptionScope(tomoriState),
+            capability: "image",
+            modelCodename: choice.name,
+          }))
+        )
+          return { status: "not-found" };
+      } catch (error) {
+        const denied = findProviderRequestDeniedError(error);
+        if (denied) return { status: "provider-denied", denied };
+        throw error;
+      }
+    }
     if (
       choice.id === currentModelIdForCapability(tomoriState, capability) &&
       savedProviderOwnsSlot(tomoriState, savedConfig.provider, capability)

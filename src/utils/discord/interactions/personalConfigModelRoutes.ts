@@ -17,6 +17,7 @@ import { buildProviderPageEntries } from "@/utils/discord/ui/modelRoutingControl
 import { takeRawModalCheckboxGroupValues, takeRawModalSelectValue } from "@/utils/discord/ui/modals";
 import { log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
+import { getProviderRequestFailureCopy } from "@/utils/provider/providerUsage";
 import {
   getActivePersonalProviderForCapability,
   getStoredPersonalProviderForCapability,
@@ -328,12 +329,15 @@ export async function handlePersonalConfigModelRoutes(context: PersonalConfigPos
       panelReceipt: {
         tone: "error",
         heading: localizer(route.locale, "commands.personal.config.write_failed_heading"),
-        detail: localizer(
-          route.locale,
-          result.status === "novelai-unavailable"
-            ? result.descriptionKey
-            : "commands.personal.config.write_failed_detail",
-        ),
+        detail:
+          result.status === "provider-denied"
+            ? getProviderRequestFailureCopy(result.denied, route.locale).description
+            : localizer(
+                route.locale,
+                result.status === "novelai-unavailable"
+                  ? result.descriptionKey
+                  : "commands.personal.config.write_failed_detail",
+              ),
       },
       dependencies,
       selectedCapability: route.capability,

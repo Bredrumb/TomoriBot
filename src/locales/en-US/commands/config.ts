@@ -806,6 +806,7 @@ export default {
       sprite_export_failed_heading: `Export Unavailable`,
       sprite_export_none_detail: `{persona} has no sprites to export.`,
       sprite_export_images_failed_detail: `None of {persona}'s sprite images could be loaded.`,
+      sprite_export_image_too_large_detail: `The sprite "{sprite}" exceeds the export file limit. Replace it with a smaller image and try again.`,
       text_override_cleared_heading: `Text Override Cleared`,
       text_override_cleared_detail: `Cleared the text-model override for {persona}.`,
       long_term_title: `**[Long-Term Memory](https://docs.tomoribot.app/en/features/knowledge/memory/long-term-memory/)**`,

@@ -11,12 +11,60 @@ import { shortTermMemoryRepository } from "@/utils/db/repositories/ShortTermMemo
 import { serverStmConfigSchema } from "@/types/db/schema";
 import { userNamingRepository } from "@/utils/db/repositories/UserNamingRepository";
 import { userPersonaNamingPreferenceSchema } from "@/types/personaNaming";
+import { decryptApiKey } from "@/utils/security/crypto";
+import { keyManager } from "@/utils/security/keyManager";
+import { OAuthStateRepository } from "@/utils/db/repositories/OAuthStateRepository";
+import { personaSpriteMessageRepository } from "@/utils/db/repositories/PersonaSpriteMessageRepository";
 
 useEnvSandbox(["POSTGRES_TRANSIENT_RETRY_DELAY_MS", "POSTGRES_TRANSIENT_RETRY_ATTEMPTS"]);
 
 beforeAll(() => {
   process.env.POSTGRES_TRANSIENT_RETRY_DELAY_MS = "0";
   process.env.POSTGRES_TRANSIENT_RETRY_ATTEMPTS = "3";
+});
+
+it("recovers credential decryption, sprite history, and OAuth cleanup after connection retirement", async () => {
+  const sprite = {
+    message_disc_id: "123456789012345678",
+    persona_id: 1,
+    sprite_name: "Happy",
+    channel_disc_id: "123456789012345679",
+    created_at: new Date(),
+  };
+  const key = spyOn(keyManager, "getKey").mockReturnValue("fixture-encryption-key");
+  const cases = [
+    {
+      read: () => decryptApiKey(Buffer.from("ciphertext")),
+      rows: [{ decrypted_key: "fixture-api-key" }],
+      expected: "fixture-api-key",
+    },
+    {
+      read: () => personaSpriteMessageRepository.getByMessageIds([sprite.message_disc_id]),
+      rows: [sprite],
+      expected: new Map([[sprite.message_disc_id, sprite]]),
+    },
+    {
+      read: () => new OAuthStateRepository(dbClient.sql).purgeFinishedStates(),
+      rows: [{ oauth_state_id: 1 }],
+      expected: { purgedStates: 1 },
+    },
+  ];
+  const array = dbClient.sql.array.bind(dbClient.sql);
+  try {
+    for (const entry of cases) {
+      const thunk = failOnceThen("ERR_POSTGRES_LIFETIME_TIMEOUT", entry.rows);
+      const query = spyOn(dbClient, "sql").mockImplementation(thunk.run as unknown as typeof dbClient.sql);
+      Object.assign(dbClient.sql, { array });
+      try {
+        expect(await entry.read()).toEqual(entry.expected);
+        expect(thunk.calls()).toBe(2);
+      } finally {
+        query.mockRestore();
+      }
+    }
+  } finally {
+    key.mockRestore();
+  }
 });
 
 it("recovers saved short-term memory settings after a connection lifetime timeout", async () => {

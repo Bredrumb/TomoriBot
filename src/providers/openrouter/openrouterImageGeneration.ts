@@ -44,6 +44,49 @@ export function usesChatCompletionsImageGeneration(modelCodename: string): boole
   return isOpenRouterGeminiModelCodename(modelCodename);
 }
 
+export function buildOpenRouterImageRequest(
+  request: Pick<OpenRouterImageGenerationRequest, "modelCodename" | "prompt" | "aspectRatio" | "referenceImages">,
+): { url: string; body: Record<string, unknown> } {
+  const { modelCodename, prompt, aspectRatio, referenceImages } = request;
+  if (usesChatCompletionsImageGeneration(modelCodename)) {
+    const content: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
+      { type: "text", text: prompt },
+      ...(referenceImages ?? []).map((image) => ({
+        type: "image_url",
+        image_url: { url: `data:${image.mimeType};base64,${image.data}` },
+      })),
+    ];
+    return {
+      url: OPENROUTER_CHAT_URL,
+      body: {
+        model: modelCodename,
+        messages: [{ role: "user", content }],
+        modalities: ["image", "text"],
+        image_config: {
+          aspect_ratio: aspectRatio,
+          ...(modelCodename === "google/gemini-nano-banana-2.1" ? { image_size: "1K" } : {}),
+        },
+      },
+    };
+  }
+  return {
+    url: OPENROUTER_IMAGES_URL,
+    body: {
+      model: modelCodename,
+      prompt,
+      aspect_ratio: aspectRatio,
+      ...(referenceImages?.length
+        ? {
+            input_references: referenceImages.map((image) => ({
+              type: "image_url",
+              image_url: { url: `data:${image.mimeType};base64,${image.data}` },
+            })),
+          }
+        : {}),
+    },
+  };
+}
+
 function buildRequestFailure(
   modelCodename: string,
   status: number,
@@ -113,27 +156,12 @@ async function resolveImageUrl(imageUrl: string, abortSignal?: AbortSignal): Pro
 async function generateViaChatCompletions(
   request: OpenRouterImageGenerationRequest,
 ): Promise<OpenRouterImageGenerationResult> {
-  const { apiKey, modelCodename, prompt, aspectRatio, referenceImages, abortSignal } = request;
-
-  const contentParts: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
-    { type: "text", text: prompt },
-  ];
-  for (const image of referenceImages ?? []) {
-    contentParts.push({ type: "image_url", image_url: { url: `data:${image.mimeType};base64,${image.data}` } });
-  }
-
-  const response = await fetchWithProviderRequest(OPENROUTER_CHAT_URL, {
+  const { apiKey, modelCodename, abortSignal } = request;
+  const { url, body } = buildOpenRouterImageRequest(request);
+  const response = await fetchWithProviderRequest(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: modelCodename,
-      messages: [{ role: "user", content: contentParts }],
-      modalities: ["image", "text"],
-      image_config: {
-        aspect_ratio: aspectRatio,
-        ...(modelCodename === "google/gemini-nano-banana-2.1" ? { image_size: "1K" } : {}),
-      },
-    }),
+    body: JSON.stringify(body),
     ...(abortSignal ? { signal: abortSignal } : {}),
   });
 
@@ -204,21 +232,9 @@ async function generateViaChatCompletions(
 async function generateViaImagesEndpoint(
   request: OpenRouterImageGenerationRequest,
 ): Promise<OpenRouterImageGenerationResult> {
-  const { apiKey, modelCodename, prompt, aspectRatio, referenceImages, abortSignal } = request;
-
-  const body: Record<string, unknown> = {
-    model: modelCodename,
-    prompt,
-    aspect_ratio: aspectRatio,
-  };
-  if (referenceImages && referenceImages.length > 0) {
-    body.input_references = referenceImages.map((image) => ({
-      type: "image_url",
-      image_url: { url: `data:${image.mimeType};base64,${image.data}` },
-    }));
-  }
-
-  const response = await fetchWithProviderRequest(OPENROUTER_IMAGES_URL, {
+  const { apiKey, modelCodename, abortSignal } = request;
+  const { url, body } = buildOpenRouterImageRequest(request);
+  const response = await fetchWithProviderRequest(url, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,

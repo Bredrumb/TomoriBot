@@ -153,6 +153,19 @@ describe("guild MCP replacement availability without a bundled MCP manager", () 
     expect(result.mcpFunctionNames).toEqual([]);
   });
 
+  it("retains guild MCP tools when the model-slot query loses a retired connection", async () => {
+    enabledConfigs.mockResolvedValue({ status: "fresh", configs: [guildServer("notes", null)] });
+    declarations.set("notes", ["lookup_notes"]);
+    slots.mockImplementationOnce((async () => {
+      throw Object.assign(new Error("Retired connection"), { code: "ERR_POSTGRES_LIFETIME_TIMEOUT" });
+    }) as unknown as typeof dbClient.sql);
+
+    const result = await getAvailableToolsWithMCP(BUILT_INS, "google", stateForContext());
+
+    expect(result.mcpFunctionNames).toContain("lookup_notes");
+    expect(result.builtInTools.map((tool) => tool.name)).toContain("web_search");
+  });
+
   it("advertises a selected url_fetcher in place of fetch_url and hides colliding names", async () => {
     declarations.set("reader", ["fetch"]);
     declarations.set("notes", ["manage_message", "lookup_notes"]);

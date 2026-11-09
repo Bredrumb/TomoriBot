@@ -1,6 +1,6 @@
 import type { SQL } from "bun";
 import { z } from "zod";
-import { sql as defaultSql } from "@/utils/db/client";
+import { sql as defaultSql, withTransientDbRetry } from "@/utils/db/client";
 import type { OAuthStateNonceRepository } from "@/utils/oauth/state";
 
 const rowSchema = z.object({
@@ -40,10 +40,13 @@ export class OAuthStateRepository implements OAuthStateNonceRepository {
   }
 
   async purgeFinishedStates(cutoff: Date = new Date()): Promise<{ purgedStates: number }> {
-    const rows = await this.client`
+    const rows = await withTransientDbRetry(
+      () => this.client`
       DELETE FROM oauth_states WHERE expires_at <= ${cutoff} OR consumed_at <= ${cutoff}
       RETURNING oauth_state_id
-    `;
+      `,
+      "purge finished OAuth states",
+    );
     return { purgedStates: rows.length };
   }
 }

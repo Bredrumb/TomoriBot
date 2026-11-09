@@ -83,10 +83,19 @@ async function sendAsInvoker(
   }
 }
 
-/**
- * Posts the action embed under the invoker's name and avatar, or as the interaction reply where the
- * channel cannot host a webhook, and returns the message that anchors the persona's chat turn.
- */
+async function sendPublicConditioningEmbed(
+  interaction: ChatInputCommandInteraction,
+  embed: EmbedBuilder,
+): Promise<Message> {
+  if (interaction.deferred) {
+    // Discord makes the first follow-up after a pending defer ephemeral, so remove the defer before posting publicly.
+    await interaction.deleteReply().catch(() => undefined);
+    return await interaction.followUp({ embeds: [embed], flags: MessageFlags.SuppressNotifications });
+  }
+  await interaction.reply({ embeds: [embed], flags: MessageFlags.SuppressNotifications });
+  return await interaction.fetchReply();
+}
+
 async function deliverConditioningEmbed(
   client: Client,
   interaction: ChatInputCommandInteraction,
@@ -94,21 +103,15 @@ async function deliverConditioningEmbed(
   embed: EmbedBuilder,
 ): Promise<Message> {
   const target = resolveInvokerWebhookTarget(interaction);
-  if (!target) {
-    await interaction.reply({ embeds: [embed], flags: MessageFlags.SuppressNotifications });
-    return (await interaction.fetchReply()) as Message;
-  }
+  if (!target) return await sendPublicConditioningEmbed(interaction, embed);
 
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  if (!interaction.deferred) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   let message: Message;
   try {
     message = await sendAsInvoker(client, interaction, target, embed);
   } catch (error) {
     log.warn(`Falling back to the interaction reply for a reward or punish embed in ${interaction.channelId}`, error);
-    // Discord turns the first follow-up after a pending defer into that ephemeral response, so the
-    // defer is removed first to keep the fallback embed public.
-    await interaction.deleteReply().catch(() => undefined);
-    return (await interaction.followUp({ embeds: [embed], flags: MessageFlags.SuppressNotifications })) as Message;
+    return await sendPublicConditioningEmbed(interaction, embed);
   }
 
   await replyInfoEmbed(interaction, locale, {
@@ -234,6 +237,8 @@ export function createConditioningInteractionCommand(
       return;
     }
 
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
     const tomoriState = await personaRepository.loadState(interaction.guild.id);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -337,18 +342,16 @@ export function createConditioningInteractionCommand(
     const activeBlocks = await getCachedActiveBlocksForUser(tomoriState.server_id, interaction.user.id);
     const personaBlock = activeBlocks.find((block) => block.persona_id === selectedPersona.persona_id);
     if (personaBlock) {
-      await interaction.reply({
-        embeds: [
-          buildConditioningIgnoredEmbed({
-            locale,
-            type,
-            actionKey,
-            targetName: selectedPersona.persona_nickname,
-            expiresAt: personaBlock.expires_at,
-          }),
-        ],
-        flags: MessageFlags.SuppressNotifications,
-      });
+      await sendPublicConditioningEmbed(
+        interaction,
+        buildConditioningIgnoredEmbed({
+          locale,
+          type,
+          actionKey,
+          targetName: selectedPersona.persona_nickname,
+          expiresAt: personaBlock.expires_at,
+        }),
+      );
       return;
     }
 

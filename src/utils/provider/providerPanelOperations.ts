@@ -36,6 +36,7 @@ import type {
 } from "@/types/discord/providerPanel";
 import { getCachedTomoriState, getRecordedDbError, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { getCachedUserRow } from "@/utils/cache/userCache";
+import { findProviderRequestDeniedError, type ProviderRequestDeniedError } from "@/utils/provider/providerUsage";
 import { llmModelRepo } from "@/utils/db/repositories/LlmModelRepository";
 import { configRepository } from "@/utils/db/repositories/ConfigRepository";
 import {
@@ -219,6 +220,7 @@ export interface AddCustomEndpointConnectionDependencies {
 
 export type SaveProviderModelResult =
   | { status: "success"; entryId: string; codeName: string; removed?: boolean }
+  | { status: "provider-denied"; denied: ProviderRequestDeniedError }
   | { status: "invalid-model" | "unsupported-capability" | "not-found" | "already-available" | "write-failed" };
 
 export type SaveProviderModelInput = ProviderPanelOwner & {
@@ -1445,15 +1447,21 @@ async function registerSharedProviderModel(
       state: input.state ?? null,
     };
     if (!(await option.selection.ensure(scope))) return { status: "write-failed" };
-    if (
-      option.selection.validateModel &&
-      !(await option.selection.validateModel({
-        scope,
-        capability: input.capability,
-        modelCodename: input.codeName.trim(),
-      }))
-    ) {
-      return { status: "invalid-model" };
+    try {
+      if (
+        option.selection.validateModel &&
+        !(await option.selection.validateModel({
+          scope,
+          capability: input.capability,
+          modelCodename: input.codeName.trim(),
+        }))
+      ) {
+        return { status: "invalid-model" };
+      }
+    } catch (error) {
+      const denied = findProviderRequestDeniedError(error);
+      if (denied) return { status: "provider-denied", denied };
+      throw error;
     }
   }
   if (input.capability === "speech") {
