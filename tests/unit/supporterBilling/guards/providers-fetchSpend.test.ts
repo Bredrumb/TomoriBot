@@ -164,6 +164,53 @@ describe.each(IMAGE_VARIANTS)("openrouter image generation via $label", (variant
 });
 
 describe("subscription image pricing", () => {
+  it.each([
+    "Google/gemini-2.5-flash-image",
+    "Google/gemini-nano-banana-2.1",
+    "Google/gemini-3.1-flash-image",
+    "OpenAI/gpt-5.4-image-2",
+  ])("validates mixed-case %s pricing without sending an inference request", async (input) => {
+    restoreEstimate();
+    const codename = input.toLowerCase();
+    fetchSpy = stubGlobalFetch((request) => {
+      const url = String(request);
+      if (url.endsWith("/endpoints")) {
+        expect(url).toContain(codename);
+        return Response.json({
+          id: codename,
+          endpoints: [
+            {
+              pricing: [
+                { billable: "output_image", unit: "token", cost_usd: 0.00003 },
+                ...(codename === "google/gemini-3.1-flash-image"
+                  ? []
+                  : [{ billable: "input_image", unit: "token", cost_usd: 0.0000003 }]),
+              ],
+            },
+          ],
+        });
+      }
+      expect(url).toBe("https://openrouter.ai/api/v1/models");
+      return Response.json({
+        data: [
+          {
+            id: codename,
+            context_length: 32768,
+            top_provider: { max_completion_tokens: 32768 },
+            pricing: { prompt: "0.0000003", completion: "0.0000025" },
+          },
+        ],
+      });
+    });
+    resetOpenRouterCapabilityCache();
+    try {
+      await getOrFetchOpenRouterImageEndpoints(codename, { fresh: true });
+      await expect(spendEstimates.validateSupporterImagePricing(` ${input} `)).resolves.toBeUndefined();
+    } finally {
+      resetOpenRouterCapabilityCache();
+    }
+  });
+
   it("funds Gemini 2.5 images and references while retaining allowance and unknown-price checks", async () => {
     restoreEstimate();
     const modelCodename = "google/gemini-2.5-flash-image";

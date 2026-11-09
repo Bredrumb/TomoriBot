@@ -9,7 +9,7 @@ import { getOrFetchOpenRouterDecisionModel } from "@/utils/cache/openrouterDecis
 import { getOrFetchOpenRouterSpeechModel } from "@/utils/cache/openrouterSpeechModelCache";
 import { getOrFetchOpenRouterVideoModelCapabilities } from "@/utils/cache/openrouterVideoModelCache";
 import { getOrFetchOpenRouterImageEndpoints } from "@/utils/cache/openrouterImageModelCache";
-import { openRouterPriceSchema as priceSchema } from "@/utils/cache/openrouterCatalog";
+import { normalizeOpenRouterCodename, openRouterPriceSchema as priceSchema } from "@/utils/cache/openrouterCatalog";
 import { findOpenRouterSpeechModel } from "@/providers/openrouter/openrouterSpeechModels";
 import { buildOpenRouterImageRequest } from "@/providers/openrouter/openrouterImageGeneration";
 
@@ -28,13 +28,14 @@ const EXA_SEARCH_REQUEST_COST = 0.007;
 const EXA_SEARCH_EXTRA_RESULT_COST = 0.001;
 
 export async function validateSupporterImagePricing(modelCodename: string): Promise<void> {
+  const codename = normalizeOpenRouterCodename(modelCodename);
   const reference = {
     mimeType: "image/png",
     data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aXZkAAAAASUVORK5CYII=",
   };
   for (const referenceImages of [undefined, [reference]]) {
     const { url, body } = buildOpenRouterImageRequest({
-      modelCodename,
+      modelCodename: codename,
       prompt: "Image pricing check",
       aspectRatio: "1:1",
       referenceImages,
