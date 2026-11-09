@@ -7,6 +7,7 @@ import {
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import type { GenerationModelCapability } from "@/types/provider/generationModels";
+import type { StandardEmbedOptions } from "@/types/discord/embed";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { userRepository } from "@/utils/db/repositories";
 import { replyInfoEmbed, safeSelectOptionText } from "@/utils/discord/ui/interactionCore";
@@ -127,12 +128,14 @@ export function createGenerationModelAutocomplete(capability: GenerationModelCap
 export async function replyGenerationModelUnavailable(
   interaction: ChatInputCommandInteraction | ModalSubmitInteraction,
   locale: string,
+  recovery: Pick<StandardEmbedOptions, "footerKey" | "files"> = {},
 ): Promise<void> {
   await replyInfoEmbed(interaction, locale, {
     titleKey: "commands.generate.model_unavailable_title",
     descriptionKey: "commands.generate.model_unavailable_description",
     color: ColorCode.WARN,
     flags: MessageFlags.Ephemeral,
+    ...recovery,
   });
 }
 

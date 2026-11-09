@@ -140,6 +140,8 @@ translator can turn a provider failure into this error using the failed request'
 translation, and never translates a denial belonging to another context. Omit the context argument only
 for credential resolution or an already-scoped error propagating to its presentation owner. An
 explicit undefined context matches only an unscoped denial.
+Model-validation refusals before credential resolution omit a context. Modal callers handle
+revalidation denials separately from the previously resolved request's context.
 Check for denials before credential-specific and generic handling. `deferNotice` lets the stream
 state machine leave a notice to the retry owner rather than posting it before fallback completes.
 
@@ -221,6 +223,10 @@ its input preserves scope, mode and replacement identity. Hosted speech registra
 catalog separately and sends option writes to this callback, so personal options can store selections
 without built-in credentials. Built-in speech writes keep using the speech repository.
 The registry never adds storage of its own.
+
+Model registration and server or personal image selection validate the payer's model support before
+writing selections. A `ProviderRequestDeniedError` from validation keeps its localized refusal in the
+panel instead of becoming an invalid-model or write-failure message.
 
 An option's panel `handleAction` owns interaction acknowledgement. It may show a modal immediately,
 or acknowledge before awaiting its lazy `loadSelection()` callback, which loads the scope and edit

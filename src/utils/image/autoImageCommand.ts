@@ -27,6 +27,7 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { runHiddenImageTurn } from "@/utils/provider/hiddenImageTurn";
 import { createProviderToolFailure } from "@/utils/provider/providerToolFailure";
+import { findProviderRequestDeniedError, getProviderRequestFailureCopy } from "@/utils/provider/providerUsage";
 import { buildRestrictedErrorDetail } from "@/utils/discord/stream/errorUi";
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { getCachedWhitelistStatus } from "@/utils/cache/channelWhitelistCache";
@@ -579,8 +580,20 @@ export async function executeAutoImageCommand(
   const modalSubmitInteraction = modalResult.interaction;
 
   try {
-    if (modelSelection)
-      await validateGenerationModelSelection(tomoriState.server_id, userData.user_id ?? null, modelSelection);
+    if (modelSelection) {
+      try {
+        await validateGenerationModelSelection(tomoriState.server_id, userData.user_id ?? null, modelSelection);
+      } catch (error) {
+        const denied = findProviderRequestDeniedError(error);
+        if (!denied) throw error;
+        await replyInfoEmbed(modalSubmitInteraction, locale, {
+          ...getProviderRequestFailureCopy(denied, locale),
+          color: ColorCode.ERROR,
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+    }
     const selectedSetting = (modalResult.values?.[SETTING_INPUT_ID] as SceneSettingId | undefined) ?? "storybeat";
     const settingPreset = SCENE_SETTING_PRESETS[selectedSetting] ?? SCENE_SETTING_PRESETS.storybeat;
 

@@ -558,15 +558,6 @@ export async function execute(
     }
 
     modalSubmitInteraction = modalResult.interaction;
-    if (modelSelection) {
-      imageCreds = await resolveCapabilityCredentials(tomoriState.server_id, "image-standard", {
-        userId: userData.user_id ?? null,
-        modelSelection,
-      });
-      apiKey = imageCreds.apiKey;
-      imageRoute = await resolveStandardImageRoute(imageCreds);
-      if (!imageRoute) throw new GenerationModelUnavailableError();
-    }
     const prompt = modalResult.values?.[PROMPT_INPUT_ID];
     const aspectRatio = modalResult.values?.[ASPECT_RATIO_SELECT_ID];
     const imageAttachments = REFERENCE_IMAGE_INPUT_IDS.map((customId) => modalResult.attachments?.[customId]).filter(
@@ -583,6 +574,27 @@ export async function execute(
       referenceFilenames: imageAttachments.map((attachment) => attachment.filename),
     };
 
+    if (modelSelection) {
+      try {
+        imageCreds = await resolveCapabilityCredentials(tomoriState.server_id, "image-standard", {
+          userId: userData.user_id ?? null,
+          modelSelection,
+        });
+      } catch (error) {
+        const denied = findProviderRequestDeniedError(error);
+        if (!denied) throw error;
+        await replyInfoEmbed(modalSubmitInteraction, locale, {
+          ...getProviderRequestFailureCopy(denied, locale),
+          color: ColorCode.ERROR,
+          flags: MessageFlags.Ephemeral,
+          ...recoveryOptions(),
+        });
+        return;
+      }
+      apiKey = imageCreds.apiKey;
+      imageRoute = await resolveStandardImageRoute(imageCreds);
+      if (!imageRoute) throw new GenerationModelUnavailableError();
+    }
     const referenceImages: Array<{ mimeType: string; data: string }> = [];
     let referenceImageUrl: string | undefined;
 
@@ -820,7 +832,7 @@ export async function execute(
       return;
     }
     if (error instanceof GenerationModelUnavailableError) {
-      await replyGenerationModelUnavailable(modalSubmitInteraction ?? interaction, locale);
+      await replyGenerationModelUnavailable(modalSubmitInteraction ?? interaction, locale, recoveryOptions());
       return;
     }
     const denied = findProviderRequestDeniedError(error, imageCreds?.usageContext);

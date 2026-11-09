@@ -109,7 +109,7 @@ Manage sprites in `/config` > Persona > Sprites (requires Manage Server):
   and optionally write usage instructions describing when to display it.
 - **Edit**: update an existing sprite's label, image, or instructions.
 - **Delete**: remove sprites you no longer want.
-- **Export and import**: share or back up the persona's complete sprite pack as a file.
+- **Export and import**: share or back up the persona's complete sprite pack. Large packs export as several ZIP files; import each file to restore the full pack. If one sprite cannot fit, replace it with a smaller image before exporting.
 
 The `Save as Identity` toggle displays the message author as `Label (Persona)` in Discord,
 useful for characters with multiple forms.

@@ -3392,7 +3392,10 @@ async function handleSpriteNavigation(
     }
 
     case "sprite-export": {
-      const result = await dependencies.spriteOperations.exportSprites({ persona });
+      const result = await dependencies.spriteOperations.exportSprites({
+        persona,
+        maxArchiveBytes: interaction.attachmentSizeLimit,
+      });
       if (result.status !== "success") {
         await repaintSprites({
           receipt: receipt(
@@ -3401,18 +3404,22 @@ async function handleSpriteNavigation(
             "commands.config.panel.sprite_export_failed_heading",
             result.status === "no-sprites"
               ? "commands.config.panel.sprite_export_none_detail"
-              : result.status === "all-images-failed"
-                ? "commands.config.panel.sprite_export_images_failed_detail"
-                : "rate_limit.error_memory_critical_description",
-            { persona: persona.persona_nickname },
+              : result.status === "image-too-large"
+                ? "commands.config.panel.sprite_export_image_too_large_detail"
+                : result.status === "all-images-failed"
+                  ? "commands.config.panel.sprite_export_images_failed_detail"
+                  : "rate_limit.error_memory_critical_description",
+            { persona: persona.persona_nickname, sprite: result.status === "image-too-large" ? result.spriteName : "" },
           ),
         });
         return "handled";
       }
 
-      await interaction.followUp({
-        files: [new AttachmentBuilder(result.buffer, { name: result.filename })],
-      });
+      for (const file of result.files) {
+        await interaction.followUp({
+          files: [new AttachmentBuilder(file.buffer, { name: file.filename })],
+        });
+      }
       if (scope.internalServerId) {
         dependencies.recordAction({
           action: "server-config.workspace.persona-sprite.export",

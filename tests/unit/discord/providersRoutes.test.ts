@@ -36,6 +36,7 @@ import { createRouteInteraction } from "../../helpers/routeInteraction";
 import * as providerOptionRegistry from "@/utils/provider/providerOptionRegistry";
 import { localizedCopy } from "../../helpers/localeCases";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { ProviderRequestDeniedError } from "@/utils/provider/providerUsage";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -983,6 +984,40 @@ describe("providers routes", () => {
 
     await route.execute({} as Client, interaction as never, parsed(customId));
     expect(calls).toEqual(["deferUpdate", "reload", "write:google/new-model:true:true", "reload", "editReply"]);
+  });
+
+  it("shows the provider's refusal when model registration cannot be priced", async () => {
+    const denied = new ProviderRequestDeniedError(undefined, () => ({
+      titleKey: "commands.providers.model_save_failed",
+      description: localizedCopy("en-US", "commands.providers.model_unsupported"),
+    }));
+    const customId = buildProvidersRouteId(PROVIDERS_ROUTE_NAMESPACE, {
+      action: "model-submit",
+      locale: "en-US",
+      entryKind: "provider",
+      entryKey: "google",
+      capability: "text",
+      editingModelId: null,
+      nonce: "abcdefgh",
+    });
+    const interaction = createRouteInteraction({
+      kind: "modal",
+      customId,
+      fields: { [buildProviderModelModalFieldId("code-name", "abcdefgh")]: "example/model" },
+    });
+    const route = createProvidersInteractionRoute({
+      resolveScope: async () => scope,
+      takeModelFlags: () => [],
+      operations: {
+        ...providerPanelOperations,
+        saveProviderModel: async () => ({ status: "provider-denied", denied }),
+      },
+    });
+    await route.execute({} as Client, interaction as never, parsed(customId));
+
+    expect(interaction.calls[0].method).toBe("deferUpdate");
+    expect(JSON.stringify(interaction.edits)).toContain(localizedCopy("en-US", "commands.providers.model_unsupported"));
+    expect(JSON.stringify(interaction.edits)).not.toContain(localizedCopy("en-US", "commands.providers.model_invalid"));
   });
 
   it("carries stored image capabilities into the edit modal it opens as the acknowledgement", async () => {

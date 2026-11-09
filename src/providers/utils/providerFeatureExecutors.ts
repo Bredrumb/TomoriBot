@@ -354,6 +354,7 @@ export async function callExpressionInitializationForProvider(
       images: request.images,
       temperature: request.temperature,
       schemaName: "expression_batch_result",
+      ...(request.providerName === "deepseek" ? { thinkingLevel: "none" } : {}),
       onUsage: request.onUsage,
     },
     buildExpressionResponseSchema(),

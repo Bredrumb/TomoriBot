@@ -8,6 +8,7 @@ import {
 import * as imageProcessor from "@/utils/image/imageProcessor";
 import { z } from "zod";
 import { log } from "@/utils/misc/logger";
+import { callExpressionInitializationForProvider } from "@/providers/utils/providerFeatureExecutors";
 
 describe("DeepSeek structured output", () => {
   const originalFetch = globalThis.fetch;
@@ -17,6 +18,27 @@ describe("DeepSeek structured output", () => {
     globalThis.fetch = originalFetch;
     imageSpy?.mockRestore();
     imageSpy = undefined;
+  });
+
+  it("reserves the expression output budget for classifications by disabling DeepSeek reasoning", async () => {
+    const expression = { name: "smile", emotion_key: "joy", description: "A smiling face with bright eyes." };
+    globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      expect(body.thinking).toEqual({ type: "disabled" });
+      return Response.json({ choices: [{ message: { content: JSON.stringify({ expressions: [expression] }) } }] });
+    }) as typeof fetch;
+
+    const result = await callExpressionInitializationForProvider({
+      providerName: "deepseek",
+      apiKey: "fixture-key",
+      model: "deepseek-flash",
+      systemPrompt: "Classify expressions.",
+      userPrompt: "Classify smile.",
+      images: [],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.expressions).toEqual([expression]);
   });
 
   it("retains empty-response finish and token diagnostics without copying private content", async () => {

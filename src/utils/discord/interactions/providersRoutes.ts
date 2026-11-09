@@ -1,4 +1,5 @@
 import { withProviderOptionCopy } from "@/utils/provider/providerOptionRegistry";
+import { getProviderRequestFailureCopy } from "@/utils/provider/providerUsage";
 import {
   ComponentType,
   MessageFlags,
@@ -342,7 +343,17 @@ function modelReceipt(
       ),
     };
   }
-  const keys: Record<Exclude<SaveProviderModelResult["status"], "success">, string> = {
+  if (result.status === "provider-denied") {
+    const copy = getProviderRequestFailureCopy(result.denied, locale);
+    return {
+      tone: "error",
+      heading: localizer(locale, copy.titleKey),
+      detail: copy.description,
+      reason: "model_save_provider_denied",
+      action: resolveProviderPanelAction(scopeKind, "model.save"),
+    };
+  }
+  const keys: Record<Exclude<SaveProviderModelResult["status"], "success" | "provider-denied">, string> = {
     "invalid-model": "commands.providers.model_invalid",
     "unsupported-capability": "commands.providers.model_unsupported",
     "not-found": "commands.providers.model_not_found",
