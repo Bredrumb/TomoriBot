@@ -229,8 +229,10 @@ activity still controls dormancy.
   messages posted during planning. The placeholder is sent only when the history read succeeds and
   comes back empty, and it is deleted again before the turn starts, so the turn borrows a message
   object whose blank line is already gone from the channel.
-- **Private channels plan alone.** A private channel is offered to the planner by itself, so its
-  history never shapes a nudge in another channel.
+- **Private channels plan alone.** The shared `getChannelPrivacyReason` check includes restricted
+  Discord audiences, private threads, unresolved audiences, and the manual private channel list.
+  A private channel is offered to the planner by itself, so its history never shapes a nudge in
+  another channel. STM sharing does not relax planner isolation.
 - **Agendas belong to one persona.** `natural_nudge_agendas` rows key by `(message_disc_id,
   persona_id)`. Context rebuild and the prompt snapshot render an agenda above its opener only for
   that persona (`runtime/agendas.ts`). The agenda expires when the opener leaves the context window.

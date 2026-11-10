@@ -175,7 +175,7 @@ export default {
     field_prompt_snapshot: `Ảnh chụp nhanh prompt`,
     field_short_term_memory: `Bộ nhớ ngắn hạn`,
     field_user_info_updates: `Cập nhật thông tin người dùng`,
-    field_stm_privacy_bypass: `Bỏ qua quyền riêng tư STM`,
+    field_private_stm_sharing: `Chia sẻ STM kênh riêng tư`,
     field_voice_messages: `Tin nhắn thoại`,
     field_voice_transcript_mode: `Chế độ chat bản chép lời thoại`,
     field_context_note: `Author's Note`,

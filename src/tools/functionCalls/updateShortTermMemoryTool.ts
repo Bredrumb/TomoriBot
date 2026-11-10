@@ -267,13 +267,6 @@ export class UpdateShortTermMemoryTool extends BaseTool {
       const serverId = context.guildId || "DM";
       const serverName = "guild" in context.channel ? context.channel.guild?.name : undefined;
       const channelName = "name" in context.channel ? context.channel.name : undefined;
-      const parentChannelId =
-        "isThread" in context.channel &&
-        typeof context.channel.isThread === "function" &&
-        context.channel.isThread() &&
-        "parentId" in context.channel
-          ? (context.channel.parentId ?? null)
-          : null;
 
       const personaId = context.tomoriState?.persona_id ?? null;
       const personaLineageId = context.tomoriState?.persona_lineage_id ?? null;
@@ -299,7 +292,6 @@ export class UpdateShortTermMemoryTool extends BaseTool {
         channelName,
         personaId,
         personaLineageId,
-        parentChannelId,
       );
       const liveServerId = serverId !== "DM" ? serverId : null;
       const liveDmUserId = serverId === "DM" ? triggeringUserId : null;
@@ -390,13 +382,6 @@ export class UpdateShortTermMemoryTool extends BaseTool {
       const serverId = context.guildId || "DM";
       const serverName = "guild" in context.channel ? context.channel.guild?.name : undefined;
       const channelName = "name" in context.channel ? context.channel.name : undefined;
-      const parentChannelId =
-        "isThread" in context.channel &&
-        typeof context.channel.isThread === "function" &&
-        context.channel.isThread() &&
-        "parentId" in context.channel
-          ? (context.channel.parentId ?? null)
-          : null;
 
       const personaId = context.tomoriState?.persona_id ?? null;
       const personaLineageId = context.tomoriState?.persona_lineage_id ?? null;
@@ -414,7 +399,6 @@ export class UpdateShortTermMemoryTool extends BaseTool {
         channelName,
         personaId,
         personaLineageId,
-        parentChannelId,
       );
 
       // Reset cadence counter after successful refresh

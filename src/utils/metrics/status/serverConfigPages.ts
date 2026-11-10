@@ -334,7 +334,7 @@ export async function buildServerConfigPages(
         inline: true,
       },
       {
-        nameKey: "commands.status.field_stm_privacy_bypass",
+        nameKey: "commands.status.field_private_stm_sharing",
         value: formatBooleanLocalized(config.stm_privacy_bypass ?? false, locale),
         inline: true,
       },

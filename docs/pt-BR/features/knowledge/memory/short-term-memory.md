@@ -17,7 +17,11 @@ A memória de curto prazo recente e a memória que carrega o conteúdo de outros
 ## Exemplo entre canais
 
 - **Canais públicos:** Você discute uma recomendação de álbum com a TomoriBot em `#music`. Alguns minutos depois em `#general`, você pergunta qual álbum ela sugeriu. Como ela respondeu em `#music`, ela recorda esse contexto em `#general`.
-- **Canais privados:** Se essa conversa aconteceu em um canal privado, ela não se lembrará dela em `#general`. Os resumos de canais privados permanecem isolados, a menos que uma pessoa com cargo de administração ative o Desvio de privacidade de STM em `/config` > `Permissions`.
+- **Canais privados:** Por padrão, a STM não pode entrar ou sair de um canal privado. Isso se aplica a resumos, campos de memória e mensagens brutas recentes, incluindo a recordação entre dois canais privados.
+
+Canais que restringem a visualização por meio de permissões do Discord são privados automaticamente. Tópicos privados e tópicos dentro de canais privados também são privados. Administradores podem marcar canais de texto públicos como privados em `/config` > `Canais` > `Regras de Canal`.
+
+`Compartilhamento de STM de Canais Privados` nesse painel fica `Bloqueado` por padrão. Escolher `Permitido` permite que a STM entre e saia de canais privados e pode expor conversas privadas em outros lugares. Essa configuração nunca ativa logs de pensamento ou ferramentas multicanal direcionadas a canais privados. Sua adesão à recordação entre servidores ainda é necessária para a recordação entre servidores diferentes, e o servidor de origem controla se a STM de seus canais privados pode sair.
 
 ## Gerenciando a memória de curto prazo
 <!-- anchor: managing-short-term-memory -->

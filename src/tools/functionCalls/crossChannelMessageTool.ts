@@ -22,6 +22,8 @@ import { resolveMessageProxyMessageIdentitiesForHistory } from "@/utils/messageP
 import { captureDiscordOwnership } from "@/utils/discord/webhook/webhookCore";
 import { sendChannelMessageOnce } from "@/utils/discord/webhook/singleAttemptMessage";
 import type { ManualTriggerInvoker } from "@/utils/chat/types";
+import { getChannelPrivacyReason } from "@/utils/discord/channelPrivacy";
+import { localizer } from "@/utils/text/localizer";
 
 // Stores pending boomerang data keyed by source channel ID.
 // After tomoriChat() completes in the target channel, the source channel
@@ -361,6 +363,14 @@ export class CrossChannelMessageTool extends BaseTool {
       };
     }
 
+    if (getChannelPrivacyReason(targetChannel, context.tomoriState.config.private_channel_ids ?? [])) {
+      return {
+        success: false,
+        error: localizer(context.locale, "tools.execution.private_channel_target"),
+        data: { status: "cross_channel_failed_private_target" },
+      };
+    }
+
     const blockedChannelIds = new Set(context.tomoriState.config.crosschannel_blocklist_ids ?? []);
     const isThreadTarget =
       "isThread" in targetChannel && typeof targetChannel.isThread === "function" && targetChannel.isThread();
@@ -390,8 +400,13 @@ export class CrossChannelMessageTool extends BaseTool {
     const botMember =
       guild.members.me ??
       (context.client.user ? await guild.members.fetch(context.client.user.id).catch(() => null) : null);
-    const invokingMember =
-      context.message?.member ?? (context.userId ? await guild.members.fetch(context.userId).catch(() => null) : null);
+    const invokingMember = context.borrowsTriggerMessage
+      ? null
+      : context.message && context.message.member?.id === context.userId
+        ? context.message.member
+        : context.userId
+          ? await guild.members.fetch(context.userId).catch(() => null)
+          : null;
 
     if (!invokingMember) {
       return {
@@ -430,7 +445,6 @@ export class CrossChannelMessageTool extends BaseTool {
         };
       }
 
-      // Peek mode only needs ViewChannel: skip send permission check
       if (!isPeekOnly) {
         const isThread =
           "isThread" in targetChannel && typeof targetChannel.isThread === "function" && targetChannel.isThread();
@@ -457,6 +471,16 @@ export class CrossChannelMessageTool extends BaseTool {
             status: "cross_channel_failed_invoker_no_view_permission",
             reason: "Invoker is missing ViewChannel permission on the target channel.",
           },
+        };
+      }
+      if (
+        !perms?.has(PermissionFlagsBits.ReadMessageHistory) ||
+        !invokerPerms.has(PermissionFlagsBits.ReadMessageHistory)
+      ) {
+        return {
+          success: false,
+          error: localizer(context.locale, "tools.execution.channel_history_unavailable"),
+          data: { status: "cross_channel_failed_no_history_permission" },
         };
       }
     }

@@ -2,10 +2,9 @@
 title: "Moderación del servidor"
 sidebar:
   order: 2
-aiGenerated: true
 ---
 
-TomoriBot proporciona a los administradores de servidores un control detallado sobre el uso, los costos, los permisos y los canales a través de `/moderation` y `/config`. La mayoría de estos controles requieren el permiso `Administrar servidor`. Para obtener una lista completa de comandos, consulte la [Referencia de comandos](/es-419/features/command-reference/).
+TomoriBot proporciona a los administradores de servidores un control detallado sobre el uso, los costos, los permisos y los canales a través de `/moderation` y `/config`. La mayoría de estos controles requieren el permiso `Administrar servidor`. Para obtener una lista completa de comandos, consulta la [Referencia de comandos](/features/command-reference/).
 
 ## Control de costo: cuotas
 <!-- anchor: cost-control-quotas -->
@@ -25,7 +24,7 @@ En `/moderation` > `Acceso de miembros`, puedes controlar si los miembros pueden
 - **Modelos de servidor permitidos** (predeterminado): los miembros utilizan proveedores configurados en el servidor.
 - **Se requieren proveedores personales**: los miembros deben configurar sus propias claves API a través de `/personal providers`. El servidor no paga nada por los mensajes iniciados por los miembros. Las acciones iniciadas por el servidor (como saludos automatizados o tareas programadas) aún utilizan el proveedor del servidor.
 
-Los miembros configuran sus proveedores personales en [Personalización](/es-419/features/knowledge/personalization/#your-own-providers).
+Los miembros configuran sus proveedores personales en [Personalización](/features/knowledge/personalization/#your-own-providers).
 
 También puede iniciar un servidor sin un proveedor de texto del lado del servidor eligiendo `BYOK del Usuario` durante `/setup`.
 
@@ -41,15 +40,21 @@ Configura el tiempo de reutilización de la respuesta global en todo el servidor
 
 ## Controles de aprendizaje y privacidad
 
-- **Permisos de miembros**: en `/moderation` > `Acceso de miembros`, haga clic en `Editar permisos` para controlar si los miembros sin `Administrar servidor` pueden administrar memorias del servidor, atributos de persona, diálogos de muestra o inspeccionar instantáneas de mensajes.
-- **Lista negra de usuarios**: en `/moderation` > `Lista negra de usuarios`, elija miembros para que TomoriBot los ignore por completo. Los miembros de la lista negra no pueden activarla ni ejecutar comandos, y sus mensajes nunca llegan al contexto del mensaje. También puede establecer bloqueos de miembros específicos de una persona.
-- **Reglas del canal**: en `/config` > `Canales` > Reglas del canal, marque los canales privados (donde la memoria a corto plazo permanece aislada y los registros de pensamiento se suprimen) y las listas de bloqueo de herramientas entre canales.
+- **Permisos de miembros**: en `/moderation` > `Acceso de miembros`, haz clic en `Editar permisos` para controlar si los miembros sin `Administrar servidor` pueden administrar memorias del servidor, atributos de persona, diálogos de muestra o inspeccionar instantáneas de mensajes.
+- **Lista negra de usuarios**: en `/moderation` > `Lista negra de usuarios`, elige miembros para que TomoriBot los ignore por completo. Los miembros de la lista negra no pueden activarla ni ejecutar comandos, y sus mensajes nunca llegan al contexto del mensaje. También puedes establecer bloqueos de miembros específicos de una persona.
+- **Reglas de canal**: en `/config` > `Canales` > `Reglas de canal`, marca canales de texto públicos como privados o agrega listas negras de herramientas entre canales. Los canales con restricciones en Discord son privados automáticamente. Los canales privados no tienen registros de pensamiento ni herramientas entrantes entre canales, incluidos vistazos, creación de hilos y tareas programadas desde otros canales. La STM no puede entrar ni salir a menos que `Uso compartido de STM de canales privados` esté en `Permitido`. Aún puedes pedirle al bot que trabaje dentro de un canal privado o despachar tareas hacia afuera; una tarea saliente puede incluir información de tu conversación.
+
+La privacidad automática comprueba los permisos de roles: `@everyone` debe poder ver el canal y ningún rol puede tener una denegación explícita de `Ver canal`. Las excepciones individuales para miembros no afectan esta clasificación. Por lo tanto, los servidores con roles de verificación o roles de restricción que denieguen la vista pueden tener canales marcados como privados incluso cuando los miembros comunes puedan leerlos. El panel distingue la privacidad automática de las selecciones manuales. Quitar una selección manual no puede anular las restricciones de Discord.
 
 ## Transparencia: registros de pensamiento
 
-En `/config` > `Canales` > Registros y bienvenida, haga clic en `Establecer canal de registros` para designar un canal donde TomoriBot publica su razonamiento interno, avisos alternativos y llamadas de herramientas exitosas. Esto es útil para auditar lo que está haciendo, incluido qué disparador expuso una herramienta en [Modo de herramienta deliberada](/es-419/features/capabilities/tools-and-extensions/#deliberate-tool-mode).
+En `/config` > `Canales` > Registros y bienvenida, haz clic en `Establecer canal de registros` para designar un canal donde TomoriBot publica su razonamiento interno, avisos alternativos y llamadas de herramientas exitosas. Esto es útil para auditar lo que está haciendo, incluido qué disparador expuso una herramienta en [Modo de herramientas deliberado](/features/capabilities/tools-and-extensions/deliberate-tool-mode/).
 
-El registro solo copia de canales que todos los miembros de tu servidor ya pueden ver. La actividad en un canal o hilo que algunos miembros no pueden abrir queda fuera del registro, por lo que el registro nunca muestra contenido que no pudieran leer donde ocurrió. El canal de registros debe estar en el mismo servidor.
+El registro utiliza la misma comprobación de privacidad basada en roles que la STM. La actividad en canales privados y sus hilos permanece fuera del registro. El canal de registros debe estar en el mismo servidor.
+
+:::tip
+El canal de registros puede estar restringido a tu equipo de moderación mientras recibe actividad de canales abiertos a todos los roles.
+:::
 
 ## Saludos de bienvenida
 
@@ -57,4 +62,4 @@ En `/config` > `Canales` > Registros y bienvenida, configure saludos automatizad
 
 ## Expresiones
 
-Ejecuta `/expressions initialize` para indexar los emojis y stickers personalizados de su servidor para que las personas puedan usarlos con precisión en la conversación. Para saber cómo las personas usan emojis, stickers y reacciones, consulte [Expresiones y reacciones](/es-419/features/chatting-personality/chatting-and-triggers/#expressions--reactions).
+Ejecuta `/expressions initialize` para indexar los emojis y stickers personalizados de su servidor para que las personas puedan usarlos con precisión en la conversación. Para saber cómo las personas usan emojis, stickers y reacciones, consulte [Expresiones y reacciones](/features/chatting-personality/chatting-and-triggers/#expressions--reactions).

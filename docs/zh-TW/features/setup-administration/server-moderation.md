@@ -2,10 +2,9 @@
 title: "伺服器管理"
 sidebar:
   order: 2
-aiGenerated: true
 ---
 
-TomoriBot透過`/moderation`和`/config`為伺服器管理者提供對使用、成本、權限和通道的細微控制。大多數這些控制項都需要`管理伺服器`權限。完整的命令清單請參考[指令參考](/zh-TW/features/command-reference/)。
+TomoriBot透過`/moderation`和`/config`為伺服器管理者提供對使用、成本、權限和通道的細微控制。大多數這些控制項都需要`管理伺服器`權限。完整的命令清單請參考[指令參考](/features/command-reference/)。
 
 ## 成本控制：額度
 <!-- anchor: cost-control-quotas -->
@@ -25,7 +24,7 @@ TomoriBot透過`/moderation`和`/config`為伺服器管理者提供對使用、�
 - **允許的伺服器模型**（預設）：成員使用伺服器配置的供應商。
 - **需要個人供應商**：會員必須透過`/personal providers`設定自己的API金鑰。伺服器不為成員發起的消息支付任何費用。伺服器啟動的操作（例如自動問候或排程任務）仍然使用伺服器供應商。
 
-會員在[個人化](/zh-TW/features/knowledge/personalization/#your-own-providers)下配置他們的個人供應商。
+會員在[個人化](/features/knowledge/personalization/#your-own-providers)下配置他們的個人供應商。
 
 你也可以透過在`/setup`期間選擇`使用者BYOK`來引導沒有伺服器端文字供應商的伺服器。
 
@@ -43,13 +42,19 @@ TomoriBot透過`/moderation`和`/config`為伺服器管理者提供對使用、�
 
 - **成員權限**：在`/moderation` > `成員存取`中，點選`編輯權限`可以控制沒有`管理伺服器`的成員是否可以管理伺服器記憶體、人格屬性、範例對話或檢查提示快照。
 - **使用者黑名單**：在`/moderation` > `使用者黑名單`中，選擇TomoriBot完全忽略的成員。列入黑名單的成員無法觸發她或運行命令，並且他們的訊息永遠不會到達提示上下文。你也可以設定特定於人格的成員區塊。
-- **頻道規則**：在`/config` > `頻道` > 頻道規則中，標記私人頻道（短期記憶保持隔離，思想日誌被抑制）和跨頻道工具黑名單。
+- **頻道規則**：在 `/config` > `頻道` > `頻道規則` 中，將公開文字頻道標記為私人，或新增跨頻道工具黑名單。受限制的 Discord 頻道會自動判定為私人。私人頻道不產生思考紀錄，也不接收傳入的跨頻道工具（包含來自其他頻道的查看、建立討論串與排程任務）。除非 `私人頻道 STM 分享` 設為 `允許`，否則 STM 無法進入或離開。你依然可以要求 bot 在私人頻道內運作或向外指派工作；向外指派的任務可以包含你對話中的資訊。
+
+自動隱私判定會檢查身分組權限：`@everyone` 必須能檢視該頻道，且任何身分組都不得有明確拒絕的 `檢視頻道` 權限。個別成員的權限覆寫不會影響此分類。因此，設有驗證身分組或拒絕檢視限制身分組的伺服器，即使一般成員能讀取，頻道也可能被標記為私人。面板會區分自動判定與手動選擇。移除手動選擇無法覆寫 Discord 的限制。
 
 ## 透明度：思考紀錄
 
-在`/config` > `頻道` > 日誌和歡迎中，按一下`設定紀錄頻道`指定TomoriBot發佈內部推理、回退通知和成功的工具呼叫的通道。這對於審核她正在做的事情很有用，包括哪個觸發器在[故意工具模式](/zh-TW/features/capabilities/tools-and-extensions/#deliberate-tool-mode)下暴露了工具。
+在 `/config` > `頻道` > `紀錄與歡迎` 中，按一下 `設定紀錄頻道` 指定 TomoriBot 發布內部推理、備援通知與成功的工具呼叫的頻道。這對於審核她正在執行的動作很有用，包括哪個觸發詞在[明確工具模式](/features/capabilities/tools-and-extensions/deliberate-tool-mode/)下揭示了工具。
 
-日誌僅從伺服器中所有成員都已有權查看的頻道複製。某些成員無法開啟的頻道或貼文中的活動不會記入日誌，因此日誌絕不會向人們展示他們在發生地無法讀取的內容。日誌頻道必須位於同一個伺服器中。
+此紀錄使用與 STM 相同的身分組隱私判定。私人頻道與其討論串中的活動不會進入紀錄中。紀錄頻道必須位於同一個伺服器。
+
+:::tip
+紀錄頻道可以只對你的管理團隊開放，同時接收來自對所有身分組開放之頻道的活動。
+:::
 
 ## 歡迎訊息
 
@@ -57,4 +62,4 @@ TomoriBot透過`/moderation`和`/config`為伺服器管理者提供對使用、�
 
 ## 表情
 
-運行`/expressions initialize`來索引伺服器的自訂表情符號和貼圖，以便人格可以在對話中準確地使用它們。有關人格如何使用表情符號、貼圖和反應，請參閱[表情和反應](/zh-TW/features/chatting-personality/chatting-and-triggers/#expressions--reactions)。
+運行`/expressions initialize`來索引伺服器的自訂表情符號和貼圖，以便人格可以在對話中準確地使用它們。有關人格如何使用表情符號、貼圖和反應，請參閱[表情與反應](/features/chatting-personality/chatting-and-triggers/#expressions--reactions)。

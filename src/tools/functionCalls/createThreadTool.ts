@@ -16,6 +16,8 @@ import { resolveContextAuthorLabel } from "@/utils/discord/contextAuthorLabel";
 import { convertMentions } from "@/utils/text/contextBuilder";
 import { isRefreshMarkerEmbed } from "@/utils/discord/embedDetection";
 import type { Message } from "discord.js";
+import { getChannelPrivacyReason } from "@/utils/discord/channelPrivacy";
+import { localizer } from "@/utils/text/localizer";
 
 const MAX_THREAD_NAME_LENGTH = 100;
 const MAX_FIRST_MESSAGE_LENGTH = 2000;
@@ -300,6 +302,17 @@ export class CreateThreadTool extends BaseTool {
     }
     const targetChannel = targetResult.channel;
 
+    if (
+      targetChannel.id !== context.channel.id &&
+      getChannelPrivacyReason(targetChannel, context.tomoriState.config.private_channel_ids ?? [])
+    ) {
+      return {
+        success: false,
+        error: localizer(context.locale, "tools.execution.private_channel_target"),
+        data: { status: "create_thread_failed_private_target" },
+      };
+    }
+
     // Blocklist guard: mirrors the cross_channel_message check so blocked channels
     // cannot be targeted via thread creation either.
     const blockedChannelIds = new Set(context.tomoriState.config.crosschannel_blocklist_ids ?? []);
@@ -317,10 +330,16 @@ export class CreateThreadTool extends BaseTool {
     const botMember =
       guild.members.me ??
       (context.client.user ? await guild.members.fetch(context.client.user.id).catch(() => null) : null);
-    const invokingMember =
-      context.message?.member ?? (context.userId ? await guild.members.fetch(context.userId).catch(() => null) : null);
+    const invokingMember = context.borrowsTriggerMessage
+      ? null
+      : context.message && context.message.member?.id === context.userId
+        ? context.message.member
+        : context.userId
+          ? await guild.members.fetch(context.userId).catch(() => null)
+          : null;
 
-    if (!invokingMember) {
+    const isLocalSystemRequest = context.borrowsTriggerMessage && targetChannel.id === context.channel.id;
+    if (!invokingMember && !isLocalSystemRequest) {
       return {
         success: false,
         error: `I could not verify the requesting user's permission to view channel \`${targetChannel.name}\`.`,
@@ -376,8 +395,8 @@ export class CreateThreadTool extends BaseTool {
       };
     }
 
-    const invokerPerms = targetChannel.permissionsFor(invokingMember);
-    if (!invokerPerms?.has(PermissionFlagsBits.ViewChannel)) {
+    const invokerPerms = invokingMember ? targetChannel.permissionsFor(invokingMember) : null;
+    if (!isLocalSystemRequest && !invokerPerms?.has(PermissionFlagsBits.ViewChannel)) {
       return {
         success: false,
         error: `The requesting user does not have permission to view channel \`${targetChannel.name}\`.`,
@@ -465,7 +484,7 @@ export class CreateThreadTool extends BaseTool {
         impersonatedUserId: context.impersonatedUserId,
         borrowsTriggerMessage: context.borrowsTriggerMessage === true,
         manualTriggerInvoker:
-          !context.borrowsTriggerMessage && context.userId
+          !context.borrowsTriggerMessage && context.userId && invokingMember
             ? {
                 userDiscId: context.userId,
                 username: invokingMember.user.username,

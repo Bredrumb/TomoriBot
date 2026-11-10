@@ -129,6 +129,18 @@ For image analysis, `analyze_image` resolves attachments from the target Discord
 
 `cross_channel_message` excludes full-privacy authors from peek results and boomerang history before formatting their messages. Verified proxy messages use the sender account's privacy setting, matching ordinary conversation history. Both paths stop at the most recent refresh marker.
 
+`getChannelPrivacyReason` in `src/utils/discord/channelPrivacy.ts` supplies the same conservative
+audience check used by STM and thought logs. Cross-channel message dispatch and peeking, thread
+creation in another channel, and scheduled tasks targeting another channel reject private or
+unresolved targets regardless of `stm_privacy_bypass`. Same-channel thread creation and tasks remain
+available. Private channels can dispatch work outward, including context in the task instruction.
+Cross-channel message history requires both the bot and the requesting member to have
+`Read Message History`; the requesting member is resolved from the invocation user rather than a
+borrowed message's author.
+Borrowed system turns have no verified requester, so cross-channel dispatch, peeking, and thread
+creation in another channel reject them instead of authorizing against the anchor message's member.
+They can create a thread in their current channel using the bot's permissions.
+
 ## Persona user blocking
 
 The `block_user` and `unblock_user` tools allow personas to manage interpersonal boundaries, gated by the `user_blocking_enabled` permission in `/config`:

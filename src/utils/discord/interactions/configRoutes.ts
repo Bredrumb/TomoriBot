@@ -707,7 +707,9 @@ const defaultDependencies: ConfigRouteDependencies = {
         maxThreshold: state?.config.autoch_threshold_max ?? state?.config.autoch_threshold ?? 0,
       },
       rules: {
-        privateChannels: availableTextChannels.filter((channel) => privateChannelIds.has(channel.id)),
+        privateChannels: availableTextChannels.filter(
+          (channel) => channel.privacyReason || privateChannelIds.has(channel.id),
+        ),
         roleplayChannels: availableTextChannels.filter((channel) => roleplayChannelIds.has(channel.id)),
         crossChannelBlocklist: availableBlocklistChannels.filter((channel) => blockedChannelIds.has(channel.id)),
       },
@@ -2110,8 +2112,6 @@ async function runPersonaWrite(
       if (!memoryView.channelId) return { receipt: staleReceipt(locale) };
       const channel = interaction.channel;
       const channelName = channel && "name" in channel && typeof channel.name === "string" ? channel.name : undefined;
-      const parentChannelId =
-        channel && "parentId" in channel && typeof channel.parentId === "string" ? channel.parentId : undefined;
 
       const isCategoryMode = !(
         memoryView.stmCategories.length === 1 && memoryView.stmCategories[0]?.label.toLowerCase() === "summary"
@@ -2131,7 +2131,6 @@ async function runPersonaWrite(
           serverDiscId: scope.guildId ?? "DM",
           serverName: interaction.guild?.name,
           channelName,
-          parentChannelId,
           personaId: persona.persona_id as number,
           personaLineageId: persona.persona_lineage_id ?? 0,
           mode: "categories",
@@ -2170,7 +2169,6 @@ async function runPersonaWrite(
         serverDiscId: scope.guildId ?? "DM",
         serverName: interaction.guild?.name,
         channelName,
-        parentChannelId,
         personaId: persona.persona_id as number,
         personaLineageId: persona.persona_lineage_id ?? 0,
         mode: "summary",

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, setSystemTime, spyOn } from "bun:test";
-import { Collection, type Client, type GuildTextBasedChannel, type Message } from "discord.js";
+import { ChannelType, Collection, type Client, type Message } from "discord.js";
 import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
 import {
   defaultServerNaturalNudgeConfig,
@@ -32,6 +32,7 @@ import { whitelistRepository } from "@/utils/db/repositories/WhitelistRepository
 import { metricSampleRepository } from "@/utils/db/repositories/MetricSampleRepository";
 import { log } from "@/utils/misc/logger";
 import { createCustomIdleNudge, createPersona } from "../../helpers/fixtures";
+import { createGuildTextChannel } from "../../helpers/discordChannels";
 
 const SERVER_ID = 7;
 const PERSONA_ID = 5;
@@ -77,7 +78,10 @@ function fixture(category: NaturalNudgeCategory = "start_topic") {
     ]),
   );
   const channels = CHANNEL_IDS.map((id) => ({
-    channel: { id, name: "art-gallery", topic: "Artwork welcome." } as GuildTextBasedChannel,
+    channel: Object.assign(createGuildTextChannel(id, { guildId: "fixture-guild" }), {
+      name: "art-gallery",
+      topic: "Artwork welcome.",
+    }),
     quietSinceMs: null,
   }));
   const messages = [1, 2].map(
@@ -510,6 +514,51 @@ describe("idle nudge shortlist", () => {
     personas[0].config.private_channel_ids = [...CHANNEL_IDS];
     drawTarget.mockResolvedValue(null);
     await processor.processDueIdleNudges();
+    const [attempt] = run.mock.calls[0];
+    expect(attempt.plannerChannels).toHaveLength(1);
+    for (const candidate of attempt.candidates) expect(candidate.channelIndices).toEqual([0]);
+  });
+
+  it("keeps channels with only individual member denials eligible for shared planning", async () => {
+    const { processor, channels, drawTarget, run } = fixture();
+    drawTarget.mockResolvedValue(null);
+    for (const entry of channels) {
+      Object.assign(
+        entry.channel,
+        createGuildTextChannel(entry.channel.id, { guildId: "fixture-guild", memberViewDenied: true }),
+      );
+    }
+    await processor.processDueIdleNudges();
+    expect(run).toHaveBeenCalled();
+    const [attempt] = run.mock.calls[0];
+    expect(attempt.plannerChannels.map((entry) => entry.channel.id)).toEqual(expect.arrayContaining(CHANNEL_IDS));
+  });
+
+  it.each([
+    "all-restricted",
+    "one-restricted",
+    "private-thread",
+    "unknown-parent",
+  ])("isolates automatic privacy in planner alternatives even with STM sharing allowed (%s)", async (restriction) => {
+    const { processor, channels, personas, drawTarget, run } = fixture();
+    personas[0].config.stm_privacy_bypass = true;
+    drawTarget.mockResolvedValue(null);
+    if (restriction === "all-restricted" || restriction === "one-restricted") {
+      for (const entry of restriction === "all-restricted" ? channels : channels.slice(0, 1)) {
+        Object.assign(
+          entry.channel,
+          createGuildTextChannel(entry.channel.id, { guildId: "fixture-guild", everyoneCanView: false }),
+        );
+      }
+    } else {
+      Object.assign(channels[0].channel, {
+        type: restriction === "private-thread" ? ChannelType.PrivateThread : ChannelType.PublicThread,
+        isThread: () => true,
+        parent: null,
+      });
+    }
+    await processor.processDueIdleNudges();
+    expect(run).toHaveBeenCalled();
     const [attempt] = run.mock.calls[0];
     expect(attempt.plannerChannels).toHaveLength(1);
     for (const candidate of attempt.candidates) expect(candidate.channelIndices).toEqual([0]);

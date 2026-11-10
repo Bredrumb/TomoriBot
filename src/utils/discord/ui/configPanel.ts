@@ -3826,8 +3826,8 @@ ${localizer(locale, "commands.config.panel.channels_rules_description")}${whitel
   const blocklistTitle = localizer(locale, "commands.config.panel.channels_rules_blocklist_title");
   const blocklistDesc = localizer(locale, "commands.config.panel.channels_rules_blocklist_description");
   const privacyView = input.permissionsView?.privacy;
-  const privacyTitle = localizer(locale, "commands.config.panel.channels_rules_memory_privacy_title");
-  const privacyDesc = localizer(locale, "commands.config.panel.channels_rules_memory_privacy_description");
+  const privacyTitle = localizer(locale, "commands.config.panel.channels_rules_stm_sharing_title");
+  const privacyDesc = localizer(locale, "commands.config.panel.channels_rules_stm_sharing_description");
 
   const baseAllowance = getBasePageTextAllowance(input, false);
   const fixedTextLength =
@@ -3844,9 +3844,15 @@ ${localizer(locale, "commands.config.panel.channels_rules_description")}${whitel
   const blocklistActionDisabled = writesDisabled || resolveChannelsRulesActionState("blocklist", actor) !== "enabled";
   const privateRangeCount = Math.max(
     1,
+    Math.ceil(
+      input.channelsView.availableTextChannels.filter((channel) => !channel.privacyReason).length /
+        CHECKLIST_CHANNELS_PER_PAGE,
+    ),
+  );
+  const roleplayRangeCount = Math.max(
+    1,
     Math.ceil(input.channelsView.availableTextChannels.length / CHECKLIST_CHANNELS_PER_PAGE),
   );
-  const roleplayRangeCount = privateRangeCount;
   const blocklistRangeCount = Math.max(
     1,
     Math.ceil(input.channelsView.availableBlocklistChannels.length / CHECKLIST_CHANNELS_PER_PAGE),
@@ -3857,7 +3863,15 @@ ${localizer(locale, "commands.config.panel.channels_rules_description")}${whitel
       locale,
       title: localizer(locale, "commands.config.panel.channels_rules_private_title"),
       description: localizer(locale, "commands.config.panel.channels_rules_private_description"),
-      members: view.privateChannels.map((channel) => `<#${channel.id}>`),
+      members: view.privateChannels.map((channel) =>
+        localizer(
+          locale,
+          channel.privacyReason
+            ? "commands.config.panel.channels_rules_private_automatic"
+            : "commands.config.panel.channels_rules_private_manual",
+          { channel: `<#${channel.id}>` },
+        ),
+      ),
       budget: rulesPerSectionBudget,
       manageCustomId: buildConfigRouteId({
         action: "channels-private-manage-open",
@@ -3877,7 +3891,7 @@ ${localizer(locale, "commands.config.panel.channels_rules_description")}${whitel
         disabled: writesDisabled,
       }),
       disabled: privateActionDisabled,
-      noChannels: input.channelsView.availableTextChannels.length === 0,
+      noChannels: input.channelsView.availableTextChannels.every((channel) => channel.privacyReason),
     }),
     ...(privacyView
       ? [
@@ -3889,12 +3903,12 @@ ${localizer(locale, "commands.config.panel.channels_rules_description")}${whitel
             [
               {
                 value: false,
-                label: localizer(locale, "commands.config.panel.off_button"),
+                label: localizer(locale, "commands.config.panel.permissions_privacy_blocked_button"),
                 customId: buildConfigRouteId({ action: "permissions-privacy-bypass-set", locale, enabled: false }),
               },
               {
                 value: true,
-                label: localizer(locale, "commands.config.panel.on_button"),
+                label: localizer(locale, "commands.config.panel.permissions_privacy_allowed_button"),
                 customId: buildConfigRouteId({ action: "permissions-privacy-bypass-set", locale, enabled: true }),
               },
             ],
@@ -3908,8 +3922,8 @@ ${localizer(locale, "commands.config.panel.channels_rules_description")}${whitel
               localizer(
                 locale,
                 privacyView.stmPrivacyBypass
-                  ? "commands.config.panel.permissions_privacy_on"
-                  : "commands.config.panel.permissions_privacy_off",
+                  ? "commands.config.panel.permissions_stm_sharing_allowed"
+                  : "commands.config.panel.permissions_stm_sharing_blocked",
               ),
             ),
           },

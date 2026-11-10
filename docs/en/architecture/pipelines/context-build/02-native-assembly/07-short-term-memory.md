@@ -15,8 +15,8 @@ The contributor `buildShortTermMemoryContext` in `src/utils/text/context/memorie
 2. **Channel memory retrieval**:
    - **Same-channel memory**: Retrieves the active running summary or category block for the current channel.
    - **Other-channel memories**: Retrieves up to three recent conversation summaries from other channels (`MAX_OTHER_CHANNEL_MEMORIES = 3`), sorted by update recency.
-   - **Privacy filtering**: Excludes other-channel memories originating from private channels unless `stm_privacy_bypass` is active.
-   - **Cross-server memory**: Folds in memories from other servers when the user has opted in via their personal settings.
+   - **Privacy filtering**: `getChannelPrivacyReason` in `src/utils/discord/channelPrivacy.ts` owns the shared privacy check for STM, thought logs, and cross-channel tool targets. Role restrictions, private threads, manually private channels and their threads, and unresolved audiences are private; individual member overwrites do not trigger automatic privacy. With `stm_privacy_bypass` off, a private destination receives only its own STM and private sources are excluded before the recall limit. Source channels are resolved through Discord rather than relying on cached STM parent metadata, including after database hydration.
+   - **Cross-server memory**: Folds in memories from other servers when the user has opted in via their personal settings. Each source server's configuration controls whether its private STM can leave; an unavailable source configuration excludes that server's entries. DM recall retains the user's explicit cross-server opt-in behavior.
 3. **Render modes**:
    - `crude_summary` (default): Emits the summary or category block followed by recent raw messages.
    - `supersede`: When a summary or category block exists, raw messages for that channel are omitted.
@@ -40,6 +40,7 @@ after native or preset assembly; presets cannot pull fresh STM into an early mar
 ## Constraints and rationale
 
 - **Out-of-band delivery**: Preserving `nudgeItem` and deferred `memoryInjectionItems` outside `contextItems` ensures that preset reassembly does not pull recency-sensitive notes into the system prefix.
+- **Sharing exception**: `stm_privacy_bypass` permits private STM to enter and leave the owning server's channels; it never changes thought-log or cross-channel tool permissions, and its stored value retains its existing meaning.
 - **Explicit memory intent suppression**: When a user explicitly asks the bot to remember or store information permanently, the short-term memory nudge is suppressed so the model selects `create_long_term_memory` instead.
 - **Fail-safe execution**: Any error during short-term memory assembly logs a warning and returns an empty list, preventing memory lookup failures from aborting the turn.
 

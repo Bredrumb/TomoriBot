@@ -27,9 +27,18 @@ A configured shallower depth can keep the content closer to the latest message. 
 - **Public channels:** You discuss an album recommendation with TomoriBot in `#music`. A few minutes
   later in `#general`, you ask what album she suggested. Because she replied in `#music`, she recalls
   that context in `#general`.
-- **Private channels:** If that conversation happened in a private channel, she will not recall it in
-  `#general`. Summaries from private channels stay isolated unless an administrator enables STM Privacy
-  Bypass under `/config` > `Permissions`.
+- **Private channels:** STM cannot enter or leave a private channel by default. This applies to
+  summaries, memory fields, and recent raw messages, including recall between two private channels.
+
+Channels that restrict viewing through Discord permissions are private automatically. Private threads
+and threads under private channels are also private. Administrators can mark public text channels
+private under `/config` > `Channels` > `Channel Rules`.
+
+`Private-Channel STM Sharing` in that panel is `Blocked` by default. Choosing `Allowed` lets STM
+enter and leave private channels and can expose private conversations elsewhere. This setting never
+enables thought logs or cross-channel tools targeting private channels. Your cross-server recall
+opt-in is still required for recall across servers, and the source server controls whether its
+private-channel STM may leave.
 
 ## Managing short-term memory
 <!-- anchor: managing-short-term-memory -->

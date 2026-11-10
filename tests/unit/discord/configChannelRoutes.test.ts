@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it, mock, spyOn } from "bun:test";
+import { createGuildTextChannel } from "../../helpers/discordChannels";
 import {
   type ActionRowData,
   ChannelType,
@@ -25,6 +26,7 @@ import {
   loadCachedGuildBlocklistChannels,
   type BlocklistChannelTarget,
   type ChannelOverrideChannelTarget,
+  type ChecklistChannelTarget,
   loadCachedGuildTextChecklistChannels,
 } from "@/utils/discord/channelChecklistManager";
 import type {
@@ -67,8 +69,8 @@ import {
 } from "@/utils/discord/ui/configChannelModals";
 import { buildConfigModalFieldId } from "@/utils/discord/ui/configModals";
 import { buildConfigPanelPayload } from "@/utils/discord/ui/configPanel";
-import { initializeLocalizer, localizer } from "@/utils/text/localizer";
-import { localizedProse } from "../../helpers/localeCases";
+import { localizedProse, localizedCopy, RUNTIME_LOCALES, collectCaseFailures } from "../../helpers/localeCases";
+import { initializeLocalizer, localizer, hasLocaleKey } from "@/utils/text/localizer";
 import { createRouteInteraction, type RouteInteraction } from "../../helpers/routeInteraction";
 import { createPersona, type PersonaFixtureOverrides } from "../../helpers/fixtures";
 
@@ -101,7 +103,7 @@ function makeScope(
 
 function makeChannelsView(
   state: TomoriState,
-  availableTextChannels = [
+  availableTextChannels: ChecklistChannelTarget[] = [
     { id: CHANNEL_ONE, name: "lounge", rawPosition: 0, parentRawPosition: -1 },
     { id: CHANNEL_TWO, name: "welcome", rawPosition: 1, parentRawPosition: -1 },
   ],
@@ -137,8 +139,8 @@ function makeChannelsView(
       maxThreshold: state.config.autoch_threshold_max ?? state.config.autoch_threshold ?? 0,
     },
     rules: {
-      privateChannels: availableTextChannels.filter((channel) =>
-        state.config.private_channel_ids?.includes(channel.id),
+      privateChannels: availableTextChannels.filter(
+        (channel) => channel.privacyReason || state.config.private_channel_ids?.includes(channel.id),
       ),
       roleplayChannels: availableTextChannels.filter((channel) => state.config.rp_channel_ids?.includes(channel.id)),
       crossChannelBlocklist: availableBlocklistChannels.filter((channel) =>
@@ -876,6 +878,15 @@ describe("Channels Auto-Trigger routes", () => {
       },
     };
 
+    for (const channel of guild.channels.cache.values()) {
+      Object.assign(channel, {
+        isDMBased: () => false,
+        isThread: () => false,
+        permissionsFor: createGuildTextChannel(channel.id).permissionsFor,
+        permissionOverwrites: createGuildTextChannel(channel.id).permissionOverwrites,
+        guild: createGuildTextChannel(channel.id).guild,
+      });
+    }
     const channels = loadCachedGuildTextChecklistChannels(guild as never);
 
     expect(fetchCalled).toBe(false);
@@ -1425,6 +1436,129 @@ describe("Channels Auto-Trigger routes", () => {
 });
 
 describe("Channels Rules", () => {
+  it("shows automatic and manual privacy with explicit sharing choices across locales", () => {
+    const cases = collectCaseFailures();
+    for (const locale of RUNTIME_LOCALES) {
+      for (const bypass of [false, true]) {
+        cases.check(`${locale}, bypass=${bypass}`, () => {
+          const resolvedLocale = (key: string) => (hasLocaleKey(locale, key) ? locale : "en-US");
+          const state = makePersona({ config: { private_channel_ids: [CHANNEL_TWO], stm_privacy_bypass: bypass } });
+          const channels: ChecklistChannelTarget[] = [
+            { id: CHANNEL_ONE, name: "mods", rawPosition: 0, parentRawPosition: -1, privacyReason: "restricted" },
+            { id: CHANNEL_TWO, name: "quiet", rawPosition: 1, parentRawPosition: -1 },
+          ];
+          const payload = buildConfigPanelPayload({
+            locale,
+            actor: { workspaceKind: "guild", isManager: true },
+            category: "channels",
+            page: "rules",
+            personas: [state],
+            selectedPersonaId: null,
+            readStatus: "fresh",
+            channelsView: makeChannelsView(state, channels),
+            permissionsView: {
+              capabilities: { toolUseEnabled: true, includeElevenLabs: false, definitionStates: {} },
+              privacy: { stmPrivacyBypass: bypass },
+            },
+          });
+          const serialized = JSON.stringify(payload);
+          expect(serialized).toMatch(
+            localizedProse(
+              resolvedLocale("commands.config.panel.channels_rules_private_automatic"),
+              "commands.config.panel.channels_rules_private_automatic",
+              {
+                channel: `<#${CHANNEL_ONE}>`,
+              },
+            ),
+          );
+          expect(serialized).toMatch(
+            localizedProse(
+              resolvedLocale("commands.config.panel.channels_rules_private_manual"),
+              "commands.config.panel.channels_rules_private_manual",
+              {
+                channel: `<#${CHANNEL_TWO}>`,
+              },
+            ),
+          );
+          expect(serialized).toContain(
+            localizedCopy(
+              resolvedLocale("commands.config.panel.channels_rules_stm_sharing_title"),
+              "commands.config.panel.channels_rules_stm_sharing_title",
+            ),
+          );
+          expect(serialized).toContain(
+            localizedCopy(
+              resolvedLocale("commands.config.panel.permissions_privacy_blocked_button"),
+              "commands.config.panel.permissions_privacy_blocked_button",
+            ),
+          );
+          expect(serialized).toContain(
+            localizedCopy(
+              resolvedLocale("commands.config.panel.permissions_privacy_allowed_button"),
+              "commands.config.panel.permissions_privacy_allowed_button",
+            ),
+          );
+          const statusKey = bypass
+            ? "commands.config.panel.permissions_stm_sharing_allowed"
+            : "commands.config.panel.permissions_stm_sharing_blocked";
+          expect(serialized).toMatch(localizedProse(resolvedLocale(statusKey), statusKey));
+        });
+      }
+    }
+    cases.expectNoFailures();
+  });
+
+  it("edits only public channels and preserves manual privacy on automatically restricted channels", async () => {
+    const state = makePersona({ config: { private_channel_ids: [CHANNEL_ONE] } });
+    const channels: ChecklistChannelTarget[] = [
+      { id: CHANNEL_ONE, name: "mods", rawPosition: 0, parentRawPosition: -1, privacyReason: "restricted" },
+      { id: CHANNEL_TWO, name: "quiet", rawPosition: 1, parentRawPosition: -1 },
+    ];
+    const modals: RawModalPayload[] = [];
+    const nonce = "nonce1234567";
+    const update = spyOn(configRepository, "updateChannelScopeConfig").mockResolvedValue(true);
+    const invalidate = spyOn(tomoriStateCache, "invalidateTomoriStateCache").mockImplementation(() => undefined);
+    try {
+      const harness = makeHarness({
+        state,
+        loadChannelsView: async () => makeChannelsView(state, channels),
+        showModal: async (_interaction, modal) => {
+          modals.push(modal);
+        },
+        checkboxValues: rulesCheckboxValues(nonce, CONFIG_CHANNEL_PRIVATE_CHECKBOX_PREFIX, [[CHANNEL_TWO]]),
+      });
+      harness.dependencies.loadPermissionsView = async () => ({
+        capabilities: { toolUseEnabled: true, includeElevenLabs: false, definitionStates: {} },
+        privacy: { stmPrivacyBypass: false },
+      });
+      await harness.dispatch(makeInteraction({ route: { action: "channels-private-manage-open", locale: "en-US" } }));
+      const options = modals.flatMap((modal) =>
+        modal.components.flatMap((component) => component.component?.options ?? []),
+      );
+      expect(options.map((option) => option.value)).toEqual([CHANNEL_TWO]);
+      await harness.dispatch(
+        makeInteraction({
+          kind: "modal",
+          route: {
+            action: "channels-private-submit",
+            locale: "en-US",
+            start: 0,
+            fp: channelRulesFingerprint(
+              state,
+              "private",
+              channels.filter((channel) => !channel.privacyReason),
+            ),
+            nonce,
+          },
+        }),
+      );
+      expect(update).toHaveBeenCalledWith(9, { private_channel_ids: [CHANNEL_ONE, CHANNEL_TWO] });
+    } finally {
+      update.mockRestore();
+      invalidate.mockRestore();
+    }
+  });
+
   it("keeps Private and Roleplay text-only while Blocklist includes all four supported channel types", () => {
     let fetchCalled = false;
     const guild = {
@@ -1470,6 +1604,14 @@ describe("Channels Rules", () => {
       },
     };
 
+    for (const channel of guild.channels.cache.values()) {
+      Object.assign(channel, createGuildTextChannel(channel.id), {
+        type: channel.type,
+        name: channel.name,
+        rawPosition: channel.rawPosition,
+        parent: channel.parent,
+      });
+    }
     const textChannels = loadCachedGuildTextChecklistChannels(guild as never);
     const blocklistChannels = loadCachedGuildBlocklistChannels(guild as never);
     const blocklistModal = buildConfigBlocklistChannelsModal(

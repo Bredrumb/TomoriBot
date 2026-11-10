@@ -409,7 +409,9 @@ function channelRulesAvailable(
   view: Awaited<ReturnType<ConfigRouteDependencies["loadChannelsView"]>>,
   collection: ConfigChannelRulesCollection,
 ) {
-  return collection === "blocklist" ? view.availableBlocklistChannels : view.availableTextChannels;
+  if (collection === "blocklist") return view.availableBlocklistChannels;
+  if (collection === "private") return view.availableTextChannels.filter((channel) => !channel.privacyReason);
+  return view.availableTextChannels;
 }
 
 function channelRulesSelectedIds(state: TomoriState, collection: ConfigChannelRulesCollection): readonly string[] {
@@ -587,7 +589,10 @@ async function runChannelRulesWrite(
     }
   }
 
-  const previousSelectedIds = visibleChannelRulesIds(state, collection, availableChannels);
+  const previousSelectedIds =
+    collection === "private"
+      ? new Set(state.config.private_channel_ids ?? [])
+      : visibleChannelRulesIds(state, collection, availableChannels);
   const nextSelectedIds = new Set(previousSelectedIds);
   for (const channelId of presentedIds) nextSelectedIds.delete(channelId);
   for (const channelId of checkedIds) nextSelectedIds.add(channelId);

@@ -29,6 +29,7 @@ import type { SimplifiedMessageForContext } from "@/utils/text/context/types";
 import { prepareParticipantContext } from "@/utils/text/participants/preparation";
 import { createLlmRow, createPersona } from "../../helpers/fixtures";
 import { createParticipantContextFixture, PARTICIPANT_FIXTURE_IDS as IDS } from "./fixtures/participantContextFixture";
+import { createGuildTextChannel } from "../../helpers/discordChannels";
 
 type SerializedPrompt = { system?: unknown; messages: unknown[] };
 type Serializer = (items: StructuredContextItem[]) => Promise<SerializedPrompt>;
@@ -107,6 +108,12 @@ afterEach(() => {
 
 it("preserves serialized prefixes across volatile updates and appended exchanges on every path and adapter", async () => {
   const fixture = createParticipantContextFixture();
+  Object.assign(fixture.client, {
+    channels: {
+      cache: new Map(),
+      fetch: async (id: string) => createGuildTextChannel(id, { guildId: IDS.guild }),
+    },
+  });
   const persona = createPersona({
     persona_id: IDS.activePersona,
     persona_lineage_id: IDS.activeLineage,
@@ -131,6 +138,7 @@ it("preserves serialized prefixes across volatile updates and appended exchanges
   const member = fixture.memberCache.get(IDS.human);
   const guild = fixture.client.guilds.cache.get(IDS.guild);
   if (!user || !member || !guild) throw new Error("Participant fixture is missing its user or guild");
+  Object.assign(guild, { channels: fixture.client.channels });
   user.timezone_offset = 5.5;
   Object.assign(guild, { presences: { cache: new Map() } });
   const activity = {

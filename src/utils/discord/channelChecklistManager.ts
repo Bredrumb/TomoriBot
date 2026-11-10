@@ -1,5 +1,6 @@
 import { ChannelType, type Guild } from "discord.js";
 import { localizer } from "@/utils/text/localizer";
+import { getChannelPrivacyReason, type ChannelPrivacyReason } from "@/utils/discord/channelPrivacy";
 
 const CHECKLIST_MAX_OPTIONS_PER_GROUP = 10;
 const CHECKLIST_MAX_GROUPS_PER_MODAL = 5;
@@ -9,6 +10,7 @@ export type ChecklistChannelTarget = {
   name: string;
   rawPosition: number;
   parentRawPosition: number;
+  privacyReason?: ChannelPrivacyReason;
 };
 
 export type BlocklistChannelTarget = {
@@ -61,6 +63,7 @@ function readGuildTextChecklistChannels(guild: Guild): ChecklistChannelTarget[] 
       name: channel.name,
       rawPosition: channel.rawPosition,
       parentRawPosition: channel.parent?.rawPosition ?? -1,
+      privacyReason: getChannelPrivacyReason(channel) ?? undefined,
     });
   }
 

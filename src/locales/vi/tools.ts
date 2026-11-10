@@ -13,6 +13,9 @@ export default {
       delivery_failed: "Không thể đăng kết quả xúc xắc. Không có lượt tung nào được gửi thành công.",
     },
     execution: {
+      channel_history_unavailable: "Cả người yêu cầu và mình đều cần quyền đọc lịch sử tin nhắn của kênh đích.",
+      private_channel_target:
+        "Công cụ liên kênh không thể nhắm vào các kênh riêng tư hoặc kênh không thể xác minh quyền xem. Thay vào đó, hãy hỏi mình ngay trong kênh đó.",
       unavailable: `Công cụ \`{tool}\` không khả dụng theo cài đặt hiện tại, khả năng của model hoặc quyền hạn của bot.`,
     },
     sprite_selection: {

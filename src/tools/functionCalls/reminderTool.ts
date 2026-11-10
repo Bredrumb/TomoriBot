@@ -21,6 +21,7 @@ import { isMatrixRelayMessage } from "@/utils/chat/triggerProcessor";
 import { verifyMessageWebhook } from "@/utils/chat/webhookIdentity";
 import { resolveChannelTarget, resolveTriggererDiscordId, resolveUserTarget } from "@/utils/discord/targetResolver";
 import { MAX_REMINDERS_PER_SERVER, ReminderLimitError } from "@/utils/db/repositories/ServerScheduleRepository";
+import { getChannelPrivacyReason } from "@/utils/discord/channelPrivacy";
 
 /**
  * Tool for creating scheduled tasks that trigger messages at specific times
@@ -297,6 +298,16 @@ export class ReminderTool extends BaseTool {
         };
       }
 
+      if (
+        channelResolution.channel.id !== channelId &&
+        getChannelPrivacyReason(channelResolution.channel, tomoriState.config.private_channel_ids ?? [])
+      ) {
+        return {
+          success: false,
+          error: localizer(context.locale, "tools.execution.private_channel_target"),
+          data: { status: "reminder_creation_failed_private_target" },
+        };
+      }
       resolvedChannelId = channelResolution.channel.id;
       resolvedChannelLabel = channelResolution.displayLabel;
     } else if ("name" in context.channel) {

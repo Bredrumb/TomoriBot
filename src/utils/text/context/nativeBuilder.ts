@@ -369,7 +369,6 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
         isUserImpersonation,
         explicitLongTermMemoryIntent,
         toolPromptMacroResolver,
-        currentParentChannelId: parentChannelId,
         convertMentions,
       });
       nudgeItem = stmResult.nudgeItem;
