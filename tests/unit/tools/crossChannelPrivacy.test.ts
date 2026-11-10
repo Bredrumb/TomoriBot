@@ -128,6 +128,27 @@ function fixture(history: Message[], anchorLookup?: () => Promise<Collection<str
 }
 
 describe("cross-channel target authorization", () => {
+  it("ignores another member's denial for classification but still enforces the requester's permissions", async () => {
+    for (const deniedRequester of [false, true]) {
+      const f = fixture([message("public-history", "author")]);
+      f.context.userId = deniedRequester ? "restricted-member" : "invoker";
+      Object.assign(f.target, {
+        permissionOverwrites: createGuildTextChannel(f.target.id, { memberViewDenied: true }).permissionOverwrites,
+        permissionsFor: (member: { id?: string }) =>
+          new PermissionsBitField(member.id === "restricted-member" ? 0n : PermissionsBitField.All),
+      });
+      Object.assign(f.context.client.guilds, {
+        fetch: async () => ({ members: { me: { id: "bot" }, fetch: async (id: string) => ({ id }) } }),
+      });
+      const result = await new CrossChannelMessageTool().execute(
+        { target_channel: "garden", peek_only: true },
+        f.context,
+      );
+      expect(result.success).toBe(!deniedRequester);
+      expect(f.fetches.length > 0).toBe(!deniedRequester);
+    }
+  });
+
   it("blocks private targets across tools even with STM sharing allowed, while allowing outward work", async () => {
     const names = spyOn(authoredText, "getKnownPersonaSpeakerNames").mockResolvedValue(new Set());
     const schedule = spyOn(serverScheduleRepository, "addReminder");

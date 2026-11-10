@@ -519,6 +519,21 @@ describe("idle nudge shortlist", () => {
     for (const candidate of attempt.candidates) expect(candidate.channelIndices).toEqual([0]);
   });
 
+  it("keeps channels with only individual member denials eligible for shared planning", async () => {
+    const { processor, channels, drawTarget, run } = fixture();
+    drawTarget.mockResolvedValue(null);
+    for (const entry of channels) {
+      Object.assign(
+        entry.channel,
+        createGuildTextChannel(entry.channel.id, { guildId: "fixture-guild", memberViewDenied: true }),
+      );
+    }
+    await processor.processDueIdleNudges();
+    expect(run).toHaveBeenCalled();
+    const [attempt] = run.mock.calls[0];
+    expect(attempt.plannerChannels.map((entry) => entry.channel.id)).toEqual(expect.arrayContaining(CHANNEL_IDS));
+  });
+
   it.each([
     "all-restricted",
     "one-restricted",

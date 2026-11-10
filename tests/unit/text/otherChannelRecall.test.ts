@@ -103,6 +103,8 @@ describe("other-channel short-term recall", () => {
         "restricted-source",
         "restricted-destination",
         "deny",
+        "member-deny-source",
+        "member-deny-destination",
         "thread",
         "private-thread",
         "missing",
@@ -111,11 +113,15 @@ describe("other-channel short-term recall", () => {
         for (const bypass of [false, true]) {
           channels.set(
             "channel-current",
-            createGuildTextChannel("channel-current", { everyoneCanView: restriction !== "restricted-destination" }),
+            createGuildTextChannel("channel-current", {
+              everyoneCanView: restriction !== "restricted-destination",
+              memberViewDenied: restriction === "member-deny-destination",
+            }),
           );
           const source = createGuildTextChannel("channel-other", {
             everyoneCanView: restriction !== "restricted-source",
             viewDenied: restriction === "deny",
+            memberViewDenied: restriction === "member-deny-source",
           });
           const privateIds =
             restriction === "manual-source"
@@ -141,7 +147,7 @@ describe("other-channel short-term recall", () => {
             createPersona({ config: { private_channel_ids: privateIds, stm_privacy_bypass: bypass } }),
           );
           expect(texts.join("\n").includes("confidential-marker"), `${restriction}, bypass=${bypass}`).toBe(
-            bypass || restriction === "public",
+            bypass || ["public", "member-deny-source", "member-deny-destination"].includes(restriction),
           );
         }
       }

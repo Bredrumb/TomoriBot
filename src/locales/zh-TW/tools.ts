@@ -12,6 +12,8 @@ export default {
       delivery_failed: "無法傳送擲骰結果。未能成功完成擲骰。",
     },
     execution: {
+      channel_history_unavailable: "提出請求的使用者與我都需要有讀取目標頻道訊息歷史紀錄的權限。",
+      private_channel_target: "跨頻道工具無法以私人頻道或無法驗證可見度的頻道為目標。請改在該頻道中詢問我。",
       unavailable: `在目前的設定、模型功能或 bot 權限下，工具 \`{tool}\` 無法使用。`,
     },
     sprite_selection: {

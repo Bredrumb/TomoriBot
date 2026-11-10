@@ -67,9 +67,10 @@ Trigger Behavior.
   `Private-Channel STM Sharing` is `Allowed`. You can still ask the bot to work within a private
   channel or dispatch work outward; an outward task can include information from your conversation.
 
-Automatic privacy uses a conservative permission check: `@everyone` must be able to view the channel,
-and no role or member may have an explicit `View Channel` deny. Servers with verification roles or
-view-denying restriction roles can therefore have channels marked private even when ordinary
+Automatic privacy checks role permissions: `@everyone` must be able to view the channel,
+and no role may have an explicit `View Channel` deny. Individual member overwrites do not affect
+this classification. Servers with verification roles or view-denying restriction roles can therefore
+have channels marked private even when ordinary
 members can read them. The panel distinguishes automatic privacy from manual selections. Removing
 a manual selection cannot override Discord restrictions.
 
@@ -80,13 +81,12 @@ TomoriBot posts her internal reasoning, fallback notices, and successful tool ca
 useful for auditing what she is doing, including which trigger exposed a tool in
 [Deliberate Tool Mode](/features/capabilities/tools-and-extensions/deliberate-tool-mode/).
 
-The log only copies from channels every member of your server can already see. Activity in a
-channel or thread that some members cannot open stays out of the log, so the log never shows
-people something they could not read where it happened. The log channel must be in the same server.
+The log uses the same role-based privacy check as STM. Activity in private channels and their
+threads stays out of the log. The log channel must be in the same server.
 
 :::tip
-Keep the log channel private to your moderation team. TomoriBot checks who can read the channel
-being copied from, so activity from public channels can go to an admin-only log channel.
+The log channel can be restricted to your moderation team while receiving activity from channels
+open to every role.
 :::
 
 ## Welcome Greetings

@@ -17,7 +17,11 @@ Bộ nhớ ngắn hạn mới và bộ nhớ mang nội dung từ các kênh kh�
 ## Ví dụ giữa các kênh
 
 - **Kênh công khai:** Bạn thảo luận về gợi ý album với TomoriBot trong `#music`. Vài phút sau trong `#general`, bạn hỏi bot đã gợi ý album nào. Vì bot đã trả lời trong `#music`, bot sẽ nhớ lại ngữ cảnh đó trong `#general`.
-- **Kênh riêng tư:** Nếu cuộc trò chuyện đó diễn ra trong một kênh riêng tư, bot sẽ không nhớ lại nó trong `#general`. Các bản tóm tắt từ các kênh riêng tư vẫn được giữ tách biệt trừ khi quản trị viên bật Bỏ qua quyền riêng tư STM trong `/config` > `Permissions`.
+- **Kênh riêng tư:** STM không thể đi vào hoặc rời khỏi kênh riêng tư theo mặc định. Điều này áp dụng cho các bản tóm tắt, trường bộ nhớ và tin nhắn thô gần đây, bao gồm cả việc gợi nhớ giữa hai kênh riêng tư.
+
+Các kênh giới hạn quyền xem qua quyền Discord sẽ tự động là riêng tư. Luồng riêng tư và luồng trực thuộc kênh riêng tư cũng là riêng tư. Quản trị viên có thể đánh dấu kênh văn bản công khai là riêng tư trong `/config` > `Kênh` > `Quy tắc kênh`.
+
+`Chia sẻ STM kênh riêng tư` trong bảng điều khiển đó ở trạng thái `Bị chặn` theo mặc định. Việc chọn `Được phép` cho phép STM đi vào và rời khỏi các kênh riêng tư, đồng thời có thể để lộ cuộc trò chuyện riêng tư ở nơi khác. Thiết lập này không bao giờ bật nhật ký suy nghĩ hoặc công cụ liên kênh nhắm vào các kênh riêng tư. Bạn vẫn cần bật đồng ý gợi nhớ liên máy chủ để gợi nhớ qua các máy chủ, và máy chủ nguồn sẽ kiểm soát việc STM của kênh riêng tư có được phép rời đi hay không.
 
 ## Quản lý bộ nhớ ngắn hạn
 <!-- anchor: managing-short-term-memory -->

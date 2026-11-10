@@ -175,6 +175,7 @@ export default {
     field_prompt_snapshot: `提示词快照`,
     field_short_term_memory: `短期记忆`,
     field_user_info_updates: `用户信息更新`,
+    field_private_stm_sharing: `私密频道 STM 共享`,
     field_voice_messages: `语音消息`,
     field_voice_transcript_mode: `语音转写聊天模式`,
     field_context_note: `上下文提醒`,

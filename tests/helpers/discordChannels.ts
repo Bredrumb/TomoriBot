@@ -1,10 +1,30 @@
-import { ChannelType, Collection, PermissionFlagsBits, PermissionsBitField, type TextChannel } from "discord.js";
+import {
+  ChannelType,
+  Collection,
+  OverwriteType,
+  PermissionFlagsBits,
+  PermissionsBitField,
+  type TextChannel,
+} from "discord.js";
 
 export function createGuildTextChannel(
   id: string,
-  options: { guildId?: string; everyoneCanView?: boolean; viewDenied?: boolean } = {},
+  options: { guildId?: string; everyoneCanView?: boolean; viewDenied?: boolean; memberViewDenied?: boolean } = {},
 ): TextChannel {
   const guildId = options.guildId ?? "server-1";
+  const overwrites: Array<[string, { type: OverwriteType; deny: PermissionsBitField }]> = [];
+  if (options.viewDenied) {
+    overwrites.push([
+      "restricted-role",
+      { type: OverwriteType.Role, deny: new PermissionsBitField(PermissionFlagsBits.ViewChannel) },
+    ]);
+  }
+  if (options.memberViewDenied) {
+    overwrites.push([
+      "restricted-member",
+      { type: OverwriteType.Member, deny: new PermissionsBitField(PermissionFlagsBits.ViewChannel) },
+    ]);
+  }
   return {
     id,
     name: id,
@@ -25,11 +45,7 @@ export function createGuildTextChannel(
         options.everyoneCanView === false ? 0n : PermissionsBitField.All & ~PermissionFlagsBits.Administrator,
       ),
     permissionOverwrites: {
-      cache: new Collection(
-        options.viewDenied
-          ? [["restricted-role", { deny: new PermissionsBitField(PermissionFlagsBits.ViewChannel) }]]
-          : [],
-      ),
+      cache: new Collection(overwrites),
     },
   } as unknown as TextChannel;
 }

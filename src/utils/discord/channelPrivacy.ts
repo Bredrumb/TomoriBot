@@ -1,4 +1,4 @@
-import { ChannelType, PermissionFlagsBits, type Channel } from "discord.js";
+import { ChannelType, OverwriteType, PermissionFlagsBits, type Channel } from "discord.js";
 
 export type ChannelPrivacyReason = "manual" | "private_thread" | "restricted" | "unknown";
 
@@ -16,7 +16,9 @@ export function getChannelPrivacyReason(
   if (privateChannelIds.includes(audience.id)) return "manual";
   if (
     !audience.permissionsFor(audience.guild.roles.everyone)?.has(PermissionFlagsBits.ViewChannel) ||
-    audience.permissionOverwrites.cache.some((overwrite) => overwrite.deny.has(PermissionFlagsBits.ViewChannel))
+    audience.permissionOverwrites.cache.some(
+      (overwrite) => overwrite.type === OverwriteType.Role && overwrite.deny.has(PermissionFlagsBits.ViewChannel),
+    )
   ) {
     return "restricted";
   }

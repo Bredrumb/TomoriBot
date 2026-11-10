@@ -2,10 +2,9 @@
 title: "Moderação do Servidor"
 sidebar:
   order: 2
-aiGenerated: true
 ---
 
-TomoriBot fornece aos gerentes de servidores controle refinado sobre uso, custos, permissões e canais por meio de `/moderation` e `/config`. A maioria desses controles requer a permissão `Gerenciar servidor`. Para obter uma lista completa de comandos, consulte a [Referência de comandos](/pt-BR/features/command-reference/).
+TomoriBot fornece aos gerentes de servidores controle refinado sobre uso, custos, permissões e canais por meio de `/moderation` e `/config`. A maioria desses controles requer a permissão `Gerenciar servidor`. Para obter uma lista completa de comandos, consulte a [Referência de comandos](/features/command-reference/).
 
 ## Controle de Custo: Cotas
 <!-- anchor: cost-control-quotas -->
@@ -25,7 +24,7 @@ Em `/moderation` > `Acesso de Membros`, você pode controlar se os membros podem
 - **Modelos de servidor permitidos** (padrão): os membros usam provedores configurados no servidor.
 - **Provedores pessoais necessários**: os membros devem configurar suas próprias chaves API via `/personal providers`. O servidor não paga nada por mensagens iniciadas por membros. As ações iniciadas pelo servidor (como saudações automatizadas ou tarefas agendadas) ainda usam o provedor do servidor.
 
-Os membros configuram seus provedores pessoais em [Personalização](/pt-BR/features/knowledge/personalization/#your-own-providers).
+Os membros configuram seus provedores pessoais em [Personalização](/features/knowledge/personalization/#your-own-providers).
 
 Você também pode inicializar um servidor sem um provedor de texto do lado do servidor escolhendo `BYOK do Usuário` durante `/setup`.
 
@@ -43,13 +42,19 @@ Configure o resfriamento da resposta global em todo o servidor em `/config` > `C
 
 - **Permissões de membro**: em `/moderation` > `Acesso de Membros`, clique em `Editar Permissões` para controlar se os membros sem `Gerenciar servidor` podem gerenciar memórias do servidor, atributos de personalidade, exemplos de diálogos ou inspecionar instantâneos de prompt.
 - **Lista negra de usuários**: em `/moderation` > `Lista Negra de Usuários`, escolha membros para TomoriBot ignorar completamente. Os membros da lista negra não podem acioná-la ou executar comandos, e suas mensagens nunca alcançam o contexto imediato. Você também pode definir bloqueios de membros específicos para cada pessoa.
-- **Regras de canal**: em `/config` > `Canais` > Regras de canal, marque canais privados (onde a memória de curto prazo permanece isolada e os registros de pensamento são suprimidos) e listas de bloqueio de ferramentas entre canais.
+- **Regras de canal**: em `/config` > `Canais` > `Regras de Canal`, marque canais de texto públicos como privados ou adicione listas de bloqueio de ferramentas multicanal. Canais restritos do Discord são privados automaticamente. Canais privados não têm logs de pensamento nem ferramentas multicanal de entrada, incluindo espiadas, criação de tópicos e tarefas agendadas a partir de outros canais. A STM não pode entrar nem sair, a menos que `Compartilhamento de STM de Canais Privados` esteja `Permitido`. Você ainda pode pedir para o bot trabalhar dentro de um canal privado ou despachar tarefas para fora; uma tarefa enviada para fora pode incluir informações da sua conversa.
 
-## Transparência: Registros de Pensamento
+A privacidade automática verifica as permissões de cargos: `@everyone` deve conseguir visualizar o canal e nenhum cargo pode ter uma negação explícita de `Ver canal`. Sobrescritas de membros individuais não afetam essa classificação. Servidores com cargos de verificação ou cargos de restrição que negam a visualização podem, portanto, ter canais marcados como privados mesmo quando membros comuns conseguem lê-los. O painel distingue a privacidade automática de seleções manuais. Remover uma seleção manual não pode sobrepor as restrições do Discord.
 
-Em `/config` > `Canais` > Logs e boas-vindas, clique em `Definir Canal de Logs` para designar um canal onde TomoriBot publica seu raciocínio interno, avisos de fallback e chamadas de ferramenta bem-sucedidas. Isso é útil para auditar o que ela está fazendo, incluindo qual gatilho expôs uma ferramenta no [Modo Ferramenta Deliberada](/pt-BR/features/capabilities/tools-and-extensions/#deliberate-tool-mode).
+## Transparência: Logs de Pensamento
 
-O registro só copia de canais que todos os membros do seu servidor já podem ver. A atividade em um canal ou tópico que alguns membros não conseguem abrir fica fora do registro, de modo que o registro nunca exibe conteúdos que eles não poderiam ler onde ocorreram. O canal de registros deve estar no mesmo servidor.
+Em `/config` > `Canais` > Logs e boas-vindas, clique em `Definir Canal de Logs` para designar um canal onde TomoriBot publica seu raciocínio interno, avisos de fallback e chamadas de ferramenta bem-sucedidas. Isso é útil para auditar o que ela está fazendo, incluindo qual gatilho expôs uma ferramenta no [Modo Ferramenta Deliberada](/features/capabilities/tools-and-extensions/deliberate-tool-mode/).
+
+O log usa a mesma verificação de privacidade baseada em cargos que a STM. Atividades em canais privados e em seus tópicos ficam fora do log. O canal de logs deve estar no mesmo servidor.
+
+:::tip
+O canal de logs pode ser restrito à sua equipe de moderação enquanto recebe atividades de canais abertos para todos os cargos.
+:::
 
 ## Saudações de Boas-Vindas
 
@@ -57,4 +62,4 @@ Em `/config` > `Canais` > Logs e boas-vindas, configure saudações automatizada
 
 ## Expressões
 
-Execute `/expressions initialize` para indexar os emojis e figurinhas personalizados do seu servidor para que as pessoas possam usá-los com precisão nas conversas. Para saber como as personas usam emojis, figurinhas e reações, consulte [Expressões e reações](/pt-BR/features/chatting-personality/chatting-and-triggers/#expressions--reactions).
+Execute `/expressions initialize` para indexar os emojis e figurinhas personalizados do seu servidor para que as pessoas possam usá-los com precisão nas conversas. Para saber como as personas usam emojis, figurinhas e reações, consulte [Expressões e reações](/features/chatting-personality/chatting-and-triggers/#expressions--reactions).

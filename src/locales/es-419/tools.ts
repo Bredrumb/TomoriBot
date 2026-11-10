@@ -13,6 +13,10 @@ export default {
       delivery_failed: "No se pudo publicar el resultado de los dados. No se entregó ninguna tirada con éxito.",
     },
     execution: {
+      channel_history_unavailable:
+        "Tanto el usuario solicitante como yo necesitamos permiso para leer el historial de mensajes del canal objetivo.",
+      private_channel_target:
+        "Las herramientas entre canales no pueden tener como objetivo canales privados ni canales cuya visibilidad no se pueda verificar. Pídemelo en ese canal en su lugar.",
       unavailable: `La herramienta \`{tool}\` no está disponible con la configuración actual, las capacidades del modelo o los permisos del bot.`,
     },
     sprite_selection: {
