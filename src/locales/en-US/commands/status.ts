@@ -175,7 +175,7 @@ export default {
     field_prompt_snapshot: `Prompt Snapshot`,
     field_short_term_memory: `Short-Term Memory`,
     field_user_info_updates: `User Info Updates`,
-    field_stm_privacy_bypass: `STM Privacy Bypass`,
+    field_private_stm_sharing: `Private-Channel STM Sharing`,
     field_voice_messages: `Voice Messages`,
     field_voice_transcript_mode: `Voice Transcript Chat Mode`,
     field_context_note: `Author's Note`,

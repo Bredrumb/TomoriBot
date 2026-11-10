@@ -175,7 +175,6 @@ export default {
     field_prompt_snapshot: `Instantánea de Prompt`,
     field_short_term_memory: `Memoria a Corto Plazo`,
     field_user_info_updates: `Actualizaciones de Información del Usuario`,
-    field_stm_privacy_bypass: `Omisión de Privacidad de MCP`,
     field_voice_messages: `Mensajes de Voz`,
     field_voice_transcript_mode: `Modo de Chat con Transcripción de Voz`,
     field_context_note: `Nota del Autor`,

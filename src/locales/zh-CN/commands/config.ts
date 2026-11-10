@@ -335,9 +335,6 @@ export default {
       channels_rules_blocklist_title: `跨频道屏蔽名单`,
       channels_rules_blocklist_description: `跨频道工具不能进入这些频道。`,
       channels_rules_blocklist_manage_button: `管理被屏蔽频道`,
-      channels_rules_memory_privacy_title: `记忆隐私`,
-      channels_rules_memory_privacy_description:
-        "控制私密频道的[短期记忆](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/short-term-memory/) 是否可以出现在别处。",
       channels_rules_private_modal_title: `管理私密频道`,
       channels_rules_private_group_label: `私密频道`,
       channels_rules_private_group_label_continued: `私密频道（续）`,
@@ -416,8 +413,6 @@ export default {
       page_models_fallbacks: `备用模型与模型随机`,
       page_models_image: `图像生成默认值`,
       page_models_voices: `TTS 参数与语音`,
-      permissions_privacy_on: `私密频道的短期记忆可以出现在该频道之外。`,
-      permissions_privacy_off: `私密频道的短期记忆只留在该频道内。`,
       permissions_privacy_direction: `用 /memories 查看或清除当前生效的短期记忆。`,
       plugins_available_tools_title: `可用工具`,
       plugins_available_tools_description: `选择我可以在这个服务器里使用哪些工具与功能。`,

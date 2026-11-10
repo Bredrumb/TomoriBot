@@ -655,7 +655,6 @@ async function writeShortTermMemory(context: ChatTurnContext, result: Generation
         context.channelName,
         personaId,
         response?.personaLineageId ?? null,
-        context.channel.isThread() ? context.channel.parentId : null,
       );
       // Advance the cadence counter on the live scope row (server-shared in guild, user in DM).
       // This fires once per bot-participation cycle: not per raw inbound message.

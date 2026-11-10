@@ -24,6 +24,8 @@ import { sanitizeUnknownTemplatePlaceholders } from "@/utils/text/processors/men
 import { buildSlugMap } from "@/utils/text/slugifyLabel";
 import { channelScopeAdmits, channelScopeCandidates } from "@/utils/discord/channelScope";
 import { STM_TAIL_SLOT, type PromptLayoutItem } from "@/utils/text/context/promptLayout";
+import { getChannelPrivacyReason } from "@/utils/discord/channelPrivacy";
+import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 
 // Default render depth for crude messages (Mode B additive blocks + no-summary
 // fallback listing). Also the fallback when a server has no crude_message_count set.
@@ -253,7 +255,6 @@ export async function buildShortTermMemoryContext(params: {
   isUserImpersonation: boolean;
   explicitLongTermMemoryIntent?: boolean;
   toolPromptMacroResolver?: ToolPromptMacroResolver;
-  currentParentChannelId?: string | null;
   convertMentions: MentionConverter;
 }): Promise<{
   memoryItems: StructuredContextItem[];
@@ -332,19 +333,6 @@ export async function buildShortTermMemoryContext(params: {
       otherChannelMemories = [...otherChannelMemories, ...crossServerUserMemories];
     }
 
-    const privateChannelIds = params.tomoriState?.config.private_channel_ids ?? [];
-    const stmPrivacyBypass = params.tomoriState?.config.stm_privacy_bypass ?? false;
-    const isCurrentChannelPrivate =
-      privateChannelIds.includes(params.currentChannelId) ||
-      (params.currentParentChannelId != null && privateChannelIds.includes(params.currentParentChannelId));
-    if (!stmPrivacyBypass && !isCurrentChannelPrivate && privateChannelIds.length > 0) {
-      otherChannelMemories = otherChannelMemories.filter(
-        (memory) =>
-          !privateChannelIds.includes(memory.channelId) &&
-          !(memory.parentChannelId != null && privateChannelIds.includes(memory.parentChannelId)),
-      );
-    }
-
     // Entries warmed from the DB carry no messages, so a row with a cleared summary has nothing to recall.
     otherChannelMemories = otherChannelMemories.filter(
       (memory) =>
@@ -354,7 +342,49 @@ export async function buildShortTermMemoryContext(params: {
     );
     otherChannelMemories.sort((a, b) => b.lastUpdated - a.lastUpdated);
 
-    const limitedMemories = otherChannelMemories.slice(0, MAX_OTHER_CHANNEL_MEMORIES);
+    const channelIsPrivate = async (serverId: string, channelId: string, privateIds: readonly string[]) => {
+      if (privateIds.includes(channelId)) return true;
+      try {
+        const channel = params.client.channels.cache.get(channelId) ?? (await params.client.channels.fetch(channelId));
+        if (!channel || !("guildId" in channel) || channel.guildId !== serverId) return true;
+        return getChannelPrivacyReason(channel, privateIds) !== null;
+      } catch (error) {
+        log.warn("Could not resolve STM channel privacy", { serverId, channelId, error });
+        return true;
+      }
+    };
+    const currentConfig = params.tomoriState?.config;
+    const destinationBlocksRecall =
+      params.currentServerId !== "DM" &&
+      !currentConfig?.stm_privacy_bypass &&
+      otherChannelMemories.length > 0 &&
+      (await channelIsPrivate(
+        params.currentServerId,
+        params.currentChannelId,
+        currentConfig?.private_channel_ids ?? [],
+      ));
+    const limitedMemories: ShortTermMemoryEntry[] = [];
+    const sourceStates = new Map<string, TomoriState | null>();
+    if (!destinationBlocksRecall) {
+      for (const memory of otherChannelMemories) {
+        if (memory.serverId !== "DM") {
+          if (memory.serverId !== params.currentServerId && !sourceStates.has(memory.serverId)) {
+            sourceStates.set(memory.serverId, await getCachedTomoriState(memory.serverId));
+          }
+          const sourceState =
+            memory.serverId === params.currentServerId ? params.tomoriState : sourceStates.get(memory.serverId);
+          if (!sourceState) continue;
+          if (
+            !sourceState.config.stm_privacy_bypass &&
+            (await channelIsPrivate(memory.serverId, memory.channelId, sourceState.config.private_channel_ids ?? []))
+          ) {
+            continue;
+          }
+        }
+        limitedMemories.push(memory);
+        if (limitedMemories.length === MAX_OTHER_CHANNEL_MEMORIES) break;
+      }
+    }
     if (limitedMemories.length > 0) {
       let otherChannelText = "";
 

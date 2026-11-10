@@ -361,9 +361,6 @@ export default {
       channels_rules_blocklist_title: `Lista de Bloqueio Multicanal`,
       channels_rules_blocklist_description: `Ferramentas multicanal não podem visitar estes canais.`,
       channels_rules_blocklist_manage_button: `Gerenciar Canais Bloqueados`,
-      channels_rules_memory_privacy_title: `Privacidade de Memória`,
-      channels_rules_memory_privacy_description:
-        "Controle se a [Memória de Curto Prazo](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/short-term-memory/) privada pode aparecer em outro lugar.",
       channels_rules_private_modal_title: `Gerenciar Canais Privados`,
       channels_rules_private_group_label: `Canais Privados`,
       channels_rules_private_group_label_continued: `Canais Privados (Continuação)`,
@@ -442,8 +439,6 @@ export default {
       page_models_fallbacks: `Alternativas e Aleatorizador`,
       page_models_image: `Padrões de Geração de Imagem`,
       page_models_voices: `Parâmetros TTS e Vozes`,
-      permissions_privacy_on: "A Memória de Curto Prazo do canal privado pode aparecer fora do seu canal.",
-      permissions_privacy_off: "A Memória de Curto Prazo do canal privado fica isolada no seu canal.",
       permissions_privacy_direction: `Use /memories para inspecionar ou limpar a MCP ativa.`,
       plugins_available_tools_title: `Ferramentas Disponíveis`,
       plugins_available_tools_description: `Escolha as ferramentas e recursos que posso usar neste servidor.`,

@@ -175,7 +175,6 @@ export default {
     field_prompt_snapshot: `提示詞快照`,
     field_short_term_memory: `短期記憶`,
     field_user_info_updates: `使用者資訊更新`,
-    field_stm_privacy_bypass: `短期記憶隱私繞行`,
     field_voice_messages: `語音訊息`,
     field_voice_transcript_mode: `語音逐字稿聊天模式`,
     field_context_note: `作者備註`,

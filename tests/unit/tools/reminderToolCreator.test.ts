@@ -43,6 +43,15 @@ async function createTaskAndReadCreator(context: Partial<ToolContext>): Promise<
 }
 
 describe("create_task creator attribution", () => {
+  it("allows a task created within its private destination channel", async () => {
+    expect(
+      await createTaskAndReadCreator({
+        tomoriState: createPersona({ config: { private_channel_ids: ["fixture-channel"] } }),
+        internalUserId: ANCHOR_AUTHOR.user_id,
+      }),
+    ).toBe(ANCHOR_AUTHOR.user_id);
+  });
+
   it("credits the requester on an ordinary turn", async () => {
     expect(await createTaskAndReadCreator({ internalUserId: ANCHOR_AUTHOR.user_id })).toBe(ANCHOR_AUTHOR.user_id);
   });

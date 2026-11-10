@@ -177,7 +177,6 @@ export default {
     field_prompt_snapshot: `プロンプトスナップショット`,
     field_short_term_memory: `短期記憶`,
     field_user_info_updates: `ユーザー情報の更新`,
-    field_stm_privacy_bypass: `STMプライバシーバイパス`,
     field_voice_messages: `音声メッセージ`,
     field_voice_transcript_mode: `音声文字起こしチャットモード`,
     field_context_note: `作者注`,

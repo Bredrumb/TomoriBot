@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
-import type { Client } from "discord.js";
+import { ChannelType, Collection, type Client } from "discord.js";
 import * as realShortTermMemoryCache from "@/utils/cache/shortTermMemoryCache";
 import type { ShortTermMemoryEntry } from "@/utils/cache/shortTermMemoryCache";
 import * as realUserCache from "@/utils/cache/userCache";
@@ -12,9 +12,18 @@ import { fitNovelAIPrompt } from "@/providers/novelai/promptFitting";
 import { getNovelAIProfile } from "@/providers/novelai/modelProfiles";
 import { applyPromptLayoutInserts, STM_TAIL_SLOT, type PromptLayoutItem } from "@/utils/text/context/promptLayout";
 import { resolveRandomChoiceMacrosInBuildOutput } from "@/utils/text/context/templates";
+import { createGuildTextChannel } from "../../helpers/discordChannels";
+import * as stateCache from "@/utils/cache/tomoriStateCache";
+import { createUserRow } from "../../helpers/fixtures";
 
 let otherChannelEntries: ShortTermMemoryEntry[] = [];
 let sameChannelEntry: ShortTermMemoryEntry | undefined;
+let userEntries: ShortTermMemoryEntry[] = [];
+let crossServerOptIn = false;
+const channels = new Collection<string, ReturnType<typeof createGuildTextChannel>>();
+const client = {
+  channels: { cache: channels, fetch: async (id: string) => channels.get(id) ?? null },
+} as unknown as Client;
 
 const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/cache/shortTermMemoryCache": realShortTermMemoryCache,
@@ -27,11 +36,13 @@ scopedMock.module("@/utils/cache/shortTermMemoryCache", () => ({
   getShortTermMemoriesForServer: mock(() => otherChannelEntries),
   preWarmStmEntry: mock(async () => undefined),
   getShortTermMemoryForServerChannel: mock(() => sameChannelEntry),
+  getShortTermMemoriesForUser: mock(() => userEntries),
+  preWarmUserStmEntries: mock(async () => undefined),
 }));
 
 scopedMock.module("@/utils/cache/userCache", () => ({
   ...realUserCache,
-  getCachedUserRow: mock(async () => null),
+  getCachedUserRow: mock(async () => createUserRow({ shortterm_cache_crossserver_opt_in: crossServerOptIn })),
 }));
 
 const { buildShortTermMemoryContext } = await import("@/utils/text/context/memories");
@@ -41,16 +52,16 @@ function hydratedEntry(channelId: string, lastUpdated: number, overrides: Partia
   return { messages: [], serverId: "server-1", channelId, lastUpdated, ...overrides } satisfies ShortTermMemoryEntry;
 }
 
-async function recallText() {
+async function recallText(tomoriState = createPersona()) {
   const { memoryItems } = await buildShortTermMemoryContext({
     triggeringUserId: "user-1",
     currentChannelId: "channel-current",
     currentServerId: "server-1",
-    tomoriState: null,
+    tomoriState,
     triggererName: "Mirri",
     botName: "Juno",
     personalMemoriesEnabled: false,
-    client: {} as Client,
+    client,
     isUserImpersonation: false,
     convertMentions: async (text) => text,
   });
@@ -61,12 +72,114 @@ async function recallText() {
 
 describe("other-channel short-term recall", () => {
   beforeEach(() => {
+    spyOn(shortTermMemoryRepository, "getStmConfig").mockResolvedValue(null);
+    spyOn(shortTermMemoryRepository, "getStmCategories").mockResolvedValue([]);
     otherChannelEntries = [];
     sameChannelEntry = undefined;
+    userEntries = [];
+    crossServerOptIn = false;
+    channels.clear();
+    for (const id of ["channel-current", "channel-other", "channel-a", "channel-b", "channel-c", "channel-d"])
+      channels.set(id, createGuildTextChannel(id));
   });
   afterEach(() => {
     spyOn(shortTermMemoryRepository, "getStmConfig").mockRestore();
     spyOn(shortTermMemoryRepository, "getStmCategories").mockRestore();
+    spyOn(stateCache, "getCachedTomoriState").mockRestore();
+  });
+
+  it("isolates private sources and destinations for summaries, categories, and crude messages unless sharing is allowed", async () => {
+    spyOn(shortTermMemoryRepository, "getStmConfig").mockResolvedValue(null);
+    spyOn(shortTermMemoryRepository, "getStmCategories").mockResolvedValue([]);
+    for (const content of [
+      { summary: "confidential-marker" },
+      { categories: { plans: "confidential-marker" } },
+      { messages: [{ role: "user" as const, content: "confidential-marker", timestamp: Date.now() }] },
+    ]) {
+      for (const restriction of [
+        "manual-source",
+        "manual-destination",
+        "both-manual",
+        "restricted-source",
+        "restricted-destination",
+        "deny",
+        "thread",
+        "private-thread",
+        "missing",
+        "public",
+      ]) {
+        for (const bypass of [false, true]) {
+          channels.set(
+            "channel-current",
+            createGuildTextChannel("channel-current", { everyoneCanView: restriction !== "restricted-destination" }),
+          );
+          const source = createGuildTextChannel("channel-other", {
+            everyoneCanView: restriction !== "restricted-source",
+            viewDenied: restriction === "deny",
+          });
+          const privateIds =
+            restriction === "manual-source"
+              ? ["channel-other"]
+              : restriction === "manual-destination"
+                ? ["channel-current"]
+                : restriction === "both-manual"
+                  ? ["channel-current", "channel-other"]
+                  : restriction === "thread"
+                    ? ["private-parent"]
+                    : [];
+          if (restriction === "thread" || restriction === "private-thread") {
+            Object.assign(source, {
+              type: restriction === "private-thread" ? ChannelType.PrivateThread : ChannelType.PublicThread,
+              isThread: () => true,
+              parent: createGuildTextChannel("private-parent"),
+            });
+          }
+          channels.set("channel-other", source);
+          if (restriction === "missing") channels.delete("channel-other");
+          otherChannelEntries = [hydratedEntry("channel-other", Date.now(), content)];
+          const texts = await recallText(
+            createPersona({ config: { private_channel_ids: privateIds, stm_privacy_bypass: bypass } }),
+          );
+          expect(texts.join("\n").includes("confidential-marker"), `${restriction}, bypass=${bypass}`).toBe(
+            bypass || restriction === "public",
+          );
+        }
+      }
+    }
+  });
+
+  it("keeps same-channel STM when privacy blocks recall and filters before applying the recall limit", async () => {
+    spyOn(shortTermMemoryRepository, "getStmConfig").mockResolvedValue(null);
+    spyOn(shortTermMemoryRepository, "getStmCategories").mockResolvedValue([]);
+    sameChannelEntry = hydratedEntry("channel-current", Date.now(), { summary: "local-marker" });
+    otherChannelEntries = ["channel-a", "channel-b", "channel-c", "channel-d"].map((id, index) =>
+      hydratedEntry(id, Date.now() - index, { summary: id }),
+    );
+    expect(
+      (await recallText(createPersona({ config: { private_channel_ids: ["channel-current"] } }))).join("\n"),
+    ).toContain("local-marker");
+    const texts = await recallText(
+      createPersona({ config: { private_channel_ids: ["channel-a", "channel-b", "channel-c"] } }),
+    );
+    expect(texts.join("\n")).toContain("channel-d");
+    expect(texts.join("\n")).not.toContain("<#channel-a>");
+  });
+
+  it("honors the source server's private list and sharing setting for cross-server opt-ins", async () => {
+    spyOn(shortTermMemoryRepository, "getStmConfig").mockResolvedValue(null);
+    spyOn(shortTermMemoryRepository, "getStmCategories").mockResolvedValue([]);
+    crossServerOptIn = true;
+    channels.set("foreign-channel", createGuildTextChannel("foreign-channel", { guildId: "server-2" }));
+    userEntries = [hydratedEntry("foreign-channel", Date.now(), { serverId: "server-2", summary: "foreign-marker" })];
+    const loadState = spyOn(stateCache, "getCachedTomoriState");
+    for (const sourceBypass of [false, true]) {
+      loadState.mockResolvedValue(
+        createPersona({ config: { private_channel_ids: ["foreign-channel"], stm_privacy_bypass: sourceBypass } }),
+      );
+      expect((await recallText()).join("\n").includes("foreign-marker")).toBe(sourceBypass);
+    }
+    loadState.mockResolvedValue(null);
+    expect(await recallText()).toEqual([]);
   });
 
   it("uses the tail slot for fresh same-channel memory and every rendered other-channel block", async () => {
@@ -95,7 +208,7 @@ describe("other-channel short-term recall", () => {
           triggererName: "Mirri",
           botName: "Juno",
           personalMemoriesEnabled: false,
-          client: {} as Client,
+          client,
           isUserImpersonation: false,
           convertMentions: async (text) => text,
         });
@@ -122,7 +235,7 @@ describe("other-channel short-term recall", () => {
       triggererName: "Mirri",
       botName: "Juno",
       personalMemoriesEnabled: false,
-      client: {} as Client,
+      client,
       isUserImpersonation: false,
       convertMentions: async (text) => text,
     });
@@ -177,7 +290,7 @@ describe("other-channel short-term recall", () => {
           triggererName: "Mirri",
           botName: "Juno",
           personalMemoriesEnabled: false,
-          client: {} as Client,
+          client,
           isUserImpersonation: false,
           convertMentions: async (text) => text,
         });

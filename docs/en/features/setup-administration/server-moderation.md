@@ -60,9 +60,18 @@ Trigger Behavior.
 - **User Blacklist**: in `/moderation` > User Blacklist, choose members for TomoriBot to ignore
   completely. Blacklisted members cannot trigger her or run commands, and their messages never
   reach prompt context. You can also set persona-specific member blocks.
-- **Channel Rules**: in `/config` > Channels > Channel Rules, mark private channels (where
-  short-term memory stays isolated and thought logs are suppressed) and cross-channel tool
-  blocklists.
+- **Channel Rules**: in `/config` > `Channels` > `Channel Rules`, mark public text channels private
+  or add cross-channel tool blocklists. Restricted Discord channels are private automatically.
+  Private channels have no thought logs or incoming cross-channel tools, including peeks, thread
+  creation, and scheduled tasks from other channels. STM cannot enter or leave unless
+  `Private-Channel STM Sharing` is `Allowed`. You can still ask the bot to work within a private
+  channel or dispatch work outward; an outward task can include information from your conversation.
+
+Automatic privacy uses a conservative permission check: `@everyone` must be able to view the channel,
+and no role or member may have an explicit `View Channel` deny. Servers with verification roles or
+view-denying restriction roles can therefore have channels marked private even when ordinary
+members can read them. The panel distinguishes automatic privacy from manual selections. Removing
+a manual selection cannot override Discord restrictions.
 
 ## Transparency: Thought Logs
 

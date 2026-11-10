@@ -359,9 +359,6 @@ export default {
       channels_rules_blocklist_title: `Danh sách chặn liên kênh`,
       channels_rules_blocklist_description: `Các công cụ liên kênh không thể truy cập những kênh này.`,
       channels_rules_blocklist_manage_button: `Quản lý kênh bị chặn`,
-      channels_rules_memory_privacy_title: `Quyền riêng tư bộ nhớ`,
-      channels_rules_memory_privacy_description:
-        "Kiểm soát việc [Bộ nhớ ngắn hạn](https://docs.tomoribot.app/vi/features/knowledge/memory/short-term-memory/) của kênh riêng có thể xuất hiện ở nơi khác hay không.",
       channels_rules_private_modal_title: `Quản lý kênh riêng tư`,
       channels_rules_private_group_label: `Kênh riêng tư`,
       channels_rules_private_group_label_continued: `Kênh riêng tư (Tiếp theo)`,
@@ -440,8 +437,6 @@ export default {
       page_models_fallbacks: `Dự phòng & Bộ ngẫu nhiên`,
       page_models_image: `Mặc định tạo hình ảnh`,
       page_models_voices: `Tham số & Giọng đọc TTS`,
-      permissions_privacy_on: "Bộ nhớ ngắn hạn của kênh riêng tư có thể xuất hiện ngoài kênh đó.",
-      permissions_privacy_off: "Bộ nhớ ngắn hạn của kênh riêng tư được giữ tách biệt trong kênh đó.",
       permissions_privacy_direction: `Dùng /memories để kiểm tra hoặc xóa STM đang hoạt động.`,
       plugins_available_tools_title: `Công cụ khả dụng`,
       plugins_available_tools_description: `Chọn các công cụ và tính năng mình được dùng trong máy chủ.`,

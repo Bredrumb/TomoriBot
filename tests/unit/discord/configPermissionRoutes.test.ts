@@ -627,7 +627,7 @@ describe("permissions routes", () => {
       expect(updatePrivacy).toHaveBeenCalledWith(9, { stm_privacy_bypass: true });
       expect(JSON.stringify(manager.edits.at(-1))).toContain("rules");
       expect(JSON.stringify(manager.edits.at(-1))).toContain(
-        localizer("en-US", "commands.config.panel.channels_rules_memory_privacy_title"),
+        localizer("en-US", "commands.config.panel.channels_rules_stm_sharing_title"),
       );
 
       for (const route of [
@@ -770,9 +770,7 @@ describe("Plugins and Channel Rules panels", () => {
         channelsView,
       }),
     );
-    expect(privacySerialized).toContain(
-      localizer("en-US", "commands.config.panel.channels_rules_memory_privacy_title"),
-    );
+    expect(privacySerialized).toContain(localizer("en-US", "commands.config.panel.channels_rules_stm_sharing_title"));
     expect(privacySerialized).toContain("/memories");
 
     const stalePayload = buildConfigPanelPayload({

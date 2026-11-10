@@ -4,6 +4,8 @@ import {
   ChannelType,
   Collection,
   EmbedBuilder,
+  PermissionFlagsBits,
+  PermissionsBitField,
   type Client,
   type GuildTextBasedChannel,
   type Message,
@@ -32,6 +34,9 @@ import type { ChatTurnContext } from "@/utils/chat/types";
 import { CreateThreadTool } from "@/tools/functionCalls/createThreadTool";
 import * as toolDelivery from "@/utils/discord/webhook/toolPersonaDelivery";
 import * as authoredText from "@/utils/discord/modelAuthoredText";
+import { createGuildTextChannel } from "../../helpers/discordChannels";
+import { ReminderTool } from "@/tools/functionCalls/reminderTool";
+import { serverScheduleRepository, userRepository } from "@/utils/db/repositories";
 
 const restores: Array<() => void> = [];
 const sourceId = "source-channel";
@@ -57,6 +62,7 @@ function message(id: string, authorId: string, webhookId: string | null = null):
 function fixture(history: Message[], anchorLookup?: () => Promise<Collection<string, Message>>) {
   const fetches: number[] = [];
   const target = {
+    ...createGuildTextChannel("target-channel", { guildId: "guild" }),
     id: "target-channel",
     name: "garden",
     isThread: () => false,
@@ -73,10 +79,13 @@ function fixture(history: Message[], anchorLookup?: () => Promise<Collection<str
   } as unknown as GuildTextBasedChannel;
   const client = {
     user: { id: "bot" },
-    guilds: { fetch: async () => ({ members: { me: {}, fetch: async () => ({}) } }) },
+    guilds: {
+      cache: new Collection(),
+      fetch: async () => ({ members: { me: {}, fetch: async (id: string) => ({ id, user: { username: id } }) } }),
+    },
   } as unknown as Client;
   const context: ToolContext = {
-    channel: { id: sourceId } as ToolContext["channel"],
+    channel: createGuildTextChannel(sourceId, { guildId: "guild" }),
     client,
     userId: "invoker",
     guildId: "guild",
@@ -118,9 +127,199 @@ function fixture(history: Message[], anchorLookup?: () => Promise<Collection<str
   return { context, target, privacy, proxies, labels, mentions, dispatch, fetches };
 }
 
+describe("cross-channel target authorization", () => {
+  it("blocks private targets across tools even with STM sharing allowed, while allowing outward work", async () => {
+    const names = spyOn(authoredText, "getKnownPersonaSpeakerNames").mockResolvedValue(new Set());
+    const schedule = spyOn(serverScheduleRepository, "addReminder");
+    const requester = spyOn(userRepository, "loadByDiscordId").mockResolvedValue(createUserRow());
+    restores.push(
+      () => names.mockRestore(),
+      () => schedule.mockRestore(),
+      () => requester.mockRestore(),
+    );
+    for (const restriction of ["manual", "restricted", "thread", "unknown"]) {
+      for (const bypass of [false, true]) {
+        const f = fixture([message("private-history", "author")]);
+        f.context.tomoriState.config.stm_privacy_bypass = bypass;
+        f.context.tomoriState.config.thread_creation_enabled = true;
+        if (restriction === "manual") f.context.tomoriState.config.private_channel_ids = [f.target.id];
+        if (restriction === "restricted")
+          Object.assign(f.target, {
+            permissionOverwrites: createGuildTextChannel("target", { viewDenied: true }).permissionOverwrites,
+          });
+        if (restriction === "thread")
+          Object.assign(f.target, {
+            type: ChannelType.PublicThread,
+            isThread: () => true,
+            parent: createGuildTextChannel("restricted-parent", { everyoneCanView: false }),
+          });
+        if (restriction === "unknown")
+          Object.assign(f.target, { type: ChannelType.PublicThread, isThread: () => true, parent: null });
+        for (const peek of [false, true]) {
+          const result = await new CrossChannelMessageTool().execute(
+            { target_channel: "garden", task: "Check", peek_only: peek },
+            f.context,
+          );
+          expect(result.success, `${restriction}, bypass=${bypass}, peek=${peek}`).toBe(false);
+        }
+        const task = await new ReminderTool().execute(
+          {
+            target_channel: "garden",
+            reminder_purpose: "Check",
+            self_reminder: true,
+            minutes_from_now: 10,
+            repetition_interval_hours: 0,
+          },
+          f.context,
+        );
+        expect(task.success).toBe(false);
+        expect(task.data).toMatchObject({ status: "reminder_creation_failed_private_target" });
+        if (restriction === "manual" || restriction === "restricted") {
+          const thread = await new CreateThreadTool().execute(
+            { channel_name: "garden", thread_name: "work", first_message: "Check" },
+            f.context,
+          );
+          expect(thread.success).toBe(false);
+        }
+        expect(f.fetches).toEqual([]);
+        expect(f.dispatch).not.toHaveBeenCalled();
+      }
+    }
+    expect(schedule).not.toHaveBeenCalled();
+    const outward = fixture([message("public-history", "author")]);
+    outward.context.tomoriState.config.private_channel_ids = [sourceId];
+    const result = await new CrossChannelMessageTool().execute(
+      { target_channel: "garden", task: "Announce", boomerang: false },
+      outward.context,
+    );
+    expect(result.success).toBe(true);
+    expect(outward.dispatch).toHaveBeenCalled();
+  });
+
+  it("checks the requester rather than a different cached message member", async () => {
+    const f = fixture([message("restricted-history", "author")]);
+    const anchorAuthor = { id: "privileged-bystander" };
+    Object.assign(f.context, { message: { member: anchorAuthor } });
+    Object.assign(f.context.client.guilds, {
+      fetch: async () => ({ members: { me: { id: "bot" }, fetch: async (id: string) => ({ id }) } }),
+    });
+    Object.assign(f.target, {
+      permissionsFor: (member: { id: string }) =>
+        new PermissionsBitField(
+          member.id === "invoker" ? [] : [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory],
+        ),
+    });
+
+    const result = await new CrossChannelMessageTool().execute(
+      { target_channel: "garden", task: "", peek_only: true },
+      f.context,
+    );
+
+    expect({ success: result.success, historyReads: f.fetches.length }).toEqual({
+      success: false,
+      historyReads: 0,
+    });
+  });
+
+  it("rejects history reads when the requester lacks ReadMessageHistory", async () => {
+    const f = fixture([message("restricted-history", "author")]);
+    const requester = { id: "invoker" };
+    Object.assign(f.context, { message: { member: requester } });
+    Object.assign(f.target, {
+      permissionsFor: (member: unknown) =>
+        new PermissionsBitField(
+          member === requester
+            ? [PermissionFlagsBits.ViewChannel]
+            : [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory],
+        ),
+    });
+
+    const result = await new CrossChannelMessageTool().execute(
+      { target_channel: "garden", task: "", peek_only: true },
+      f.context,
+    );
+
+    expect({ success: result.success, historyReads: f.fetches.length }).toEqual({
+      success: false,
+      historyReads: 0,
+    });
+  });
+
+  it("rejects private thread targets before attempting to read history", async () => {
+    const f = fixture([message("private-thread-history", "author")]);
+    Object.assign(f.target, {
+      type: ChannelType.PrivateThread,
+      isThread: () => true,
+    });
+
+    const result = await new CrossChannelMessageTool().execute(
+      { target_channel: "garden", task: "", peek_only: true },
+      f.context,
+    );
+
+    expect(result.data).toMatchObject({ status: "cross_channel_failed_private_target" });
+    expect(f.fetches).toEqual([]);
+  });
+});
+
 describe("cross-channel request attribution", () => {
+  it.each([
+    false,
+    true,
+  ])("allows a thread within the current private channel without borrowing authority (system: %s)", async (borrowed) => {
+    const f = fixture([]);
+    f.context.channel = f.target;
+    f.context.borrowsTriggerMessage = borrowed;
+    f.context.message = {
+      ...message("anchor", "invoker"),
+      member: { id: "invoker", user: { username: "Mirri" } },
+    } as Message;
+    const permissionChecks: string[] = [];
+    Object.assign(f.target, {
+      permissionsFor: (member: { id?: string }) => {
+        permissionChecks.push(member.id ?? "bot");
+        return new PermissionsBitField(PermissionsBitField.All);
+      },
+    });
+    f.context.tomoriState.config.private_channel_ids = [f.target.id];
+    f.context.tomoriState.config.thread_creation_enabled = true;
+    Object.assign(f.target, {
+      threads: {
+        create: async () => ({
+          id: "created-thread",
+          name: "work",
+          messages: { fetch: async () => new Collection<string, Message>() },
+        }),
+      },
+    });
+    const names = spyOn(authoredText, "getKnownPersonaSpeakerNames").mockResolvedValue(new Set());
+    const posted = message("thread-starter", "bot");
+    const delivery = spyOn(toolDelivery, "sendToolPersonaPost").mockResolvedValue({
+      status: "sent",
+      message: posted,
+      receipt: {
+        messageId: posted.id,
+        channelId: "created-thread",
+        route: "bot",
+        webhookId: null,
+        identity: { username: "Juno" },
+        speaker: null,
+      },
+    });
+    restores.push(
+      () => names.mockRestore(),
+      () => delivery.mockRestore(),
+    );
+    const result = await new CreateThreadTool().execute({ thread_name: "work", first_message: "Check" }, f.context);
+    expect(result.success).toBe(true);
+    expect(delivery).toHaveBeenCalled();
+    expect(consumePendingBoomerang(f.target.id)?.success).toBe(true);
+    expect(permissionChecks.includes("invoker")).toBe(!borrowed);
+  });
+
   for (const borrowed of [true, false]) {
-    it(`stores ${borrowed ? "system" : "human"} attribution when creating a thread`, async () => {
+    const name = borrowed ? "refuses a borrowed thread request" : "stores human thread attribution";
+    it(name, async () => {
       const f = fixture([]);
       f.context.borrowsTriggerMessage = borrowed;
       f.context.tomoriState.config.thread_creation_enabled = true;
@@ -157,6 +356,11 @@ describe("cross-channel request attribution", () => {
         f.context,
       );
 
+      if (borrowed) {
+        expect(result.data).toMatchObject({ status: "create_thread_failed_invoker_not_resolved" });
+        expect(delivery).not.toHaveBeenCalled();
+        return;
+      }
       expect(result.success).toBe(true);
       const pending = consumePendingBoomerang(sourceId);
       expect(pending?.borrowsTriggerMessage).toBe(borrowed);
@@ -166,7 +370,10 @@ describe("cross-channel request attribution", () => {
 
   for (const borrowed of [true, false]) {
     for (const failedDispatch of [true, false]) {
-      it(`preserves ${borrowed ? "system" : "human"} attribution through a ${failedDispatch ? "failed" : "successful"} dispatch and report`, async () => {
+      const name = borrowed
+        ? `refuses a borrowed anchor before ${failedDispatch ? "failing" : "successful"} dispatch`
+        : `preserves human attribution through a ${failedDispatch ? "failed" : "successful"} dispatch and report`;
+      it(name, async () => {
         const f = fixture([]);
         const persona = f.context.tomoriState;
         const requester = createUserRow({ user_id: 42, user_disc_id: "invoker" });
@@ -184,7 +391,12 @@ describe("cross-channel request attribution", () => {
           isThread: () => true,
           guild,
         });
-        Object.assign(f.target, { type: ChannelType.PublicThread, isThread: () => true, guild });
+        Object.assign(f.target, {
+          type: ChannelType.PublicThread,
+          isThread: () => true,
+          guild,
+          parent: createGuildTextChannel("public-parent", { guildId: "guild" }),
+        });
         const sourceAnchor = {
           ...message("source-anchor", bystander.user_disc_id),
           channel: source,
@@ -217,7 +429,7 @@ describe("cross-channel request attribution", () => {
         f.context.userId = borrowed ? bystander.user_disc_id : requester.user_disc_id;
         f.context.borrowsTriggerMessage = borrowed;
         f.context.message = borrowed
-          ? sourceAnchor
+          ? ({ ...sourceAnchor, member: { id: bystander.user_disc_id } } as Message)
           : ({ ...sourceAnchor, ...message("request", requester.user_disc_id) } as Message);
         const credentialUsers: Array<number | null | undefined> = [];
         const admissions: string[] = [];
@@ -282,6 +494,12 @@ describe("cross-channel request attribution", () => {
           { target_channel: "garden", task: "Check the conversation", boomerang: true },
           f.context,
         );
+        if (borrowed) {
+          expect(result.data).toMatchObject({ status: "cross_channel_failed_invoker_not_resolved" });
+          expect(f.dispatch).not.toHaveBeenCalled();
+          expect(credentialUsers).toEqual([]);
+          return;
+        }
         const incoming = normalizeChatInvocation({
           client: f.context.client,
           message: f.context.message,

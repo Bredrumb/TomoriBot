@@ -58,9 +58,6 @@ export interface ShortTermMemoryEntry {
   /** Discord channel ID */
   channelId: string;
 
-  /** Parent channel ID when channelId is a thread , so used for privacy/RP inheritance checks */
-  parentChannelId?: string | null;
-
   /** Optional channel name (for same-server channel mentions) */
   channelName?: string;
 
@@ -393,7 +390,6 @@ function storeMemoryEntry(
   channelName?: string,
   personaId?: number | null,
   personaLineageId?: number | null,
-  parentChannelId?: string | null,
 ): void {
   const existing = cache.get(key);
 
@@ -406,7 +402,6 @@ function storeMemoryEntry(
     serverId,
     serverName,
     channelId,
-    parentChannelId,
     channelName,
     personaId,
     personaLineageId,
@@ -671,7 +666,6 @@ function updateSummaryForKey(
   channelName?: string,
   personaId?: number | null,
   personaLineageId?: number | null,
-  parentChannelId?: string | null,
 ): void {
   let existing = cache.get(key);
 
@@ -682,7 +676,6 @@ function updateSummaryForKey(
       serverId,
       serverName,
       channelId,
-      parentChannelId,
       channelName,
       personaId,
       personaLineageId,
@@ -707,7 +700,6 @@ function updateSummaryForKey(
  * @param channelName - Optional channel name for same-server channel mentions
  * @param personaId - Optional persona ID for persona-scoped memory
  * @param personaLineageId - Optional persona lineage ID for cross-server persona matching
- * @param parentChannelId - Parent channel ID when channelId is a thread (used for privacy inheritance)
  */
 export function storeShortTermMemory(
   userId: string,
@@ -723,7 +715,6 @@ export function storeShortTermMemory(
   channelName?: string,
   personaId?: number | null,
   personaLineageId?: number | null,
-  parentChannelId?: string | null,
 ): void {
   try {
     if (!userId || !channelId || !serverId) {
@@ -745,7 +736,6 @@ export function storeShortTermMemory(
       channelName,
       personaId,
       personaLineageId,
-      parentChannelId,
     );
 
     if (serverId !== "DM") {
@@ -758,7 +748,6 @@ export function storeShortTermMemory(
         channelName,
         personaId,
         personaLineageId,
-        parentChannelId,
       );
     }
 
@@ -907,7 +896,6 @@ export function getShortTermMemoryForServerChannel(
  * @param channelName - Channel name (optional, for new entries)
  * @param personaId - Optional persona ID for persona-scoped memory
  * @param personaLineageId - Optional persona lineage ID for cross-server persona matching
- * @param parentChannelId - Parent channel ID when channelId is a thread (used for privacy inheritance)
  */
 export function updateShortTermMemorySummary(
   userId: string,
@@ -918,7 +906,6 @@ export function updateShortTermMemorySummary(
   channelName?: string,
   personaId?: number | null,
   personaLineageId?: number | null,
-  parentChannelId?: string | null,
 ): void {
   try {
     if (!userId || !channelId || !summary) {
@@ -940,7 +927,6 @@ export function updateShortTermMemorySummary(
       channelName,
       personaId,
       personaLineageId,
-      parentChannelId,
     );
 
     if (serverId && serverId !== "DM") {
@@ -953,7 +939,6 @@ export function updateShortTermMemorySummary(
         channelName,
         personaId,
         personaLineageId,
-        parentChannelId,
       );
     }
 
@@ -1280,7 +1265,6 @@ export function getShortTermMemoryCacheStats(): CacheStats & {
  * @param channelName - Optional channel name
  * @param personaId - Optional persona ID for persona-scoped memory
  * @param personaLineageId - Optional persona lineage ID
- * @param parentChannelId - Optional parent channel ID (thread privacy)
  */
 export async function updateShortTermMemoryCategories(
   userId: string,
@@ -1291,7 +1275,6 @@ export async function updateShortTermMemoryCategories(
   channelName?: string,
   personaId?: number | null,
   personaLineageId?: number | null,
-  parentChannelId?: string | null,
 ): Promise<void> {
   try {
     if (!userId || !channelId) {
@@ -1311,7 +1294,6 @@ export async function updateShortTermMemoryCategories(
         serverId: serverId ?? "unknown",
         serverName,
         channelId,
-        parentChannelId,
         channelName,
         personaId,
         personaLineageId,
@@ -1331,7 +1313,6 @@ export async function updateShortTermMemoryCategories(
           serverId,
           serverName,
           channelId,
-          parentChannelId,
           channelName,
           personaId,
           personaLineageId,

@@ -1,4 +1,5 @@
 import type { Client, Message } from "discord.js";
+import { getChannelPrivacyReason } from "@/utils/discord/channelPrivacy";
 import { isPrimaryProcess } from "@/utils/cluster/shardLeases";
 import type { ShardTopology } from "@/utils/discord/shardOwnership";
 import { canRunScheduledWork, type ScheduledWorkContext } from "@/timers/scheduledWorkContext";
@@ -565,12 +566,15 @@ export class NaturalNudgeProcessor {
     guildId: string,
     now: Date,
   ): Promise<Array<NudgeChannel & { transcript: string }>> {
-    const privateIds = new Set(persona.config.private_channel_ids ?? []);
+    const privateIds = persona.config.private_channel_ids ?? [];
     const [first, ...rest] = shuffled(pool);
     if (!first) return [];
-    const chosen = privateIds.has(first.channel.id)
+    const chosen = getChannelPrivacyReason(first.channel, privateIds)
       ? [first]
-      : [first, ...rest.filter((channel) => !privateIds.has(channel.channel.id))].slice(0, MAX_PLANNER_CHANNELS);
+      : [first, ...rest.filter((channel) => !getChannelPrivacyReason(channel.channel, privateIds))].slice(
+          0,
+          MAX_PLANNER_CHANNELS,
+        );
     return Promise.all(
       chosen.map(async (channel) => ({
         ...channel,

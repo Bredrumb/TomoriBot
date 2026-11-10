@@ -368,9 +368,6 @@ export default {
       channels_rules_blocklist_title: `Lista negra entre canales`,
       channels_rules_blocklist_description: `Las herramientas entre canales no pueden visitar estos canales.`,
       channels_rules_blocklist_manage_button: `Gestionar canales bloqueados`,
-      channels_rules_memory_privacy_title: `Privacidad de memoria`,
-      channels_rules_memory_privacy_description:
-        "Controla si la [Memoria a corto plazo](https://docs.tomoribot.app/es-419/features/knowledge/memory/short-term-memory/) de un canal privado puede aparecer en otros lugares.",
       channels_rules_private_modal_title: `Gestionar canales privados`,
       channels_rules_private_group_label: `Canales privados`,
       channels_rules_private_group_label_continued: `Canales privados (continuación)`,
@@ -450,8 +447,6 @@ export default {
       page_models_fallbacks: `Alternativas y aleatorizador`,
       page_models_image: `Valores de imagen`,
       page_models_voices: `Parámetros y voces TTS`,
-      permissions_privacy_on: "La memoria a corto plazo de un canal privado puede aparecer fuera de su canal.",
-      permissions_privacy_off: "La memoria a corto plazo de un canal privado se mantiene aislada en su canal.",
       permissions_privacy_direction: `Usa /memories para inspeccionar o borrar la memoria a corto plazo activa.`,
       plugins_available_tools_title: `Herramientas disponibles`,
       plugins_available_tools_description: `Elige qué herramientas y funciones puedo usar en este servidor.`,

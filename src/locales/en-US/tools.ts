@@ -13,6 +13,10 @@ export default {
       delivery_failed: "The dice result could not be posted. No successful roll was delivered.",
     },
     execution: {
+      channel_history_unavailable:
+        "The requesting user and I both need permission to read the target channel's message history.",
+      private_channel_target:
+        "Cross-channel tools cannot target private channels or channels whose visibility cannot be verified. Ask me in that channel instead.",
       unavailable: `The tool \`{tool}\` is unavailable under the current settings, model capabilities, or bot permissions.`,
     },
     sprite_selection: {

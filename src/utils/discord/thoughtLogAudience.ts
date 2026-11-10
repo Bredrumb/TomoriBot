@@ -1,5 +1,6 @@
-import { ChannelType, PermissionFlagsBits, type Channel } from "discord.js";
+import type { Channel } from "discord.js";
 import { log } from "@/utils/misc/logger";
+import { getChannelPrivacyReason } from "@/utils/discord/channelPrivacy";
 
 interface MirrorRefusal {
   reason: string;
@@ -44,21 +45,6 @@ function findMirrorRefusal(
   if (!("guildId" in destination) || !("guild" in source) || destination.guildId !== source.guildId) {
     return { reason: "thought log is in a different guild" };
   }
-  if (source.type === ChannelType.PrivateThread) return { reason: "private thread" };
-
-  const audience = source.isThread() ? source.parent : source;
-  if (!audience || !("permissionOverwrites" in audience)) {
-    return { reason: "audience unknown (uncached parent or no permission data)", undetermined: true };
-  }
-  if (privateChannelIds.includes(source.id) || privateChannelIds.includes(audience.id)) {
-    return { reason: "channel is on the Private Channels list" };
-  }
-
-  if (!audience.permissionsFor(source.guild.roles.everyone).has(PermissionFlagsBits.ViewChannel)) {
-    return { reason: "@everyone cannot view the channel" };
-  }
-  if (audience.permissionOverwrites.cache.some((overwrite) => overwrite.deny.has(PermissionFlagsBits.ViewChannel))) {
-    return { reason: "a role or member overwrite denies View Channel" };
-  }
-  return null;
+  const privacy = getChannelPrivacyReason(source, privateChannelIds);
+  return privacy ? { reason: privacy, undetermined: privacy === "unknown" } : null;
 }

@@ -311,7 +311,6 @@ export interface ConfigPersonaOperations {
     serverDiscId: string;
     serverName?: string;
     channelName?: string;
-    parentChannelId?: string | null;
     personaId: number;
     personaLineageId: number;
     mode: "summary" | "categories";
@@ -1200,7 +1199,6 @@ export const configPersonaOperations: ConfigPersonaOperations = {
     serverDiscId,
     serverName,
     channelName,
-    parentChannelId,
     personaId,
     personaLineageId,
     mode,
@@ -1217,7 +1215,6 @@ export const configPersonaOperations: ConfigPersonaOperations = {
         channelName,
         personaId,
         personaLineageId,
-        parentChannelId,
       );
       return { status: "success" };
     }
@@ -1236,7 +1233,6 @@ export const configPersonaOperations: ConfigPersonaOperations = {
         channelName,
         personaId,
         personaLineageId,
-        parentChannelId,
       );
     } else {
       shortTermMemoryRepository.clearSummary(userDiscId, channelId, personaId, serverDiscId);

@@ -1993,7 +1993,6 @@ describe("config Persona Memories routes", () => {
       55,
       // The route falls back to 0 only for a row without a lineage; a real persona row always has one.
       MAIN.persona_lineage_id,
-      undefined,
     );
     expect(acknowledged).toBe(true);
     summarySpy.mockRestore();

@@ -336,9 +336,6 @@ export default {
       channels_rules_blocklist_title: `跨頻道黑名單`,
       channels_rules_blocklist_description: `跨頻道工具不能造訪這些頻道。`,
       channels_rules_blocklist_manage_button: `管理封鎖頻道`,
-      channels_rules_memory_privacy_title: `記憶隱私`,
-      channels_rules_memory_privacy_description:
-        "控制私人頻道的[短期記憶](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/short-term-memory/) 是否可能出現在其他地方。",
       channels_rules_private_modal_title: `管理私人頻道`,
       channels_rules_private_group_label: `私人頻道`,
       channels_rules_private_group_label_continued: `私人頻道（續）`,
@@ -417,8 +414,6 @@ export default {
       page_models_fallbacks: `備援與隨機化`,
       page_models_image: `圖片生成預設`,
       page_models_voices: `TTS 參數與語音`,
-      permissions_privacy_on: "私人頻道的短期記憶可以出現在 頻道之外。",
-      permissions_privacy_off: "私人頻道的短期記憶會保持隔離在 原本的頻道。",
       permissions_privacy_direction: `用 /memories 查看或清除使用中的 STM。`,
       plugins_available_tools_title: `可用工具`,
       plugins_available_tools_description: `選擇我可以在這個伺服器使用哪些工具與功能。`,
