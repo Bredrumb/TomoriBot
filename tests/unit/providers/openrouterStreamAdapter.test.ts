@@ -5,6 +5,8 @@ import type { ContextPart, StructuredContextItem } from "@/types/misc/context";
 import type { RawStreamChunk, StreamContext } from "@/types/stream/interfaces";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { sumTurnUsage } from "@/utils/text/tokenEstimate";
+import { log } from "@/utils/misc/logger";
+import { reportStreamProviderFailure } from "@/utils/provider/providerErrorMetrics";
 import { createPersona } from "../../helpers/fixtures";
 import { stubGlobalFetch } from "../../helpers/fetchStub";
 
@@ -803,6 +805,159 @@ describe("OpenrouterStreamAdapter response body teardown", () => {
 });
 
 describe("OpenrouterStreamAdapter video context", () => {
+  it("retains safe video diagnostics on HTTP and SSE failures without fetching videos or duplicating incident records", async () => {
+    const cases = [
+      {
+        uri: "https://cdn.discordapp.com/attachments/111/222/PRIVATE_FILENAME.mp4?ex=00000001&is=0&hm=PRIVATE_SIGNATURE",
+        mimeType: "video/mp4",
+        expected: { source: "discord_cdn", scheme: "https", mimeType: "video/mp4", expiresAtUnixSeconds: 1 },
+      },
+      {
+        uri: "https://www.youtube.com/watch?v=AbCdEfGhI12&private=PRIVATE_QUERY",
+        mimeType: "video/youtube",
+        expected: { source: "youtube", scheme: "https", mimeType: "video/youtube" },
+      },
+      {
+        uri: "https://PRIVATE_HOST.example.test/PRIVATE_FILENAME?token=PRIVATE_QUERY",
+        mimeType: "PRIVATE_MIME",
+        expected: { source: "remote_url", scheme: "https", mimeType: "other" },
+      },
+      {
+        uri: "data:video/mp4;base64,UFJJVkFURV9WSURFT19CWVRFUw==",
+        mimeType: "video/mp4",
+        expected: {
+          source: "inline_data",
+          scheme: "data",
+          mimeType: "video/mp4",
+          encodedBytes: Buffer.byteLength("data:video/mp4;base64,UFJJVkFURV9WSURFT19CWVRFUw=="),
+        },
+      },
+    ];
+    const errors = spyOn(log, "error").mockImplementation(async () => {});
+    try {
+      for (const transport of ["http", "sse"]) {
+        for (const video of cases) {
+          errors.mockClear();
+          const payload = {
+            id: "gen-fixture",
+            error: {
+              code: 400,
+              message: "Failed to download one or more videos",
+              metadata: { provider_name: "Fixture Provider" },
+            },
+          };
+          let requestCount = 0;
+          const fetchStub = stubGlobalFetch((_input, init) => {
+            requestCount++;
+            expect(init?.method).toBe("POST");
+            return transport === "http"
+              ? Response.json(payload, { status: 400, headers: { "x-request-id": "req-fixture" } })
+              : makeSseResponse([payload, "[DONE]"]);
+          });
+          try {
+            const context = makeStreamContext();
+            context.tomoriState = createPersona();
+            context.holdResponseText = true;
+            context.contextItems = [
+              {
+                role: "user",
+                parts: [
+                  { type: "text", text: "PRIVATE_PROMPT" },
+                  { type: "video", uri: "https://example.test/earlier.mp4", mimeType: "video/mp4" },
+                  { type: "video", uri: video.uri, mimeType: video.mimeType },
+                ],
+              },
+            ];
+            const config: OpenrouterStreamConfig = { ...makeStreamConfig(), seesVideos: true };
+            const adapter = new OpenrouterStreamAdapter();
+            const chunks: RawStreamChunk[] = [];
+            for await (const chunk of adapter.startStream(config, context)) chunks.push(chunk);
+            const error = chunks.map((chunk) => adapter.processChunk(chunk).error).find(Boolean);
+            if (!error) throw new Error("Expected provider rejection");
+            await reportStreamProviderFailure({
+              providerError: error,
+              providerName: "openrouter",
+              context,
+              requestApiKey: config.apiKey,
+              denied: false,
+              surfaced: false,
+            });
+            expect(requestCount).toBe(1);
+            expect(errors.mock.calls).toHaveLength(1);
+            const diagnostics = errors.mock.calls[0]?.[2]?.metadata?.videoRequestDiagnostics;
+            expect(diagnostics).toMatchObject({
+              model: config.model,
+              attempt: "default",
+              omittedVideos: 1,
+              httpStatus: transport === "http" ? 400 : 200,
+              generationId: "gen-fixture",
+              servingProvider: "Fixture Provider",
+              videos: [video.expected],
+            });
+            expect(context.videoRequestDiagnostics?.requestId).toBe(transport === "http" ? "req-fixture" : undefined);
+            const serialized = JSON.stringify(diagnostics);
+            for (const privateValue of [
+              config.apiKey,
+              video.uri,
+              "PRIVATE_PROMPT",
+              "PRIVATE_FILENAME",
+              "PRIVATE_SIGNATURE",
+              "PRIVATE_QUERY",
+              "PRIVATE_HOST",
+              "PRIVATE_MIME",
+              "UFJJVkFURV9WSURFT19CWVRFUw==",
+            ]) {
+              expect(serialized).not.toContain(privateValue);
+            }
+          } finally {
+            fetchStub.mockRestore();
+          }
+        }
+      }
+    } finally {
+      errors.mockRestore();
+    }
+  });
+
+  it("rejects unsafe provider identities and clears video diagnostics when a reused context sends no video", async () => {
+    const context = makeStreamContext();
+    context.holdResponseText = true;
+    context.contextItems = [
+      {
+        role: "user",
+        parts: [
+          {
+            type: "video",
+            uri: "https://cdn.discordapp.com/attachments/111/222/video.mp4?ex=PRIVATE_EXPIRY&hm=PRIVATE_SIGNATURE",
+            mimeType: "video/mp4",
+          },
+        ],
+      },
+    ];
+    const fetchStub = stubGlobalFetch(() =>
+      Response.json(
+        { id: "x".repeat(201), error: { message: "Rejected", metadata: { provider_name: "https://PRIVATE_HOST" } } },
+        { status: 400, headers: { "x-request-id": "https://PRIVATE_HOST?token=PRIVATE_QUERY" } },
+      ),
+    );
+    try {
+      const adapter = new OpenrouterStreamAdapter();
+      const config: OpenrouterStreamConfig = { ...makeStreamConfig(), seesVideos: true };
+      await drainStream(adapter.startStream(config, context));
+      expect(context.videoRequestDiagnostics?.videos).toEqual([
+        { source: "discord_cdn", scheme: "https", mimeType: "video/mp4" },
+      ]);
+      expect(context.videoRequestDiagnostics?.requestId).toBeUndefined();
+      expect(context.videoRequestDiagnostics?.generationId).toBeUndefined();
+      expect(context.videoRequestDiagnostics?.servingProvider).toBeUndefined();
+      config.seesVideos = false;
+      await drainStream(adapter.startStream(config, context));
+      expect(context.videoRequestDiagnostics).toBeUndefined();
+    } finally {
+      fetchStub.mockRestore();
+    }
+  });
+
   it("sends only the latest video across history and attachments while preserving other context", async () => {
     const latestVideos: Array<Extract<ContextPart, { type: "video" }>> = [
       { type: "video", uri: "https://example.test/latest.mp4", mimeType: "video/mp4" },

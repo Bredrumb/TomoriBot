@@ -121,6 +121,7 @@ export async function reportStreamProviderFailure(args: {
       channelId: context.channel.id,
       surfaced: args.surfaced,
       requestDiagnostics: context.requestDiagnostics,
+      videoRequestDiagnostics: args.providerName === "openrouter" ? context.videoRequestDiagnostics : undefined,
     },
     redactValues: [args.requestApiKey],
   });

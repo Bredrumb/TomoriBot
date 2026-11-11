@@ -91,6 +91,15 @@ The orchestrator routes normalized chunks based on `ProcessedChunk.type`:
   providers that report usage on trailing empty chunks or override terminal metadata. Terminal results
   retain reported usage, including errors, stops and empty replies.
 
+OpenRouter attempts containing video attach `videoRequestDiagnostics` to the existing failure
+report, including suppressed fallback failures. Fields identify the requested model, payload
+attempt, omitted video count, source category, URL scheme, known declared MIME type, inline encoded
+size, available [Discord URL expiry](https://discord.com/developers/docs/reference#signed-attachment-cdn-urls),
+HTTP status, and bounded provider request IDs and serving provider. Raw URLs, query values, filenames,
+media bytes, and prompts are excluded from this structure. Collection makes no additional network
+requests, so CDN reachability and actual media response headers remain unknown. A streamed provider
+rejection can accompany HTTP 200.
+
 ## Stream completion
 
 When the generator finishes normally, `completeStreamAfterProviderEnd()` invokes `flushFinalBuffer()`,
