@@ -602,8 +602,6 @@ export function queueFollowUpForLockedTurn(args: {
   manualStreamingContextOverrides: QueuedMessage["manualStreamingContextOverrides"];
   isNaturalStopMessage: boolean;
   shouldSurfaceUserErrors?: boolean;
-  isUserImpersonation?: boolean;
-  impersonatedUserId?: string;
   onGenerationResult?: ChatGenerationResultHandler;
   onQueueDiscard?: QueuedMessageDiscardHandler;
 }): boolean {
@@ -640,8 +638,8 @@ export function queueFollowUpForLockedTurn(args: {
     followUpUserDiscId: args.userDiscId,
     selectedPersonaId: args.lockEntry.activePersonaId,
     triggeredPersonaIds: args.lockEntry.activeTriggeredPersonaIds,
-    isUserImpersonation: args.isUserImpersonation,
-    impersonatedUserId: args.impersonatedUserId,
+    isUserImpersonation: args.lockEntry.activeIsUserImpersonation,
+    impersonatedUserId: args.lockEntry.activeImpersonatedUserId,
     textQuotaSource: args.textQuotaSource,
     textQuotaTriggerKey: args.textQuotaTriggerKey,
     textQuotaUserDiscId: args.textQuotaUserDiscId,

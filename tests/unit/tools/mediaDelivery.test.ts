@@ -48,7 +48,8 @@ import * as download from "@/utils/security/safeDownload";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { GENERATED_IMAGE_PROMPT_FILENAME } from "@/utils/image/generatedImageMetadata";
 import { createPersona } from "../../helpers/fixtures";
-import { localizedCopy } from "../../helpers/localeCases";
+import { localizedCopy, localizedProse } from "../../helpers/localeCases";
+import * as minimalNoticeBodies from "@/utils/discord/minimalNoticeBodies";
 
 const BASE = "https://example.com/base.png";
 const SPRITE = "https://example.com/joy.png";
@@ -67,6 +68,7 @@ afterEach(() => {
 });
 
 function fixture(isAlter = false, isIdentity = false, inThread = true, rememberSprite = true) {
+  spyOn(minimalNoticeBodies, "recordMinimalNoticeRef").mockResolvedValue(undefined);
   clearPersonaAppearances();
   clearAllChannelDeliveryContinuity();
   const persona = createPersona({
@@ -246,6 +248,7 @@ const generatedSenders = [
         new AttachmentBuilder(Buffer.from("image"), { name: "SPOILER_generated.png" }),
         "SPOILER_generated.png",
         1200,
+        { provider: "openrouter", model: "fixture/image-model" },
         ["Mirri"],
         new AttachmentBuilder(Buffer.from("prompt"), { name: GENERATED_IMAGE_PROMPT_FILENAME }),
       ),
@@ -258,13 +261,21 @@ const generatedSenders = [
         new AttachmentBuilder(Buffer.from("image"), { name: "SPOILER_generated.png" }),
         "SPOILER_generated.png",
         1200,
+        { provider: "novelai", model: "nai-diffusion-4-5-full" },
         new AttachmentBuilder(Buffer.from("prompt"), { name: GENERATED_IMAGE_PROMPT_FILENAME }),
       ),
   },
   {
     name: "video",
     send: (context: ToolContext) =>
-      new GenerateVideoTool()["sendGeneratedVideo"](context, Buffer.from("video"), "SPOILER_generated.mp4", 1200, true),
+      new GenerateVideoTool()["sendGeneratedVideo"](
+        context,
+        Buffer.from("video"),
+        "SPOILER_generated.mp4",
+        1200,
+        true,
+        { provider: "openrouter", model: "fixture/video-model" },
+      ),
   },
 ];
 
@@ -428,11 +439,13 @@ describe("persona media delivery", () => {
     it(`${sender.name} downgrades only a proven component refusal and reconstructs attachments`, async () => {
       const f = fixture();
       f.outcomes.push("components");
+      f.context.tomoriState.config.tool_notice_verbosity = "verbose";
       await sender.send(f.context);
       expect(f.requests).toHaveLength(2);
       expect(f.requests[0].payload.components).toBeDefined();
       expect(f.requests[1].payload.components).toBeUndefined();
       expect(f.requests[1].payload.flags).toBeUndefined();
+      expect(f.requests[1].payload.content).toMatch(localizedProse("en-US", "tools.media.generation_source_line"));
       expect(f.requests[1].payload.attachments).toEqual(f.requests[0].payload.attachments);
       expect(f.receipts).toHaveLength(1);
       const badAttachment = fixture();

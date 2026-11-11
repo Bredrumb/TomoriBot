@@ -172,8 +172,6 @@ async function evaluateLockedChannelAdmission(
       manualStreamingContextOverrides: followUpOverrides,
       isNaturalStopMessage: args.isNaturalStopMessage,
       shouldSurfaceUserErrors: true,
-      isUserImpersonation: incoming.isUserImpersonation,
-      impersonatedUserId: incoming.impersonatedUserId,
       onGenerationResult: incoming.onGenerationResult,
       onQueueDiscard: incoming.onQueueDiscard,
     })

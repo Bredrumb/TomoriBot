@@ -82,7 +82,7 @@ Generated videos must satisfy Discord attachment limits:
 
 - **File size limit:** Command and tool enforce a local 25 MiB ceiling (`DISCORD_FILE_SIZE_LIMIT`). This fixed ceiling does not represent every Discord account or guild's current upload allowance.
 - **Format:** Providers return binary MP4 video.
-- **Components V2 presentation:** `src/utils/discord/generatedVideoMessage.ts` wraps the attachment in a Components V2 message. A `MediaGallery` item references the `attachment://` file so Discord renders its inline player, and a `TextDisplay` component places a localized generation time notice ("Generated in Xs") below the player. If Components V2 rendering fails, delivery falls back to a standard attachment-only message.
+- **Components V2 presentation:** `src/utils/discord/generatedVideoMessage.ts` wraps the attachment in a Components V2 message. A `MediaGallery` item references the `attachment://` file so Discord renders its inline player, and a `TextDisplay` component places a localized generation time notice ("Generated in Xs") below the player. Detailed tool deliveries also name the provider and configured model. History assembly restores that source in Minimal mode from the stored generation record, including for plain attachment fallback deliveries.
 
 ## Source pointers
 

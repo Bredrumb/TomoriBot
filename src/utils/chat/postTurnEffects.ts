@@ -225,8 +225,7 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
     // segment's accumulatedText, which is appended only after Discord accepts a send, not
     // from personaResponses[].text: that string is the short-term-memory payload and
     // carries the `[Scene Metadata]` block drained out of `<details>`, so emoji the model
-    // wrote there would score despite never surfacing in chat. Per-stream state also
-    // recovers text delivered before a tool call, which the final response no longer holds.
+    // wrote there would score despite never surfacing in chat.
     const emojiCounts = new Map<string, number>();
     for (const stream of result.streamResults) {
       for (const match of (stream.accumulatedText ?? "").matchAll(RESOLVED_CUSTOM_EMOJI_RE)) {

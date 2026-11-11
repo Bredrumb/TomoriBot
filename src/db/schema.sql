@@ -286,17 +286,19 @@ CREATE TABLE IF NOT EXISTS persona_sprite_messages (
 CREATE INDEX IF NOT EXISTS idx_persona_sprite_messages_created
   ON persona_sprite_messages(created_at);
 
--- Maps a Minimal tool notice message to the memory or task it confirmed. A Minimal card shows only
--- its title, so context rebuilding joins this reference to the live row to restore the body the
--- model needs to avoid repeating the tool call. Storing the reference rather than the text keeps no
--- second copy of personal data: a deleted or erased row simply stops resolving. No FK because
--- `ref_id` points into a different table per kind; dangling references are harmless and pruned.
 CREATE TABLE IF NOT EXISTS minimal_notice_refs (
   message_disc_id TEXT PRIMARY KEY,
-  ref_kind TEXT NOT NULL CHECK (ref_kind IN ('server_memory', 'personal_memory', 'task')),
-  ref_id INT NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  ref_kind TEXT NOT NULL CHECK (ref_kind IN ('server_memory', 'personal_memory', 'task', 'generation')),
+  ref_id INT,
+  generation_source JSONB,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT minimal_notice_refs_payload_check CHECK (
+    (ref_kind = 'generation' AND ref_id IS NULL AND generation_source IS NOT NULL)
+    OR (ref_kind <> 'generation' AND ref_id IS NOT NULL AND generation_source IS NULL)
+  )
 );
+
+SELECT add_column_if_not_exists('minimal_notice_refs', 'generation_source', 'JSONB');
 
 CREATE INDEX IF NOT EXISTS idx_minimal_notice_refs_created
   ON minimal_notice_refs(created_at);

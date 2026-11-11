@@ -2,6 +2,7 @@ import { RESPONSE_REVIEW_ITEM_VALUES, DEFAULT_RESPONSE_REVIEW_ITEMS } from "@/co
 import { getDiscordTextLength } from "@/utils/text/discordTextLimits";
 import { StickerFormatType } from "discord.js";
 import { z } from "zod";
+import { generatedMediaSourceSchema, type GeneratedMediaSource } from "@/types/provider/generationModels";
 import { EmotionKey } from "@/types/misc/emotions";
 import { SUPPORTED_PARAM_VALUES, isSupportedParamValue, type SupportedParamValue } from "@/constants/supportedParams";
 import { DEFAULT_THINKING_LEVEL, THINKING_LEVEL_VALUES } from "@/constants/thinkingLevels";
@@ -187,24 +188,28 @@ export type PersonaSpriteMessageRow = z.infer<typeof personaSpriteMessageSchema>
 const MINIMAL_NOTICE_REF_KINDS = ["server_memory", "personal_memory", "task"] as const;
 type MinimalNoticeRefKind = (typeof MINIMAL_NOTICE_REF_KINDS)[number];
 
-/** The row a Minimal tool notice confirmed, identified so context rebuilding can reload it live. */
-export interface MinimalNoticeRef {
-  kind: MinimalNoticeRefKind;
-  id: number;
-}
+export type MinimalNoticeRef =
+  | { kind: MinimalNoticeRefKind; id: number }
+  | { kind: "generation"; source: GeneratedMediaSource };
 
-/**
- * A `minimal_notice_refs` row joined to its live target. The content columns are null when the
- * referenced memory or task no longer exists.
- */
-export const resolvedMinimalNoticeRefSchema = z.object({
+const resolvedMinimalNoticeBaseSchema = z.object({
   message_disc_id: z.string().min(1),
-  ref_kind: z.enum(MINIMAL_NOTICE_REF_KINDS),
-  ref_id: z.number().int(),
   memory_content: z.string().nullable(),
   memory_tags: z.array(z.string()).nullable(),
   reminder_purpose: z.string().nullable(),
 });
+export const resolvedMinimalNoticeRefSchema = z.discriminatedUnion("ref_kind", [
+  resolvedMinimalNoticeBaseSchema.extend({
+    ref_kind: z.enum(MINIMAL_NOTICE_REF_KINDS),
+    ref_id: z.number().int(),
+    generation_source: z.null(),
+  }),
+  resolvedMinimalNoticeBaseSchema.extend({
+    ref_kind: z.literal("generation"),
+    ref_id: z.null(),
+    generation_source: generatedMediaSourceSchema,
+  }),
+]);
 export type ResolvedMinimalNoticeRefRow = z.infer<typeof resolvedMinimalNoticeRefSchema>;
 
 /**

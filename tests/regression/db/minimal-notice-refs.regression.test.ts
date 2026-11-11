@@ -10,6 +10,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { minimalNoticeRefRepository } from "@/utils/db/repositories/MinimalNoticeRefRepository";
 import { formatMinimalNoticeBody } from "@/utils/discord/minimalNoticeBodies";
+import { initializeLocalizer } from "@/utils/text/localizer";
 import { cleanupFixtures, insertFixtures, type FixtureRefs } from "./setup/fixtures";
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
 
@@ -25,6 +26,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Minimal notice refs — regression", () =>
 
   beforeAll(async () => {
     await setupTestDb();
+    await initializeLocalizer();
     refs = await insertFixtures(testSql);
 
     const [serverMemory] = await testSql<Array<{ server_memory_id: number }>>`
@@ -80,5 +82,22 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Minimal notice refs — regression", () =>
     expect(row).toBeDefined();
     if (!row) return;
     expect(formatMinimalNoticeBody(row)).toBeNull();
+  });
+
+  it("preserves the delivered generation source when model selections change", async () => {
+    const messageId = "_rt_minimal_generation";
+    const source = { provider: "openrouter", model: "fixture/first-model" };
+    expect(await minimalNoticeRefRepository.record(messageId, { kind: "generation", source })).toBe(true);
+    expect(
+      await minimalNoticeRefRepository.record(messageId, {
+        kind: "generation",
+        source: { provider: "novelai", model: "fixture/next-model" },
+      }),
+    ).toBe(true);
+    const row = (await minimalNoticeRefRepository.resolveByMessageIds([messageId])).get(messageId);
+    expect(row?.generation_source).toEqual(source);
+    expect(row?.ref_id).toBeNull();
+    if (!row) throw new Error("Missing generated media source");
+    expect(formatMinimalNoticeBody(row)).toContain(source.model);
   });
 });

@@ -1,6 +1,7 @@
 export default {
   tools: {
     media: {
+      generation_source_line: "Proveedor: {provider} · Modelo: {model}",
       delivery_failed: "Discord no entregó el contenido multimedia. No se registró una entrega exitosa.",
       delivery_unconfirmed:
         "Discord no confirmó si se publicó el contenido multimedia. Termina este turno y revisa el canal antes de generarlo o publicarlo de nuevo, ya que otro intento podría duplicarlo.",

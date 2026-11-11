@@ -6,22 +6,22 @@ import {
 import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 
-/**
- * Persists which memory or task a Minimal tool notice confirmed, and resolves those references
- * against the live rows when context is rebuilt.
- */
 class MinimalNoticeRefRepository {
   /** @returns false on error; a lost row only leaves that notice as a bare title in context. */
   async record(messageDiscId: string, ref: MinimalNoticeRef): Promise<boolean> {
     try {
       await sql`
-        INSERT INTO minimal_notice_refs (message_disc_id, ref_kind, ref_id)
-        VALUES (${messageDiscId}, ${ref.kind}, ${ref.id})
+        INSERT INTO minimal_notice_refs (message_disc_id, ref_kind, ref_id, generation_source)
+        VALUES (
+          ${messageDiscId}, ${ref.kind},
+          ${ref.kind === "generation" ? null : ref.id},
+          ${ref.kind === "generation" ? ref.source : null}::jsonb
+        )
         ON CONFLICT (message_disc_id) DO NOTHING
       `;
       return true;
     } catch (error) {
-      log.error(`Error recording minimal notice ref for message ${messageDiscId} (${ref.kind} ${ref.id}):`, error);
+      log.error(`Error recording minimal notice ref for message ${messageDiscId} (${ref.kind}):`, error);
       return false;
     }
   }
@@ -43,6 +43,7 @@ class MinimalNoticeRefRepository {
           r.message_disc_id,
           r.ref_kind,
           r.ref_id,
+          r.generation_source,
           COALESCE(sm.content, pm.content) AS memory_content,
           COALESCE(sm.tags, pm.tags) AS memory_tags,
           rem.reminder_purpose

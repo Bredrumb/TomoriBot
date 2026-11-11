@@ -23,7 +23,8 @@ Target scope depends on the presence of the `target_user` argument:
   - Bridge users reject personal updates with an error because bridge users only support server-wide memories.
   - Personal updates targeting the bot itself return an error.
   - The resolved user must belong to the current guild or direct message channel.
-  - For updates, if the target user has `PrivacyLevel.PARTIAL` or `PrivacyLevel.FULL`, the update halts with a privacy error. Deletions remain permitted.
+  - Updates and deletions check the target's privacy and message-proxy host protection before loading personal memories. `PrivacyLevel.PARTIAL` or `PrivacyLevel.FULL`, an unresolved proxy host, or a host with full privacy or a server blacklist entry blocks the tool.
+  - Owners can still delete stored memories after opting out through `/personal memories`, whose interactions bind the owner to the invoking account or a managed proxy identity.
 
 ### Database operations and notifications
 
