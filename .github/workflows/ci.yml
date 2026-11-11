@@ -45,8 +45,10 @@ jobs:
         with:
           bun-version: 1.4.0
 
-      - name: Install PostgreSQL client tools
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Verify PostgreSQL client tools
+        # The ubuntu-24.04 image ships PostgreSQL 16, and installing the client over the network
+        # blocked deploys whenever the Ubuntu archive was unreachable.
+        run: psql --version && pg_dump --version
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
