@@ -596,6 +596,8 @@ export function queueFollowUpForLockedTurn(args: {
   userDiscId: string;
   message: Message;
   verifiedProxySenderDiscId?: string;
+  isUserImpersonation?: boolean;
+  impersonatedUserId?: string;
   textQuotaSource: TextQuotaSource;
   textQuotaTriggerKey: string;
   textQuotaUserDiscId: string;
@@ -638,8 +640,8 @@ export function queueFollowUpForLockedTurn(args: {
     followUpUserDiscId: args.userDiscId,
     selectedPersonaId: args.lockEntry.activePersonaId,
     triggeredPersonaIds: args.lockEntry.activeTriggeredPersonaIds,
-    isUserImpersonation: args.lockEntry.activeIsUserImpersonation,
-    impersonatedUserId: args.lockEntry.activeImpersonatedUserId,
+    isUserImpersonation: args.isUserImpersonation || args.lockEntry.activeIsUserImpersonation,
+    impersonatedUserId: args.isUserImpersonation ? args.impersonatedUserId : args.lockEntry.activeImpersonatedUserId,
     textQuotaSource: args.textQuotaSource,
     textQuotaTriggerKey: args.textQuotaTriggerKey,
     textQuotaUserDiscId: args.textQuotaUserDiscId,

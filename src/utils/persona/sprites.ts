@@ -2,7 +2,8 @@ import { normalizeRenderModifierName } from "@/utils/discord/renderModifierParse
 
 const RENDER_MODIFIER_MAX_LENGTH = 64;
 const DEFAULT_MAX_SPRITES_PER_PERSONA = 50;
-const DEFAULT_MAX_PROMPT_SPRITES = 20;
+// Matches the per-persona sprite limit with a worst-case token ceiling of 50 sprites x ~1000 characters per turn.
+const DEFAULT_MAX_PROMPT_SPRITES = DEFAULT_MAX_SPRITES_PER_PERSONA;
 // Matches the persona_sprites CHECK, so every stored row (archive imports included) still fits the edit modal.
 const DEFAULT_MAX_INSTRUCTIONS_LENGTH = 1000;
 const INVISIBLE_FORMAT_CHARS = /[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g;

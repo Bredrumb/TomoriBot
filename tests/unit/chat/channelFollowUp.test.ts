@@ -23,7 +23,10 @@ afterEach(() => {
 describe("follow-up identity", () => {
   for (const isInToolCallChain of [false, true]) {
     for (const isUserImpersonation of [false, true]) {
-      it(`preserves the active identity with tools=${isInToolCallChain}, impersonation=${isUserImpersonation}`, () => {
+      it.each([
+        undefined,
+        "incoming-member",
+      ])(`preserves follow-up identity with tools=${isInToolCallChain}, active impersonation=${isUserImpersonation}, incoming target=%s`, (incomingImpersonatedUserId) => {
         const lockEntry = getOrCreateChannelLockEntry(CHANNEL_ID, "follow-up-guild");
         acquireChannelLockForTurn(lockEntry, {
           messageId: "reply-to-impersonation",
@@ -54,6 +57,8 @@ describe("follow-up identity", () => {
             channelId: CHANNEL_ID,
             userDiscId: USER_ID,
             message,
+            isUserImpersonation: incomingImpersonatedUserId !== undefined,
+            impersonatedUserId: incomingImpersonatedUserId,
             textQuotaSource: "user",
             textQuotaTriggerKey: message.id,
             textQuotaUserDiscId: USER_ID,
@@ -66,8 +71,8 @@ describe("follow-up identity", () => {
           isManuallyTriggered: true,
           selectedPersonaId: 1,
           triggeredPersonaIds: [1],
-          isUserImpersonation: isUserImpersonation || undefined,
-          impersonatedUserId,
+          isUserImpersonation: incomingImpersonatedUserId !== undefined || isUserImpersonation || undefined,
+          impersonatedUserId: incomingImpersonatedUserId ?? impersonatedUserId,
         });
         expect(StreamOrchestrator.isFollowUpRequest(CHANNEL_ID)).toBe(!isInToolCallChain);
       });
