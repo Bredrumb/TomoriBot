@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, spyOn } from "bun:test";
 import { OpenrouterStreamAdapter, type OpenrouterStreamConfig } from "@/providers/openrouter/openrouterStreamAdapter";
 import { humanizerSettingsFromDegree } from "@/constants/humanizer";
+import type { ContextPart, StructuredContextItem } from "@/types/misc/context";
 import type { RawStreamChunk, StreamContext } from "@/types/stream/interfaces";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { sumTurnUsage } from "@/utils/text/tokenEstimate";
@@ -798,6 +799,121 @@ describe("OpenrouterStreamAdapter response body teardown", () => {
     await drainStream(new OpenrouterStreamAdapter().startStream(makeStreamConfig(), makeStreamContext()));
 
     expect(cancelled).toBe(false);
+  });
+});
+
+describe("OpenrouterStreamAdapter video context", () => {
+  it("sends only the latest video across history and attachments while preserving other context", async () => {
+    const latestVideos: Array<Extract<ContextPart, { type: "video" }>> = [
+      { type: "video", uri: "https://example.test/latest.mp4", mimeType: "video/mp4" },
+      { type: "video", uri: "http://example.test/latest.webm", mimeType: "video/webm" },
+      { type: "video", uri: "data:video/mp4;base64,aGVsbG8=", mimeType: "video/mp4" },
+      {
+        type: "video",
+        uri: "https://www.youtube.com/watch?v=example",
+        mimeType: "video/mp4",
+        isYouTubeLink: true,
+      },
+    ];
+    for (const latestVideo of latestVideos) {
+      for (const latestRole of ["user", "model"] as const) {
+        const context = makeStreamContext();
+        context.tomoriState = createPersona({ config: { thinking_level: "none" } });
+        context.contextItems = [
+          {
+            role: "user",
+            parts: [
+              { type: "text", text: "Earlier question" },
+              { type: "video", uri: "https://example.test/earlier.mp4", mimeType: "video/mp4" },
+            ],
+          },
+          {
+            role: latestRole,
+            parts: [
+              { type: "text", text: "Latest question" },
+              { type: "image", uri: "data:image/png;base64,aGVsbG8=", mimeType: "image/png" },
+              { type: "video", uri: "https://example.test/first-attachment.mp4", mimeType: "video/mp4" },
+              latestVideo,
+            ],
+          },
+        ];
+        const originalItems = structuredClone(context.contextItems);
+        let requestMessages: Array<Record<string, unknown>> = [];
+        let requestCount = 0;
+        const fetchStub = stubGlobalFetch((_input, init) => {
+          requestCount++;
+          requestMessages = JSON.parse(String(init?.body)).messages;
+          const videoCount = requestMessages
+            .flatMap((message) => (Array.isArray(message.content) ? message.content : []))
+            .filter((part) => part.type === "video_url").length;
+          return videoCount > 1
+            ? Response.json({ error: { message: "Too many videos in request" } }, { status: 400 })
+            : makeSseResponse(["[DONE]"]);
+        });
+        const adapter = new OpenrouterStreamAdapter();
+        try {
+          const chunks: RawStreamChunk[] = [];
+          const config: OpenrouterStreamConfig = { ...makeStreamConfig(), seesVideos: true };
+          for await (const chunk of adapter.startStream(config, context)) {
+            chunks.push(chunk);
+          }
+          expect(chunks.map((chunk) => adapter.processChunk(chunk).type)).not.toContain("error");
+          expect(requestCount).toBe(1);
+          expect(requestMessages).toEqual(await adapter.buildProbeMessages(context.contextItems, true, true));
+          const parts = requestMessages.flatMap((message) =>
+            Array.isArray(message.content) ? message.content : [{ type: "text", text: message.content }],
+          );
+          expect(parts.filter((part) => part.type === "video_url")).toEqual([
+            { type: "video_url", video_url: { url: latestVideo.uri } },
+          ]);
+          expect(parts).toContainEqual({
+            type: "image_url",
+            image_url: { url: "data:image/png;base64,aGVsbG8=" },
+          });
+          for (const text of ["Earlier question", "Latest question"]) {
+            expect(parts.some((part) => typeof part.text === "string" && part.text.includes(text))).toBe(true);
+          }
+          const omitted = requestMessages[0]?.content;
+          expect(typeof omitted).toBe("string");
+          expect(String(omitted).length).toBeGreaterThan("Earlier question".length);
+          expect(context.contextItems).toEqual(originalItems);
+        } finally {
+          fetchStub.mockRestore();
+        }
+      }
+    }
+  });
+
+  it("preserves single-video and text-only requests and honors disabled video support", async () => {
+    const adapter = new OpenrouterStreamAdapter();
+    const textItem: StructuredContextItem = { role: "user", parts: [{ type: "text", text: "Question" }] };
+    expect(await adapter.buildProbeMessages([textItem], true, true)).toEqual([{ role: "user", content: "Question" }]);
+    const items: StructuredContextItem[] = [
+      {
+        role: "user",
+        parts: [...textItem.parts, { type: "video", uri: "https://example.test/only.mp4", mimeType: "video/mp4" }],
+      },
+    ];
+    expect(await adapter.buildProbeMessages(items, true, true)).toEqual([
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "Question" },
+          { type: "video_url", video_url: { url: "https://example.test/only.mp4" } },
+        ],
+      },
+    ]);
+    expect(
+      await adapter.buildProbeMessages(
+        [...items, { role: "user", parts: [{ type: "video", uri: "file:///video.mp4", mimeType: "video/mp4" }] }],
+        true,
+        true,
+      ),
+    ).toEqual(await adapter.buildProbeMessages(items, true, true));
+    const disabledMessages = await adapter.buildProbeMessages(items, true, false);
+    expect(disabledMessages.every((message) => typeof message.content === "string")).toBe(true);
+    expect(String(disabledMessages[0]?.content).startsWith("Question")).toBe(true);
+    expect(String(disabledMessages[0]?.content).length).toBeGreaterThan("Question".length);
   });
 });
 
