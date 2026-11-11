@@ -65,7 +65,8 @@ Channel locks coordinate three forms of turn interruption:
    interrupt an active stream via `StreamOrchestrator.requestFollowUp()`, up to `MAX_FOLLOW_UP_INTERRUPTS` (3).
    If the active turn is executing a tool (`isInToolCallChain`), the message is enqueued as the latest follow-up
    without interrupting the stream, protecting tool completion.
-   Both paths preserve the active persona and user-impersonation identity when replaying the follow-up.
+   Both paths preserve the active persona when replaying the follow-up. An incoming impersonation
+   target takes precedence over the active turn's impersonation identity; ordinary follow-ups retain it.
 2. **Natural stops**: `requestNaturalStopForLockedTurn()` captures the message and registers
    `StreamOrchestrator.requestStop()`. Active streaming halts gracefully and saves the stop context.
 3. **Hard cancellation via `/kill`**: `forceKillChannelStream()` in `src/commands/kill.ts` immediately aborts

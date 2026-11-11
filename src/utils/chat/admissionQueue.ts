@@ -163,6 +163,8 @@ async function evaluateLockedChannelAdmission(
       channelId,
       userDiscId,
       message,
+      isUserImpersonation: incoming.isUserImpersonation,
+      impersonatedUserId: incoming.impersonatedUserId,
       verifiedProxySenderDiscId: args.messageProxyRecord?.originalSuppressed
         ? args.messageProxyRecord.senderDiscId
         : undefined,
