@@ -85,6 +85,22 @@ export interface StreamConfig extends ProviderConfig {
  * Contains all the Discord and application context needed for streaming
  */
 export interface StreamContext {
+  videoRequestDiagnostics?: {
+    model: string;
+    attempt: string;
+    omittedVideos: number;
+    httpStatus?: number;
+    requestId?: string;
+    generationId?: string;
+    servingProvider?: string;
+    videos: Array<{
+      source: "discord_cdn" | "youtube" | "remote_url" | "inline_data" | "invalid_url";
+      scheme: "http" | "https" | "data" | "invalid";
+      mimeType: string;
+      encodedBytes?: number;
+      expiresAtUnixSeconds?: number;
+    }>;
+  };
   requestDiagnostics?: {
     model: string;
     contextItemCount: number;

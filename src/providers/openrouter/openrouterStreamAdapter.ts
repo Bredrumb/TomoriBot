@@ -23,7 +23,7 @@ import {
 import { mapWithConcurrency } from "@/utils/async/bounded";
 import { resolveToolCallId } from "@/providers/utils/toolCallIds";
 import type { FunctionCall, FunctionResponseImageMetadata, ThoughtLogEntry } from "../../types/provider/interfaces";
-import type { StructuredContextItem } from "../../types/misc/context";
+import type { ContextPart, StructuredContextItem } from "@/types/misc/context";
 import { log } from "../../utils/misc/logger";
 import {
   formatProviderErrorCodeForDisplay,
@@ -375,13 +375,16 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     requestBody: Record<string, unknown>,
     model: string | undefined,
     attemptLabel: string,
+    videoDiagnostics?: StreamContext["videoRequestDiagnostics"],
   ): { error: Error; errorMessage: string; statusCode: number } {
     let errorMessage = errorText || responseStatusText;
     let errorCode: string | undefined;
     let rawErrorBodyFromMetadata: string | undefined;
 
     try {
-      const errorData = JSON.parse(errorText) as {
+      const parsed: unknown = JSON.parse(errorText);
+      if (videoDiagnostics) this.captureVideoResponseDiagnostics(videoDiagnostics, parsed);
+      const errorData = parsed as {
         error?: {
           message?: string;
           code?: string | number;
@@ -422,6 +425,74 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     };
   }
 
+  private captureVideoResponseDiagnostics(
+    diagnostics: NonNullable<StreamContext["videoRequestDiagnostics"]>,
+    payload: unknown,
+  ): void {
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return;
+    const envelope = payload as Record<string, unknown>;
+    if (typeof envelope.id === "string" && /^[a-zA-Z0-9_.:-]{1,200}$/.test(envelope.id)) {
+      diagnostics.generationId = envelope.id;
+    }
+    const error = envelope.error && typeof envelope.error === "object" ? envelope.error : undefined;
+    const metadata = error && "metadata" in error ? error.metadata : undefined;
+    const provider =
+      envelope.provider ??
+      (metadata && typeof metadata === "object" && "provider_name" in metadata ? metadata.provider_name : undefined);
+    if (typeof provider === "string" && /^[a-zA-Z0-9_. -]{1,100}$/.test(provider)) {
+      diagnostics.servingProvider = provider;
+    }
+  }
+
+  private describeVideoInput(
+    part: Extract<ContextPart, { type: "video" }>,
+  ): NonNullable<StreamContext["videoRequestDiagnostics"]>["videos"][number] {
+    const diagnostics: NonNullable<StreamContext["videoRequestDiagnostics"]>["videos"][number] = {
+      source: "invalid_url",
+      scheme: "invalid",
+      mimeType: [
+        "video/mp4",
+        "video/webm",
+        "video/mpeg",
+        "video/mov",
+        "video/quicktime",
+        "video/youtube",
+        "video/ogg",
+        "video/x-msvideo",
+        "video/x-matroska",
+        "application/octet-stream",
+      ].includes(part.mimeType)
+        ? part.mimeType
+        : "other",
+    };
+    if (part.uri.startsWith("data:")) {
+      diagnostics.source = "inline_data";
+      diagnostics.scheme = "data";
+      diagnostics.encodedBytes = Buffer.byteLength(part.uri);
+      return diagnostics;
+    }
+    try {
+      const url = new URL(part.uri);
+      if (url.protocol === "http:" || url.protocol === "https:") {
+        diagnostics.scheme = url.protocol === "http:" ? "http" : "https";
+      }
+      if (["cdn.discordapp.com", "media.discordapp.net"].includes(url.hostname)) {
+        diagnostics.source = "discord_cdn";
+        const expiry = url.searchParams.get("ex");
+        if (expiry && /^[a-fA-F0-9]{1,12}$/.test(expiry)) {
+          diagnostics.expiresAtUnixSeconds = Number.parseInt(expiry, 16);
+        }
+      } else if (["youtube.com", "youtu.be"].includes(url.hostname) || url.hostname.endsWith(".youtube.com")) {
+        diagnostics.source = "youtube";
+      } else {
+        diagnostics.source = "remote_url";
+      }
+    } catch {
+      diagnostics.source = "invalid_url";
+    }
+    return diagnostics;
+  }
+
   async *startStream(config: StreamConfig, context: StreamContext): AsyncGenerator<RawStreamChunk, void, unknown> {
     log.info("OpenrouterStreamAdapter: Initializing OpenRouter streaming");
 
@@ -430,6 +501,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     this.speakerGuardPendingTail = "";
     this.streamedTextTail = "";
     this.servingProvider = undefined;
+    context.videoRequestDiagnostics = undefined;
     const botName = context.prefixStrippingName ?? context.personaUsername ?? context.tomoriState.persona_nickname;
     this.speakerGuardAllowedSourceNames = collectRenderModifierSourceNames(
       botName,
@@ -447,6 +519,12 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     // Cast config to OpenrouterStreamConfig to access provider-specific fields
     const openrouterConfig = config as OpenrouterStreamConfig;
 
+    const videoDiagnostics: NonNullable<StreamContext["videoRequestDiagnostics"]> = {
+      model: config.model,
+      attempt: "default",
+      omittedVideos: 0,
+      videos: [],
+    };
     let messages = await this.assembleOpenrouterContext(
       context.contextItems,
       context.currentTurnModelParts,
@@ -456,7 +534,9 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       openrouterConfig.seesVideos ?? false, // Default false: videos are strictly opt-in per model
       context.messageIdMap,
       config.model,
+      videoDiagnostics,
     );
+    if (videoDiagnostics.videos.length > 0) context.videoRequestDiagnostics = videoDiagnostics;
 
     // Strict role alternation: merge consecutive same-role turns and guarantee a leading user
     // turn so proxied backends requiring alternating roles accept the history. Gated by the
@@ -765,6 +845,13 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       let completedAttempt = false;
       attemptLoop: for (let i = 0; i < attempts.length; i++) {
         const attempt = attempts[i];
+        if (context.videoRequestDiagnostics) {
+          videoDiagnostics.attempt = attempt.label;
+          videoDiagnostics.httpStatus = undefined;
+          videoDiagnostics.requestId = undefined;
+          videoDiagnostics.generationId = undefined;
+          videoDiagnostics.servingProvider = undefined;
+        }
         const isRetry = i > 0;
         attemptedBodies.push(attempt.body);
 
@@ -807,6 +894,11 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
             currentController.signal.throwIfAborted();
           }
           const response = await fetch("https://openrouter.ai/api/v1/chat/completions", requestInit);
+          if (context.videoRequestDiagnostics) {
+            videoDiagnostics.httpStatus = response.status;
+            const requestId = response.headers.get("x-request-id");
+            if (requestId && /^[a-zA-Z0-9_.:-]{1,200}$/.test(requestId)) videoDiagnostics.requestId = requestId;
+          }
 
           if (!response.ok) {
             spendHold?.reportCost(0);
@@ -819,6 +911,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
               attempt.body,
               config.model,
               attempt.label,
+              context.videoRequestDiagnostics,
             );
 
             const retryPlan = planDegradationRetry({
@@ -926,6 +1019,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
                   continue;
                 }
 
+                if (context.videoRequestDiagnostics) this.captureVideoResponseDiagnostics(videoDiagnostics, parsed);
                 const normalizedChunk = this.normalizeOpenrouterChunk(parsed);
                 if (!normalizedChunk) continue;
                 spendHold?.reportCost(normalizedChunk.usage?.cost);
@@ -2317,6 +2411,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     seesVideos: boolean = false,
     messageIdMap?: StreamContext["messageIdMap"],
     model?: string,
+    videoDiagnostics?: StreamContext["videoRequestDiagnostics"],
   ): Promise<Array<Record<string, unknown>>> {
     const messages: Array<Record<string, unknown>> = [];
     const { items: relocatedContextItems, boundaryIndex } = relocateCacheContextItems(contextItems);
@@ -2526,6 +2621,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
               }
 
               if (itemIndex !== latestVideoItemIndex || partIndex !== latestVideoPartIndex) {
+                if (videoDiagnostics) videoDiagnostics.omittedVideos++;
                 videoTargetParts.push({
                   type: "text",
                   text: "[System: This video was omitted because only the latest video is included in this request. Do not guess its contents.]",
@@ -2539,6 +2635,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
                 type: "video_url",
                 video_url: { url: part.uri },
               });
+              videoDiagnostics?.videos.push(this.describeVideoInput(part));
 
               if (part.isYouTubeLink) {
                 log.success(`Added YouTube video to message: ${part.uri}`);
