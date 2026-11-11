@@ -103,6 +103,10 @@ export function extractTextDisplayContent(components: readonly unknown[] | undef
   return blocks.join("\n").trim();
 }
 
+export function hasMediaGallery(components: readonly unknown[] | undefined): boolean {
+  return components?.some((component) => toComponentRecord(component)?.type === ComponentType.MediaGallery) ?? false;
+}
+
 /**
  * Reconstructs the embed-equivalent {title, description, footer} triple from a
  * message's Components V2 tree.

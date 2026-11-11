@@ -84,6 +84,16 @@ Capability credential resolution captures the active model ID with its provider 
 settings read. Media, vision, and embedding callers use `getResolvedCapabilityModelId()` to keep that
 model paired with its credentials when their turn's cached settings predate a model change.
 
+Successful image and video generation tools return `data.provider` and `data.model` from the
+resolved generation route. Detailed media captions show the source; Minimal captions keep only
+their existing timing and reference details. Both modes store the provider and model in
+`minimal_notice_refs`, including plain attachment fallback deliveries, so history assembly can
+restore the source as persona text after a model switch or restart. These snapshots share the
+notice table's 30-day retention. History preserves visible caption text and restores the stored
+source only when the content and footer lack a source line in any authored locale.
+Custom endpoints report their configured model name when present;
+NovelAI inpainting reports the inpainting variant.
+
 Execution dispatch enforces the following rules:
 
 1. **Alias and opaque ID resolution:** Built-in aliases (`BUILTIN_TOOL_ALIASES`) resolve to canonical names. Opaque identifiers (`media_id`, `message_id`, `end_message_id`) resolve to Discord snowflakes via `MessageIdMap` before reaching tool code.

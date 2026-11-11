@@ -19,6 +19,8 @@ The stage packages accumulated iteration state into a standardized structure:
    visible streaming buffer during chunk normalization, so Discord users never see it in the channel.
 
 2. **Persona response packaging (`personaResponses`):**
+   The response text joins every iteration's delivered text in order, including narration before
+   tool calls. With Response Drafting On, it includes only the approved text actually delivered.
    When the merged response text is non-empty, the stage creates a single `ChatPersonaResponse`
    containing the current persona's nickname, text, persona ID, and lineage ID. When no text was produced
    (such as an error before generation, or a turn that delivered an expression only), `personaResponses`
@@ -48,8 +50,8 @@ The assembled `GenerationTurnResult` passes back up the chat pipeline:
 1. **Attempt evaluation (`runGenerationTurn`):**
    `runGenerationTurn` inspects `result.status`. If the attempt ended in a retryable status (`error` or
    `timeout`) and fallback options remain, it keeps the messages this attempt posted and retries with
-   the next key or model, which continues the reply from the posted text. An `error` or `timeout`
-   result joins the text every iteration posted, so a terminal failure still reaches short-term memory.
+   the next key or model, which continues the reply from the posted text. Delivered text remains
+   in the result on every exit path, so partial replies still reach short-term memory.
 2. **Delivery finalization (`responseSink.finalize`):**
    Once an attempt succeeds or fallbacks are exhausted, `runGenerationTurn` sends fallback model notices
    if applicable and invokes `responseSink.finalize(result)` to conclude Discord message streaming.

@@ -1,6 +1,7 @@
 export default {
   tools: {
     media: {
+      generation_source_line: "Nhà cung cấp: {provider} · Model: {model}",
       delivery_failed:
         "Discord không gửi được nội dung đa phương tiện. Không có lượt gửi thành công nào được ghi nhận.",
       delivery_unconfirmed:

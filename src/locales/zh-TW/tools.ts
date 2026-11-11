@@ -1,6 +1,7 @@
 export default {
   tools: {
     media: {
+      generation_source_line: "供應商：{provider} · 模型：{model}",
       delivery_failed: "Discord 未能傳送媒體，沒有記錄成功的傳送。",
       delivery_unconfirmed:
         "Discord 未確認媒體是否已發布。請結束這一輪，並在重新產生或發布前檢查頻道，因為再次嘗試可能造成重複。",

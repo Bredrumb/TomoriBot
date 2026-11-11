@@ -6,9 +6,9 @@ import {
   formatSystemProducedEmbedHint,
   processLinkEmbed,
 } from "@/utils/discord/embedClassifier";
-import { extractNoticeTextFromComponents } from "@/utils/discord/componentNoticeReader";
+import { extractNoticeTextFromComponents, hasMediaGallery } from "@/utils/discord/componentNoticeReader";
 import { ColorCode } from "@/utils/misc/logger";
-import { classifyProtocolEmbed, isMinimalTitleKind } from "@/utils/discord/embedProtocol";
+import { classifyProtocolEmbed, isMinimalTitleKind, matchesProtocolTemplateKey } from "@/utils/discord/embedProtocol";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 import { truncateForSystemContext } from "@/utils/chat/contextDirectives";
 
@@ -85,6 +85,15 @@ export function processEmbedsFromMessage(args: {
   // This runs after the embed loop and is mutually exclusive with it, because
   // Discord rejects messages that mix `embeds` with the IsComponentsV2 flag.
   const notice = extractNoticeTextFromComponents(args.components);
+  if (args.isTomoriAuthoredMessage && !notice?.title && (hasMediaGallery(args.components) || args.minimalNoticeBody)) {
+    const footer = notice?.footer ?? "";
+    const hasVisibleSource = [args.content, footer].some((text) =>
+      text.split("\n").some((line) => matchesProtocolTemplateKey("tools.media.generation_source_line", line.trim())),
+    );
+    const caption = [footer, ...(hasVisibleSource ? [] : [args.minimalNoticeBody])].filter(Boolean).join("\n");
+    content = [content, caption].filter(Boolean).join("\n");
+    completionSegments.push(caption);
+  }
   if (notice?.title) {
     const noticeCheck = checkTargetEmbedTitle(notice.title);
     if (noticeCheck.isTarget && (notice.description || isMinimalTitleKind(noticeCheck.type))) {

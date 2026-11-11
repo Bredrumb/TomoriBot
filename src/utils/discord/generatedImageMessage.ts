@@ -1,4 +1,5 @@
 import { ComponentType, MessageFlags, type MessageCreateOptions } from "discord.js";
+import { buildGeneratedMediaSourceLine, type GeneratedMediaSource } from "@/utils/discord/generatedMediaMetadata";
 import { GENERATED_IMAGE_PROMPT_FILENAME } from "@/utils/image/generatedImageMetadata";
 import { localizer } from "@/utils/text/localizer";
 
@@ -11,6 +12,7 @@ export function buildGeneratedImageComponentsV2Payload(
   referencedIdentities: string[] = [],
   promptAttached = false,
   spoiler = false,
+  source?: GeneratedMediaSource,
 ): GeneratedImageComponentsV2Payload {
   const seconds = Math.max(0, elapsedMs / 1000).toFixed(1);
   const timingLine = localizer(locale, "tools.image.generated_after_seconds_line", {
@@ -18,6 +20,7 @@ export function buildGeneratedImageComponentsV2Payload(
   });
 
   const footerLines = [timingLine];
+  if (source) footerLines.push(buildGeneratedMediaSourceLine(locale, source));
   if (promptAttached) {
     footerLines.push(localizer(locale, "commands.generate.image.prompt_attached_footer"));
   }

@@ -14,6 +14,8 @@ import { createProviderToolFailure } from "@/utils/provider/providerToolFailure"
 
 import { AttachmentBuilder } from "discord.js";
 import { prepareGeneratedImage } from "@/utils/image/generatedImageMetadata";
+import { buildGeneratedMediaSourceLine, type GeneratedMediaSource } from "@/utils/discord/generatedMediaMetadata";
+import { recordMinimalNoticeRef } from "@/utils/discord/minimalNoticeBodies";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
 import { buildGeneratedImageComponentsV2Payload } from "@/utils/discord/generatedImageMessage";
@@ -23,6 +25,7 @@ import {
   buildImageToolNoticeDescription,
   buildReferencedMessageUrl,
   sendToolProgressNotice,
+  isMinimalNotice,
 } from "@/utils/discord/toolProgressNotice";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
 import type { TomoriState } from "@/types/db/schema";
@@ -289,8 +292,11 @@ export class GenerateImageNaiTool extends BaseTool {
     attachment: AttachmentBuilder,
     attachmentFilename: string,
     elapsedMs: number,
+    source: GeneratedMediaSource,
     promptAttachment?: AttachmentBuilder,
   ): Promise<import("discord.js").Message> {
+    const config = context.tomoriState.config;
+    const visibleSource = isMinimalNotice(config, "image_generation") ? undefined : source;
     const componentsPayload = buildGeneratedImageComponentsV2Payload(
       attachmentFilename,
       elapsedMs,
@@ -298,6 +304,7 @@ export class GenerateImageNaiTool extends BaseTool {
       [],
       Boolean(promptAttachment),
       attachment.spoiler,
+      visibleSource,
     );
     const files = () =>
       [attachment, ...(promptAttachment ? [promptAttachment] : [])].map(
@@ -307,11 +314,16 @@ export class GenerateImageNaiTool extends BaseTool {
             description: file.description ?? undefined,
           }),
       );
-    return sendToolMediaPost(
+    const message = await sendToolMediaPost(
       context,
       () => ({ files: files(), ...componentsPayload, withComponents: true }),
-      () => ({ files: files() }),
+      () => ({
+        files: files(),
+        ...(visibleSource ? { content: buildGeneratedMediaSourceLine(context.locale, visibleSource) } : {}),
+      }),
     );
+    await recordMinimalNoticeRef(message.id, { kind: "generation", source });
+    return message;
   }
 
   /**
@@ -947,6 +959,10 @@ export class GenerateImageNaiTool extends BaseTool {
         };
       }
       const baseModelCodename = resolvedModel.codename;
+      const generationSource: GeneratedMediaSource = {
+        provider: "novelai",
+        model: isInpaintMode ? this.getInpaintingModelCodename(baseModelCodename) : baseModelCodename,
+      };
 
       log.info(
         `Using NAI diffusion model: ${baseModelCodename} (source: ${resolvedModel.source}) for ${isInpaintMode ? "inpainting" : "image generation"}`,
@@ -1184,7 +1200,7 @@ export class GenerateImageNaiTool extends BaseTool {
           }
         }
 
-        const inpaintModel = this.getInpaintingModelCodename(baseModelCodename);
+        const inpaintModel = generationSource.model;
 
         imageBuffer = await this.generateInpaintImage(
           apiKey,
@@ -1236,6 +1252,7 @@ export class GenerateImageNaiTool extends BaseTool {
         attachment,
         attachmentFilename,
         Date.now() - startedAtMs,
+        generationSource,
         preparedImage.promptAttachment,
       );
 
@@ -1273,6 +1290,7 @@ export class GenerateImageNaiTool extends BaseTool {
       return {
         success: true,
         message: successMessage,
+        data: generationSource,
         // imageMetadata intentionally omitted, so Discord CDN URLs are protected
         // End the LLM turn immediately when this tool is the target of a hidden agent turn
         endTurn: context.streamContext?.endTurnAfterTools?.includes(this.name) ?? false,

@@ -1,6 +1,7 @@
 export default {
   tools: {
     media: {
+      generation_source_line: "プロバイダー：{provider} · モデル：{model}",
       delivery_failed: "Discordはメディアを送信できませんでした。送信成功は記録されていません。",
       delivery_unconfirmed:
         "Discordはメディアが投稿されたか確認できませんでした。このターンを終了し、再生成や再投稿の前にチャンネルを確認してください。再試行すると重複する可能性があります。",

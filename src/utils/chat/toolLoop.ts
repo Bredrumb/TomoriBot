@@ -623,18 +623,19 @@ async function streamOnce(
   // Promise.race the loser is otherwise abandoned (never awaited); its rejection is still observed
   // by race's internal handlers, so holding this reference does not create an unhandled rejection.
   const correction = params.context.responseReview && responseRevisionInstruction(params.context.responseReview);
-  const pendingNarration =
-    params.context.responseReview && functionHistory.some((entry) => entry.preToolCallTextParts?.length)
-      ? {
-          role: "user" as const,
-          parts: [
-            {
-              type: "text" as const,
-              text: "[System: The text you wrote before calling a tool has not been sent yet. It will be posted together with what you write next, so continue without repeating it.]",
-            },
-          ],
-        }
-      : undefined;
+  const preToolNarration = functionHistory.some((entry) => entry.preToolCallTextParts?.length)
+    ? {
+        role: "user" as const,
+        parts: [
+          {
+            type: "text" as const,
+            text: params.context.responseReview
+              ? "[System: The text you wrote before calling a tool has not been sent yet. It will be posted together with what you write next, so continue without repeating it.]"
+              : "[System: Your text before the tool call has already been sent to the conversation. Continue from where it ended without repeating it. If your reply is complete, finish without additional text.]",
+          },
+        ],
+      }
+    : undefined;
   const earlierToolNotice =
     earlierToolNames.length > 0
       ? {
@@ -649,7 +650,7 @@ async function streamOnce(
       : undefined;
   const outputPrefill = params.context.streamingContext.outputPrefill;
   let requestItems = params.context.contextItems;
-  for (const item of [earlierToolNotice, pendingNarration, correction]) {
+  for (const item of [earlierToolNotice, preToolNarration, correction]) {
     if (item) requestItems = insertBeforeNativePrefill(requestItems, outputPrefill, item);
   }
   const request = foldPrefillIntoToolHistory(requestItems, outputPrefill, functionHistory);
@@ -1479,7 +1480,14 @@ function buildResult(
     status,
     streamResults,
     usageEntries: context.responseReview?.usage,
-    personaResponses: buildPersonaResponses(context, composeResponseText(context, responseText, detailsText)),
+    personaResponses: buildPersonaResponses(
+      context,
+      composeResponseText(
+        context,
+        context.responseReview ? responseText : joinDeliveredText(streamResults),
+        detailsText,
+      ),
+    ),
     toolResponseDelivered: toolResponseDelivered || undefined,
     firstDeliveredMessageId: streamResults.find((result) => result.firstMessageId)?.firstMessageId,
     thoughtLog,

@@ -2322,6 +2322,20 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     const { items: relocatedContextItems, boundaryIndex } = relocateCacheContextItems(contextItems);
     const systemInstructionParts: string[] = [];
     let boundaryMessage: Record<string, unknown> | undefined;
+    let latestVideoItemIndex = -1;
+    let latestVideoPartIndex = -1;
+
+    // Some OpenRouter routes allow only one video per request, so keep the latest until per-model limits are available.
+    for (const [itemIndex, item] of relocatedContextItems.entries()) {
+      if (isSystemInstructionContextItem(item) || item.role === "system") continue;
+      const partIndex = item.parts.findLastIndex(
+        (part) => part.type === "video" && /^(?:https?:\/\/|data:)/.test(part.uri),
+      );
+      if (partIndex >= 0) {
+        latestVideoItemIndex = itemIndex;
+        latestVideoPartIndex = partIndex;
+      }
+    }
 
     for (const [itemIndex, item] of relocatedContextItems.entries()) {
       if (itemIndex === boundaryIndex + 1 && boundaryIndex >= 0) boundaryMessage = messages.at(-1);
@@ -2339,7 +2353,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         const role = item.role === "user" ? "user" : "assistant";
         // Collects resolved image parts from assistant turns for injection into a synthetic
         // user turn, since OpenRouter only permits image content on user-role messages.
-        const partsByInput = await mapWithConcurrency(item.parts, 4, async (part) => {
+        const partsByInput = await mapWithConcurrency(item.parts, 4, async (part, partIndex) => {
           const pendingBotImageParts: Array<Record<string, unknown>> = [];
           const contentParts: Array<Record<string, unknown>> = [];
           if (part.type === "text") {
@@ -2508,6 +2522,14 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
               const isDataUrl = part.uri.startsWith("data:");
               if (!isHttpUrl && !isDataUrl) {
                 log.warn(`Skipping unsupported video URI format for OpenRouter: ${part.uri}`);
+                return { pendingBotImageParts, contentParts };
+              }
+
+              if (itemIndex !== latestVideoItemIndex || partIndex !== latestVideoPartIndex) {
+                videoTargetParts.push({
+                  type: "text",
+                  text: "[System: This video was omitted because only the latest video is included in this request. Do not guess its contents.]",
+                });
                 return { pendingBotImageParts, contentParts };
               }
 

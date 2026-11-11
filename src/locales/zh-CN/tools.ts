@@ -1,6 +1,7 @@
 export default {
   tools: {
     media: {
+      generation_source_line: "提供方：{provider} · 模型：{model}",
       delivery_failed: "Discord 未能发送媒体，未记录成功的发送。",
       delivery_unconfirmed:
         "Discord 未确认媒体是否已发布。请结束本轮，并在重新生成或发布前检查频道，因为再次尝试可能造成重复。",

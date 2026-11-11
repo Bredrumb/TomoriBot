@@ -27,12 +27,15 @@ import { localizer } from "../../utils/text/localizer";
 import { resolveAvatarByIdentity, type ResolvedAvatarData } from "@/utils/discord/avatarResolver";
 import { buildGeneratedImageComponentsV2Payload } from "@/utils/discord/generatedImageMessage";
 import { prepareGeneratedImage } from "@/utils/image/generatedImageMetadata";
+import { buildGeneratedMediaSourceLine, type GeneratedMediaSource } from "@/utils/discord/generatedMediaMetadata";
+import { recordMinimalNoticeRef } from "@/utils/discord/minimalNoticeBodies";
 import { mediaDeliveryFailure, sendToolMediaPost } from "@/utils/discord/webhook/toolMediaDelivery";
 import { DiscordDeliveryError } from "@/utils/discord/webhook/deliveryOutcome";
 import {
   buildImageToolNoticeDescription,
   buildReferencedMessageUrl,
   sendToolProgressNotice,
+  isMinimalNotice,
 } from "@/utils/discord/toolProgressNotice";
 import {
   BaseTool,
@@ -811,9 +814,12 @@ export class GenerateImageTool extends BaseTool {
     attachment: AttachmentBuilder,
     attachmentFilename: string,
     elapsedMs: number,
+    source: GeneratedMediaSource,
     referencedIdentities: string[] = [],
     promptAttachment?: AttachmentBuilder,
   ): Promise<import("discord.js").Message> {
+    const config = context.tomoriState.config;
+    const visibleSource = isMinimalNotice(config, "image_generation") ? undefined : source;
     const componentsPayload = buildGeneratedImageComponentsV2Payload(
       attachmentFilename,
       elapsedMs,
@@ -821,6 +827,7 @@ export class GenerateImageTool extends BaseTool {
       referencedIdentities,
       Boolean(promptAttachment),
       attachment.spoiler,
+      visibleSource,
     );
     const files = () =>
       [attachment, ...(promptAttachment ? [promptAttachment] : [])].map(
@@ -830,11 +837,16 @@ export class GenerateImageTool extends BaseTool {
             description: file.description ?? undefined,
           }),
       );
-    return sendToolMediaPost(
+    const message = await sendToolMediaPost(
       context,
       () => ({ files: files(), ...componentsPayload, withComponents: true }),
-      () => ({ files: files() }),
+      () => ({
+        files: files(),
+        ...(visibleSource ? { content: buildGeneratedMediaSourceLine(context.locale, visibleSource) } : {}),
+      }),
     );
+    await recordMinimalNoticeRef(message.id, { kind: "generation", source });
+    return message;
   }
 
   /**
@@ -1039,6 +1051,10 @@ export class GenerateImageTool extends BaseTool {
         credentialSource: creds.source,
       };
       const displayModelName = creds.customEndpoint ? formatCustomModelDisplay(creds.customEndpoint) : modelCodename;
+      const generationSource: GeneratedMediaSource = {
+        provider: creds.provider,
+        model: creds.customEndpoint?.model_name?.trim() || modelCodename,
+      };
 
       log.info(`Using diffusion model: ${modelCodename} for image generation`);
 
@@ -1493,6 +1509,7 @@ export class GenerateImageTool extends BaseTool {
         attachment,
         attachmentFilename,
         Date.now() - startedAtMs,
+        generationSource,
         referencedIdentityNames,
         preparedImage.promptAttachment,
       );
@@ -1532,6 +1549,7 @@ export class GenerateImageTool extends BaseTool {
       return {
         success: true,
         message: successMessage,
+        data: generationSource,
         // imageMetadata intentionally omitted to avoid 403 errors when OpenRouter tries to fetch Discord CDN URLs
         // End the LLM turn immediately when this tool is the target of a hidden agent turn
         endTurn: context.streamContext?.endTurnAfterTools?.includes(this.name) ?? false,

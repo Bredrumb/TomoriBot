@@ -19,11 +19,17 @@ export type TargetEmbedType =
   | "danbooru_tags"
   | "dice_roll";
 
-export type ProtocolKind = TargetEmbedType | "diagnostic" | "reply_context" | "unshared_dice_roll";
+export type ProtocolKind =
+  | TargetEmbedType
+  | "diagnostic"
+  | "reply_context"
+  | "unshared_dice_roll"
+  | "generation_source";
 type ProtocolEntry = { key: string; kind: ProtocolKind; match?: "template" | "prefix" };
 
 /** These rendered strings are persisted in Discord and must remain recognizable after a locale ships. */
 export const PROTOCOL_KEYS: ProtocolEntry[] = [
+  { key: "tools.media.generation_source_line", kind: "generation_source", match: "template" },
   ...[
     "server_memory_learned_title",
     "server_memory_updated_title",
@@ -105,7 +111,7 @@ const targetKinds = new Set<ProtocolKind>([
   "danbooru_tags",
   "dice_roll",
 ]);
-const knownKinds = new Set<ProtocolKind>([...targetKinds, "diagnostic", "reply_context"]);
+const knownKinds = new Set<ProtocolKind>([...targetKinds, "diagnostic", "reply_context", "generation_source"]);
 
 /**
  * Kinds whose notices can render at Minimal verbosity. Minimal titles once dropped their leading

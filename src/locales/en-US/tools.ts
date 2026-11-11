@@ -1,6 +1,7 @@
 export default {
   tools: {
     media: {
+      generation_source_line: "Provider: {provider} · Model: {model}",
       delivery_failed: "Discord did not deliver the media. No successful delivery was recorded.",
       delivery_unconfirmed:
         "Discord did not confirm whether the media was posted. Stop this turn and check the channel before generating or posting it again, since another attempt could create a duplicate.",

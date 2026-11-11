@@ -396,38 +396,36 @@ export class UpdateLongTermMemoryTool extends BaseTool {
         targetUserRow.user_nickname ||
         targetUserRow.user_disc_id;
 
-      if (!isDeleteRequested) {
-        const userPrivacyLevel = await userRepository.getPrivacyLevel(resolvedTargetUserId as string);
-        if (userPrivacyLevel === PrivacyLevel.PARTIAL || userPrivacyLevel === PrivacyLevel.FULL) {
-          return {
-            success: false,
-            error: `Cannot update personal memory: ${resolvedTargetUserLabel} has privacy restrictions.`,
-            data: {
-              status: "memory_update_failed_privacy_restricted",
-              reason: `The user ${resolvedTargetUserLabel} has chosen to restrict personal memory storage.`,
-            },
-          };
-        }
+      const userPrivacyLevel = await userRepository.getPrivacyLevel(resolvedTargetUserId as string);
+      if (userPrivacyLevel === PrivacyLevel.PARTIAL || userPrivacyLevel === PrivacyLevel.FULL) {
+        return {
+          success: false,
+          error: `Cannot update personal memory: ${resolvedTargetUserLabel} has privacy restrictions.`,
+          data: {
+            status: "memory_update_failed_privacy_restricted",
+            reason: `The user ${resolvedTargetUserLabel} has chosen to restrict personal memory storage.`,
+          },
+        };
+      }
 
-        const messageProxyHostProtection = await getMessageProxyHostProtection(
-          resolvedTargetUserId as string,
-          serverDiscId,
-        );
-        if (messageProxyHostProtection.protected) {
-          return {
-            success: false,
-            error: `Cannot update personal memory: ${resolvedTargetUserLabel} has privacy restrictions.`,
-            data: {
-              status: "memory_update_failed_privacy_restricted",
-              reason:
-                messageProxyHostProtection.reason === "host_unresolved"
-                  ? `The host accounts for ${resolvedTargetUserLabel} could not be resolved. I cannot update personal memories until their privacy restrictions can be checked.`
-                  : messageProxyHostProtection.reason === "host_blacklisted"
-                    ? `The host account for ${resolvedTargetUserLabel} is blacklisted in this server. I cannot update personal memories for its message-proxy identities.`
-                    : `The host account for ${resolvedTargetUserLabel} has full privacy enabled. I cannot update personal memories for its message-proxy identities.`,
-            },
-          };
-        }
+      const messageProxyHostProtection = await getMessageProxyHostProtection(
+        resolvedTargetUserId as string,
+        serverDiscId,
+      );
+      if (messageProxyHostProtection.protected) {
+        return {
+          success: false,
+          error: `Cannot update personal memory: ${resolvedTargetUserLabel} has privacy restrictions.`,
+          data: {
+            status: "memory_update_failed_privacy_restricted",
+            reason:
+              messageProxyHostProtection.reason === "host_unresolved"
+                ? `The host accounts for ${resolvedTargetUserLabel} could not be resolved. I cannot update personal memories until their privacy restrictions can be checked.`
+                : messageProxyHostProtection.reason === "host_blacklisted"
+                  ? `The host account for ${resolvedTargetUserLabel} is blacklisted in this server. I cannot update personal memories for its message-proxy identities.`
+                  : `The host account for ${resolvedTargetUserLabel} has full privacy enabled. I cannot update personal memories for its message-proxy identities.`,
+          },
+        };
       }
 
       const personaLineageId = tomoriState.persona_lineage_id ?? 0;

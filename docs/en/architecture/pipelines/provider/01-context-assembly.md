@@ -22,8 +22,9 @@ Context assembly handles five responsibilities:
    Gemini `Content[]` structures, while OpenAI-compatible adapters format standard message objects.
 2. **Media processing:** Images are fetched and optimized via `fetchAndOptimizeImage()`. Animated
    GIFs are converted to keyframes or replaced with a text placeholder when running under production
-   to avoid memory pressure. Videos are fetched and inlined as base64 only when their size stays
-   under `VIDEO_CONTEXT_MAX_INLINE_MB`. Remote fetches execute through SSRF-validated network helpers.
+   to avoid memory pressure. Google's adapters fetch and inline videos only when their size stays
+   under `VIDEO_CONTEXT_MAX_INLINE_MB`; OpenRouter passes supported remote URLs or data URLs.
+   Remote fetches execute through SSRF-validated network helpers.
 3. **Dynamic tool declarations:** Tools prepared by `getAvailableToolsWithMCP()` pass through
    `src/tools/assembly.ts`. The assembler filters tools against model capabilities and emits native
    tool schemas attached to request options.
@@ -47,6 +48,11 @@ Adapters enforce strict structural constraints required by downstream model endp
 - **Expiring URL isolation:** Image serialization downloads and optimizes Discord attachments before
   embedding them, avoiding provider-side fetches of expiring URLs. Media handling remains
   provider-specific: Google's adapter can pass supported video links as `fileData`.
+- **OpenRouter video limit:** Requests include only the latest video with a supported URI scheme
+  across user and assistant history, including multiple attachments in one turn. Earlier videos
+  become omission notices while text and images remain. This conservative cap accommodates routes
+  that accept one video per request until model-specific limits are available. Streaming, cost
+  probes, and prompt inspection use the same serializer.
 - **Anthropic structured images:** Remote and inline images pass through the bounded image downloader
   and header validation before becoming base64 blocks. Unreadable, unsupported, or oversized images
   are skipped with retained warnings. Image labels preserve the original positions, and omission

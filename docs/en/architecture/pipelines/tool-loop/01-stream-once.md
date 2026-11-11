@@ -14,6 +14,10 @@ The stage prepares the request payload, manages timeout timers, and races the pr
 cancellation:
 
 1. **Context and prefill preparation:**
+   When tool history contains pre-tool prose, a request-only notice tells the model to continue
+   without repeating it. With Response Drafting Off, the notice says the prose was already sent
+   and allows an empty continuation if the reply is complete. With On, it says the prose is held
+   for delivery with the continuation.
    `foldPrefillIntoToolHistory` merges any assistant output prefill into `functionHistory` so the model
    receives required formatting or continuation tokens. Request-only notices, such as the one naming
    tool calls an earlier attempt completed, go before a native prefill so it stays the last item. For queued messages, `replyToMessage` is set to

@@ -1,4 +1,5 @@
 import { ComponentType, MessageFlags, type MessageCreateOptions } from "discord.js";
+import { buildGeneratedMediaSourceLine, type GeneratedMediaSource } from "@/utils/discord/generatedMediaMetadata";
 import { localizer } from "@/utils/text/localizer";
 
 export type GeneratedVideoComponentsV2Payload = Required<Pick<MessageCreateOptions, "components" | "flags">>;
@@ -22,6 +23,7 @@ export function buildGeneratedVideoComponentsV2Payload(
   elapsedMs: number,
   locale: string,
   spoiler = false,
+  source?: GeneratedMediaSource,
 ): GeneratedVideoComponentsV2Payload {
   const seconds = Math.max(0, elapsedMs / 1000).toFixed(1);
   const timingLine = localizer(locale, "tools.video.generated_after_seconds_line", {
@@ -42,7 +44,9 @@ export function buildGeneratedVideoComponentsV2Payload(
     },
     {
       type: ComponentType.TextDisplay,
-      content: `-# ${timingLine}`,
+      content: [timingLine, ...(source ? [buildGeneratedMediaSourceLine(locale, source)] : [])]
+        .map((line) => `-# ${line}`)
+        .join("\n"),
     },
   ] satisfies NonNullable<MessageCreateOptions["components"]>;
 

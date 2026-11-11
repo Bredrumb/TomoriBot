@@ -24,6 +24,7 @@ function resolvedRow(messageDiscId: string, content: string | null): ResolvedMin
     memory_content: content,
     memory_tags: [],
     reminder_purpose: null,
+    generation_source: null,
   };
 }
 
