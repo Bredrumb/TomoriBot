@@ -91,7 +91,7 @@ export function buildDiscordUserAliases(params: {
     owner: params.owner,
     value: params.userRow.user_nickname,
     source: "saved_nickname",
-    purposes: ["input_reference", ...visibleSavedPurposes],
+    purposes: ["input_reference", "identity_replacement", ...visibleSavedPurposes],
     exposure: params.exposeSavedNickname ? "visible" : "lookup_only",
     priority: 10,
   });
@@ -99,7 +99,7 @@ export function buildDiscordUserAliases(params: {
     owner: params.owner,
     value: params.identity.displayName,
     source: "guild_display_name",
-    purposes: ["input_reference"],
+    purposes: ["input_reference", "identity_replacement"],
     exposure: "lookup_only",
     priority: 15,
   });
@@ -112,7 +112,7 @@ export function buildDiscordUserAliases(params: {
       owner: params.owner,
       value,
       source,
-      purposes: ["input_reference", ...ALL_DISCORD_USER_OUTPUT_PURPOSES],
+      purposes: ["input_reference", "identity_replacement", ...ALL_DISCORD_USER_OUTPUT_PURPOSES],
       exposure: "visible",
       priority,
     });
@@ -154,7 +154,7 @@ export function buildPersonaAliases(params: {
     owner: params.owner,
     value: nickname,
     source: "persona_nickname",
-    purposes: ["output_mention", "tool_target", "copied_identity"],
+    purposes: ["identity_replacement", "output_mention", "tool_target", "copied_identity"],
     exposure: "visible",
     priority: 10,
     ...(canonicalTrigger && { canonicalValue: canonicalTrigger }),
@@ -208,7 +208,7 @@ export function buildMessageProxyIdentityAliases(params: {
       owner: params.owner,
       value,
       source: "message_proxy_display_name",
-      purposes: ["input_reference", "output_mention", "tool_target"],
+      purposes: ["input_reference", "identity_replacement", "output_mention", "tool_target"],
       exposure: "lookup_only",
       priority,
     });
@@ -224,7 +224,7 @@ export function buildWebhookAliases(params: {
     owner: params.owner,
     value: params.displayName,
     source: "webhook_display_name",
-    purposes: [],
+    purposes: ["identity_replacement"],
     exposure: "lookup_only",
     priority: 10,
   });
