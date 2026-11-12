@@ -52,7 +52,6 @@ import {
   CONFIG_CHANNEL_AUTO_TRIGGER_ENABLED_FIELD,
   CONFIG_CHANNEL_AUTO_TRIGGER_PERSONA_FIELD,
   CONFIG_CHANNEL_AUTO_TRIGGER_THRESHOLD_FIELD,
-  CONFIG_CHANNEL_AUTO_TRIGGER_MAX_THRESHOLD_FIELD,
   CONFIG_CHANNEL_BLOCKLIST_CHECKBOX_PREFIX,
   CONFIG_CHANNEL_PRIVATE_CHECKBOX_PREFIX,
   CONFIG_CHANNEL_RP_CHECKBOX_PREFIX,
@@ -288,12 +287,9 @@ function rulesCheckboxValues(nonce: string, prefix: string, groups: string[][]):
   );
 }
 
-function thresholdFields(nonce: string, threshold: number, maxThreshold?: number): Record<string, string> {
+function thresholdFields(nonce: string, value: string): Record<string, string> {
   return {
-    [buildConfigModalFieldId(CONFIG_CHANNEL_AUTO_TRIGGER_THRESHOLD_FIELD, nonce)]: String(threshold),
-    ...(maxThreshold === undefined
-      ? {}
-      : { [buildConfigModalFieldId(CONFIG_CHANNEL_AUTO_TRIGGER_MAX_THRESHOLD_FIELD, nonce)]: String(maxThreshold) }),
+    [buildConfigModalFieldId(CONFIG_CHANNEL_AUTO_TRIGGER_THRESHOLD_FIELD, nonce)]: value,
   };
 }
 
@@ -1136,9 +1132,9 @@ describe("Channels Auto-Trigger routes", () => {
       },
     );
     const modes = [
-      { current: [1, 1] as const, next: [0, 0] as const },
-      { current: [0, 0] as const, next: [5, 5] as const },
-      { current: [5, 5] as const, next: [2, 8] as const },
+      { current: [1, 1] as const, input: "0", next: [0, 0] as const },
+      { current: [0, 0] as const, input: "5", next: [5, 5] as const },
+      { current: [5, 5] as const, input: "2-8", next: [2, 8] as const },
     ];
 
     for (const [index, mode] of modes.entries()) {
@@ -1162,7 +1158,7 @@ describe("Channels Auto-Trigger routes", () => {
           nonce,
         },
         kind: "modal",
-        fields: thresholdFields(nonce, mode.next[0], mode.next[1]),
+        fields: thresholdFields(nonce, mode.input),
       });
       let acknowledged = false;
       setThreshold.mockImplementationOnce(async (serverId, personaId, threshold, maxThreshold, nextTarget) => {
@@ -1191,18 +1187,14 @@ describe("Channels Auto-Trigger routes", () => {
     random.mockRestore();
   });
 
-  it("rejects invalid threshold pairs without writing", async () => {
+  it("rejects invalid threshold input without writing", async () => {
     const setThreshold = spyOn(configRepository, "setAutoChatThreshold");
     const state = makePersona({
       config: { autoch_threshold: 5, autoch_threshold_max: 5 } as TomoriState["config"],
     });
-    const pairs = [
-      [0, 1],
-      [5, 3],
-      [101, 101],
-    ] as const;
-    for (const [threshold, maxThreshold] of pairs) {
-      const nonce = `nonce${threshold}234567`;
+    const inputs = ["0-1", "5-3", "101-101", "abc", "5-", "-5", "1-2-3"];
+    for (const [index, input] of inputs.entries()) {
+      const nonce = `nonce${index + 3}234567`;
       const harness = makeHarness({ state });
       await harness.dispatch(
         makeInteraction({
@@ -1213,7 +1205,7 @@ describe("Channels Auto-Trigger routes", () => {
             nonce,
           },
           kind: "modal",
-          fields: thresholdFields(nonce, threshold, maxThreshold),
+          fields: thresholdFields(nonce, input),
         }),
       );
     }
@@ -1257,7 +1249,7 @@ describe("Channels Auto-Trigger routes", () => {
         nonce,
       },
       kind: "modal",
-      fields: thresholdFields(nonce, 5, 5),
+      fields: thresholdFields(nonce, "5"),
     });
     await harness.dispatch(thresholdInteraction);
 
@@ -1369,7 +1361,7 @@ describe("Channels Auto-Trigger routes", () => {
         nonce: thresholdNonce,
       },
       kind: "modal",
-      fields: thresholdFields(thresholdNonce, 5, 5),
+      fields: thresholdFields(thresholdNonce, "5"),
     });
     const thresholdHarness = makeHarness({ state });
     await thresholdHarness.dispatch(thresholdInteraction);

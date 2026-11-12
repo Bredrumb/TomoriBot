@@ -1,9 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import {
+  formatThresholdInput,
   MAX_THRESHOLD,
   MIN_RANDOM_THRESHOLD,
   MIN_THRESHOLD,
+  parseThresholdInput,
   rollAutochatTarget,
+  THRESHOLD_INPUT_MAX_LENGTH,
   validateThresholdInput,
 } from "@/utils/discord/autoTriggerThreshold";
 
@@ -62,6 +65,66 @@ describe("/server auto-trigger threshold write plan", () => {
       expect(MIN_THRESHOLD).toBe(0);
       expect(MIN_RANDOM_THRESHOLD).toBe(1);
       expect(MAX_THRESHOLD).toBe(100);
+    });
+  });
+
+  describe("parseThresholdInput", () => {
+    it("reads a flat number as a fixed count", () => {
+      expect(parseThresholdInput("50")).toEqual({ threshold: 50, maxThreshold: 50 });
+    });
+
+    it("reads zero as always-reply", () => {
+      expect(parseThresholdInput("0")).toEqual({ threshold: 0, maxThreshold: 0 });
+    });
+
+    it("reads a hyphenated range as min and max", () => {
+      expect(parseThresholdInput("50-60")).toEqual({ threshold: 50, maxThreshold: 60 });
+    });
+
+    it("collapses an equal-ended range to the fixed pair the validator already accepts", () => {
+      expect(parseThresholdInput("50-50")).toEqual({ threshold: 50, maxThreshold: 50 });
+    });
+
+    it("tolerates spaces around the hyphen and the ends", () => {
+      expect(parseThresholdInput(" 5 - 6 ")).toEqual({ threshold: 5, maxThreshold: 6 });
+    });
+
+    it("keeps the modal field cap wide enough for a padded maximum range", () => {
+      const padded = "  100  -  100  ";
+      expect(padded.length).toBeLessThanOrEqual(THRESHOLD_INPUT_MAX_LENGTH);
+      expect(parseThresholdInput(padded)).toEqual({ threshold: 100, maxThreshold: 100 });
+    });
+
+    it("returns null for text that is neither a number nor a range", () => {
+      for (const value of ["", "abc", "5-", "-5", "1-2-3", "50.5", "+5", "1 000"]) {
+        expect(parseThresholdInput(value)).toBeNull();
+      }
+    });
+
+    it("leaves range validity to validateThresholdInput", () => {
+      const parsed = parseThresholdInput("0-5");
+      const validation = parsed ? validateThresholdInput(parsed.threshold, parsed.maxThreshold) : null;
+      expect(parsed).toEqual({ threshold: 0, maxThreshold: 5 });
+      expect(validation?.isValid).toBe(false);
+    });
+  });
+
+  describe("formatThresholdInput", () => {
+    it("prefills each mode in the same shape the field accepts", () => {
+      expect(formatThresholdInput(0, 0)).toBe("0");
+      expect(formatThresholdInput(50, 50)).toBe("50");
+      expect(formatThresholdInput(50, 60)).toBe("50-60");
+    });
+
+    it("round-trips every valid pair through the parser", () => {
+      for (const [threshold, maxThreshold] of [
+        [0, 0],
+        [1, 1],
+        [100, 100],
+        [1, 100],
+      ] as const) {
+        expect(parseThresholdInput(formatThresholdInput(threshold, maxThreshold))).toEqual({ threshold, maxThreshold });
+      }
     });
   });
 
