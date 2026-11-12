@@ -125,7 +125,9 @@ export function speechErrorBody(body: unknown, apiKey: string): string {
 
 export function checkSpeechStatus(response: Response, body?: string): void {
   if (response.ok) return;
-  const code = providerContentRejectionSchema.options.find((value) => new RegExp(`\\b${value}\\b`).test(body ?? ""));
+  const code =
+    providerContentRejectionSchema.options.find((value) => new RegExp(`\\b${value}\\b`).test(body ?? "")) ??
+    (/\bblocked\s+by\s+safety\s+polic(?:y|ies)\b/i.test(body ?? "") ? "SAFETY" : undefined);
   const kind = code
     ? "content_blocked"
     : response.status === 401 || response.status === 403

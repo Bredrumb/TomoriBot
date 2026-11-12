@@ -5,6 +5,7 @@ import { createVertexClient } from "@/providers/vertex/vertexClient";
 import {
   HOSTED_SPEECH_LIMITS,
   HostedSpeechError,
+  isExpectedHostedSpeechFailure,
   validateSpeechAudio,
   type SpeechOperation,
 } from "@/utils/speech/hostedSpeech";
@@ -59,6 +60,26 @@ afterEach(() => {
 });
 
 describe("hosted speech transports", () => {
+  it("treats a voice prompt safety refusal as expected while preserving malformed request incidents", async () => {
+    for (const [message, kind, expected] of [
+      ["Voice prompt was blocked by safety policies.", "content_blocked", true],
+      ["Invalid request field: voice_prompt", "invalid_request", false],
+    ] as const) {
+      stubFetch(async () =>
+        Response.json({ error: { code: 400, status: "INVALID_ARGUMENT", message } }, { status: 400 }),
+      );
+      const error = await createGoogleSpeechTransport("google", "fixture-key")
+        .create("Warm narration", "gemini-3.8-flash-tts", signal(), [])
+        .catch((error: unknown) => error);
+      expect(error).toBeInstanceOf(HostedSpeechError);
+      if (!(error instanceof HostedSpeechError)) throw new Error("Expected a speech failure");
+      expect(error.kind).toBe(kind);
+      expect(error.providerCode).toBe(expected ? "SAFETY" : undefined);
+      expect(error.providerDetail).toContain(message);
+      expect(isExpectedHostedSpeechFailure(error.kind, error.providerStatus)).toBe(expected);
+    }
+  });
+
   it("resolves keyless managed speech for both scopes and keeps a denial separate from the other mode", async () => {
     const context: ProviderUsageContext = {};
     let resolvedContext = context;
