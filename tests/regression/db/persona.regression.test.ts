@@ -8,7 +8,7 @@
  */
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { afterAll, beforeAll, describe, expect, it, spyOn } from "bun:test";
 import { forkPointerForAvatarChange } from "@/utils/persona/pointerFork";
 import type { TomoriPresetRow } from "@/types/db/schema";
 import { configPersonaOperations } from "@/utils/discord/interactions/configPersonaOperations";
@@ -16,6 +16,8 @@ import { presetRepository, personaSpriteRepository, personaRepository } from "@/
 import { splitSqlStatements } from "@/utils/db/sqlSplitter";
 import { FIXTURE_IDS, cleanupFixtures, insertFixtures, type FixtureRefs } from "./setup/fixtures";
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
+import { personaSpriteMessageRepository } from "@/utils/db/repositories/PersonaSpriteMessageRepository";
+import { log } from "@/utils/misc/logger";
 
 async function executeMigrationFile(fileName: string): Promise<void> {
   const sqlText = await readFile(join(import.meta.dir, "..", "..", "..", "src", "db", "migrations", fileName), "utf-8");
@@ -34,6 +36,45 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona — regression", () => {
 
   afterAll(async () => {
     await cleanupFixtures(testSql);
+  });
+
+  it("warns when a persona disappears before its sprite receipt and retains other write failures", async () => {
+    const alter = await personaRepository.createAlterPersona({
+      serverId: refs.serverId,
+      nickname: "_rt_receipt",
+      attributes: [],
+      sampleDialoguesIn: [],
+      sampleDialoguesOut: [],
+    });
+    if (!alter?.persona_id) throw new Error("Expected an alter persona");
+    const input = {
+      messageDiscId: "_rt_sprite_receipt",
+      personaId: alter.persona_id,
+      spriteName: "Happy",
+      channelDiscId: "_rt_receipt_channel",
+    };
+    const errors = spyOn(log, "error").mockResolvedValue(undefined);
+    const warnings = spyOn(log, "warn").mockImplementation(() => {});
+    const metrics = spyOn(log, "metric").mockImplementation(() => {});
+    try {
+      expect(await personaSpriteMessageRepository.record(input)).toBe(true);
+      expect(
+        await personaSpriteMessageRepository.record({ ...input, messageDiscId: "_rt_invalid_receipt", spriteName: "" }),
+      ).toBe(false);
+      expect(errors).toHaveBeenCalledTimes(1);
+      errors.mockClear();
+      await testSql`DELETE FROM personas WHERE persona_id = ${alter.persona_id}`;
+      expect(await personaSpriteMessageRepository.record(input)).toBe(false);
+      expect(errors).not.toHaveBeenCalled();
+      expect(warnings).toHaveBeenCalledTimes(1);
+      expect(metrics).toHaveBeenCalledWith("persona_sprite_message_skipped", { reason: "persona_deleted" });
+      expect(await personaSpriteMessageRepository.getByMessageIds([input.messageDiscId])).toEqual(new Map());
+    } finally {
+      errors.mockRestore();
+      warnings.mockRestore();
+      metrics.mockRestore();
+      await testSql`DELETE FROM personas WHERE persona_id = ${alter.persona_id}`;
+    }
   });
 
   it("loadTomoriState returns null for unknown server", async () => {
