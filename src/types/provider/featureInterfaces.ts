@@ -329,20 +329,22 @@ export interface ProviderCapabilityMap {
 
 export type ProviderCapabilityName = keyof ProviderCapabilityMap;
 
-export type DecisionApiStyle = "openrouter-decisions" | "system-one" | "openai-decisions";
+export type DecisionApiStyle = "google-decisions" | "openrouter-decisions" | "system-one" | "openai-decisions";
 
 export const decisionModelReferenceSchema = z
   .object({
-    provider: z.string().regex(/^(openrouter|custom:[1-9][0-9]*)$/),
+    provider: z.string().regex(/^(google|openrouter|custom:[1-9][0-9]*)$/),
     modelId: z.number().int().positive(),
     /** Null for a global catalog row or custom endpoint; scoped registrations retain their exact ID. */
     registrationId: z.number().int().positive().nullable(),
     customEndpointId: z.number().int().positive().nullable(),
   })
   .refine((reference) =>
-    reference.provider === "openrouter"
-      ? reference.customEndpointId === null
-      : reference.customEndpointId !== null && reference.registrationId === null,
+    reference.provider === "google"
+      ? reference.customEndpointId === null && reference.registrationId === null
+      : reference.provider === "openrouter"
+        ? reference.customEndpointId === null
+        : reference.customEndpointId !== null && reference.registrationId === null,
   );
 export type DecisionModelReference = z.infer<typeof decisionModelReferenceSchema>;
 

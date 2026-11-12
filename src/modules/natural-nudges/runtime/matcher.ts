@@ -12,7 +12,7 @@ import {
   resolveNudgeModel,
   resolveStructuredCallTarget,
 } from "@/modules/natural-nudges/runtime/model";
-import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
+import { llmProviderRepo } from "@/utils/db/repositories";
 import { findProviderRequestDeniedError, withProviderUsageContext } from "@/utils/provider/providerUsage";
 import {
   findProviderOptionByActiveProvider,
@@ -56,12 +56,6 @@ export interface ResolvedChecker {
   /** The provider option paying for the text checker refused it, so checks pause instead of retrying per message. */
   denied?: true;
 }
-
-/**
- * Recommended checker text models by provider, tried after a Decision model. Gemma has no paid tier on
- * Google's API, so the frequent checks stay off the quota that chat replies use.
- */
-const RECOMMENDED_CHECKER_LLMS = [{ provider: "google", codename: "gemma-4-31b-it" }] as const;
 
 type MatcherReason =
   | "matched"
@@ -124,8 +118,8 @@ async function decisionBackend(
       return { backend: null, denied: true };
     }
   } else if (
-    option.model.provider === "openrouter" &&
-    !(await llmProviderRepo.loadSavedProviderConfig(state.server_id, "openrouter"))?.api_key
+    (option.model.provider === "openrouter" || option.model.provider === "google") &&
+    !(await llmProviderRepo.loadSavedProviderConfig(state.server_id, option.model.provider))?.api_key
   ) {
     return { backend: null };
   }
@@ -174,16 +168,13 @@ export async function resolveMatcherBackend(
     const selected = options.find((option) => option.model.decision_model_id === serverDecisionModelId);
     return { ...(await decisionBackend(state, selected, "decision")), source: "recommended" };
   }
-  const openRouterDefault = await decisionBackend(
-    state,
-    options.find((option) => option.model.provider === "openrouter" && option.model.is_default),
-    "decision",
-  );
-  if (openRouterDefault.backend || openRouterDefault.denied) return { ...openRouterDefault, source: "recommended" };
-  for (const recommended of RECOMMENDED_CHECKER_LLMS) {
-    const model = await llmModelRepo.loadByProviderAndCodename(recommended.provider, recommended.codename);
-    const resolved = model?.llm_id ? await llmBackend(state, { llmId: model.llm_id, slot: "nudge-checker" }) : null;
-    if (resolved?.backend) return { backend: resolved.backend, source: "recommended" };
+  for (const provider of ["google", "openrouter"]) {
+    const resolved = await decisionBackend(
+      state,
+      options.find((option) => option.model.provider === provider && option.model.is_default),
+      "decision",
+    );
+    if (resolved.backend || resolved.denied) return { ...resolved, source: "recommended" };
   }
   return { ...(await llmBackend(state, plannerModelRef(state, config.llm_id))), source: "recommended" };
 }

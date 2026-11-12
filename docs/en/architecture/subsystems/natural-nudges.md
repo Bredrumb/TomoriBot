@@ -386,8 +386,8 @@ messageCreate (activeNudge.ts)
   (`checker_llm_id`) or a Decision model (`checker_decision_model_id`), at most one, and a pinned
   checker that cannot answer does not fall back. Unpinned, the recommended checker is resolved from
   the server's current keys on every check, so adding or removing a provider needs no write: the
-  Decision model selected in `/config > Models`, then the catalog's default OpenRouter Decision
-  model, then `gemma-4-31b-it` on a Google key, then the planner model.
+  Decision model selected in `/config > Models`, then Google's default `gemini-decision-1` on a
+  Google key, then the catalog's default OpenRouter Decision model, then the planner model.
 - **Matcher, one boundary, two backends** (`runtime/matcher.ts`). A Decision model gets one `choice`
   question and must list `choice` in `supported_primitives`. A text model gets a structured enum of
   the option IDs at temperature 0, with one format retry. Both use the wording the false-fire evaluation measured, up

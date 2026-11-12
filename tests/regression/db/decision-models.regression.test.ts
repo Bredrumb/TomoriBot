@@ -2,6 +2,8 @@ import { afterAll, beforeAll, describe, expect, it, spyOn } from "bun:test";
 import * as capabilities from "@/utils/provider/providerCapabilityResolver";
 import { OpenrouterProvider } from "@/providers/openrouter/openrouterProvider";
 import { callOpenRouterDecisions } from "@/providers/openrouter/openrouterDecisions";
+import { GoogleProvider } from "@/providers/google/googleProvider";
+import { callGoogleDecisions } from "@/providers/google/googleDecisions";
 import {
   currentProviderUsageContext,
   ProviderRequestDeniedError,
@@ -19,6 +21,7 @@ import { createPersona, createServerConfig } from "../../helpers/fixtures";
 import { resetRepository } from "@/utils/db/repositories/ResetRepository";
 import { initializeDatabase } from "@/utils/db/initializeDatabase";
 import { splitSqlStatements } from "@/utils/db/sqlSplitter";
+import { encryptApiKey } from "@/utils/security/crypto";
 import { insertFixtures } from "./setup/fixtures";
 import { DB_TESTS_AVAILABLE, executeTestSqlFile, setupTestDb, testSql } from "./setup/testDb";
 
@@ -130,12 +133,95 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Decision model persistence", () => {
     ).toBe(true);
     expect(await llmModelRepo.loadDecisionModelByProviderAndCodename("openrouter", "fixture-decision")).toBeNull();
     const seeds = personal.filter((model) => !model.is_scoped_registration);
-    const catalogDefault = decisionSections.flatMap((section) => section.rows).find((row) => row.isDefault);
+    const catalogDefault = decisionSections
+      .flatMap((section) => section.rows)
+      .find((row) => row.provider === "openrouter" && row.isDefault);
     if (!catalogDefault) throw new Error("Missing default Decision model in the catalog");
     expect(seeds.find((model) => model.codename === catalogDefault.codename)?.input_token_limit).toBe(
       catalogDefault.inputTokenLimit,
     );
     expect(seeds.every((model) => model.provider === "openrouter")).toBe(true);
+  });
+
+  it("offers Google's seeded Decision model only to saved-key owners and executes with each scope's key", async () => {
+    const model = await llmModelRepo.loadDecisionModelByProviderAndCodename("google", "gemini-decision-1");
+    expect(model).toMatchObject({
+      is_default: true,
+      is_scoped_registration: false,
+      input_token_limit: 262144,
+      input_price_per_million: 0.1,
+      output_price_per_million: 0,
+      supported_primitives: ["predicate", "choice"],
+    });
+    if (!model) throw new Error("Missing Google Decision seed");
+    const scopes = [
+      { kind: "server", ownerId: serverId },
+      { kind: "personal", ownerId: userId },
+    ] as const;
+    const calls: Array<{ provider: string; key: string | null; style: string }> = [];
+    const transport = spyOn(GoogleProvider.prototype, "callDecisions").mockImplementation(async (request) => {
+      calls.push({ provider: request.reference.provider, key: request.apiKey, style: request.apiStyle });
+      return callGoogleDecisions(request, async () =>
+        Response.json({
+          answers: { q: { type: "noul", noul: 0.8, confidence: 0.8 } },
+          usage: { total_input_tokens: 10, total_output_tokens: 0, total_tokens: 10 },
+        }),
+      );
+    });
+    try {
+      for (const scope of scopes) {
+        expect((await loadDecisionModelsForScope(scope)).some((entry) => entry.model.provider === "google")).toBe(
+          false,
+        );
+        const key = await encryptApiKey(`fixture-${scope.kind}-google-decision`);
+        if (scope.kind === "server") {
+          await testSql`INSERT INTO saved_provider_configs (server_id, provider, api_key, key_version)
+            VALUES (${serverId}, 'google', ${key.encrypted}, ${key.version})`;
+        } else {
+          await testSql`INSERT INTO user_saved_provider_configs (user_id, provider, api_key, key_version)
+            VALUES (${userId}, 'google', ${key.encrypted}, ${key.version})`;
+        }
+        const selected = (await loadDecisionModelsForScope(scope)).find((entry) => entry.model.provider === "google");
+        expect(selected?.reference).toEqual({
+          provider: "google",
+          modelId: model.decision_model_id,
+          registrationId: null,
+          customEndpointId: null,
+        });
+        if (!selected) throw new Error("Missing owned Google Decision option");
+        expect((await loadProviderModelChoices(scope, "decision", "google")).map((choice) => choice.id)).toContain(
+          model.decision_model_id,
+        );
+        expect(
+          await callDecisionsForProvider({
+            scope,
+            reference: selected.reference,
+            evidence: "fixture",
+            questions: [{ type: "predicate", id: "q", instructions: "Evaluate the evidence." }],
+          }),
+        ).toMatchObject({
+          status: "completed",
+          actualModel: "gemini-decision-1",
+          usage: { inputTokens: 10, outputTokens: 0 },
+        });
+        expect(calls.at(-1)).toEqual({
+          provider: "google",
+          key: `fixture-${scope.kind}-google-decision`,
+          style: "google-decisions",
+        });
+      }
+      expect(await llmProviderRepo.deleteServerProviderRegistration(serverId, "google")).toBe(true);
+      expect((await loadDecisionModelsForScope(scopes[0])).some((entry) => entry.model.provider === "google")).toBe(
+        false,
+      );
+      expect((await loadDecisionModelsForScope(scopes[1])).some((entry) => entry.model.provider === "google")).toBe(
+        true,
+      );
+    } finally {
+      transport.mockRestore();
+      await llmProviderRepo.deleteServerProviderRegistration(serverId, "google");
+      await llmProviderRepo.deleteUserProviderRegistration(userId, "google");
+    }
   });
 
   it("registers and edits exact custom identities without activating text, then deletes only the owned registration", async () => {

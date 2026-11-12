@@ -4547,6 +4547,21 @@ export const embeddingSections: ModelSection<EmbeddingInput>[] = [
 // Active rows cover the default, low-cost bulk checks, Korean/long documents, largest inputs, and free trials.
 export const decisionSections: ModelSection<DecisionInput>[] = [
   {
+    comment: "Google Decisions",
+    rows: [
+      {
+        provider: "google",
+        codename: "gemini-decision-1",
+        isDefault: true,
+        inputTokenLimit: 262144,
+        seesImages: true,
+        inputPricePerMillion: 0.1,
+        outputPricePerMillion: 0,
+        desc: "Default Google Decision model for classification and routing with no output tokens.",
+      },
+    ],
+  },
+  {
     comment: "OpenRouter Decisions",
     rows: [
       {

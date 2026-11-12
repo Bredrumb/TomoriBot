@@ -12,7 +12,7 @@ export const googleProviderInfo: ProviderInfo = {
   supportsVideos: true,
   apiFamily: "google-genai",
   featureSupport: {
-    decisions: false,
+    decisions: true,
     imageGeneration: "chat-completion",
     videoGeneration: "chat-completion",
     embeddings: true,

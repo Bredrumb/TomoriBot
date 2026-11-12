@@ -109,7 +109,12 @@ export async function callDecisionsForProvider(request: DecisionExecutionRequest
     return { status: "invalid-input", correlationId, errorLogged: false };
   }
   const reference = request.reference;
-  let apiStyle: DecisionApiStyle = reference.provider === "openrouter" ? "openrouter-decisions" : "system-one";
+  let apiStyle: DecisionApiStyle =
+    reference.provider === "google"
+      ? "google-decisions"
+      : reference.provider === "openrouter"
+        ? "openrouter-decisions"
+        : "system-one";
   const trace = () => ({ reference, apiStyle, correlationId });
   const cancelled = (): DecisionResult => {
     decisionTrace(trace(), "cancelled", { questionCount: request.questions.length, elapsedMs: Date.now() - startedAt });
@@ -186,7 +191,7 @@ export async function callDecisionsForProvider(request: DecisionExecutionRequest
         operation: "decision-request",
         stage: "resolution",
         category: "credentials",
-        provider: custom ? "custom" : "openrouter",
+        provider: custom ? "custom" : reference.provider,
         apiStyle,
         modelId: reference.modelId,
         registrationId: reference.registrationId,

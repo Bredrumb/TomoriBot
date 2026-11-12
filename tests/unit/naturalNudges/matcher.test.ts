@@ -16,7 +16,7 @@ import type {
   StructuredOutputResult,
 } from "@/types/provider/featureInterfaces";
 import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
-import { savedProviderConfigSchema } from "@/types/db/schema";
+import { decisionModelSchema, savedProviderConfigSchema } from "@/types/db/schema";
 import * as serverStructuredOutput from "@/utils/provider/serverStructuredOutput";
 import { createPersona } from "../../helpers/fixtures";
 
@@ -195,25 +195,30 @@ describe("Active Nudge Checker resolution", () => {
   const GEMMA_ID = 50;
   const PLANNER_ID = 7;
   const unpinned = { llm_id: PLANNER_ID, checker_llm_id: null, checker_decision_model_id: null };
-  const decisionOption = (id: number, codename: string, isDefault: boolean): DecisionModelOption =>
-    ({
-      model: {
-        decision_model_id: id,
-        provider: "openrouter",
-        codename,
-        is_default: isDefault,
-        supported_primitives: ["predicate", "choice"],
-      },
-      reference: { provider: "openrouter", modelId: id, registrationId: null, customEndpointId: null },
-    }) as DecisionModelOption;
+  const decisionOption = (
+    id: number,
+    codename: string,
+    isDefault: boolean,
+    provider = "openrouter",
+  ): DecisionModelOption => ({
+    model: decisionModelSchema.parse({
+      decision_model_id: id,
+      provider,
+      codename,
+      is_default: isDefault,
+      input_token_limit: 262144,
+      supported_primitives: ["predicate", "choice"],
+    }),
+    reference: { provider, modelId: id, registrationId: null, customEndpointId: null },
+  });
 
   /** Text models in `usable` resolve against the server's keys under their codename; every other ID cannot. */
   function stubCatalog(decisionOptions: DecisionModelOption[], usable: Record<number, string>) {
     spies.push(
-      spyOn(llmProviderRepo, "loadSavedProviderConfig").mockResolvedValue(
+      spyOn(llmProviderRepo, "loadSavedProviderConfig").mockImplementation(async (_serverId, provider) =>
         savedProviderConfigSchema.parse({
           server_id: state.server_id,
-          provider: "openrouter",
+          provider,
           api_key: Buffer.from("fixture"),
           llm_id: null,
           diffusion_model_id: null,
@@ -227,7 +232,6 @@ describe("Active Nudge Checker resolution", () => {
         }),
       ),
       spyOn(llmModelRepo, "loadDecisionModelOptions").mockResolvedValue(decisionOptions),
-      spyOn(llmModelRepo, "loadByProviderAndCodename").mockResolvedValue({ llm_id: GEMMA_ID } as never),
       spyOn(serverStructuredOutput, "resolveServerStructuredModel").mockImplementation(async (_state, llmId) =>
         usable[llmId]
           ? {
@@ -242,28 +246,56 @@ describe("Active Nudge Checker resolution", () => {
   const withServerDecision = (decisionModelId: number | null) =>
     ({ ...state, config: { ...state.config, decision_model_id: decisionModelId } }) as typeof state;
 
-  it("recommends OpenRouter's default Decision model, then Gemma on a Google key, then the planner model", async () => {
-    stubCatalog([decisionOption(3, "typesafe/jev-1.13", true)], { [GEMMA_ID]: "gemma-4-31b-it", [PLANNER_ID]: "chat" });
+  it("recommends Google's default Decision model, then OpenRouter's default, then the planner model", async () => {
+    const googleDefault = decisionOption(5, "gemini-decision-1", true, "google");
+    stubCatalog([decisionOption(3, "typesafe/jev-1.13", true), googleDefault], { [PLANNER_ID]: "chat" });
     expect(await resolveMatcherBackend(withServerDecision(null), unpinned)).toMatchObject({
-      backend: { kind: "decision", model: "typesafe/jev-1.13" },
+      backend: { kind: "decision", model: "gemini-decision-1", reference: googleDefault.reference },
       source: "recommended",
     });
 
     for (const spy of spies.splice(0)) spy.mockRestore();
-    stubCatalog([decisionOption(4, "upstage/solar-decide-flash", false)], { [GEMMA_ID]: "gemma-4-31b-it" });
+    stubCatalog([decisionOption(3, "typesafe/jev-1.13", true)], { [PLANNER_ID]: "chat" });
     expect(await resolveMatcherBackend(withServerDecision(null), unpinned)).toMatchObject({
-      backend: { kind: "llm", llmId: GEMMA_ID, slot: "nudge-checker" },
+      backend: { kind: "decision", model: "typesafe/jev-1.13" },
     });
 
     for (const spy of spies.splice(0)) spy.mockRestore();
-    stubCatalog([], { [PLANNER_ID]: "chat" });
+    stubCatalog([], { [GEMMA_ID]: "gemma-4-31b-it", [PLANNER_ID]: "chat" });
     expect(await resolveMatcherBackend(withServerDecision(null), unpinned)).toMatchObject({
       backend: { kind: "llm", llmId: PLANNER_ID, slot: "nudge-planner", model: "chat" },
     });
   });
 
+  it("skips Google's default when the server has no saved Google key", async () => {
+    stubCatalog(
+      [decisionOption(5, "gemini-decision-1", true, "google"), decisionOption(3, "typesafe/jev-1.13", true)],
+      { [PLANNER_ID]: "chat" },
+    );
+    const openRouterConfig = await llmProviderRepo.loadSavedProviderConfig(state.server_id, "openrouter");
+    spyOn(llmProviderRepo, "loadSavedProviderConfig").mockImplementation(async (_serverId, provider) =>
+      provider === "google" ? null : openRouterConfig,
+    );
+    expect(await resolveMatcherBackend(withServerDecision(null), unpinned)).toMatchObject({
+      backend: { kind: "decision", model: "typesafe/jev-1.13" },
+    });
+  });
+
   it("never falls back from a pinned checker or a Decision model selected in Models", async () => {
-    stubCatalog([decisionOption(3, "typesafe/jev-1.13", true)], { [GEMMA_ID]: "gemma-4-31b-it", [PLANNER_ID]: "chat" });
+    stubCatalog(
+      [decisionOption(5, "gemini-decision-1", true, "google"), decisionOption(3, "typesafe/jev-1.13", true)],
+      { [PLANNER_ID]: "chat" },
+    );
+    expect(
+      await resolveMatcherBackend(withServerDecision(null), { ...unpinned, checker_decision_model_id: 3 }),
+    ).toMatchObject({
+      backend: { kind: "decision", model: "typesafe/jev-1.13" },
+      source: "pinned",
+    });
+    expect(await resolveMatcherBackend(withServerDecision(3), unpinned)).toMatchObject({
+      backend: { kind: "decision", model: "typesafe/jev-1.13" },
+      source: "recommended",
+    });
     expect(await resolveMatcherBackend(withServerDecision(null), { ...unpinned, checker_llm_id: 99 })).toEqual({
       backend: null,
       source: "pinned",

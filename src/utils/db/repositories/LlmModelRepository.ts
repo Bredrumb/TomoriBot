@@ -162,6 +162,7 @@ class LlmModelRepository {
       WHERE model.is_deprecated = false
         AND (
           (model.provider = 'openrouter' AND (model.is_scoped_registration = false OR registration.scoped_model_registration_id IS NOT NULL))
+          OR (model.provider = 'google' AND model.is_scoped_registration = false)
           OR endpoint.custom_endpoint_id IS NOT NULL
         )
         AND (

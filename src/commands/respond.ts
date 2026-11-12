@@ -1,53 +1,63 @@
 import type { SlashCommandBuilder } from "discord.js";
-import type { ChatInputCommandInteraction, Client, Message, ModalSubmitInteraction } from "discord.js";
+import type { ChatInputCommandInteraction, Client, Message } from "discord.js";
 import { DiscordAPIError, MessageFlags, PermissionFlagsBits, RESTJSONErrorCodes } from "discord.js";
-import { promptWithPaginatedModal, replyInfoEmbed, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { handlePersonaAutocomplete } from "@/utils/discord/autocomplete/personaAutocomplete";
 import { sendCooldownDM } from "@/utils/discord/cooldownDM";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
 import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { localizer } from "@/utils/text/localizer";
-import { resolvePersonaSnippet } from "@/utils/text/personaPrompt";
-import { DISCORD_SELECT_OPTION_DESCRIPTION_MAX } from "@/utils/discord/ui/componentsV2Limits";
 import type { LlmRow, UserRow } from "@/types/db/schema";
 import { ASSISTANT_PREFILL_MAX_LENGTH, resolvePrefillBlocker, resolvePrefillMode } from "@/utils/chat/assistantPrefill";
-import type { ModalComponent, SelectOption } from "@/types/discord/modal";
 import { tomoriChat } from "@/events/messageCreate/tomoriChat";
 import { llmModelRepo, personaRepository } from "@/utils/db/repositories";
 import { getCachedWhitelistStatus } from "@/utils/cache/channelWhitelistCache";
 import { getCachedPersonalSpotlightStatus } from "@/utils/cache/personalSpotlightCache";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { resolveFallbackPersona } from "@/utils/discord/personaTurnDetectionResolver";
-import { filterPersonasForTrigger, isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
+import { filterPersonasForTrigger } from "@/utils/persona/personaAccess";
+import { resolveSelectedPersona } from "@/utils/persona/personaOptionValue";
 import { CooldownType } from "@/types/db/schema";
 import { cooldownRepository } from "@/utils/db/repositories/CooldownRepository";
 import { isNoticeEmbedVisible } from "@/utils/discord/toolProgressNotice";
+
+const RESPOND_PROMPT_MAX_LENGTH = 2000;
+
+export const autocomplete = handlePersonaAutocomplete;
 
 export const configureCommand = (command: SlashCommandBuilder) =>
   command
     .setName("respond")
     .setDescription(localizer("en-US", "commands.respond.description"))
+    .addStringOption((option) =>
+      option
+        .setName("persona")
+        .setDescription(localizer("en-US", "commands.respond.persona_description"))
+        .setAutocomplete(true)
+        .setRequired(false),
+    )
     .addBooleanOption((option) =>
       option
-        .setName("extra_options")
-        .setDescription(localizer("en-US", "commands.respond.extra_options_description"))
+        .setName("reasoning")
+        .setDescription(localizer("en-US", "commands.respond.reasoning_description"))
+        .setRequired(false),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("prompt")
+        .setDescription(localizer("en-US", "commands.respond.prompt_description"))
+        .setMaxLength(RESPOND_PROMPT_MAX_LENGTH)
+        .setRequired(false),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("prefill")
+        .setDescription(localizer("en-US", "commands.respond.prefill_description"))
+        .setMaxLength(ASSISTANT_PREFILL_MAX_LENGTH)
         .setRequired(false),
     );
 
-async function replyPersonaAccessBlocked(
-  interaction: ChatInputCommandInteraction | ModalSubmitInteraction,
-  locale: string,
-): Promise<void> {
-  await replyInfoEmbed(interaction, locale, {
-    titleKey: "general.message_cooldown_title",
-    descriptionKey: "commands.respond.persona_access_blocked",
-    color: ColorCode.WARN,
-  });
-}
-
-/**
- * Execute the respond command - manually trigger Tomori to respond to the latest message
- */
 export async function execute(
   client: Client,
   interaction: ChatInputCommandInteraction,
@@ -107,6 +117,8 @@ export async function execute(
     }
   }
 
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral | MessageFlags.SuppressNotifications });
+
   const tomoriState = await personaRepository.loadState(serverDiscId);
   if (!tomoriState) {
     await replyInfoEmbed(interaction, locale, {
@@ -117,7 +129,6 @@ export async function execute(
     return;
   }
 
-  const extraOptions = interaction.options.getBoolean("extra_options") ?? false;
   const invokingMember = interaction.member as import("discord.js").GuildMember | null;
 
   // Check cooldown (shares cooldown pool with message triggers)
@@ -157,6 +168,7 @@ export async function execute(
       interaction,
       MessageFlags.Ephemeral,
     );
+    if (!interaction.replied) await interaction.deleteReply();
     return;
   }
 
@@ -183,6 +195,17 @@ export async function execute(
       descriptionKey: "commands.respond.persona_access_blocked",
       color: ColorCode.WARN,
       flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  const personaOption = interaction.options.getString("persona");
+  const requestedPersona = personaOption === null ? null : resolveSelectedPersona(availablePersonas, personaOption);
+  if (personaOption !== null && !requestedPersona) {
+    await replyInfoEmbed(interaction, locale, {
+      titleKey: "general.errors.invalid_option_title",
+      descriptionKey: "commands.respond.invalid_persona_description",
+      color: ColorCode.WARN,
     });
     return;
   }
@@ -220,17 +243,19 @@ export async function execute(
     return;
   }
 
-  const fallbackPersona = await resolveFallbackPersona({
-    availablePersonas,
-    allPersonas,
-    tomoriState,
-    effectiveChannelId: parentChannelId ?? interaction.channel.id,
-    personalAutoTriggerPersonaId: personalSpotlightStatus?.autoTriggerPersonaId ?? null,
-    clientUserId: client.user?.id,
-    fetchRecentMessages: async () => messages,
-  });
+  const selectedPersona =
+    requestedPersona ??
+    (await resolveFallbackPersona({
+      availablePersonas,
+      allPersonas,
+      tomoriState,
+      effectiveChannelId: parentChannelId ?? interaction.channel.id,
+      personalAutoTriggerPersonaId: personalSpotlightStatus?.autoTriggerPersonaId ?? null,
+      clientUserId: client.user?.id,
+      fetchRecentMessages: async () => messages,
+    }));
 
-  if (!fallbackPersona) {
+  if (!selectedPersona) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",
       descriptionKey: "general.errors.unknown_error_description",
@@ -241,136 +266,28 @@ export async function execute(
   }
 
   const hideEmbed = !isNoticeEmbedVisible(tomoriState.config, "respond_embed");
-  const deferFlags = hideEmbed
-    ? MessageFlags.Ephemeral | MessageFlags.SuppressNotifications
-    : MessageFlags.SuppressNotifications;
-
-  let selectedPersona = fallbackPersona;
-  let replyInteraction: ChatInputCommandInteraction | import("discord.js").ModalSubmitInteraction = interaction;
-  let manualPrompt: string | undefined;
-  let manualPrefill: string | undefined;
+  const manualPrompt = interaction.options.getString("prompt")?.trim() || undefined;
+  const manualPrefill = interaction.options.getString("prefill")?.trim() || undefined;
   let forceReason: boolean | undefined;
   let llmOverrideCodename: string | undefined;
   let reasoningModel: LlmRow | undefined;
 
-  if (extraOptions) {
-    const modalComponents: ModalComponent[] = [];
+  if (interaction.options.getBoolean("reasoning")) {
+    const currentProvider = tomoriState.llm.llm_provider;
+    const smartestModel = await llmModelRepo.loadSmartestModel(currentProvider);
 
-    if (availablePersonas.length > 1) {
-      const personaOptions: SelectOption[] = availablePersonas.map((persona, index) => ({
-        label: safeSelectOptionText(persona.persona_nickname),
-        value: index.toString(),
-        description:
-          resolvePersonaSnippet(persona, DISCORD_SELECT_OPTION_DESCRIPTION_MAX) ??
-          localizer(
-            locale,
-            persona.is_alter
-              ? "commands.shared.persona_select.alter_persona_description"
-              : "commands.shared.persona_select.main_persona_description",
-          ),
-      }));
-      modalComponents.push({
-        customId: "persona_choice",
-        labelKey: "commands.respond.select_persona_label",
-        descriptionKey: "commands.respond.select_persona_description",
-        placeholder: "commands.respond.select_persona_placeholder",
-        required: true,
-        options: personaOptions,
+    if (!smartestModel) {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.respond.no_smart_model_title",
+        descriptionKey: "commands.respond.no_smart_model_description",
+        color: ColorCode.ERROR,
       });
-    }
-
-    // Reasoning checkbox: checked = "true", unchecked = "false"
-    modalComponents.push({
-      kind: "checkbox" as const,
-      customId: "use_reasoning",
-      labelKey: "commands.respond.use_reasoning_label",
-      descriptionKey: "commands.respond.use_reasoning_description",
-      default: false,
-    });
-
-    modalComponents.push({
-      customId: "prompt",
-      labelKey: "commands.respond.prompt_label",
-      descriptionKey: "commands.respond.prompt_description",
-      placeholder: localizer(locale, "commands.respond.prompt_placeholder"),
-      required: false,
-      maxLength: 2000,
-      style: 2, // TextInputStyle.Paragraph
-    });
-
-    modalComponents.push({
-      customId: "prefill",
-      labelKey: "commands.respond.prefill_label",
-      descriptionKey: "commands.respond.prefill_description",
-      placeholder: localizer(locale, "commands.respond.prefill_placeholder"),
-      required: false,
-      maxLength: ASSISTANT_PREFILL_MAX_LENGTH,
-      style: 2, // TextInputStyle.Paragraph
-    });
-
-    const modalResult = await promptWithPaginatedModal(interaction, locale, {
-      modalCustomId: "respond_persona_select",
-      modalTitleKey: "commands.respond.extra_options_title",
-      pageSelectTitleKey: "general.pagination.select_persona_title",
-      pageSelectDescriptionKey: "general.pagination.select_persona_page_description",
-      components: modalComponents,
-    });
-
-    if (modalResult.outcome !== "submit") {
-      log.info(`Respond modal ${modalResult.outcome} for user ${interaction.user.id}`);
       return;
     }
 
-    if (modalResult.interaction) {
-      replyInteraction = modalResult.interaction;
-    }
-
-    // Defer the modal submission: opens a new 3-second window
-    await replyInteraction.deferReply({ flags: deferFlags });
-
-    const selectedIndex = Number.parseInt(modalResult.values?.persona_choice ?? "0", 10);
-    if (availablePersonas.length > 1) {
-      selectedPersona = availablePersonas[selectedIndex] ?? fallbackPersona;
-      log.info(
-        `User ${interaction.user.id} selected persona ${selectedPersona.persona_nickname} (ID: ${selectedPersona.persona_id}) for manual respond`,
-      );
-    }
-
-    if (!isPersonaAllowedForTrigger(whitelistStatus, personalSpotlightStatus, selectedPersona?.persona_id)) {
-      await replyPersonaAccessBlocked(replyInteraction, locale);
-      return;
-    }
-
-    const manualPromptRaw = modalResult.values?.prompt;
-    manualPrompt = manualPromptRaw?.trim() || undefined;
-    const manualPrefillRaw = modalResult.values?.prefill;
-    manualPrefill = manualPrefillRaw?.trim() || undefined;
-
-    const useReasoning = modalResult.values?.use_reasoning === "true";
-    if (useReasoning) {
-      const currentProvider = tomoriState.llm.llm_provider;
-      const smartestModel = await llmModelRepo.loadSmartestModel(currentProvider);
-
-      if (!smartestModel) {
-        await replyInfoEmbed(replyInteraction, locale, {
-          titleKey: "commands.respond.no_smart_model_title",
-          descriptionKey: "commands.respond.no_smart_model_description",
-          color: ColorCode.ERROR,
-        });
-        return;
-      }
-
-      forceReason = true;
-      llmOverrideCodename = smartestModel.llm_codename;
-      reasoningModel = smartestModel;
-    }
-  } else {
-    await interaction.deferReply({ flags: deferFlags });
-
-    if (!isPersonaAllowedForTrigger(whitelistStatus, personalSpotlightStatus, selectedPersona?.persona_id)) {
-      await replyPersonaAccessBlocked(interaction, locale);
-      return;
-    }
+    forceReason = true;
+    llmOverrideCodename = smartestModel.llm_codename;
+    reasoningModel = smartestModel;
   }
 
   try {
@@ -385,14 +302,24 @@ export async function execute(
         ),
       ) === "instruction";
     const successDescription = localizer(locale, "commands.respond.success_description");
-    await replyInfoEmbed(replyInteraction, locale, {
+    const successEmbedOptions = {
       titleKey: "commands.respond.success_title",
       description: prefillBecomesInstruction
         ? `${successDescription}\n${statusNote("warning", localizer(locale, "commands.respond.prefill_instruction_notice"))}`
         : successDescription,
       color: ColorCode.SUCCESS,
       configHint: !hideEmbed,
-    });
+    };
+    if (hideEmbed) {
+      await replyInfoEmbed(interaction, locale, successEmbedOptions);
+    } else {
+      // Discord keeps a deferred reply's visibility on its first follow-up, so delete the private defer before posting publicly.
+      await interaction.deleteReply();
+      await interaction.followUp({
+        embeds: [createStandardEmbed(locale, successEmbedOptions)],
+        flags: MessageFlags.SuppressNotifications,
+      });
+    }
 
     // tomoriChat injects its "[Continue your last message]" prompt when a manual
     // trigger's tail message is the bot's own, so replaying the latest message keeps
@@ -446,7 +373,7 @@ export async function execute(
     });
 
     try {
-      await replyInteraction.followUp({
+      await interaction.followUp({
         embeds: [
           createStandardEmbed(locale, {
             titleKey: "general.errors.unknown_error_title",

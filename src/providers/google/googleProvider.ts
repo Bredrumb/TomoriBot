@@ -43,6 +43,9 @@ import type {
   ProviderStructuredJsonRequest,
   StructuredOutputResult,
   SupportsConversationCompaction,
+  SupportsDecisions,
+  ProviderDecisionRequest,
+  DecisionResult,
   SupportsEmbeddings,
   SupportsPresetGeneration,
   SupportsStructuredOutput,
@@ -58,6 +61,7 @@ import {
 } from "../../types/provider/interfaces";
 import { getGoogleToolAdapter } from "./googleToolAdapter";
 import { callGoogleStructuredJSON } from "./googleStructuredOutput";
+import { callGoogleDecisions } from "@/providers/google/googleDecisions";
 import { getCachedDefaultLLM, isLLMCacheReady } from "../../utils/cache/llmCache";
 import { llmModelRepo } from "@/utils/db/repositories";
 import { googleProviderInfo } from "./providerInfo";
@@ -225,11 +229,16 @@ export class GoogleProvider
   extends BaseLLMProvider
   implements
     LLMProvider,
+    SupportsDecisions,
     SupportsEmbeddings,
     SupportsStructuredOutput,
     SupportsPresetGeneration,
     SupportsConversationCompaction
 {
+  async callDecisions(request: ProviderDecisionRequest): Promise<DecisionResult> {
+    return await callGoogleDecisions(request);
+  }
+
   /**
    * Get provider information and capabilities
    */
