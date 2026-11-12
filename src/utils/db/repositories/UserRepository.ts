@@ -491,6 +491,10 @@ class UserRepository implements IRepository<UserExportShape> {
   async setPrivacyLevel(userDiscId: string, level: PrivacyLevel): Promise<UserRow | null> {
     const user = await this.setPrivacyLevelRow(userDiscId, level);
     if (user) invalidateUserCache(userDiscId);
+    if (user && level === PrivacyLevelValue.FULL) {
+      const { conversationRecordingRepository } = await import("@/modules/conversation-recording/db/repositories");
+      await conversationRecordingRepository.removePrivateParticipant(userDiscId);
+    }
     return user;
   }
 
