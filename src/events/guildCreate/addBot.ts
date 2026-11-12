@@ -52,7 +52,8 @@ const handler = async (client: Client, guild: Guild): Promise<void> => {
     if (!sentSuccessfully) {
       channel = await findBestChannel(guild, client);
       if (!channel) {
-        log.error(`No suitable text channel found in guild ${guild.name} (${guild.id})`);
+        log.metric("guild_welcome_skipped", { reason: "no_sendable_channel" });
+        log.warn(`No suitable text channel found in guild ${guild.name} (${guild.id})`);
         return;
       }
 
