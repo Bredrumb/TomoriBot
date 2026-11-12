@@ -75,7 +75,8 @@ Managed via `/moderation` and persisted in `personalization_blacklist`:
 - Keyed by `(server_id, persona_id, user_disc_id)`.
 - `mute`: prevents the user from triggering the persona.
 - `block`: prevents triggers and hides the target's recent messages from the persona's conversation history context.
-- Does not alter stored memory rows or trigger data deletion.
+- Does not alter stored memory rows. Conversation recording prunes stored copies for active blocks;
+  see [its lifecycle contract](/architecture/subsystems/conversation-recording/).
 
 ## SQL injection protections
 
