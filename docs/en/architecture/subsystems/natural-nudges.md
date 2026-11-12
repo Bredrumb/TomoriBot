@@ -189,11 +189,13 @@ activity still controls dormancy.
   `Manage Server`. The weight modal accepts four positive whole numbers totaling 100 and saves
   them together. Heat buttons use atomic database updates. Both writes invalidate the shared
   nudge eligibility snapshot after success.
-- **Failure stop.** Planner failures after their one format retry, and generation errors, count
-  toward `server_natural_nudge_runtime_state.consecutive_failures`; three stop the server until a
-  normal turn succeeds there (`text_generated` newer than `stopped_at`). Aborts never count. Idle Nudges
-  and Active Nudges each lift the stop when they read it (`runtime/failureStop.ts`), because a server
-  with idle nudges off is never evaluated by the idle nudge timer.
+- **Failure cooldown.** Planner failures after their one format retry, and generation errors, count
+  toward `server_natural_nudge_runtime_state.consecutive_failures`; three pause both modes for
+  three hours from `stopped_at`. Both modes admit the next eligible attempt after expiry through
+  `runtime/failureStop.ts`, keeping the streak so another failure renews the full cooldown.
+  A delivered nudge clears both fields, and a normal turn succeeding after `stopped_at` clears them
+  early when either mode next evaluates. Aborts never count. Cooldowns survive restarts, while
+  waking hours, activity, ignored invitations, and daily request limits still gate retries.
 - **Server keys only.** The planner, checker, and interest generation resolve through
   `resolveNudgeModel` (`runtime/model.ts`), which wraps `resolveServerStructuredModel`
   (`src/utils/provider/serverStructuredOutput.ts`) and never uses a personal key. The turn planner
@@ -387,7 +389,7 @@ messageCreate (activeNudge.ts)
   to 25 interests plus `none` (some Decision models reject more than 26 options; personas whose new
   labels would overflow sit the check out), and argmax. A refused, blocked, or unparseable answer
   reads as `none`, and so does a choice that is not its own most likely option. A transport failure
-  is recorded but never counts toward the failure stop, so a broken matcher cannot stop idle nudges.
+  is recorded but never counts toward the failure cooldown, so a broken matcher cannot pause idle nudges.
 - **Member text stays data.** The evidence is `Name: text` lines read through the same privacy filter
   as planner transcripts. A text-model checker sees it inside an escaped `<<< >>>` block; the
   Decision API receives it as its separate evidence field.
@@ -408,7 +410,7 @@ messageCreate (activeNudge.ts)
   otherwise it aborts as `window_gone`.
 - **Plain turn.** The turn carries `naturalNudge` with no tools and `borrowsTriggerMessage`, and no
   brief, agenda, or injected context, so it skips the same stats and memory writes as an idle nudge.
-  Active Nudges have no pending or unanswered rules; they count toward the shared failure stop.
+  Active Nudges have no pending or unanswered rules; generation failures count toward the shared cooldown.
 - **Telemetry.** One `natural_nudge_active` row per check: outcome, phase, reason, heat, matcher
   kind and model, option count, the Decision margin over `none`, detour, matcher tokens, and whether
   a second call ran with its own tokens.

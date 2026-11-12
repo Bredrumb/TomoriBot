@@ -26,13 +26,14 @@ import { expectForEveryLocale, localizedCopy, localizedProse } from "../../helpe
 import { initializeLocalizer, localizer, hasLocaleKey } from "@/utils/text/localizer";
 import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
 import { idleNudgesPerDay } from "@/modules/natural-nudges/runtime/meters";
+import { NATURAL_NUDGE_FAILURE_COOLDOWN_MS } from "@/modules/natural-nudges/runtime/tuning";
 import { validateRawModalLimits } from "@/utils/discord/ui/componentsV2Limits";
 import { buildConfigPanelPayload } from "@/utils/discord/ui/configPanel";
 import { createConfigInteractionRoute } from "@/utils/discord/interactions/configRoutes";
 import { InteractionRouteRegistry, type GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
 import type { ConfigScope } from "@/utils/discord/interactions/configRouteContext";
 import { buildConfigModalFieldId } from "@/utils/discord/ui/configModals";
-import type { Client } from "discord.js";
+import { time, TimestampStyles, type Client } from "discord.js";
 import { createRouteInteraction, type RouteInteraction } from "../../helpers/routeInteraction";
 import * as localizerModule from "@/utils/text/localizer";
 
@@ -150,6 +151,22 @@ it("uses each mode's own off-state copy independently of the other toggle", () =
       expect(text.includes(t("commands.config.natural_nudges.active_nudges_off"))).toBe(!activeEnabled);
     }
   }
+});
+
+it("shows the failure cooldown retry time and hides the notice once it expires", () => {
+  const stoppedAt = new Date();
+  const view = makeView({
+    runtime: { server_id: 1, idle_nudge_jitter: 1, consecutive_failures: 3, stopped_at: stoppedAt },
+  });
+  const notice = t("commands.config.natural_nudges.notice_cooldown", {
+    retry_at: time(new Date(stoppedAt.getTime() + NATURAL_NUDGE_FAILURE_COOLDOWN_MS), TimestampStyles.RelativeTime),
+  });
+  expect(collectTextDisplays(buildNaturalNudgesSettingsBody(LOCALE, view, false, false)).join("\n")).toContain(notice);
+
+  view.runtime.stopped_at = new Date(stoppedAt.getTime() - NATURAL_NUDGE_FAILURE_COOLDOWN_MS);
+  expect(collectTextDisplays(buildNaturalNudgesSettingsBody(LOCALE, view, false, false)).join("\n")).not.toMatch(
+    localizedProse(LOCALE, "commands.config.natural_nudges.notice_cooldown"),
+  );
 });
 
 function makePersonaNudgeConfig(overrides: Partial<PersonaNaturalNudgeConfig> = {}): PersonaNaturalNudgeConfig {

@@ -57,7 +57,6 @@ export default {
       notice_tracking_disabled: "此主机关闭了统计追踪，导致我无法判断服务器活跃度及对话地点，因此搭话功能不会启动。",
       notice_byok:
         "此服务器采用成员自备密钥支付文本，因此没有多余的密钥来承担无人发起的搭话消息。在服务器配置自己的密钥前，Natural Nudges 将保持关闭。",
-      notice_stopped: "因连续多次尝试失败已暂停搭话。在此服务器中完成下一次成功回复后将恢复。",
       idle_nudges_title: "空闲搭话",
       idle_nudges_description: "当频道过久无人说话时，我会在该频道主动挑起话题。",
       idle_nudges_off: "只有在有人跟我说话时我才会发言。",

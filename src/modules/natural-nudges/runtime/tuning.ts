@@ -63,8 +63,8 @@ export const UNANSWERED_STOP_STREAK = 3;
 /** Each unanswered idle nudge in the current streak multiplies the next interval by this. */
 export const UNANSWERED_INTERVAL_FACTOR = 3;
 
-/** Consecutive generation or planner failures that stop a server's nudges until a turn succeeds. */
 export const NATURAL_NUDGE_FAILURE_STOP_THRESHOLD = 3;
+export const NATURAL_NUDGE_FAILURE_COOLDOWN_MS = 3 * HOUR_MS;
 
 /** Rested share starts here right after a fire and climbs in a straight line to 1. */
 export const RESTED_FLOOR = 0.1;

@@ -62,8 +62,6 @@ export default {
         "Este host desativou o rastreamento de estatísticas, que eu preciso para saber quão ativo o servidor está e onde as pessoas falam comigo, então os toques nunca começam.",
       notice_byok:
         "Este servidor paga pelo texto com a chave própria de cada membro, portanto nenhuma chave cobre uma mensagem que ninguém pediu. O Natural Nudges fica desativado até que o servidor tenha sua própria chave.",
-      notice_stopped:
-        "Parei após várias tentativas com falha seguidas. Começarei de novo após minha próxima resposta bem-sucedida neste servidor.",
       idle_nudges_title: "Toques Ociosos",
       idle_nudges_description: "Inicio algo em um canal por conta própria se ele ficar silencioso demais.",
       idle_nudges_off: "Só falo quando alguém falar comigo.",

@@ -57,7 +57,6 @@ export default {
       notice_tracking_disabled: "此主機關閉了統計追蹤，導致我無法得知伺服器活躍度與對話地點，因此搭話功能不會啟動。",
       notice_byok:
         "此伺服器由每位成員自備金鑰支付文字費用，因此沒有金鑰能負擔無人要求的搭話訊息。在伺服器設定自己的金鑰前，Natural Nudges 將保持關閉。",
-      notice_stopped: "因連續多次嘗試失敗已暫停搭話。在此伺服器完成下一次成功回覆後將會恢復。",
       idle_nudges_title: "閒置搭話",
       idle_nudges_description: "當頻道過於安靜時，我會主動在頻道中發起話題。",
       idle_nudges_off: "只有在有人跟我說話時我才會發言。",

@@ -22,6 +22,7 @@ import {
   ACTIVE_NUDGE_OPTION_BUDGET,
   ACTIVE_NUDGE_QUOTA_PAUSE_MS,
   ACTIVE_NUDGE_STALE_HUMAN_MESSAGES,
+  NATURAL_NUDGE_FAILURE_COOLDOWN_MS,
   NUDGE_DORMANCY_MS,
 } from "@/modules/natural-nudges/runtime/tuning";
 import * as tomoriStateCache from "@/utils/cache/tomoriStateCache";
@@ -504,6 +505,7 @@ describe("Active Nudge check", () => {
 
   it("lifts a failure stop itself once a turn has succeeded since, so idle nudges being off cannot strand it", async () => {
     const stoppedAt = new Date("2026-10-21T16:06:23Z");
+    setSystemTime(new Date(stoppedAt.getTime() + 60_000));
     const clear = spyOn(naturalNudgeRepository, "clearFailures").mockResolvedValue(undefined);
     const lastTurn = spyOn(statRepository, "getServerMetricLastAt").mockResolvedValue(new Date("2026-10-21T16:05:00Z"));
     spies.push(
@@ -524,6 +526,29 @@ describe("Active Nudge check", () => {
     lastTurn.mockResolvedValue(new Date("2026-10-21T16:07:18Z"));
     expect(await runActiveNudgeCheck(check, options())).toBe("fired");
     expect(clear).toHaveBeenCalledWith(SERVER_ID);
+  });
+
+  it("admits the next Active Nudge when the failure cooldown expires without a successful reply", async () => {
+    const stoppedAt = new Date();
+    const clear = spyOn(naturalNudgeRepository, "clearFailures").mockResolvedValue(undefined);
+    spies.push(
+      clear,
+      recordFire(),
+      spyOn(statRepository, "getServerMetricLastAt").mockResolvedValue(null),
+      spyOn(naturalNudgeRepository, "loadRuntimeState").mockResolvedValue({
+        server_id: SERVER_ID,
+        idle_nudge_jitter: 1,
+        consecutive_failures: 3,
+        stopped_at: stoppedAt,
+      }),
+    );
+    setSystemTime(new Date(stoppedAt.getTime() + NATURAL_NUDGE_FAILURE_COOLDOWN_MS - 1));
+    expect(await runActiveNudgeCheck(check, options())).toBe("aborted");
+    expect(match).not.toHaveBeenCalled();
+
+    setSystemTime(new Date(stoppedAt.getTime() + NATURAL_NUDGE_FAILURE_COOLDOWN_MS));
+    expect(await runActiveNudgeCheck(check, options())).toBe("fired");
+    expect(clear).not.toHaveBeenCalled();
   });
 
   it("skips a channel where the bot cannot send, before any matcher call", async () => {

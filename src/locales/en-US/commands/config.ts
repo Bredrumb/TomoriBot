@@ -58,7 +58,7 @@ export default {
       description: `I speak up without anyone mentioning me: I start conversations when a channel has gone quiet, and join ones that match a persona's interests.`,
       notice_tracking_disabled: `This host turned off stat tracking, which I need to tell how active the server is and where people talk to me, so nudges never start.`,
       notice_byok: `This server pays for text with each member's own key, so no key covers a message nobody asked for. Natural Nudges stays off until the server has its own key.`,
-      notice_stopped: `I stopped after several failed attempts in a row. I start again after my next successful reply in this server.`,
+      notice_cooldown: `I paused nudges after repeated failures. They can retry {retry_at}, or sooner after my next successful reply in this server.`,
       idle_nudges_title: `Idle Nudges`,
       idle_nudges_description: `I start something in a channel myself if it becomes too quiet.`,
       idle_nudges_off: `I won't start conversations in quiet channels on my own.`,

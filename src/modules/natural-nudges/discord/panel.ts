@@ -4,6 +4,8 @@ import {
   ComponentType,
   SelectMenuDefaultValueType,
   TextInputStyle,
+  time,
+  TimestampStyles,
   type ButtonComponentData,
   type ComponentInContainerData,
   type SelectMenuComponentOptionData,
@@ -42,6 +44,7 @@ import {
   ACTIVE_NUDGE_DAILY_CHECK_CAPS,
   IDLE_NUDGE_DAILY_CAPS,
   MAX_EFFECTIVE_HEAT,
+  NATURAL_NUDGE_FAILURE_COOLDOWN_MS,
 } from "@/modules/natural-nudges/runtime/tuning";
 import { DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX, getDiscordTextLength } from "@/utils/discord/ui/componentsV2Limits";
 import { buildTextPreview, textPreviewFooterKey, textPreviewFooterVars } from "@/utils/text/textPreview";
@@ -756,10 +759,20 @@ export function buildNaturalNudgesSettingsBody(
   const { config, status } = view;
   const hasEligibleChannel = (status?.effectiveChannelIds ?? config.channel_disc_ids).length > 0;
   const hasUsableModel = status ? status.plannerModel.kind === "ready" : config.llm_id !== null;
+  const retryAt = view.runtime.stopped_at
+    ? view.runtime.stopped_at.getTime() + NATURAL_NUDGE_FAILURE_COOLDOWN_MS
+    : null;
   const notices = [
     !view.trackingEnabled ? statusNote("error", t("commands.config.natural_nudges.notice_tracking_disabled")) : "",
     byokMode ? statusNote("error", t("commands.config.natural_nudges.notice_byok")) : "",
-    view.runtime.stopped_at ? statusNote("error", t("commands.config.natural_nudges.notice_stopped")) : "",
+    retryAt !== null && retryAt > Date.now()
+      ? statusNote(
+          "warning",
+          t("commands.config.natural_nudges.notice_cooldown", {
+            retry_at: time(new Date(retryAt), TimestampStyles.RelativeTime),
+          }),
+        )
+      : "",
   ].filter(Boolean);
   const providerOptions = modelProviderOptions(locale, view.plannerModels, "llm");
   const plannerNotice =

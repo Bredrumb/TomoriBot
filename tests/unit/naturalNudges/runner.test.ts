@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, setSystemTime, spyOn } from "bun:test";
 import { Collection, type Client, type GuildTextBasedChannel, type Message } from "discord.js";
 import * as tomoriChatModule from "@/events/messageCreate/tomoriChat";
 import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
@@ -16,13 +16,14 @@ import {
   type IdleNudgeDefinition,
 } from "@/modules/natural-nudges/runtime/idleNudges";
 import * as planner from "@/modules/natural-nudges/runtime/planner";
-import { PLAY_SCENE_SHORT_TURNS } from "@/modules/natural-nudges/runtime/tuning";
+import { NATURAL_NUDGE_FAILURE_COOLDOWN_MS, PLAY_SCENE_SHORT_TURNS } from "@/modules/natural-nudges/runtime/tuning";
 import * as configCache from "@/modules/natural-nudges/runtime/configCache";
 import * as plannerModel from "@/modules/natural-nudges/runtime/model";
 import * as toolsModule from "@/modules/natural-nudges/runtime/tools";
 import * as targetsModule from "@/modules/natural-nudges/runtime/targets";
 import { runIdleNudgeAttempt, type IdleNudgeAttempt } from "@/modules/natural-nudges/runtime/runner";
 import { metricSampleRepository } from "@/utils/db/repositories/MetricSampleRepository";
+import { statRepository } from "@/utils/db/repositories";
 import { personaRepository } from "@/utils/db/repositories/PersonaRepository";
 import { whitelistRepository } from "@/utils/db/repositories/WhitelistRepository";
 import { createCustomIdleNudge, createPersona } from "../../helpers/fixtures";
@@ -145,6 +146,7 @@ beforeEach(() => {
 
 afterEach(() => {
   for (const spy of spies.splice(0)) spy.mockRestore();
+  setSystemTime();
 });
 
 /** The gateway still reports `RECORDED_ID` as the newest message, as it does after that message is deleted. */
@@ -380,6 +382,40 @@ describe("idle nudge channel context", () => {
     expect(await runIdleNudgeAttempt(attempt)).toBe("failed");
     expect(failure).toHaveBeenCalledTimes(1);
     expect(fire).not.toHaveBeenCalled();
+  });
+
+  it("rechecks an expired failure cooldown and generates from the latest channel message", async () => {
+    const stoppedAt = new Date();
+    let latest = messageWithId(OLDER_ID);
+    const { attempt } = attemptWithHistory(async () => [latest]);
+    spies.push(
+      spyOn(statRepository, "getServerMetricLastAt").mockResolvedValue(null),
+      spyOn(naturalNudgeRepository, "loadRuntimeState").mockResolvedValue({
+        server_id: SERVER_ID,
+        stopped_at: stoppedAt,
+        idle_nudge_jitter: 1,
+        consecutive_failures: 3,
+      }),
+      spyOn(naturalNudgeRepository, "recordIdleNudgeFire").mockResolvedValue(true),
+    );
+    onChatCall = async () => {
+      await chatInputs.at(-1)?.onGenerationResult?.({
+        status: "completed",
+        streamResults: [],
+        personaResponses: [
+          { text: "A new topic.", personaName: attempt.persona.persona_nickname, personaId: PERSONA_ID },
+        ],
+        firstDeliveredMessageId: RECORDED_ID,
+      });
+    };
+    setSystemTime(new Date(stoppedAt.getTime() + NATURAL_NUDGE_FAILURE_COOLDOWN_MS - 1));
+    expect(await runIdleNudgeAttempt(attempt)).toBe("aborted");
+    expect(chatInputs).toHaveLength(0);
+
+    latest = messageWithId(NEWER_ID);
+    setSystemTime(new Date(stoppedAt.getTime() + NATURAL_NUDGE_FAILURE_COOLDOWN_MS));
+    expect(await runIdleNudgeAttempt(attempt)).toBe("fired");
+    expect(chatInputs.map((input) => input.message)).toEqual([latest]);
   });
 
   it("aborts an untargeted selection when the target context exposed during planning is no longer eligible", async () => {

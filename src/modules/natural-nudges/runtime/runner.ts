@@ -4,6 +4,7 @@ import type { TomoriState } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
 import { readNaturalNudgeGate } from "@/modules/natural-nudges/runtime/configCache";
+import { isFailureStopped } from "@/modules/natural-nudges/runtime/failureStop";
 import {
   HANGING_CONVERSATION_PREREQUISITE,
   type NaturalNudgeCategory,
@@ -97,7 +98,8 @@ async function recheckBeforeSend(
   if (config.category_weights[attempt.idleNudge.category] === 0) return "idle_nudge_unavailable";
   const channelIds = await resolveEffectiveChannelIds(attempt.serverId, config, now);
   if (!channelIds.includes(target.channel.id)) return "channel_removed";
-  if ((await naturalNudgeRepository.loadRuntimeState(attempt.serverId)).stopped_at) return "stopped";
+  const { stopped_at: stoppedAt } = await naturalNudgeRepository.loadRuntimeState(attempt.serverId);
+  if (await isFailureStopped(attempt.serverId, stoppedAt)) return "stopped";
 
   const dayStart = serverDayStart(now, attempt.timezoneOffset);
   const history = await naturalNudgeRepository.loadFireHistory(attempt.serverId, dayStart, LATEST_IDLE_NUDGE_ROWS);

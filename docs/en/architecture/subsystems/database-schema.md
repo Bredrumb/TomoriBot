@@ -282,7 +282,7 @@ Natural Nudges stores events and derives its meters on read
   personas leave stale IDs that readers filter. Excluded from export; reset deletes them.
 - **`persona_natural_nudge_configs`**: talkativeness and interests per persona. Pointer personas
   without a row read `persona_presets.natural_nudge_interests` and `natural_nudge_talkativeness`.
-- **`server_natural_nudge_runtime_state`**: idle nudge jitter, the failure stop, and the indexed
+- **`server_natural_nudge_runtime_state`**: idle nudge jitter, the failure cooldown, and the indexed
   `last_direct_chat_at` timestamp that suspends both modes after 14 days without direct chat.
   Excluded from export; a missing timestamp keeps the server dormant. The dormancy migration seeds
   it once from recent channel activity only for existing servers that already pass the heat and

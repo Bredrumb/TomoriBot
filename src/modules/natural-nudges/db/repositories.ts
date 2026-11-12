@@ -662,16 +662,18 @@ class NaturalNudgeRepository {
     `;
   }
 
-  /** Counts one failure and stamps `stopped_at` when the run reaches the stop threshold. */
+  /** The SMALLINT failure counter stays at the threshold because outages can now retry indefinitely. */
   async recordFailure(serverId: number): Promise<NaturalNudgeRuntimeState | null> {
     const rows = await sql`
       INSERT INTO server_natural_nudge_runtime_state (server_id, consecutive_failures, stopped_at)
       VALUES (${serverId}, 1, NULL)
       ON CONFLICT (server_id) DO UPDATE SET
-        consecutive_failures = server_natural_nudge_runtime_state.consecutive_failures + 1,
+        consecutive_failures = LEAST(
+          server_natural_nudge_runtime_state.consecutive_failures + 1, ${NATURAL_NUDGE_FAILURE_STOP_THRESHOLD}
+        ),
         stopped_at = CASE
           WHEN server_natural_nudge_runtime_state.consecutive_failures + 1 >= ${NATURAL_NUDGE_FAILURE_STOP_THRESHOLD}
-            THEN COALESCE(server_natural_nudge_runtime_state.stopped_at, NOW())
+            THEN NOW()
           ELSE server_natural_nudge_runtime_state.stopped_at
         END,
         updated_at = NOW()
@@ -803,8 +805,8 @@ class NaturalNudgeRepository {
         }
         await tx`
           UPDATE server_natural_nudge_runtime_state
-          SET consecutive_failures = 0, updated_at = NOW()
-          WHERE server_id = ${fire.serverId} AND consecutive_failures <> 0
+          SET consecutive_failures = 0, stopped_at = NULL, updated_at = NOW()
+          WHERE server_id = ${fire.serverId} AND (consecutive_failures <> 0 OR stopped_at IS NOT NULL)
         `;
       });
       return true;
@@ -827,8 +829,8 @@ class NaturalNudgeRepository {
         `;
         await tx`
           UPDATE server_natural_nudge_runtime_state
-          SET consecutive_failures = 0, updated_at = NOW()
-          WHERE server_id = ${fire.serverId} AND consecutive_failures <> 0
+          SET consecutive_failures = 0, stopped_at = NULL, updated_at = NOW()
+          WHERE server_id = ${fire.serverId} AND (consecutive_failures <> 0 OR stopped_at IS NOT NULL)
         `;
       });
       return true;

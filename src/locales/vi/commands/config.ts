@@ -62,8 +62,6 @@ export default {
         "Máy chủ lưu trữ này đã tắt theo dõi thống kê, điều mình cần để biết mức độ hoạt động và nơi mọi người nói chuyện với mình, nên các gợi ý sẽ không bao giờ bắt đầu.",
       notice_byok:
         "Máy chủ này chi trả văn bản bằng khóa riêng của từng thành viên, vì vậy không có khóa nào chi trả cho tin nhắn không ai yêu cầu. Natural Nudges sẽ tắt cho đến khi máy chủ có khóa riêng.",
-      notice_stopped:
-        "Mình đã dừng lại sau nhiều lần thử liên tiếp thất bại. Mình sẽ bắt đầu lại sau câu trả lời thành công tiếp theo trong máy chủ này.",
       idle_nudges_title: "Gợi ý nhàn rỗi",
       idle_nudges_description: "Mình tự khởi xướng điều gì đó trong kênh nếu kênh trở nên quá yên ắng.",
       idle_nudges_off: "Mình chỉ lên tiếng khi có ai đó nói chuyện với mình.",
