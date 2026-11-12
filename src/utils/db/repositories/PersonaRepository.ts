@@ -2201,7 +2201,10 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
 
   async materializeIfPointer(personaId: number): Promise<boolean> {
     try {
-      return await sql.transaction((tx) => this.materializeIfPointerWithClient(personaId, tx));
+      return await withTransientDbRetry(
+        () => sql.transaction((tx) => this.materializeIfPointerWithClient(personaId, tx)),
+        "materialize preset pointer persona",
+      );
     } catch (error) {
       log.error(`Error materializing preset pointer persona ${personaId}:`, error);
       return false;

@@ -15,12 +15,59 @@ import { decryptApiKey } from "@/utils/security/crypto";
 import { keyManager } from "@/utils/security/keyManager";
 import { OAuthStateRepository } from "@/utils/db/repositories/OAuthStateRepository";
 import { personaSpriteMessageRepository } from "@/utils/db/repositories/PersonaSpriteMessageRepository";
+import * as quotas from "@/utils/db/repositories/QuotaRepository";
+import { personaRepository } from "@/utils/db/repositories/PersonaRepository";
+import type { SQL } from "bun";
 
 useEnvSandbox(["POSTGRES_TRANSIENT_RETRY_DELAY_MS", "POSTGRES_TRANSIENT_RETRY_ATTEMPTS"]);
 
 beforeAll(() => {
   process.env.POSTGRES_TRANSIENT_RETRY_DELAY_MS = "0";
   process.env.POSTGRES_TRANSIENT_RETRY_ATTEMPTS = "3";
+});
+
+it("recovers quota configuration reads without allowing genuine query faults", async () => {
+  const logged = spyOn(log, "error").mockResolvedValue(undefined);
+  try {
+    for (const read of [quotas.getTextConfigResult, quotas.getImageConfigResult, quotas.getVideoConfigResult]) {
+      for (const code of ["ERR_POSTGRES_LIFETIME_TIMEOUT", "23505"]) {
+        const thunk = failOnceThen(code, []);
+        const query = spyOn(dbClient, "sql").mockImplementation(thunk.run as unknown as typeof dbClient.sql);
+        try {
+          expect(await read(1)).toEqual({ status: code === "23505" ? "unavailable" : "fresh", config: null });
+          expect(thunk.calls()).toBe(code === "23505" ? 1 : 2);
+        } finally {
+          query.mockRestore();
+        }
+      }
+    }
+  } finally {
+    logged.mockRestore();
+  }
+});
+
+it("restarts preset materialization in a fresh transaction only for a retired connection", async () => {
+  const logged = spyOn(log, "error").mockResolvedValue(undefined);
+  try {
+    for (const code of ["ERR_POSTGRES_LIFETIME_TIMEOUT", "23505"]) {
+      let attempts = 0;
+      const transaction = async (callback: (tx: SQL) => Promise<boolean>) => {
+        attempts++;
+        if (attempts === 1) throw postgresError(code);
+        return callback((async () => [{ persona_id: 1, is_pointer: false }]) as unknown as SQL);
+      };
+      const query = spyOn(dbClient, "sql").mockImplementation((async () => []) as unknown as typeof dbClient.sql);
+      Object.assign(dbClient.sql, { transaction });
+      try {
+        expect(await personaRepository.materializeIfPointer(1)).toBe(code !== "23505");
+        expect(attempts).toBe(code === "23505" ? 1 : 2);
+      } finally {
+        query.mockRestore();
+      }
+    }
+  } finally {
+    logged.mockRestore();
+  }
 });
 
 it("recovers credential decryption, sprite history, and OAuth cleanup after connection retirement", async () => {
