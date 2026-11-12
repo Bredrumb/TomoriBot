@@ -45,21 +45,30 @@ if (effectivePassword) process.env.POSTGRES_PASSWORD = effectivePassword;
  */
 export const DB_TESTS_AVAILABLE = Boolean(effectivePassword) && process.env.TEST_DB_READY === "1";
 
-/**
- * A direct SQL client for the test database, used exclusively for fixture
- * insertion and cleanup. Test assertions call the real dbRead/dbWrite functions
- * which use the global sql singleton from client.ts, so those must also be pointed
- * at the test DB via POSTGRES_DB env var (set by the wrapper).
- */
-export const testSql = new SQL({
-  hostname: effectiveHost,
-  port: Number(effectivePort),
-  username: effectiveUser,
-  password: effectivePassword ?? "dummy",
-  database: effectiveDatabase,
-  idleTimeout: 180,
-  maxLifetime: 1800,
-});
+function createFixtureClient(): SQL {
+  return new SQL({
+    hostname: effectiveHost,
+    port: Number(effectivePort),
+    username: effectiveUser,
+    password: effectivePassword ?? "dummy",
+    database: effectiveDatabase,
+    idleTimeout: 180,
+    maxLifetime: 1800,
+  });
+}
+
+let fixtureClient = createFixtureClient();
+
+// Repositories retain this client at module load, so the proxy must survive pool replacement.
+export const testSql = new Proxy(
+  ((strings: TemplateStringsArray, ...values: unknown[]) => fixtureClient(strings, ...values)) as unknown as SQL,
+  {
+    get(_target, property) {
+      const value = Reflect.get(fixtureClient, property, fixtureClient);
+      return typeof value === "function" ? value.bind(fixtureClient) : value;
+    },
+  },
+);
 
 /** Executes a migration script on one reserved transaction connection. */
 export async function executeTestSqlFile(filePath: string): Promise<void> {
@@ -98,9 +107,11 @@ let bootstrapPromise: Promise<void> | null = null;
 export async function setupTestDb(): Promise<void> {
   bootstrapPromise ??= bootstrap();
   await bootstrapPromise;
-  // Retire the application pool between suites because migration replays invalidate its prepared result shapes.
+  // Schema restores invalidate prepared type and result metadata in both pools.
   await sql.close();
   resetDatabaseConnection();
+  await fixtureClient.close();
+  fixtureClient = createFixtureClient();
 }
 
 /**

@@ -58,6 +58,10 @@ the source and isolates those files. Regression files share one database with fi
 they stay in one lane; `setupTestDb()` initializes the schema once per process. Output is printed per
 lane (`unit`, `unit-isolated`, `db`) after all lanes finish.
 
+Before each suite, `setupTestDb()` replaces the application and fixture SQL pools so schema restores
+cannot leave stale prepared-statement metadata. Construct repositories with the shared `testSql`
+reference so they follow the current pool.
+
 Only the DB lane receives database connection settings. Unit lanes run without them, so an indirect
 error-log write cannot race a database restore or insert fixture references from another process.
 
