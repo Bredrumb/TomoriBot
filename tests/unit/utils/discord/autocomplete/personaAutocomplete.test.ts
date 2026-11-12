@@ -13,11 +13,13 @@ import { clearTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import * as whitelistCache from "@/utils/cache/channelWhitelistCache";
 import * as spotlightCache from "@/utils/cache/personalSpotlightCache";
 import { handlePersonaAutocomplete, respondWithPersonaChoices } from "@/utils/discord/autocomplete/personaAutocomplete";
+import { createPersona as createPersonaFixture } from "../../../../helpers/fixtures";
 
 type AutocompleteChoice = { name: string; value: string };
 
 type MockInteraction = {
   guild: unknown;
+  guildId: string | null;
   channel: unknown;
   user: { id: string };
   options: { getFocused: () => string };
@@ -28,6 +30,7 @@ type MockInteraction = {
 function createMockInteraction(focusedValue = "", guildId = "123"): MockInteraction {
   let respondChoices: AutocompleteChoice[] = [];
   return {
+    guildId,
     guild: {
       id: guildId,
       members: { cache: { get: () => ({ roles: { cache: [] } }) } },
@@ -105,6 +108,24 @@ afterEach(() => {
 });
 
 describe("handlePersonaAutocomplete", () => {
+  it("loads the invoker's DM workspace and keeps persona restrictions", async () => {
+    const main = createPersonaFixture({ persona_id: 1, persona_nickname: "Mirri" });
+    const alter = createPersonaFixture({ persona_id: 2, persona_nickname: "Juno", is_alter: true });
+    const loadPersonas = trackSpy(spyOn(personaRepository, "loadAllForServer").mockResolvedValue([main, alter]));
+    stubUser(999);
+    stubWhitelist({ isTriggerAllowed: true });
+    stubSpotlight({ personaIds: [2] });
+    const interaction = createMockInteraction();
+    interaction.guild = null;
+    interaction.guildId = null;
+
+    const choices = await runAutocomplete(interaction);
+
+    expect(loadPersonas).toHaveBeenCalledWith(interaction.user.id);
+    expect(choices).toEqual([{ name: alter.persona_nickname, value: String(alter.persona_id) }]);
+    expect(spotlightCache.getCachedPersonalSpotlightStatus).toHaveBeenCalledWith(main.server_id, 999, "456");
+  });
+
   it("caps the response at Discord's 25-choice limit", async () => {
     stubPersonaLoad(Array.from({ length: 30 }, (_, i) => createPersona(i + 1, `Persona ${i + 1}`, i !== 0)));
     stubUser(null);

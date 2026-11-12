@@ -109,33 +109,34 @@ export const handlePersonaAutocomplete: CommandAutocompleteFunction = async (
   interaction: AutocompleteInteraction,
 ): Promise<void> => {
   try {
-    if (!interaction.guild || !interaction.channel) {
+    if (!interaction.channel) {
       await interaction.respond([]);
       return;
     }
 
-    const tomoriState = await getCachedTomoriState(interaction.guild.id);
+    const serverDiscId = interaction.guildId ?? interaction.user.id;
+    const tomoriState = await getCachedTomoriState(serverDiscId);
     if (!tomoriState) {
       await interaction.respond([]);
       return;
     }
 
-    const allPersonas = await getCachedAllPersonas(interaction.guild.id);
+    const allPersonas = await getCachedAllPersonas(serverDiscId);
     if (allPersonas.length === 0) {
       await interaction.respond([]);
       return;
     }
 
-    const invokingMember = interaction.guild.members.cache.get(interaction.user.id);
+    const invokingMember = interaction.guild?.members.cache.get(interaction.user.id);
     const memberRoleDiscIds = invokingMember?.roles.cache.map((role) => role.id);
 
-    const guildChannel = interaction.guild.channels.cache.get(interaction.channel.id) ?? interaction.channel;
+    const guildChannel = interaction.guild?.channels.cache.get(interaction.channel.id) ?? interaction.channel;
     const isThread =
       "isThread" in guildChannel && typeof guildChannel.isThread === "function" && guildChannel.isThread();
     const parentChannelId = isThread && "parent" in guildChannel ? guildChannel.parent?.id : undefined;
 
     const whitelistStatus = await getCachedWhitelistStatus(
-      interaction.guild.id,
+      serverDiscId,
       interaction.channel.id,
       memberRoleDiscIds,
       parentChannelId,

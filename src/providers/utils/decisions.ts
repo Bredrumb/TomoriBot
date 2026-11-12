@@ -115,8 +115,25 @@ const usageSchema = z.object({
   output_tokens_details: z.object({ reasoning_tokens: z.number().int().nonnegative().optional() }).optional(),
 });
 
-function parseDecisionUsage(payload: unknown): DecisionUsage | undefined {
+const googleUsageSchema = z.object({
+  total_input_tokens: z.number().int().nonnegative(),
+  total_output_tokens: z.literal(0),
+  total_tokens: z.number().int().nonnegative(),
+});
+
+function parseDecisionUsage(
+  payload: unknown,
+  apiStyle: ProviderDecisionRequest["apiStyle"],
+): DecisionUsage | undefined {
   if (payload === undefined) return undefined;
+  if (apiStyle === "google-decisions") {
+    const usage = googleUsageSchema.parse(payload);
+    return {
+      inputTokens: usage.total_input_tokens,
+      outputTokens: usage.total_output_tokens,
+      totalTokens: usage.total_tokens,
+    };
+  }
   const usage = usageSchema.parse(payload);
   return {
     inputTokens: usage.input_tokens,
@@ -231,7 +248,7 @@ export function decisionTrace(
     `Decision request ${JSON.stringify({
       operation: "decision-request",
       outcome,
-      provider: request.reference.provider.startsWith("custom:") ? "custom" : "openrouter",
+      provider: request.reference.provider.startsWith("custom:") ? "custom" : request.reference.provider,
       apiStyle: request.apiStyle,
       modelId: request.reference.modelId,
       registrationId: request.reference.registrationId,
@@ -270,13 +287,13 @@ export async function reportDecisionFailure(
       operation: "decision-request",
       stage,
       category,
-      provider: request.reference.provider.startsWith("custom:") ? "custom" : "openrouter",
+      provider: request.reference.provider.startsWith("custom:") ? "custom" : request.reference.provider,
     },
     metadata: {
       operation: "decision-request",
       stage,
       category,
-      provider: request.reference.provider.startsWith("custom:") ? "custom" : "openrouter",
+      provider: request.reference.provider.startsWith("custom:") ? "custom" : request.reference.provider,
       apiStyle: request.apiStyle,
       modelId: request.reference.modelId,
       registrationId: request.reference.registrationId,
@@ -318,7 +335,11 @@ export async function executeDecisionTransport(
   const headers = {
     "Content-Type": "application/json",
     ...transport.headers,
-    ...(request.apiKey ? { Authorization: `Bearer ${request.apiKey}` } : {}),
+    ...(request.apiKey
+      ? request.apiStyle === "google-decisions"
+        ? { "x-goog-api-key": request.apiKey }
+        : { Authorization: `Bearer ${request.apiKey}` }
+      : {}),
   };
   decisionTrace(request, "start", { questionCount: request.questions.length, elapsedMs: Date.now() - startedAt });
   let stage: "transport" | "response" | "validation" = "transport";
@@ -333,6 +354,41 @@ export async function executeDecisionTransport(
     if (!response.ok) {
       const detail = await readProviderErrorBody(response, request.apiKey ?? "");
       if (request.abortSignal?.aborted) return cancelled();
+      if (request.apiStyle === "google-decisions" && response.status === 400) {
+        let refusal = false;
+        try {
+          refusal = z
+            .object({
+              error: z.object({
+                code: z.enum(["safety", "prohibited_content", "blocklist", "image_safety", "content_blocked"]),
+              }),
+            })
+            .safeParse(JSON.parse(detail)).success;
+        } catch {
+          refusal = false;
+        }
+        if (refusal) {
+          await reportProviderFailure({
+            summary: "Google Decision request refused",
+            error: new Error("Decision input blocked by safety filters"),
+            errorType: "DecisionOperationRefused",
+            expected: true,
+            detail,
+            dimensions: { operation: "decision-request", provider: "google", category: "safety" },
+            metadata: { correlation: correlationId, httpStatus, modelId: request.reference.modelId },
+          });
+          decisionTrace(request, "refused", {
+            questionCount: request.questions.length,
+            elapsedMs: Date.now() - startedAt,
+          });
+          return {
+            status: "refused",
+            answers: request.questions.map((question) => ({ type: "refusal", id: question.id })),
+            correlationId,
+            actualModel: request.model,
+          };
+        }
+      }
       const limit = readOpenRouterLimitError(response.status, response.headers, detail);
       const denied = limit && findProviderRequestDeniedError(limit, currentProviderUsageContext());
       if (denied) return { status: "denied", error: denied, correlationId, errorLogged: false };
@@ -351,12 +407,15 @@ export async function executeDecisionTransport(
     stage = "validation";
     const payload = parseDecisionJson(raw);
     const reportedUsage = z.object({ usage: z.unknown().optional() }).parse(payload);
-    const usage = parseDecisionUsage(reportedUsage.usage);
+    const usage = parseDecisionUsage(reportedUsage.usage, request.apiStyle);
     if (usage) request.onUsage?.(usage);
     if (request.abortSignal?.aborted) return cancelled();
     const envelope = z
       .object({
-        model: z.string().min(1).max(200),
+        model:
+          request.apiStyle === "google-decisions"
+            ? z.literal(request.model).default(request.model)
+            : z.string().min(1).max(200),
         answers: z.unknown(),
         usage: z.unknown().optional(),
         id: z.string().optional(),

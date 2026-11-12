@@ -476,7 +476,7 @@ export function validateModels(): string[] {
   validateSpec(transcriptionSpec, errors);
   for (const model of rowsOf(decisionSpec)) {
     if (
-      model.provider !== "openrouter" ||
+      !["google", "openrouter"].includes(model.provider) ||
       !Number.isSafeInteger(model.inputTokenLimit) ||
       model.inputTokenLimit < 512 ||
       model.inputTokenLimit > 10_000_000

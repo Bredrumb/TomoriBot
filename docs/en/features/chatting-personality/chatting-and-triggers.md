@@ -16,6 +16,12 @@ By default, she replies when you:
 - **Use a trigger word**: any registered trigger word anywhere in a message
 - **Use `/respond`**: manually request a response
 
+`/respond` accepts optional `persona`, `reasoning`, `prompt`, and `prefill` parameters. Leaving `persona`
+empty uses the last speaker if allowed, then the channel's auto-trigger persona or an available default.
+`reasoning` uses the current provider's reasoning model for this response. `prompt` adds system
+instructions for this response, and `prefill` supplies text for the assistant to continue. Models that
+cannot continue a prefill receive it as an instruction instead.
+
 In a DM, send a message directly without any trigger word or mention.
 
 To make the main persona reply to every eligible message in the server without needing a mention or trigger word, enable `Always Reply` in `/config` > `Behavior` > `Trigger Behavior`.

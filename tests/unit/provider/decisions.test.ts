@@ -1,5 +1,6 @@
 import { afterAll, afterEach, describe, expect, it, spyOn } from "bun:test";
 import { callCustomDecisions } from "@/providers/custom/customDecisions";
+import { callGoogleDecisions } from "@/providers/google/googleDecisions";
 import { callOpenRouterDecisions } from "@/providers/openrouter/openrouterDecisions";
 import { callDecisionsForProvider } from "@/providers/utils/providerFeatureExecutors";
 import type { ProviderDecisionRequest } from "@/types/provider/featureInterfaces";
@@ -39,6 +40,119 @@ describe("Decision transports", () => {
     info.mockRestore();
     error.mockRestore();
     warn.mockRestore();
+  });
+
+  describe("Google Decisions", () => {
+    const googleRequest: ProviderDecisionRequest = {
+      ...request,
+      reference: { provider: "google", modelId: 7, registrationId: null, customEndpointId: null },
+      model: "gemini-decision-1",
+      apiStyle: "google-decisions",
+      questions: [
+        ...request.questions,
+        {
+          type: "choice",
+          id: "topic",
+          instructions: "Choose the conversation topic.",
+          options: [
+            { id: "robots", description: "Giant piloted robots." },
+            { id: "other", description: "Another topic." },
+          ],
+        },
+      ],
+    };
+    const answers = {
+      criterion: { type: "noul", noul: 0.9, confidence: 0.9 },
+      topic: { type: "choice", choice: "robots", probabilities: { robots: 0.8, other: 0.2 }, confidence: 0.8 },
+    };
+    const usage = { total_input_tokens: 100, total_output_tokens: 0, total_tokens: 100 };
+
+    it("sends shared input and named questions with Google's API-key header and reads its model-less response", async () => {
+      const reported: unknown[] = [];
+      const result = await callGoogleDecisions(
+        { ...googleRequest, onUsage: (value) => reported.push(value) },
+        async (url, init) => {
+          expect(url).toBe("https://generativelanguage.googleapis.com/v1beta/decisions");
+          expect(init.method).toBe("POST");
+          const headers = new Headers(init.headers);
+          expect(headers.get("x-goog-api-key")).toBe(request.apiKey);
+          expect(headers.has("authorization")).toBe(false);
+          expect(JSON.parse(String(init.body))).toEqual({
+            model: "gemini-decision-1",
+            input: request.evidence,
+            questions: {
+              criterion: { type: "noul", instructions: request.questions[0].instructions },
+              topic: {
+                type: "choice",
+                instructions: googleRequest.questions[1].instructions,
+                criteria: { robots: "Giant piloted robots.", other: "Another topic." },
+              },
+            },
+          });
+          return Response.json({ answers, usage });
+        },
+      );
+      expect(result).toMatchObject({
+        status: "completed",
+        actualModel: "gemini-decision-1",
+        answers: [
+          { type: "predicate", id: "criterion", probability: 0.9 },
+          { type: "choice", id: "topic", choice: "robots", probabilities: { robots: 0.8, other: 0.2 } },
+        ],
+        usage: { inputTokens: 100, outputTokens: 0, totalTokens: 100 },
+      });
+      expect(reported).toEqual([{ inputTokens: 100, outputTokens: 0, totalTokens: 100 }]);
+    });
+
+    it("retains valid usage on a malformed verdict and rejects invalid Google usage", async () => {
+      for (const payload of [
+        { answers: {}, usage },
+        { answers, usage: { ...usage, total_input_tokens: -1 } },
+        { answers, usage: { ...usage, total_output_tokens: 1 } },
+        { answers, usage: { input_tokens: 100 } },
+      ]) {
+        const reported: unknown[] = [];
+        const result = await callGoogleDecisions(
+          { ...googleRequest, onUsage: (value) => reported.push(value) },
+          async () => Response.json(payload),
+        );
+        expect(result).toMatchObject({ status: "failed", category: "malformed", errorLogged: true });
+        expect(reported).toHaveLength(payload.usage === usage ? 1 : 0);
+      }
+    });
+
+    it("returns typed safety blocks as refusals and keeps other HTTP errors as failures", async () => {
+      for (const code of [
+        "safety",
+        "prohibited_content",
+        "blocklist",
+        "image_safety",
+        "content_blocked",
+        "INVALID_ARGUMENT",
+      ]) {
+        error.mockClear();
+        warn.mockClear();
+        const result = await callGoogleDecisions(googleRequest, async () =>
+          Response.json({ error: { code, message: `PRIVATE_DETAIL ${request.apiKey}` } }, { status: 400 }),
+        );
+        if (code === "INVALID_ARGUMENT") {
+          expect(result).toMatchObject({ status: "failed", category: "http", errorLogged: true });
+          expect(error).toHaveBeenCalledTimes(1);
+        } else {
+          expect(result).toMatchObject({
+            status: "refused",
+            answers: [
+              { type: "refusal", id: "criterion" },
+              { type: "refusal", id: "topic" },
+            ],
+          });
+          expect(error).not.toHaveBeenCalled();
+          expect(warn).toHaveBeenCalledTimes(1);
+        }
+        expect(JSON.stringify(result)).not.toContain("PRIVATE_DETAIL");
+        expect(JSON.stringify([...warn.mock.calls, ...error.mock.calls])).not.toContain(request.apiKey);
+      }
+    });
   });
 
   it("preserves validated limit causes without retaining provider prose", async () => {
