@@ -11,7 +11,7 @@ sidebar:
 
 Todos os comandos de barra (slash commands) atualmente registrados pela TomoriBot, gerados a partir dos mesmos construtores de comando e descrições em português usados para o registro no Discord (descrições ainda não traduzidas aparecem em inglês).
 
-Grupos de comandos de nível superior: **44**. Comandos de barra executáveis: **91**.
+Grupos de comandos de nível superior: **45**. Comandos de barra executáveis: **94**.
 
 ## `/booru`
 
@@ -294,6 +294,16 @@ Gerencie as redefinições de cota de geração.
 |---|---|
 | `/quota reset global` | Redefina o pool de cota de geração para todo o servidor. |
 | `/quota reset user` | Redefina o uso diário de cota para um usuário. |
+
+## `/record`
+
+Manage your conversation recordings in this server
+
+| Comando | Resumo |
+|---|---|
+| `/record data` | View, export or delete your recordings in this server |
+| `/record start` | Choose recording settings and review consent before starting |
+| `/record stop` | Stop collecting excerpts and keep your saved recordings |
 
 ## `/refresh`
 

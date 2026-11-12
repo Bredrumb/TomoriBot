@@ -53,6 +53,7 @@ Pages are bucketed into task-based sub-categories:
   - [`matrix-bridge.md`](./en/features/integrations/matrix-bridge/)
   - [`sillytavern-support.md`](./en/features/integrations/sillytavern-support/)
   - [`novelai.md`](./en/features/integrations/novelai/)
+- [`features/conversation-recordings.md`](./en/features/conversation-recordings.md): optional server excerpts and private exports
 - [`features/command-reference.md`](./en/features/command-reference/): generated from command locales (Phase 3)
 
 ## Self-Hosting (order 3)
@@ -141,6 +142,7 @@ Supporting services that pipelines depend on.
 
 - [`architecture/subsystems/sharding.md`](./en/architecture/subsystems/sharding.md): shard topology, process ownership, coordination, shutdown, and per-shard health
 
+- [`architecture/subsystems/conversation-recording.md`](./en/architecture/subsystems/conversation-recording.md): consent, capture, transcript lifecycle, and private exports
 - [`architecture/subsystems/lorebooks.md`](./en/architecture/subsystems/lorebooks.md): lorebook storage, scope ownership, and pure activation contracts
 - [`architecture/subsystems/`](./en/architecture/subsystems/README.md): database schema, events, commands, tools,
   caching, cooldowns, security, localization, multi-persona, persona-presets, natural-nudges, and more

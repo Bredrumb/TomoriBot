@@ -11,7 +11,7 @@ sidebar:
 
 TomoriBot 当前注册的全部斜杠指令，由与 Discord 注册所用的同一批指令构建器和简体中文描述生成（尚未翻译的描述以英文显示）。
 
-顶层指令组：**44**。可执行的斜杠指令：**91**。
+顶层指令组：**45**。可执行的斜杠指令：**94**。
 
 ## `/booru`
 
@@ -294,6 +294,16 @@ TomoriBot 当前注册的全部斜杠指令，由与 Discord 注册所用的同�
 |---|---|
 | `/quota reset global` | 重置全服务器共用的生成配额池。 |
 | `/quota reset user` | 重置某个用户的每日配额用量。 |
+
+## `/record`
+
+Manage your conversation recordings in this server
+
+| 指令 | 摘要 |
+|---|---|
+| `/record data` | View, export or delete your recordings in this server |
+| `/record start` | Choose recording settings and review consent before starting |
+| `/record stop` | Stop collecting excerpts and keep your saved recordings |
 
 ## `/refresh`
 

@@ -51,6 +51,30 @@ In non-production environments, startup creates a database backup when the bot v
 Older bundles can contain secrets in `config.env`. Restore does not load it; review it privately and
 supply the required keys through your normal secret source.
 
+## Conversation recording storage
+<!-- anchor: conversation-recording-storage -->
+
+[Conversation recordings](/features/conversation-recordings/) store opted-in server excerpts in your
+database. Surrounding-message mode can include other participants. Protect database access and
+backups as private conversation data; identity replacement does not make the text anonymous.
+
+To expire saved excerpts by age, set `RECORD_RETENTION_DAYS` to a positive integer, for example
+`RECORD_RETENTION_DAYS=30`, in the bot environment and restart all instances. Leave the variable
+absent for no age expiry. Empty, zero, negative, fractional, or otherwise invalid values fail startup
+validation. Use the same value across instances sharing a database.
+
+The limit applies to existing excerpts as well as new ones, measured from the trigger timestamp.
+Reads and writes enforce expiry; primary-process cleanup runs bounded batches every minute.
+Physical cleanup can take multiple batches. Collection duration only controls when capture stops.
+The 100 MiB logical quota per owner across servers still applies when age expiry is off and can
+remove oldest complete excerpts sooner. Physical database/index usage can differ from that quota.
+
+Database backups include recording data. Live retention, privacy pruning, and deletion do not rewrite
+backup bundles or downloaded exports. Set a separate backup lifecycle, protect recovery copies, and
+review restored data before reopening the bot: missed source deletions cannot be reconstructed from
+gateway events. Recording exports are source excerpts and cannot restore the database. See the
+[architecture contract](/architecture/subsystems/conversation-recording/) for lifecycle ownership.
+
 ## Rotating encryption keys
 
 1. Back up the database and keep all existing keys in protected storage. Test recovery on a

@@ -11,7 +11,7 @@ sidebar:
 
 Todos los comandos de barra que TomoriBot tiene registrados actualmente, generados a partir de los mismos constructores de comandos y descripciones en español que se usan para el registro en Discord (las descripciones sin traducir aparecen en inglés).
 
-Grupos de comandos de nivel superior: **44**. Comandos de barra ejecutables: **91**.
+Grupos de comandos de nivel superior: **45**. Comandos de barra ejecutables: **94**.
 
 ## `/booru`
 
@@ -294,6 +294,16 @@ Administra los reinicios de cuotas de generación.
 |---|---|
 | `/quota reset global` | Reinicia el fondo de cuota de generación a nivel de servidor. |
 | `/quota reset user` | Reinicia el uso de la cuota diaria para un usuario. |
+
+## `/record`
+
+Manage your conversation recordings in this server
+
+| Comando | Resumen |
+|---|---|
+| `/record data` | View, export or delete your recordings in this server |
+| `/record start` | Choose recording settings and review consent before starting |
+| `/record stop` | Stop collecting excerpts and keep your saved recordings |
 
 ## `/refresh`
 

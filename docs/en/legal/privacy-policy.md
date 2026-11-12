@@ -10,7 +10,7 @@ This policy covers the official hosted TomoriBot on Discord, including personal 
 
 ## Privacy at a glance
 
-- TomoriBot reads recent messages to answer and sends relevant context to the selected AI provider. We do not save a copy of your chat history, but optional short-term memory saves summaries.
+- TomoriBot reads recent messages to answer and sends relevant context to the selected AI provider. Optional conversation recordings save message excerpts after the recording owner confirms; surrounding-message mode can include other participants. Optional short-term memory saves summaries.
 - We keep the settings, memories, and files you or your Server choose to save. Some Server memories may describe members who did not provide them.
 - Paid memberships add account links, sponsorships, and usage records so we can provide benefits and track the shared allowance. We do not collect your Patreon password or card details.
 - You can review or delete most saved data through commands. Subscription records require a separate support request. Deleting bot data does not cancel Patreon billing.
@@ -57,9 +57,32 @@ We keep sponsorships, their authorizations, allowance and spending totals, and r
 
 Temporary sign-in and membership-update records help secure account linking and prevent duplicate updates. Your own Patreon sign-in tokens are not kept after linking.
 
+### 2.7) Conversation recordings
+
+[Conversation recordings](/features/conversation-recordings/) are optional and scoped to the recording
+owner and Server. After confirmation, a new real message from the owner can save that message and up
+to ten preceding eligible messages in the same channel or thread, even without a bot reply. Context
+may predate activation. Surrounding-message mode can include other members, bots, and webhooks whose
+participants did not start a recording.
+
+We store normalized message text, timestamps, ordered excerpt boundaries, speaker labels, eligible
+reply relationships, and attachment type/count metadata. We do not save attachment bytes, filenames,
+attachment URLs, OCR, generated descriptions, or embed bodies through this feature. Restricted source
+identifiers support ownership, deduplication, privacy exclusions, and observed edits/deletions.
+
+Before storing bodies, structured Discord identities and exact unique known names/nicknames become
+readable placeholders such as `[SELF]` and `[PARTICIPANT_1]`. Ambiguous shared names are skipped;
+ordinary words used as names may be replaced even when they mean something else. Custom emoji lose
+numeric IDs and Discord message links become a generic marker. Free text and ordinary external URLs
+can still identify people. Replacement is best effort and does not make recordings anonymous.
+
+The bot operator stores these records and can have infrastructure access. Discord controls permit
+only the owner in the current Server to export or delete them, with no manager override. Recording
+makes no automatic AI-provider calls and does not start a training pipeline.
+
 ## 3) What we read without saving
 
-TomoriBot temporarily reads recent messages, relevant media, Server and channel details, and available presence information to answer. This is not saved as chat history. Short-term memory summaries and files you deliberately save are handled as described above.
+TomoriBot temporarily reads recent messages, relevant media, Server and channel details, and available presence information to answer. Ordinary reply processing does not itself archive chat history. Optional recordings, short-term memory summaries, and deliberately saved files are handled in Section 2.
 
 ## 4) Who receives your data
 
@@ -75,6 +98,7 @@ These services may process data outside your country and have their own privacy 
 
 | Data | Retention |
 |---|---|
+| Conversation recording excerpts | No age expiry unless `RECORD_RETENTION_DAYS` is set; the configured positive day limit applies to existing data too. The 100 MiB logical quota per owner across Servers can evict oldest complete excerpts sooner. |
 | Short-term memory summaries | 90 days after last activity by default |
 | Error logs | 90 days |
 | Performance records and bot-message identifiers | 30 days |
@@ -100,6 +124,8 @@ Removing the bot keeps Server data for re-invitation; run `/nuke` first to delet
 | Stop personas pinging you to start a conversation | `/personal config` > `Privacy` > `Pings from Personas` |
 | Review or remove personal memories | `/personal memories` |
 | Review or remove Server memories and documents | `/memories` |
+| Export or delete your current-Server recordings | `/record data`; Markdown or versioned JSON, private interaction attachments, confirmed range or all-record deletion |
+| Stop collecting new excerpts without deleting saved ones | `/record stop` |
 | Export your personal settings or memories | `/export personal config`, `/export personal memories` |
 | Export Server settings or memories | `/export config`, `/export memories` |
 | Reset your personal settings | `/reset personal config` |
@@ -111,6 +137,14 @@ Removing the bot keeps Server data for re-invitation; run `/nuke` first to delet
 Your Server memories and documents stay, with your authorship removed; ask a manager to delete them with `/memories`. If a shared memory or document contains personal data about you and you cannot get it removed, contact us directly using Section 9. You do not need a manager's permission to request review and removal.
 
 Privacy settings limit message visibility and personalization; they do not erase existing memories. Privacy opt-outs survive erasure so collection is not silently re-enabled. Your Pings from Personas choice is a personalization setting, so `/personal nuke` erases it; turn Pings from Personas off again afterwards if you still want them off.
+
+Recording exports remain available after source-channel access is lost, subject to current privacy
+exclusions and retention. Date ranges select excerpts by trigger time at UTC midnight, with the
+start included and the end excluded. Observed edits reapply identity replacement; observed single
+and bulk source deletions remove stored copies. Later privacy exclusions prune affected stored data.
+We cannot guarantee receiving events while offline or after access changes. Live deletion does not
+retract downloaded exports or rewrite backups, which follow the separate lifecycles in Section 5.
+Deleting recordings leaves collection enabled unless you also stop it.
 
 For subscriptions, use the subscription panel to review your allowance and sponsorships or stop sponsoring a Server. Cancel renewal through Patreon; stopping sponsorship or deleting bot data does not stop billing.
 

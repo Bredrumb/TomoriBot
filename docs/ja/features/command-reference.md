@@ -11,7 +11,7 @@ sidebar:
 
 TomoriBotに現在登録されているすべてのスラッシュコマンドです。Discordへの登録に使われるものと同じコマンド定義と日本語の説明文から生成しています（未翻訳の説明は英語で表示されます）。
 
-トップレベルのコマンドグループ：**44**。実行できるスラッシュコマンド：**91**。
+トップレベルのコマンドグループ：**45**。実行できるスラッシュコマンド：**94**。
 
 ## `/booru`
 
@@ -294,6 +294,16 @@ Discordチャンネルを双方向リレーでMatrixルームにリンクしま�
 |---|---|
 | `/quota reset global` | サーバー全体の生成クォータプールをリセットします。 |
 | `/quota reset user` | ユーザーの日次クォータ使用量をリセットします。 |
+
+## `/record`
+
+Manage your conversation recordings in this server
+
+| コマンド | 概要 |
+|---|---|
+| `/record data` | View, export or delete your recordings in this server |
+| `/record start` | Choose recording settings and review consent before starting |
+| `/record stop` | Stop collecting excerpts and keep your saved recordings |
 
 ## `/refresh`
 

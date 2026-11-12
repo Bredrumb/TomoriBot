@@ -11,7 +11,7 @@ sidebar:
 
 Every slash command currently registered by TomoriBot, generated from the same command builders and English locale descriptions used for Discord registration.
 
-Top-level command groups: **44**. Runnable slash commands: **91**.
+Top-level command groups: **45**. Runnable slash commands: **94**.
 
 ## `/booru`
 
@@ -294,6 +294,16 @@ Manage generation quota resets.
 |---|---|
 | `/quota reset global` | Reset the server-wide generation quota pool. |
 | `/quota reset user` | Reset daily quota usage for a user. |
+
+## `/record`
+
+Manage your conversation recordings in this server
+
+| Command | Summary |
+|---|---|
+| `/record data` | View, export or delete your recordings in this server |
+| `/record start` | Choose recording settings and review consent before starting |
+| `/record stop` | Stop collecting excerpts and keep your saved recordings |
 
 ## `/refresh`
 
