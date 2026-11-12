@@ -43,6 +43,7 @@ const MODEL_ERROR_PATTERNS: RegExp[] = [
   /\bmodel\s+(?:not\s+found|does\s+not\s+exist|is\s+not\s+available)\b/i,
   /\bno\s+such\s+model\b/i,
   /\bmodel_not_found\b/i,
+  /\bmodel_not_supported\b/i,
   // A deprecated/retired model is a model-availability problem (e.g. OpenRouter 404
   // "Grok 4.1 Fast is deprecated"), so present it as a model error and steer the user to
   // pick a different model rather than showing the generic API-error copy.

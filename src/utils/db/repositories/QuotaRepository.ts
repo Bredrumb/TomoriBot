@@ -31,7 +31,7 @@ import {
   videoQuotaSchema,
   videoServerwideQuotaSchema,
 } from "@/types/db/schema";
-import { sql } from "@/utils/db/client";
+import { sql, withTransientDbRetry } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 import type {} from "./IRepository";
 
@@ -77,9 +77,12 @@ class QuotaCapReached extends Error {
  */
 export async function getTextConfigResult(serverId: number): Promise<TextQuotaConfigReadResult> {
   try {
-    const [existing] = await sql<TextQuotaConfigRow[]>`
+    const [existing] = await withTransientDbRetry(
+      () => sql<TextQuotaConfigRow[]>`
       SELECT * FROM text_quota_configs WHERE server_id = ${serverId}
-    `;
+      `,
+      "load text quota config",
+    );
     return {
       status: "fresh",
       config: existing ? textQuotaConfigSchema.parse(existing) : null,
@@ -96,9 +99,12 @@ export async function getTextConfigResult(serverId: number): Promise<TextQuotaCo
  */
 export async function getImageConfigResult(serverId: number): Promise<ImageQuotaConfigReadResult> {
   try {
-    const [existing] = await sql<ImageQuotaConfigRow[]>`
+    const [existing] = await withTransientDbRetry(
+      () => sql<ImageQuotaConfigRow[]>`
       SELECT * FROM image_quota_configs WHERE server_id = ${serverId}
-    `;
+      `,
+      "load image quota config",
+    );
     return {
       status: "fresh",
       config: existing ? imageQuotaConfigSchema.parse(existing) : null,
@@ -115,9 +121,12 @@ export async function getImageConfigResult(serverId: number): Promise<ImageQuota
  */
 export async function getVideoConfigResult(serverId: number): Promise<VideoQuotaConfigReadResult> {
   try {
-    const [existing] = await sql<VideoQuotaConfigRow[]>`
+    const [existing] = await withTransientDbRetry(
+      () => sql<VideoQuotaConfigRow[]>`
       SELECT * FROM video_quota_configs WHERE server_id = ${serverId}
-    `;
+      `,
+      "load video quota config",
+    );
     return {
       status: "fresh",
       config: existing ? videoQuotaConfigSchema.parse(existing) : null,

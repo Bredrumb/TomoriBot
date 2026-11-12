@@ -32,6 +32,13 @@ class PersonaSpriteMessageRepository {
       `;
       return true;
     } catch (error) {
+      if (typeof error === "object" && error !== null && "errno" in error && error.errno === "23503") {
+        log.metric("persona_sprite_message_skipped", { reason: "persona_deleted" });
+        log.warn("Skipped sprite message mapping for a deleted persona", error, {
+          personaId: input.personaId,
+        });
+        return false;
+      }
       log.error(`Error recording persona sprite message ${input.messageDiscId} for persona ${input.personaId}:`, error);
       return false;
     }
