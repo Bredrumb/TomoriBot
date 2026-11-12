@@ -161,12 +161,38 @@ export class ConversationRecordingRepository {
     return this.transact(scope, (tx) => this.session(tx, scope));
   }
 
+  private async latestToken(tx: Transaction, scope: RecordingScope): Promise<RecordingToken | null> {
+    const [row] = await tx`SELECT session_id, revision FROM conversation_recording_sessions
+      WHERE owner_user_id = ${scope.ownerUserId} AND server_id = ${scope.serverId}
+      ORDER BY started_at DESC, session_id DESC LIMIT 1`;
+    return row ? { sessionId: row.session_id, revision: row.revision } : null;
+  }
+
+  async getStartToken(scope: RecordingScope): Promise<RecordingToken | null> {
+    return this.transact(scope, (tx) => this.latestToken(tx, scope));
+  }
+
   async start(
     scope: RecordingScope,
     settings: RecordingSettings,
-  ): Promise<{ session: RecordingSession; created: boolean }> {
+  ): Promise<{ session: RecordingSession; created: boolean }>;
+  async start(
+    scope: RecordingScope,
+    settings: RecordingSettings,
+    consent: RecordingToken | null,
+  ): Promise<{ session: RecordingSession; created: boolean } | null>;
+  async start(
+    scope: RecordingScope,
+    settings: RecordingSettings,
+    consent?: RecordingToken | null,
+  ): Promise<{ session: RecordingSession; created: boolean } | null> {
     recordingSettingsSchema.parse(settings);
+    if (consent) tokenSchema.parse(consent);
     return this.transact(scope, async (tx, now) => {
+      if (consent !== undefined) {
+        const latest = await this.latestToken(tx, scope);
+        if (latest?.sessionId !== consent?.sessionId || latest?.revision !== consent?.revision) return null;
+      }
       const existing = await this.session(tx, scope);
       if (existing) return { session: existing, created: false };
       const [guild] =
