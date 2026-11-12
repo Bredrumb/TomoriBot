@@ -361,6 +361,51 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("conversation recording storage", () => {
     other = { ownerUserId: secondUserId, serverId: scope.serverId };
   });
 
+  it("atomically rejects replayed consent after another confirmation or a start/stop cycle", async () => {
+    const consent = await repo.getStartToken(scope);
+    expect(consent).toBeNull();
+    const settings = { context: "own", duration: "24h" } as const;
+    const results = await Promise.all([repo.start(scope, settings, consent), peer.start(scope, settings, consent)]);
+    expect(results.filter((result) => result?.created)).toHaveLength(1);
+    expect(results.filter((result) => result === null)).toHaveLength(1);
+    const active = await repo.getActive(scope);
+    if (!active) throw new Error("Missing active recording");
+    await repo.stop(scope, token(active));
+    expect(await repo.start(scope, settings, consent)).toBeNull();
+    const freshConsent = await repo.getStartToken(scope);
+    expect((await repo.start(scope, settings, freshConsent))?.created).toBe(true);
+    expect(await repo.start(other, settings, freshConsent)).toBeNull();
+    expect(await repo.start(second, settings, freshConsent)).toBeNull();
+  });
+
+  it("keeps old context snapshots and applies the same half-open trigger range to export and deletion", async () => {
+    const active = (await repo.start(scope, { context: "surrounding", duration: "24h" })).session;
+    const participant = message({
+      sourceAuthorId: "_rt_recording_user",
+      speaker: "PARTICIPANT_1",
+      timestamp: new Date(Date.now() - 86_400_000),
+    });
+    const trigger = message();
+    await repo.append(scope, token(active), excerpt([participant, trigger]));
+    const changed = await repo.updateSettings(scope, token(active), { context: "own", duration: active.duration });
+    if (!changed) throw new Error("Missing settings result");
+    expect(changed.ends_at).toEqual(active.ends_at);
+    expect((await repo.append(scope, token(active), excerpt([message()]))).status).toBe("stale");
+    const next = message({ timestamp: new Date(trigger.timestamp.getTime() + 1) });
+    await repo.append(scope, token(changed), excerpt([next]));
+    const selected = { from: trigger.timestamp, until: next.timestamp };
+    const exported = await repo.readRange(scope, selected);
+    expect(exported.excerpts).toHaveLength(1);
+    expect(exported.excerpts[0]?.context).toBe("surrounding");
+    expect(exported.excerpts[0]?.messages[0]?.timestamp).toBe(participant.timestamp.toISOString());
+    expect(await repo.deleteRange(scope, selected)).toBe(1);
+    const remaining = await records();
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]?.context).toBe("own");
+    expect(await repo.getActive(scope)).not.toBeNull();
+    expect((await repo.append(scope, token(changed), excerpt([message()]))).status).toBe("stale");
+  });
+
   it("prunes stored copies through generic user writes and both personal settings imports", async () => {
     const ownerId = FIXTURE_IDS.userDiscId;
     const settings = await userRepository.toExportShape(ownerId);
