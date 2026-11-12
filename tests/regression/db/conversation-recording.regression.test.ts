@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "bun:test";
 import { ConversationRecordingRepository } from "@/modules/conversation-recording/db/repositories";
 import { userRepository } from "@/utils/db/repositories/UserRepository";
+import { importRepository } from "@/utils/db/repositories/ImportRepository";
 import { PrivacyLevel } from "@/types/db/schema";
 import {
   RECORDING_QUOTA_BYTES,
@@ -358,5 +359,46 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("conversation recording storage", () => {
     const [user] = await testSql`INSERT INTO users (user_disc_id) VALUES ('_rt_recording_user') RETURNING user_id`;
     secondUserId = user.user_id;
     other = { ownerUserId: secondUserId, serverId: scope.serverId };
+  });
+
+  it("prunes stored copies through generic user writes and both personal settings imports", async () => {
+    const ownerId = FIXTURE_IDS.userDiscId;
+    const settings = await userRepository.toExportShape(ownerId);
+    if (!settings) throw new Error("Fixture settings are unavailable");
+    for (const path of ["update", "export-shape", "settings-import"] as const) {
+      await userRepository.setPrivacyLevel(ownerId, PrivacyLevel.MINIMAL);
+      const active = await start();
+      await repo.append(scope, token(active), excerpt([message()]));
+      if (path === "update") await userRepository.update(refs.userId, { privacy_level: PrivacyLevel.FULL });
+      if (path === "export-shape")
+        expect(await userRepository.fromExportShape(ownerId, { ...settings, privacy_level: PrivacyLevel.FULL })).toBe(
+          true,
+        );
+      if (path === "settings-import")
+        expect(
+          (await importRepository.importPersonalSettings(ownerId, { ...settings, privacy_level: PrivacyLevel.FULL }))
+            .success,
+        ).toBe(true);
+      const remaining =
+        await testSql`SELECT message_id FROM conversation_recording_messages WHERE session_id = ${active.session_id}`;
+      expect(remaining).toHaveLength(0);
+      expect(await repo.getActive(scope)).toBeNull();
+    }
+    await userRepository.setPrivacyLevel(ownerId, PrivacyLevel.MINIMAL);
+  });
+
+  it("fences an empty owner's session on FULL privacy and checks fresh capture admission exclusions", async () => {
+    const active = await start();
+    expect(await repo.findCaptureScope(FIXTURE_IDS.serverDiscId, FIXTURE_IDS.userDiscId)).toEqual(scope);
+    expect(await repo.findCaptureScope("999999999999999999", FIXTURE_IDS.userDiscId)).toBeNull();
+    expect(await repo.eligibleUsers(scope.serverId, [FIXTURE_IDS.userDiscId])).toContain(FIXTURE_IDS.userDiscId);
+    await userRepository.setPrivacyLevel(FIXTURE_IDS.userDiscId, PrivacyLevel.FULL);
+    await userRepository.setPrivacyLevel(FIXTURE_IDS.userDiscId, PrivacyLevel.MINIMAL);
+    expect((await repo.append(scope, token(active), excerpt([message()]))).status).toBe("stale");
+    expect(await repo.getActive(scope)).toBeNull();
+    await testSql`UPDATE server_channel_scope_configs SET crosschannel_blocklist_ids = ARRAY['200000000000000099'] WHERE server_id = ${scope.serverId}`;
+    expect(await repo.channelExcluded(scope.serverId, "200000000000000001", "200000000000000099")).toBe(true);
+    await testSql`INSERT INTO personalization_blacklist (server_id, user_disc_id) VALUES (${scope.serverId}, ${FIXTURE_IDS.userDiscId})`;
+    expect(await repo.eligibleUsers(scope.serverId, [FIXTURE_IDS.userDiscId])).not.toContain(FIXTURE_IDS.userDiscId);
   });
 });

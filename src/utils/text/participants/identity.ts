@@ -18,6 +18,7 @@ export type ParticipantInclusionReason =
 
 export type ParticipantAliasPurpose =
   | "input_reference"
+  | "identity_replacement"
   | "output_mention"
   | "tool_target"
   | "copied_identity"

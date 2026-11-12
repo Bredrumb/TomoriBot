@@ -43,6 +43,40 @@ function parseTranscript(value: unknown): RecordingMessage {
 export class ConversationRecordingRepository {
   constructor(private readonly client: SQL = sql) {}
 
+  async findServerId(serverDiscordId: string): Promise<number | null> {
+    const [row] = await this
+      .client`SELECT server_id FROM servers WHERE server_disc_id = ${serverDiscordId} AND NOT is_dm_channel`;
+    return row?.server_id ?? null;
+  }
+
+  async findCaptureScope(serverDiscordId: string, ownerDiscordId: string): Promise<RecordingScope | null> {
+    const [row] = await this.client`SELECT s.owner_user_id, s.server_id FROM conversation_recording_sessions s
+      JOIN users u ON u.user_id = s.owner_user_id JOIN servers g ON g.server_id = s.server_id
+      WHERE g.server_disc_id = ${serverDiscordId} AND NOT g.is_dm_channel AND u.user_disc_id = ${ownerDiscordId}
+        AND s.stopped_at IS NULL AND (s.ends_at IS NULL OR s.ends_at > clock_timestamp())`;
+    return row ? { ownerUserId: row.owner_user_id, serverId: row.server_id } : null;
+  }
+
+  async channelExcluded(serverId: number, channelId: string, parentId: string | null): Promise<boolean> {
+    const [row] = await this
+      .client`SELECT EXISTS (SELECT 1 FROM server_channel_scope_configs WHERE server_id = ${serverId}
+      AND (${channelId} = ANY(private_channel_ids) OR ${parentId} = ANY(private_channel_ids)
+        OR ${channelId} = ANY(crosschannel_blocklist_ids) OR ${parentId} = ANY(crosschannel_blocklist_ids))) AS excluded`;
+    return row.excluded;
+  }
+
+  async eligibleUsers(serverId: number, userIds: readonly string[]): Promise<Set<string>> {
+    if (!userIds.length) return new Set();
+    const rows = await this.client<
+      Array<{ id: string }>
+    >`SELECT id FROM unnest(${this.client.array([...new Set(userIds)], "TEXT")}) AS id
+      WHERE NOT EXISTS (SELECT 1 FROM users u WHERE u.user_disc_id = id AND u.privacy_level = 2)
+        AND NOT EXISTS (SELECT 1 FROM personalization_blacklist b WHERE b.server_id = ${serverId} AND b.user_disc_id = id)
+        AND NOT EXISTS (SELECT 1 FROM persona_user_blocks b WHERE b.server_id = ${serverId} AND b.user_disc_id = id
+          AND b.block_type = 'block' AND b.expires_at > clock_timestamp())`;
+    return new Set(rows.map((row) => String(row.id)));
+  }
+
   private async lockOwner(tx: Transaction, ownerUserId: number): Promise<void> {
     const rows = await tx`SELECT user_id FROM users WHERE user_id = ${ownerUserId} FOR NO KEY UPDATE`;
     if (!rows.length) throw new Error("Recording owner does not exist");
@@ -465,6 +499,7 @@ export class ConversationRecordingRepository {
     Array<{
       scope: RecordingScope;
       token: RecordingToken;
+      ownerDiscordId: string;
       sourceAuthorId: string;
       privacyUserIds: string[];
     }>
@@ -475,16 +510,19 @@ export class ConversationRecordingRepository {
         server_id: number;
         session_id: string;
         revision: number;
+        user_disc_id: string;
         source_author_id: string;
         privacy_user_ids: unknown;
       }>
     >`SELECT s.owner_user_id, s.server_id, s.session_id, s.revision,
-      m.source_author_id, m.privacy_user_ids
+      m.source_author_id, m.privacy_user_ids, u.user_disc_id
       FROM conversation_recording_messages m JOIN conversation_recording_sessions s USING (session_id)
+      JOIN users u ON u.user_id = s.owner_user_id
       WHERE s.server_id = ${serverId} AND m.source_channel_id = ${sourceChannelId} AND m.source_message_id = ${sourceMessageId}`;
     return rows.map((row) => ({
       scope: { ownerUserId: row.owner_user_id, serverId: row.server_id },
       token: { sessionId: row.session_id, revision: row.revision },
+      ownerDiscordId: row.user_disc_id,
       sourceAuthorId: row.source_author_id,
       privacyUserIds: z.array(z.string()).parse(row.privacy_user_ids),
     }));
@@ -546,8 +584,10 @@ export class ConversationRecordingRepository {
 
   async removePrivateParticipant(sourceUserId: string, serverId?: number): Promise<number> {
     const owners = await this.client`SELECT DISTINCT s.owner_user_id FROM conversation_recording_sessions s
-      JOIN conversation_recording_messages m USING (session_id)
-      WHERE ${sourceUserId} = ANY(m.privacy_user_ids) AND (${serverId ?? null}::int IS NULL OR s.server_id = ${serverId ?? null})
+      JOIN users u ON u.user_id = s.owner_user_id
+      LEFT JOIN conversation_recording_messages m USING (session_id)
+      WHERE (${sourceUserId} = ANY(m.privacy_user_ids) OR u.user_disc_id = ${sourceUserId})
+        AND (${serverId ?? null}::int IS NULL OR s.server_id = ${serverId ?? null})
       ORDER BY s.owner_user_id`;
     let deleted = 0;
     for (const owner of owners) {
@@ -555,6 +595,10 @@ export class ConversationRecordingRepository {
         await this.lockOwner(tx, owner.owner_user_id);
         await tx`UPDATE conversation_recording_sessions SET revision = revision + 1
           WHERE owner_user_id = ${owner.owner_user_id} AND (${serverId ?? null}::int IS NULL OR server_id = ${serverId ?? null})`;
+        await tx`UPDATE conversation_recording_sessions s SET stopped_at = clock_timestamp()
+          FROM users u WHERE u.user_id = s.owner_user_id AND u.user_disc_id = ${sourceUserId} AND u.privacy_level = 2
+            AND s.owner_user_id = ${owner.owner_user_id} AND s.stopped_at IS NULL
+            AND (${serverId ?? null}::int IS NULL OR s.server_id = ${serverId ?? null})`;
         const rows = await tx`DELETE FROM conversation_recording_messages m USING conversation_recording_sessions s
           WHERE m.session_id = s.session_id AND s.owner_user_id = ${owner.owner_user_id}
           AND (${serverId ?? null}::int IS NULL OR s.server_id = ${serverId ?? null}) AND ${sourceUserId} = ANY(m.privacy_user_ids)`;
