@@ -79,6 +79,7 @@ function isGoogleModelUnavailableError(errorMessage: string): boolean {
   return (
     normalizedMessage.includes("model not found") ||
     normalizedMessage.includes("model_not_found") ||
+    normalizedMessage.includes("is not found for api version") ||
     normalizedMessage.includes("no longer available")
   );
 }
