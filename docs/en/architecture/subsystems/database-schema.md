@@ -34,6 +34,13 @@ Startup schema execution is coordinated by `src/utils/db/initializeDatabase.ts`:
 - Deterministic apply ordering uses integer versions first, with file stem code-point comparison breaking ties. Sibling migrations sharing a number must be mutually order-independent.
 - Versions 900 and above are reserved for deployment-specific migrations. A clean installation executes that band after the base schema instead of recording it as applied, so `schema.sql` stays free of deployment-specific DDL.
 
+## Conversation recording storage
+
+The `conversation_recording_*` tables and logical-size view in `schema.sql` are paired with migration
+137. The module repository owns their writes, owner-wide transactions, source lifecycle handling,
+and reclamation. See [Conversation recording](/architecture/subsystems/conversation-recording/) for
+the cross-component contracts.
+
 ## Document heading paths
 
 `document_chunks.heading_path` is nullable JSONB shaped as

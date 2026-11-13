@@ -970,6 +970,12 @@ class ImportRepository {
         return { success: false, error: "commands.data.import.error_update_failed" };
       }
 
+      invalidateUserCache(userDiscId);
+      if (importData.privacy_level === 2) {
+        const { conversationRecordingRepository } = await import("@/modules/conversation-recording/db/repositories");
+        await conversationRecordingRepository.removePrivateParticipant(userDiscId);
+      }
+
       // Count imported fields (base 2 + optional impersonation/image/behavioral fields)
       let fieldsCount = 2;
       if (impersonationPrompt) fieldsCount++;

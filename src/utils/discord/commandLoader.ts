@@ -121,6 +121,7 @@ const GUILD_ONLY_CATEGORIES: string[] = [
   "reward",
   "impersonate",
   "quota",
+  "record",
 ];
 // Categories that require manage permissions in guild context
 const MANAGER_ONLY_CATEGORIES = ["model", "nsfw", "server", "expressions", "matrix", "quota"];

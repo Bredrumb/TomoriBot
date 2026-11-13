@@ -22,16 +22,17 @@ and restores are host-side operations; see [Maintenance & Backups](/self-hosting
 - Server configuration settings
 - Encrypted provider API keys
 - Expression metadata, persona access rules, and uploaded expression media
+- Opt-in [conversation recordings](/features/setup-administration/conversation-recordings/), including surrounding messages when selected
 
 ### Not stored
 
-- Discord message history (messages are not archived in a persistent message log)
+- Media bytes, filenames, and attachment URLs from conversation recordings; only attachment type/count metadata is saved.
 
 ### Sent to your AI providers
 
 Whenever triggered, TomoriBot fetches recent messages in the channel along with relevant
-memories as context for the model. She does not read or process messages outside of those
-triggers.
+memories as context for the model. Optional conversation recording also reads eligible messages independently of reply
+triggers; it makes no automatic provider calls.
 
 When an embedding model is set up, its provider receives the latest message and the document and
 memory text it searches. This can be a different provider from the one writing replies. Personal
@@ -45,7 +46,11 @@ privacy policy. Avoid sharing sensitive personal credentials or confidential dat
 
 ## Export Your Data
 
-Exportable data is delivered to your DMs as a JSON file, so your DMs keep a copy you can restore
+Conversation recordings use `/record data` for private Markdown or JSON attachments in the current
+server. Their range, retention, and deletion rules are in the
+[recording guide](/features/setup-administration/conversation-recordings/).
+
+Settings and memory exports are delivered to your DMs as a JSON file, so your DMs keep a copy you can restore
 later. If TomoriBot can't DM you, the file is attached to a private reply instead; save it before
 the reply disappears.
 
@@ -91,6 +96,7 @@ their original Discord server, so review channel limits when moving a backup to 
 
 These actions permanently remove or reset stored data:
 
+- `/record data`: delete your current-server recording excerpts after confirmation; stop collection separately with `/record stop`.
 - `/personal memories`: manage or remove personal memories.
 - `/memories`: manage or remove server memories, documents, and lorebooks. Documents and lorebooks
   require `Manage Server`. With member teaching enabled, members can view, edit, or remove their

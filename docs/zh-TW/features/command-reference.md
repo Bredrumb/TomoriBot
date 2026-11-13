@@ -11,7 +11,7 @@ sidebar:
 
 TomoriBot 目前註冊的每一個斜線指令，都是從 Discord 註冊時使用的同一批指令建構器與繁體中文說明產生的（尚未翻譯的說明會以英文顯示）。
 
-頂層指令群組：**44**。可執行的斜線指令：**91**。
+頂層指令群組：**45**。可執行的斜線指令：**94**。
 
 ## `/booru`
 
@@ -294,6 +294,16 @@ TomoriBot 目前註冊的每一個斜線指令，都是從 Discord 註冊時使�
 |---|---|
 | `/quota reset global` | 重置整個伺服器的生成額度池。 |
 | `/quota reset user` | 重置某位使用者的每日額度用量。 |
+
+## `/record`
+
+Manage your conversation recordings in this server
+
+| 指令 | 摘要 |
+|---|---|
+| `/record data` | View, export or delete your recordings in this server |
+| `/record start` | Save anonymized conversation excerpts in this server whenever you send a message |
+| `/record stop` | Stop collecting excerpts and keep your saved recordings |
 
 ## `/refresh`
 

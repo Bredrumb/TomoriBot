@@ -48,6 +48,7 @@ Pages are bucketed into task-based sub-categories:
   - [`server-moderation.md`](./en/features/setup-administration/server-moderation/)
   - [`age-restricted-commands.md`](./en/features/setup-administration/age-restricted-commands/)
   - [`stats-and-insights.md`](./en/features/setup-administration/stats-and-insights/)
+  - [`conversation-recordings.md`](./en/features/setup-administration/conversation-recordings/): optional server excerpts and private exports
 - **Integrations**:
   - [`message-proxy-support.md`](./en/features/integrations/message-proxy-support/)
   - [`matrix-bridge.md`](./en/features/integrations/matrix-bridge/)
@@ -141,6 +142,7 @@ Supporting services that pipelines depend on.
 
 - [`architecture/subsystems/sharding.md`](./en/architecture/subsystems/sharding.md): shard topology, process ownership, coordination, shutdown, and per-shard health
 
+- [`architecture/subsystems/conversation-recording.md`](./en/architecture/subsystems/conversation-recording.md): consent, capture, transcript lifecycle, and private exports
 - [`architecture/subsystems/lorebooks.md`](./en/architecture/subsystems/lorebooks.md): lorebook storage, scope ownership, and pure activation contracts
 - [`architecture/subsystems/`](./en/architecture/subsystems/README.md): database schema, events, commands, tools,
   caching, cooldowns, security, localization, multi-persona, persona-presets, natural-nudges, and more

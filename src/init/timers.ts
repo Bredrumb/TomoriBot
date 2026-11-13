@@ -47,7 +47,7 @@ export function stopTimers(): void {
 }
 
 export async function initTimers(client: Client): Promise<void> {
-  const [scheduled, memory, metrics, pruner, rag, catalog, stm, quota] = await Promise.all([
+  const [scheduled, memory, metrics, pruner, rag, catalog, stm, quota, recording] = await Promise.all([
     import("@/timers/scheduledWorkCoordinator"),
     import("@/timers/memoryMonitor"),
     import("@/timers/cacheMetricsLogger"),
@@ -56,6 +56,7 @@ export async function initTimers(client: Client): Promise<void> {
     import("@/timers/openrouterCatalogRefresher"),
     import("@/timers/stmJanitor"),
     import("@/utils/security/rateLimiter"),
+    import("@/modules/conversation-recording/runtime/cleanup"),
   ]);
   if (isDraining()) return;
   timerStops = [
@@ -66,6 +67,7 @@ export async function initTimers(client: Client): Promise<void> {
     rag.stopRagAvailabilityMonitor,
     catalog.stopOpenRouterCatalogRefresher,
     stm.stopStmJanitor,
+    recording.stopRecordingCleanup,
   ];
   client.once("clientReady", () => {
     if (isDraining()) return;
@@ -79,4 +81,5 @@ export async function initTimers(client: Client): Promise<void> {
   rag.initializeRagAvailabilityMonitor();
   catalog.initializeOpenRouterCatalogRefresher();
   stm.initializeStmJanitor();
+  recording.initializeRecordingCleanup();
 }

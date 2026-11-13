@@ -12,6 +12,10 @@
  */
 
 export const PANEL_ACTIONS = [
+  "record.personal.collection.start",
+  "record.personal.collection.stop",
+  "record.personal.collection.set",
+  "record.personal.excerpts.remove",
   "server-config.workspace.response-drafting.set",
   "server-config.workspace.response-review-items.set",
   "server-config.workspace.response-reviewer.set",

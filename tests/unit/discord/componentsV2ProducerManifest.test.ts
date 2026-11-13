@@ -26,6 +26,11 @@ export type ProducerManifestEntry = FixturedProducerManifestEntry | DeclaredProd
  */
 export const COMPONENTS_V2_PRODUCER_MANIFEST: readonly ProducerManifestEntry[] = [
   {
+    modulePath: "src/modules/conversation-recording/discord/panel.ts",
+    builderName: "buildRecordingPanel",
+    coverage: { kind: "suite", suites: ["tests/unit/discord/conversationRecording.test.ts"] },
+  },
+  {
     modulePath: "src/utils/discord/ui/expressionsPanel.ts",
     builderName: "buildExpressionsPanelPayload",
     coverage: { kind: "suite", suites: ["tests/unit/discord/expressionsPanel.test.ts"] },
