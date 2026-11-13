@@ -45,7 +45,7 @@ export default {
       attributelist_option: `属性列表`,
       sampledialogues_option: `示例对话`,
       promptsnapshot_option: `提示词快照`,
-      servermemories_desc: `添加或移除服务器级记忆`,
+      servermemories_desc: `查看自己的服务器记忆、添加新记忆，以及编辑或删除自己的记忆`,
       attributelist_desc: `添加或移除性格属性`,
       sampledialogues_desc: `添加或移除示例对话对`,
       promptsnapshot_desc: `从 /context 和 /tool prompt snapshot 查看完整提示词`,

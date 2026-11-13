@@ -64,7 +64,7 @@ export default {
     add_to_docs_rag_unavailable_title: `RAG local no disponible`,
     add_to_docs_rag_unavailable_description: `El almacén de documentos requiere PostgreSQL con la extensión pgvector habilitada.`,
     add_to_docs_no_permission_title: `Permiso denegado`,
-    add_to_docs_no_permission_description: `Necesitas el permiso de Administrar Servidor, o la enseñanza de memoria debe estar habilitada en este servidor.`,
+    add_to_docs_no_permission_description: `Necesitas el permiso Administrar servidor para guardar documentos.`,
     add_to_docs_no_embedding_title: `Sin modelo de incrustaciones`,
     add_to_docs_no_embedding_description: `Configura un modelo de incrustaciones para usar el almacén de documentos.`,
     add_to_docs_persona_not_found_title: `Persona no encontrada`,

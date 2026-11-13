@@ -2,7 +2,6 @@
 title: "Manuseio de Dados"
 sidebar:
   order: 4
-aiGenerated: false
 ---
 
 Exporte, faça backup, importe ou exclua suas configurações, memórias e personas usando comandos de barra Discord. Para termos de serviço e detalhes de privacidade, consulte `/legal terms-of-service` e `/legal privacy-policy`.
@@ -73,7 +72,9 @@ Anexe um arquivo exportado para restaurá-lo:
 Estas ações removem ou redefinem permanentemente os dados armazenados:
 
 - `/personal memories`: gerencie ou remova memórias pessoais.
-- `/memories`: gerencia ou remove memórias do servidor (requer Gerenciar Servidor).
+- `/memories`: gerencie ou remova memórias do servidor, documentos e lorebooks. Documentos e lorebooks
+  exigem `Gerenciar Servidor`. Com o ensino por membros ativado, os membros podem ver, editar ou remover
+  suas próprias memórias do servidor. Quando desativado, ver e gerenciar memórias do servidor exige `Gerenciar Servidor`.
 - `/personal nuke`: exclui permanentemente todos os dados pessoais dos servidores.
 - `/nuke`: limpa os dados do servidor, incluindo expressões personalizadas e regras de acesso pessoal. Defina `preserve_personas: true` para manter personas enquanto remove expressões e mídia personalizadas.
 - `/reset config`: restaura a configuração do servidor para os padrões do banco de dados.

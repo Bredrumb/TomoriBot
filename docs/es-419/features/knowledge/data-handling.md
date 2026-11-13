@@ -2,7 +2,6 @@
 title: "Manejo de datos"
 sidebar:
   order: 4
-aiGenerated: true
 ---
 
 Exporta, respalda, importa o elimina tus ajustes, recuerdos y personas con los comandos de barra de Discord. Para conocer las condiciones del servicio y la privacidad, consulta `/legal terms-of-service` y `/legal privacy-policy`.
@@ -73,7 +72,9 @@ Adjunte un archivo exportado para restaurarlo:
 Estas acciones eliminan o restablecen permanentemente los datos almacenados:
 
 - `/personal memories`: gestiona o elimina recuerdos personales.
-- `/memories`: administrar o eliminar memorias del servidor (requiere Administrar Servidor).
+- `/memories`: administra o elimina memorias del servidor, documentos y lorebooks. Los documentos y lorebooks
+  requieren `Administrar servidor`. Con la enseñanza de miembros habilitada, los miembros pueden ver, editar o eliminar sus
+  propias memorias del servidor. Cuando está desactivada, ver y administrar las memorias del servidor requiere `Administrar servidor`.
 - `/personal nuke`: elimina permanentemente todos los datos personales en los servidores.
 - `/nuke`: borra los datos del servidor, incluidas las expresiones personalizadas y las reglas de acceso de personas. Configura `preserve_personas: true` para conservar las personas y al mismo tiempo eliminar expresiones y medios personalizados.
 - `/reset config`: restaura la configuración del servidor a los valores predeterminados de la base de datos.

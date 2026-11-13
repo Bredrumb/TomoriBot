@@ -45,7 +45,7 @@ export default {
       attributelist_option: `属性リスト`,
       sampledialogues_option: `サンプル対話`,
       promptsnapshot_option: `プロンプトスナップショット`,
-      servermemories_desc: `サーバー記憶の追加・削除`,
+      servermemories_desc: `自分のサーバーの記憶を表示、新しい記憶を追加、自分の記憶を編集・削除`,
       attributelist_desc: `性格属性の追加・削除`,
       sampledialogues_desc: `サンプル対話の追加・削除`,
       promptsnapshot_desc: `/context および /tool prompt snapshot からプロンプト全文を閲覧`,

@@ -20,8 +20,8 @@ export default {
     // Member access
     member_access_title: `Configurações de Acesso de Membros`,
     member_access_description: `Configure permissões para membros sem \`Manage Server\`.`,
-    member_access_servermemories_enabled: `🟢 Membros podem gerenciar memórias do servidor e documentos.`,
-    member_access_servermemories_disabled: `🔴 Membros não podem gerenciar memórias do servidor e docs.`,
+    member_access_servermemories_enabled: `🟢 Membros podem ver suas próprias memórias do servidor, adicionar novas e editar ou remover as suas.`,
+    member_access_servermemories_disabled: `🔴 Apenas membros com a permissão Gerenciar Servidor podem ver ou gerenciar memórias do servidor.`,
     member_access_attributelist_enabled: `🟢 Membros podem gerenciar atributos da persona.`,
     member_access_attributelist_disabled: `🔴 Membros não podem gerenciar atributos da persona.`,
     member_access_sampledialogues_enabled: `🟢 Membros podem gerenciar diálogos de exemplo da persona.`,

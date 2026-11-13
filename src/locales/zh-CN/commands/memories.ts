@@ -71,7 +71,7 @@ export default {
     blacklisted_error_heading: `用户已被列入黑名单`,
     blacklisted_error_detail: "你在这个服务器已被列入黑名单，无法修改服务器记忆或文档。",
     teaching_disabled_error_heading: `教导已关闭`,
-    teaching_disabled_error_detail: `这个服务器已关闭成员教导记忆。`,
+    teaching_disabled_error_detail: `这个服务器已关闭成员教导记忆。只有拥有管理服务器权限的成员才能查看或管理服务器记忆。`,
     empty_memory_label: `（空白记忆）`,
     no_memories: `这个人格还没有教导过任何服务器记忆。`,
     no_owned_memories: `你还没有教导这个人格任何内容。`,

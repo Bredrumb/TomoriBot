@@ -2,7 +2,6 @@
 title: "数据处理"
 sidebar:
   order: 4
-aiGenerated: true
 ---
 
 使用Discord斜线命令导出、备份、导入或删除你的设置、记忆和人格。有关服务条款和隐私详细信息，请参阅`/legal terms-of-service`和`/legal privacy-policy`。
@@ -73,7 +72,7 @@ aiGenerated: true
 这些操作永久删除或重置存储的数据：
 
 - `/personal memories`：管理或删除个人记忆。
-- `/memories`：管理或删除服务器内存（需要管理服务器）。
+- `/memories`：管理或删除服务器记忆、文档和世界书。文档和世界书需要 `管理服务器` 权限。开启成员教导后，成员可以查看、编辑或删除自己的服务器记忆。关闭时，查看和管理服务器记忆需要 `管理服务器` 权限。
 - `/personal nuke`：永久删除跨服务器的所有个人数据。
 - `/nuke`：擦除服务器数据，包括自定义表达式和人格访问规则。设置`preserve_personas: true`以保留人格，同时删除自定义表达式和媒体。
 - `/reset config`：将服务器配置恢复为数据库默认值。

@@ -74,7 +74,7 @@ export default {
     blacklisted_error_detail:
       "Bạn đang nằm trong blacklist của máy chủ này, nên không thể thay đổi bộ nhớ hay tài liệu của máy chủ.",
     teaching_disabled_error_heading: `Tính năng dạy đang tắt`,
-    teaching_disabled_error_detail: `Tính năng thành viên dạy bộ nhớ đang bị tắt trên máy chủ này.`,
+    teaching_disabled_error_detail: `Tính năng thành viên dạy bộ nhớ đang bị tắt trên máy chủ này. Chỉ thành viên có quyền Quản lý máy chủ mới có thể xem hoặc quản lý bộ nhớ máy chủ.`,
     empty_memory_label: `(bộ nhớ trống)`,
     no_memories: `Chưa có bộ nhớ máy chủ nào được dạy cho persona này.`,
     no_owned_memories: `Bạn chưa dạy điều gì cho persona này.`,

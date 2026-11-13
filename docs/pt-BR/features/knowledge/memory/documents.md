@@ -30,7 +30,7 @@ Documentos precisam de um modelo de embedding. Escolha um no espaço Embeddings;
 
 Gerencie documentos em `/memories` > `Documentos`. Escolha `Adicionar novo documento` para enviar um arquivo `.txt`, `.md` ou `.pdf`. Um documento pode pertencer a uma persona ou ser compartilhado entre personas, e pode ser limitado a canais selecionados e seus tópicos. Você pode ler os fragmentos armazenados e editar ou remover qualquer um deles. Para transformar uma memória longa do servidor em documento, abra-a em `/memories` e escolha `Vetorizar`.
 
-Em servidores novos, o gerenciamento de documentos é restrito por padrão a membros com `Gerenciar Servidor`; quem gerencia o servidor pode conceder acesso por meio de `/moderation` > `Acesso de Membros`.
+Visualizar e gerenciar documentos requer `Gerenciar Servidor`. O ensino de memórias por membros se aplica apenas a memórias do servidor e vem desativado por padrão em novos servidores.
 
 ## Limites de documentos
 

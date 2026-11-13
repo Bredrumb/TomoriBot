@@ -12,7 +12,7 @@ aiGenerated: false
 
 个人记忆是关于你的事实。它们跨服务器跟随你，并在你参与对话时使用。服务器记忆则包含供该服务器内所有人使用的信息。
 
-每个人格都拥有独立的个人记忆与服务器记忆。在 `/personal memories` 的全局页面添加的个人记忆适用于每个人格。使用 `/personal memories` 管理个人记忆，使用 `/memories` 管理服务器记忆。
+每个人格都拥有独立的个人记忆与服务器记忆。在 `/personal memories` 的全局页面添加的个人记忆适用于每个人格。使用 `/personal memories` 管理个人记忆，使用 `/memories` 管理服务器记忆。查看和管理服务器记忆需要 `管理服务器` 权限，除非在 `/moderation` > `成员访问` 中开启了成员记忆教导。教导功能默认关闭。开启后，成员可以查看自己的服务器记忆、添加新记忆，以及编辑或删除自己的记忆。
 
 受支持的消息代理服务让 TomoriBot 能为已验证的代理身份保留独立的个人记忆。宿主 Discord 账号掌控隐私与授权。设置与限制请参阅[消息代理支持](/features/integrations/message-proxy-support/)。
 

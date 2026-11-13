@@ -20,8 +20,8 @@ export default {
     // Member access
     member_access_title: `成員存取設定`,
     member_access_description: `為沒有 \`管理伺服器\` 權限的成員設定權限。`,
-    member_access_servermemories_enabled: `🟢 成員可以管理伺服器記憶與文件。`,
-    member_access_servermemories_disabled: `🔴 成員無法管理伺服器記憶與文件。`,
+    member_access_servermemories_enabled: `🟢 成員可以查看自己的伺服器記憶、新增記憶，並編輯或移除自己的記憶。`,
+    member_access_servermemories_disabled: `🔴 只有具備「管理伺服器」權限的成員才能查看或管理伺服器記憶。`,
     member_access_attributelist_enabled: `🟢 成員可以管理人格屬性。`,
     member_access_attributelist_disabled: `🔴 成員無法管理人格屬性。`,
     member_access_sampledialogues_enabled: `🟢 成員可以管理人格範例對話。`,

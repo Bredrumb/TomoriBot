@@ -64,7 +64,7 @@ export default {
     add_to_docs_rag_unavailable_title: `本機 RAG 無法使用`,
     add_to_docs_rag_unavailable_description: `文件庫需要已啟用 pgvector 擴充功能的 PostgreSQL。`,
     add_to_docs_no_permission_title: `權限不足`,
-    add_to_docs_no_permission_description: `你需要「管理伺服器」權限，或這個伺服器必須開啟成員教導記憶。`,
+    add_to_docs_no_permission_description: `你需要「管理伺服器」權限才能儲存文件。`,
     add_to_docs_no_embedding_title: `沒有嵌入模型`,
     add_to_docs_no_embedding_description: `請設定一個嵌入模型，才能使用文件庫。`,
     add_to_docs_persona_not_found_title: `找不到人格`,

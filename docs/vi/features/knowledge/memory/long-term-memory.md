@@ -12,7 +12,7 @@ Bộ nhớ dài hạn là các dữ kiện ngắn gọn mà TomoriBot lưu giữ
 
 Bộ nhớ cá nhân là các dữ kiện về bạn. Chúng theo bạn qua các máy chủ và được sử dụng khi bạn tham gia vào một cuộc trò chuyện. Bộ nhớ máy chủ chứa thông tin dành cho mọi người trong máy chủ đó.
 
-Mỗi persona có bộ nhớ cá nhân và bộ nhớ máy chủ riêng. Bộ nhớ cá nhân được thêm trên trang Toàn cục của `/personal memories` áp dụng cho mọi persona. Quản lý bộ nhớ cá nhân bằng `/personal memories` và bộ nhớ máy chủ bằng `/memories`.
+Mỗi persona có bộ nhớ cá nhân và bộ nhớ máy chủ riêng. Bộ nhớ cá nhân được thêm trên trang Toàn cục của `/personal memories` áp dụng cho mọi persona. Quản lý bộ nhớ cá nhân bằng `/personal memories` và bộ nhớ máy chủ bằng `/memories`. Việc xem và quản lý bộ nhớ máy chủ yêu cầu `Quản lý máy chủ` trừ khi tính năng thành viên dạy bộ nhớ được bật trong `/moderation` > `Quyền thành viên`. Tính năng dạy bị tắt theo mặc định. Khi được bật, các thành viên có thể xem bộ nhớ máy chủ của mình, thêm bộ nhớ mới, và chỉnh sửa hoặc xóa bộ nhớ của chính mình.
 
 Các dịch vụ proxy tin nhắn được hỗ trợ cho phép TomoriBot giữ bộ nhớ cá nhân riêng biệt cho các danh tính proxy đã xác minh. Tài khoản Discord của máy chủ lưu trữ kiểm soát quyền riêng tư và phân quyền. Xem [Hỗ trợ proxy tin nhắn](/features/integrations/message-proxy-support/) để biết cách thiết lập và các giới hạn.
 

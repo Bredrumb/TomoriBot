@@ -21,7 +21,10 @@ participas en una conversación. Las memorias del servidor contienen informació
 
 Cada persona tiene sus propias memorias personales y del servidor. Una memoria personal agregada en la página
 Global de `/personal memories` se aplica a todas las personas. Gestiona las memorias personales con
-`/personal memories` y las memorias del servidor con `/memories`.
+`/personal memories` y las memorias del servidor con `/memories`. Ver y administrar las memorias del servidor requiere
+`Administrar servidor` a menos que la enseñanza de memorias de miembros esté habilitada en `/moderation` > `Acceso de miembros`.
+La enseñanza está desactivada por defecto. Cuando está activada, los miembros pueden ver sus propias memorias del servidor,
+agregar nuevas y editar o eliminar las suyas.
 
 Los servicios de proxy de mensajes compatibles permiten que TomoriBot mantenga memorias personales
 independientes para identidades de proxy verificadas. La cuenta anfitriona de Discord controla la privacidad

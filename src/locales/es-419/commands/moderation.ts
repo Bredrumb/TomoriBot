@@ -21,8 +21,8 @@ export default {
     // Acceso de miembros
     member_access_title: `Ajustes de acceso de miembros`,
     member_access_description: `Configura los permisos para miembros sin \`Administrar servidor\`.`,
-    member_access_servermemories_enabled: `🟢 Los miembros pueden administrar memorias y documentos del servidor.`,
-    member_access_servermemories_disabled: `🔴 Los miembros no pueden administrar memorias ni documentos del servidor.`,
+    member_access_servermemories_enabled: `🟢 Los miembros pueden ver sus propias memorias del servidor, agregar nuevas y editar o eliminar las suyas.`,
+    member_access_servermemories_disabled: `🔴 Solo los miembros con el permiso Administrar servidor pueden ver o administrar las memorias del servidor.`,
     member_access_attributelist_enabled: `🟢 Los miembros pueden administrar los atributos de las personas.`,
     member_access_attributelist_disabled: `🔴 Los miembros no pueden administrar los atributos de las personas.`,
     member_access_sampledialogues_enabled: `🟢 Los miembros pueden administrar los diálogos de muestra de las personas.`,

@@ -12,7 +12,12 @@ Memórias de longo prazo são fatos curtos que a TomoriBot mantém até que algu
 
 Memórias pessoais são fatos sobre você. Elas acompanham você entre servidores e são usadas quando você participa de uma conversa. As memórias do servidor contêm informações para todos naquele servidor.
 
-Cada persona tem suas próprias memórias pessoais e do servidor. Uma memória pessoal adicionada na página Global de `/personal memories` se aplica a todas as personas. Gerencie memórias pessoais com `/personal memories` e memórias do servidor com `/memories`.
+Cada persona tem suas próprias memórias pessoais e do servidor. Uma memória pessoal adicionada na página Global de
+`/personal memories` se aplica a todas as personas. Gerencie memórias pessoais com `/personal memories` e
+memórias do servidor com `/memories`. Visualizar e gerenciar memórias do servidor requer `Gerenciar Servidor`,
+a menos que o ensino de memórias por membros esteja ativado em `/moderation` > `Acesso de Membros`. O ensino vem
+desativado por padrão. Quando ativado, os membros podem ver suas próprias memórias do servidor, adicionar novas e
+editar ou remover as suas.
 
 Os serviços de proxy de mensagens compatíveis permitem que a TomoriBot mantenha memórias pessoais separadas para identidades com proxy verificadas. A conta do Discord que hospeda controla a privacidade e a autorização. Veja [Suporte a Proxy de Mensagens](/features/integrations/message-proxy-support/) para configuração e limitações.
 

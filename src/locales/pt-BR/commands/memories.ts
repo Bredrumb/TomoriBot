@@ -75,7 +75,7 @@ export default {
     blacklisted_error_detail:
       "Você está na lista negra deste servidor, então não pode alterar as memórias nem os documentos do servidor.",
     teaching_disabled_error_heading: `Ensino Desativado`,
-    teaching_disabled_error_detail: `O ensino de memórias por membros está desativado neste servidor.`,
+    teaching_disabled_error_detail: `O ensino de memórias por membros está desativado neste servidor. Apenas membros com a permissão Gerenciar Servidor podem ver ou gerenciar memórias do servidor.`,
     empty_memory_label: `(memória vazia)`,
     no_memories: `Nenhuma memória do servidor ensinada para esta persona ainda.`,
     no_owned_memories: `Você ainda não ensinou nada a esta persona.`,

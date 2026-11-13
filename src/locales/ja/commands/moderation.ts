@@ -21,8 +21,8 @@ export default {
     // メンバーアクセス
     member_access_title: `メンバーアクセス設定`,
     member_access_description: `「サーバー管理」を持たないメンバーの権限を設定します。`,
-    member_access_servermemories_enabled: `🟢 メンバーはサーバーの記憶とドキュメントを管理できます。`,
-    member_access_servermemories_disabled: `🔴 メンバーはサーバーの記憶とドキュメントを管理できません。`,
+    member_access_servermemories_enabled: `🟢 メンバーは自分のサーバーの記憶を表示し、新しい記憶を追加し、自分の記憶を編集または削除できます。`,
+    member_access_servermemories_disabled: `🔴 「サーバー管理」権限を持つメンバーのみがサーバーの記憶を表示・管理できます。`,
     member_access_attributelist_enabled: `🟢 メンバーはペルソナ属性を管理できます。`,
     member_access_attributelist_disabled: `🔴 メンバーはペルソナ属性を管理できません。`,
     member_access_sampledialogues_enabled: `🟢 メンバーはペルソナのサンプル会話を管理できます。`,

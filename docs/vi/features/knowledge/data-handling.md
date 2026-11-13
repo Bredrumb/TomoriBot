@@ -2,7 +2,6 @@
 title: "Xử lý dữ liệu"
 sidebar:
   order: 4
-aiGenerated: true
 ---
 
 Xuất, sao lưu, nhập hoặc xóa cài đặt, kỷ niệm và cá tính của bạn bằng lệnh gạch chéo Discord. Để biết điều khoản dịch vụ và chi tiết về quyền riêng tư, hãy xem `/legal terms-of-service` và `/legal privacy-policy`.
@@ -73,7 +72,9 @@ Phương tiện biểu thức đã tải lên được lưu trữ trên máy ch�
 Những hành động này sẽ xóa vĩnh viễn hoặc đặt lại dữ liệu đã lưu trữ:
 
 - `/personal memories`: quản lý hoặc xóa ký ức cá nhân.
-- `/memories`: quản lý hoặc xóa bộ nhớ máy chủ (yêu cầu Quản lý máy chủ).
+- `/memories`: quản lý hoặc xóa bộ nhớ máy chủ, tài liệu và lorebook. Tài liệu và lorebook
+  yêu cầu `Quản lý máy chủ`. Khi tính năng thành viên dạy bộ nhớ được bật, các thành viên có thể xem, chỉnh sửa hoặc xóa
+  bộ nhớ máy chủ của chính mình. Khi bị tắt, việc xem và quản lý bộ nhớ máy chủ yêu cầu `Quản lý máy chủ`.
 - `/personal nuke`: xóa vĩnh viễn tất cả dữ liệu cá nhân trên các máy chủ.
 - `/nuke`: xóa dữ liệu máy chủ, bao gồm các biểu thức tùy chỉnh và quy tắc truy cập cá nhân. Đặt `preserve_personas: true` để giữ các cá tính trong khi xóa các biểu thức và phương tiện tùy chỉnh.
 - `/reset config`: khôi phục cấu hình máy chủ về mặc định cơ sở dữ liệu.

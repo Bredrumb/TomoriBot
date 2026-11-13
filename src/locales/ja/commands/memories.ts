@@ -74,7 +74,7 @@ export default {
     blacklisted_error_detail:
       "あなたはこのサーバーでブラックリストに登録されているため、サーバーの記憶やドキュメントを変更できません。",
     teaching_disabled_error_heading: `記憶を教える機能は無効です`,
-    teaching_disabled_error_detail: `このサーバーではメンバーによる記憶の教示が無効になっています。`,
+    teaching_disabled_error_detail: `このサーバーではメンバーによる記憶の教示が無効になっています。「サーバー管理」権限を持つメンバーのみがサーバーの記憶を表示・管理できます。`,
     empty_memory_label: `（空の記憶）`,
     no_memories: `このペルソナにはまだサーバーの記憶が教えられていません。`,
     no_owned_memories: `あなたはまだこのペルソナに何も教えていません。`,

@@ -30,7 +30,7 @@ Los documentos necesitan un modelo de incrustación. Elige uno en la ranura de `
 
 Gestiona los documentos en `/memories` > `Documentos`. Elige `Añadir nuevo Documento` para subir un archivo `.txt`, `.md` o `.pdf`. Un documento puede pertenecer a una persona o compartirse entre todas las personas, y puede limitarse a canales seleccionados y a sus hilos. Puedes leer los fragmentos almacenados y editar o eliminar cualquiera de ellos. Para convertir una memoria del servidor larga en un documento, ábrela en `/memories` y elige `Vectorizar`.
 
-En servidores nuevos, la gestión de documentos está restringida por defecto a miembros con `Administrar servidor`; los administradores pueden otorgar acceso mediante `/moderation` > `Acceso de miembros`.
+Ver y administrar documentos requiere `Administrar servidor`. La enseñanza de memorias de miembros se aplica únicamente a las memorias del servidor y está desactivada por defecto en servidores nuevos.
 
 ## Límites de documentos
 
