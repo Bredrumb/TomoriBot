@@ -327,7 +327,7 @@ export async function initializeDatabase(options: InitializeDatabaseOptions = {}
       // Baseline DDL replaces these functions on every boot, so restore speech ownership before catalog updates fire their triggers.
       await executeSqlFile(
         client,
-        path.join(path.dirname(schemaPath), "migrations/901_subscription_speech_selections.sql"),
+        path.join(path.dirname(schemaPath), "migrations/903_subscription_credential_retention.sql"),
       );
       log.success("PostgreSQL database schema verified");
 

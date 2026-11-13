@@ -23,6 +23,7 @@ const BAND_MIGRATIONS = [
   "900_shared_oauth_states",
   "901_subscription_speech_selections",
   "902_subscription_capability_ownership",
+  "903_subscription_credential_retention",
 ] as const;
 const TAG_PREFIX = "_rt_supporter_speech_";
 const ROLLBACK = new Error("rollback");
@@ -139,7 +140,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Subscription speech upgrade regressions", 
   it("records and executes the deployment band on the disposable fresh install", async () => {
     const recorded = await testSql<{ name: string }[]>`
       SELECT name FROM schema_migrations
-      WHERE name IN (${BAND_MIGRATIONS[0]}, ${BAND_MIGRATIONS[1]}, ${BAND_MIGRATIONS[2]})
+      WHERE name = ANY(${testSql.array([...BAND_MIGRATIONS], "text")})
       ORDER BY name
     `;
     expect(recorded.map(({ name }) => name)).toEqual([...BAND_MIGRATIONS]);
