@@ -26,9 +26,14 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("stored API key retention", () => {
   useFullEnvSandbox();
   let fixture: FixtureRefs;
   let modelId: number;
+  let reviseSpeechCredentials: string;
 
   beforeAll(async () => {
     await setupTestDb();
+    const [definition] = await testSql<
+      { body: string }[]
+    >`SELECT pg_get_functiondef('revise_speech_credentials()'::regprocedure) AS body`;
+    reviseSpeechCredentials = definition.body;
     fixture = await insertFixtures(testSql);
     const [model] = await testSql`SELECT llm_id FROM llms WHERE llm_provider = 'google' LIMIT 1`;
     modelId = model.llm_id;
@@ -51,6 +56,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("stored API key retention", () => {
   });
 
   afterAll(async () => {
+    await testSql.unsafe(reviseSpeechCredentials);
     cache.clear();
     await cleanupFixtures(testSql);
   });
