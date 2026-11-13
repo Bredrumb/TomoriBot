@@ -138,6 +138,7 @@ function extractOpenRouterEmbeddings(response: unknown): number[][] {
 export interface OpenrouterProviderConfig extends ProviderConfig {
   // OpenRouter uses OpenAI-compatible API, simple configuration
   seesImages?: boolean; // Whether the model supports image inputs
+  seesYoutube?: boolean;
   seesVideos?: boolean; // Whether the model supports video inputs
   topP?: number; // Nucleus sampling (0.0-1.0)
   topK?: number; // Top-k sampling
@@ -688,6 +689,7 @@ export class OpenrouterProvider
       disabledParams: tomoriState.config.llm_disabled_params ?? [],
       maxOutputTokens: resolvedMaxOutputTokens,
       seesImages: effectiveSeesImages, // Use effective value (may be overridden)
+      seesYoutube: resolveEffectiveOpenRouterSeesYouTube(tomoriState),
       seesVideos: effectiveSeesVideos, // Wire through video capability flag
       // repetitionPenalty is hardcoded as a general token repetition dampener
       repetitionPenalty: 1.1,

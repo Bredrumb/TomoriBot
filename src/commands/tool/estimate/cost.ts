@@ -1013,6 +1013,7 @@ export async function measureOpenRouterInputTokens(
     contextItems,
     providerConfig.seesImages ?? true,
     providerConfig.seesVideos ?? false,
+    providerConfig.seesYoutube ?? false,
   );
   const requestBody = buildOpenRouterProbeRequest(providerConfig, messages);
 

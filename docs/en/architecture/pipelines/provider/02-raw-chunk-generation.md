@@ -30,6 +30,10 @@ the trailing usage arrives or the stream ends, because the orchestrator returns 
 the tool loop as soon as it receives a completed tool call. The call retains its reported cost and
 tokens; a response without usage still proceeds at the SSE end marker or when the body closes.
 
+OpenRouter rechecks video and YouTube capabilities when serializing context, including context
+reused by a fallback model. Unsupported video parts become a text notice. Direct video support
+does not imply YouTube support.
+
 ## Shared parameter degradation
 <!-- anchor: shared-parameter-degradation -->
 

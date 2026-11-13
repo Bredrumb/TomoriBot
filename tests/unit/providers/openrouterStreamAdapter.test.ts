@@ -805,6 +805,49 @@ describe("OpenrouterStreamAdapter response body teardown", () => {
 });
 
 describe("OpenrouterStreamAdapter video context", () => {
+  it("rechecks YouTube capability on existing context while retaining direct video support", async () => {
+    const bodies: Array<{ messages: unknown[] }> = [];
+    const fetchStub = stubGlobalFetch((_input, init) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return makeSseResponse(["[DONE]"]);
+    });
+    try {
+      for (const seesYoutube of [false, true]) {
+        for (const youtube of [false, true]) {
+          const context = makeStreamContext();
+          context.contextItems = [
+            {
+              role: "user",
+              parts: [
+                {
+                  type: "video",
+                  uri: youtube ? "https://www.youtube.com/watch?v=example" : "https://example.test/video.mp4",
+                  mimeType: youtube ? "video/youtube" : "video/mp4",
+                  isYouTubeLink: youtube,
+                },
+              ],
+            },
+          ];
+          const config = { ...makeStreamConfig(), seesVideos: true, seesYoutube };
+          await drainStream(new OpenrouterStreamAdapter().startStream(config, context));
+          const parts =
+            bodies.at(-1)?.messages.flatMap((message) => {
+              const content = (message as { content?: unknown }).content;
+              return Array.isArray(content)
+                ? content
+                : typeof content === "string"
+                  ? [{ type: "text", text: content }]
+                  : [];
+            }) ?? [];
+          expect(parts.some((part) => part.type === "video_url")).toBe(!youtube || seesYoutube);
+          expect(parts.some((part) => part.type === "text")).toBe(youtube && !seesYoutube);
+        }
+      }
+    } finally {
+      fetchStub.mockRestore();
+    }
+  });
+
   it("retains safe video diagnostics on HTTP and SSE failures without fetching videos or duplicating incident records", async () => {
     const cases = [
       {
@@ -868,7 +911,7 @@ describe("OpenrouterStreamAdapter video context", () => {
                 ],
               },
             ];
-            const config: OpenrouterStreamConfig = { ...makeStreamConfig(), seesVideos: true };
+            const config: OpenrouterStreamConfig = { ...makeStreamConfig(), seesYoutube: true, seesVideos: true };
             const adapter = new OpenrouterStreamAdapter();
             const chunks: RawStreamChunk[] = [];
             for await (const chunk of adapter.startStream(config, context)) chunks.push(chunk);
@@ -942,7 +985,7 @@ describe("OpenrouterStreamAdapter video context", () => {
     );
     try {
       const adapter = new OpenrouterStreamAdapter();
-      const config: OpenrouterStreamConfig = { ...makeStreamConfig(), seesVideos: true };
+      const config: OpenrouterStreamConfig = { ...makeStreamConfig(), seesYoutube: true, seesVideos: true };
       await drainStream(adapter.startStream(config, context));
       expect(context.videoRequestDiagnostics?.videos).toEqual([
         { source: "discord_cdn", scheme: "https", mimeType: "video/mp4" },
@@ -1008,13 +1051,13 @@ describe("OpenrouterStreamAdapter video context", () => {
         const adapter = new OpenrouterStreamAdapter();
         try {
           const chunks: RawStreamChunk[] = [];
-          const config: OpenrouterStreamConfig = { ...makeStreamConfig(), seesVideos: true };
+          const config: OpenrouterStreamConfig = { ...makeStreamConfig(), seesYoutube: true, seesVideos: true };
           for await (const chunk of adapter.startStream(config, context)) {
             chunks.push(chunk);
           }
           expect(chunks.map((chunk) => adapter.processChunk(chunk).type)).not.toContain("error");
           expect(requestCount).toBe(1);
-          expect(requestMessages).toEqual(await adapter.buildProbeMessages(context.contextItems, true, true));
+          expect(requestMessages).toEqual(await adapter.buildProbeMessages(context.contextItems, true, true, true));
           const parts = requestMessages.flatMap((message) =>
             Array.isArray(message.content) ? message.content : [{ type: "text", text: message.content }],
           );
