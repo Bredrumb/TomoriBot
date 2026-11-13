@@ -1,3 +1,4 @@
+import * as retention from "@/utils/db/repositories/ApiKeyRetentionRepository";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { useEnvSandbox } from "../../helpers/env";
 import * as managedProvider from "@/modules/supporter-billing/runtime/managedProvider";
@@ -116,3 +117,9 @@ describe("OpenRouter engine funded searches", () => {
     expect(record.mock.calls.every(([funding]) => funding !== undefined)).toBe(true);
   });
 });
+
+let activityLookup: { mockRestore(): void };
+beforeEach(() => {
+  activityLookup = spyOn(retention, "loadCredentialActivityReferences").mockResolvedValue([]);
+});
+afterEach(() => activityLookup.mockRestore());

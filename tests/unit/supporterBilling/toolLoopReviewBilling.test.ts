@@ -1,3 +1,4 @@
+import * as retention from "@/utils/db/repositories/ApiKeyRetentionRepository";
 import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import * as capabilityResolver from "@/utils/provider/providerCapabilityResolver";
 import * as crypto from "@/utils/security/crypto";
@@ -50,6 +51,7 @@ let hiddenToolNotices: string[] = [];
 let onStopCheck: (() => void) | null = null;
 
 const scopedMock = createScopedModuleMocker(mock, {
+  "@/utils/db/repositories/ApiKeyRetentionRepository": retention,
   "@/utils/discord/embedHelper": realEmbedHelper,
   "@/utils/discord/toolProgressNotice": realToolProgressNotice,
   "@/utils/discord/streamOrchestrator": realStreamOrchestrator,
@@ -67,6 +69,11 @@ stubLogMembers({
   success: () => undefined,
   section: () => undefined,
 });
+
+scopedMock.module("@/utils/db/repositories/ApiKeyRetentionRepository", () => ({
+  ...retention,
+  loadCredentialActivityReferences: async () => [],
+}));
 
 scopedMock.module("@/utils/discord/embedHelper", () => ({
   ...realEmbedHelper,

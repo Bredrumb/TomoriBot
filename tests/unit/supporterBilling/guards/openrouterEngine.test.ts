@@ -1,3 +1,4 @@
+import * as retention from "@/utils/db/repositories/ApiKeyRetentionRepository";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { useEnvSandbox } from "../../../helpers/env";
 import { supporterUsageStatisticsRepository } from "@/modules/supporter-billing/db/repositories";
@@ -122,3 +123,9 @@ describe("OpenRouter web search billing guards", () => {
     expect(result.error).toContain(localizedCopy("en-US", "commands.subscribe.request.scope.server"));
   });
 });
+
+let activityLookup: { mockRestore(): void };
+beforeEach(() => {
+  activityLookup = spyOn(retention, "loadCredentialActivityReferences").mockResolvedValue([]);
+});
+afterEach(() => activityLookup.mockRestore());

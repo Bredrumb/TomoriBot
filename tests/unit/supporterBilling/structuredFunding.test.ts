@@ -1,3 +1,4 @@
+import * as retention from "@/utils/db/repositories/ApiKeyRetentionRepository";
 import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import {
   supporterProviderOption,
@@ -338,7 +339,7 @@ describe("Subscription structured-call payer ownership", () => {
       ).toMatchObject({ status: "completed" });
     }
     expect(seen).toEqual([
-      { key: "fixture-byok", context: undefined },
+      { key: "fixture-byok", context: expect.objectContaining({ storedCredentialActivity: expect.anything() }) },
       { key: "fixture-member", context: getSupporterUsageContext(funding) },
     ]);
     member.mockRejectedValue(new SupporterRequestDeniedError("model_not_allowed"));
@@ -360,3 +361,9 @@ describe("Subscription structured-call payer ownership", () => {
     });
   });
 });
+
+let activityLookup: { mockRestore(): void };
+beforeEach(() => {
+  activityLookup = spyOn(retention, "loadCredentialActivityReferences").mockResolvedValue([]);
+});
+afterEach(() => activityLookup.mockRestore());

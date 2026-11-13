@@ -1,4 +1,5 @@
-import { afterEach, beforeAll, describe, expect, it, spyOn } from "bun:test";
+import * as retention from "@/utils/db/repositories/ApiKeyRetentionRepository";
+import { beforeEach, afterEach, beforeAll, describe, expect, it, spyOn } from "bun:test";
 import type { Client, Message, TextChannel } from "discord.js";
 import { humanizerSettingsFromDegree } from "@/constants/humanizer";
 import type { EmbeddingModelRow, SavedProviderConfigRow } from "@/types/db/schema";
@@ -119,7 +120,7 @@ const SAVED_EMBEDDING_PROVIDER: SavedProviderConfigRow = {
   server_id: 1,
   provider: "google",
   credential_revision: 1,
-  api_key: null,
+  api_key: Buffer.from("synthetic-embedding-credential"),
   key_version: 1,
   llm_id: null,
   diffusion_model_id: null,
@@ -351,3 +352,9 @@ describe("supporter denial rendering guards", () => {
     expect(notice?.description).toMatch(localizedProse("en-US", "commands.subscribe.sponsorship.errors.inactive"));
   });
 });
+
+let activityLookup: { mockRestore(): void };
+beforeEach(() => {
+  activityLookup = spyOn(retention, "loadCredentialActivityReferences").mockResolvedValue([]);
+});
+afterEach(() => activityLookup.mockRestore());

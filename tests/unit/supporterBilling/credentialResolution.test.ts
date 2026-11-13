@@ -1,3 +1,5 @@
+import { getSupporterFundingFromUsageContext } from "@/modules/supporter-billing/runtime/types";
+import * as retention from "@/utils/db/repositories/ApiKeyRetentionRepository";
 import { beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import { useEnvSandbox } from "../../helpers/env";
 import * as managedProvider from "@/modules/supporter-billing/runtime/managedProvider";
@@ -55,10 +57,16 @@ function makeSavedProviderConfigRow(
 }
 
 const scopedMock = createScopedModuleMocker(mock, {
+  "@/utils/db/repositories/ApiKeyRetentionRepository": retention,
   "@/utils/db/repositories": realRepositories,
   "@/utils/db/repositories/SpeechRepository": realSpeechRepository,
   "@/utils/security/crypto": realCrypto,
 });
+
+scopedMock.module("@/utils/db/repositories/ApiKeyRetentionRepository", () => ({
+  ...retention,
+  loadCredentialActivityReferences: async () => [],
+}));
 
 scopedMock.module("@/utils/db/repositories/SpeechRepository", () => ({
   ...realSpeechRepository,
@@ -136,7 +144,7 @@ describe("personal credential resolution for capability split", () => {
         const resolved = await resolveCapabilityCredentials(1, capability, { userId: 1 });
         expect(resolved.apiKey).toBe("synthetic-personal-byok");
         expect(resolved.source).toBe("personal");
-        expect(resolved.usageContext).toBeUndefined();
+        expect(getSupporterFundingFromUsageContext(resolved.usageContext)).toBeNull();
       }
       expect(memberKey).not.toHaveBeenCalled();
     } finally {
@@ -169,7 +177,7 @@ describe("personal credential resolution for capability split", () => {
     try {
       const resolved = await resolveCapabilityCredentials(1, "embedding");
       expect(resolved).toMatchObject({ provider: "openrouter", apiKey: "server-fixture-key", source: "server" });
-      expect(resolved.usageContext).toBeUndefined();
+      expect(getSupporterFundingFromUsageContext(resolved.usageContext)).toBeNull();
       funding.mockRejectedValue(new SupporterRequestDeniedError("model_unavailable", undefined, "embedding", "server"));
       expect((await resolveCapabilityCredentials(1, "embedding")).apiKey).toBe("server-fixture-key");
       expect(funding).not.toHaveBeenCalled();

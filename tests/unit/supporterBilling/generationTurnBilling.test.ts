@@ -1,3 +1,4 @@
+import * as retention from "@/utils/db/repositories/ApiKeyRetentionRepository";
 import { createLlmRow, createPersona } from "../../helpers/fixtures";
 import * as memberCredentials from "@/modules/supporter-billing/runtime/managedProvider";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
@@ -93,6 +94,7 @@ type TestStopContext = {
 };
 
 const scopedMock = createScopedModuleMocker(mock, {
+  "@/utils/db/repositories/ApiKeyRetentionRepository": retention,
   "@/utils/cache/channelLlmCache": realChannelLlmCache,
   "@/utils/chat/admissionGuards": realAdmissionGuards,
   "@/utils/cache/novelaiSubscriptionCache": realNovelaiSubscriptionCache,
@@ -117,6 +119,11 @@ stubLogMembers({
   success: () => undefined,
   warn: () => undefined,
 });
+
+scopedMock.module("@/utils/db/repositories/ApiKeyRetentionRepository", () => ({
+  ...retention,
+  loadCredentialActivityReferences: async () => [],
+}));
 
 scopedMock.module("@/utils/cache/channelLlmCache", () => ({
   ...realChannelLlmCache,
