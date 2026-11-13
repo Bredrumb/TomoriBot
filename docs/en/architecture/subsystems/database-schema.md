@@ -243,6 +243,15 @@ including link expressions. Existing rows remain editable when the limit is reac
 - **`custom_endpoints`**: model registrations under a connection, linking to synthetic catalog rows through `model_ref_id`.
 - **`scoped_model_registrations`**: exclusive arc table mapping extra catalog rows under shared provider names to a specific `server_id` or `user_id`.
 
+Migration 140 moves active server selections and saved server/personal selections from NVIDIA's
+`nv-embed-v1` to `nvidia/nemotron-3.5-embed-1b`, which is already the seeded default. Apply it with
+the bot stopped and restart every worker afterward so configuration caches reload. The migration
+preserves stored vectors and their original family labels. Memory recall can fill vectors in the
+new family; existing documents remain unavailable to the new family's search until explicitly
+re-embedded through `RagRepository.reembedServerDocuments`. SQL migration does not call providers.
+Rollback preserves the supported selections because it cannot distinguish migrated rows from
+later choices.
+
 ### Decision registration lifecycle
 
 Decision catalogs remain independent of text assignments. Migration 098 extends the scoped

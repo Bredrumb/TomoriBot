@@ -37,6 +37,15 @@ interface ChatTurnLatencyFields {
   assets_ms: number;
   history_build_ms: number;
   participant_ms: number;
+  participant_candidate_ms: number;
+  participant_members_ms: number;
+  participant_proxy_ms: number;
+  participant_composition_ms: number;
+  participant_candidate_reads: number;
+  participant_member_cache_hits: number;
+  participant_member_fetches: number;
+  participant_proxy_reads: number;
+  participant_discovery: "unmeasured" | "fresh" | "reused";
   naming_ms: number;
   reunion_ms: number;
   native_ms: number;
@@ -58,6 +67,10 @@ type StageField =
   | "assets_ms"
   | "history_build_ms"
   | "participant_ms"
+  | "participant_candidate_ms"
+  | "participant_members_ms"
+  | "participant_proxy_ms"
+  | "participant_composition_ms"
   | "naming_ms"
   | "reunion_ms"
   | "native_ms";
@@ -66,6 +79,7 @@ interface TurnLatencyScope {
   invocation: ChatLatencyInvocation;
   fields: ChatTurnLatencyFields;
   finished: boolean;
+  participantActive: boolean;
 }
 
 const scope = new AsyncLocalStorage<TurnLatencyScope>();
@@ -88,6 +102,7 @@ export async function runWithChatTurnLatency<T>(
   const active: TurnLatencyScope = {
     invocation,
     finished: false,
+    participantActive: false,
     fields: {
       gateway_ms: invocation.gatewayMs,
       admission_ms: admissionMs,
@@ -100,6 +115,15 @@ export async function runWithChatTurnLatency<T>(
       assets_ms: -1,
       history_build_ms: -1,
       participant_ms: -1,
+      participant_candidate_ms: -1,
+      participant_members_ms: -1,
+      participant_proxy_ms: -1,
+      participant_composition_ms: -1,
+      participant_candidate_reads: 0,
+      participant_member_cache_hits: 0,
+      participant_member_fetches: 0,
+      participant_proxy_reads: 0,
+      participant_discovery: "unmeasured",
       naming_ms: -1,
       reunion_ms: -1,
       native_ms: -1,
@@ -132,10 +156,14 @@ function current(): TurnLatencyScope | undefined {
 
 export async function measureChatTurnStage<T>(field: StageField, callback: () => Promise<T>): Promise<T> {
   const active = current();
+  const participantStage = field === "participant_ms";
+  if (field.startsWith("participant_") && !participantStage && !active?.participantActive) return callback();
+  if (participantStage && active) active.participantActive = true;
   const startedAt = performance.now();
   try {
     return await callback();
   } finally {
+    if (participantStage && active) active.participantActive = false;
     if (active && !active.finished) {
       active.fields[field] = Math.max(0, active.fields[field]) + performance.now() - startedAt;
     }
@@ -147,6 +175,23 @@ export function recordChatTurnConfiguration(provider: string, humanizer: Humaniz
   if (!active) return;
   if (active.fields.dispatch_ms < 0) active.fields.provider = providerDimension(provider);
   active.fields.humanizer = matchHumanizerPreset(humanizer) ?? "custom";
+}
+
+export function recordChatTurnParticipantDiscovery(reused: boolean): void {
+  const active = current();
+  if (active?.participantActive) active.fields.participant_discovery = reused ? "reused" : "fresh";
+}
+
+export function recordChatTurnParticipantLookup(kind: "candidate" | "member_cache" | "member_fetch" | "proxy"): void {
+  const active = current();
+  if (!active?.participantActive) return;
+  const field = {
+    candidate: "participant_candidate_reads",
+    member_cache: "participant_member_cache_hits",
+    member_fetch: "participant_member_fetches",
+    proxy: "participant_proxy_reads",
+  } as const;
+  active.fields[field[kind]]++;
 }
 
 function providerDimension(provider: string): LatencyProvider {
