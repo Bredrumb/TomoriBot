@@ -848,6 +848,47 @@ describe("OpenrouterStreamAdapter video context", () => {
     }
   });
 
+  it("selects the latest supported video when a YouTube link follows a direct video", async () => {
+    const bodies: Array<{ messages: Array<{ content: unknown }> }> = [];
+    const fetchStub = stubGlobalFetch((_input, init) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return makeSseResponse(["[DONE]"]);
+    });
+    try {
+      for (const sameMessage of [false, true]) {
+        for (const seesYoutube of [false, true]) {
+          for (const seesVideos of [false, true]) {
+            const direct: ContextPart = { type: "video", uri: "https://example.test/video.mp4", mimeType: "video/mp4" };
+            const youtube: ContextPart = {
+              type: "video",
+              uri: "https://www.youtube.com/watch?v=example",
+              mimeType: "video/youtube",
+              isYouTubeLink: true,
+            };
+            const context = makeStreamContext();
+            context.contextItems = sameMessage
+              ? [{ role: "user", parts: [direct, youtube] }]
+              : [
+                  { role: "user", parts: [direct] },
+                  { role: "user", parts: [youtube] },
+                ];
+            const config: OpenrouterStreamConfig = { ...makeStreamConfig(), seesVideos, seesYoutube };
+            await drainStream(new OpenrouterStreamAdapter().startStream(config, context));
+            const videos = bodies
+              .at(-1)
+              ?.messages.flatMap((message) => (Array.isArray(message.content) ? message.content : []))
+              .filter((part) => part.type === "video_url");
+            expect(videos).toEqual(
+              seesVideos ? [{ type: "video_url", video_url: { url: seesYoutube ? youtube.uri : direct.uri } }] : [],
+            );
+          }
+        }
+      }
+    } finally {
+      fetchStub.mockRestore();
+    }
+  });
+
   it("retains safe video diagnostics on HTTP and SSE failures without fetching videos or duplicating incident records", async () => {
     const cases = [
       {
