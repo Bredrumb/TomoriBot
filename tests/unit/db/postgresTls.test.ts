@@ -18,7 +18,7 @@ describe("production PostgreSQL TLS trust", () => {
   it("lets TEST_PRODUCTION skip TLS only for a database on this machine", () => {
     for (const host of ["localhost", "127.0.0.1", "::1", "[::1]", " LOCALHOST "]) {
       expect(skipsTlsForTestProduction(host, "true")).toBe(true);
-      expect(skipsTlsForTestProduction(host, undefined)).toBe(false);
+      expect(skipsTlsForTestProduction(host, "")).toBe(false);
     }
     for (const host of ["tomoribot-postgres.postgres.database.azure.com", "10.0.0.5", "127.0.0.1.example.com", "db"]) {
       expect(skipsTlsForTestProduction(host, "true")).toBe(false);

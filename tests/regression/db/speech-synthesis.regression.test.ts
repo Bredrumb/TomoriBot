@@ -1,3 +1,8 @@
+import {
+  currentProviderUsageContext,
+  withProviderUsageContext,
+  type ProviderUsageContext,
+} from "@/utils/provider/providerUsage";
 import { localizedCopy } from "../../helpers/localeCases";
 import { createSpeechCallerFixture } from "../../helpers/speechCallers";
 import { getAvailableToolsWithMCP } from "@/tools/availability";
@@ -42,7 +47,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Hosted speech synthesis lifecycle and fall
   let rejectionCode: string | undefined;
   let onCreate: (() => Promise<void>) | undefined;
   let onSynthesize: (() => Promise<void>) | undefined;
-  const requests: Array<{ url: string; init: RequestInit }> = [];
+  const requests: Array<{ url: string; init: RequestInit; usageContext?: ProviderUsageContext }> = [];
   const wav = createSpeechWav();
   let mp3: Buffer;
   const serverScope = () => ({ kind: "server" as const, ownerId: refs.serverId });
@@ -87,7 +92,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Hosted speech synthesis lifecycle and fall
       Object.assign(
         async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
           const url = String(input);
-          requests.push({ url, init: init ?? {} });
+          requests.push({ url, init: init ?? {}, usageContext: currentProviderUsageContext() });
           if (init?.method === "DELETE")
             return deleteFails
               ? Response.json({ error: { message: upstreamError } }, { status: 500 })
@@ -156,6 +161,23 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Hosted speech synthesis lifecycle and fall
       source: { kind: "design", designPrompt: "Warm narration", ...(temporary ? {} : { personaId: refs.personaId }) },
     };
   }
+
+  it("uses the speech credential context for Google requests inside a different text turn", async () => {
+    const speech = await request(false, true);
+    const result = await withProviderUsageContext({ credentialProvider: "openrouter" }, () =>
+      synthesizeVoiceMessage(speech),
+    );
+    expect(result.success).toBe(true);
+    const authenticated = requests.filter((entry) => new Headers(entry.init.headers).has("x-goog-api-key"));
+    expect(authenticated.length).toBeGreaterThan(0);
+    expect(authenticated.some((entry) => entry.init.method === "DELETE")).toBe(true);
+    for (const entry of authenticated) {
+      expect(entry.usageContext?.storedCredentialActivity?.requestKeyDigest).toBe(
+        speech.target?.usageContext?.storedCredentialActivity?.requestKeyDigest,
+      );
+      expect(entry.usageContext?.storedCredentialActivity).toBeDefined();
+    }
+  });
 
   function routing(sourceIsExplicit = false): NonNullable<VoiceMessageSynthesisRequest["routing"]> {
     return {

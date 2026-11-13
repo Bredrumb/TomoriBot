@@ -645,22 +645,28 @@ export async function execute(
 
     let generatedImageData: string | null = null;
     if (imageRoute.kind === "custom") {
-      const result = await generateCustomImageViaEndpoint({
-        endpoint: imageRoute.endpoint,
-        apiKey,
-        prompt,
-        aspectRatio,
-        referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
-      });
+      const endpoint = imageRoute.endpoint;
+      const result = await withProviderUsageContext(imageCreds.usageContext, () =>
+        generateCustomImageViaEndpoint({
+          endpoint,
+          apiKey,
+          prompt,
+          aspectRatio,
+          referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
+        }),
+      );
       generatedImageData = result.imageData;
     } else if (imageRoute.kind === "native") {
-      const result = await imageRoute.provider.generateNativeImage({
-        apiKey,
-        model: modelCodename,
-        prompt,
-        aspectRatio,
-        ...(referenceImages.length > 0 ? { referenceImages } : {}),
-      });
+      const provider = imageRoute.provider;
+      const result = await withProviderUsageContext(imageCreds.usageContext, () =>
+        provider.generateNativeImage({
+          apiKey,
+          model: modelCodename,
+          prompt,
+          aspectRatio,
+          ...(referenceImages.length > 0 ? { referenceImages } : {}),
+        }),
+      );
       generatedImageData = result.imageData;
     } else if (imageRoute.kind === "openrouter") {
       const result = await withProviderUsageContext(imageCreds.usageContext, async () =>
@@ -682,15 +688,17 @@ export async function execute(
 
       const messageParts = buildGeminiImagePromptParts(prompt, referenceImages);
 
-      const response = await chat.sendMessage({
-        message: messageParts,
-        config: {
-          responseModalities: ["IMAGE"],
-          imageConfig: {
-            aspectRatio: aspectRatio,
+      const response = await withProviderUsageContext(imageCreds.usageContext, () =>
+        chat.sendMessage({
+          message: messageParts,
+          config: {
+            responseModalities: ["IMAGE"],
+            imageConfig: {
+              aspectRatio: aspectRatio,
+            },
           },
-        },
-      });
+        }),
+      );
 
       if (response?.candidates && response.candidates.length > 0 && response.candidates[0]?.content?.parts) {
         for (const part of response.candidates[0].content.parts) {
@@ -713,14 +721,16 @@ export async function execute(
         });
       }
       const { generateZaiNativeImage } = await import("@/providers/zai/zaiImageGeneration");
-      const result = await generateZaiNativeImage({
-        apiKey,
-        model: modelCodename,
-        prompt,
-        aspectRatio,
-        endpointUrl:
-          executionProvider === "zaicoding" ? ZAI_CODING_IMAGES_GENERATIONS_URL : ZAI_GENERAL_IMAGES_GENERATIONS_URL,
-      });
+      const result = await withProviderUsageContext(imageCreds.usageContext, () =>
+        generateZaiNativeImage({
+          apiKey,
+          model: modelCodename,
+          prompt,
+          aspectRatio,
+          endpointUrl:
+            executionProvider === "zaicoding" ? ZAI_CODING_IMAGES_GENERATIONS_URL : ZAI_GENERAL_IMAGES_GENERATIONS_URL,
+        }),
+      );
       generatedImageData = result.imageData;
     } else {
       if (referenceImages.length > 0) {
@@ -735,13 +745,15 @@ export async function execute(
         });
       }
       const { generateNvidiaNativeImage } = await import("@/providers/nvidia/nvidiaImageGeneration");
-      const result = await generateNvidiaNativeImage({
-        apiKey,
-        model: modelCodename,
-        prompt,
-        aspectRatio,
-        referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
-      });
+      const result = await withProviderUsageContext(imageCreds.usageContext, () =>
+        generateNvidiaNativeImage({
+          apiKey,
+          model: modelCodename,
+          prompt,
+          aspectRatio,
+          referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
+        }),
+      );
       generatedImageData = result.imageData;
     }
 

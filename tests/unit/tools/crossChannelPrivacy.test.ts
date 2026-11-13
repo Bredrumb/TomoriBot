@@ -657,7 +657,10 @@ describe("cross-channel full privacy", () => {
             },
           ]);
           const contextItems = buildBoomerangContext({ ...pending, targetChannelMessages: longMessages });
-          const text = contextItems[0]?.parts[0]?.type === "text" ? contextItems[0].parts[0].text : "";
+          const text = contextItems
+            .flatMap((item) => item.parts)
+            .flatMap((part) => (part.type === "text" ? [part.text] : []))
+            .join("\n");
           expect(text.length).toBeGreaterThan(1500);
           expect(text).toContain("Final posted dispatch outcome at the end of the window.");
           expect(text).not.toContain("...");

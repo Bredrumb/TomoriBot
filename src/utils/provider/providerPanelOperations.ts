@@ -1972,10 +1972,12 @@ async function editServerProvider(input: EditProviderInput): Promise<EditProvide
     });
     if (!updated) return { status: "write-failed" };
     if (input.state.llm.llm_provider.toLowerCase() === provider) {
+      const savedConfig = await llmProviderRepo.loadSavedProviderConfig(input.state.server_id, provider);
+      if (!savedConfig) return { status: "write-failed" };
       const activated = await activateServerTextModelFromSavedConfig({
         serverDiscId: input.serverDiscId,
         tomoriState: input.state,
-        savedConfig: nextConfig,
+        savedConfig,
       });
       if (activated.status !== "activated") return { status: "write-failed" };
     }

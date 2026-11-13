@@ -210,11 +210,13 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Encrypted credential recovery", () => {
       expect(row.key_version).toBe(4);
       await verifyCiphertext(testSql, row.ciphertext, 4);
     }
+    await testSql`DROP TRIGGER track_api_key_replacement ON server_model_configs`;
     await testSql`ALTER TABLE server_model_configs DROP COLUMN api_key`;
     try {
       expect((await run("auditKeyVersions")).code).toBe(0);
     } finally {
       await testSql`ALTER TABLE server_model_configs ADD COLUMN api_key BYTEA`;
+      await testSql`CREATE TRIGGER track_api_key_replacement BEFORE UPDATE OF api_key ON server_model_configs FOR EACH ROW EXECUTE FUNCTION track_api_key_replacement()`;
       await testSql`UPDATE server_model_configs SET api_key = pgp_sym_encrypt(${CREDENTIAL}, ${KEYS.CRYPTO_SECRET_V4}) WHERE server_id = ${serverId}`;
     }
   });

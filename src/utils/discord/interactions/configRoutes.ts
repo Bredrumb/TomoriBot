@@ -1,3 +1,4 @@
+import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 import { handleDraftModalOpen, handleDraftRoutes } from "@/utils/discord/interactions/responseDraftingRoutes";
 import { naturalNudgePanelDependencies } from "@/modules/natural-nudges/discord/operations";
 import { sameNaturalNudgeInterests } from "@/modules/natural-nudges/db/types";
@@ -560,7 +561,7 @@ const defaultDependencies: ConfigRouteDependencies = {
     const target = (await resolveSpeechTargets(state.server_id)).clone;
     const key = target?.endpoint?.api_style === "elevenlabs" ? target.apiKey : null;
     if (!key) return view;
-    const result = await fetchElevenLabsVoiceCatalog(key);
+    const result = await withProviderUsageContext(target?.usageContext, () => fetchElevenLabsVoiceCatalog(key));
     if (!result.success || !result.voices?.length) return view;
     return {
       ...view,

@@ -64,7 +64,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("stored API key retention", () => {
     const [row] = await testSql`
       INSERT INTO saved_provider_configs (server_id, provider, api_key, key_version, llm_id, llm_temperature)
       VALUES (${fixture.serverId}, 'google', ${ciphertext}, 1, ${modelId}, 0.7)
-      RETURNING *
+      RETURNING saved_config_id, credential_revision, api_key, credential_last_attempt_at
     `;
     return row;
   }
@@ -199,6 +199,23 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("stored API key retention", () => {
       true,
     );
     expect(await clearInactiveApiKeys(90, testSql)).toHaveLength(0);
+  });
+
+  it("keeps the live primary rotation pointer when a differently encrypted legacy mirror expires", async () => {
+    const canonical = await encrypt();
+    await save(canonical);
+    const mirror = await encrypt();
+    await testSql`UPDATE server_model_configs SET api_key = ${mirror} WHERE server_id = ${fixture.serverId}`;
+    const [pointer] = await testSql`INSERT INTO api_key_rotation (server_id, provider, is_main_key_pointer)
+      VALUES (${fixture.serverId}, 'google', true) RETURNING rotation_key_id`;
+    await age("server_model_configs");
+    await clearInactiveApiKeys(90, testSql);
+    expect(
+      await testSql`SELECT 1 FROM api_key_rotation WHERE rotation_key_id = ${pointer.rotation_key_id}`,
+    ).toHaveLength(1);
+    const [saved] =
+      await testSql`SELECT api_key FROM saved_provider_configs WHERE server_id = ${fixture.serverId} AND provider = 'google'`;
+    expect(saved.api_key.equals(canonical)).toBe(true);
   });
 
   it("defers primary expiry while the eligible pool member is locked", async () => {
@@ -470,5 +487,20 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("stored API key retention", () => {
     const [restored] =
       await testSql`SELECT api_key FROM saved_provider_configs WHERE saved_config_id = ${saved.saved_config_id}`;
     expect(restored.api_key).toBeNull();
+  });
+  it("restores a promoted credential to the legacy mirror on rollback", async () => {
+    await save(await encrypt());
+    await age("saved_provider_configs");
+    const replacement = await encrypt("synthetic_promoted_rollback_key");
+    await testSql`INSERT INTO api_key_rotation (server_id, provider, api_key, key_version)
+      VALUES (${fixture.serverId}, 'google', ${replacement}, 1)`;
+    await clearInactiveApiKeys(90, testSql);
+    try {
+      await executeTestSqlFile("src/db/migrations/139_api_key_activity.down.sql");
+      const [mirror] = await testSql`SELECT api_key FROM server_model_configs WHERE server_id = ${fixture.serverId}`;
+      expect(mirror.api_key.equals(replacement)).toBe(true);
+    } finally {
+      await executeTestSqlFile("src/db/migrations/139_api_key_activity.sql");
+    }
   });
 });

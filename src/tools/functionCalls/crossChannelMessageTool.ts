@@ -165,11 +165,7 @@ export function buildBoomerangContext(boomerang: PendingBoomerang): StructuredCo
     `You have just returned from channel \`${boomerang.targetChannelName}\`.\nReport back naturally on what happened there.`;
   const outro = boomerang.outroText ?? "Now continue the conversation here with a concise update.";
 
-  let contextText = `[System: ${intro}\nOutcome: ${resultStr}.`;
-  if (messagesBlock) {
-    contextText += `\nHere is what was happening in channel \`${boomerang.targetChannelName}\` (last 10 messages, oldest first):\n${messagesBlock}`;
-  }
-  contextText += `\n${outro}]`;
+  const contextText = `[System: ${intro}\nOutcome: ${resultStr}.\n${outro}]`;
 
   return [
     {
@@ -177,6 +173,21 @@ export function buildBoomerangContext(boomerang: PendingBoomerang): StructuredCo
       parts: [{ type: "text", text: contextText }],
       metadataTag: ContextItemTag.SYSTEM_INSTRUCTION_BLOCK,
     },
+    ...(messagesBlock
+      ? [
+          {
+            role: "user" as const,
+            parts: [
+              {
+                type: "text" as const,
+                text: `Recent transcript from channel \`${boomerang.targetChannelName}\` (oldest first):\n${messagesBlock}`,
+              },
+            ],
+            metadataTag: ContextItemTag.SYSTEM_INSTRUCTION_BLOCK,
+            boomerangTranscript: true,
+          },
+        ]
+      : []),
   ];
 }
 

@@ -70,7 +70,7 @@ beforeEach(() => {
   modal = makeFakeInteraction();
   spyOn(personaRepository, "loadState").mockResolvedValue(state);
   spyOn(states, "getCachedTomoriState").mockResolvedValue(state);
-  spyOn(crypto, "getOptApiKey").mockResolvedValue("synthetic-nai-key");
+  spyOn(crypto, "getOptApiKeyCredentials").mockResolvedValue({ apiKey: "synthetic-nai-key", usageContext: {} });
   spyOn(naiModels, "resolveNaiDiffusionModel").mockResolvedValue({
     diffusionModelId: 3,
     codename: "nai-diffusion-4-5-full",

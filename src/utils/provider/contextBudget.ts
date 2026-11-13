@@ -62,7 +62,7 @@ export async function applyProviderContextTruncation(
     reservedTailItems,
     normalizeMessageFetchLimit(tomoriState.config.message_fetch_limit),
   );
-  if (totalDropped === 0) return contextItems;
+  if (totalDropped === 0) return truncated;
 
   log.warn(
     `History truncation: dropped ${historyPairsDropped} history exchange pair(s) and ${sampleItemsDropped} sample dialogue item(s) for ${tomoriState.llm.llm_codename} to preserve output budget`,

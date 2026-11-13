@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it, mock, setSystemTime } from "bun:test";
+import { afterEach, beforeAll, describe, expect, it, mock, setSystemTime } from "bun:test";
 import type { Client } from "discord.js";
 import { execute as executeConfigExport } from "@/commands/export/config";
 import { runConfigExport, type ConfigExportDependencies } from "@/commands/export/configExportOperation";
@@ -376,3 +376,5 @@ describe("config export operation", () => {
     );
   });
 });
+
+afterEach(() => setSystemTime());

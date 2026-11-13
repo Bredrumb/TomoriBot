@@ -596,28 +596,33 @@ export async function execute(
     const videoImplementation = resolveProviderFeatureImplementation(executionProvider, "videoGeneration");
 
     if (videoCreds.customEndpoint) {
-      const result = await generateCustomVideoViaEndpoint({
-        endpoint: videoCreds.customEndpoint,
-        apiKey,
-        prompt,
-        aspectRatio,
-        durationSeconds,
-        fps,
-        referenceImages,
-      });
+      const endpoint = videoCreds.customEndpoint;
+      const result = await withProviderUsageContext(videoCreds.usageContext, () =>
+        generateCustomVideoViaEndpoint({
+          endpoint,
+          apiKey,
+          prompt,
+          aspectRatio,
+          durationSeconds,
+          fps,
+          referenceImages,
+        }),
+      );
       videoData = result.videoData;
       videoFilename = result.filename ?? videoFilename;
     } else if (videoImplementation === "google") {
       const { generateGoogleNativeVideo } = await import("@/providers/google/googleVideoGeneration");
-      const result = await generateGoogleNativeVideo({
-        apiKey,
-        model: modelCodename,
-        prompt,
-        aspectRatio,
-        durationSeconds,
-        fps,
-        referenceImages,
-      });
+      const result = await withProviderUsageContext(videoCreds.usageContext, () =>
+        generateGoogleNativeVideo({
+          apiKey,
+          model: modelCodename,
+          prompt,
+          aspectRatio,
+          durationSeconds,
+          fps,
+          referenceImages,
+        }),
+      );
       videoData = result.videoData;
       videoFilename = result.filename ?? videoFilename;
     } else if (videoImplementation === "openrouter") {
@@ -642,15 +647,17 @@ export async function execute(
       videoFilename = result.filename ?? videoFilename;
     } else if (videoImplementation === "zai") {
       const { generateZaiNativeVideo } = await import("@/providers/zai/zaiVideoGeneration");
-      const result = await generateZaiNativeVideo({
-        apiKey,
-        model: modelCodename,
-        prompt,
-        aspectRatio,
-        durationSeconds,
-        fps,
-        referenceImages,
-      });
+      const result = await withProviderUsageContext(videoCreds.usageContext, () =>
+        generateZaiNativeVideo({
+          apiKey,
+          model: modelCodename,
+          prompt,
+          aspectRatio,
+          durationSeconds,
+          fps,
+          referenceImages,
+        }),
+      );
       videoData = result.videoData;
       videoFilename = result.filename ?? videoFilename;
     } else {

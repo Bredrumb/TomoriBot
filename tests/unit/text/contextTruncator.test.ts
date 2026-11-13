@@ -143,3 +143,26 @@ it("retains tail-slot facts across removed exchanges and repositions them above 
     expect(getCacheablePrefixBoundary(items)).toBe(originalBoundary);
   }
 });
+
+it("fits a boomerang transcript to the remaining input budget while preserving its outcome", () => {
+  const instruction: StructuredContextItem = {
+    role: "user",
+    metadataTag: ContextItemTag.SYSTEM_INSTRUCTION_BLOCK,
+    parts: [{ type: "text", text: "Report the successful outcome." }],
+  };
+  const transcript: StructuredContextItem = {
+    role: "user",
+    metadataTag: ContextItemTag.SYSTEM_INSTRUCTION_BLOCK,
+    boomerangTranscript: true,
+    parts: [{ type: "text", text: "transcript ".repeat(2000) }],
+  };
+  for (const contextLength of [512, 4096]) {
+    const result = truncateDialogueHistory([instruction, ...history(10), transcript], contextLength, 100);
+    const chars = result.truncated
+      .flatMap((item) => item.parts)
+      .reduce((sum, part) => sum + (part.type === "text" ? part.text.length : 0), 0);
+    expect(chars / 4).toBeLessThanOrEqual(Math.floor((contextLength - 100) * 0.9));
+    expect(result.truncated).toContain(instruction);
+    expect(transcript.parts[0]).toHaveProperty("text", "transcript ".repeat(2000));
+  }
+});

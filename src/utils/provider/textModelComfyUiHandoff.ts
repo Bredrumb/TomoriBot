@@ -14,11 +14,7 @@ import {
 import { parseCustomProvider } from "@/utils/provider/customProviderUtils";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import { getEndpointRemotePolicy } from "@/utils/security/remoteUrlSecurity";
-import {
-  currentProviderUsageContext,
-  withProviderUsageContext,
-  type ProviderUsageContext,
-} from "@/utils/provider/providerUsage";
+import { withProviderUsageContext, type ProviderUsageContext } from "@/utils/provider/providerUsage";
 
 export interface TextModelHandoffLease {
   /** Callers fire and forget, so a Discord upload is never held behind text-model readiness. */
@@ -424,7 +420,7 @@ function createMediaLease(params: {
 export async function beginTextModelHandoffBeforeComfyUi(params: {
   tomoriState: TomoriState;
   /** The ComfyUI server running the job, which is asked to release its VRAM before the text model reloads. */
-  comfyUi: { endpointUrl: string; apiKey: string };
+  comfyUi: { endpointUrl: string; apiKey: string; usageContext?: ProviderUsageContext };
 }): Promise<TextModelHandoffLease> {
   const connectionId = parseCustomProvider(params.tomoriState.llm.llm_provider)?.connectionId;
   if (connectionId == null) return NO_HANDOFF;
@@ -434,7 +430,7 @@ export async function beginTextModelHandoffBeforeComfyUi(params: {
   const credential = await loadCustomConnectionCredential(connection);
   const apiKey = credential?.apiKey ?? "";
   const usageContext = credential?.usageContext;
-  const comfyUiCredential = { apiKey: params.comfyUi.apiKey, usageContext: currentProviderUsageContext() };
+  const comfyUiCredential = { apiKey: params.comfyUi.apiKey, usageContext: params.comfyUi.usageContext };
 
   return withWriterQueue(connectionId, async () => {
     const gate = getGate(connectionId);

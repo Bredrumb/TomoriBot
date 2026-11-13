@@ -462,17 +462,41 @@ export class GenerateVideoTool extends BaseTool {
       const videoImplementation = resolveProviderFeatureImplementation(executionProvider, "videoGeneration");
 
       if (creds.customEndpoint) {
+        const endpoint = creds.customEndpoint;
         const handoff =
           creds.customEndpoint.api_style === "comfyui"
             ? await beginTextModelHandoffBeforeComfyUi({
                 tomoriState: context.tomoriState,
-                comfyUi: { endpointUrl: creds.customEndpoint.endpoint_url, apiKey },
+                comfyUi: { endpointUrl: creds.customEndpoint.endpoint_url, apiKey, usageContext },
               })
             : null;
         try {
-          const result = await generateCustomVideoViaEndpoint({
-            endpoint: creds.customEndpoint,
+          const result = await withProviderUsageContext(usageContext, () =>
+            generateCustomVideoViaEndpoint({
+              endpoint,
+              apiKey,
+              prompt,
+              aspectRatio,
+              durationSeconds,
+              resolution,
+              referenceImages,
+              generateAudio,
+              audioPrompt,
+              loop,
+              abortSignal: context.abortSignal,
+            }),
+          );
+          videoData = result.videoData;
+          videoFilename = result.filename ?? videoFilename;
+        } finally {
+          void handoff?.restore();
+        }
+      } else if (videoImplementation === "google") {
+        const { generateGoogleNativeVideo } = await import("@/providers/google/googleVideoGeneration");
+        const result = await withProviderUsageContext(usageContext, () =>
+          generateGoogleNativeVideo({
             apiKey,
+            model: modelCodename,
             prompt,
             aspectRatio,
             durationSeconds,
@@ -482,27 +506,8 @@ export class GenerateVideoTool extends BaseTool {
             audioPrompt,
             loop,
             abortSignal: context.abortSignal,
-          });
-          videoData = result.videoData;
-          videoFilename = result.filename ?? videoFilename;
-        } finally {
-          void handoff?.restore();
-        }
-      } else if (videoImplementation === "google") {
-        const { generateGoogleNativeVideo } = await import("@/providers/google/googleVideoGeneration");
-        const result = await generateGoogleNativeVideo({
-          apiKey,
-          model: modelCodename,
-          prompt,
-          aspectRatio,
-          durationSeconds,
-          resolution,
-          referenceImages,
-          generateAudio,
-          audioPrompt,
-          loop,
-          abortSignal: context.abortSignal,
-        });
+          }),
+        );
         videoData = result.videoData;
         videoFilename = result.filename ?? videoFilename;
       } else if (videoImplementation === "openrouter") {
@@ -531,19 +536,21 @@ export class GenerateVideoTool extends BaseTool {
         videoFilename = result.filename ?? videoFilename;
       } else if (videoImplementation === "zai") {
         const { generateZaiNativeVideo } = await import("@/providers/zai/zaiVideoGeneration");
-        const result = await generateZaiNativeVideo({
-          apiKey,
-          model: modelCodename,
-          prompt,
-          aspectRatio,
-          durationSeconds,
-          resolution,
-          referenceImages,
-          generateAudio,
-          audioPrompt,
-          loop,
-          abortSignal: context.abortSignal,
-        });
+        const result = await withProviderUsageContext(usageContext, () =>
+          generateZaiNativeVideo({
+            apiKey,
+            model: modelCodename,
+            prompt,
+            aspectRatio,
+            durationSeconds,
+            resolution,
+            referenceImages,
+            generateAudio,
+            audioPrompt,
+            loop,
+            abortSignal: context.abortSignal,
+          }),
+        );
         videoData = result.videoData;
         videoFilename = result.filename ?? videoFilename;
       } else {

@@ -185,7 +185,12 @@ export async function clearInactiveApiKeys(days: number, client: SQL = sql): Pro
         }
         if (legacy) {
           await tx`DELETE FROM api_key_rotation WHERE server_id = ${candidate.server_id}
-            AND provider = ${candidate.provider} AND is_main_key_pointer`;
+            AND provider = ${candidate.provider} AND is_main_key_pointer
+            AND NOT EXISTS (
+              SELECT 1 FROM saved_provider_configs saved
+              WHERE saved.server_id = ${candidate.server_id} AND saved.provider = ${candidate.provider}
+                AND saved.api_key IS NOT NULL
+            )`;
         }
         result.push({
           table: owner.table,

@@ -30,6 +30,8 @@ export default {
     persona_not_found_title: `Persona Not Found`,
     persona_not_found_description: `That persona no longer exists on this server. Pick one from the list.`,
     build_failed_title: `Context Unavailable`,
+    novelai_unavailable_description:
+      "Fitted NovelAI inspection is unavailable. Check the configured key and local tokenizer setup, then send a normal message to load subscription information before inspecting again.",
     build_failed_description: `I couldn't read this channel's history to build the prompt. Try again in a text channel I can see.`,
     no_permission_title: `Permission Denied`,
     no_permission_description: `You need **Manage Server** permission, or a manager can allow full prompts for members in \`/moderation\`.`,

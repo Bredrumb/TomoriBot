@@ -1,3 +1,4 @@
+import { withProviderUsageContext, type ProviderUsageContext } from "@/utils/provider/providerUsage";
 import { createHash } from "node:crypto";
 import { MAX_VOICE_DESIGN_PROMPT_LENGTH } from "@/constants/speech";
 import { TextInputStyle, type ModalSubmitInteraction } from "discord.js";
@@ -46,7 +47,9 @@ export interface ConfigPersonaVoiceRouteContext {
   dependencies: ConfigRouteDependencies;
 }
 
-type ActiveVoiceMode = { apiStyle: "tts-clone" } | { apiStyle: "elevenlabs"; apiKey: string };
+type ActiveVoiceMode =
+  | { apiStyle: "tts-clone" }
+  | { apiStyle: "elevenlabs"; apiKey: string; usageContext?: ProviderUsageContext };
 
 function receipt(
   locale: string,
@@ -82,7 +85,7 @@ async function resolveActiveVoiceMode(
 ): Promise<ActiveVoiceMode> {
   const endpoint = await dependencies.resolveActiveSpeechEndpoint(persona.server_id, "clone");
   return endpoint?.endpoint?.api_style === "elevenlabs" && endpoint.apiKey.trim()
-    ? { apiStyle: "elevenlabs", apiKey: endpoint.apiKey }
+    ? { apiStyle: "elevenlabs", apiKey: endpoint.apiKey, usageContext: endpoint.usageContext }
     : { apiStyle: "tts-clone" };
 }
 
@@ -205,7 +208,9 @@ async function loadRemoteCatalog(
 ): Promise<{ voices: ElevenLabsVoiceCatalogEntry[]; view: ConfigPersonaVoiceRemoteView } | null> {
   const mode = await resolveActiveVoiceMode(persona, dependencies);
   if (mode.apiStyle !== "elevenlabs") return null;
-  const result = await dependencies.fetchElevenLabsVoiceCatalog(mode.apiKey);
+  const result = await withProviderUsageContext(mode.usageContext, () =>
+    dependencies.fetchElevenLabsVoiceCatalog(mode.apiKey),
+  );
   if (!result.success || !result.voices?.length) return null;
   const voices = [...result.voices].sort((left, right) => left.name.localeCompare(right.name, "en"));
   return { voices, view: buildConfigPersonaVoiceRemoteView(locale, voices, 0, persona.speech_voice_id) };

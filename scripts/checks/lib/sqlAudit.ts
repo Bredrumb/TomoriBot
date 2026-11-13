@@ -91,6 +91,10 @@ export const EXEMPT_PATHS = new Map<string, string>([
   ["src/utils/misc/logger.ts", "logging infrastructure"],
   ["src/utils/security/crypto.ts", "security primitive"],
   ["src/utils/security/keyRotation.ts", "security primitive"],
+  [
+    "src/utils/security/encryptedColumns.ts",
+    "encrypted credential inventory and atomic key rotation with secret-safe failures",
+  ],
   ["src/utils/documents/documentService.ts", "RAG service layer; SQL invoked exclusively through RagRepository facade"],
   ["src/db/seed/catalog/presetAssetLock.ts", "catalog seeding concurrency lock"],
 ]);

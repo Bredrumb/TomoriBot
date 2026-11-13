@@ -1,3 +1,7 @@
+import {
+  loadSavedProvidersForCapability,
+  loadUserSavedProvidersForCapability,
+} from "@/utils/provider/savedProviderConfig";
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import type { Message } from "discord.js";
 import type { GenerationModelSelection } from "@/types/provider/generationModels";
@@ -415,6 +419,31 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Invocation model selection", () => {
       await testSql`DELETE FROM saved_provider_configs WHERE server_id = ${refs.serverId} AND provider = 'test-option'`;
       await testSql`UPDATE server_model_configs SET llm_id = ${config?.llm_id}, diffusion_model_id = ${config?.diffusion_model_id}, video_model_id = ${config?.video_model_id} WHERE server_id = ${refs.serverId}`;
       await testSql`DELETE FROM scoped_model_registrations WHERE server_id = ${refs.serverId} AND diffusion_model_id = ${personalImageId}`;
+    }
+  });
+  it("excludes cleared server and personal keys from capability and decision model selections", async () => {
+    await testSql`UPDATE saved_provider_configs SET api_key = NULL WHERE server_id = ${refs.serverId}`;
+    await testSql`UPDATE user_saved_provider_configs SET api_key = NULL WHERE user_id = ${refs.userId}`;
+    for (const capability of ["text", "vision", "embedding", "image", "video"] as const) {
+      expect(
+        (await loadSavedProvidersForCapability(refs.serverId, capability)).some((row) => row.provider === "google"),
+      ).toBe(false);
+      expect(
+        (await loadUserSavedProvidersForCapability(refs.userId, capability)).some((row) => row.provider === "google"),
+      ).toBe(false);
+    }
+    for (const scope of [
+      { kind: "server", ownerId: refs.serverId },
+      { kind: "personal", ownerId: refs.userId },
+    ] as const) {
+      expect(
+        (await llmModelRepo.loadDecisionModelOptions(scope)).some((option) => option.model.provider === "google"),
+      ).toBe(false);
+      expect(
+        (await llmModelRepo.loadDecisionModelOptions(scope, ["google"])).some(
+          (option) => option.model.provider === "google",
+        ),
+      ).toBe(true);
     }
   });
 });

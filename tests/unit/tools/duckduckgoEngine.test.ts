@@ -1,4 +1,5 @@
-import { afterEach, beforeAll, describe, expect, it, spyOn } from "bun:test";
+import * as retention from "@/utils/db/repositories/ApiKeyRetentionRepository";
+import { afterEach, beforeAll, describe, expect, it, mock, spyOn } from "bun:test";
 import { AnthropicToolAdapter } from "@/providers/anthropic/anthropicToolAdapter";
 import { GoogleToolAdapter } from "@/providers/google/googleToolAdapter";
 import { OpenAICompatibleToolAdapter } from "@/providers/openaiCompatible/openaiCompatibleToolAdapter";
@@ -32,7 +33,15 @@ import {
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { createLlmRow, createPersona } from "../../helpers/fixtures";
 import { localizedCopy } from "../../helpers/localeCases";
-import { stubLogMembers } from "../../helpers/mockSurface";
+import { createScopedModuleMocker, stubLogMembers } from "../../helpers/mockSurface";
+
+const scopedMock = createScopedModuleMocker(mock, {
+  "@/utils/db/repositories/ApiKeyRetentionRepository": retention,
+});
+scopedMock.module("@/utils/db/repositories/ApiKeyRetentionRepository", () => ({
+  ...retention,
+  loadCredentialActivityReferences: async () => [],
+}));
 
 stubLogMembers({ warn: () => {}, info: () => {}, success: () => {} });
 

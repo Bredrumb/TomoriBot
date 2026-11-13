@@ -1,3 +1,10 @@
+UPDATE server_model_configs mirror
+SET api_key = saved.api_key, key_version = saved.key_version
+FROM saved_provider_configs saved, llms model
+WHERE mirror.llm_id = model.llm_id
+  AND saved.server_id = mirror.server_id AND saved.provider = model.llm_provider
+  AND saved.api_key IS NOT NULL;
+
 DROP INDEX IF EXISTS idx_retention_saved_provider_configs_api_key;
 DROP INDEX IF EXISTS idx_retention_user_saved_provider_configs_api_key;
 DROP INDEX IF EXISTS idx_retention_api_key_rotation_api_key;

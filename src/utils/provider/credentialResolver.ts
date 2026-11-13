@@ -110,7 +110,7 @@ export function getCapabilityCredentialFailureCopy(
   if (!keys) return null;
   let description = localizer(locale, keys.descriptionKey);
   const days = readApiKeyInactivityDays();
-  if (days !== null && error instanceof CredentialUnavailableError && error.reason !== "decryption_failed") {
+  if (days !== null && error instanceof CredentialUnavailableError && error.reason === "no_saved_config") {
     description += `\n\n${localizer(locale, "commands.providers.credential_retention", { days })}`;
   }
   return { titleKey: keys.titleKey, description };

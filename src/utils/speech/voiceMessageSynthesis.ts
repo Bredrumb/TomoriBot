@@ -420,27 +420,31 @@ async function synthesizeHostedVoiceMessage(
     } else {
       if (source.kind !== "design" || !validDesign) throw new HostedSpeechError("invalid_request");
       const transport = createGoogleSpeechTransport(target.model.provider, target.apiKey);
-      cleanupPending = !(await cleanupPendingGoogleVoices(
-        target.owner,
-        target.credentialId,
-        target.credentialRevision,
-        target.apiKey,
-        attempt.operations,
+      cleanupPending = !(await withProviderUsageContext(usageContext, () =>
+        cleanupPendingGoogleVoices(
+          target.owner,
+          target.credentialId,
+          target.credentialRevision,
+          target.apiKey,
+          attempt.operations,
+        ),
       ));
-      const result = await synthesizeGoogleVoice({
-        transport,
-        owner: target.owner,
-        credentialId: target.credentialId,
-        credentialRevision: target.credentialRevision,
-        personaId: source.personaId,
-        prompt: source.designPrompt.trim(),
-        script: request.script,
-        direction: request.voiceInstructions,
-        model: target.model.codename,
-        signal,
-        maxBytes,
-        operations: attempt.operations,
-      });
+      const result = await withProviderUsageContext(usageContext, () =>
+        synthesizeGoogleVoice({
+          transport,
+          owner: target.owner,
+          credentialId: target.credentialId,
+          credentialRevision: target.credentialRevision,
+          personaId: source.personaId,
+          prompt: source.designPrompt.trim(),
+          script: request.script,
+          direction: request.voiceInstructions,
+          model: target.model.codename,
+          signal,
+          maxBytes,
+          operations: attempt.operations,
+        }),
+      );
       audio = result.audio;
       cleanupPending ||= result.cleanupPending;
     }

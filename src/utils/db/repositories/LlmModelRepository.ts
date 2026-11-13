@@ -166,8 +166,9 @@ class LlmModelRepository {
           OR endpoint.custom_endpoint_id IS NOT NULL
         )
         AND (
-          EXISTS (SELECT 1 FROM saved_provider_configs saved WHERE saved.server_id = ${serverId} AND saved.provider = model.provider)
-          OR EXISTS (SELECT 1 FROM user_saved_provider_configs saved WHERE saved.user_id = ${userId} AND saved.provider = model.provider)
+          EXISTS (SELECT 1 FROM saved_provider_configs saved WHERE saved.server_id = ${serverId} AND saved.provider = model.provider AND saved.api_key IS NOT NULL)
+          OR EXISTS (SELECT 1 FROM user_saved_provider_configs saved WHERE saved.user_id = ${userId} AND saved.provider = model.provider AND saved.api_key IS NOT NULL)
+          OR (endpoint.custom_endpoint_id IS NOT NULL AND NOT connection.requires_auth)
           OR model.provider = ANY(${sql.array([...managedProviders], "text")})
         )
       ORDER BY model.provider, model.decision_model_id
