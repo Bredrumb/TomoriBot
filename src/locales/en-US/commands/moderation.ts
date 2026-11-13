@@ -21,8 +21,8 @@ export default {
     // Member access
     member_access_title: `Member Access Settings`,
     member_access_description: `Configure permissions for members without \`Manage Server\`.`,
-    member_access_servermemories_enabled: `🟢 Members can manage server memories and documents.`,
-    member_access_servermemories_disabled: `🔴 Members cannot manage server memories and documents.`,
+    member_access_servermemories_enabled: `🟢 Members can view their own server memories, add new ones, and edit or remove their own.`,
+    member_access_servermemories_disabled: `🔴 Only members with Manage Server permission can view or manage server memories.`,
     member_access_attributelist_enabled: `🟢 Members can manage persona attributes.`,
     member_access_attributelist_disabled: `🔴 Members cannot manage persona attributes.`,
     member_access_sampledialogues_enabled: `🟢 Members can manage persona sample dialogues.`,

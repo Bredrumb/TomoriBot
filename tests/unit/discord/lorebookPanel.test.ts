@@ -242,20 +242,33 @@ describe("lorebook panel", () => {
     });
   });
 
-  it("hides add and import options from non-managers and disables every write button", () => {
-    const payload = buildMemoriesPanelPayload(panelInput({ canManage: false }));
-    expect(collectTextDisplays(payload.components)).toContain(
-      `-# ${localizedCopy("en-US", "commands.memories.lorebook_read_only_notice")}`,
-    );
-    const entrySelect = collectSelects(payload.components).find((select) => select.customId?.includes("lore-select"));
-    expect(entrySelect?.options?.some((option) => option.value?.startsWith("action:"))).toBe(false);
-    const lorebookButtons = collectButtons(payload.components).filter((button) =>
-      /lore-(edit-open|activation-open|toggle-enabled|remove-prompt|book-toggle-enabled|book-channels-open|book-rename-open|book-remove-prompt)/.test(
-        button.customId ?? "",
-      ),
-    );
-    expect(lorebookButtons.length).toBeGreaterThan(0);
-    expect(lorebookButtons.every((button) => button.disabled === true)).toBe(true);
+  it("hides shared content from non-managers even when member teaching is enabled", () => {
+    for (const category of ["lorebooks", "documents"] as const) {
+      const payload = buildMemoriesPanelPayload(
+        panelInput({
+          category,
+          canManage: false,
+          memteachingEnabled: true,
+          documents: [
+            {
+              document_id: 1,
+              document_name: "Hidden document",
+              first_chunk: "Hidden chunk",
+              channel_disc_ids: [],
+              channel_scope_pending: false,
+              isHistory: false,
+            },
+          ],
+        }),
+      );
+      expect(collectTextDisplays(payload.components)).toEqual([
+        localizedCopy("en-US", "commands.memories.manager_only_detail"),
+      ]);
+      expect(collectSelects(payload.components)).toHaveLength(0);
+      expect(collectButtons(payload.components).some((button) => /lore-|document-/.test(button.customId ?? ""))).toBe(
+        false,
+      );
+    }
   });
 
   it("renders saved channel scope, activation meta, and the delete confirmation", () => {

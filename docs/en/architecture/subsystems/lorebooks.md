@@ -51,7 +51,7 @@ category shares the Documents scope switcher and the Memories lineage picker; be
 lineage-owned, its picker groups personas that share a lineage. Scope lineage `0` is the Serverwide
 sentinel and every routed operation maps it back to a NULL lineage before calling the repository.
 
-Every member can read either scope. Only `canManage` writes, and every routed write re-resolves the
+Reading and writing either scope requires `canManage` (Manage Server in guilds). Every routed write re-resolves the
 scope, rejects a lineage that is not present on the server, and checks the permission again. A stale
 route for a removed persona or deleted entry repaints a safe scope with a changed-state receipt
 instead of writing. Modal opens are acknowledged by the modal itself; button and modal-submit writes

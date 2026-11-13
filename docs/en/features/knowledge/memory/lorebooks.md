@@ -9,8 +9,7 @@ Lorebooks are advanced memory for roleplay worlds, characters, and recurring sto
 Memories for everyday conversations. Lorebook entries recall the details you write when their keywords
 appear in recent messages.
 
-Manage lorebooks in `/memories` > `Lorebooks`. Every member can read the entries in scope; only
-members with `Manage Server` can add, edit, import, export, or remove them.
+Manage lorebooks in `/memories` > `Lorebooks`. Members need `Manage Server` to view, add, edit, import, export, or remove entries.
 
 ## Serverwide and Persona lorebooks
 

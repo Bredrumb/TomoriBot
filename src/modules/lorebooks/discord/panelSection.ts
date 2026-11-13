@@ -330,13 +330,6 @@ export function buildLorebookPanelSection(input: LorebookPanelRenderInput): Comp
     });
   }
 
-  if (!canManage) {
-    components.push({
-      type: ComponentType.TextDisplay,
-      content: withLinePrefix("-# ", localizer(locale, "commands.memories.lorebook_read_only_notice")),
-    });
-  }
-
   if (!personaScope && !selectedBook) return components;
 
   if (!personaScope && selectedBook) {

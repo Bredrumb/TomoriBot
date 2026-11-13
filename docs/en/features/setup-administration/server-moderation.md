@@ -56,7 +56,10 @@ Trigger Behavior.
 
 - **Member permissions**: in `/moderation` > Member Access, click `Edit Permissions` to control
   whether members without `Manage Server` can manage server memories, persona attributes,
-  sample dialogues, or inspect prompt snapshots.
+  sample dialogues, or inspect prompt snapshots. Server memory teaching is disabled by default and
+  lets members view their own memories, add new ones, and edit or remove their own. When disabled,
+  only members with `Manage Server` can view or manage server memories. Viewing and managing documents and
+  lorebooks requires `Manage Server`.
 - **User Blacklist**: in `/moderation` > User Blacklist, choose members for TomoriBot to ignore
   completely. Blacklisted members cannot trigger her or run commands, and their messages never
   reach prompt context. You can also set persona-specific member blocks.

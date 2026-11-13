@@ -20,7 +20,10 @@ in a conversation. Server memories contain information for everyone in that serv
 
 Each persona has its own personal and server memories. A personal memory added on the Global page of
 `/personal memories` applies to every persona. Manage personal memories with `/personal memories` and
-server memories with `/memories`.
+server memories with `/memories`. Viewing and managing server memories requires `Manage Server`
+unless member memory teaching is enabled under `/moderation` > `Member Access`. Teaching is off by
+default. When enabled, members can view their own server memories, add new ones, and edit or remove
+their own.
 
 Supported message-proxy services let TomoriBot keep separate personal memories for verified proxied
 identities. The host Discord account controls privacy and authorization. See

@@ -39,7 +39,7 @@ export interface DocumentChunkRow {
 }
 
 export type DocumentWriteResult =
-  | { status: "blacklisted" | "teaching-disabled" | "rag-disabled" | "memory-critical" }
+  | { status: "forbidden" | "rag-disabled" | "memory-critical" }
   | { status: "invalid-name" | "invalid-file" | "file-too-large" | "download-failed" }
   | { status: "empty-content" | "content-too-long" | "too-many-chunks" | "document-limit" | "chunk-limit" }
   | { status: "duplicate" | "quota-exceeded" | "credentials-missing" | "model-missing" | "not-found" }
@@ -84,7 +84,7 @@ export type VectorizeMemoryResult =
   | { status: "partial-failure"; documentId: number; documentName: string; chunkCount: number };
 
 export type DocumentRemoveResult =
-  | { status: "blacklisted" | "teaching-disabled" | "not-found" | "write-failed" }
+  | { status: "forbidden" | "not-found" | "write-failed" }
   | { status: "success"; documentName: string };
 
 export type ChunkEditResult =
@@ -146,8 +146,7 @@ async function embedChunks(
 
 export const serverDocumentsOperations = {
   async add(input: AddDocumentInput): Promise<DocumentWriteResult> {
-    if (input.isBlacklisted && !input.canManage) return { status: "blacklisted" };
-    if (!input.memteachingEnabled && !input.canManage) return { status: "teaching-disabled" };
+    if (!input.canManage) return { status: "forbidden" };
     if (!isRagAvailable()) return { status: "rag-disabled" };
     if (memoryGuard.checkMemory().status === "critical") return { status: "memory-critical" };
 
@@ -225,8 +224,7 @@ export const serverDocumentsOperations = {
     memteachingEnabled: boolean;
     historyOnly: boolean;
   }): Promise<DocumentRemoveResult> {
-    if (input.isBlacklisted && !input.canManage) return { status: "blacklisted" };
-    if (!input.memteachingEnabled && !input.canManage) return { status: "teaching-disabled" };
+    if (!input.canManage) return { status: "forbidden" };
     const documents = input.historyOnly
       ? await serverMemoryRepository.loadHistoryDocuments(input.serverId, input.personaId)
       : await serverMemoryRepository.loadDocuments(input.serverId, input.personaId);
@@ -329,16 +327,10 @@ export const serverDocumentsOperations = {
   },
 
   async vectorize(input: VectorizeMemoryInput): Promise<VectorizeMemoryResult> {
-    if (input.isBlacklisted && !input.canManage) return { status: "blacklisted" };
-    if (!input.memteachingEnabled && !input.canManage) return { status: "teaching-disabled" };
+    if (!input.canManage) return { status: "forbidden" };
     if (!isRagAvailable()) return { status: "rag-disabled" };
     if (memoryGuard.checkMemory().status === "critical") return { status: "memory-critical" };
-    const ownerFilter = input.canManage ? undefined : input.userId;
-    const memories = await serverMemoryRepository.loadServerMemoriesScoped(
-      input.serverId,
-      input.personaLineageId,
-      ownerFilter,
-    );
+    const memories = await serverMemoryRepository.loadServerMemoriesScoped(input.serverId, input.personaLineageId);
     const target = memories.find((memory) => memory.server_memory_id === input.memoryId);
     if (!target) return { status: "not-found" };
     return vectorizeLoadedMemory(input, target);

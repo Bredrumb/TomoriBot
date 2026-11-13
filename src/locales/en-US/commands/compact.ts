@@ -64,7 +64,7 @@ export default {
     add_to_docs_rag_unavailable_title: `Local RAG Not Available`,
     add_to_docs_rag_unavailable_description: `The document store requires PostgreSQL with the pgvector extension enabled.`,
     add_to_docs_no_permission_title: `Permission Denied`,
-    add_to_docs_no_permission_description: `You need Manage Server permission, or memory teaching must be enabled on this server.`,
+    add_to_docs_no_permission_description: `You need Manage Server permission to save documents.`,
     add_to_docs_no_embedding_title: `No Embedding Model`,
     add_to_docs_no_embedding_description: `Configure an embedding model to use the document store.`,
     add_to_docs_persona_not_found_title: `Persona Not Found`,
