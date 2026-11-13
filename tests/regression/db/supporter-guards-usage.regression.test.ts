@@ -164,7 +164,12 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("supporter guard usage through the real cre
           }
           return Response.json({
             id: "synthetic-guard-search",
-            usage: { cost: 0.0072, prompt_tokens: 100, completion_tokens: 1 },
+            usage: {
+              cost: 0.0072,
+              prompt_tokens: 100,
+              completion_tokens: 1,
+              prompt_tokens_details: { cached_tokens: 60, cache_write_tokens: 10 },
+            },
             choices: [
               {
                 message: {
@@ -191,7 +196,9 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("supporter guard usage through the real cre
     }
 
     const rows = async () =>
-      testSql`SELECT funding_scope, server_id, capability, model_codename, cost_usd, provider_request_id
+      testSql`SELECT funding_scope, server_id, capability, model_codename, cost_usd, provider_request_id,
+          input_tokens::float8 AS input_tokens, output_tokens::float8 AS output_tokens,
+          cache_read_tokens::float8 AS cache_read_tokens, cache_write_tokens::float8 AS cache_write_tokens
         FROM supporter_usage_statistics
         WHERE supporter_identity_id = ${identity.supporter_identity_id} AND capability = 'text'`;
     for (let attempt = 0; attempt < 50 && (await rows()).length === 0; attempt++) await Bun.sleep(10);
@@ -203,6 +210,10 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("supporter guard usage through the real cre
         model_codename: MODEL,
         cost_usd: 0.0072,
         provider_request_id: "synthetic-guard-search",
+        input_tokens: 100,
+        output_tokens: 1,
+        cache_read_tokens: 60,
+        cache_write_tokens: 10,
       },
     ]);
   });

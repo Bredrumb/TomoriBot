@@ -30,6 +30,8 @@ export function recordSupporterUsage(
       providerRequestId: report.providerRequestId ?? null,
       inputTokens: report.inputTokens ?? null,
       outputTokens: report.outputTokens ?? null,
+      cacheReadTokens: report.cacheReadTokens ?? null,
+      cacheWriteTokens: report.cacheWriteTokens ?? null,
     })
     .catch((error: unknown) =>
       log.warn("Failed to record subscription usage statistics", error, {

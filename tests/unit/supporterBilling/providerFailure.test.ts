@@ -248,6 +248,8 @@ describe("subscription usage statistics", () => {
         providerRequestId: null,
         inputTokens: null,
         outputTokens: null,
+        cacheReadTokens: null,
+        cacheWriteTokens: null,
       },
       {
         supporterIdentityId: 10,
@@ -259,6 +261,8 @@ describe("subscription usage statistics", () => {
         providerRequestId: "job_1",
         inputTokens: null,
         outputTokens: null,
+        cacheReadTokens: null,
+        cacheWriteTokens: null,
       },
     ]);
   });
@@ -274,8 +278,12 @@ describe("subscription usage statistics", () => {
         },
       };
       recordSupporterUsage(null, { modelCodename: "example/model", costUsd: 0.01 }, failing);
-      for (const costUsd of [undefined, null, -1, Number.NaN])
-        recordSupporterUsage(funding(), { modelCodename: "example/model", costUsd }, failing);
+      for (const costUsd of [undefined, null, -1, Number.NaN, Number.POSITIVE_INFINITY])
+        recordSupporterUsage(
+          funding(),
+          { modelCodename: "example/model", costUsd, cacheReadTokens: 0, cacheWriteTokens: 0 },
+          failing,
+        );
       expect(calls).toBe(0);
       expect(() =>
         recordSupporterUsage(funding(), { modelCodename: "example/model", costUsd: 0.01 }, failing),

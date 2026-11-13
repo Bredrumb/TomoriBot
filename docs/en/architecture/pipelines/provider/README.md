@@ -110,6 +110,11 @@ Callers report provider usage once per completed provider response, or pass
 reported cost, tokens, and provider request identity; they do not estimate missing charges. Job
 polling reports the final job identity once at the caller. A registered reporter owns persistence and
 deduplication. Reporting does not await storage, and reporter failures cannot fail inference.
+On release, `supporter_usage_statistics` stores reported cache reads and writes as nullable token
+counts alongside total input and output. Unknown counts remain null, and total input already includes
+the cache subsets. Spending limits use reported cost and provider balances, without recalculating
+charges from these token counts. Privileged billing schema initialization adds the columns before
+startup validation admits funded requests.
 Without a reporter, reporting does nothing. Document retrieval and re-embedding accept the same
 embedding `onUsage` callback; the caller supplies the recorder for each response.
 Decision execution owns its usage recorder and forwards validated usage to consumer callbacks.

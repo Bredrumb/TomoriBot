@@ -63,6 +63,8 @@ describe("supporter usage reporter", () => {
         costUsd: 0.02,
         inputTokens: 10,
         outputTokens: 2,
+        cacheReadTokens: 4,
+        cacheWriteTokens: 1,
         providerRequestId: "fixture-job",
       });
 
@@ -76,6 +78,8 @@ describe("supporter usage reporter", () => {
         costUsd: 0.02,
         inputTokens: 10,
         outputTokens: 2,
+        cacheReadTokens: 4,
+        cacheWriteTokens: 1,
         providerRequestId: "fixture-job",
       });
     } finally {
@@ -88,6 +92,35 @@ describe("supporter usage reporter", () => {
     try {
       reportProviderUsage({}, { modelCodename: "fixture/byok", costUsd: 0.02 });
       expect(record).not.toHaveBeenCalled();
+    } finally {
+      record.mockRestore();
+    }
+  });
+
+  it("preserves unknown cache counts and explicit zeros without changing reported cost", () => {
+    const record = spyOn(supporterUsageStatisticsRepository, "record").mockResolvedValue(true);
+    try {
+      const funding = createFunding();
+      for (const counts of [
+        {},
+        { cacheReadTokens: null, cacheWriteTokens: null },
+        { cacheReadTokens: 0, cacheWriteTokens: 0 },
+      ]) {
+        reportProviderUsage(getSupporterUsageContext(funding), {
+          modelCodename: funding.modelCodename,
+          costUsd: 0.02,
+          inputTokens: 10,
+          outputTokens: 2,
+          ...counts,
+        });
+        expect(record.mock.lastCall?.[0]).toMatchObject({
+          costUsd: 0.02,
+          inputTokens: 10,
+          outputTokens: 2,
+          cacheReadTokens: counts.cacheReadTokens ?? null,
+          cacheWriteTokens: counts.cacheWriteTokens ?? null,
+        });
+      }
     } finally {
       record.mockRestore();
     }

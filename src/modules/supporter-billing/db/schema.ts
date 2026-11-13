@@ -200,6 +200,8 @@ const SUPPORTER_BILLING_SCHEMA_STATEMENTS = [
     WHERE provider_request_id IS NOT NULL`,
   "ALTER TABLE supporter_usage_statistics ADD COLUMN IF NOT EXISTS input_tokens BIGINT CHECK (input_tokens >= 0)",
   "ALTER TABLE supporter_usage_statistics ADD COLUMN IF NOT EXISTS output_tokens BIGINT CHECK (output_tokens >= 0)",
+  "ALTER TABLE supporter_usage_statistics ADD COLUMN IF NOT EXISTS cache_read_tokens BIGINT CHECK (cache_read_tokens >= 0)",
+  "ALTER TABLE supporter_usage_statistics ADD COLUMN IF NOT EXISTS cache_write_tokens BIGINT CHECK (cache_write_tokens >= 0)",
   "CREATE INDEX IF NOT EXISTS idx_supporter_usage_statistics_identity ON supporter_usage_statistics(supporter_identity_id, recorded_at)",
   `DO $$ BEGIN
     IF to_regclass('public.supporter_oauth_states') IS NOT NULL THEN
@@ -312,7 +314,7 @@ export async function validateSupporterBillingSchema(
     SELECT e.last_successful_charge_at, e.next_charge_at, e.cancel_at_period_end,
       k.applied_limit, k.key_created_at, k.retained_cost, k.applied_allowance, k.target_allowance,
       k.detached_retention_started_at, k.retention_hold, k.carried_allowance, k.patreon_user_id, k.patreon_campaign_id, k.funded_period_start, k.funded_period_end,
-      u.input_tokens, u.output_tokens, w.idempotency_key
+      u.input_tokens, u.output_tokens, u.cache_read_tokens, u.cache_write_tokens, w.idempotency_key
     FROM supporter_entitlements e, supporter_member_keys k,
       supporter_usage_statistics u, supporter_webhook_events w, oauth_states o
     LIMIT 0

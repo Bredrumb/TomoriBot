@@ -362,6 +362,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
             `REVOKE INSERT ON supporter_webhook_events FROM ${role}`,
             `REVOKE USAGE ON SEQUENCE supporter_identities_supporter_identity_id_seq FROM ${role}`,
             "ALTER TABLE supporter_usage_statistics DROP COLUMN input_tokens",
+            "ALTER TABLE supporter_usage_statistics DROP COLUMN cache_read_tokens",
+            "ALTER TABLE supporter_usage_statistics DROP COLUMN cache_write_tokens",
             "ALTER TABLE supporter_member_keys DROP COLUMN detached_retention_started_at",
             "ALTER TABLE supporter_member_keys DROP COLUMN retention_hold",
             "DROP TABLE supporter_webhook_events",
@@ -1846,6 +1848,36 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
     expect(duplicateReceipt.event.webhook_event_id).toBe(firstReceipt.event.webhook_event_id);
   });
 
+  it("adds unknown cache counts to existing usage without changing stored spend", async () => {
+    await initializeSupporterBillingSchema(testSql);
+    const identity = await createSupporterFixture(`cache_upgrade_${Date.now()}`);
+    const rollback = new Error("rollback cache column upgrade");
+    try {
+      await expect(
+        testSql.begin(async (tx) => {
+          await tx`ALTER TABLE supporter_usage_statistics DROP COLUMN cache_read_tokens, DROP COLUMN cache_write_tokens`;
+          await tx`INSERT INTO supporter_usage_statistics (
+            supporter_identity_id, funding_scope, capability, model_codename, cost_usd, input_tokens, output_tokens
+          ) VALUES (${identity.supporter_identity_id}, 'personal', 'text', 'example/legacy-model', 0.25, 100, 5)`;
+          await initializeSupporterBillingSchema(tx);
+          await initializeSupporterBillingSchema(tx);
+          const rows = await tx`SELECT cost_usd, input_tokens::float8 AS input_tokens,
+            output_tokens::float8 AS output_tokens, cache_read_tokens, cache_write_tokens
+            FROM supporter_usage_statistics WHERE supporter_identity_id = ${identity.supporter_identity_id}`;
+          expect(rows).toEqual([
+            { cost_usd: 0.25, input_tokens: 100, output_tokens: 5, cache_read_tokens: null, cache_write_tokens: null },
+          ]);
+          expect(
+            await new SupporterUsageStatisticsRepository(tx).totalSince(identity.supporter_identity_id, new Date(0)),
+          ).toBe(0.25);
+          throw rollback;
+        }),
+      ).rejects.toBe(rollback);
+    } finally {
+      await testSql`DELETE FROM supporter_identities WHERE supporter_identity_id = ${identity.supporter_identity_id}`;
+    }
+  });
+
   it("records usage statistics once per provider job and follows identity and server deletion", async () => {
     await initializeSupporterBillingSchema(testSql);
     const repository = new SupporterUsageStatisticsRepository(testSql);
@@ -1872,7 +1904,15 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
     for (let poll = 0; poll < 3; poll++)
       recordSupporterUsage(
         funding,
-        { modelCodename: funding.modelCodename, costUsd: 0.25, providerRequestId: jobId },
+        {
+          modelCodename: funding.modelCodename,
+          costUsd: 0.25,
+          providerRequestId: jobId,
+          inputTokens: 1000,
+          outputTokens: 20,
+          cacheReadTokens: 400,
+          cacheWriteTokens: 100,
+        },
         repository,
       );
     recordSupporterUsage(
@@ -1882,12 +1922,21 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
     );
     recordSupporterUsage(
       { ...funding, capability: "text" },
-      { modelCodename: "example/text-model", costUsd: 0.001 },
+      {
+        modelCodename: "example/text-model",
+        costUsd: 0.001,
+        inputTokens: 10,
+        outputTokens: 1,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+      },
       repository,
     );
     const readRows = async () =>
       testSql`
-        SELECT funding_scope, server_id, capability, model_codename, cost_usd, provider_request_id
+        SELECT funding_scope, server_id, capability, model_codename, cost_usd, provider_request_id,
+          input_tokens::float8 AS input_tokens, output_tokens::float8 AS output_tokens,
+          cache_read_tokens::float8 AS cache_read_tokens, cache_write_tokens::float8 AS cache_write_tokens
         FROM supporter_usage_statistics
         WHERE supporter_identity_id = ${identity.supporter_identity_id}
         ORDER BY capability DESC, usage_statistic_id
@@ -1901,6 +1950,10 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
         model_codename: "example/video-model",
         cost_usd: 0.25,
         provider_request_id: jobId,
+        input_tokens: 1000,
+        output_tokens: 20,
+        cache_read_tokens: 400,
+        cache_write_tokens: 100,
       },
       {
         funding_scope: "server",
@@ -1909,6 +1962,10 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
         model_codename: "example/text-model",
         cost_usd: 0.001,
         provider_request_id: null,
+        input_tokens: null,
+        output_tokens: null,
+        cache_read_tokens: null,
+        cache_write_tokens: null,
       },
       {
         funding_scope: "server",
@@ -1917,6 +1974,10 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
         model_codename: "example/text-model",
         cost_usd: 0.001,
         provider_request_id: null,
+        input_tokens: 10,
+        output_tokens: 1,
+        cache_read_tokens: 0,
+        cache_write_tokens: 0,
       },
     ]);
     expect(
@@ -1930,6 +1991,22 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
         providerRequestId: jobId,
       }),
     ).toBe(false);
+
+    await initializeSupporterBillingSchema(testSql);
+    expect(await repository.totalSince(identity.supporter_identity_id, new Date(0))).toBeCloseTo(0.252, 10);
+    expect(
+      (await readRows()).map(
+        (row: { input_tokens: number | null; cache_read_tokens: number | null; cache_write_tokens: number | null }) => [
+          row.input_tokens,
+          row.cache_read_tokens,
+          row.cache_write_tokens,
+        ],
+      ),
+    ).toEqual([
+      [1000, 400, 100],
+      [null, null, null],
+      [10, 0, 0],
+    ]);
 
     await testSql`DELETE FROM servers WHERE server_id = ${server.server_id}`;
     expect((await readRows()).map((row: { server_id: number | null }) => row.server_id)).toEqual([null, null, null]);

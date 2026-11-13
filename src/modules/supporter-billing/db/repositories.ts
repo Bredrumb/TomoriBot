@@ -779,6 +779,8 @@ export interface RecordSupporterUsageParams {
   providerRequestId: string | null;
   inputTokens?: number | null;
   outputTokens?: number | null;
+  cacheReadTokens?: number | null;
+  cacheWriteTokens?: number | null;
 }
 
 export class SponsorshipConflictError extends Error {
@@ -860,7 +862,9 @@ export class SupporterUsageStatisticsRepository {
         cost_usd,
         provider_request_id,
         input_tokens,
-        output_tokens
+        output_tokens,
+        cache_read_tokens,
+        cache_write_tokens
       ) VALUES (
         ${params.supporterIdentityId},
         ${params.fundingScope},
@@ -870,7 +874,9 @@ export class SupporterUsageStatisticsRepository {
         ${params.costUsd},
         ${params.providerRequestId},
         ${params.inputTokens ?? null},
-        ${params.outputTokens ?? null}
+        ${params.outputTokens ?? null},
+        ${params.cacheReadTokens ?? null},
+        ${params.cacheWriteTokens ?? null}
       )
       ON CONFLICT (provider_request_id) WHERE provider_request_id IS NOT NULL DO NOTHING
       RETURNING usage_statistic_id
