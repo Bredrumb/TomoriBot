@@ -101,6 +101,7 @@ import type {
 export interface OpenrouterStreamConfig extends StreamConfig {
   // OpenRouter uses OpenAI-compatible config, simple structure
   seesImages?: boolean; // Whether the model supports image inputs
+  seesYoutube?: boolean;
   seesVideos?: boolean; // Whether the model supports video inputs
   // Sampling parameters to control output quality
   topP?: number; // Nucleus sampling (0.0-1.0)
@@ -253,8 +254,20 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     contextItems: StructuredContextItem[],
     seesImages = true,
     seesVideos = false,
+    seesYoutube = false,
   ): Promise<Array<Record<string, unknown>>> {
-    return this.assembleOpenrouterContext(contextItems, [], undefined, seesImages, "Assistant", seesVideos);
+    return this.assembleOpenrouterContext(
+      contextItems,
+      [],
+      undefined,
+      seesImages,
+      "Assistant",
+      seesVideos,
+      undefined,
+      undefined,
+      undefined,
+      seesYoutube,
+    );
   }
 
   private isOpenRouterParamSupported(
@@ -535,6 +548,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       context.messageIdMap,
       config.model,
       videoDiagnostics,
+      openrouterConfig.seesYoutube ?? false,
     );
     if (videoDiagnostics.videos.length > 0) context.videoRequestDiagnostics = videoDiagnostics;
 
@@ -2412,6 +2426,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     messageIdMap?: StreamContext["messageIdMap"],
     model?: string,
     videoDiagnostics?: StreamContext["videoRequestDiagnostics"],
+    seesYoutube = false,
   ): Promise<Array<Record<string, unknown>>> {
     const messages: Array<Record<string, unknown>> = [];
     const { items: relocatedContextItems, boundaryIndex } = relocateCacheContextItems(contextItems);
@@ -2603,7 +2618,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
             // For assistant turns, stage in pendingBotImageParts for a synthetic user turn.
             const videoTargetParts = role === "assistant" ? pendingBotImageParts : contentParts;
 
-            if (!seesVideos) {
+            if (!seesVideos || (part.isYouTubeLink && !seesYoutube)) {
               log.info(`Skipping video (model doesn't support videos): ${part.uri}`);
               videoTargetParts.push({
                 type: "text",

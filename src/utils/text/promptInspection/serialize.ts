@@ -1,3 +1,4 @@
+import { resolveEffectiveOpenRouterSeesYouTube } from "@/utils/provider/openrouterModelCapabilities";
 import { isPromptSystemItem } from "@/utils/text/context/promptLayout";
 import { getNovelAIProfile } from "@/providers/novelai/modelProfiles";
 import type { PreparedNovelAIRequest } from "@/providers/novelai/promptFitting";
@@ -252,7 +253,12 @@ export async function buildJsonSnapshot(
     };
   } else if (providerFamily === "openrouter" || providerFamily === "openai-compatible") {
     const adapter = new OpenrouterStreamAdapter();
-    const messages = await adapter.buildProbeMessages(contextItems, seesImages, seesVideos);
+    const messages = await adapter.buildProbeMessages(
+      contextItems,
+      seesImages,
+      seesVideos,
+      resolveEffectiveOpenRouterSeesYouTube({ ...persona, llm: activeLlm }),
+    );
 
     // Sanitize: replace data-URI image_url values (mirrors logSanitizedRequest)
     const sanitized = messages.map((msg: Record<string, unknown>) => {
