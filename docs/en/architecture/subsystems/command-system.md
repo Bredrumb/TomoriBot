@@ -51,6 +51,7 @@ All Discord interactions arrive at `src/events/interactionCreate/handleCommands.
 
 1. **Autocomplete:** If `interaction.isAutocomplete()` is true, routes to `runAutocompleteCommand()`.
 2. **Chat-input slash commands:** If `interaction.isChatInputCommand()` is true, routes to `runChatInputCommand()`:
+   - Acknowledges `/help`, `/config`, and `/setup` with an ephemeral deferred reply before command loading or database work; their entry points render panels and edit that reply.
    - Resolves category, group, and subcommand names into an execution key.
    - Evaluates server blacklist status; an unreadable status blocks execution with the temporary database error, while a confirmed blacklist entry receives the blacklist warning.
    - Checks category cooldown in `cooldownRepository`, scaling duration with `COMMAND_COOLDOWN_SCALE`.

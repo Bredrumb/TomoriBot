@@ -4155,7 +4155,7 @@ export async function executeConfigCommand(
   dependenciesOverride: Partial<ConfigRouteDependencies> = {},
 ): Promise<void> {
   const dependencies: ConfigRouteDependencies = { ...defaultDependencies, ...dependenciesOverride };
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  if (!interaction.deferred && !interaction.replied) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const scope = await dependencies.resolveScope(interaction, false);
   if (!scope) {
