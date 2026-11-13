@@ -87,7 +87,8 @@ Esses serviços podem processar dados fora do seu país e têm suas próprias po
 
 | Dados | Retenção |
 |---|---|
-| Trechos de gravações de conversa | Sem expiração por idade a menos que `RECORD_RETENTION_DAYS` esteja definido; o limite de dias positivos configurado também se aplica a dados existentes. A cota lógica de 100 MiB por proprietário entre Servidores pode remover os trechos completos mais antigos mais cedo. |
+| Trechos de gravações de conversa | 90 dias após a mensagem que iniciou o trecho. A cota lógica de 100 MiB por proprietário entre Servidores pode remover os trechos completos mais antigos mais cedo. |
+| Chaves de API de provedores e serviços opcionais fornecidas pelo usuário, incluindo as de rotação | 90 dias sem tentativas de requisições autenticadas |
 | Resumos da memória de curto prazo | 90 dias após a última atividade, por padrão |
 | Registros de erros | 90 dias |
 | Registros de desempenho e identificadores de mensagens do bot | 30 dias |
@@ -100,6 +101,8 @@ Esses serviços podem processar dados fora do seu país e têm suas próprias po
 | Vínculos de associação, status de acesso, patrocínios e chaves gerenciadas | Enquanto houver vínculo; solicite desvinculação ou exclusão ao suporte |
 | Identificadores de associação e totais de franquia/gastos mantidos após desvinculação | 90 dias após o último destes eventos: desvinculação, fim do período pago e conclusão da exclusão da chave do provedor |
 | Outras configurações, memórias, credenciais e arquivos salvos | Até serem excluídos pelos controles da Seção 6 |
+
+Respostas de erro do provedor contam como atividade da chave. Chaves nunca usadas contam a partir da inclusão ou substituição; chaves já salvas quando o rastreamento é introduzido recebem 90 dias completos de carência. Cadastre novamente uma chave removida em `/providers` ou `/personal providers` para restaurar o serviço. A remoção do banco não revoga a chave no provedor nem apaga backups retidos.
 
 Registros expirados são removidos na limpeza agendada. Podemos manter registros contábeis relevantes por mais tempo para uma disputa específica não resolvida ou obrigação legal, removendo-os quando essa necessidade terminar. Totais de gastos podem sobreviver à exclusão do uso detalhado. Dados excluídos podem permanecer em backups retidos: os de recuperação do banco expiram após sete dias, enquanto os da inicialização ficam até serem substituídos. Cópias separadas para recuperação ou migração são excluídas quando esse trabalho termina.
 

@@ -87,7 +87,8 @@ Estos servicios pueden procesar datos fuera de tu país y tienen sus propias pol
 
 | Datos | Conservación |
 |---|---|
-| Extractos de grabaciones de conversaciones | Sin vencimiento por antigüedad a menos que se configure `RECORD_RETENTION_DAYS`; el límite positivo de días configurado también se aplica a los datos existentes. La cuota lógica de 100 MiB por propietario en todos los servidores puede expulsar antes los extractos completos más antiguos. |
+| Extractos de grabaciones de conversaciones | 90 días después del mensaje que inició el extracto. La cuota lógica de 100 MiB por propietario en todos los servidores puede expulsar antes los extractos completos más antiguos. |
+| Claves de API de proveedores y servicios opcionales proporcionadas por el usuario, incluidas las de rotación | 90 días sin intentos de solicitudes autenticadas |
 | Resúmenes de memoria a corto plazo | 90 días después de la última actividad, de forma predeterminada |
 | Registros de errores | 90 días |
 | Registros de rendimiento e identificadores de mensajes del bot | 30 días |
@@ -100,6 +101,8 @@ Estos servicios pueden procesar datos fuera de tu país y tienen sus propias pol
 | Vínculos de membresía, estado de acceso, patrocinios y claves administradas | Mientras exista el vínculo; pide la desvinculación o eliminación a soporte |
 | Identificadores de membresía y totales de asignación/gastos tras desvincular | 90 días desde el último de estos eventos: desvinculación, fin del período pagado y eliminación completada de la clave del proveedor |
 | Otras configuraciones, memorias, credenciales y archivos guardados | Hasta eliminarlos con los controles de la Sección 6 |
+
+Las respuestas de error del proveedor cuentan como actividad de la clave. Las claves nunca usadas se cuentan desde su registro o reemplazo; las claves ya guardadas al introducir el seguimiento reciben 90 días completos de gracia. Vuelve a registrar una clave eliminada en `/providers` o `/personal providers` para restablecer el servicio. Eliminarla de la base de datos no la revoca en el proveedor ni borra las copias de seguridad conservadas.
 
 Los registros vencidos se eliminan durante la limpieza programada. Podemos conservar registros contables relevantes por más tiempo para una disputa específica sin resolver u obligación legal y eliminarlos cuando termine esa necesidad. Los totales de gastos pueden permanecer después de eliminar el uso detallado. Los datos eliminados pueden quedar en copias conservadas: las de recuperación de la base de datos vencen después de siete días y las de inicio permanecen hasta reemplazarse. Las copias separadas para recuperación o migración se eliminan al terminar ese trabajo.
 

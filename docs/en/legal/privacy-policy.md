@@ -99,7 +99,8 @@ These services may process data outside your country and have their own privacy 
 
 | Data | Retention |
 |---|---|
-| Conversation recording excerpts | No age expiry unless `RECORD_RETENTION_DAYS` is set; the configured positive day limit applies to existing data too. The 100 MiB logical quota per owner across Servers can evict oldest complete excerpts sooner. |
+| Conversation recording excerpts | 90 days after the excerpt's trigger message. The 100 MiB logical quota per owner across Servers can evict oldest complete excerpts sooner. |
+| User-supplied provider and optional-service API keys, including rotation keys | 90 days without authenticated request attempts |
 | Short-term memory summaries | 90 days after last activity by default |
 | Error logs | 90 days |
 | Performance records and bot-message identifiers | 30 days |
@@ -112,6 +113,8 @@ These services may process data outside your country and have their own privacy 
 | Membership links, access status, sponsorships, and managed keys | While linked; contact support to request unlinking or erasure |
 | Membership identifiers and allowance/spending totals kept after unlinking | 90 days after unlinking, the paid period ending, and completion of provider-key deletion, whichever is last |
 | Other saved settings, memories, credentials, and uploads | Until deleted through the controls in Section 6 |
+
+Failed provider responses count as key activity. Never-used keys age from insertion or replacement; keys already stored when tracking is introduced receive a full 90-day grace period. Re-enter a removed key through `/providers` or `/personal providers` to restore service. Database removal does not revoke a key at its provider or erase retained backups.
 
 Expired records are removed during scheduled cleanup. We may keep relevant accounting records longer for a specific unresolved dispute or legal obligation, then remove them when that need ends. Spending totals may survive deletion of detailed usage. Deleted data can remain in retained backups: database recovery backups expire after seven days, while startup backups remain until replaced. Separate manual recovery or migration copies are deleted when that work is complete.
 

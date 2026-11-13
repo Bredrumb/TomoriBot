@@ -611,7 +611,7 @@ jobs:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           set -euo pipefail
-          runtime_json=$TOMORI_SECRETS_JSON
+          runtime_json=$(jq '. + {RECORD_RETENTION_DAYS: "90", API_KEY_INACTIVITY_DAYS: "90"}' <<<"$TOMORI_SECRETS_JSON")
 
           runtime_user=$(jq -er '.POSTGRES_USER' <<<"$runtime_json")
           case "$runtime_user" in

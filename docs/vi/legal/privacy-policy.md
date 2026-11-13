@@ -101,7 +101,8 @@ Các dịch vụ này có thể xử lý dữ liệu ngoài quốc gia của b�
 
 | Dữ liệu | Thời gian lưu |
 |---|---|
-| Trích đoạn bản ghi cuộc trò chuyện | Không hết hạn theo thời gian trừ khi thiết lập RECORD_RETENTION_DAYS; giới hạn số ngày dương đã cấu hình cũng áp dụng cho dữ liệu hiện có. Hạn ngạch hợp lý 100 MiB cho mỗi chủ sở hữu trên các Máy chủ có thể thu hồi các trích đoạn hoàn chỉnh cũ nhất sớm hơn. |
+| Trích đoạn bản ghi cuộc trò chuyện | 90 ngày sau tin nhắn bắt đầu trích đoạn. Hạn ngạch hợp lý 100 MiB cho mỗi chủ sở hữu trên các Máy chủ có thể thu hồi các trích đoạn hoàn chỉnh cũ nhất sớm hơn. |
+| Khóa API nhà cung cấp và dịch vụ tùy chọn do người dùng cung cấp, gồm khóa luân phiên | 90 ngày không có lần thử gửi yêu cầu xác thực |
 | Bản tóm tắt bộ nhớ ngắn hạn | Mặc định 90 ngày sau hoạt động gần nhất |
 | Nhật ký lỗi | 90 ngày |
 | Bản ghi hiệu suất và mã định danh tin nhắn bot | 30 ngày |
@@ -114,6 +115,8 @@ Các dịch vụ này có thể xử lý dữ liệu ngoài quốc gia của b�
 | Liên kết thành viên, trạng thái truy cập, tài trợ và khóa được quản lý | Trong thời gian liên kết; liên hệ hỗ trợ để hủy liên kết hoặc xóa |
 | Mã định danh thành viên và tổng hạn mức/chi tiêu giữ sau hủy liên kết | 90 ngày từ thời điểm muộn nhất trong ba mốc: hủy liên kết, hết kỳ trả phí và hoàn tất xóa khóa nhà cung cấp |
 | Cài đặt, bộ nhớ, thông tin xác thực và tệp khác đã lưu | Đến khi xóa bằng các công cụ tại Mục 6 |
+
+Yêu cầu bị nhà cung cấp trả lỗi vẫn được tính là hoạt động của khóa. Khóa chưa từng dùng được tính từ lúc thêm hoặc thay thế; khóa đã lưu khi bắt đầu theo dõi có đủ 90 ngày gia hạn. Nhập lại khóa đã xóa qua `/providers` hoặc `/personal providers` để khôi phục dịch vụ. Xóa khỏi cơ sở dữ liệu không thu hồi khóa ở nhà cung cấp hoặc xóa các bản sao lưu còn được giữ.
 
 Bản ghi hết hạn được xóa trong đợt dọn dẹp định kỳ. Chúng tôi có thể giữ bản ghi kế toán liên quan lâu hơn vì một tranh chấp cụ thể chưa giải quyết hoặc nghĩa vụ pháp lý, rồi xóa khi không còn cần thiết. Tổng chi tiêu có thể còn sau khi chi tiết sử dụng bị xóa. Dữ liệu đã xóa có thể còn trong bản sao lưu: bản sao phục hồi cơ sở dữ liệu hết hạn sau bảy ngày, còn bản sao lúc khởi động giữ đến khi bị thay thế. Bản sao riêng cho phục hồi hoặc di chuyển được xóa khi công việc hoàn tất.
 
