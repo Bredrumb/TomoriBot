@@ -1,6 +1,7 @@
+import * as retention from "@/utils/db/repositories/ApiKeyRetentionRepository";
 import { createLlmRow, createPersona } from "../../helpers/fixtures";
 import * as dbClient from "@/utils/db/client";
-import { describe, expect, it, mock, spyOn } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import type {
   LlmRow,
   SavedProviderConfigUpsert,
@@ -973,3 +974,9 @@ describe("provider panel mutations", () => {
     });
   });
 });
+
+let activityLookup: { mockRestore(): void };
+beforeEach(() => {
+  activityLookup = spyOn(retention, "loadCredentialActivityReferences").mockResolvedValue([]);
+});
+afterEach(() => activityLookup.mockRestore());
