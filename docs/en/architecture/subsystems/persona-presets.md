@@ -98,6 +98,8 @@ generation before another model request. Google likewise aborts when its search 
 The command owns the failure reply and preserves the inputs with a retry hint; background tools
 suppress their public denial notices. Search engines can still fall back within one tool call.
 OpenRouter's initial model request chooses the search tool, so it can incur usage before search fails.
+Google persona search and generation report terminal overloads through the shared provider failure
+classifier, which retains warnings and metrics for transient failures and incidents for unknown failures.
 Anthropic requests omit unsupported array constraints.
 The shared schema used by other providers stays unchanged. Local validation still rejects
 noncompliant output without exporting a card; validation receipts preserve the inputs and show the

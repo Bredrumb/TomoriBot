@@ -1,3 +1,4 @@
+import { isExpectedVideoFailure } from "@/providers/utils/providerVideoErrors";
 import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { generateGoogleNativeVideo } from "@/providers/google/googleVideoGeneration";
 import { log } from "@/utils/misc/logger";
@@ -71,5 +72,18 @@ describe("Google Gemini Omni video generation", () => {
     responses = [{ id: "synthetic", status: "failed", errors: [{ code, message: "synthetic interaction failure" }] }];
 
     await expect(generateGoogleNativeVideo(REQUEST)).rejects.toThrow("synthetic interaction failure");
+  });
+  it("classifies terminal resource exhaustion as a warning without hiding unknown failures", async () => {
+    responses = [
+      { id: "synthetic", status: "failed", errors: [{ code: "RESOURCE_EXHAUSTED", message: "Processing failed" }] },
+    ];
+    const error = await generateGoogleNativeVideo(REQUEST).catch((failure: unknown) => failure);
+    expect(error).toBeInstanceOf(Error);
+    expect(isExpectedVideoFailure((error as Error).message, undefined)).toBe(true);
+    for (const code of ["429", "502", "503", "504"]) {
+      expect(isExpectedVideoFailure("Provider unavailable", code)).toBe(true);
+    }
+    expect(isExpectedVideoFailure("Unexpected integration failure", undefined)).toBe(false);
+    expect(isExpectedVideoFailure("Malformed upstream response", "500")).toBe(false);
   });
 });

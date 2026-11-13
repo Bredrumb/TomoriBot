@@ -1,4 +1,5 @@
-import { describe, expect, it } from "bun:test";
+import { log } from "@/utils/misc/logger";
+import { describe, expect, it, spyOn } from "bun:test";
 import type { GoogleGenAI } from "@google/genai";
 import { generatePresetFromPrompt } from "@/providers/google/presetGenerator";
 import { DEFAULT_PRESET_GENERATION_MAX_OUTPUT_TOKENS } from "@/utils/provider/maxOutputTokens";
@@ -278,4 +279,57 @@ describe("Google preset generation", () => {
     expect(generationPrompt).not.toContain("Web Search Instructions:");
     expect(generationPrompt).not.toContain("web search tools");
   });
+});
+
+it("reports Google persona overloads as warnings while retaining unexpected failures as incidents", async () => {
+  const errorSpy = spyOn(log, "error").mockResolvedValue(undefined);
+  const warnSpy = spyOn(log, "warn").mockImplementation(() => {});
+  const metricSpy = spyOn(log, "metric").mockImplementation(() => {});
+  try {
+    for (const useWebSearch of [false, true]) {
+      for (const overloaded of [true, false]) {
+        errorSpy.mockClear();
+        warnSpy.mockClear();
+        metricSpy.mockClear();
+        const client = {
+          models: {
+            generateContent: async () => {
+              throw new Error(
+                overloaded
+                  ? JSON.stringify({ error: { code: 503, status: "UNAVAILABLE", message: "High demand" } })
+                  : "Unexpected application failure",
+              );
+            },
+          },
+        } as unknown as GoogleGenAI;
+        const result = await generatePresetFromPrompt(
+          "test-api-key",
+          {
+            characterName: "Juno",
+            characterDescription: "A helpful guide.",
+            speechExamples: "Calm and clear.",
+            modelName: "selected-model",
+            useWebSearch,
+          },
+          "en-US",
+          client,
+        );
+        expect(result.error).toBeDefined();
+        expect(result.preset).toBeUndefined();
+        expect(errorSpy).toHaveBeenCalledTimes(overloaded ? 0 : 1);
+        expect(metricSpy).toHaveBeenCalledTimes(overloaded ? 1 : 0);
+        if (overloaded) {
+          expect(
+            warnSpy.mock.calls.some(
+              (call) => call[3]?.retain === true && call[3]?.redactValues?.includes("test-api-key"),
+            ),
+          ).toBe(true);
+        }
+      }
+    }
+  } finally {
+    errorSpy.mockRestore();
+    warnSpy.mockRestore();
+    metricSpy.mockRestore();
+  }
 });
