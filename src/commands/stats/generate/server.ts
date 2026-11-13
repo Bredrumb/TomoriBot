@@ -3,6 +3,7 @@ import { AttachmentBuilder } from "discord.js";
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import type { UserRow } from "@/types/db/schema";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
+import { buildExportFilename } from "@/utils/discord/attachmentFilename";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
@@ -73,7 +74,9 @@ export async function execute(
     });
 
     const png = await renderCardToPng(renderServerCard(data), CARD_W, getServerCardHeight(data));
-    const attachment = new AttachmentBuilder(png, { name: `stats_server_${Date.now()}.png` });
+    const attachment = new AttachmentBuilder(png, {
+      name: buildExportFilename({ kind: "stats", scope: "server", extension: "png" }),
+    });
     await interaction.editReply({ files: [attachment] });
   } catch (error) {
     await log.error(`Error executing /stats generate server for user ${userData.user_disc_id}`, error as Error, {

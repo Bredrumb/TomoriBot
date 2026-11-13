@@ -1,3 +1,4 @@
+import { currentProviderUsageContext } from "@/utils/provider/providerUsage";
 import { beforeAll, describe, expect, it, spyOn } from "bun:test";
 import type { Client } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
@@ -29,6 +30,7 @@ function makeEndpoint(apiStyle: "tts-clone" | "elevenlabs", supportsInstruct = f
       extra_config: { supports_instruct: supportsInstruct },
     },
     apiKey: "test-key",
+    usageContext: { credentialProvider: "voice-catalog-credential" },
   } as never;
 }
 
@@ -118,6 +120,7 @@ function makeHarness(options: HarnessOptions = {}) {
       events.push(`fetch:${apiKey}`);
       acknowledgedAtFetch.push(Boolean(activeInteraction?.deferred || activeInteraction?.replied));
       expect(apiKey).toBe("test-key");
+      expect(currentProviderUsageContext()?.credentialProvider).toBe("voice-catalog-credential");
       return { success: true, voices };
     },
     loadVoiceSamples: async () => [

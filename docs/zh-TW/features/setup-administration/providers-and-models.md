@@ -47,6 +47,8 @@ TomoriBot連接到外部AI供應商，而不是託管內建模型。你可以連
 切勿與其他人分享你的API金鑰。從`/providers`中的`編輯端點`操作新增或取代自訂端點的承載身分驗證令牌。
 :::
 
+維運者可以啟用未使用 API 金鑰的自動移除功能。若已儲存的設定遺失了金鑰，可在 `/providers` 或 `/personal providers` 中使用**編輯**重新新增。已儲存的模型設定將會保留。移除已儲存的金鑰並不會向供應商撤銷該金鑰，也不會抹除備份中的複本。
+
 Vertex AI使用應用程式預設憑證 (ADC) 而不是儲存的機密進行身份驗證。對於本機託管，ADC可以來自`gcloud`；託管部署應使用工作負載身分或服務帳戶。AI Studio API金鑰單獨無法驗證完整的Vertex AI。所選的Google雲端專案必須啟用計費和Vertex AI API，且主機身分需要Vertex存取權限。架設 TomoriBot 的人可以將 Vertex AI 限制為僅供特定伺服器與使用者使用；其他人需要選擇其他供應商。設定指南可從`/help`中的`API Keys`頁面上的Google Vertex AI取得。
 
 Google Gemini 與 Vertex AI 的設定透過已通過驗證的模型清單端點來驗證憑證，而 Vertex AI Express 則使用 `countTokens` 驗證 API 金鑰，因此設定過程絕不會生成文字。

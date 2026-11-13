@@ -64,7 +64,7 @@ export default {
     add_to_docs_rag_unavailable_title: `RAG cục bộ không khả dụng`,
     add_to_docs_rag_unavailable_description: `Kho tài liệu yêu cầu PostgreSQL đã bật tiện ích mở rộng pgvector.`,
     add_to_docs_no_permission_title: `Từ chối quyền truy cập`,
-    add_to_docs_no_permission_description: `Bạn cần quyền Quản lý máy chủ, hoặc tính năng dạy bộ nhớ phải được bật trên máy chủ này.`,
+    add_to_docs_no_permission_description: `Bạn cần quyền Quản lý máy chủ để lưu tài liệu.`,
     add_to_docs_no_embedding_title: `Chưa có model embedding`,
     add_to_docs_no_embedding_description: `Hãy cấu hình một model embedding để sử dụng kho tài liệu.`,
     add_to_docs_persona_not_found_title: `Không tìm thấy persona`,

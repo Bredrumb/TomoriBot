@@ -18,6 +18,7 @@ import { loadSpeechRoutingPolicy } from "@/utils/db/repositories/SpeechRepositor
 import { log } from "@/utils/misc/logger";
 import { resolveCustomEndpointForProvider } from "@/utils/provider/customEndpointService";
 import { decryptApiKey } from "@/utils/security/crypto";
+import { storedCredentialUsageContext, readApiKeyInactivityDays } from "@/utils/security/apiKeyRetention";
 import { CUSTOM_ENDPOINT_PLACEHOLDER_KEY } from "@/utils/provider/legacyCustomProvider";
 import { isCustomProvider } from "@/utils/provider/customProviderUtils";
 import { getStaticProviderInfo } from "@/utils/provider/providerInfoRegistry";
@@ -111,7 +112,13 @@ export function getCapabilityCredentialFailureCopy(
                 descriptionKey: "general.errors.api_key_missing_description",
               }
         : null;
-  return keys ? { titleKey: keys.titleKey, description: localizer(locale, keys.descriptionKey) } : null;
+  if (!keys) return null;
+  let description = localizer(locale, keys.descriptionKey);
+  const days = readApiKeyInactivityDays();
+  if (days !== null && error instanceof CredentialUnavailableError && error.reason === "no_saved_config") {
+    description += `\n\n${localizer(locale, "commands.providers.credential_retention", { days })}`;
+  }
+  return { titleKey: keys.titleKey, description };
 }
 
 function mapCapabilityToPersonalCapability(capability: Capability): PersonalProviderCapability {
@@ -378,6 +385,8 @@ async function resolveSavedCredentials(
     provider,
     modelId: activeModelId ?? undefined,
     apiKey: decryptedKey,
+    usageContext:
+      provider === "vertex" ? undefined : await storedCredentialUsageContext(savedConfig.api_key, decryptedKey),
     keyVersion: savedConfig.key_version || 1,
     savedConfig,
     source,

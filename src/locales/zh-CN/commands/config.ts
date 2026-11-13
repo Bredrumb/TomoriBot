@@ -57,6 +57,7 @@ export default {
       notice_tracking_disabled: "此主机关闭了统计追踪，导致我无法判断服务器活跃度及对话地点，因此搭话功能不会启动。",
       notice_byok:
         "此服务器采用成员自备密钥支付文本，因此没有多余的密钥来承担无人发起的搭话消息。在服务器配置自己的密钥前，Natural Nudges 将保持关闭。",
+      notice_cooldown: "多次失败后，我已暂停搭话。可在 {retry_at} 重试，或在我于此服务器下一次成功回复后提早恢复。",
       idle_nudges_title: "空闲搭话",
       idle_nudges_description: "当频道过久无人说话时，我会在该频道主动挑起话题。",
       idle_nudges_off: "只有在有人跟我说话时我才会发言。",
@@ -316,6 +317,10 @@ export default {
       channels_auto_trigger_updated_heading: `自动触发频道已更新`,
       channels_auto_trigger_updated_detail: `自动触发频道设置已更新。`,
       channels_auto_trigger_threshold_modal_title: `编辑活跃度阈值`,
+      channels_auto_trigger_threshold_label: `回复频率`,
+      channels_auto_trigger_threshold_input_description: `0 表示每条消息都回复。50 表示每 50 条消息回复一次。50-60 每次抽取一个随机消息数。`,
+      channels_auto_trigger_threshold_placeholder: `0、50 或 50-60`,
+      channels_auto_trigger_threshold_invalid_detail: `请输入 0、1 到 100 的数字，或类似 50-60 的范围。`,
       channels_auto_trigger_threshold_updated_heading: `活跃度阈值已更新`,
       channels_auto_trigger_threshold_updated_detail: `频道活跃度阈值已更新。`,
       channels_rules_title: `频道规则`,

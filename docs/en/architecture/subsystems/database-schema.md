@@ -36,6 +36,13 @@ Startup schema execution is coordinated by `src/utils/db/initializeDatabase.ts`:
 - Versions 900 and above are reserved for deployment-specific migrations. A clean installation executes that band after the base schema instead of recording it as applied, so `schema.sql` stays free of deployment-specific DDL.
 - A deployment-band migration can replace a stored function created by a baseline migration. Because an applied band migration is never replayed, a later baseline migration that redefines that function needs a new band migration that restores the deployment body.
 
+## Conversation recording storage
+
+The `conversation_recording_*` tables and logical-size view in `schema.sql` are paired with migration
+137. The module repository owns their writes, owner-wide transactions, source lifecycle handling,
+and reclamation. See [Conversation recording](/architecture/subsystems/conversation-recording/) for
+the cross-component contracts.
+
 ## Document heading paths
 
 `document_chunks.heading_path` is nullable JSONB shaped as
@@ -363,6 +370,11 @@ leaves a saved binding unavailable. Exports contain settings without credentials
 model/checker ownership before writing and drop the retired `response_decision_model_id` that older
 v2 exports carry. Configuration reset restores these defaults while
 preserving registrations and credentials.
+
+Provider credential generations and request-attempt ages are maintained separately from model/settings
+updates and encryption versions. Assembled server state reads credentials from `saved_provider_configs`;
+legacy mirrors remain available to encryption audits and retention cleanup. See
+[Security & Privacy](/architecture/subsystems/security/#inactive-database-api-keys) for the retention contract.
 
 ## Encryption at rest
 

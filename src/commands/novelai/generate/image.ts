@@ -1,3 +1,5 @@
+import { storedCredentialUsageContext } from "@/utils/security/apiKeyRetention";
+import { withProviderUsageContext, type ProviderUsageContext } from "@/utils/provider/providerUsage";
 import {
   addGenerationModelOption,
   createGenerationModelAutocomplete,
@@ -19,7 +21,7 @@ import {
 } from "discord.js";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
-import { decryptApiKey, getOptApiKey } from "@/utils/security/crypto";
+import { decryptApiKey, getOptApiKeyCredentials } from "@/utils/security/crypto";
 import {
   CredentialUnavailableError,
   getResolvedCapabilityModelId,
@@ -111,13 +113,14 @@ function splitTags(rawTags: string): string[] {
     .filter((tag) => tag.length > 0);
 }
 
-async function resolveServerNovelAiApiKey(tomoriState: TomoriState): Promise<string | null> {
-  const optKey = await getOptApiKey(tomoriState.server_id, "novelai");
+async function resolveServerNovelAiApiKey(tomoriState: TomoriState) {
+  const optKey = await getOptApiKeyCredentials(tomoriState.server_id, "novelai");
   if (optKey) return optKey;
 
   const encryptedApiKey = tomoriState.config.api_key;
   if (!encryptedApiKey) return null;
-  return await decryptApiKey(encryptedApiKey, tomoriState.config.key_version || 1);
+  const apiKey = await decryptApiKey(encryptedApiKey, tomoriState.config.key_version || 1);
+  return { apiKey, usageContext: await storedCredentialUsageContext(encryptedApiKey, apiKey) };
 }
 
 async function resolveSelectedNaiCredentials(
@@ -127,11 +130,16 @@ async function resolveSelectedNaiCredentials(
 ) {
   await validateGenerationModelSelection(serverId, userId, modelSelection);
   if (modelSelection.source === "server") {
-    const apiKey = await getOptApiKey(serverId, "novelai");
-    if (apiKey) return { apiKey, source: "server" as const, modelId: modelSelection.modelId };
+    const apiKey = await getOptApiKeyCredentials(serverId, "novelai");
+    if (apiKey) return { ...apiKey, source: "server" as const, modelId: modelSelection.modelId };
   }
   const resolved = await resolveCapabilityCredentials(serverId, "image-nai", { userId, modelSelection });
-  return { apiKey: resolved.apiKey, source: resolved.source, modelId: modelSelection.modelId };
+  return {
+    apiKey: resolved.apiKey,
+    usageContext: resolved.usageContext,
+    source: resolved.source,
+    modelId: modelSelection.modelId,
+  };
 }
 
 async function prepareCharacterReferencePayload(attachment: APIAttachment): Promise<NaiGenerationCharacterPayload> {
@@ -198,7 +206,9 @@ export async function execute(
   let quotaConsumed = false;
   let tomoriState: TomoriState | null = null;
   let resolvedModel: Awaited<ReturnType<typeof resolveNaiDiffusionModel>> | null = null;
-  let imageCreds: { apiKey: string; source: "server" | "personal"; modelId: number | null } | undefined;
+  let imageCreds:
+    | { usageContext?: ProviderUsageContext; apiKey: string; source: "server" | "personal"; modelId: number | null }
+    | undefined;
   let submittedInput:
     | { prompt: string; negativeTags: string; orientation: string; referenceFilenames: string[] }
     | undefined;
@@ -266,6 +276,7 @@ export async function execute(
         });
         imageCreds = {
           apiKey: resolved.apiKey,
+          usageContext: resolved.usageContext,
           source: resolved.source,
           modelId: getResolvedCapabilityModelId(resolved, "image-nai"),
         };
@@ -286,7 +297,7 @@ export async function execute(
       }
     } else {
       const apiKey = await resolveServerNovelAiApiKey(serverTomoriState);
-      if (apiKey) imageCreds = { apiKey, source: "server", modelId: null };
+      if (apiKey) imageCreds = { ...apiKey, source: "server", modelId: null };
     }
 
     if (!imageCreds) {
@@ -488,15 +499,18 @@ export async function execute(
       quotaReservation = claim.reservation;
     }
 
-    const imageBuffer = await generateNovelAiImage({
-      apiKey,
-      model: resolvedModel.codename,
-      prompt: effectivePrompt,
-      negativePrompt: effectiveNegativePrompt,
-      orientation,
-      imageParams: effectiveImageParams,
-      characterPayload,
-    });
+    const generationModel = resolvedModel;
+    const imageBuffer = await withProviderUsageContext(imageCreds.usageContext, () =>
+      generateNovelAiImage({
+        apiKey,
+        model: generationModel.codename,
+        prompt: effectivePrompt,
+        negativePrompt: effectiveNegativePrompt,
+        orientation,
+        imageParams: effectiveImageParams,
+        characterPayload,
+      }),
+    );
 
     const generationTimeSeconds = ((performance.now() - startTime) / 1000).toFixed(1);
     const preparedImage = await prepareGeneratedImage(

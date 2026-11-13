@@ -313,6 +313,35 @@ function payloadText(interaction: ReturnType<typeof makeInteraction>): string[] 
 }
 
 describe("lorebook panel routes", () => {
+  it("blocks shared-content reads and stale document modals before loading content", async () => {
+    for (const customId of [
+      "memories:v1:lore-select:en-US:1770:1",
+      "memories:v1:document-select:en-US:10:2",
+      "memories:v1:document-add-submit:en-US:0:nonce123",
+      "memories:v1:category:en-US:lorebooks",
+      "memories:v1:category:en-US:documents",
+    ]) {
+      const { dependencies, calls } = createDependencies({
+        loadDocuments: async () => {
+          throw new Error("Unauthorized document read");
+        },
+        loadDocumentChunks: async () => {
+          throw new Error("Unauthorized chunk read");
+        },
+        documentOperations: {
+          ...createDependencies().dependencies.documentOperations,
+          add: async () => {
+            throw new Error("Unauthorized document write");
+          },
+        },
+      });
+      const interaction = makeInteraction(customId, { manage: false });
+      await runRoute(dependencies, interaction);
+      expect(calls.some((call) => call.startsWith("loadLorebooks:"))).toBe(false);
+      expect(payloadText(interaction)).toContain(localizedCopy("en-US", "commands.memories.manager_only_detail"));
+    }
+  });
+
   it("opens add and import modals for the scope on screen without deferring", async () => {
     const { dependencies, calls } = createDependencies();
     const add = makeInteraction("memories:v1:lore-select:en-US:1770", {
@@ -406,6 +435,7 @@ describe("lorebook panel routes", () => {
     expect(interaction.followUps).toHaveLength(0);
     const attachment = interaction.directMessages[0]?.files?.[0];
     expect(attachment).toBeInstanceOf(AttachmentBuilder);
+    expect(attachment?.name).toMatch(/^tomori-lorebook-[\w-]+-\d{8}T\d{6}Z\.json$/);
     if (!attachment || !Buffer.isBuffer(attachment.attachment)) throw new Error("Missing export buffer");
     const exported = JSON.parse(attachment.attachment.toString());
     expect(Object.values(exported.entries)).toHaveLength(1);

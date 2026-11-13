@@ -122,6 +122,26 @@ export function truncateDialogueHistory(
     }
     if (dropped === 0) break;
   }
+  for (let index = 0; index < items.length; index++) {
+    const item = items[index];
+    if (!item.boomerangTranscript) continue;
+    const otherChars = items.reduce(
+      (sum, entry, entryIndex) =>
+        sum +
+        (entryIndex === index
+          ? 0
+          : entry.parts.reduce((count, part) => count + (part.type === "text" ? part.text.length : 0), 0)),
+      0,
+    );
+    const availableChars = Math.max(0, safeInputBudget * 4 - otherChars);
+    const text = item.parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n");
+    if (text.length > availableChars) {
+      items[index] = {
+        ...item,
+        parts: [{ type: "text", text: availableChars > 0 ? text.slice(-availableChars) : "" }],
+      };
+    }
+  }
   if (historyPairsDropped > 0 && (getCacheablePrefixBoundary(contextItems) || contextItems.some(getPromptLayoutInsert)))
     applyPromptLayoutInserts(items, []);
 

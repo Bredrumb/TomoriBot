@@ -1,3 +1,5 @@
+import { storedCredentialUsageContext } from "@/utils/security/apiKeyRetention";
+import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 import { createProviderToolFailure } from "@/utils/provider/providerToolFailure";
 /**
  * NovelAI Image Generation Tool
@@ -399,10 +401,11 @@ export class GenerateImageNaiTool extends BaseTool {
   /**
    * @returns Decrypted Google API key, or null if unavailable
    */
-  private async resolveGoogleApiKey(context: ToolContext): Promise<string | null> {
+  private async resolveGoogleApiKey(context: ToolContext) {
     const savedGoogleConfig = await llmProviderRepo.loadSavedProviderConfig(context.tomoriState.server_id, "google");
     if (savedGoogleConfig?.api_key) {
-      return await decryptApiKey(savedGoogleConfig.api_key, savedGoogleConfig.key_version || 1);
+      const apiKey = await decryptApiKey(savedGoogleConfig.api_key, savedGoogleConfig.key_version || 1);
+      return { apiKey, usageContext: await storedCredentialUsageContext(savedGoogleConfig.api_key, apiKey) };
     }
 
     return null;
@@ -1040,7 +1043,9 @@ export class GenerateImageNaiTool extends BaseTool {
 
       // Resolve only the model-provided tags via suggest-tags API when enabled
       const resolvedModelTags = NAI_IMAGE_ENABLE_TAG_RESOLUTION
-        ? await this.normalizeTags(modelTags, baseModelCodename, apiKey)
+        ? await withProviderUsageContext(creds.usageContext, () =>
+            this.normalizeTags(modelTags, baseModelCodename, apiKey),
+          )
         : modelTags;
 
       if (!NAI_IMAGE_ENABLE_TAG_RESOLUTION) {
@@ -1155,12 +1160,14 @@ export class GenerateImageNaiTool extends BaseTool {
 
         log.info(`[NAI] Calling Gemini segmentation for target: "${editTarget}"`);
 
-        const segResult = await segmentImage(
-          sourceImage.data,
-          sourceImage.mimeType,
-          editTarget,
-          googleApiKey,
-          usesNaiStructuredPromptFormat(baseModelCodename),
+        const segResult = await withProviderUsageContext(googleApiKey.usageContext, () =>
+          segmentImage(
+            sourceImage.data,
+            sourceImage.mimeType,
+            editTarget,
+            googleApiKey.apiKey,
+            usesNaiStructuredPromptFormat(baseModelCodename),
+          ),
         );
 
         log.info(
@@ -1202,31 +1209,35 @@ export class GenerateImageNaiTool extends BaseTool {
 
         const inpaintModel = generationSource.model;
 
-        imageBuffer = await this.generateInpaintImage(
-          apiKey,
-          inpaintModel,
-          normalizedPrompt,
-          effectiveNegativePrompt,
-          sourceImage.data,
-          segResult.maskBase64,
-          segResult.imageWidth,
-          segResult.imageHeight,
-          effectiveImageParams,
-          context.abortSignal,
+        imageBuffer = await withProviderUsageContext(creds.usageContext, () =>
+          this.generateInpaintImage(
+            apiKey,
+            inpaintModel,
+            normalizedPrompt,
+            effectiveNegativePrompt,
+            sourceImage.data,
+            segResult.maskBase64,
+            segResult.imageWidth,
+            segResult.imageHeight,
+            effectiveImageParams,
+            context.abortSignal,
+          ),
         );
 
         log.success(`[NAI] Inpainting complete with model "${inpaintModel}"`);
       } else {
-        imageBuffer = await generateNovelAiImage({
-          apiKey,
-          model: baseModelCodename,
-          prompt: normalizedPrompt,
-          negativePrompt: effectiveNegativePrompt,
-          orientation,
-          imageParams: effectiveImageParams,
-          characterPayload,
-          abortSignal: context.abortSignal,
-        });
+        imageBuffer = await withProviderUsageContext(creds.usageContext, () =>
+          generateNovelAiImage({
+            apiKey,
+            model: baseModelCodename,
+            prompt: normalizedPrompt,
+            negativePrompt: effectiveNegativePrompt,
+            orientation,
+            imageParams: effectiveImageParams,
+            characterPayload,
+            abortSignal: context.abortSignal,
+          }),
+        );
       }
 
       // /kill stops awaiting this tool but cannot stop it (the inpaint path takes no signal), so

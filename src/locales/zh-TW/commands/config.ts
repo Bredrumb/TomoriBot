@@ -57,6 +57,7 @@ export default {
       notice_tracking_disabled: "此主機關閉了統計追蹤，導致我無法得知伺服器活躍度與對話地點，因此搭話功能不會啟動。",
       notice_byok:
         "此伺服器由每位成員自備金鑰支付文字費用，因此沒有金鑰能負擔無人要求的搭話訊息。在伺服器設定自己的金鑰前，Natural Nudges 將保持關閉。",
+      notice_cooldown: `在多次失敗後，我已暫停搭話功能。可在 {retry_at} 重試，或在我下次於此伺服器成功回覆後提前恢復。`,
       idle_nudges_title: "閒置搭話",
       idle_nudges_description: "當頻道過於安靜時，我會主動在頻道中發起話題。",
       idle_nudges_off: "只有在有人跟我說話時我才會發言。",
@@ -317,6 +318,10 @@ export default {
       channels_auto_trigger_updated_heading: `自動觸發頻道已更新`,
       channels_auto_trigger_updated_detail: `自動觸發頻道設定已更新。`,
       channels_auto_trigger_threshold_modal_title: `編輯活動門檻`,
+      channels_auto_trigger_threshold_label: `回覆頻率`,
+      channels_auto_trigger_threshold_input_description: `0 表示每則訊息都回覆。50 表示每 50 則訊息回覆一次。50-60 則每次隨機選取該範圍內的次數。`,
+      channels_auto_trigger_threshold_placeholder: `0、50 或 50-60`,
+      channels_auto_trigger_threshold_invalid_detail: `請輸入 0、1 到 100 的數字，或像 50-60 這樣的範圍。`,
       channels_auto_trigger_threshold_updated_heading: `活動門檻已更新`,
       channels_auto_trigger_threshold_updated_detail: `頻道活動門檻已更新。`,
       channels_rules_title: `頻道規則`,

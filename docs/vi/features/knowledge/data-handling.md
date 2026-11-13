@@ -2,7 +2,6 @@
 title: "Xử lý dữ liệu"
 sidebar:
   order: 4
-aiGenerated: true
 ---
 
 Xuất, sao lưu, nhập hoặc xóa cài đặt, kỷ niệm và cá tính của bạn bằng lệnh gạch chéo Discord. Để biết điều khoản dịch vụ và chi tiết về quyền riêng tư, hãy xem `/legal terms-of-service` và `/legal privacy-policy`.
@@ -20,14 +19,15 @@ Trang này bao gồm các điều khiển của người dùng trong Discord. Tr
 - Cài đặt cấu hình máy chủ
 - Khóa API của nhà cung cấp được mã hóa
 - Siêu dữ liệu biểu cảm, quy tắc truy cập persona và phương tiện biểu cảm đã tải lên
+- Các [bản ghi cuộc trò chuyện](/features/setup-administration/conversation-recordings/) tự nguyện tham gia, bao gồm các tin nhắn xung quanh khi được chọn
 
 ### Không được lưu trữ
 
-- Lịch sử tin nhắn Discord (tin nhắn không được lưu trữ trong nhật ký tin nhắn liên tục)
+- Byte phương tiện, tên tệp và URL đính kèm từ các bản ghi cuộc trò chuyện; chỉ lưu siêu dữ liệu về loại/số lượng tệp đính kèm.
 
 ### Đã gửi tới các nhà cung cấp AI của bạn
 
-Bất cứ khi nào được kích hoạt, TomoriBot sẽ tìm nạp các tin nhắn gần đây trong kênh cùng với các bộ nhớ có liên quan làm ngữ cảnh cho model. Bot không đọc hoặc xử lý tin nhắn bên ngoài những lần kích hoạt đó.
+Bất cứ khi nào được kích hoạt, TomoriBot sẽ tìm nạp các tin nhắn gần đây trong kênh cùng với các bộ nhớ có liên quan làm ngữ cảnh cho model. Tính năng ghi cuộc trò chuyện tùy chọn cũng đọc các tin nhắn đủ điều kiện một cách độc lập với các kích hoạt phản hồi; tính năng này không thực hiện cuộc gọi tự động nào tới nhà cung cấp.
 
 Khi một model embedding được thiết lập, nhà cung cấp của nó sẽ nhận tin nhắn mới nhất cùng văn bản tài liệu và bộ nhớ mà nó tìm kiếm. Đây có thể là nhà cung cấp khác với nhà cung cấp tạo câu trả lời. Bộ nhớ cá nhân bị ẩn bởi cài đặt quyền riêng tư sẽ không được đưa vào tìm kiếm. Dữ liệu tìm kiếm được xóa cùng với bộ nhớ tương ứng; xem [Suy giảm bộ nhớ](/features/knowledge/memory/memory-decay/) để biết về việc tự động tạm nghỉ và thay thế.
 
@@ -48,7 +48,13 @@ Xuất cấu hình bao gồm các cài đặt này mà không có khóa API ho�
 
 ## Xuất dữ liệu của bạn
 
-Dữ liệu có thể xuất được gửi tới DM của bạn dưới dạng tệp JSON:
+Bản ghi cuộc trò chuyện dùng `/record data` để nhận tệp đính kèm Markdown hoặc JSON riêng tư trong máy chủ
+hiện tại. Quy tắc về phạm vi, thời gian lưu trữ và xóa dữ liệu có trong
+[hướng dẫn ghi](/features/setup-administration/conversation-recordings/).
+
+Các bản xuất cài đặt và bộ nhớ được gửi tới DM của bạn dưới dạng tệp JSON, để DM của bạn giữ một bản sao có thể khôi phục
+sau này. Nếu TomoriBot không thể gửi DM cho bạn, tệp sẽ được đính kèm trong câu trả lời riêng tư; hãy lưu lại trước khi
+câu trả lời biến mất:
 
 - `/export config`: giá trị cấu hình máy chủ (không bao gồm khóa và thông tin xác thực API).
 - `/export personal config`: cài đặt hồ sơ cá nhân (quyền riêng tư, thẻ xuất hiện, đặt tên).
@@ -72,8 +78,11 @@ Phương tiện biểu thức đã tải lên được lưu trữ trên máy ch�
 
 Những hành động này sẽ xóa vĩnh viễn hoặc đặt lại dữ liệu đã lưu trữ:
 
+- `/record data`: xóa các trích đoạn bản ghi trong máy chủ hiện tại của bạn sau khi xác nhận; dừng thu thập riêng biệt bằng `/record stop`.
 - `/personal memories`: quản lý hoặc xóa ký ức cá nhân.
-- `/memories`: quản lý hoặc xóa bộ nhớ máy chủ (yêu cầu Quản lý máy chủ).
+- `/memories`: quản lý hoặc xóa bộ nhớ máy chủ, tài liệu và lorebook. Tài liệu và lorebook
+  yêu cầu `Quản lý máy chủ`. Khi tính năng thành viên dạy bộ nhớ được bật, các thành viên có thể xem, chỉnh sửa hoặc xóa
+  bộ nhớ máy chủ của chính mình. Khi bị tắt, việc xem và quản lý bộ nhớ máy chủ yêu cầu `Quản lý máy chủ`.
 - `/personal nuke`: xóa vĩnh viễn tất cả dữ liệu cá nhân trên các máy chủ.
 - `/nuke`: xóa dữ liệu máy chủ, bao gồm các biểu thức tùy chỉnh và quy tắc truy cập cá nhân. Đặt `preserve_personas: true` để giữ các cá tính trong khi xóa các biểu thức và phương tiện tùy chỉnh.
 - `/reset config`: khôi phục cấu hình máy chủ về mặc định cơ sở dữ liệu.

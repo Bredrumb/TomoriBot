@@ -156,7 +156,7 @@ export async function brave_web_search(
       return createToolResult(false, "Web search failed", result.error);
     }
 
-    const formattedResults = formatBraveSearchResults(result.data, "web");
+    const formattedResults = formatBraveSearchResults(result.data, "web", searchParams.count);
 
     const enhancedResults = addFetchCapabilityReminder(formattedResults);
 
@@ -665,7 +665,7 @@ export async function brave_video_search(
       return createToolResult(false, "Video search failed", result.error);
     }
 
-    const formattedResults = formatBraveSearchResults(result.data, "video");
+    const formattedResults = formatBraveSearchResults(result.data, "video", searchParams.count);
 
     return createToolResult(true, "Video search completed successfully", {
       results: formattedResults,
@@ -726,7 +726,7 @@ export async function brave_news_search(
       return createToolResult(false, "News search failed", result.error);
     }
 
-    const formattedResults = formatBraveSearchResults(result.data, "news");
+    const formattedResults = formatBraveSearchResults(result.data, "news", searchParams.count);
 
     return createToolResult(true, "News search completed successfully", {
       results: formattedResults,

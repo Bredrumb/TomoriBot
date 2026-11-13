@@ -1,3 +1,4 @@
+import { NovelAIPreparationError } from "@/providers/novelai/preparationError";
 import type { ChatInputCommandInteraction, Client, SlashCommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
 import type { UserRow } from "@/types/db/schema";
@@ -98,6 +99,14 @@ export async function execute(
       method: "editReply",
     });
   } catch (error) {
+    if (error instanceof NovelAIPreparationError) {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.context.build_failed_title",
+        descriptionKey: "commands.context.novelai_unavailable_description",
+        color: ColorCode.WARN,
+      });
+      return;
+    }
     log.error("Error executing /context:", error as Error, {
       errorType: "CommandExecutionError",
       metadata: { commandName: "context", guildId: guild.id },

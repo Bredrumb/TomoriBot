@@ -1,3 +1,4 @@
+import { NovelAIPreparationError } from "@/providers/novelai/preparationError";
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
 import type { UserRow } from "@/types/db/schema";
@@ -131,6 +132,14 @@ export async function execute(
       editReply: (options) => interaction.editReply(options),
     });
   } catch (error) {
+    if (error instanceof NovelAIPreparationError) {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.context.build_failed_title",
+        descriptionKey: "commands.context.novelai_unavailable_description",
+        color: ColorCode.WARN,
+      });
+      return;
+    }
     log.error("Error executing /tool prompt snapshot:", error as Error, {
       errorType: "CommandExecutionError",
       metadata: { commandName: "tool prompt snapshot", guildId: guild.id },

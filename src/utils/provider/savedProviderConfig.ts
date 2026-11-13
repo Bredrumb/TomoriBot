@@ -306,6 +306,7 @@ async function hasRegisteredCustomEndpointCapability(
   provider: string,
   capability: SavedProviderCapability,
   owner: OpenRouterModelScope,
+  hasCredential: boolean,
 ): Promise<boolean> {
   const parsed = parseCustomProvider(provider);
   const endpointCapability = mapSavedCapabilityToCustomEndpointCapability(capability);
@@ -315,7 +316,7 @@ async function hasRegisteredCustomEndpointCapability(
   }
 
   const connection = await llmProviderRepo.loadCustomEndpointConnectionById(parsed.connectionId);
-  if (!connection || connection.capability !== endpointCapability) {
+  if (!connection || (connection.requires_auth && !hasCredential) || connection.capability !== endpointCapability) {
     return false;
   }
   if ((owner.kind === "server" ? connection.server_id : connection.user_id) !== owner.ownerId) {
@@ -436,10 +437,10 @@ async function filterSavedProvidersByCapability<
   const registeredVisibility = await Promise.all(
     availableConfigs.map(async (config) => {
       if (!isCustomProvider(config.provider)) {
-        return true;
+        return findProviderOption(config.provider) !== undefined || config.api_key !== null;
       }
 
-      return await hasRegisteredCustomEndpointCapability(config.provider, capability, owner);
+      return await hasRegisteredCustomEndpointCapability(config.provider, capability, owner, config.api_key !== null);
     }),
   );
 

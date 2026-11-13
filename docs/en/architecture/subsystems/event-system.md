@@ -31,6 +31,10 @@ The `messageCreate` event routes to `src/events/messageCreate/tomoriChat.ts`. Th
 
 `src/events/messageCreate/activeNudge.ts` sorts first and feeds the Natural Nudges active-nudge counter. It starts the counter without awaiting it, because handlers run one after another and a cold settings read must never delay `tomoriChat`. A tripped check runs detached as well. See [Natural Nudges](/architecture/subsystems/natural-nudges/#active-nudges).
 
+The detached `conversationRecording.ts` handlers observe creates, edits, and single/bulk deletes
+independently of chat admission. See [Conversation recording](/architecture/subsystems/conversation-recording/)
+for consent, permissions, and lifecycle ordering.
+
 ### Startup initialization
 
 The `clientReady` event runs startup initialization tasks, including registering application slash commands with Discord (`src/events/clientReady/01_registercommands.ts`) and initializing Model Context Protocol (MCP) servers.

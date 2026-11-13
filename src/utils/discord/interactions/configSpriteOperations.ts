@@ -2,7 +2,7 @@ import type { APIAttachment } from "discord.js";
 import type { PersonaSpriteRow, TomoriState } from "@/types/db/schema";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { personaSpriteRepository } from "@/utils/db/repositories";
-import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
+import { buildExportFilename } from "@/utils/discord/attachmentFilename";
 import { convertToPNG } from "@/utils/image/imageProcessor";
 import { log } from "@/utils/misc/logger";
 import { forkPointerForAvatarChange } from "@/utils/persona/pointerFork";
@@ -457,16 +457,18 @@ export const configSpriteOperations: ConfigSpriteOperations = {
         archives.push(archive.buffer);
       }
     }
-    const sanitizedNickname = sanitizeAttachmentFilenamePart(persona.persona_nickname, {
-      fallback: "persona",
-      maxLength: 50,
-    });
-    const timestamp = Date.now();
+    const now = new Date();
     return {
       status: "success",
       files: archives.map((buffer, index) => ({
         buffer,
-        filename: `${sanitizedNickname}-sprites-${timestamp}${archives.length > 1 ? `-${index + 1}` : ""}.zip`,
+        filename: buildExportFilename({
+          kind: "sprites",
+          subject: { value: persona.persona_nickname, fallback: "persona" },
+          part: archives.length > 1 ? { index: index + 1, total: archives.length } : undefined,
+          extension: "zip",
+          now,
+        }),
       })),
       spriteCount: buildEntries.length,
       skippedCount,

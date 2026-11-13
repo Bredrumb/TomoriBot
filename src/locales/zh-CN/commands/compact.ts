@@ -64,7 +64,7 @@ export default {
     add_to_docs_rag_unavailable_title: `本地 RAG 不可用`,
     add_to_docs_rag_unavailable_description: `文档库需要已启用 pgvector 扩展的 PostgreSQL。`,
     add_to_docs_no_permission_title: `权限不足`,
-    add_to_docs_no_permission_description: `你需要「管理服务器」权限，或这个服务器必须开启记忆教导。`,
+    add_to_docs_no_permission_description: `你需要「管理服务器」权限才能保存文档。`,
     add_to_docs_no_embedding_title: `没有嵌入模型`,
     add_to_docs_no_embedding_description: `请先配置一个嵌入模型，才能使用文档库。`,
     add_to_docs_persona_not_found_title: `未找到人格`,

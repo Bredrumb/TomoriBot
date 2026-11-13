@@ -2,23 +2,36 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { ColorCode, log } from "@/utils/misc/logger";
 import type { TokenUsage } from "@/utils/text/tokenEstimate";
+import type { StoredCredentialActivity } from "@/utils/security/apiKeyRetention";
 
 declare const providerUsageContextBrand: unique symbol;
 
 export interface ProviderUsageContext {
+  readonly storedCredentialActivity?: StoredCredentialActivity;
   readonly [providerUsageContextBrand]?: never;
   readonly credentialProvider?: string;
   readonly credentialScope?: "server" | "personal";
 }
 
-const requestUsageContext = new AsyncLocalStorage<ProviderUsageContext | undefined>();
+const requestUsageContext = new AsyncLocalStorage<{
+  context?: ProviderUsageContext;
+  activity?: StoredCredentialActivity;
+}>();
 
-export function withProviderUsageContext<T>(context: ProviderUsageContext | undefined, execute: () => T): T {
-  return requestUsageContext.run(context, execute);
+export function withProviderUsageContext<T>(
+  context: ProviderUsageContext | undefined,
+  execute: () => T,
+  activity = context?.storedCredentialActivity,
+): T {
+  return requestUsageContext.run({ context, activity }, execute);
 }
 
 export function currentProviderUsageContext(): ProviderUsageContext | undefined {
-  return requestUsageContext.getStore();
+  return requestUsageContext.getStore()?.context;
+}
+
+export function currentStoredCredentialActivity(): StoredCredentialActivity | undefined {
+  return requestUsageContext.getStore()?.activity;
 }
 
 export interface ProviderUsageReport {

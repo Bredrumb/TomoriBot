@@ -45,7 +45,7 @@ export default {
       attributelist_option: `Danh sách thuộc tính`,
       sampledialogues_option: `Đoạn hội thoại mẫu`,
       promptsnapshot_option: `Ảnh chụp nhanh prompt`,
-      servermemories_desc: `Thêm/xóa bộ nhớ trên toàn máy chủ`,
+      servermemories_desc: `Xem bộ nhớ máy chủ của mình, thêm mới, và chỉnh sửa hoặc xóa của chính mình`,
       attributelist_desc: `Thêm/xóa thuộc tính tính cách`,
       sampledialogues_desc: `Thêm/xóa các cặp hội thoại mẫu`,
       promptsnapshot_desc: `Xem toàn bộ prompt từ /context và /tool prompt snapshot`,

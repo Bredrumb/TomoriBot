@@ -343,10 +343,12 @@ function buildNovelAIParameters(state: TomoriState, model: string): NovelAIParam
 }
 
 export async function prepareNovelAIRequest(
-  args: Omit<FitInput, "profile" | "window"> & { model: string; apiKey: string },
+  args: Omit<FitInput, "profile" | "window"> & { model: string; apiKey: string; refreshSubscription?: boolean },
 ): Promise<PreparedNovelAIRequest> {
   const profile = getNovelAIProfile(args.model);
-  const subscription = getCachedNovelAISubscription(args.apiKey) ?? (await refreshNovelAISubscription(args.apiKey));
+  const subscription =
+    getCachedNovelAISubscription(args.apiKey) ??
+    (args.refreshSubscription === false ? undefined : await refreshNovelAISubscription(args.apiKey));
   if (!subscription) throw new NovelAIPreparationError("subscription_unavailable");
   if (!subscription.active) throw new NovelAIPreparationError("subscription_inactive");
   const window = profile.contextByTier[subscription.tier];

@@ -19,7 +19,7 @@ import type { PresetExportData } from "../../types/preset/presetExport";
 import { extractMetadataFromPNG, extractSillyTavernMetadataFromPNG } from "../../utils/image/pngMetadata";
 import { validatePNGBuffer } from "../../utils/image/avatarHelper";
 import { personaRepository } from "@/utils/db/repositories";
-import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
+import { buildExportFilename } from "@/utils/discord/attachmentFilename";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { dedupeTriggerWords, parseTriggerWordListInput } from "@/utils/text/triggerWords";
 import { uploadPersonaAvatarToStorage } from "../../utils/storage/avatarStorage";
@@ -162,7 +162,11 @@ async function replyCardConversionFailure(options: {
     MAX_SILLY_TAVERN_DEBUG_BYTES,
     "\n\n[Truncated: decoded payload exceeded attachment size budget.]",
   );
-  const debugFilename = `${options.attachmentName}-${Date.now()}.txt`;
+  const debugFilename = buildExportFilename({
+    kind: "import-debug",
+    extraParts: [options.attachmentName],
+    extension: "txt",
+  });
 
   await replyInfoEmbed(options.interaction, options.locale, {
     titleKey: "commands.persona.import.card_conversion_failed_title",
@@ -1003,12 +1007,11 @@ export async function importPersona(
 
       const missingPostPermission = await missingPublicImportPermission(interaction, Boolean(avatarImageBuffer));
       if (!missingPostPermission && avatarImageBuffer) {
-        const sanitizedNickname = sanitizeAttachmentFilenamePart(itemsImported.nickname, {
-          fallback: "persona",
-          maxLength: 50,
+        const avatarFilename = buildExportFilename({
+          kind: "preset",
+          subject: { value: itemsImported.nickname, fallback: "persona" },
+          extension: "png",
         });
-        const timestamp = Date.now();
-        const avatarFilename = `tomori-preset-${sanitizedNickname}-${timestamp}.png`;
         const avatarAttachment = new AttachmentBuilder(avatarImageBuffer, {
           name: avatarFilename,
         });
@@ -1151,12 +1154,11 @@ export async function importPersona(
       const missingAlterPostPermission = await missingPublicImportPermission(interaction, Boolean(avatarImageBuffer));
       if (!missingAlterPostPermission && interaction.channel && "send" in interaction.channel) {
         if (avatarImageBuffer) {
-          const sanitizedNickname = sanitizeAttachmentFilenamePart(alterResult.nickname, {
-            fallback: "persona",
-            maxLength: 50,
+          const avatarFilename = buildExportFilename({
+            kind: "preset",
+            subject: { value: alterResult.nickname, fallback: "persona" },
+            extension: "png",
           });
-          const timestamp = Date.now();
-          const avatarFilename = `tomori-preset-${sanitizedNickname}-${timestamp}.png`;
           alterSuccessEmbed.setImage(`attachment://${avatarFilename}`);
           await interaction.channel.send({
             embeds: [alterSuccessEmbed],

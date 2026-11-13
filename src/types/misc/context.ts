@@ -71,6 +71,7 @@ export interface ContextMemoryEntry {
 export type StructuredContextItem = {
   personaSprites?: { personaId: number; spriteKeys: string[] };
   completionText?: string;
+  boomerangTranscript?: boolean;
   memoryEntries?: ContextMemoryEntry[];
   personalMemoryItems?: StructuredContextItem[];
   role: "system" | "user" | "model"; // 'system' for initial instructions, 'user' for user/tool inputs, 'model' for LLM responses

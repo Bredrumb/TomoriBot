@@ -155,9 +155,7 @@ export function consumePendingBoomerang(channelId: string): PendingBoomerang | u
 export function buildBoomerangContext(boomerang: PendingBoomerang): StructuredContextItem[] {
   let messagesBlock = "";
   if (boomerang.targetChannelMessages.length > 0) {
-    const formatted = boomerang.targetChannelMessages.map((m) => `"${m.author}: ${m.content}"`).join("\n");
-    // Truncate if total exceeds ~1500 chars to stay within reasonable context size
-    messagesBlock = formatted.length > 1500 ? `${formatted.substring(0, 1497)}...` : formatted;
+    messagesBlock = boomerang.targetChannelMessages.map((m) => `"${m.author}: ${m.content}"`).join("\n");
   }
 
   const resultStr = boomerang.success ? "Success" : `Failed: ${boomerang.error ?? "unknown error"}`;
@@ -167,11 +165,7 @@ export function buildBoomerangContext(boomerang: PendingBoomerang): StructuredCo
     `You have just returned from channel \`${boomerang.targetChannelName}\`.\nReport back naturally on what happened there.`;
   const outro = boomerang.outroText ?? "Now continue the conversation here with a concise update.";
 
-  let contextText = `[System: ${intro}\nOutcome: ${resultStr}.`;
-  if (messagesBlock) {
-    contextText += `\nHere is what was happening in channel \`${boomerang.targetChannelName}\` (last 10 messages, oldest first):\n${messagesBlock}`;
-  }
-  contextText += `\n${outro}]`;
+  const contextText = `[System: ${intro}\nOutcome: ${resultStr}.\n${outro}]`;
 
   return [
     {
@@ -179,6 +173,21 @@ export function buildBoomerangContext(boomerang: PendingBoomerang): StructuredCo
       parts: [{ type: "text", text: contextText }],
       metadataTag: ContextItemTag.SYSTEM_INSTRUCTION_BLOCK,
     },
+    ...(messagesBlock
+      ? [
+          {
+            role: "user" as const,
+            parts: [
+              {
+                type: "text" as const,
+                text: `Recent transcript from channel \`${boomerang.targetChannelName}\` (oldest first):\n${messagesBlock}`,
+              },
+            ],
+            metadataTag: ContextItemTag.SYSTEM_INSTRUCTION_BLOCK,
+            boomerangTranscript: true,
+          },
+        ]
+      : []),
   ];
 }
 

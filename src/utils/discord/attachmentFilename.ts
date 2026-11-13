@@ -46,6 +46,57 @@ function buildFilenameHash(value: string): string {
   return createHash("sha1").update(value).digest("hex").slice(0, 8);
 }
 
+export interface ExportFilenameSubject {
+  value: string;
+  fallback: string;
+  maxLength?: number;
+}
+
+export interface ExportFilenamePart {
+  index: number;
+  total: number;
+}
+
+export interface ExportFilenameOptions {
+  kind: string;
+  extension: string;
+  scope?: string;
+  subject?: ExportFilenameSubject;
+  extraParts?: string[];
+  shortId?: string;
+  part?: ExportFilenamePart;
+  now?: Date;
+}
+
+export function formatExportTimestamp(now: Date = new Date()): string {
+  return `${now.toISOString().slice(0, 19).replace(/[-:]/g, "")}Z`;
+}
+
+export function buildExportFilename(options: ExportFilenameOptions): string {
+  const segments = ["tomori", options.kind];
+  if (options.scope) segments.push(options.scope);
+  if (options.subject) {
+    segments.push(
+      sanitizeAttachmentFilenamePart(options.subject.value, {
+        fallback: options.subject.fallback,
+        maxLength: options.subject.maxLength ?? 50,
+      }),
+    );
+  }
+  if (options.extraParts) {
+    for (const part of options.extraParts) {
+      if (part.length > 0) segments.push(part);
+    }
+  }
+  segments.push(formatExportTimestamp(options.now));
+  if (options.shortId) segments.push(options.shortId);
+  if (options.part && options.part.total > 1) {
+    segments.push(`part-${options.part.index}-of-${options.part.total}`);
+  }
+  const ext = options.extension.startsWith(".") ? options.extension.slice(1) : options.extension;
+  return `${segments.join("-")}.${ext}`;
+}
+
 export function sanitizeAttachmentFilenamePart(value: string, options?: AttachmentFilenamePartOptions): string {
   const maxLength = options?.maxLength ?? 50;
   const fallback = options?.fallback ?? "file";

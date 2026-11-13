@@ -1,7 +1,6 @@
 import { validateOpenRouterSpeechModel } from "@/utils/cache/openrouterSpeechModelCache";
 import { validateOpenRouterTranscriptionModel } from "@/utils/cache/openrouterTranscriptionModelCache";
-import { getNovelAIModelAccessError } from "@/providers/novelai/modelAccess";
-import { decryptApiKey } from "@/utils/security/crypto";
+import { getStoredNovelAIModelAccessError } from "@/providers/novelai/modelAccess";
 import { DEFAULT_THINKING_LEVEL, isThinkingLevelValue } from "@/constants/thinkingLevels";
 import { getRegisterableLocales } from "@/utils/text/localizer";
 import type { APIAttachment } from "discord.js";
@@ -438,9 +437,10 @@ export const personalConfigOperations: PersonalConfigOperations = {
     if (capability === "text") {
       const selected = availableModels.find((model) => model.id === modelId);
       if (provider.toLowerCase() === "novelai" && selected?.name === "xialong-v1") {
-        const descriptionKey = await getNovelAIModelAccessError(
+        const descriptionKey = await getStoredNovelAIModelAccessError(
           selected.name,
-          targetRow.api_key ? await decryptApiKey(targetRow.api_key, targetRow.key_version) : null,
+          targetRow.api_key,
+          targetRow.key_version,
         );
         if (descriptionKey) return { status: "novelai-unavailable", descriptionKey };
       }

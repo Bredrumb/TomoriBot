@@ -7,6 +7,7 @@ import {
   type TopLevelComponentData,
 } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
+import { buildExportFilename } from "@/utils/discord/attachmentFilename";
 import { buildPanelContainer, type PanelAccentTone } from "@/utils/discord/ui/panel";
 import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { localizer } from "@/utils/text/localizer";
@@ -48,13 +49,17 @@ export async function deliverPromptSnapshot(delivery: PromptSnapshotDelivery): P
     inspection.answeringState,
     providerName,
     modelName,
-    inspection.novelaiRequest?.report.outputCap ?? (await resolveRequestMaxOutputTokens(inspection.answeringState)),
+    inspection.novelaiRequest?.report.outputCap ??
+      (await resolveRequestMaxOutputTokens(inspection.answeringState, false)),
     inspection.novelaiRequest,
   );
 
   let fileContent: string;
-  let fileName: string;
-  const fileStem = `prompt-snapshot-${inspection.channelId}-${selectedPersona.persona_lineage_id}-${Date.now()}`;
+  const fileName = buildExportFilename({
+    kind: "prompt-snapshot",
+    extraParts: [inspection.channelId, String(selectedPersona.persona_lineage_id)],
+    extension: format === "json" ? "json" : "txt",
+  });
 
   if (format === "json") {
     const snapshotData = await buildJsonSnapshot(
@@ -67,7 +72,6 @@ export async function deliverPromptSnapshot(delivery: PromptSnapshotDelivery): P
       inspection.novelaiRequest,
     );
     fileContent = JSON.stringify(snapshotData, null, 2);
-    fileName = `${fileStem}.json`;
   } else {
     const infoLines = [
       `server_id: ${delivery.guildId}`,
@@ -79,7 +83,6 @@ export async function deliverPromptSnapshot(delivery: PromptSnapshotDelivery): P
       `captured: ${inspection.capturedAt}`,
     ];
     fileContent = buildTextSnapshot(inspection.contextItems, requestConfig, infoLines, inspection.novelaiRequest);
-    fileName = `${fileStem}.txt`;
   }
 
   const attachment = new AttachmentBuilder(Buffer.from(fileContent, "utf-8"), { name: fileName });

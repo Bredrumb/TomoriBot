@@ -1,4 +1,5 @@
 import { withProviderUsageContext } from "@/utils/provider/providerUsage";
+import { getOptApiKeyCredentials } from "@/utils/security/crypto";
 import { findProviderOption } from "@/utils/provider/providerOptionRegistry";
 import {
   findProviderRequestDeniedError,
@@ -419,27 +420,31 @@ async function synthesizeHostedVoiceMessage(
     } else {
       if (source.kind !== "design" || !validDesign) throw new HostedSpeechError("invalid_request");
       const transport = createGoogleSpeechTransport(target.model.provider, target.apiKey);
-      cleanupPending = !(await cleanupPendingGoogleVoices(
-        target.owner,
-        target.credentialId,
-        target.credentialRevision,
-        target.apiKey,
-        attempt.operations,
+      cleanupPending = !(await withProviderUsageContext(usageContext, () =>
+        cleanupPendingGoogleVoices(
+          target.owner,
+          target.credentialId,
+          target.credentialRevision,
+          target.apiKey,
+          attempt.operations,
+        ),
       ));
-      const result = await synthesizeGoogleVoice({
-        transport,
-        owner: target.owner,
-        credentialId: target.credentialId,
-        credentialRevision: target.credentialRevision,
-        personaId: source.personaId,
-        prompt: source.designPrompt.trim(),
-        script: request.script,
-        direction: request.voiceInstructions,
-        model: target.model.codename,
-        signal,
-        maxBytes,
-        operations: attempt.operations,
-      });
+      const result = await withProviderUsageContext(usageContext, () =>
+        synthesizeGoogleVoice({
+          transport,
+          owner: target.owner,
+          credentialId: target.credentialId,
+          credentialRevision: target.credentialRevision,
+          personaId: source.personaId,
+          prompt: source.designPrompt.trim(),
+          script: request.script,
+          direction: request.voiceInstructions,
+          model: target.model.codename,
+          signal,
+          maxBytes,
+          operations: attempt.operations,
+        }),
+      );
       audio = result.audio;
       cleanupPending ||= result.cleanupPending;
     }
@@ -523,7 +528,16 @@ export async function synthesizeVoiceMessage(
 ): Promise<VoiceMessageSynthesisResult> {
   const attempts: VoiceSynthesisAttempt[] = [];
   async function run(current: VoiceMessageSynthesisRequest): Promise<VoiceMessageSynthesisResult> {
-    if (!current.target) return synthesizeLocalVoiceMessage(current);
+    if (!current.target) {
+      if (current.routing && current.source.kind === "elevenlabs") {
+        const credential = await getOptApiKeyCredentials(current.routing.serverId, "elevenlabs");
+        if (!credential || credential.apiKey !== current.elevenLabsApiKey) {
+          return synthesizeLocalVoiceMessage({ ...current, elevenLabsApiKey: "" });
+        }
+        return withProviderUsageContext(credential.usageContext, () => synthesizeLocalVoiceMessage(current));
+      }
+      return synthesizeLocalVoiceMessage(current);
+    }
     const target = current.target;
     const attempt: VoiceSynthesisAttempt = {
       provider: target.kind === "hosted-model" ? target.model.provider : target.endpoint.api_style,
@@ -562,12 +576,14 @@ export async function synthesizeVoiceMessage(
     const result =
       target.kind === "hosted-model"
         ? await synthesizeHostedVoiceMessage(current, target, attempt)
-        : await synthesizeLocalVoiceMessage({
-            ...current,
-            endpoint: target.endpoint,
-            endpointApiKey: target.apiKey,
-            elevenLabsApiKey: target.endpoint.api_style === "elevenlabs" ? target.apiKey : current.elevenLabsApiKey,
-          });
+        : await withProviderUsageContext(target.usageContext, () =>
+            synthesizeLocalVoiceMessage({
+              ...current,
+              endpoint: target.endpoint,
+              endpointApiKey: target.apiKey,
+              elevenLabsApiKey: target.endpoint.api_style === "elevenlabs" ? target.apiKey : current.elevenLabsApiKey,
+            }),
+          );
     attempt.synthesisSuccess =
       result.success ||
       attempt.operations.some((operation) => operation.operation === "synthesize" && operation.success);

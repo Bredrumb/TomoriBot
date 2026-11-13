@@ -60,6 +60,24 @@ function fit(
 }
 
 describe("NovelAI prompt fitting", () => {
+  it("leaves a cold subscription cache unchanged during prompt inspection", async () => {
+    let requests = 0;
+    const fetch = stubGlobalFetch(() => {
+      requests++;
+      return Response.json({ tier: 3, active: true });
+    });
+    restores.push(() => fetch.mockRestore());
+    await expect(
+      prepareNovelAIRequest({
+        contextItems: [],
+        tomoriState: createPersona(),
+        model: "glm-4-6",
+        apiKey: "synthetic_uncached_inspection_key",
+        refreshSubscription: false,
+      }),
+    ).rejects.toBeInstanceOf(NovelAIPreparationError);
+    expect(requests).toBe(0);
+  });
   it("renders persistent content without a system block except for Xialong's provider prompt", () => {
     const state = createPersona({
       persona_nickname: "Juno",

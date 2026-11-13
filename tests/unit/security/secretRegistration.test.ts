@@ -28,6 +28,7 @@ const BASE_SECRETS: Record<string, string> = {
 };
 
 interface ScenarioResult {
+  retentionRejected?: boolean;
   value?: string;
   unregistered?: string;
   lateRegistrationRejected?: boolean;
@@ -61,6 +62,44 @@ async function runScenario(
 }
 
 describe("registered application secret names", () => {
+  it("loads both retention policies from the mounted bundle before validating ambient values", async () => {
+    const secretDir = await mkdtemp(path.join(os.tmpdir(), "tomoribot-retention-file-"));
+    const secretFile = path.join(secretDir, "secrets.json");
+    try {
+      await writeFile(
+        secretFile,
+        JSON.stringify({ ...BASE_SECRETS, RECORD_RETENTION_DAYS: 90, API_KEY_INACTIVITY_DAYS: 90 }),
+      );
+      const result = await runScenario(
+        `import { loadSecrets } from "./src/init/secrets";
+         await loadSecrets("production");
+         console.log(JSON.stringify({ marker: "secret-registration", value: process.env.RECORD_RETENTION_DAYS + ":" + process.env.API_KEY_INACTIVITY_DAYS }));`,
+        {
+          ...BASE_DOTENV,
+          RUN_ENV: "production",
+          SECRET_FILE: secretFile,
+          RECORD_RETENTION_DAYS: "0",
+          API_KEY_INACTIVITY_DAYS: "0",
+        },
+        ["GCP_SECRET_FILE", "TEST_PRODUCTION"],
+      );
+      expect(result.value).toBe("90:90");
+      for (const name of ["RECORD_RETENTION_DAYS", "API_KEY_INACTIVITY_DAYS"]) {
+        await writeFile(secretFile, JSON.stringify({ ...BASE_SECRETS, [name]: "" }));
+        const invalid = await runScenario(
+          `import { loadSecrets } from "./src/init/secrets";
+           let retentionRejected = false;
+           try { await loadSecrets("production"); } catch { retentionRejected = true; }
+           console.log(JSON.stringify({ marker: "secret-registration", retentionRejected }));`,
+          { ...BASE_DOTENV, RUN_ENV: "production", SECRET_FILE: secretFile },
+          ["GCP_SECRET_FILE", "TEST_PRODUCTION", "RECORD_RETENTION_DAYS", "API_KEY_INACTIVITY_DAYS"],
+        );
+        expect(invalid.retentionRejected).toBe(true);
+      }
+    } finally {
+      await rm(secretDir, { recursive: true, force: true });
+    }
+  });
   it("loads a registered name from the environment and rejects registration after loading", async () => {
     const result = await runScenario(
       `import { getAppSecrets, registerSecretEnvKeys } from "./src/utils/security/secretsManager";

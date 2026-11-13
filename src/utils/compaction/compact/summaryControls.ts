@@ -361,8 +361,9 @@ async function saveSummaryToDocs(params: {
     return null;
   }
 
-  const hasManagePermission = buttonInteraction.memberPermissions?.has("ManageGuild") ?? false;
-  if (!tomoriState.config.server_memteaching_enabled && !hasManagePermission) {
+  const hasManagePermission =
+    !buttonInteraction.guildId || (buttonInteraction.memberPermissions?.has("ManageGuild") ?? false);
+  if (!hasManagePermission) {
     await replyInfoEmbed(submitInteraction, locale, {
       titleKey: "commands.compact.add_to_docs_no_permission_title",
       descriptionKey: "commands.compact.add_to_docs_no_permission_description",

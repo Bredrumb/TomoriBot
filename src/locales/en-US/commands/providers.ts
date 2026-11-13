@@ -19,6 +19,8 @@ export default {
     description: `Add, view, edit, and remove provider credentials, endpoints, and model catalogs.`,
     title: `Server Providers`,
     personal_title: `Personal Providers`,
+    credential_missing: "I don't have an API key for this saved configuration. Use **Edit** to add it again.",
+    credential_retention: "This installation removes stored keys after {days} days without authenticated requests.",
     selector_guidance: "**Select** or **add** a provider or endpoint using the dropdown below.",
     select_placeholder: `Choose a provider, endpoint, or action...`,
     select_add_provider: `+ Add New Provider`,

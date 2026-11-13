@@ -55,7 +55,7 @@ import {
   presetExportDataSchema,
   PRESET_EXPORT_VERSION,
 } from "../../types/preset/presetExport";
-import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
+import { buildExportFilename } from "@/utils/discord/attachmentFilename";
 import { CONFIRMATION_PREVIEW_BUDGET } from "@/utils/text/textPreview";
 import { dedupeTriggerWords } from "@/utils/text/triggerWords";
 import type { PresetExport } from "../../types/preset/presetExport";
@@ -1078,12 +1078,11 @@ export async function execute(
       return;
     }
 
-    const sanitizedNickname = sanitizeAttachmentFilenamePart(characterName, {
-      fallback: "persona",
-      maxLength: 50,
+    const filename = buildExportFilename({
+      kind: "preset",
+      subject: { value: characterName, fallback: "persona" },
+      extension: "png",
     });
-    const timestamp = Date.now();
-    const filename = `tomori-preset-${sanitizedNickname}-${timestamp}.png`;
     const attachment = new AttachmentBuilder(finalPngBuffer, {
       name: filename,
     });

@@ -223,18 +223,11 @@ export class OpenAICompatibleToolAdapter implements MCPCapableToolAdapter {
 
   private extractRelevantData(data: Record<string, unknown>): string | null {
     try {
-      const keys = Object.keys(data);
-      if (keys.length === 0) {
+      if (Object.keys(data).length === 0) {
         return null;
       }
 
-      const relevantKeys = keys.slice(0, 5);
-      const relevantData: Record<string, unknown> = {};
-      for (const key of relevantKeys) {
-        relevantData[key] = data[key];
-      }
-
-      return JSON.stringify(relevantData, null, 2);
+      return JSON.stringify(data, null, 2);
     } catch (error) {
       log.warn(`${this.providerName} adapter: Failed to extract relevant data`, {
         error: error as Error,

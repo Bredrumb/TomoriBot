@@ -1,8 +1,11 @@
 import { SUPPORTER_SECRET_ENV_KEYS } from "@/modules/supporter-billing/config/secretEnvKeys";
+import { initializeCredentialActivityFetch } from "@/utils/provider/providerRequestHook";
 import { log } from "@/utils/misc/logger";
 import { getAppSecrets, registerSecretEnvKeys } from "@/utils/security/secretsManager";
 import { keyManager } from "@/utils/security/keyManager";
 import type { AppEnvironment } from "@/types/config";
+import { readRecordingRetentionDays } from "@/modules/conversation-recording/config";
+import { readApiKeyInactivityDays } from "@/utils/security/apiKeyRetention";
 
 // Registration is an import-time side effect because getAppSecrets() only loads names known before
 // it runs, and a name registered late would silently stay out of the loaded secret object.
@@ -87,6 +90,12 @@ export async function loadSecrets(environment: AppEnvironment): Promise<void> {
     const value = secrets[key];
     if (value) process.env[key] = value;
   }
+  for (const name of ["RECORD_RETENTION_DAYS", "API_KEY_INACTIVITY_DAYS"] as const) {
+    if (secrets[name] !== undefined) process.env[name] = secrets[name];
+  }
+  readRecordingRetentionDays();
+  readApiKeyInactivityDays();
+  initializeCredentialActivityFetch();
 
   const secretsSource =
     environment !== "production" || process.env.TEST_PRODUCTION === "true"

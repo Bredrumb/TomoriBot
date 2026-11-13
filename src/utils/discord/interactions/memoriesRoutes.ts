@@ -44,7 +44,7 @@ import {
   parseLorebookSelectiveLogic,
 } from "@/modules/lorebooks/discord/panelSection";
 import { IMPORT_LIMITS } from "@/utils/security/rateLimiter";
-import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
+import { buildExportFilename } from "@/utils/discord/attachmentFilename";
 import { deliverTransferExport } from "@/utils/discord/transferExportDelivery";
 import { safeDownload } from "@/utils/security/safeDownload";
 import type { GlobalInteractionRoute, GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
@@ -1038,8 +1038,6 @@ async function takeLorebookChannelScope(
  * see it because the heading and detail suffixes are composed at call time.
  */
 export const DOCUMENT_RESULT_RECEIPT_KEYS: Record<string, MemoryReceiptKey> = {
-  blacklisted: "blacklisted_error",
-  "teaching-disabled": "teaching_disabled_error",
   "rag-disabled": "document_rag_disabled",
   "memory-critical": "document_memory_critical",
   "invalid-name": "document_invalid_name",
@@ -1194,6 +1192,15 @@ async function preWarmServerStm(workspaceId: string): Promise<void> {
   await preWarmServerStmEntries(workspaceId);
 }
 
+async function loadPanelMemories(
+  scope: MemoriesScope,
+  lineageId: number,
+  dependencies: MemoriesRouteDependencies,
+): Promise<ServerMemoryRow[]> {
+  if (!scope.canManage && !scope.memteachingEnabled) return [];
+  return dependencies.loadMemories(scope.serverId, lineageId, scope.canManage ? undefined : scope.userId);
+}
+
 /**
  * Refuse a modal-opening branch by repainting the panel with an error receipt.
  *
@@ -1211,15 +1218,13 @@ async function refuseInPlace(
   receiptKey: MemoryReceiptKey,
   dependencies: MemoriesRouteDependencies,
 ): Promise<void> {
-  await interaction.deferUpdate();
+  if (!interaction.deferred && !interaction.replied) await interaction.deferUpdate();
   if (!scope) {
     await interaction.editReply(terminalPayload(locale, "commands.memories.unavailable"));
     return;
   }
   const memories =
-    category === "memories" && selectedId
-      ? await dependencies.loadMemories(scope.serverId, selectedId, scope.canManage ? undefined : scope.userId)
-      : [];
+    category === "memories" && selectedId ? await loadPanelMemories(scope, selectedId, dependencies) : [];
   const page =
     category === "documents"
       ? { kind: "documents" as const }
@@ -1261,7 +1266,7 @@ async function repaint(
   let documentChunks: DocumentChunkRow[] | undefined;
   let documentCountsByPersona: Map<number, number> | undefined;
   let eligibleHistoryPersonaIds: Set<number> | undefined;
-  if (category === "documents" && (scope.canManage || scope.memteachingEnabled)) {
+  if (category === "documents" && scope.canManage) {
     const personaId = selectedLineageId === 0 ? null : selectedLineageId;
     let scopedCounts: { byPersona: Map<number, number>; serverwide: number };
     [documents, scopedCounts, eligibleHistoryPersonaIds] = await Promise.all([
@@ -1289,7 +1294,7 @@ async function repaint(
   let lorebookEntries: LorebookEntryRow[] | undefined;
   let lorebookCounts: Map<number | null, number> | null = null;
   let readStatus = scope.readStatus;
-  if (category === "lorebooks") {
+  if (category === "lorebooks" && scope.canManage) {
     const [lorebooks, counts] = await Promise.all([
       dependencies.loadLorebooks(scope.serverId, lorebookLineageId(selectedLineageId)),
       dependencies.getLorebookCounts(scope.serverId),
@@ -1305,7 +1310,9 @@ async function repaint(
   }
 
   const memoryCountsByLineage =
-    category === "memories" ? await dependencies.getMemoryCountsByLineage(scope.serverId, ownerFilter) : undefined;
+    category === "memories" && (scope.canManage || scope.memteachingEnabled)
+      ? await dependencies.getMemoryCountsByLineage(scope.serverId, ownerFilter)
+      : undefined;
 
   // Documents key on persona_id, so the face beside that heading is looked up directly rather
   // than through the lineage representative the Memories page uses. Serverwide (0) has none.
@@ -1377,9 +1384,7 @@ async function repaintCategory(
   dependencies: MemoriesRouteDependencies,
 ): Promise<void> {
   const lineageId = openingSelection(category, scope, persona);
-  const ownerFilter = scope.canManage ? undefined : scope.userId;
-  const memories =
-    category === "memories" && lineageId ? await dependencies.loadMemories(scope.serverId, lineageId, ownerFilter) : [];
+  const memories = category === "memories" && lineageId ? await loadPanelMemories(scope, lineageId, dependencies) : [];
   await repaint(interaction, locale, scope, category, lineageId, memories, { kind: "main" }, receipt, dependencies);
 }
 
@@ -1557,10 +1562,11 @@ export async function buildInitialMemoriesPanel(
       : scope.personas.find((persona) => persona.persona_lineage_id === requestedLineageId);
   const selectedLineageId = requestedPersona?.persona_lineage_id ?? scope.personas[0]?.persona_lineage_id ?? 0;
   const ownerFilter = scope.canManage ? undefined : scope.userId;
-  const memories = selectedLineageId
-    ? await dependencies.loadMemories(scope.serverId, selectedLineageId, ownerFilter)
-    : [];
-  const memoryCountsByLineage = await dependencies.getMemoryCountsByLineage(scope.serverId, ownerFilter);
+  const memories = selectedLineageId ? await loadPanelMemories(scope, selectedLineageId, dependencies) : [];
+  const memoryCountsByLineage =
+    scope.canManage || scope.memteachingEnabled
+      ? await dependencies.getMemoryCountsByLineage(scope.serverId, ownerFilter)
+      : undefined;
   const representative = personaRepresentativeForLineage(scope.personas, selectedLineageId);
   const selectedPersonaAvatar = representative
     ? await dependencies.getPersonaAvatarData(interaction, representative)
@@ -1576,6 +1582,7 @@ export async function buildInitialMemoriesPanel(
       selectedPersonaAvatarUrl: selectedPersonaAvatar?.url,
       memories,
       canManage: scope.canManage,
+      memteachingEnabled: scope.memteachingEnabled,
       readStatus: scope.readStatus,
       page: { kind: "main" },
     }),
@@ -1668,6 +1675,27 @@ export function createMemoriesInteractionRoute(
       const route = parseMemoriesPanelRoute(parsed);
       if (!route) throw new Error(`Malformed memories panel route: ${interaction.customId}`);
 
+      if (
+        interaction.guildId &&
+        !interaction.memberPermissions?.has("ManageGuild") &&
+        (route.action.startsWith("lore-") ||
+          route.action.startsWith("document-") ||
+          route.action.startsWith("history-") ||
+          route.action.startsWith("vectorize-"))
+      ) {
+        await interaction.deferUpdate();
+        await refuseInPlace(
+          interaction,
+          route.locale,
+          await dependencies.resolveScope(interaction, false),
+          route.action.startsWith("lore-") ? "lorebooks" : "documents",
+          0,
+          "manager_only",
+          dependencies,
+        );
+        return;
+      }
+
       // Modals and modal-opening select choices handle their own acknowledgement
       if (route.action === "select") {
         if (!interaction.isStringSelectMenu()) {
@@ -1747,8 +1775,7 @@ export function createMemoriesInteractionRoute(
           );
           return;
         }
-        const ownerFilter = cachedScope.canManage ? undefined : cachedScope.userId;
-        const memories = await dependencies.loadMemories(cachedScope.serverId, route.lineageId, ownerFilter);
+        const memories = await loadPanelMemories(cachedScope, route.lineageId, dependencies);
         const memory = memories.find((m) => m.server_memory_id === route.memoryId);
         if (!memory) {
           await interaction.deferUpdate();
@@ -1973,30 +2000,6 @@ export function createMemoriesInteractionRoute(
             );
             return;
           }
-          if (!cachedScope.canManage && !cachedScope.memteachingEnabled) {
-            await refuseInPlace(
-              interaction,
-              route.locale,
-              cachedScope,
-              "documents",
-              route.personaId,
-              "teaching_disabled_error",
-              dependencies,
-            );
-            return;
-          }
-          if (cachedScope.isBlacklisted && !cachedScope.canManage) {
-            await refuseInPlace(
-              interaction,
-              route.locale,
-              cachedScope,
-              "documents",
-              route.personaId,
-              "blacklisted_error",
-              dependencies,
-            );
-            return;
-          }
           if (
             route.personaId !== 0 &&
             !cachedScope.personas.some((persona) => persona.persona_id === route.personaId)
@@ -2082,36 +2085,11 @@ export function createMemoriesInteractionRoute(
           );
           return;
         }
-        if (cachedScope.isBlacklisted && !cachedScope.canManage) {
-          await refuseInPlace(
-            interaction,
-            route.locale,
-            cachedScope,
-            "memories",
-            route.lineageId,
-            "blacklisted_error",
-            dependencies,
-          );
-          return;
-        }
-        if (!cachedScope.memteachingEnabled && !cachedScope.canManage) {
-          await refuseInPlace(
-            interaction,
-            route.locale,
-            cachedScope,
-            "memories",
-            route.lineageId,
-            "teaching_disabled_error",
-            dependencies,
-          );
-          return;
-        }
         const representativeMatches = cachedScope.personas.some(
           (persona) => persona.persona_id === route.personaId && persona.persona_lineage_id === route.lineageId,
         );
-        const owner = cachedScope.canManage ? undefined : cachedScope.userId;
         const memories = representativeMatches
-          ? await dependencies.loadMemories(cachedScope.serverId, route.lineageId, owner)
+          ? await loadPanelMemories(cachedScope, route.lineageId, dependencies)
           : [];
         const memory = memories.find((candidate) => candidate.server_memory_id === route.memoryId);
         if (!memory) {
@@ -2176,7 +2154,6 @@ export function createMemoriesInteractionRoute(
       });
       if (!initialScope) return;
       let scope = initialScope;
-      const ownerFilter = scope.canManage ? undefined : scope.userId;
 
       if (route.action === "category") {
         await repaintCategory(interaction, route.locale, scope, route.category, null, undefined, dependencies);
@@ -2191,7 +2168,7 @@ export function createMemoriesInteractionRoute(
         const validLineage = scope.personas.some((p) => p.persona_lineage_id === selectedLineage)
           ? selectedLineage
           : (scope.personas[0]?.persona_lineage_id ?? 0);
-        const memories = validLineage ? await dependencies.loadMemories(scope.serverId, validLineage, ownerFilter) : [];
+        const memories = validLineage ? await loadPanelMemories(scope, validLineage, dependencies) : [];
         await repaint(
           interaction,
           route.locale,
@@ -2210,7 +2187,7 @@ export function createMemoriesInteractionRoute(
         const validLineage = scope.personas.some((persona) => persona.persona_lineage_id === route.lineageId)
           ? route.lineageId
           : (scope.personas[0]?.persona_lineage_id ?? 0);
-        const memories = validLineage ? await dependencies.loadMemories(scope.serverId, validLineage, ownerFilter) : [];
+        const memories = validLineage ? await loadPanelMemories(scope, validLineage, dependencies) : [];
         await repaint(
           interaction,
           route.locale,
@@ -2227,7 +2204,7 @@ export function createMemoriesInteractionRoute(
 
       if (route.action === "select") {
         const memoryId = Number((interaction as StringSelectMenuInteraction).values[0]);
-        const memories = await dependencies.loadMemories(scope.serverId, route.lineageId, ownerFilter);
+        const memories = await loadPanelMemories(scope, route.lineageId, dependencies);
         await repaint(
           interaction,
           route.locale,
@@ -2243,7 +2220,7 @@ export function createMemoriesInteractionRoute(
       }
 
       if (route.action === "range") {
-        const memories = await dependencies.loadMemories(scope.serverId, route.lineageId, ownerFilter);
+        const memories = await loadPanelMemories(scope, route.lineageId, dependencies);
         await repaint(
           interaction,
           route.locale,
@@ -2524,7 +2501,11 @@ export function createMemoriesInteractionRoute(
             locale: route.locale,
             dmDescription: exportDetail,
             attachment: new AttachmentBuilder(Buffer.from(JSON.stringify(file, null, 2)), {
-              name: `${sanitizeAttachmentFilenamePart(name, { fallback: "lorebook" })}.json`,
+              name: buildExportFilename({
+                kind: "lorebook",
+                subject: { value: name, fallback: "lorebook" },
+                extension: "json",
+              }),
             }),
             operationLabel: "lorebook",
             sendDirectMessage: (payload) => interaction.user.send(payload),
@@ -2764,9 +2745,7 @@ export function createMemoriesInteractionRoute(
         const representativeMatches = scope.personas.some(
           (persona) => persona.persona_id === route.personaId && persona.persona_lineage_id === route.lineageId,
         );
-        const memories = representativeMatches
-          ? await dependencies.loadMemories(scope.serverId, route.lineageId, ownerFilter)
-          : [];
+        const memories = representativeMatches ? await loadPanelMemories(scope, route.lineageId, dependencies) : [];
         const target = memories.find((memory) => memory.server_memory_id === route.memoryId);
         await repaint(
           interaction,
@@ -2783,7 +2762,7 @@ export function createMemoriesInteractionRoute(
       }
 
       if (route.action === "vectorize-cancel") {
-        const memories = await dependencies.loadMemories(scope.serverId, route.lineageId, ownerFilter);
+        const memories = await loadPanelMemories(scope, route.lineageId, dependencies);
         await repaint(
           interaction,
           route.locale,
@@ -3078,7 +3057,7 @@ export function createMemoriesInteractionRoute(
           (persona) => persona.persona_id === route.personaId && persona.persona_lineage_id === route.lineageId,
         );
         if (!personaMatches || !channelDiscIds) {
-          const memories = await dependencies.loadMemories(scope.serverId, route.lineageId, ownerFilter);
+          const memories = await loadPanelMemories(scope, route.lineageId, dependencies);
           await repaint(
             interaction,
             route.locale,
@@ -3098,7 +3077,7 @@ export function createMemoriesInteractionRoute(
           scope,
           "memories",
           route.lineageId,
-          await dependencies.loadMemories(scope.serverId, route.lineageId, ownerFilter),
+          await loadPanelMemories(scope, route.lineageId, dependencies),
           { kind: "main" },
           workingReceipt(route.locale, "vectorize_working"),
           dependencies,
@@ -3125,8 +3104,7 @@ export function createMemoriesInteractionRoute(
         );
         scope = action.state ?? scope;
         const result = action.result;
-        const currentOwner = scope.canManage ? undefined : scope.userId;
-        const memories = await dependencies.loadMemories(scope.serverId, route.lineageId, currentOwner);
+        const memories = await loadPanelMemories(scope, route.lineageId, dependencies);
         if (result.status === "success") {
           dependencies.recordAction({
             action: "memories.workspace.memory.vectorize",
@@ -3932,7 +3910,7 @@ export function createMemoriesInteractionRoute(
         const personaId = representative?.persona_id;
 
         if (!channelDiscIds) {
-          const memories = await dependencies.loadMemories(scope.serverId, route.lineageId, ownerFilter);
+          const memories = await loadPanelMemories(scope, route.lineageId, dependencies);
           await repaint(
             interaction,
             route.locale,
@@ -3948,7 +3926,7 @@ export function createMemoriesInteractionRoute(
         }
 
         if (!personaId) {
-          const memories = await dependencies.loadMemories(scope.serverId, route.lineageId, ownerFilter);
+          const memories = await loadPanelMemories(scope, route.lineageId, dependencies);
           await repaint(
             interaction,
             route.locale,
@@ -3966,7 +3944,7 @@ export function createMemoriesInteractionRoute(
         if (uploadedFile) {
           const upload = await dependencies.readUploadedText(uploadedFile);
           if (!upload.isValid || !upload.text) {
-            const memories = await dependencies.loadMemories(scope.serverId, route.lineageId, ownerFilter);
+            const memories = await loadPanelMemories(scope, route.lineageId, dependencies);
             await repaint(
               interaction,
               route.locale,
@@ -4001,8 +3979,7 @@ export function createMemoriesInteractionRoute(
           );
           const batchResult = batchAction.result;
           scope = batchAction.state ?? scope;
-          const currentOwnerFilter = scope.canManage ? undefined : scope.userId;
-          const memories = await dependencies.loadMemories(scope.serverId, route.lineageId, currentOwnerFilter);
+          const memories = await loadPanelMemories(scope, route.lineageId, dependencies);
 
           if (batchResult.status === "success") {
             dependencies.recordAction({
@@ -4072,8 +4049,7 @@ export function createMemoriesInteractionRoute(
         );
         const result = action.result;
         scope = action.state ?? scope;
-        const currentOwnerFilter = scope.canManage ? undefined : scope.userId;
-        const memories = await dependencies.loadMemories(scope.serverId, route.lineageId, currentOwnerFilter);
+        const memories = await loadPanelMemories(scope, route.lineageId, dependencies);
 
         if (result.status === "success") {
           dependencies.recordAction({
@@ -4128,7 +4104,7 @@ export function createMemoriesInteractionRoute(
           buildServerMemoryModalFieldId("channels", route.nonce),
         );
         if (!channelDiscIds) {
-          const memories = await dependencies.loadMemories(scope.serverId, route.lineageId, ownerFilter);
+          const memories = await loadPanelMemories(scope, route.lineageId, dependencies);
           await repaint(
             interaction,
             route.locale,
@@ -4161,8 +4137,7 @@ export function createMemoriesInteractionRoute(
         );
         const result = action.result;
         scope = action.state ?? scope;
-        const currentOwnerFilter = scope.canManage ? undefined : scope.userId;
-        const memories = await dependencies.loadMemories(scope.serverId, route.lineageId, currentOwnerFilter);
+        const memories = await loadPanelMemories(scope, route.lineageId, dependencies);
 
         if (result.status === "success") {
           dependencies.recordAction({
@@ -4238,7 +4213,7 @@ export function createMemoriesInteractionRoute(
       }
 
       if (route.action === "remove-prompt") {
-        const memories = await dependencies.loadMemories(scope.serverId, route.lineageId, ownerFilter);
+        const memories = await loadPanelMemories(scope, route.lineageId, dependencies);
         const target = memories.find((m) => m.server_memory_id === route.memoryId);
         await repaint(
           interaction,
@@ -4255,7 +4230,7 @@ export function createMemoriesInteractionRoute(
       }
 
       if (route.action === "remove-cancel") {
-        const memories = await dependencies.loadMemories(scope.serverId, route.lineageId, ownerFilter);
+        const memories = await loadPanelMemories(scope, route.lineageId, dependencies);
         await repaint(
           interaction,
           route.locale,
@@ -4271,9 +4246,7 @@ export function createMemoriesInteractionRoute(
       }
 
       if (route.action === "remove-confirm") {
-        const memoriesBeforeRemoval = [
-          ...(await dependencies.loadMemories(scope.serverId, route.lineageId, ownerFilter)),
-        ];
+        const memoriesBeforeRemoval = [...(await loadPanelMemories(scope, route.lineageId, dependencies))];
         const action = await performPanelAction(
           () =>
             dependencies.operations.remove({
@@ -4290,8 +4263,7 @@ export function createMemoriesInteractionRoute(
         );
         const result = action.result;
         scope = action.state ?? scope;
-        const currentOwnerFilter = scope.canManage ? undefined : scope.userId;
-        const memories = await dependencies.loadMemories(scope.serverId, route.lineageId, currentOwnerFilter);
+        const memories = await loadPanelMemories(scope, route.lineageId, dependencies);
 
         if (result.status === "success") {
           dependencies.recordAction({
@@ -4356,9 +4328,7 @@ export function createMemoriesInteractionRoute(
             ? (retryLineageId ?? 0)
             : (route.lineageId ?? scope.personas[0]?.persona_lineage_id ?? 0);
         const memories =
-          route.category === "memories" && lineageId
-            ? await dependencies.loadMemories(scope.serverId, lineageId, ownerFilter)
-            : [];
+          route.category === "memories" && lineageId ? await loadPanelMemories(scope, lineageId, dependencies) : [];
         const page =
           route.category === "documents"
             ? { kind: "documents" as const }

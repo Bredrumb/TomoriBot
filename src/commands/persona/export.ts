@@ -14,7 +14,7 @@ import { presetRepository } from "@/utils/db/repositories/PresetRepository";
 import { getServerAvatar } from "../../utils/image/avatarHelper";
 import { embedMetadataInPNG } from "../../utils/image/pngMetadata";
 import { personaRepository } from "@/utils/db/repositories";
-import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
+import { buildExportFilename } from "@/utils/discord/attachmentFilename";
 import { convertToPNG } from "@/utils/image/imageProcessor";
 import { loadStoredPersonaAvatarBuffer } from "@/utils/storage/avatarStorage";
 import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
@@ -83,12 +83,11 @@ export async function execute(
     const presetData = exportResult.data;
     if (exportJson) {
       const nickname = presetData.data.tomori_nickname;
-      const sanitizedNickname = sanitizeAttachmentFilenamePart(nickname, {
-        fallback: "persona",
-        maxLength: 50,
+      const filename = buildExportFilename({
+        kind: "preset",
+        subject: { value: nickname, fallback: "persona" },
+        extension: "json",
       });
-      const timestamp = Date.now();
-      const filename = `tomori-preset-${sanitizedNickname}-${timestamp}.json`;
 
       // Canonical PresetExport payload (identical to the PNG tEXt chunk) so the
       // file round-trips through /persona import's validatePresetFile() path.
@@ -187,12 +186,11 @@ export async function execute(
     }
 
     const nickname = presetData.data.tomori_nickname;
-    const sanitizedNickname = sanitizeAttachmentFilenamePart(nickname, {
-      fallback: "persona",
-      maxLength: 50,
+    const filename = buildExportFilename({
+      kind: "preset",
+      subject: { value: nickname, fallback: "persona" },
+      extension: "png",
     });
-    const timestamp = Date.now();
-    const filename = `tomori-preset-${sanitizedNickname}-${timestamp}.png`;
 
     const attachment = new AttachmentBuilder(pngWithMetadata, {
       name: filename,

@@ -11,7 +11,7 @@ sidebar:
 
 Tất cả các lệnh slash hiện được TomoriBot đăng ký, được tạo từ cùng trình xây dựng lệnh và mô tả tiếng Việt dùng để đăng ký trên Discord (mô tả chưa được dịch sẽ hiển thị bằng tiếng Anh).
 
-Các nhóm lệnh cấp cao nhất: **44**. Các lệnh slash có thể thực thi: **91**.
+Các nhóm lệnh cấp cao nhất: **45**. Các lệnh slash có thể thực thi: **94**.
 
 ## `/booru`
 
@@ -294,6 +294,16 @@ Quản lý đặt lại hạn ngạch tạo sinh.
 |---|---|
 | `/quota reset global` | Đặt lại nhóm hạn ngạch tạo sinh trên toàn máy chủ. |
 | `/quota reset user` | Đặt lại mức sử dụng hạn ngạch hàng ngày của người dùng. |
+
+## `/record`
+
+Quản lý bản ghi cuộc trò chuyện của bạn trong máy chủ này
+
+| Lệnh | Tóm tắt |
+|---|---|
+| `/record data` | Xem, xuất hoặc xóa bản ghi của bạn trong máy chủ này |
+| `/record start` | Lưu trích đoạn cuộc trò chuyện ẩn danh trong máy chủ này mỗi khi bạn gửi tin nhắn |
+| `/record stop` | Dừng thu thập trích đoạn và giữ lại các bản ghi đã lưu của bạn |
 
 ## `/refresh`
 

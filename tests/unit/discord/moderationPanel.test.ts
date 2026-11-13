@@ -479,9 +479,9 @@ describe("moderationPanel UI rendering", () => {
       "### Member Access Settings\\nConfigure permissions for members without `Manage Server`.",
     );
     expect(serialized).not.toContain("> Configure permissions");
-    expect(serialized).toContain("> 🟢 Members can manage server memories and documents.");
-    expect(serialized).toContain("> 🔴 Members cannot manage persona attributes.");
-    expect(serialized).toContain("> 🟢 Members can manage persona sample dialogues.");
+    expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.member_access_servermemories_enabled"));
+    expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.member_access_attributelist_disabled"));
+    expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.member_access_sampledialogues_enabled"));
     expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.member_access_promptsnapshot_disabled"));
     expect(serialized).toContain(localizer("en-US", "commands.moderation.edit_permissions"));
     expect(serialized).toContain('"customId":"moderation:v2:member-access-open:en-US"');
@@ -632,9 +632,9 @@ describe("moderationPanel UI rendering", () => {
     });
 
     const serialized = JSON.stringify(payload);
-    expect(serialized).toContain("> 🔴 Members cannot manage server memories and documents.");
-    expect(serialized).toContain("> 🟢 Members can manage persona attributes.");
-    expect(serialized).toContain("> 🔴 Members cannot manage persona sample dialogues.");
+    expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.member_access_servermemories_disabled"));
+    expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.member_access_attributelist_enabled"));
+    expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.member_access_sampledialogues_disabled"));
     expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.member_access_promptsnapshot_enabled"));
   });
 
@@ -1156,9 +1156,9 @@ describe("moderationPanel UI rendering", () => {
 
     const serialized = JSON.stringify(payload);
     expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.stale_warning"));
-    expect(serialized).toContain("> 🟢 Members can manage server memories and documents.");
-    expect(serialized).toContain("> 🟢 Members can manage persona attributes.");
-    expect(serialized).toContain("> 🔴 Members cannot manage persona sample dialogues.");
+    expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.member_access_servermemories_enabled"));
+    expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.member_access_attributelist_enabled"));
+    expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.member_access_sampledialogues_disabled"));
     expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.member_access_promptsnapshot_enabled"));
   });
 
@@ -1386,20 +1386,20 @@ describe("moderationPanel UI rendering", () => {
     expect(checkboxGroup.options).toEqual([
       {
         value: "servermemories",
-        label: "Server Memories",
-        description: "Add/remove server-wide memories",
+        label: localizedCopy("en-US", "commands.server.member-permissions.servermemories_option"),
+        description: localizedCopy("en-US", "commands.server.member-permissions.servermemories_desc"),
         default: true,
       },
       {
         value: "attributelist",
-        label: "Attribute List",
-        description: "Add/remove personality attributes",
+        label: localizedCopy("en-US", "commands.server.member-permissions.attributelist_option"),
+        description: localizedCopy("en-US", "commands.server.member-permissions.attributelist_desc"),
         default: false,
       },
       {
         value: "sampledialogues",
-        label: "Sample Dialogues",
-        description: "Add/remove sample dialogue pairs",
+        label: localizedCopy("en-US", "commands.server.member-permissions.sampledialogues_option"),
+        description: localizedCopy("en-US", "commands.server.member-permissions.sampledialogues_desc"),
         default: true,
       },
       {

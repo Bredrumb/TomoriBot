@@ -48,8 +48,8 @@ be limited to selected channels and their threads. You can read the stored chunk
 remove any of them. To turn a long server memory into a document, open it in `/memories` and choose
 `Vectorize`.
 
-On new servers, document management is restricted to members with `Manage Server` by default;
-managers can grant access through `/moderation` > `Member Access`.
+Viewing and managing documents requires `Manage Server`. Member memory teaching applies only to
+server memories and is disabled by default on new servers.
 
 ## Document limits
 

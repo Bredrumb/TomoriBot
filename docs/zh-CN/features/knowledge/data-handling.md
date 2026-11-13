@@ -2,7 +2,6 @@
 title: "数据处理"
 sidebar:
   order: 4
-aiGenerated: true
 ---
 
 使用Discord斜线命令导出、备份、导入或删除你的设置、记忆和人格。有关服务条款和隐私详细信息，请参阅`/legal terms-of-service`和`/legal privacy-policy`。
@@ -20,14 +19,15 @@ aiGenerated: true
 - 服务器配置设置
 - 加密的提供方 API 密钥
 - 立绘元数据、人格访问规则和上传的立绘媒体
+- 需主动开启的[对话记录](/features/setup-administration/conversation-recordings/)（若选择，还会包含周围消息）
 
 ### 未存储
 
-- Discord 消息历史记录（消息未存档在持久消息日志中）
+- 对话记录中的媒体文件内容、文件名及附件 URL；仅保存附件类型和数量的元数据。
 
 ### 发送给你的 AI 提供方
 
-每当被触发时，TomoriBot 都会获取频道中的近期消息以及相关记忆，作为模型的上下文。除这些触发之外，她不会读取或处理任何消息。
+每当被触发时，TomoriBot 都会获取频道中的近期消息以及相关记忆，作为模型的上下文。可选的对话记录功能也会独立于回复触发机制读取符合条件的消息；该功能不会发起任何自动提供方调用。
 
 配置了嵌入模型后，其提供方会接收最新消息以及所搜索的文档与记忆文本。该提供方可以不同于编写回复的提供方。因隐私设置而隐藏的个人记忆不会参与搜索。搜索数据会随其对应的记忆一同删除；有关自动休眠与替换的说明，请参阅[记忆衰退](/features/knowledge/memory/memory-decay/)。
 
@@ -48,7 +48,9 @@ aiGenerated: true
 
 ## 导出你的数据
 
-可导出的数据以JSON文件形式传送到你的DM：
+对话记录使用 `/record data` 在当前服务器中提供私密的 Markdown 或 JSON 附件。其范围、保留及删除规则详见[记录指南](/features/setup-administration/conversation-recordings/)。
+
+设置与记忆导出以 JSON 文件的形式发送到你的私信，以便你在私信中保留一份日后可用于恢复的副本。若 TomoriBot 无法向你发送私信，文件将改以私密回复形式附加；请在回复消失前及时保存：
 
 - `/export config`：服务器配置值（不包括API密钥和凭据）。
 - `/export personal config`：个人资料设置（隐私、外观标签、命名）。
@@ -72,8 +74,9 @@ aiGenerated: true
 
 这些操作永久删除或重置存储的数据：
 
+- `/record data`：确认后删除你在当前服务器中的记录摘录；若要停止收集，需另外使用 `/record stop`。
 - `/personal memories`：管理或删除个人记忆。
-- `/memories`：管理或删除服务器内存（需要管理服务器）。
+- `/memories`：管理或删除服务器记忆、文档和世界书。文档和世界书需要 `管理服务器` 权限。开启成员教导后，成员可以查看、编辑或删除自己的服务器记忆。关闭时，查看和管理服务器记忆需要 `管理服务器` 权限。
 - `/personal nuke`：永久删除跨服务器的所有个人数据。
 - `/nuke`：擦除服务器数据，包括自定义表达式和人格访问规则。设置`preserve_personas: true`以保留人格，同时删除自定义表达式和媒体。
 - `/reset config`：将服务器配置恢复为数据库默认值。

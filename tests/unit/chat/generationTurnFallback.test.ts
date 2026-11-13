@@ -1,3 +1,4 @@
+import * as retention from "@/utils/db/repositories/ApiKeyRetentionRepository";
 import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import { customEndpointSchema, personaSpriteSchema } from "@/types/db/schema";
 import { GenerateVoiceMessageTool } from "@/tools/functionCalls/generateVoiceMessageTool";
@@ -110,6 +111,7 @@ type TestStopContext = {
 // hex STRINGS modules call string methods on at load time (e.g. contextEmbeds.ts
 // does ColorCode.ERROR.replace("#", "")). Only `log` is silenced.
 const scopedMock = createScopedModuleMocker(mock, {
+  "@/utils/db/repositories/ApiKeyRetentionRepository": retention,
   "@/utils/cache/channelLlmCache": realChannelLlmCache,
   "@/utils/chat/admissionGuards": realAdmissionGuards,
   "@/utils/cache/novelaiSubscriptionCache": realNovelaiSubscriptionCache,
@@ -124,6 +126,11 @@ const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/chat/toolLoop": realToolLoop,
   "@/tools/toolRegistry": realToolRegistry,
 });
+
+scopedMock.module("@/utils/db/repositories/ApiKeyRetentionRepository", () => ({
+  ...retention,
+  loadCredentialActivityReferences: async () => [],
+}));
 
 stubLogMembers({
   error: () => undefined,

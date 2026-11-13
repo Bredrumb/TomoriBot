@@ -14,7 +14,7 @@ import {
 function makeSavedRow(overrides: Partial<SavedProviderConfigRow> & { provider: string }): SavedProviderConfigRow {
   return {
     server_id: 1,
-    api_key: null,
+    api_key: Buffer.from("synthetic-saved-credential"),
     key_version: 1,
     llm_id: null,
     diffusion_model_id: null,
@@ -31,7 +31,7 @@ function makeUserSavedRow(
 ): UserSavedProviderConfigRow {
   return {
     user_id: 1,
-    api_key: null,
+    api_key: Buffer.from("synthetic-saved-credential"),
     key_version: 1,
     llm_id: null,
     diffusion_model_id: null,
@@ -138,5 +138,17 @@ describe("saved provider capability filters", () => {
 
     expect(await loadSavedProvidersForCapability(1, "text")).toEqual([]);
     expect((await loadUserSavedProvidersForCapability(7, "text")).map((row) => row.llm_id)).toEqual([903]);
+  });
+  it("excludes cleared credentials while preserving unauthenticated custom endpoints", async () => {
+    const customProvider = buildCustomProviderName(44);
+    spyOn(llmProviderRepo, "loadSavedProviderConfigs").mockResolvedValue([
+      makeSavedRow({ provider: "google", api_key: null }),
+      makeSavedRow({ provider: customProvider, llm_id: 904, api_key: null }),
+    ]);
+    const connection = makeConnection({ connection_id: 44, server_id: 1, requires_auth: true });
+    stubConnections([connection], new Map());
+    expect(await loadSavedProvidersForCapability(1, "text")).toEqual([]);
+    connection.requires_auth = false;
+    expect((await loadSavedProvidersForCapability(1, "text")).map((row) => row.provider)).toEqual([customProvider]);
   });
 });

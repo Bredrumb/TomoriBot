@@ -101,6 +101,9 @@ export const SERVER_SINGLETON_RESET_TABLES: readonly SingletonResetClassificatio
       "other_model_capabilities_fetched_at",
       // Payer for the preserved model selections, so resetting it alone would change who pays.
       "subscription_capabilities",
+      "credential_created_at",
+      "credential_activity_epoch",
+      "credential_last_attempt_at",
     ],
   },
   {

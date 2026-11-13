@@ -9,8 +9,7 @@ Os lorebooks são uma memória avançada para mundos de RPG, personagens e detal
 Memórias para conversas cotidianas. As entradas de lorebook relembram os detalhes que você escreve quando as palavras-chave
 delas aparecem em mensagens recentes.
 
-Gerencie lorebooks em `/memories` > `Lorebooks`. Todos os membros podem ler as entradas no escopo; somente
-membros com a permissão `Gerenciar Servidor` podem adicionar, editar, importar, exportar ou remover entradas.
+Gerencie lorebooks em `/memories` > `Lorebooks`. Membros precisam de `Gerenciar Servidor` para visualizar, adicionar, editar, importar, exportar ou remover entradas.
 
 ## Lorebooks de Todo o Servidor e de Persona
 

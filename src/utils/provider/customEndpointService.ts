@@ -18,6 +18,8 @@ import { forgetCachedLlm } from "@/utils/cache/llmCacheStore";
 import { configRepository, llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 
 import { CUSTOM_ENDPOINT_PLACEHOLDER_KEY } from "@/utils/provider/legacyCustomProvider";
+import { storedCredentialUsageContext } from "@/utils/security/apiKeyRetention";
+import type { ProviderUsageContext } from "@/utils/provider/providerUsage";
 import {
   buildSavedProviderConfigFromExistingOrDefaults,
   buildUserSavedProviderConfigFromExistingOrDefaults,
@@ -911,7 +913,7 @@ export function normalizeCustomEndpointUrlForStorage(apiStyle: CustomEndpointApi
 export async function loadCustomConnectionCredential(
   connection: CustomEndpointConnectionRow,
   failureContext?: ErrorContext,
-): Promise<string | null> {
+): Promise<{ apiKey: string; usageContext: ProviderUsageContext } | null> {
   if (!connection.requires_auth) return null;
   const provider = buildCustomProviderName(connection.connection_id);
   const config =
@@ -922,7 +924,8 @@ export async function loadCustomConnectionCredential(
         : null;
   if (!config?.api_key) return null;
   try {
-    return await decryptApiKey(config.api_key, config.key_version ?? 1, failureContext);
+    const apiKey = await decryptApiKey(config.api_key, config.key_version ?? 1, failureContext);
+    return { apiKey, usageContext: await storedCredentialUsageContext(config.api_key, apiKey) };
   } catch (error) {
     if (failureContext) throw error;
     return null;

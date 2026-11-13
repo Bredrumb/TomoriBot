@@ -1,5 +1,5 @@
 import type { ChatInputCommandInteraction } from "discord.js";
-import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
+import { buildExportFilename } from "@/utils/discord/attachmentFilename";
 
 export type TransferExportScope = "workspace" | "personal";
 export type TransferExportCategory = "config" | "memories";
@@ -22,21 +22,25 @@ export function resolveTransferExportSubject(
 }
 
 /**
- * `tomori-<name>-<scope>-<category>-<timestamp>.json`, the shape `/persona export` uses. The subject is passed
- * through the same sanitizer `/persona export` uses: that is what keeps an arbitrary guild or account name from
- * carrying a path separator, a reserved character, or a control character into the attachment name. A name that
- * sanitizes away entirely still yields a name, because the sanitizer appends a short hash of the original.
+ * `tomori-<category>-<scope>-<name>-<timestamp>.json`, following the shared export filename convention.
+ * The subject passes through `sanitizeAttachmentFilenamePart` so arbitrary guild or account names never
+ * introduce path separators, reserved characters, or control characters.
  */
 export function buildTransferExportFileName(input: {
   scope: TransferExportScope;
   category: TransferExportCategory;
   subject: string;
+  now?: Date;
 }): string {
   const scopeName = TRANSFER_EXPORT_SCOPE_NAMES[input.scope];
-  const sanitizedSubject = sanitizeAttachmentFilenamePart(input.subject, {
-    fallback: scopeName,
-    maxLength: 50,
+  return buildExportFilename({
+    kind: input.category,
+    scope: scopeName,
+    subject: {
+      value: input.subject,
+      fallback: scopeName,
+    },
+    extension: "json",
+    now: input.now,
   });
-
-  return `tomori-${sanitizedSubject}-${scopeName}-${input.category}-${Date.now()}.json`;
 }

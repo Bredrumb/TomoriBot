@@ -9,8 +9,7 @@ Lorebook là bộ nhớ nâng cao cho thế giới nhập vai, nhân vật và c
 Bộ nhớ cho các cuộc trò chuyện hàng ngày. Các mục lorebook sẽ gợi lại những chi tiết bạn đã viết khi
 từ khóa của chúng xuất hiện trong các tin nhắn gần đây.
 
-Quản lý lorebook trong `/memories` > `Lorebook`. Mọi thành viên đều có thể đọc các mục trong phạm vi;
-chỉ những thành viên có quyền `Quản lý Máy chủ` mới có thể thêm, sửa, nhập, xuất hoặc xóa chúng.
+Quản lý lorebook trong `/memories` > `Lorebook`. Thành viên cần quyền `Quản lý máy chủ` để xem, thêm, sửa, nhập, xuất hoặc xóa các mục.
 
 ## Lorebook Toàn máy chủ và Persona
 

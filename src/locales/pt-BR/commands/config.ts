@@ -62,6 +62,8 @@ export default {
         "Este host desativou o rastreamento de estatísticas, que eu preciso para saber quão ativo o servidor está e onde as pessoas falam comigo, então os toques nunca começam.",
       notice_byok:
         "Este servidor paga pelo texto com a chave própria de cada membro, portanto nenhuma chave cobre uma mensagem que ninguém pediu. O Natural Nudges fica desativado até que o servidor tenha sua própria chave.",
+      notice_cooldown:
+        "Pausei os toques após falhas repetidas. Eles podem tentar novamente {retry_at}, ou mais cedo após minha próxima resposta bem-sucedida neste servidor.",
       idle_nudges_title: "Toques Ociosos",
       idle_nudges_description: "Inicio algo em um canal por conta própria se ele ficar silencioso demais.",
       idle_nudges_off: "Só falo quando alguém falar comigo.",
@@ -339,6 +341,10 @@ export default {
       channels_auto_trigger_updated_heading: `Canais de Gatilho Auto. Atualizados`,
       channels_auto_trigger_updated_detail: `As configurações do canal de gatilho automático foram atualizadas.`,
       channels_auto_trigger_threshold_modal_title: `Editar Limite de Atividade`,
+      channels_auto_trigger_threshold_label: `Com que frequência responder`,
+      channels_auto_trigger_threshold_input_description: `0 significa a cada mensagem. 50 significa a cada 50 mensagens. 50-60 escolhe uma contagem aleatória a cada vez.`,
+      channels_auto_trigger_threshold_placeholder: `0, 50 ou 50-60`,
+      channels_auto_trigger_threshold_invalid_detail: `Use 0, um número de 1 a 100 ou um intervalo como 50-60.`,
       channels_auto_trigger_threshold_updated_heading: `Limite de Atividade Atualizado`,
       channels_auto_trigger_threshold_updated_detail: `O limite de atividade do canal foi atualizado.`,
       channels_rules_title: `Regras de Canal`,

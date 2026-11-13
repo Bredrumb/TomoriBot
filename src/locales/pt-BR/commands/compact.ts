@@ -64,7 +64,7 @@ export default {
     add_to_docs_rag_unavailable_title: `RAG Local Não Disponível`,
     add_to_docs_rag_unavailable_description: `O armazenamento de documentos requer PostgreSQL com a extensão pgvector ativada.`,
     add_to_docs_no_permission_title: `Permissão Negada`,
-    add_to_docs_no_permission_description: `Você precisa da permissão Gerenciar Servidor, ou o ensino de memória deve estar ativado neste servidor.`,
+    add_to_docs_no_permission_description: `Você precisa da permissão Gerenciar Servidor para salvar documentos.`,
     add_to_docs_no_embedding_title: `Nenhum Modelo de Embedding`,
     add_to_docs_no_embedding_description: `Configure um modelo de embedding para usar o armazenamento de documentos.`,
     add_to_docs_persona_not_found_title: `Persona Não Encontrada`,

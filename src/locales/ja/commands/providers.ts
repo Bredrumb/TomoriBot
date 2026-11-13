@@ -19,6 +19,8 @@ export default {
     description: `プロバイダーの認証情報、エンドポイント、モデルカタログの追加・表示・編集・削除を行います。`,
     title: `サーバープロバイダー`,
     personal_title: `個人プロバイダー`,
+    credential_missing: "この保存済み設定のAPIキーがありません。**編集**から再度追加してください。",
+    credential_retention: "この環境では、認証済みリクエストのない保存済みキーは{days}日後に自動削除されます。",
     selector_guidance: "下のドロップダウンでプロバイダーやエンドポイントを **選択**または**追加**してください。",
     select_placeholder: `プロバイダー、エンドポイント、または操作を選択...`,
     select_add_provider: `+ 新しいプロバイダーを追加`,

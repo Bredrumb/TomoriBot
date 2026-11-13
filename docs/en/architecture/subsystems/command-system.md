@@ -222,6 +222,7 @@ Persistence is described in
 - `providers`
 - `punish`
 - `quota`
+- `record`
 - `refresh`
 - `reset`
 - `respond`

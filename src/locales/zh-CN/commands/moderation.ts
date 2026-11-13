@@ -20,8 +20,8 @@ export default {
     // Member access
     member_access_title: `成员访问设置`,
     member_access_description: `配置没有 \`Manage Server\` 权限的成员的权限。`,
-    member_access_servermemories_enabled: `🟢 成员可以管理服务器记忆和文档。`,
-    member_access_servermemories_disabled: `🔴 成员不能管理服务器记忆和文档。`,
+    member_access_servermemories_enabled: `🟢 成员可以查看自己的服务器记忆、添加新记忆，以及编辑或删除自己的记忆。`,
+    member_access_servermemories_disabled: `🔴 只有拥有管理服务器权限的成员才能查看或管理服务器记忆。`,
     member_access_attributelist_enabled: `🟢 成员可以管理人格属性。`,
     member_access_attributelist_disabled: `🔴 成员不能管理人格属性。`,
     member_access_sampledialogues_enabled: `🟢 成员可以管理人格示例对话。`,

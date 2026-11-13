@@ -1,3 +1,4 @@
+import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 import type { Attachment, Message } from "discord.js";
 import { ZodError } from "zod";
 import { safeDownload } from "@/utils/security/safeDownload";
@@ -219,10 +220,11 @@ export async function transcribeMessageAudioAttachment(
 
   let failure: Extract<AttemptResult, { status: "failed" }> = { status: "failed", reason: "stt_failed" };
   for (const target of targets) {
-    const attempt =
+    const attempt = await withProviderUsageContext(target.usageContext, async () =>
       target.kind === "custom-endpoint"
         ? await transcribeWithEndpoint(target, attachment, audio, serverId)
-        : await transcribeWithHostedModel(target, mp3, { serverId, userId });
+        : await transcribeWithHostedModel(target, mp3, { serverId, userId }),
+    );
     if (attempt.status === "success") return { ...base, transcriptText: attempt.transcriptText };
     if (attempt.status === "empty") return { ...base, transcriptText: null, failureReason: "empty_transcript" };
     failure = attempt;

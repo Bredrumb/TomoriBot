@@ -45,7 +45,7 @@ export default {
       attributelist_option: `Lista de atributos`,
       sampledialogues_option: `Diálogos de muestra`,
       promptsnapshot_option: `Capturas de prompt`,
-      servermemories_desc: `Añadir/quitar memorias de todo el servidor`,
+      servermemories_desc: `Ver tus propias memorias del servidor, agregar nuevas y editar o eliminar las tuyas`,
       attributelist_desc: `Añadir/quitar atributos de personalidad`,
       sampledialogues_desc: `Añadir/quitar pares de diálogo de muestra`,
       promptsnapshot_desc: `Ver prompts completos desde /context y /tool prompt snapshot`,

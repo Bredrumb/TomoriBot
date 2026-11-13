@@ -11,20 +11,25 @@ import { llmProviderRepo } from "@/utils/db/repositories";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { fetchNovelAISubscription } from "@/providers/novelai/novelaiService";
-import { getOptApiKey, decryptApiKey } from "@/utils/security/crypto";
+import { getOptApiKeyCredentials, decryptApiKey } from "@/utils/security/crypto";
+import { storedCredentialUsageContext } from "@/utils/security/apiKeyRetention";
+import { withProviderUsageContext, type ProviderUsageContext } from "@/utils/provider/providerUsage";
 import { localizer } from "@/utils/text/localizer";
 import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("usage").setDescription(localizer("en-US", "commands.novelai.usage.description"));
 
-async function resolveNovelAiApiKey(tomoriState: TomoriState): Promise<string | null> {
-  const optionalKey = await getOptApiKey(tomoriState.server_id, "novelai");
+async function resolveNovelAiApiKey(
+  tomoriState: TomoriState,
+): Promise<{ apiKey: string; usageContext: ProviderUsageContext } | null> {
+  const optionalKey = await getOptApiKeyCredentials(tomoriState.server_id, "novelai");
   if (optionalKey) return optionalKey;
 
   const savedConfig = await llmProviderRepo.loadSavedProviderConfig(tomoriState.server_id, "novelai");
   if (!savedConfig?.api_key) return null;
-  return decryptApiKey(savedConfig.api_key, savedConfig.key_version || 1);
+  const apiKey = await decryptApiKey(savedConfig.api_key, savedConfig.key_version || 1);
+  return { apiKey, usageContext: await storedCredentialUsageContext(savedConfig.api_key, apiKey) };
 }
 
 export function renderUsageMeter(percent: number): string {
@@ -73,8 +78,8 @@ export async function execute(
       return;
     }
 
-    const apiKey = await resolveNovelAiApiKey(tomoriState);
-    if (!apiKey) {
+    const credential = await resolveNovelAiApiKey(tomoriState);
+    if (!credential) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.novelai.usage.no_api_key_title",
         descriptionKey: "commands.novelai.usage.no_api_key_description",
@@ -83,7 +88,9 @@ export async function execute(
       return;
     }
 
-    const subscription = await fetchNovelAISubscription(apiKey);
+    const subscription = await withProviderUsageContext(credential.usageContext, () =>
+      fetchNovelAISubscription(credential.apiKey),
+    );
     const usage = subscription?.usage;
     if (!usage) {
       await replyInfoEmbed(interaction, locale, {

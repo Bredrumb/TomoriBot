@@ -10,7 +10,11 @@ import {
   type GuildTextBasedChannel,
   type Message,
 } from "discord.js";
-import { CrossChannelMessageTool, consumePendingBoomerang } from "@/tools/functionCalls/crossChannelMessageTool";
+import {
+  buildBoomerangContext,
+  CrossChannelMessageTool,
+  consumePendingBoomerang,
+} from "@/tools/functionCalls/crossChannelMessageTool";
 import { PrivacyLevel } from "@/types/db/schema";
 import type { ToolContext } from "@/types/tool/interfaces";
 import * as userCache from "@/utils/cache/userCache";
@@ -640,6 +644,27 @@ describe("cross-channel full privacy", () => {
         expect(pending?.targetChannelMessages.map((entry) => entry.content)).toEqual(expectedContents);
         expect(fixtureState.dispatch).toHaveBeenCalledTimes(1);
         expect(fixtureState.fetches).toEqual([1, 10]);
+        if (pending) {
+          const longMessages = Array.from({ length: 9 }, (_, index) => ({
+            author: "Juno",
+            content: `Earlier discussion point ${index + 1}: ${"observatory telemetry log ".repeat(8)}`,
+            timestamp: "12:00",
+          })).concat([
+            {
+              author: "Mirri",
+              content: "Final posted dispatch outcome at the end of the window.",
+              timestamp: "12:01",
+            },
+          ]);
+          const contextItems = buildBoomerangContext({ ...pending, targetChannelMessages: longMessages });
+          const text = contextItems
+            .flatMap((item) => item.parts)
+            .flatMap((part) => (part.type === "text" ? [part.text] : []))
+            .join("\n");
+          expect(text.length).toBeGreaterThan(1500);
+          expect(text).toContain("Final posted dispatch outcome at the end of the window.");
+          expect(text).not.toContain("...");
+        }
       }
       expect(fixtureState.privacy).toHaveBeenCalledWith("hidden-host");
       expect(fixtureState.privacy).not.toHaveBeenCalledWith("proxy-webhook");

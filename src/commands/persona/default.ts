@@ -16,7 +16,7 @@ import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed, promptWithRawModal, safeSelectOptionText } from "../../utils/discord/interactionHelper";
 import { type UserRow, type ErrorContext, tomoriSchema, type TomoriPresetRow } from "../../types/db/schema";
 import type { SelectOption } from "../../types/discord/modal";
-import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
+import { buildExportFilename } from "@/utils/discord/attachmentFilename";
 import { getCachedPresetAvatar, getPresetAvatarBuffer } from "../../utils/image/avatarHelper";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { deletePersonaAvatarFromStorage, deletePersonaSpriteFromStorage } from "../../utils/storage/avatarStorage";
@@ -491,12 +491,11 @@ export async function applyPresetDefault(
       presetAvatarBuffer = presetAvatarBuffer ?? (await getPresetAvatarBuffer(selectedPreset));
       let avatarAttachment: AttachmentBuilder | null = null;
       if (presetAvatarBuffer) {
-        const sanitizedNickname = sanitizeAttachmentFilenamePart(resolvedPersonaName, {
-          fallback: "persona",
-          maxLength: 50,
+        const avatarFilename = buildExportFilename({
+          kind: "preset",
+          subject: { value: resolvedPersonaName, fallback: "persona" },
+          extension: "png",
         });
-        const timestamp = Date.now();
-        const avatarFilename = `tomori-preset-${sanitizedNickname}-${timestamp}.png`;
         avatarAttachment = new AttachmentBuilder(presetAvatarBuffer, {
           name: avatarFilename,
         });
@@ -645,12 +644,11 @@ export async function applyPresetDefault(
     const presetAvatarBuffer = await getPresetAvatarBuffer(selectedPreset);
     let avatarAttachment: AttachmentBuilder | null = null;
     if (presetAvatarBuffer) {
-      const sanitizedNickname = sanitizeAttachmentFilenamePart(resolvedAlterName, {
-        fallback: "persona",
-        maxLength: 50,
+      const avatarFilename = buildExportFilename({
+        kind: "preset",
+        subject: { value: resolvedAlterName, fallback: "persona" },
+        extension: "png",
       });
-      const timestamp = Date.now();
-      const avatarFilename = `tomori-preset-${sanitizedNickname}-${timestamp}.png`;
       avatarAttachment = new AttachmentBuilder(presetAvatarBuffer, {
         name: avatarFilename,
       });

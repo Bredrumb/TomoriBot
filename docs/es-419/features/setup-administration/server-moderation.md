@@ -40,7 +40,12 @@ Configura el tiempo de reutilización de la respuesta global en todo el servidor
 
 ## Controles de aprendizaje y privacidad
 
-- **Permisos de miembros**: en `/moderation` > `Acceso de miembros`, haz clic en `Editar permisos` para controlar si los miembros sin `Administrar servidor` pueden administrar memorias del servidor, atributos de persona, diálogos de muestra o inspeccionar instantáneas de mensajes.
+- **Permisos de miembros**: en `/moderation` > `Acceso de miembros`, haz clic en `Editar permisos` para controlar
+  si los miembros sin `Administrar servidor` pueden administrar memorias del servidor, atributos de persona,
+  diálogos de muestra o inspeccionar instantáneas de mensajes. La enseñanza de memorias del servidor está desactivada por defecto y
+  permite a los miembros ver sus propias memorias, agregar nuevas y editar o eliminar las suyas. Cuando está desactivada,
+  solo los miembros con `Administrar servidor` pueden ver o administrar las memorias del servidor. Ver y administrar documentos y
+  lorebooks requiere `Administrar servidor`.
 - **Lista negra de usuarios**: en `/moderation` > `Lista negra de usuarios`, elige miembros para que TomoriBot los ignore por completo. Los miembros de la lista negra no pueden activarla ni ejecutar comandos, y sus mensajes nunca llegan al contexto del mensaje. También puedes establecer bloqueos de miembros específicos de una persona.
 - **Reglas de canal**: en `/config` > `Canales` > `Reglas de canal`, marca canales de texto públicos como privados o agrega listas negras de herramientas entre canales. Los canales con restricciones en Discord son privados automáticamente. Los canales privados no tienen registros de pensamiento ni herramientas entrantes entre canales, incluidos vistazos, creación de hilos y tareas programadas desde otros canales. La STM no puede entrar ni salir a menos que `Uso compartido de STM de canales privados` esté en `Permitido`. Aún puedes pedirle al bot que trabaje dentro de un canal privado o despachar tareas hacia afuera; una tarea saliente puede incluir información de tu conversación.
 

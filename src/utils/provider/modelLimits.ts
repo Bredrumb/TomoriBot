@@ -11,6 +11,7 @@ import { resolveCustomTextEndpointTarget } from "@/utils/provider/customEndpoint
 import { resolveChatMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
 import { normalizeProviderName } from "@/utils/provider/providerInfoRegistry";
 import { decryptApiKey } from "@/utils/security/crypto";
+import { withStoredCredentialUsage } from "@/utils/security/apiKeyRetention";
 
 /** Null means unknown: an unknown window skips history truncation, an unknown ceiling skips clamping. */
 export interface ModelLimits {
@@ -35,7 +36,9 @@ function scheduleLiveModelLimitsLookup(tomoriState: TomoriState, provider: LiveL
   const encryptedKey = tomoriState.config.api_key;
   if (!encryptedKey || !isLiveModelLimitsRefreshDue(provider, codename)) return;
   void decryptApiKey(encryptedKey, tomoriState.config.key_version || 1)
-    .then((apiKey) => refreshLiveModelLimits(provider, codename, apiKey))
+    .then((apiKey) =>
+      withStoredCredentialUsage(encryptedKey, apiKey, () => refreshLiveModelLimits(provider, codename, apiKey)),
+    )
     .catch(() => log.metric("live_model_limits_key_unavailable", { provider, codename }));
 }
 
@@ -43,7 +46,11 @@ function scheduleLiveModelLimitsLookup(tomoriState: TomoriState, provider: LiveL
  * Limits a provider reports at runtime, which outrank the catalog because they track model changes
  * the catalog has not been reviewed for yet, and they cover scoped registrations the catalog never lists.
  */
-function resolveLiveModelLimits(tomoriState: TomoriState, provider: string): Partial<ModelLimits> {
+function resolveLiveModelLimits(
+  tomoriState: TomoriState,
+  provider: string,
+  refreshLiveLimits: boolean,
+): Partial<ModelLimits> {
   const codename = tomoriState.llm.llm_codename;
   if (provider === "openrouter") {
     const tokenLimits = getOpenRouterTokenLimits(codename);
@@ -53,7 +60,7 @@ function resolveLiveModelLimits(tomoriState: TomoriState, provider: string): Par
     };
   }
   if (isLiveLimitsProvider(provider)) {
-    scheduleLiveModelLimitsLookup(tomoriState, provider);
+    if (refreshLiveLimits) scheduleLiveModelLimitsLookup(tomoriState, provider);
     return getLiveModelLimits(provider, codename) ?? {};
   }
   return {};
@@ -65,14 +72,14 @@ function resolveLiveModelLimits(tomoriState: TomoriState, provider: string): Par
  * sends, so an unset `num_ctx` stays unknown. NovelAI windows depend on the subscription tier and are
  * resolved by its own capability cache instead.
  */
-export async function resolveModelLimits(tomoriState: TomoriState): Promise<ModelLimits> {
+export async function resolveModelLimits(tomoriState: TomoriState, refreshLiveLimits = true): Promise<ModelLimits> {
   const provider = normalizeProviderName(tomoriState.llm.llm_provider);
   if (provider === "custom") {
     const { numCtx } = await resolveCustomTextEndpointTarget(tomoriState);
     return { contextWindow: positiveOrNull(numCtx), maxOutputTokens: null };
   }
 
-  const live = resolveLiveModelLimits(tomoriState, provider);
+  const live = resolveLiveModelLimits(tomoriState, provider, refreshLiveLimits);
   return {
     contextWindow: live.contextWindow ?? positiveOrNull(tomoriState.llm.context_window),
     maxOutputTokens: live.maxOutputTokens ?? positiveOrNull(tomoriState.llm.max_output_tokens),
@@ -87,10 +94,13 @@ export async function resolveModelLimits(tomoriState: TomoriState): Promise<Mode
  * the request omits max_tokens so the model self-manages. An explicit `/model parameters` override
  * is still sent there, because the "lower output tokens" tip on 402/400 errors depends on it.
  */
-export async function resolveRequestMaxOutputTokens(tomoriState: TomoriState): Promise<number | undefined> {
+export async function resolveRequestMaxOutputTokens(
+  tomoriState: TomoriState,
+  refreshLiveLimits = true,
+): Promise<number | undefined> {
   const provider = normalizeProviderName(tomoriState.llm.llm_provider);
   const configured = tomoriState.config.llm_max_output_tokens;
-  const { contextWindow, maxOutputTokens } = await resolveModelLimits(tomoriState);
+  const { contextWindow, maxOutputTokens } = await resolveModelLimits(tomoriState, refreshLiveLimits);
   if (provider === "openrouter" && !maxOutputTokens) {
     return typeof configured === "number" && configured > 0 ? configured : undefined;
   }

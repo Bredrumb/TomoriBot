@@ -1,4 +1,5 @@
 import { withProviderUsageContext } from "@/utils/provider/providerUsage";
+import { storedCredentialUsageContext, type StoredCredentialActivity } from "@/utils/security/apiKeyRetention";
 import { createResponseReviewState } from "@/utils/chat/responseReview";
 import type { FallbackEntry, LlmRow, TomoriState } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
@@ -83,6 +84,7 @@ import {
 type SendableChannel = Parameters<typeof sendStandardEmbed>[0];
 
 interface GenerationAttempt {
+  activity?: StoredCredentialActivity;
   credentialSource: TextCredentialSource;
   funding: SupporterFundingContext | null;
   label: string;
@@ -267,13 +269,16 @@ async function runGenerationAttempts(
           ),
         );
         result = await runWithChatDiagnosticStage({ attempt: index + 1, keyAttempt: keyAttemptCount }, () =>
-          withProviderUsageContext(context.usageContext, async () =>
-            runToolLoop({
-              context,
-              provider: attempt.provider,
-              providerConfig: attempt.providerConfig,
-              tomoriState: attempt.tomoriState,
-            }),
+          withProviderUsageContext(
+            context.usageContext,
+            async () =>
+              runToolLoop({
+                context,
+                provider: attempt.provider,
+                providerConfig: attempt.providerConfig,
+                tomoriState: attempt.tomoriState,
+              }),
+            attempt.activity,
           ),
         );
         supersededResult = result;
@@ -322,6 +327,7 @@ async function runGenerationAttempts(
         if (!nextKey) break;
 
         attempt.providerConfig.apiKey = nextKey.apiKey;
+        attempt.activity = nextKey.usageContext?.storedCredentialActivity;
         rotationKeyId = nextKey.rotationKeyId;
         log.warn(
           `Key rotation: retrying ${attempt.label} with key ${rotationKeyId ?? "main"} (attempt ${keyAttemptCount + 1}).`,
@@ -1165,10 +1171,19 @@ async function createAttempt(
   const rotationKeyId = rotationSelection?.rotationKeyId ?? null;
 
   const providerConfig = await provider.createConfig(effectiveState, apiKey);
+  const ciphertext = effectiveState.config.api_key;
 
   return {
     credentialSource,
     funding: null,
+    activity:
+      effectiveState.llm.llm_provider.toLowerCase() === "vertex"
+        ? undefined
+        : rotationSelection
+          ? rotationSelection.usageContext?.storedCredentialActivity
+          : ciphertext
+            ? (await storedCredentialUsageContext(ciphertext, apiKey)).storedCredentialActivity
+            : undefined,
     label,
     tomoriState: effectiveState,
     provider,

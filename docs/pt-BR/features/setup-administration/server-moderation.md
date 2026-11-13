@@ -40,7 +40,12 @@ Configure o resfriamento da resposta global em todo o servidor em `/config` > `C
 
 ## Controles de Aprendizado & Privacidade
 
-- **Permissões de membro**: em `/moderation` > `Acesso de Membros`, clique em `Editar Permissões` para controlar se os membros sem `Gerenciar servidor` podem gerenciar memórias do servidor, atributos de personalidade, exemplos de diálogos ou inspecionar instantâneos de prompt.
+- **Permissões de membro**: em `/moderation` > `Acesso de Membros`, clique em `Editar Permissões` para controlar
+  se os membros sem `Gerenciar Servidor` podem gerenciar memórias do servidor, atributos de personalidade,
+  exemplos de diálogos ou inspecionar instantâneos de prompt. O ensino de memórias do servidor vem desativado por
+  padrão e permite que os membros vejam suas próprias memórias, adicionem novas e editem ou removam as suas. Quando
+  desativado, apenas membros com `Gerenciar Servidor` podem ver ou gerenciar memórias do servidor. Visualizar e
+  gerenciar documentos e lorebooks requer `Gerenciar Servidor`.
 - **Lista negra de usuários**: em `/moderation` > `Lista Negra de Usuários`, escolha membros para TomoriBot ignorar completamente. Os membros da lista negra não podem acioná-la ou executar comandos, e suas mensagens nunca alcançam o contexto imediato. Você também pode definir bloqueios de membros específicos para cada pessoa.
 - **Regras de canal**: em `/config` > `Canais` > `Regras de Canal`, marque canais de texto públicos como privados ou adicione listas de bloqueio de ferramentas multicanal. Canais restritos do Discord são privados automaticamente. Canais privados não têm logs de pensamento nem ferramentas multicanal de entrada, incluindo espiadas, criação de tópicos e tarefas agendadas a partir de outros canais. A STM não pode entrar nem sair, a menos que `Compartilhamento de STM de Canais Privados` esteja `Permitido`. Você ainda pode pedir para o bot trabalhar dentro de um canal privado ou despachar tarefas para fora; uma tarefa enviada para fora pode incluir informações da sua conversa.
 

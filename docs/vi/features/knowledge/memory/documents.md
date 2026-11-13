@@ -30,7 +30,7 @@ Tài liệu cần một model embedding. Hãy chọn một model trong vị trí
 
 Quản lý tài liệu trong `/memories` > `Tài liệu`. Chọn `Thêm tài liệu mới` để tải lên tệp `.txt`, `.md` hoặc `.pdf`. Một tài liệu có thể thuộc về một persona hoặc dùng chung giữa các persona, và có thể được giới hạn trong các kênh đã chọn và luồng của chúng. Bạn có thể đọc các chunk đã lưu và chỉnh sửa hoặc xóa bất kỳ chunk nào trong số đó. Để chuyển một bộ nhớ máy chủ dài thành một tài liệu, hãy mở nó trong `/memories` và chọn `Vector hóa`.
 
-Trong các máy chủ mới, việc quản lý tài liệu được giới hạn cho các thành viên có quyền `Quản lý máy chủ` theo mặc định; người quản lý có thể cấp quyền truy cập qua `/moderation` > `Quyền thành viên`.
+Việc xem và quản lý tài liệu yêu cầu `Quản lý máy chủ`. Tính năng thành viên dạy bộ nhớ chỉ áp dụng cho bộ nhớ máy chủ và bị tắt theo mặc định trên các máy chủ mới.
 
 ## Giới hạn tài liệu
 

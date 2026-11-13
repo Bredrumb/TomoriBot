@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import { requestNovelAISubscription } from "@/providers/novelai/novelaiService";
+import { z } from "zod";
+import { broadcastInvalidation, registerInvalidation } from "@/utils/cache/invalidationBus";
 
 const SUBSCRIPTION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -52,4 +54,12 @@ export function getNovelaiSubscriptionCacheSize(): number {
 
 export function clearNovelaiSubscriptionCache(): void {
   subscriptionCache.clear();
+  broadcastInvalidation("novelaiSubscription", [[]]);
 }
+
+registerInvalidation(
+  "novelaiSubscription",
+  z.tuple([]),
+  () => subscriptionCache.clear(),
+  () => subscriptionCache.clear(),
+);

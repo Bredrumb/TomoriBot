@@ -604,6 +604,9 @@ const SERVER_CONFIG_EXPORT_COVERAGE_TARGETS: ServerConfigExportCoverageTarget[] 
       // Security-sensitive encrypted credential mirrors are never exported.
       "api_key",
       "key_version",
+      "credential_activity_epoch",
+      "credential_created_at",
+      "credential_last_attempt_at",
       // Deprecated migration/compatibility fields are not part of portable config.
       "custom_endpoint_url",
       "custom_model_name",
@@ -829,6 +832,9 @@ const CONFIG_COLUMN_EXCLUSION_REASONS: Record<string, string> = {
   "server_model_configs.decision_model_id": "The selected Decision model is deployment-specific.",
   "server_model_configs.api_key": "Encrypted credentials are never portable.",
   "server_model_configs.key_version": "Credential metadata has no portable meaning.",
+  "server_model_configs.credential_activity_epoch": "Credential generations belong to this database.",
+  "server_model_configs.credential_created_at": "Credential retention anchors belong to this database.",
+  "server_model_configs.credential_last_attempt_at": "Credential activity is runtime state.",
   "server_model_configs.custom_endpoint_url": "Custom endpoints are deployment-specific.",
   "server_model_configs.custom_model_name": "Custom model names are deployment-specific.",
   "server_model_configs.custom_num_ctx": "Custom context settings belong to a deployment-specific model.",

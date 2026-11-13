@@ -17,6 +17,8 @@ import { sql } from "@/utils/db/client";
 import { invalidateNovelAISubscription } from "@/utils/cache/novelaiSubscriptionCache";
 import { log } from "../misc/logger";
 import { encryptApiKey, decryptApiKey } from "./crypto";
+import { storedCredentialUsageContext } from "@/utils/security/apiKeyRetention";
+import type { ProviderUsageContext } from "@/utils/provider/providerUsage";
 import { type ApiKeyRotationErrorType, type TomoriState, apiKeyRotationSchema } from "@/types/db/schema";
 
 /** Cooldown duration for rate limit errors (429) in milliseconds */
@@ -29,6 +31,7 @@ const API_ERROR_COOLDOWN_MS = 5 * 60_000;
 export const MAX_KEY_ATTEMPTS = 3;
 
 export interface SelectedKeyResult {
+  usageContext?: ProviderUsageContext;
   /** The decrypted API key ready for use */
   apiKey: string;
   /** The rotation_key_id to use for recording success/error (null for main key without pointer) */
@@ -125,25 +128,13 @@ export async function selectApiKey(
         continue;
       }
 
-      // Decrypt and return this key
-      let decryptedKey: string;
-
-      if (key.is_main_key_pointer) {
-        // Main key pointer: decrypt from the assembled server config api_key
-        if (!tomoriState.config.api_key) {
-          log.warn(`Main key pointer exists but server config api_key is null for server ${serverId}`);
-          continue;
-        }
-        const keyVersion = tomoriState.config.key_version || 1;
-        decryptedKey = await decryptApiKey(tomoriState.config.api_key, keyVersion);
-      } else {
-        // Regular rotation key: decrypt from row's api_key
-        if (!key.api_key) {
-          log.warn(`Rotation key ${key.rotation_key_id} has null api_key for server ${serverId}`);
-          continue;
-        }
-        decryptedKey = await decryptApiKey(key.api_key, key.key_version);
+      const ciphertext = key.is_main_key_pointer ? tomoriState.config.api_key : key.api_key;
+      if (!ciphertext) {
+        log.warn(`Rotation key ${key.rotation_key_id} has no stored credential on server ${serverId}`);
+        continue;
       }
+      const keyVersion = key.is_main_key_pointer ? tomoriState.config.key_version || 1 : key.key_version;
+      const decryptedKey = await decryptApiKey(ciphertext, keyVersion);
 
       if (!decryptedKey) {
         log.warn(`Failed to decrypt rotation key ${key.rotation_key_id} for server ${serverId}`);
@@ -156,6 +147,7 @@ export async function selectApiKey(
 
       return {
         apiKey: decryptedKey,
+        usageContext: provider === "vertex" ? undefined : await storedCredentialUsageContext(ciphertext, decryptedKey),
         rotationKeyId: key.rotation_key_id ?? null,
         isMainKey: key.is_main_key_pointer,
       };

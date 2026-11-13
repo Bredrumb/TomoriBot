@@ -140,6 +140,12 @@ fresh; daily accounting invalidates affected server snapshots after commit. Doma
 - MCP tool discovery updates: `invalidateGuildMcpConfigCache(serverId)`.
 - NovelAI credential add/replacement: saved-config repository upserts invalidate the old and new credentials after successful writes. Adding a rotation key invalidates that key after insertion. Unchanged stored credentials retain their entries.
 
+Inactive API key cleanup invalidates affected server snapshots and clears NovelAI subscription metadata
+after each committed batch. Subscription-cache clearing is broadcast to peer processes. Credential
+generation checks at dispatch still reject a removed or replaced cached key if a notification is lost.
+Activity-only writes preserve configuration edit timestamps; the request gate reads generation metadata
+from PostgreSQL.
+
 Invalidating before write success is forbidden: a rolled-back transaction would leave the cache empty, prompting an immediate refetch of the pre-write database state.
 
 ## Cross-process invalidation

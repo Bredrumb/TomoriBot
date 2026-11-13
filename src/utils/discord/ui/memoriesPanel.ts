@@ -487,7 +487,6 @@ export function buildMemoriesPanelPayload(input: MemoriesPanelRenderInput): Memo
     receipt,
   } = input;
   const writesDisabled = readStatus !== "fresh";
-  const memberTeachingBlocked = !canManage && input.memteachingEnabled === false;
 
   const categoryButtons = buildCategoryButtonRow(
     [
@@ -533,6 +532,22 @@ export function buildMemoriesPanelPayload(input: MemoriesPanelRenderInput): Memo
       },
       buildRetryRow(locale, category, selectedLineageId || undefined),
     );
+    return buildPayload(components, receipt);
+  }
+
+  if (!canManage && (category === "documents" || category === "lorebooks" || page.kind === "vectorize")) {
+    components.push({
+      type: ComponentType.TextDisplay,
+      content: localizer(locale, "commands.memories.manager_only_detail"),
+    });
+    return buildPayload(components, receipt);
+  }
+
+  if (category === "memories" && !canManage && input.memteachingEnabled === false) {
+    components.push({
+      type: ComponentType.TextDisplay,
+      content: localizer(locale, "commands.memories.teaching_disabled_error_detail"),
+    });
     return buildPayload(components, receipt);
   }
 
@@ -868,7 +883,7 @@ export function buildMemoriesPanelPayload(input: MemoriesPanelRenderInput): Memo
               memoryId: selectedMemory?.server_memory_id ?? 0,
             }),
             label: localizer(locale, "commands.memories.vectorize_button"),
-            disabled: writesDisabled || !selectedMemory,
+            disabled: writesDisabled || !selectedMemory || !canManage,
           },
           {
             type: ComponentType.Button,
@@ -891,14 +906,6 @@ export function buildMemoriesPanelPayload(input: MemoriesPanelRenderInput): Memo
       content: `### ${localizer(locale, "commands.memories.documents_title")}
 ${localizer(locale, "commands.memories.documents_description")}`,
     };
-    if (memberTeachingBlocked) {
-      components.push(documentsHeading, {
-        type: ComponentType.TextDisplay,
-        content: withLinePrefix("> ", localizer(locale, "commands.memories.documents_teaching_disabled")),
-      });
-      return buildPayload(components, receipt);
-    }
-
     // 0 is the serverwide sentinel and the page's default scope, so an absent selection stays 0
     // rather than falling through to whichever persona happens to sort first.
     const selectedPersonaId = input.selectedDocumentPersonaId ?? 0;

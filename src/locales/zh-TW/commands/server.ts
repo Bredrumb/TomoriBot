@@ -45,7 +45,7 @@ export default {
       attributelist_option: `屬性清單`,
       sampledialogues_option: `範例對話`,
       promptsnapshot_option: `提示詞快照`,
-      servermemories_desc: `新增或移除伺服器層級的記憶`,
+      servermemories_desc: `查看自己的伺服器記憶、新增記憶，並編輯或移除自己的記憶`,
       attributelist_desc: `新增或移除人格屬性`,
       sampledialogues_desc: `新增或移除範例對話配對`,
       promptsnapshot_desc: `從 /context 與 /tool prompt snapshot 檢視完整提示詞`,

@@ -1,3 +1,4 @@
+import { storedCredentialUsageContext } from "@/utils/security/apiKeyRetention";
 import {
   findProviderRequestDeniedError,
   reportProviderUsage,
@@ -208,11 +209,17 @@ export async function callDecisionsForProvider(request: DecisionExecutionRequest
           : await llmProviderRepo.loadUserSavedProviderConfig(request.scope.ownerId, reference.provider);
     let apiKey: string | null = credentials?.apiKey ?? null;
     try {
-      if (connection) apiKey = await loadCustomConnectionCredential(connection, failureContext);
-      else if (!credentials) {
+      if (connection) {
+        const stored = await loadCustomConnectionCredential(connection, failureContext);
+        apiKey = stored?.apiKey ?? null;
+        usageContext = stored?.usageContext;
+      } else if (!credentials) {
         apiKey = nativeConfig?.api_key
           ? await decryptApiKey(nativeConfig.api_key, nativeConfig.key_version, failureContext)
           : null;
+        if (apiKey && nativeConfig?.api_key && reference.provider !== "vertex") {
+          usageContext = await storedCredentialUsageContext(nativeConfig.api_key, apiKey);
+        }
       }
     } catch {
       // Credential decryption reports its safe cause with the operation context before throwing.

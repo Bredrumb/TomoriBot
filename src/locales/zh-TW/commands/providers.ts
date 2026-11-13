@@ -19,6 +19,8 @@ export default {
     description: `新增、查看、編輯與移除供應商憑證、端點與模型目錄。`,
     title: `伺服器供應商`,
     personal_title: `個人供應商`,
+    credential_missing: "我沒有這個已儲存設定的 API 金鑰。請使用**編輯**重新新增。",
+    credential_retention: "此安裝環境會在 {days} 天沒有驗證請求後移除已儲存的金鑰。",
     selector_guidance: "用下方的下拉選單**選擇**或**新增**一個 供應商或端點。",
     select_placeholder: `選擇供應商、端點或動作...`,
     select_add_provider: `+ 新增供應商`,

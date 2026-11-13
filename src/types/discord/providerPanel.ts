@@ -38,6 +38,7 @@ export interface ProviderPanelCapabilitySection {
 }
 
 interface ProviderPanelEntryBase {
+  credentialMissing?: boolean;
   id: string;
   displayName: string;
   savedAt: Date | null;

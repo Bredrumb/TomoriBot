@@ -3,6 +3,8 @@ import { sql, withTransientDbRetry } from "@/utils/db/client";
 import { lazyRotateEncryptedRow } from "./encryptedColumns";
 import { keyManager } from "./keyManager";
 import type { ErrorContext } from "@/types/db/schema";
+import { storedCredentialUsageContext } from "@/utils/security/apiKeyRetention";
+import type { ProviderUsageContext } from "@/utils/provider/providerUsage";
 /**
  * Encrypts an API key before storing it in the database using pgcrypto's PGP symmetric encryption.
  *
@@ -105,6 +107,9 @@ export const storeOptApiKey = async (serverId: number, serviceName: string, apiK
   try {
     log.info(`Storing encrypted optional API key for server ${serverId}, service: ${serviceName}`);
 
+    const previous = await getOptApiKey(serverId, serviceName);
+    if (previous === apiKey.trim()) return true;
+
     // Encrypt the API key using the current key version
     const { encrypted, version } = await encryptApiKey(apiKey);
 
@@ -131,7 +136,13 @@ export const storeOptApiKey = async (serverId: number, serviceName: string, apiK
  * Automatically performs lazy rotation if the key is encrypted with an old version
  *
  */
-export const getOptApiKey = async (serverId: number, serviceName: string): Promise<string | null> => {
+export const getOptApiKey = async (serverId: number, serviceName: string): Promise<string | null> =>
+  (await getOptApiKeyCredentials(serverId, serviceName))?.apiKey ?? null;
+
+export const getOptApiKeyCredentials = async (
+  serverId: number,
+  serviceName: string,
+): Promise<{ apiKey: string; usageContext: ProviderUsageContext } | null> => {
   if (!serviceName || !serverId) {
     log.warn("Missing required parameters for optional API key retrieval");
     return null;
@@ -153,13 +164,14 @@ export const getOptApiKey = async (serverId: number, serviceName: string): Promi
 
     // Default to V1 for backward compatibility (NULL values from before versioning)
     const decryptedKey = await decryptApiKey(result.api_key, result.key_version || 1);
+    const usageContext = await storedCredentialUsageContext(result.api_key, decryptedKey);
     await lazyRotateEncryptedRow(sql, "opt_api_keys", {
       id: result.opt_api_key_id,
       ciphertext: result.api_key,
       key_version: result.key_version,
     });
 
-    return decryptedKey;
+    return { apiKey: decryptedKey, usageContext };
   } catch (error) {
     log.error(`Failed to retrieve optional API key for ${serviceName}`, error as Error);
     return null;

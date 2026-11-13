@@ -8,6 +8,7 @@
  * Export contract: toExportShape / fromExportShape are required by IRepository
  * and consumed by the Phase 6 (#16.7) export pipeline composition.
  */
+import { withStoredCredentialUsage } from "@/utils/security/apiKeyRetention";
 import type { SQL } from "bun";
 import { HUMANIZER_TOGGLES, type HumanizerSettings } from "@/constants/humanizer";
 import {
@@ -1007,14 +1008,12 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         for (const owner of speechOwners) {
           try {
             const credential = await loadSpeechCredentialForCleanup(owner, owner.provider);
-            if (credential)
-              await cleanupPendingGoogleVoices(
-                owner,
-                credential.credentialId,
-                credential.credentialRevision,
-                await decryptApiKey(credential.apiKey, credential.keyVersion),
-                [],
+            if (credential) {
+              const apiKey = await decryptApiKey(credential.apiKey, credential.keyVersion);
+              await withStoredCredentialUsage(credential.apiKey, apiKey, () =>
+                cleanupPendingGoogleVoices(owner, credential.credentialId, credential.credentialRevision, apiKey, []),
               );
+            }
           } catch {
             log.error("Persona speech cleanup failed; remove unused voices in the provider console.", undefined, {
               personaId,
@@ -1980,7 +1979,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         smc.created_at, smc.updated_at,
         -- 1. server_model_configs
         smc.llm_id, smc.embedding_model_id, smc.diffusion_model_id, smc.video_model_id, smc.decision_model_id,
-        smc.subscription_capabilities, smc.vision_llm_id, smc.api_key, smc.key_version, smc.llm_temperature,
+        smc.subscription_capabilities, smc.vision_llm_id, spc.api_key, COALESCE(spc.key_version, 1) AS key_version, smc.llm_temperature,
         smc.thinking_level, smc.llm_disabled_params, smc.custom_endpoint_url,
         smc.custom_model_name, smc.custom_num_ctx, smc.fallback_llm_ids,
         smc.other_model_codename, smc.other_model_capabilities,
@@ -2054,6 +2053,8 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         swc.welcome_channel_disc_id, swc.welcome_prompt, swc.welcome_persona_id
       FROM servers s
       LEFT JOIN server_model_configs smc ON smc.server_id = s.server_id
+      LEFT JOIN saved_provider_configs spc ON spc.server_id = s.server_id
+        AND spc.provider = (SELECT llm_provider FROM llms WHERE llm_id = smc.llm_id)
       LEFT JOIN server_chat_configs scc ON scc.server_id = s.server_id
       LEFT JOIN server_member_permissions_configs smpc ON smpc.server_id = s.server_id
       LEFT JOIN server_capabilities_configs scaps ON scaps.server_id = s.server_id
@@ -2094,7 +2095,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         smc.created_at, smc.updated_at,
         -- 1. server_model_configs
         smc.llm_id, smc.embedding_model_id, smc.diffusion_model_id, smc.video_model_id, smc.decision_model_id,
-        smc.subscription_capabilities, smc.vision_llm_id, smc.api_key, smc.key_version, smc.llm_temperature,
+        smc.subscription_capabilities, smc.vision_llm_id, spc.api_key, COALESCE(spc.key_version, 1) AS key_version, smc.llm_temperature,
         smc.thinking_level, smc.llm_disabled_params, smc.custom_endpoint_url,
         smc.custom_model_name, smc.custom_num_ctx, smc.fallback_llm_ids,
         smc.other_model_codename, smc.other_model_capabilities,
@@ -2169,6 +2170,8 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
       FROM personas t
       JOIN servers s ON s.server_id = t.server_id
       LEFT JOIN server_model_configs smc ON smc.server_id = s.server_id
+      LEFT JOIN saved_provider_configs spc ON spc.server_id = s.server_id
+        AND spc.provider = (SELECT llm_provider FROM llms WHERE llm_id = smc.llm_id)
       LEFT JOIN server_chat_configs scc ON scc.server_id = s.server_id
       LEFT JOIN server_member_permissions_configs smpc ON smpc.server_id = s.server_id
       LEFT JOIN server_capabilities_configs scaps ON scaps.server_id = s.server_id

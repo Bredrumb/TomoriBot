@@ -1,8 +1,12 @@
+import { CredentialUnavailableError, getCapabilityCredentialFailureCopy } from "@/utils/provider/credentialResolver";
+import { initializeLocalizer } from "@/utils/text/localizer";
+import { localizedCopy } from "../../helpers/localeCases";
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type { UserSavedProviderConfigRow } from "@/types/db/schema";
 import * as realRepositories from "@/utils/db/repositories";
 import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
 import * as realCrypto from "@/utils/security/crypto";
+import * as retention from "@/utils/db/repositories/ApiKeyRetentionRepository";
 import { getResolvedCapabilityModelId, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
 import { savedProviderConfigSchema } from "@/types/db/schema";
 import { createLlmRow, createServerConfig } from "../../helpers/fixtures";
@@ -46,7 +50,13 @@ function makeSavedProviderConfigRow(
 const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/db/repositories": realRepositories,
   "@/utils/security/crypto": realCrypto,
+  "@/utils/db/repositories/ApiKeyRetentionRepository": retention,
 });
+
+scopedMock.module("@/utils/db/repositories/ApiKeyRetentionRepository", () => ({
+  ...retention,
+  loadCredentialActivityReferences: async () => [],
+}));
 
 scopedMock.module("@/utils/security/crypto", () => ({
   ...realCrypto,
@@ -291,4 +301,25 @@ describe("personal credential resolution for capability split", () => {
       "No usable credentials for novelai (image-standard, server): missing_model_id",
     );
   });
+});
+
+it("adds retention guidance only to missing saved credentials in either scope", async () => {
+  await initializeLocalizer();
+  const previous = process.env.API_KEY_INACTIVITY_DAYS;
+  process.env.API_KEY_INACTIVITY_DAYS = "90";
+  try {
+    const notice = localizedCopy("en-US", "commands.providers.credential_retention", { days: 90 });
+    for (const source of ["server", "personal"] as const) {
+      for (const reason of ["no_saved_config", "decryption_failed", "placeholder_key", "missing_model_id"] as const) {
+        const copy = getCapabilityCredentialFailureCopy(
+          new CredentialUnavailableError("google", "text", reason, source),
+          "en-US",
+        );
+        expect(copy?.description.includes(notice)).toBe(reason === "no_saved_config");
+      }
+    }
+  } finally {
+    if (previous === undefined) delete process.env.API_KEY_INACTIVITY_DAYS;
+    else process.env.API_KEY_INACTIVITY_DAYS = previous;
+  }
 });

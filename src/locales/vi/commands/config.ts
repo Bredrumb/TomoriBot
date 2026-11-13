@@ -62,6 +62,8 @@ export default {
         "Máy chủ lưu trữ này đã tắt theo dõi thống kê, điều mình cần để biết mức độ hoạt động và nơi mọi người nói chuyện với mình, nên các gợi ý sẽ không bao giờ bắt đầu.",
       notice_byok:
         "Máy chủ này chi trả văn bản bằng khóa riêng của từng thành viên, vì vậy không có khóa nào chi trả cho tin nhắn không ai yêu cầu. Natural Nudges sẽ tắt cho đến khi máy chủ có khóa riêng.",
+      notice_cooldown:
+        "Mình đã tạm dừng gợi ý sau nhiều lần thất bại liên tiếp. Gợi ý có thể thử lại vào {retry_at}, hoặc sớm hơn sau câu trả lời thành công tiếp theo của mình trong máy chủ này.",
       idle_nudges_title: "Gợi ý nhàn rỗi",
       idle_nudges_description: "Mình tự khởi xướng điều gì đó trong kênh nếu kênh trở nên quá yên ắng.",
       idle_nudges_off: "Mình chỉ lên tiếng khi có ai đó nói chuyện với mình.",
@@ -338,6 +340,10 @@ export default {
       channels_auto_trigger_updated_heading: `Đã cập nhật các kênh tự động`,
       channels_auto_trigger_updated_detail: `Cài đặt các kênh tự động kích hoạt đã được cập nhật.`,
       channels_auto_trigger_threshold_modal_title: `Sửa ngưỡng hoạt động`,
+      channels_auto_trigger_threshold_label: `Tần suất trả lời`,
+      channels_auto_trigger_threshold_input_description: `0 nghĩa là mỗi tin nhắn. 50 nghĩa là mỗi 50 tin nhắn. 50-60 sẽ chọn ngẫu nhiên một số mỗi lần.`,
+      channels_auto_trigger_threshold_placeholder: `0, 50 hoặc 50-60`,
+      channels_auto_trigger_threshold_invalid_detail: `Hãy dùng 0, một số từ 1 đến 100, hoặc một khoảng như 50-60.`,
       channels_auto_trigger_threshold_updated_heading: `Đã cập nhật ngưỡng hoạt động`,
       channels_auto_trigger_threshold_updated_detail: `Ngưỡng hoạt động của kênh đã được cập nhật.`,
       channels_rules_title: `Quy tắc kênh`,

@@ -17,8 +17,11 @@ import {
   PROVIDERS_MODELS_PER_SELECTOR_PAGE,
 } from "@/utils/discord/ui/providersPanel";
 import { DISCORD_SELECT_OPTIONS_MAX, validateRawModalLimits } from "@/utils/discord/ui/componentsV2Limits";
-import { initializeLocalizer } from "@/utils/text/localizer";
+import { initializeLocalizer, hasLocaleKey } from "@/utils/text/localizer";
 import { localizedCopy, localizedProse } from "../../helpers/localeCases";
+import { expectForEveryLocale } from "../../helpers/localeCases";
+import { useEnvSandbox } from "../../helpers/env";
+import { expectSafePanelPayload } from "../../helpers/panelLimits";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -73,6 +76,39 @@ function providerEntry(id: string, name = "Google"): ProviderPanelEntry {
 }
 
 describe("providers panel rendering", () => {
+  useEnvSandbox(["API_KEY_INACTIVITY_DAYS"]);
+
+  it("explains a missing credential and the configured policy within panel limits across locales", () => {
+    process.env.API_KEY_INACTIVITY_DAYS = "90";
+    expectForEveryLocale((locale) => {
+      const entry = { ...providerEntry("provider:google"), credentialMissing: true };
+      const payload = buildProvidersPanelPayload({
+        locale,
+        entries: [entry],
+        initialEntryId: entry.id,
+        readStatus: "fresh",
+        page: { kind: "entry" },
+      });
+      const serialized = JSON.stringify(payload);
+      const missingLocale = hasLocaleKey(locale, "commands.providers.credential_missing") ? locale : "en-US";
+      const policyLocale = hasLocaleKey(locale, "commands.providers.credential_retention") ? locale : "en-US";
+      expect(serialized).toMatch(localizedProse(missingLocale, "commands.providers.credential_missing"));
+      expect(serialized).toMatch(localizedProse(policyLocale, "commands.providers.credential_retention", { days: 90 }));
+      expectSafePanelPayload(payload, locale);
+    });
+    delete process.env.API_KEY_INACTIVITY_DAYS;
+    const entry = { ...providerEntry("provider:google"), credentialMissing: true };
+    const disabled = JSON.stringify(
+      buildProvidersPanelPayload({
+        locale: "en-US",
+        entries: [entry],
+        initialEntryId: entry.id,
+        readStatus: "fresh",
+        page: { kind: "entry" },
+      }),
+    );
+    expect(disabled).not.toMatch(localizedProse("en-US", "commands.providers.credential_retention"));
+  });
   it("builds one provider modal for curated providers, ElevenLabs, and Brave", () => {
     const modal = buildAddProviderModal("en-US", "abcdefgh");
     const serialized = JSON.stringify(modal);

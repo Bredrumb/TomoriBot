@@ -1,3 +1,4 @@
+import * as retention from "@/utils/db/repositories/ApiKeyRetentionRepository";
 import { stubAllShardOwnership } from "../../helpers/shardOwnership";
 stubAllShardOwnership();
 import { REST } from "discord.js";
@@ -78,6 +79,7 @@ let onStopCheck: (() => void) | null = null;
 // STRINGS other modules rely on at load time (e.g. contextEmbeds.ts calls
 // ColorCode.ERROR.replace("#", "")). Only `log` is silenced.
 const scopedMock = createScopedModuleMocker(mock, {
+  "@/utils/db/repositories/ApiKeyRetentionRepository": retention,
   "@/utils/discord/embedHelper": realEmbedHelper,
   "@/utils/discord/toolProgressNotice": realToolProgressNotice,
   "@/utils/discord/streamOrchestrator": realStreamOrchestrator,
@@ -87,6 +89,11 @@ const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/chat/contextAnnotations": realContextAnnotations,
   "@/tools/toolRegistry": realToolRegistry,
 });
+
+scopedMock.module("@/utils/db/repositories/ApiKeyRetentionRepository", () => ({
+  ...retention,
+  loadCredentialActivityReferences: async () => [],
+}));
 
 stubLogMembers({
   error: () => undefined,

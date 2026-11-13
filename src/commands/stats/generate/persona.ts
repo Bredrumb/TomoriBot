@@ -3,6 +3,7 @@ import { AttachmentBuilder, MessageFlags } from "discord.js";
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import type { UserRow } from "@/types/db/schema";
 import { getCachedAllPersonas, getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
+import { buildExportFilename } from "@/utils/discord/attachmentFilename";
 import { handleServerPersonaAutocomplete } from "@/utils/discord/autocomplete/personaAutocomplete";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { localizer } from "@/utils/text/localizer";
@@ -121,7 +122,9 @@ export async function execute(
     });
 
     const png = await renderCardToPng(renderPersonaCard(data), CARD_W, getPersonaCardHeight(data));
-    const attachment = new AttachmentBuilder(png, { name: `stats_persona_${Date.now()}.png` });
+    const attachment = new AttachmentBuilder(png, {
+      name: buildExportFilename({ kind: "stats", scope: "persona", extension: "png" }),
+    });
     await interaction.followUp({ files: [attachment] });
   } catch (error) {
     await log.error(`Error executing /stats generate persona for user ${userData.user_disc_id}`, error as Error, {

@@ -110,7 +110,9 @@ export async function rotateEncryptedRow(client: SQL, target: EncryptedColumn, r
     const currentKey = keyManager.getCurrentKey();
     const version = keyManager.getCurrentVersion();
     const keyVersionColumn = "keyVersion" in target ? target.keyVersion : "key_version";
-    const updated = await client`
+    const updated = await client.begin(async (tx) => {
+      await tx`SELECT set_config('tomori.encryption_rotation', 'true', true)`;
+      return tx`
       UPDATE ${client(`public.${target.table}`)}
       SET ${client(target.column)} = pgp_sym_encrypt(pgp_sym_decrypt(${row.ciphertext}, ${oldKey}),
           ${currentKey}, 'compress-algo=1, cipher-algo=aes256'), ${client(keyVersionColumn)} = ${version}
@@ -118,7 +120,8 @@ export async function rotateEncryptedRow(client: SQL, target: EncryptedColumn, r
         AND ${client(keyVersionColumn)} IS NOT DISTINCT FROM ${row.key_version}
         AND ${target.table === "api_key_rotation" ? client`is_main_key_pointer IS NOT TRUE` : client`TRUE`}
       RETURNING ${client(target.id)}
-    `;
+      `;
+    });
     if (updated.length !== 1) throw new Error("Concurrent credential replacement.");
   } catch {
     throw new Error(`Rotation failed or row changed: ${target.table}, row ${row.id}.`);

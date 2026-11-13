@@ -90,6 +90,8 @@ const OPTIONAL_SECRET_FIELDS = [
   "TOPGG_TOKEN",
   "CONTAINER_MEMORY_LIMIT_MB",
   "VERTEX_ALLOWED_OWNERS",
+  "RECORD_RETENTION_DAYS",
+  "API_KEY_INACTIVITY_DAYS",
 ] as const;
 
 const registeredSecretNames = new Set<string>();

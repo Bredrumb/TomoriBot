@@ -9,6 +9,7 @@ import {
 import type { ProviderUsageContext } from "@/utils/provider/providerUsage";
 import { withSavedProviderConfig } from "@/utils/provider/savedProviderConfig";
 import { decryptApiKey } from "@/utils/security/crypto";
+import { storedCredentialUsageContext } from "@/utils/security/apiKeyRetention";
 
 export type MalformedStructuredReply = NonNullable<
   Extract<StructuredOutputResult<unknown>, { success: false }>["malformed"]
@@ -97,10 +98,13 @@ export async function resolveServerStructuredModel(
   const saved = await llmProviderRepo.loadSavedProviderConfig(baseState.server_id, model.llm_provider);
   if (!saved?.api_key) return unavailable("missing_credentials");
   try {
+    const apiKey = await decryptApiKey(saved.api_key, saved.key_version ?? 1, failureContext);
     return {
       capability,
       state: pinnedState(baseState, model, saved),
-      apiKey: await decryptApiKey(saved.api_key, saved.key_version ?? 1, failureContext),
+      apiKey,
+      usageContext:
+        model.llm_provider === "vertex" ? undefined : await storedCredentialUsageContext(saved.api_key, apiKey),
     };
   } catch {
     return { errorLogged: true };

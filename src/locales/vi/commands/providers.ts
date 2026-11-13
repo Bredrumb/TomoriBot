@@ -19,6 +19,8 @@ export default {
     description: `Thêm, xem, chỉnh sửa và xóa thông tin xác thực nhà cung cấp, endpoint và danh mục model.`,
     title: `Nhà cung cấp của máy chủ`,
     personal_title: `Nhà cung cấp cá nhân`,
+    credential_missing: "Mình không có API key cho cấu hình đã lưu này. Dùng **Sửa** để thêm lại.",
+    credential_retention: "Bản cài đặt này xóa các khóa đã lưu sau {days} ngày không có yêu cầu xác thực.",
     selector_guidance: "**Chọn** hoặc **thêm** nhà cung cấp hay endpoint bằng menu thả xuống bên dưới.",
     select_placeholder: `Chọn nhà cung cấp, endpoint hoặc hành động...`,
     select_add_provider: `+ Thêm nhà cung cấp mới`,

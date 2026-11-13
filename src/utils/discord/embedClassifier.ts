@@ -44,14 +44,26 @@ export type LinkPreviewResult = {
   thumbnailInfo: LinkPreviewImageInfo | null;
 };
 
+export function extractEmbedTextParts(
+  embed: Pick<Embed, "author" | "title" | "description" | "fields" | "footer">,
+): string[] {
+  const parts: string[] = [];
+  if (embed.author?.name) parts.push(embed.author.name);
+  if (embed.title) parts.push(embed.title);
+  if (embed.description) parts.push(embed.description);
+  for (const field of embed.fields) {
+    if (field.name || field.value)
+      parts.push(field.name && field.value ? `${field.name}: ${field.value}` : field.name || field.value);
+  }
+  if (embed.footer?.text) parts.push(embed.footer.text);
+  return parts;
+}
+
 /**
  * Extracts text + image content from an auto-generated Discord link preview
  * embed (e.g., Twitter, YouTube, article card). Returns `isLinkPreview: false`
  * for empty embeds or for embeds already classified as bot-produced (per
  * `checkTargetEmbedTitle`).
- *
- * Kept byte-for-byte consistent with `processLinkEmbed` in tomoriChat.ts so
- * snapshot output matches live-chat conversion.
  */
 export function processLinkEmbed(embed: Embed): LinkPreviewResult {
   if (classifyProtocolEmbed(embed) === "unshared_dice_roll")
@@ -74,25 +86,13 @@ export function processLinkEmbed(embed: Embed): LinkPreviewResult {
     return { isLinkPreview: false, textContent: null, imageInfo: null, thumbnailInfo: null };
   }
 
-  // Assemble text content from available fields
-  const contentParts: string[] = [];
-  if (embed.author?.name) contentParts.push(embed.author.name);
-  if (embed.title) contentParts.push(embed.title);
-  if (embed.description) {
-    const maxDescLength = 500;
-    contentParts.push(
-      embed.description.length > maxDescLength
-        ? `${embed.description.substring(0, maxDescLength)}...`
-        : embed.description,
-    );
-  }
-  if (embed.fields.length > 0) {
-    for (const field of embed.fields) {
-      if (field.name || field.value) {
-        contentParts.push(field.name && field.value ? `${field.name}: ${field.value}` : field.name || field.value);
-      }
-    }
-  }
+  const contentParts = extractEmbedTextParts({
+    author: embed.author,
+    title: embed.title,
+    description: embed.description,
+    fields: embed.fields,
+    footer: null,
+  });
 
   const textContent =
     contentParts.length > 0 ? `[System: Link preview embed content: ${contentParts.join(" - ")}]` : "";

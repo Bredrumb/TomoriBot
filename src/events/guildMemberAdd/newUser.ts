@@ -1,3 +1,4 @@
+import { withStoredCredentialUsage } from "@/utils/security/apiKeyRetention";
 import { ChannelType, type Client, type GuildMember, type Message, type TextChannel } from "discord.js";
 import { GoogleGenAI } from "@google/genai";
 import type { Part } from "@google/genai";
@@ -147,7 +148,9 @@ async function getAvatarVisionDescription(member: GuildMember, persona: TomoriSt
   log.info(`newUser: Delegating avatar analysis to vision model ${provider}/${apiModelName} for member ${member.id}`);
 
   if (provider === "google") {
-    return await callGoogleVisionForAvatar(apiKey, apiModelName, base64Image, WELCOME_AVATAR_VISION_PROMPT);
+    return await withStoredCredentialUsage(persona.config.api_key, apiKey, () =>
+      callGoogleVisionForAvatar(apiKey, apiModelName, base64Image, WELCOME_AVATAR_VISION_PROMPT),
+    );
   }
 
   const knownUrl = VISION_PROVIDER_URLS[provider];
@@ -160,12 +163,8 @@ async function getAvatarVisionDescription(member: GuildMember, persona: TomoriSt
         : `${customUrl}/chat/completions`
       : "https://api.openai.com/v1/chat/completions");
 
-  return await callOpenAICompatibleVisionForAvatar(
-    apiKey,
-    apiModelName,
-    endpointUrl,
-    base64Image,
-    WELCOME_AVATAR_VISION_PROMPT,
+  return await withStoredCredentialUsage(persona.config.api_key, apiKey, () =>
+    callOpenAICompatibleVisionForAvatar(apiKey, apiModelName, endpointUrl, base64Image, WELCOME_AVATAR_VISION_PROMPT),
   );
 }
 

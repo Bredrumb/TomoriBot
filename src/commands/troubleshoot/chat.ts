@@ -8,6 +8,7 @@ import {
 } from "discord.js";
 import type { UserRow } from "@/types/db/schema";
 import { getChatDiagnostic } from "@/utils/chat/diagnosticTimeline";
+import { buildExportFilename } from "@/utils/discord/attachmentFilename";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
@@ -105,7 +106,11 @@ export async function execute(
   const attachment = new AttachmentBuilder(
     Buffer.from(`${JSON.stringify({ botVersion: packageInfo.version, ...report }, null, 2)}\n`, "utf-8"),
     {
-      name: `tomoribot-chat-${report.reportId}.json`,
+      name: buildExportFilename({
+        kind: "chat-diagnostic",
+        shortId: report.reportId.slice(0, 8),
+        extension: "json",
+      }),
     },
   );
   let deliveredToDm = false;

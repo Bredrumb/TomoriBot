@@ -19,6 +19,9 @@ export default {
     description: `Adicione, veja, edite e remova credenciais de provedores, endpoints e catálogos de modelos.`,
     title: `Provedores do Servidor`,
     personal_title: `Provedores Pessoais`,
+    credential_missing:
+      "Não tenho uma chave de API para esta configuração salva. Use **Editar** para adicioná-la novamente.",
+    credential_retention: "Esta instalação remove chaves armazenadas após {days} dias sem requisições autenticadas.",
     selector_guidance: "**Selecione** ou **adicione** um provedor ou endpoint usando o menu suspenso abaixo.",
     select_placeholder: `Escolha um provedor, endpoint, ou ação...`,
     select_add_provider: `+ Adicionar Novo Provedor`,

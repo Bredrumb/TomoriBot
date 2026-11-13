@@ -57,6 +57,7 @@ import * as rateLimiter from "@/utils/security/rateLimiter";
 import * as safeDownloadModule from "@/utils/security/safeDownload";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 import { createPersona } from "../../helpers/fixtures";
+import { localizedProse } from "../../helpers/localeCases";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -747,6 +748,106 @@ describe("memories permissions and scoping", () => {
     expect(edited).toBeDefined();
   });
 
+  it("acknowledges navigation and manager-only refusals before loading scope", async () => {
+    for (const customId of [
+      "memories:v1:persona-select:en-US:1770",
+      "memories:v1:persona-page:en-US:1770:1",
+      "memories:v1:select:en-US:1770",
+      "memories:v1:range:en-US:1770:1",
+      "memories:v1:retry:en-US:memories:1770",
+      "memories:v1:lore-select:en-US:1770",
+      "memories:v1:document-select:en-US:10",
+      "memories:v1:history-remove-prompt:en-US:10:1",
+      "memories:v1:vectorize-prompt:en-US:1770:10:1",
+    ]) {
+      const { dependencies } = createTestDependencies();
+      const resolveScope = dependencies.resolveScope;
+      let scopeReads = 0;
+      dependencies.resolveScope = async (interaction, fresh) => {
+        expect(interaction.deferred).toBe(true);
+        scopeReads++;
+        const scope = await resolveScope(interaction, fresh);
+        return scope ? { ...scope, memteachingEnabled: true } : null;
+      };
+      const interaction = createRouteInteraction({
+        customId,
+        isManager: false,
+        kind: customId.includes("-submit:")
+          ? "modal"
+          : /:(persona-select|select|document-select|lore-select):/.test(customId)
+            ? "string-select"
+            : "button",
+        values: ["1"],
+        fields: { [buildServerMemoryModalFieldId("content", "nonce123")]: "New memory" },
+      });
+      await createMemoriesInteractionRoute(dependencies).execute(
+        {} as Client,
+        interaction as unknown as ButtonInteraction,
+        requireRoute(customId),
+      );
+      expect(scopeReads).toBe(1);
+      expect(interaction.calls.filter((call) => call.method === "deferUpdate")).toHaveLength(1);
+    }
+  });
+
+  it("hides server memories and counts from members when teaching is off, including old controls", async () => {
+    const { dependencies, calls, memories } = createTestDependencies();
+    const initial = createRouteInteraction({ isManager: false });
+    const initialPayload = await buildInitialMemoriesPanel(
+      initial as unknown as ButtonInteraction,
+      "en-US",
+      dependencies,
+    );
+    expect(collectTextDisplays(initialPayload.components).join("\n")).toMatch(
+      localizedProse("en-US", "commands.memories.teaching_disabled_error_detail"),
+    );
+    for (const customId of [
+      "memories:v1:category:en-US:memories",
+      "memories:v1:persona-select:en-US:1770",
+      "memories:v1:select:en-US:1770",
+      "memories:v1:edit-open:en-US:1770:1",
+      "memories:v1:add-submit:en-US:1770:nonce123",
+      "memories:v1:remove-prompt:en-US:1770:1",
+    ]) {
+      const interaction = createRouteInteraction({
+        customId,
+        isManager: false,
+        kind: customId.includes("-submit:")
+          ? "modal"
+          : /:(persona-select|select|document-select|lore-select):/.test(customId)
+            ? "string-select"
+            : "button",
+        values: ["1"],
+        fields: { [buildServerMemoryModalFieldId("content", "nonce123")]: "New memory" },
+      });
+      await createMemoriesInteractionRoute(dependencies).execute(
+        {} as Client,
+        interaction as unknown as ButtonInteraction,
+        requireRoute(customId),
+      );
+      const text = collectTextDisplays(interaction.edits.at(-1));
+      expect(text.join("\n")).toMatch(localizedProse("en-US", "commands.memories.teaching_disabled_error_detail"));
+      expect(memories.some((memory) => text.some((part) => part.includes(memory.content)))).toBe(false);
+      expect(interaction.calls.some((call) => call.method === "showModal")).toBe(false);
+    }
+    expect(calls.some((call) => /^(loadMemories|getMemoryCountsByLineage):/.test(call))).toBe(false);
+    const suppliedContent = buildMemoriesPanelPayload({
+      locale: "en-US",
+      category: "memories",
+      selectedLineageId: 1770,
+      personas: [makePersona(10, 1770, "Tomori")],
+      memories,
+      canManage: false,
+      memteachingEnabled: false,
+      readStatus: "fresh",
+      page: { kind: "main" },
+    });
+    expect(collectSelects(suppliedContent.components)).toHaveLength(0);
+    expect(collectTextDisplays(suppliedContent.components).join("\n")).toMatch(
+      localizedProse("en-US", "commands.memories.teaching_disabled_error_detail"),
+    );
+  });
+
   it("passes actor userId as owner filter for non-managers and undefined for managers", async () => {
     // Non-manager interaction
     const nonManagerInteraction = {
@@ -756,6 +857,11 @@ describe("memories permissions and scoping", () => {
     } as unknown as ChatInputCommandInteraction;
 
     const { dependencies: depNonManager, calls: callsNonManager } = createTestDependencies();
+    const resolveMemberScope = depNonManager.resolveScope;
+    depNonManager.resolveScope = async (...args) => {
+      const scope = await resolveMemberScope(...args);
+      return scope ? { ...scope, memteachingEnabled: true } : null;
+    };
     const panelNonManager = await buildInitialMemoriesPanel(nonManagerInteraction, "en-US", depNonManager);
 
     expect(callsNonManager).toContain("loadMemories:1:1770:42");
@@ -1863,6 +1969,11 @@ describe("memories permissions and scoping", () => {
     let managerReply: unknown = null;
     let memberReply: unknown = null;
     const { dependencies } = createTestDependencies();
+    const resolveScope = dependencies.resolveScope;
+    dependencies.resolveScope = async (...args) => {
+      const scope = await resolveScope(...args);
+      return scope ? { ...scope, memteachingEnabled: true } : null;
+    };
     const route = createMemoriesInteractionRoute(dependencies);
 
     function interactionFor(isManager: boolean, sink: (payload: unknown) => void) {
@@ -2431,7 +2542,6 @@ describe("memories permissions and scoping", () => {
       "lorebook_import_option",
       "lorebook_import_option_description",
       "lorebook_empty",
-      "lorebook_read_only_notice",
       "lorebook_add_modal_title",
       "lorebook_edit_modal_title",
       "lorebook_activation_modal_title",
@@ -2792,6 +2902,74 @@ describe("memories document operation ordering", () => {
       },
     };
   }
+
+  it("allows compact document saves in DMs and for guild managers, and denies other guild members", async () => {
+    for (const { guildId, isManager } of [
+      { guildId: null, isManager: false },
+      { guildId: "guild-123", isManager: false },
+      { guildId: "guild-123", isManager: true },
+    ]) {
+      const stubs = stubDocumentWriteDependencies();
+      const state = createPersona({
+        server_id: 1,
+        persona_id: 10,
+        config: { server_memteaching_enabled: !isManager, embedding_model_id: 5 },
+      });
+      const button = createRouteInteraction({ guildId, isManager });
+      const submit = createRouteInteraction({ kind: "modal", guildId, isManager });
+      const message = {
+        id: `summary-permissions-${guildId ?? "dm"}-${isManager}`,
+        embeds: [{ description: "Summary content" }],
+        components: [{ components: [{ customId: "compact:v1:save:en-US" }] }],
+        edit: async () => {},
+      };
+      const interaction = {
+        ...button,
+        memberPermissions: guildId ? button.memberPermissions : null,
+        message: { ...message, fetch: async () => message },
+      } as unknown as ButtonInteraction;
+      const reply = spyOn(embedUi, "replyInfoEmbed").mockResolvedValue(undefined);
+      const loadState = spyOn(personaRepository, "loadState").mockResolvedValue(state);
+      const extras = [
+        reply,
+        loadState,
+        spyOn(interactionLocale, "resolveUserLocale").mockResolvedValue("en-US"),
+        spyOn(personaRepository, "loadAllForServer").mockResolvedValue([state]),
+        spyOn(modalUi, "promptWithPaginatedModal").mockResolvedValue({
+          outcome: "submit",
+          interaction: submit as unknown as ModalSubmission,
+          values: { compact_doc_name: "Guide" },
+        }),
+      ];
+      try {
+        await handleSummarySaveClick(interaction, { locale: "en-US", refresh: false, editDeadline: 0 });
+        expect(loadState).toHaveBeenCalledWith(guildId ?? button.user.id);
+        if (!guildId || isManager) {
+          expect(stubs.spies.insert).toHaveBeenCalledWith(expect.objectContaining({ serverId: state.server_id }));
+          expect(reply).toHaveBeenCalledWith(
+            expect.anything(),
+            "en-US",
+            expect.objectContaining({
+              descriptionKey: "commands.compact.add_to_docs_success_description",
+            }),
+          );
+        } else {
+          expect(stubs.spies.embedding).not.toHaveBeenCalled();
+          expect(stubs.spies.insert).not.toHaveBeenCalled();
+          expect(reply).toHaveBeenCalledWith(
+            expect.anything(),
+            "en-US",
+            expect.objectContaining({
+              descriptionKey: "commands.compact.add_to_docs_no_permission_description",
+            }),
+          );
+        }
+      } finally {
+        for (const spy of extras) spy.mockRestore();
+        stubs.restore();
+      }
+    }
+  });
 
   it("rejects document and scope chunk caps before embedding or writes on all new-document paths", async () => {
     for (const cap of ["document", "scope"]) {

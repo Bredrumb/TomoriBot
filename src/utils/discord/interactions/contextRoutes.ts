@@ -1,3 +1,4 @@
+import { NovelAIPreparationError } from "@/providers/novelai/preparationError";
 import { MessageFlags } from "discord.js";
 import { getCachedAllPersonas, getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { userRepository } from "@/utils/db/repositories";
@@ -69,17 +70,28 @@ export const contextInteractionRoute: GlobalInteractionRoute = {
       return;
     }
 
-    const inspection = await assemblePromptInspection({
-      client,
-      guild,
-      channel,
-      user: interaction.user,
-      userData,
-      tomoriState,
-      personas,
-      selectedPersona,
-      includeTools: format === "json",
-    });
+    let inspection: Awaited<ReturnType<typeof assemblePromptInspection>>;
+    try {
+      inspection = await assemblePromptInspection({
+        client,
+        guild,
+        channel,
+        user: interaction.user,
+        userData,
+        tomoriState,
+        personas,
+        selectedPersona,
+        includeTools: format === "json",
+      });
+    } catch (error) {
+      if (!(error instanceof NovelAIPreparationError)) throw error;
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.context.build_failed_title",
+        descriptionKey: "commands.context.novelai_unavailable_description",
+        color: ColorCode.WARN,
+      });
+      return;
+    }
     if (!inspection) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.context.build_failed_title",

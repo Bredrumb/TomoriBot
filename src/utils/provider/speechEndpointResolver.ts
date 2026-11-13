@@ -19,6 +19,7 @@ import {
 import { log } from "@/utils/misc/logger";
 import { buildCustomProviderName } from "@/utils/provider/customProviderUtils";
 import { decryptApiKey } from "@/utils/security/crypto";
+import { storedCredentialUsageContext } from "@/utils/security/apiKeyRetention";
 import type { GenerationModelSelection } from "@/types/provider/generationModels";
 import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import { GenerationModelUnavailableError, validateGenerationModelSelection } from "@/utils/provider/generationModels";
@@ -30,6 +31,7 @@ import {
 } from "@/utils/db/repositories/SpeechRepository";
 
 interface SpeechEndpointResult {
+  usageContext?: ProviderUsageContext;
   endpoint: CustomEndpointRow;
   /** Empty string when requires_auth = false (local endpoint with no auth). */
   apiKey: string;
@@ -125,7 +127,7 @@ async function resolveActiveEndpointByCapability(
       return null;
     }
 
-    return { endpoint, apiKey };
+    return { endpoint, apiKey, usageContext: await storedCredentialUsageContext(configRow.api_key, apiKey) };
   } catch (error) {
     log.warn(`[SpeechResolver] Error resolving ${capability} endpoint for server ${serverId}`, error);
     return null;
@@ -145,7 +147,11 @@ async function resolveActiveSpeechEndpoint(
 
 export type TranscriptionTarget =
   | (SpeechEndpointResult & { kind: "custom-endpoint" })
-  | (Omit<HostedTranscriptionSelection, "apiKey" | "keyVersion"> & { kind: "hosted-model"; apiKey: string });
+  | (Omit<HostedTranscriptionSelection, "apiKey" | "keyVersion"> & {
+      kind: "hosted-model";
+      apiKey: string;
+      usageContext?: ProviderUsageContext;
+    });
 
 async function decryptTranscriptionSelection(
   selection: HostedTranscriptionSelection | null,
@@ -153,7 +159,17 @@ async function decryptTranscriptionSelection(
   if (!selection) return null;
   try {
     const apiKey = await decryptApiKey(selection.apiKey, selection.keyVersion);
-    return apiKey ? { ...selection, kind: "hosted-model", apiKey } : null;
+    return apiKey
+      ? {
+          ...selection,
+          kind: "hosted-model",
+          apiKey,
+          usageContext:
+            selection.model.provider === "vertex"
+              ? undefined
+              : await storedCredentialUsageContext(selection.apiKey, apiKey),
+        }
+      : null;
   } catch (error) {
     log.warn("SpeechResolver: transcription credential unavailable", error, {
       metadata: { owner: selection.owner, provider: selection.model.provider },
@@ -212,7 +228,13 @@ export async function resolveSpeechTargets(
       const apiKey =
         endpoint.requires_auth && saved?.api_key ? await decryptApiKey(saved.api_key, saved.key_version) : "";
       if (endpoint.requires_auth && !apiKey) throw new GenerationModelUnavailableError();
-      target = { kind: "custom-endpoint", endpoint, apiKey, owner: { kind: "server", ownerId: serverId } };
+      target = {
+        kind: "custom-endpoint",
+        endpoint,
+        apiKey,
+        owner: { kind: "server", ownerId: serverId },
+        usageContext: saved?.api_key && apiKey ? await storedCredentialUsageContext(saved.api_key, apiKey) : undefined,
+      };
     } else {
       const model = await llmModelRepo.loadSpeechModelById(modelSelection.modelId);
       if (!model || !saved) throw new GenerationModelUnavailableError();
@@ -299,6 +321,7 @@ async function resolveHostedSpeechTarget(
     usageContext = credentials?.usageContext;
   } else if (hosted.apiKey) {
     apiKey = await decryptApiKey(hosted.apiKey, hosted.keyVersion);
+    if (hosted.model.provider !== "vertex") usageContext = await storedCredentialUsageContext(hosted.apiKey, apiKey);
   }
   if (!apiKey) throw new GenerationModelUnavailableError();
   return { ...hosted, kind: "hosted-model", endpoint: null, apiKey, usageContext };

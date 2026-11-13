@@ -21,8 +21,8 @@ export default {
     // Member access
     member_access_title: `Cài đặt quyền thành viên`,
     member_access_description: `Cấu hình quyền cho thành viên không có quyền \`Quản lý Máy chủ\`.`,
-    member_access_servermemories_enabled: `🟢 Thành viên có thể quản lý bộ nhớ máy chủ và tài liệu.`,
-    member_access_servermemories_disabled: `🔴 Thành viên không thể quản lý bộ nhớ máy chủ và tài liệu.`,
+    member_access_servermemories_enabled: `🟢 Thành viên có thể xem bộ nhớ máy chủ của mình, thêm bộ nhớ mới, và chỉnh sửa hoặc xóa bộ nhớ của mình.`,
+    member_access_servermemories_disabled: `🔴 Chỉ thành viên có quyền Quản lý máy chủ mới có thể xem hoặc quản lý bộ nhớ máy chủ.`,
     member_access_attributelist_enabled: `🟢 Thành viên có thể quản lý thuộc tính persona.`,
     member_access_attributelist_disabled: `🔴 Thành viên không thể quản lý thuộc tính persona.`,
     member_access_sampledialogues_enabled: `🟢 Thành viên có thể quản lý hội thoại mẫu của persona.`,

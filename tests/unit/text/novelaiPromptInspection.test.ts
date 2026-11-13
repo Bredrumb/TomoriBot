@@ -18,7 +18,7 @@ import { buildConditioningInteractionEmbed } from "@/utils/conditioning/conditio
 import { initializeLocalizer } from "@/utils/text/localizer";
 import * as participants from "@/utils/text/participants/preparation";
 import { userNamingRepository, userRepository } from "@/utils/db/repositories";
-import { clearNovelaiSubscriptionCache } from "@/utils/cache/novelaiSubscriptionCache";
+import { clearNovelaiSubscriptionCache, refreshNovelAISubscription } from "@/utils/cache/novelaiSubscriptionCache";
 import { assemblePromptInspection, type PromptInspectionRequest } from "@/utils/text/promptInspection/assemble";
 import { buildJsonSnapshot, buildRequestConfig, buildTextSnapshot } from "@/utils/text/promptInspection/serialize";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
@@ -299,6 +299,9 @@ describe("NovelAI prompt inspection credentials", () => {
     });
     restores.push(() => fetch.mockRestore());
     const snapshots = [];
+    await refreshNovelAISubscription("server-key");
+    await refreshNovelAISubscription("personal-key");
+    seenKeys.length = 0;
     for (const source of ["server", "personal"] as const) {
       resolved.mockResolvedValue({ provider: "novelai", apiKey: `${source}-key`, keyVersion: 1, savedConfig, source });
       const snapshot = await assemblePromptInspection(request);
@@ -335,7 +338,7 @@ describe("NovelAI prompt inspection credentials", () => {
     expect(snapshots[1].novelaiRequest?.report.trimmed.length).toBeGreaterThan(
       snapshots[0].novelaiRequest?.report.trimmed.length ?? 0,
     );
-    expect(seenKeys).toEqual(["server-key", "personal-key"]);
+    expect(seenKeys).toEqual([]);
     expect(rotated).not.toHaveBeenCalled();
     const budgetPersona = createPersona({
       llm: createLlmRow({ llm_provider: "openrouter", llm_codename: "inspection-margin", context_window: 16000 }),
@@ -357,10 +360,22 @@ describe("NovelAI prompt inspection credentials", () => {
     expect(budgetSnapshot?.historyPairsDropped).toBe(3);
     applyPromptLayoutInserts(builtItems, []);
     expect(budgetSnapshot?.contextItems).toEqual(await applyProviderContextTruncation(builtItems, budgetPersona));
+    const longEmbedDescription = `${"Detailed field report on the northern observatory calibration. ".repeat(10)}Final conclusion: the telescope mirror alignment drifted by 0.42 arcseconds.`;
     const rawHistory = Array.from({ length: 22 }, (_, index) => ({
       ...message,
       id: String(index + 1),
-      embeds: [],
+      embeds:
+        index === 21
+          ? [
+              {
+                url: "https://example.invalid/observatory",
+                title: "Observatory Calibration Report",
+                description: longEmbedDescription,
+                author: { name: "Observatory Bulletin" },
+                fields: [{ name: "Instrument", value: "Primary spectrograph", inline: false }],
+              },
+            ]
+          : [],
       content: String(index + 1),
     }));
     fetchedMessages = new Map(
@@ -372,7 +387,7 @@ describe("NovelAI prompt inspection credentials", () => {
     selectAnchoredHistory(request.channel.id, rawHistory.slice(0, 20), 20);
     const liveHistory = selectAnchoredHistory(request.channel.id, rawHistory.slice(-20), 20);
     agendas.set("12", "Check the map");
-    await assemblePromptInspection({
+    const windowSnapshot = await assemblePromptInspection({
       ...request,
       tomoriState: budgetPersona,
       selectedPersona: budgetPersona,
@@ -381,5 +396,8 @@ describe("NovelAI prompt inspection credentials", () => {
     expect(inspectedHistoryStart).toBe(liveHistory[0]?.id);
     expect(inspectedHistoryStart).toBe("7");
     expect(inspectedAgenda).toBe(true);
+    const inspectedText = JSON.stringify(windowSnapshot?.contextItems ?? []);
+    expect(inspectedText).toContain("Final conclusion: the telescope mirror alignment drifted by 0.42 arcseconds.");
+    expect(inspectedText).toContain("Instrument: Primary spectrograph");
   });
 });

@@ -134,6 +134,30 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
+  private async preserveUnchangedCredential(
+    table: "saved_provider_configs" | "user_saved_provider_configs",
+    ownerId: number,
+    provider: string,
+    ciphertext: Buffer | null,
+    keyVersion: number,
+  ): Promise<{ api_key: Buffer | null; key_version: number }> {
+    if (ciphertext) {
+      const ownerColumn = table === "saved_provider_configs" ? "server_id" : "user_id";
+      const [previous] = await sql<{ api_key: Buffer | null; key_version: number | null }[]>`
+        SELECT api_key, key_version FROM ${sql(table)}
+        WHERE ${sql(ownerColumn)} = ${ownerId} AND provider = ${provider}
+      `;
+      if (previous?.api_key && !previous.api_key.equals(ciphertext)) {
+        const [oldKey, newKey] = await Promise.all([
+          decryptApiKey(previous.api_key, previous.key_version ?? 1).catch(() => null),
+          decryptApiKey(ciphertext, keyVersion),
+        ]);
+        if (oldKey === newKey) return { api_key: previous.api_key, key_version: previous.key_version ?? 1 };
+      }
+    }
+    return { api_key: ciphertext, key_version: keyVersion };
+  }
+
   async deleteOwnedDecisionRegistration(
     scope: OpenRouterModelScope,
     provider: string,
@@ -1494,6 +1518,22 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     if (params.connectionIds.length === 0) return false;
     if (params.vramHandoff?.connectionIds.some((id) => !params.connectionIds.includes(id))) return false;
     try {
+      const credentials = new Map<string, { api_key: Buffer | null; key_version: number }>();
+      if (params.encryptedApiKey) {
+        for (const connectionId of params.connectionIds) {
+          const provider = `custom:${connectionId}`;
+          credentials.set(
+            provider,
+            await this.preserveUnchangedCredential(
+              "saved_provider_configs",
+              params.serverId,
+              provider,
+              params.encryptedApiKey,
+              params.keyVersion ?? 1,
+            ),
+          );
+        }
+      }
       return await sql.begin(async (tx) => {
         const owned = await tx<Array<{ connection_id: number }>>`
           SELECT connection_id
@@ -1517,18 +1557,12 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
         await applyVramHandoffChange(tx, params.vramHandoff);
 
         if (params.encryptedApiKey) {
-          const providerKeys = params.connectionIds.map((connectionId) => `custom:${connectionId}`);
-          const updated = await tx`
-            UPDATE saved_provider_configs
-            SET
-              api_key = ${params.encryptedApiKey},
-              key_version = ${params.keyVersion ?? 1},
-              updated_at = CURRENT_TIMESTAMP
-            WHERE server_id = ${params.serverId}
-              AND provider = ANY(${sql.array(providerKeys, "text")})
-          `;
-          if (updated.count !== providerKeys.length) {
-            throw new Error("Endpoint credential snapshot count changed during group edit");
+          for (const [provider, credential] of credentials) {
+            const updated = await tx`
+              UPDATE saved_provider_configs SET api_key = ${credential.api_key}, key_version = ${credential.key_version}, updated_at = CURRENT_TIMESTAMP
+              WHERE server_id = ${params.serverId} AND provider = ${provider}
+            `;
+            if (updated.count !== 1) throw new Error("endpoint credential snapshot count changed during group edit");
           }
         }
         return true;
@@ -1552,6 +1586,22 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     if (params.connectionIds.length === 0) return false;
     if (params.vramHandoff?.connectionIds.some((id) => !params.connectionIds.includes(id))) return false;
     try {
+      const credentials = new Map<string, { api_key: Buffer | null; key_version: number }>();
+      if (params.encryptedApiKey) {
+        for (const connectionId of params.connectionIds) {
+          const provider = `custom:${connectionId}`;
+          credentials.set(
+            provider,
+            await this.preserveUnchangedCredential(
+              "user_saved_provider_configs",
+              params.userId,
+              provider,
+              params.encryptedApiKey,
+              params.keyVersion ?? 1,
+            ),
+          );
+        }
+      }
       return await sql.begin(async (tx) => {
         const owned = await tx<Array<{ connection_id: number }>>`
           SELECT connection_id
@@ -1575,18 +1625,13 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
         await applyVramHandoffChange(tx, params.vramHandoff);
 
         if (params.encryptedApiKey) {
-          const providerKeys = params.connectionIds.map((connectionId) => `custom:${connectionId}`);
-          const updated = await tx`
-            UPDATE user_saved_provider_configs
-            SET
-              api_key = ${params.encryptedApiKey},
-              key_version = ${params.keyVersion ?? 1},
-              updated_at = CURRENT_TIMESTAMP
-            WHERE user_id = ${params.userId}
-              AND provider = ANY(${sql.array(providerKeys, "text")})
-          `;
-          if (updated.count !== providerKeys.length) {
-            throw new Error("Personal endpoint credential snapshot count changed during group edit");
+          for (const [provider, credential] of credentials) {
+            const updated = await tx`
+              UPDATE user_saved_provider_configs SET api_key = ${credential.api_key}, key_version = ${credential.key_version}, updated_at = CURRENT_TIMESTAMP
+              WHERE user_id = ${params.userId} AND provider = ${provider}
+            `;
+            if (updated.count !== 1)
+              throw new Error("Personal endpoint credential snapshot count changed during group edit");
           }
         }
         return true;
@@ -2141,6 +2186,16 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
   ): Promise<boolean> {
     try {
       const provider = config.provider.toLowerCase();
+      config = {
+        ...config,
+        ...(await this.preserveUnchangedCredential(
+          "saved_provider_configs",
+          serverId,
+          provider,
+          config.api_key,
+          config.key_version,
+        )),
+      };
       const previous = provider === "novelai" ? await this.loadSavedProviderConfig(serverId, provider) : null;
       await cleanupSpeechCredentialBeforeChange({ kind: "server", ownerId: serverId }, provider, config.api_key);
       const fallbackModelRefsJson = JSON.stringify(config.fallback_model_refs ?? []);
@@ -2248,6 +2303,16 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
   async upsertUserSavedProviderConfig(userId: number, config: UserSavedProviderConfigUpsert): Promise<boolean> {
     try {
       const provider = config.provider.toLowerCase();
+      config = {
+        ...config,
+        ...(await this.preserveUnchangedCredential(
+          "user_saved_provider_configs",
+          userId,
+          provider,
+          config.api_key,
+          config.key_version,
+        )),
+      };
       const previous = provider === "novelai" ? await this.loadUserSavedProviderConfig(userId, provider) : null;
       await cleanupSpeechCredentialBeforeChange({ kind: "personal", ownerId: userId }, provider, config.api_key);
       const enabledCapabilitiesLiteral = this.toPostgresTextArrayLiteral(config.enabled_capabilities);
