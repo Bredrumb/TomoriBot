@@ -32,7 +32,8 @@ tokens; a response without usage still proceeds at the SSE end marker or when th
 
 OpenRouter rechecks video and YouTube capabilities when serializing context, including context
 reused by a fallback model. Unsupported video parts become a text notice. Direct video support
-does not imply YouTube support.
+does not imply YouTube support. The single-video limit selects the latest supported input, so
+an unsupported YouTube link cannot displace an earlier direct video.
 
 ## Shared parameter degradation
 <!-- anchor: shared-parameter-degradation -->

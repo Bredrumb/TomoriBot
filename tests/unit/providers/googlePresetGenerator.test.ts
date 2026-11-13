@@ -41,37 +41,41 @@ describe("Google preset generation", () => {
     expect(requestedModels).toEqual(["configured-google-default", "selected-persona-model"]);
   });
 
-  it("classifies a retired Search grounding model as a model error", async () => {
-    let requests = 0;
-    const client = {
-      models: {
-        generateContent: async () => {
-          requests++;
-          throw new Error(
-            '{"error":{"code":404,"message":"This model models/gemini-old is no longer available to new users."}}',
-          );
-        },
-      },
-    } as unknown as GoogleGenAI;
-
-    const result = await generatePresetFromPrompt(
-      "test-api-key",
-      {
-        characterName: "Juno",
-        characterDescription: "A helpful guide.",
-        speechExamples: "Calm and clear.",
-        useWebSearch: true,
-        modelName: "selected-persona-model",
-      },
-      "en-US",
-      client,
-      "configured-provider-default",
-    );
-
-    expect(result.errorType).toBe("MODEL_ERROR");
-    expect(result.failureStage).toBe("web_search");
-    expect(result.preset).toBeUndefined();
-    expect(requests).toBe(1);
+  it("classifies retired and missing API-version models in search and generation", async () => {
+    const messages = [
+      "This model models/gemini-old is no longer available to new users.",
+      "models/gemini-unavailable is not found for API version v1beta, or is not supported for generateContent.",
+    ];
+    for (const message of messages) {
+      for (const useWebSearch of [false, true]) {
+        let requests = 0;
+        const client = {
+          models: {
+            generateContent: async () => {
+              requests++;
+              throw new Error(JSON.stringify({ error: { code: 404, message } }));
+            },
+          },
+        } as unknown as GoogleGenAI;
+        const result = await generatePresetFromPrompt(
+          "test-api-key",
+          {
+            characterName: "Juno",
+            characterDescription: "A helpful guide.",
+            speechExamples: "Calm and clear.",
+            useWebSearch,
+            modelName: "selected-persona-model",
+          },
+          "en-US",
+          client,
+          "configured-provider-default",
+        );
+        expect(result.errorType).toBe("MODEL_ERROR");
+        expect(result.failureStage).toBe(useWebSearch ? "web_search" : undefined);
+        expect(result.preset).toBeUndefined();
+        expect(requests).toBe(1);
+      }
+    }
   });
 
   it("replies with a localized summary, never the upstream message or an unrecognized code", async () => {

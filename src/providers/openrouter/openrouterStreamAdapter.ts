@@ -2439,7 +2439,11 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     for (const [itemIndex, item] of relocatedContextItems.entries()) {
       if (isSystemInstructionContextItem(item) || item.role === "system") continue;
       const partIndex = item.parts.findLastIndex(
-        (part) => part.type === "video" && /^(?:https?:\/\/|data:)/.test(part.uri),
+        (part) =>
+          seesVideos &&
+          part.type === "video" &&
+          (!part.isYouTubeLink || seesYoutube) &&
+          /^(?:https?:\/\/|data:)/.test(part.uri),
       );
       if (partIndex >= 0) {
         latestVideoItemIndex = itemIndex;
