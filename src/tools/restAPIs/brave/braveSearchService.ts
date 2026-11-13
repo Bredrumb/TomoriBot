@@ -5,7 +5,8 @@
  */
 
 import { log } from "../../../utils/misc/logger";
-import { getOptApiKey } from "../../../utils/security/crypto";
+import { getOptApiKeyCredentials } from "@/utils/security/crypto";
+import { withProviderUsageContext, type ProviderUsageContext } from "@/utils/provider/providerUsage";
 import type {
   WebSearchParams,
   ImageSearchParams,
@@ -124,10 +125,12 @@ export function addFetchCapabilityReminder(originalResult: string): {
  * @param serverId - Discord server ID (optional)
  * @returns API key or null if not available
  */
-async function getBraveApiKey(serverId?: number): Promise<string | null> {
+async function getBraveApiKey(
+  serverId?: number,
+): Promise<{ apiKey: string; usageContext?: ProviderUsageContext } | null> {
   if (serverId) {
     try {
-      const serverApiKey = await getOptApiKey(serverId, SERVICE_NAME);
+      const serverApiKey = await getOptApiKeyCredentials(serverId, SERVICE_NAME);
       if (serverApiKey) {
         log.info(`Using server-specific Brave API key for server ${serverId}`);
         return serverApiKey;
@@ -141,7 +144,7 @@ async function getBraveApiKey(serverId?: number): Promise<string | null> {
   const envApiKey = process.env.BRAVE_API_KEY;
   if (envApiKey) {
     log.info("Using environment variable Brave API key");
-    return envApiKey;
+    return { apiKey: envApiKey };
   }
 
   log.warn("No Brave API key available (neither server-specific nor environment variable)");
@@ -160,7 +163,10 @@ async function makeBraveApiRequest<T>(
   const { serverId, timeout = REQUEST_TIMEOUT, signal: externalSignal } = config;
 
   try {
-    const apiKey = config.apiKey || (await getBraveApiKey(serverId));
+    const credential = config.apiKey
+      ? { apiKey: config.apiKey, usageContext: undefined }
+      : await getBraveApiKey(serverId);
+    const apiKey = credential?.apiKey;
     if (!apiKey) {
       return {
         success: false,
@@ -188,16 +194,18 @@ async function makeBraveApiRequest<T>(
       externalSignal.addEventListener("abort", () => controller.abort(), { once: true });
     }
 
-    const response = await fetch(url.toString(), {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        "Accept-Encoding": "gzip",
-        "X-Subscription-Token": apiKey,
-        "User-Agent": USER_AGENT,
-      },
-      signal: controller.signal,
-    });
+    const response = await withProviderUsageContext(credential?.usageContext, () =>
+      fetch(url.toString(), {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+          "Accept-Encoding": "gzip",
+          "X-Subscription-Token": apiKey,
+          "User-Agent": USER_AGENT,
+        },
+        signal: controller.signal,
+      }),
+    );
 
     clearTimeout(timeoutId);
 
@@ -359,6 +367,7 @@ export async function isBraveSearchAvailable(serverId?: number): Promise<boolean
 export function formatBraveSearchResults(
   response: BraveSearchResponse,
   searchType: "web" | "image" | "video" | "news",
+  count?: number,
 ): string {
   try {
     let results: unknown[] = [];
@@ -384,7 +393,8 @@ export function formatBraveSearchResults(
 
     let formatted = `**${searchType.charAt(0).toUpperCase() + searchType.slice(1)} Search Results for "${queryOriginal}"**\n\n`;
 
-    for (let i = 0; i < Math.min(results.length, 10); i++) {
+    const resultLimit = count !== undefined ? Math.min(Math.max(Math.floor(count), 1), 20) : 10;
+    for (let i = 0; i < Math.min(results.length, resultLimit); i++) {
       const result = results[i];
 
       switch (searchType) {

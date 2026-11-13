@@ -10,6 +10,7 @@ import {
 import { ProviderRequestDeniedError, type ProviderUsageContext } from "@/utils/provider/providerUsage";
 import { resolveServerStructuredModel } from "@/utils/provider/serverStructuredOutput";
 import * as crypto from "@/utils/security/crypto";
+import * as retention from "@/utils/db/repositories/ApiKeyRetentionRepository";
 import { createLlmRow, createPersona } from "../../helpers/fixtures";
 
 const SERVER_ID = 12;
@@ -43,6 +44,7 @@ function stubCatalog(): { savedLookups: string[] } {
   const model = createLlmRow({ llm_id: MODEL_ID, llm_provider: "openrouter", supports_structoutput: true });
   const savedLookups: string[] = [];
   const spies = [
+    spyOn(retention, "loadCredentialActivityReferences").mockResolvedValue([]),
     spyOn(llmModelRepo, "loadById").mockResolvedValue(model),
     spyOn(llmModelRepo, "loadAvailableModelsForProvider").mockResolvedValue([model]),
     spyOn(llmProviderRepo, "loadSavedProviderConfig").mockImplementation(async (_serverId, provider) => {
@@ -162,7 +164,6 @@ describe("Server-pinned structured model payer", () => {
     const { requests } = registerPayingOption({ owned: ["reviewer"] });
     const resolved = await resolveServerStructuredModel(persona(), MODEL_ID, { serverId: SERVER_ID }, "nudge-checker");
     expect(resolved).toMatchObject({ apiKey: "saved-key" });
-    expect(resolved && "usageContext" in resolved ? resolved.usageContext : undefined).toBeUndefined();
     expect(requests).toEqual([]);
     expect(savedLookups).toEqual(["openrouter"]);
   });

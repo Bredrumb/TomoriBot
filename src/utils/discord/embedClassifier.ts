@@ -64,9 +64,6 @@ export function extractEmbedTextParts(
  * embed (e.g., Twitter, YouTube, article card). Returns `isLinkPreview: false`
  * for empty embeds or for embeds already classified as bot-produced (per
  * `checkTargetEmbedTitle`).
- *
- * Kept byte-for-byte consistent with `processLinkEmbed` in tomoriChat.ts so
- * snapshot output matches live-chat conversion.
  */
 export function processLinkEmbed(embed: Embed): LinkPreviewResult {
   if (classifyProtocolEmbed(embed) === "unshared_dice_roll")
@@ -89,15 +86,10 @@ export function processLinkEmbed(embed: Embed): LinkPreviewResult {
     return { isLinkPreview: false, textContent: null, imageInfo: null, thumbnailInfo: null };
   }
 
-  // Assemble text content from available fields
-  const maxDescLength = 500;
   const contentParts = extractEmbedTextParts({
     author: embed.author,
     title: embed.title,
-    description:
-      embed.description && embed.description.length > maxDescLength
-        ? `${embed.description.substring(0, maxDescLength)}...`
-        : embed.description,
+    description: embed.description,
     fields: embed.fields,
     footer: null,
   });

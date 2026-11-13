@@ -5,6 +5,7 @@ import type { UserRow } from "@/types/db/schema";
 import { PrivacyLevel } from "@/types/db/schema";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { getCachedPrivacyLevel } from "@/utils/cache/userCache";
+import { buildExportFilename } from "@/utils/discord/attachmentFilename";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
@@ -108,7 +109,9 @@ export async function execute(
     });
 
     const png = await renderCardToPng(renderPersonalCard(data), CARD_W, getPersonalCardHeight(data));
-    const attachment = new AttachmentBuilder(png, { name: `stats_personal_${Date.now()}.png` });
+    const attachment = new AttachmentBuilder(png, {
+      name: buildExportFilename({ kind: "stats", scope: "personal", extension: "png" }),
+    });
     await interaction.editReply({ files: [attachment] });
   } catch (error) {
     await log.error(`Error executing /stats generate personal for user ${userData.user_disc_id}`, error as Error, {

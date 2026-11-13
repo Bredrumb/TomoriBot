@@ -842,7 +842,7 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
       log.warn("Prompt inspection could not resolve the NovelAI credential; fitted inspection is unavailable.");
     }
   }
-  const budget = await resolveContextBudget(answeringState);
+  const budget = await resolveContextBudget(answeringState, false);
   const truncation = budget
     ? truncateDialogueHistory(resolvedContextItems, budget.contextLength, budget.outputReserve, [], messageFetchLimit)
     : null;
@@ -867,6 +867,7 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
           tomoriState: answeringState,
           model: answeringState.llm.llm_codename,
           apiKey: inspectionApiKey,
+          refreshSubscription: false,
         })
       : undefined;
   const presetData = await getCachedActivePreset(selectedPersona.server_id);

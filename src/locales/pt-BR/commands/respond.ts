@@ -1,11 +1,14 @@
 export default {
   respond: {
     description: `Acione manualmente a resposta à última mensagem neste canal.`,
+    persona_description: `Persona com a qual responder. Deixe em branco para selecionar automaticamente.`,
+    reasoning_description: `Usar o modelo de raciocínio deste provedor com seu orçamento de raciocínio mais alto.`,
     prompt_description: `Prompt de sistema opcional para anexar ao final do contexto.`,
     prefill_description: `Preenchimento opcional do assistente que você quer que eu continue.`,
     prefill_instruction_notice: `Este modelo não pode continuar um preenchimento, então passei como uma instrução.`,
     success_title: `Resposta Manual Acionada`,
     success_description: `Respondendo à última mensagem neste canal como a última persona...`,
+    invalid_persona_description: `Escolha uma persona disponível no autocompletar ou digite o nome completo dela.`,
     no_smart_model_title: `Nenhum Modelo de Raciocínio Encontrado`,
     no_smart_model_description: `Nenhum modelo de raciocínio encontrado para seu provedor de IA atual. Use \`/config\` > Modelos > Mudar Modelos para mudar para um provedor que suporte modelos de raciocínio.`,
     no_messages_title: `Nenhuma Mensagem Encontrada`,

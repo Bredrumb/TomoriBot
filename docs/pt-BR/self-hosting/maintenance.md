@@ -27,6 +27,30 @@ No host, `bun run backup` precisa de `pg_dump`, e `bun run restore-backup` preci
 
 Para avatares locais, mantenha os webhooks gerenciados do TomoriBot: excluí-los impede que o bot edite mensagens de webhook mais antigas.
 
+## Limpeza de chaves de API inativas
+
+Defina `API_KEY_INACTIVITY_DAYS` com um número inteiro positivo e reinicie o bot para ativar a limpeza
+de credenciais do banco de dados. Deixe a variável indefinida para desativar a exclusão. Por exemplo:
+
+```dotenv
+API_KEY_INACTIVITY_DAYS=90
+```
+
+As chaves expiram após essa quantidade de dias sem nenhuma requisição autenticada. Respostas de falha do provedor contam
+como atividade. Chaves nunca utilizadas envelhecem a partir da inserção ou substituição; chaves existentes recebem um período de carência completo
+quando o rastreamento de atividade é instalado pela primeira vez. O rastreamento continua com a exclusão desativada, então ativar a
+política mais tarde pode remover imediatamente chaves que já estejam inativas. A limpeza é executada na inicialização e a cada hora em lotes
+limitados no processo principal.
+
+A política abrange chaves de API do servidor, pessoais, de rotação adicional e de serviços opcionais. As configurações de modelos
+salvas permanecem. Uma chave de rotação adicional elegível pode substituir uma chave primária expirada automaticamente. Insira novamente uma chave removida por meio de `/providers` ou `/personal providers` para restaurar o serviço;
+as seleções de fala também podem precisar ser escolhidas novamente. Credenciais do host, incluindo Vertex ADC, permanecem
+sob o controle do operador.
+
+A remoção do banco de dados não revoga a chave no provedor nem apaga backups retidos. Revogue chaves
+comprometidas pelo console do provedor. Recursos do lado do provedor, como vozes criadas, também podem exigir
+remoção manual após a limpeza da chave armazenada. Configure a retenção de backup separadamente.
+
 ## Backups de banco de dados e chaves de recuperação
 <!-- anchor: database-backups-and-recovery-keys -->
 
@@ -44,6 +68,30 @@ Faça backup do diretório local `data/` separadamente, incluindo avatares, amos
 Em ambientes que não sejam de produção, a inicialização cria um backup do banco de dados quando a versão do bot muda ou o backup mais recente tem pelo menos `TOMORI_AUTO_BACKUP_INTERVAL_HOURS` de idade (24 horas por padrão). O sistema retém `TOMORI_AUTO_BACKUP_MAX` backups (5 por padrão); defina `TOMORI_AUTO_BACKUP_ENABLED=false` para desativar isso. Esses backups não incluem mídia nem chaves de criptografia.
 
 Pacotes mais antigos podem conter segredos em `config.env`. A restauração não o carrega; revise-o em ambiente privado e forneça as chaves necessárias por meio da sua fonte normal de segredos.
+
+## Armazenamento de gravações de conversa
+<!-- anchor: conversation-recording-storage -->
+
+As [gravações de conversa](/features/setup-administration/conversation-recordings/) armazenam trechos do servidor autorizados no seu
+banco de dados. O modo de mensagens ao redor pode incluir outros participantes. Proteja o acesso ao banco de dados e aos
+backups como dados de conversa privados; a substituição de identidade não torna o texto anônimo.
+
+Para expirar trechos salvos por idade, defina `RECORD_RETENTION_DAYS` como um número inteiro positivo, por exemplo
+`RECORD_RETENTION_DAYS=30`, no ambiente do bot e reinicie todas as instâncias. Deixe a variável ausente
+para não expirar por idade. Valores vazios, zero, negativos, fracionários ou de outra forma inválidos falham na validação
+de inicialização. Use o mesmo valor em todas as instâncias que compartilham um banco de dados.
+
+O limite se aplica a trechos existentes bem como a novos, medido a partir do carimbo de data/hora do acionamento.
+Leituras e gravações impõem a expiração; a limpeza no processo principal executa lotes limitados a cada minuto.
+A limpeza física pode levar vários lotes. A duração da coleta apenas controla quando a captura é interrompida.
+A cota lógica de 100 MiB por proprietário entre servidores ainda se aplica quando a expiração por idade está desativada e pode
+remover trechos completos mais antigos mais cedo. O uso físico do banco de dados/índices pode diferir dessa cota.
+
+Os backups do banco de dados incluem dados de gravação. A retenção em tempo real, a poda de privacidade e a exclusão não reescrevem
+pacotes de backup ou exportações baixadas. Defina um ciclo de vida de backup separado, proteja cópias de recuperação e
+revise os dados restaurados antes de reabrir o bot: exclusões de origem perdidas não podem ser reconstruídas a partir de
+eventos de gateway. As exportações de gravações são trechos de origem e não podem restaurar o banco de dados. Consulte o
+[contrato de arquitetura](/architecture/subsystems/conversation-recording/) para a propriedade do ciclo de vida.
 
 ## Rotacionando chaves de criptografia
 <!-- anchor: rotating-encryption-keys -->

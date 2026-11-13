@@ -1,11 +1,14 @@
 export default {
   respond: {
     description: `手动触发对当前频道最新消息的回复。`,
+    persona_description: `以该人格的身份回复。留空则自动选择。`,
+    reasoning_description: `使用当前提供方的推理模型，并分配最高推理预算。`,
     prompt_description: `可选，追加在上下文末尾的系统提示词。`,
     prefill_description: `可选，你想让我接着续写的助手预填内容。`,
     prefill_instruction_notice: `这个模型无法接着预填内容续写，因此我改将其作为指令传入。`,
     success_title: `已手动触发回复`,
     success_description: `正在以最后一个人格的身份回复这个频道的最新消息……`,
+    invalid_persona_description: `从自动补全中选择可用的人格，或输入其完整名称。`,
     no_smart_model_title: `没有找到推理模型`,
     no_smart_model_description: `你当前的 AI 提供方没有推理模型。请用 \`/config\` > 模型 > 切换模型 换成支持推理模型的提供方。`,
     no_messages_title: `没有找到消息`,

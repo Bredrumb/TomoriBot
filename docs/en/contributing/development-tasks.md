@@ -41,6 +41,12 @@ bun run vl > /tmp/vl.log 2>&1; echo "VL_EXIT=$?" >> /tmp/vl.log
 - Two-space indentation and double quotes (Biome enforces both).
 - Strict TypeScript without `any`. Shared types go in `src/types/`. Validate untrusted input with Zod.
 - `camelCase` file names, `@/*` imports for `src/*`, and `node:` imports for Node built-ins.
+- **Export downloads**: build user-facing export filenames with `buildExportFilename` in
+  `src/utils/discord/attachmentFilename.ts`
+  (`tomori-{kind}[-{scope}][-{subject}]-{YYYYMMDDTHHMMSSZ}[-{shortId}][-part-{n}-of-{m}].{ext}`).
+  Share one timestamp across every file in a multipart export, sanitize user-provided subjects, and
+  omit server, account, and Discord IDs from privacy-minimized exports such as recordings.
+  Operational host backups (`backup_*`, `personas_*`) keep their existing directory conventions.
 - Comments follow the [comment policy](/contributing/policies/comments/). JSDoc on exported functions
   only where behavior is not obvious from the name and types.
 - **Workspace**: in code and contributor docs, a workspace is a Discord server or a DM scope.

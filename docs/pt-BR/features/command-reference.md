@@ -297,13 +297,13 @@ Gerencie as redefinições de cota de geração.
 
 ## `/record`
 
-Manage your conversation recordings in this server
+Gerencie suas gravações de conversa neste servidor
 
 | Comando | Resumo |
 |---|---|
-| `/record data` | View, export or delete your recordings in this server |
-| `/record start` | Save anonymized conversation excerpts in this server whenever you send a message |
-| `/record stop` | Stop collecting excerpts and keep your saved recordings |
+| `/record data` | Veja, exporte ou exclua suas gravações neste servidor |
+| `/record start` | Salve trechos de conversas anonimizadas neste servidor sempre que enviar uma mensagem |
+| `/record stop` | Interrompa a coleta de trechos e mantenha suas gravações salvas |
 
 ## `/refresh`
 

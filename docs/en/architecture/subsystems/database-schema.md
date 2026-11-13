@@ -322,6 +322,11 @@ model/checker ownership before writing and drop the retired `response_decision_m
 v2 exports carry. Configuration reset restores these defaults while
 preserving registrations and credentials.
 
+Provider credential generations and request-attempt ages are maintained separately from model/settings
+updates and encryption versions. Assembled server state reads credentials from `saved_provider_configs`;
+legacy mirrors remain available to encryption audits and retention cleanup. See
+[Security & Privacy](/architecture/subsystems/security/#inactive-database-api-keys) for the retention contract.
+
 ## Encryption at rest
 
 Sensitive provider credentials are encrypted using PostgreSQL `pgcrypto` (`pgp_sym_encrypt` with AES-256 and compression). Encrypted values are stored as `BYTEA` alongside an integer `key_version`:

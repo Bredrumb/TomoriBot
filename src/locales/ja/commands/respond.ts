@@ -1,11 +1,14 @@
 export default {
   respond: {
     description: `このチャンネルの最新メッセージに手動で応答をトリガーします。`,
+    persona_description: `応答に使用するペルソナ。自動で選択する場合は空欄のままにしてください。`,
+    reasoning_description: `このプロバイダーの推論モデルを最大推論バジェットで使用します。`,
     prompt_description: `コンテキスト末尾に追加する任意のシステムプロンプト。`,
     prefill_description: `私に続きを書いてほしい、アシスタントの返答の書き出し（任意）。`,
     prefill_instruction_notice: `このモデルはプリフィルの続きを生成できないため、代わりに指示として渡しました。`,
     success_title: `手動応答がトリガーされました`,
     success_description: `このチャンネルの最新メッセージに応答しています...`,
+    invalid_persona_description: `オートコンプリートから利用可能なペルソナを選択するか、正式名を入力してください。`,
     no_smart_model_title: `推論モデルが見つかりません`,
     no_smart_model_description: `現在のAIプロバイダーに推論モデルが見つかりませんでした。\`/config\` > モデル > モデルの切り替えを使用して、推論モデルをサポートするプロバイダーに切り替えてください。`,
     no_messages_title: `メッセージが見つかりません`,

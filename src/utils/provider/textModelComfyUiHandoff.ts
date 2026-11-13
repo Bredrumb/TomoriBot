@@ -14,6 +14,11 @@ import {
 import { parseCustomProvider } from "@/utils/provider/customProviderUtils";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import { getEndpointRemotePolicy } from "@/utils/security/remoteUrlSecurity";
+import {
+  currentProviderUsageContext,
+  withProviderUsageContext,
+  type ProviderUsageContext,
+} from "@/utils/provider/providerUsage";
 
 export interface TextModelHandoffLease {
   /** Callers fire and forget, so a Discord upload is never held behind text-model readiness. */
@@ -31,7 +36,7 @@ type ConnectionGate = {
   onReadersDrained: (() => void) | null;
   mediaLeases: number;
   /** ComfyUI servers used during this handoff, keyed by URL; each must release VRAM before the reload. */
-  comfyUiTargets: Map<string, string>;
+  comfyUiTargets: Map<string, { apiKey: string; usageContext?: ProviderUsageContext }>;
   closed: Promise<void> | null;
   open: (() => void) | null;
 };
@@ -376,6 +381,7 @@ function createMediaLease(params: {
   gate: ConnectionGate;
   connection: CustomEndpointConnectionRow;
   apiKey: string;
+  usageContext?: ProviderUsageContext;
   backend: VramHandoffBackend;
 }): TextModelHandoffLease {
   let released = false;
@@ -388,13 +394,17 @@ function createMediaLease(params: {
         if (params.gate.mediaLeases > 0) return;
         // Runs for failed and cancelled jobs too, which the success-only unload in the ComfyUI
         // client never covers; otherwise ComfyUI keeps the VRAM the text model needs back.
-        for (const [endpointUrl, comfyUiKey] of params.gate.comfyUiTargets) {
-          await releaseComfyUiVram(endpointUrl, comfyUiKey);
+        for (const [endpointUrl, credential] of params.gate.comfyUiTargets) {
+          await withProviderUsageContext(credential.usageContext, () =>
+            releaseComfyUiVram(endpointUrl, credential.apiKey),
+          );
         }
         params.gate.comfyUiTargets.clear();
         // Ollama reloads lazily on the next request, so only KoboldCpp needs an explicit reload.
         if (params.backend === "koboldcpp") {
-          const restored = await restoreKoboldCpp(params.connection.endpoint_url, params.apiKey);
+          const restored = await withProviderUsageContext(params.usageContext, () =>
+            restoreKoboldCpp(params.connection.endpoint_url, params.apiKey),
+          );
           if (!restored) {
             log.error("KoboldCpp reload failed after a ComfyUI job; text replies will fail until it is reloaded.");
             recordHandoff(params.backend, "restore_failed");
@@ -421,14 +431,17 @@ export async function beginTextModelHandoffBeforeComfyUi(params: {
   const connection = await llmProviderRepo.loadCustomEndpointConnectionById(connectionId);
   const backend = connection?.behavior?.vram_handoff;
   if (!connection || !backend) return NO_HANDOFF;
-  const apiKey = (await loadCustomConnectionCredential(connection)) ?? "";
+  const credential = await loadCustomConnectionCredential(connection);
+  const apiKey = credential?.apiKey ?? "";
+  const usageContext = credential?.usageContext;
+  const comfyUiCredential = { apiKey: params.comfyUi.apiKey, usageContext: currentProviderUsageContext() };
 
   return withWriterQueue(connectionId, async () => {
     const gate = getGate(connectionId);
     if (gate.mediaLeases > 0) {
       gate.mediaLeases += 1;
-      gate.comfyUiTargets.set(params.comfyUi.endpointUrl, params.comfyUi.apiKey);
-      return createMediaLease({ connectionId, gate, connection, apiKey, backend });
+      gate.comfyUiTargets.set(params.comfyUi.endpointUrl, comfyUiCredential);
+      return createMediaLease({ connectionId, gate, connection, apiKey, usageContext, backend });
     }
 
     closeGate(gate);
@@ -440,7 +453,9 @@ export async function beginTextModelHandoffBeforeComfyUi(params: {
       }
       let prepared: boolean;
       if (backend === "koboldcpp") {
-        prepared = await prepareKoboldCpp(connection.endpoint_url, apiKey);
+        prepared = await withProviderUsageContext(usageContext, () =>
+          prepareKoboldCpp(connection.endpoint_url, apiKey),
+        );
       } else {
         const endpoint = await resolveCustomEndpointForProvider(
           params.tomoriState.llm.llm_provider,
@@ -449,7 +464,9 @@ export async function beginTextModelHandoffBeforeComfyUi(params: {
         );
         const model =
           params.tomoriState.config.custom_model_name || endpoint?.model_name || params.tomoriState.llm.llm_codename;
-        prepared = await prepareOllama(connection.endpoint_url, apiKey, model);
+        prepared = await withProviderUsageContext(usageContext, () =>
+          prepareOllama(connection.endpoint_url, apiKey, model),
+        );
       }
       if (!prepared) {
         recordHandoff(backend, "unload_failed");
@@ -457,9 +474,9 @@ export async function beginTextModelHandoffBeforeComfyUi(params: {
         return NO_HANDOFF;
       }
       gate.mediaLeases = 1;
-      gate.comfyUiTargets.set(params.comfyUi.endpointUrl, params.comfyUi.apiKey);
+      gate.comfyUiTargets.set(params.comfyUi.endpointUrl, comfyUiCredential);
       recordHandoff(backend, "unloaded");
-      return createMediaLease({ connectionId, gate, connection, apiKey, backend });
+      return createMediaLease({ connectionId, gate, connection, apiKey, usageContext, backend });
     } catch (error) {
       log.error("Text-model handoff before a ComfyUI job failed unexpectedly", error as Error);
       openGate(connectionId, gate);

@@ -12,7 +12,7 @@ Esta política cubre TomoriBot oficial alojada en Discord, incluido el uso perso
 
 ## Resumen de privacidad
 
-- TomoriBot lee mensajes recientes para responder y envía el contexto relevante al proveedor de IA seleccionado. No guardamos una copia del historial del chat, pero la memoria a corto plazo opcional guarda resúmenes.
+- TomoriBot lee mensajes recientes para responder y envía el contexto relevante al proveedor de IA seleccionado. Las grabaciones de conversaciones opcionales guardan extractos de mensajes después de que el propietario de la grabación confirma; el modo de mensajes circundantes puede incluir a otros participantes. La memoria a corto plazo opcional guarda resúmenes.
 - Conservamos la configuración, las memorias y los archivos que tú o tu servidor elijan guardar. Algunas memorias del servidor pueden describir a miembros que no aportaron esa información.
 - Las membresías de pago agregan vínculos de cuenta, patrocinios y registros de uso para proporcionar beneficios y controlar la asignación compartida. No recopilamos tu contraseña de Patreon ni datos de tarjetas.
 - Puedes consultar o eliminar la mayoría de los datos guardados mediante comandos. Los registros de suscripción requieren una solicitud separada a soporte. Eliminar datos del bot no cancela los cobros de Patreon.
@@ -59,9 +59,19 @@ Conservamos patrocinios, sus autorizaciones, totales de asignación y gastos, y 
 
 Los registros temporales de inicio de sesión y actualización de membresía ayudan a proteger la vinculación y evitar actualizaciones duplicadas. Tus propios tokens de inicio de sesión de Patreon no se conservan después de la vinculación.
 
+### 2.7) Grabaciones de conversaciones
+
+Las [grabaciones de conversaciones](/features/setup-administration/conversation-recordings/) son opcionales y están limitadas al propietario de la grabación y al servidor. Tras la confirmación, un nuevo mensaje real del propietario puede guardar ese mensaje y hasta diez mensajes aptos anteriores en el mismo canal o hilo, incluso sin una respuesta del bot. El contexto puede ser anterior a la activación. El modo de mensajes circundantes puede incluir a otros miembros, bots y webhooks cuyos participantes no iniciaron una grabación.
+
+Almacenamos texto normalizado de mensajes y embeds, marcas de tiempo, límites ordenados de extractos, etiquetas de hablantes, relaciones de respuesta aptas y metadatos de tipo/cantidad de archivos adjuntos. No guardamos bytes de archivos adjuntos, nombres de archivo, URLs de archivos adjuntos, OCR ni descripciones generadas de archivos multimedia mediante esta función. El texto de los embeds incluye títulos, descripciones, campos, nombres de autor y pies de página, con el mismo reemplazo de identidad que el texto de los mensajes. Los identificadores de origen restringidos admiten la propiedad, la deduplicación, las exclusiones de privacidad y las ediciones/eliminaciones observadas.
+
+Antes de almacenar los cuerpos, las identidades estructuradas de Discord y los nombres o apodos conocidos exactos y únicos se convierten en marcadores de posición legibles como `[SELF]` y `[PARTICIPANT_1]`. Se omiten los nombres compartidos ambiguos; las palabras comunes usadas como nombres pueden reemplazarse incluso cuando signifiquen otra cosa. Los emojis personalizados pierden sus IDs numéricos y los enlaces a mensajes de Discord se convierten en un marcador genérico. El texto libre y las URLs externas comunes aún pueden identificar a personas. El reemplazo es según el mejor esfuerzo y no hace que las grabaciones sean anónimas.
+
+El operador del bot almacena estos registros y puede tener acceso a la infraestructura. Los controles de Discord permiten únicamente al propietario en el servidor actual exportarlos o eliminarlos, sin anulación por parte de los administradores. La grabación no realiza llamadas automáticas al proveedor de IA ni inicia ningún flujo de entrenamiento.
+
 ## 3) Qué leemos sin guardar
 
-TomoriBot lee temporalmente mensajes recientes, medios relevantes, detalles del servidor y canal, e información de presencia disponible para responder. Esto no se guarda como historial de chat. Los resúmenes de memoria a corto plazo y los archivos que guardes deliberadamente se tratan como se explica arriba.
+TomoriBot lee temporalmente mensajes recientes, medios relevantes, detalles del servidor y canal, e información de presencia disponible para responder. El procesamiento habitual de respuestas no archiva por sí mismo el historial de chat. Las grabaciones opcionales, los resúmenes de memoria a corto plazo y los archivos guardados deliberadamente se tratan en la Sección 2.
 
 ## 4) Quién recibe tus datos
 
@@ -77,6 +87,7 @@ Estos servicios pueden procesar datos fuera de tu país y tienen sus propias pol
 
 | Datos | Conservación |
 |---|---|
+| Extractos de grabaciones de conversaciones | Sin vencimiento por antigüedad a menos que se configure `RECORD_RETENTION_DAYS`; el límite positivo de días configurado también se aplica a los datos existentes. La cuota lógica de 100 MiB por propietario en todos los servidores puede expulsar antes los extractos completos más antiguos. |
 | Resúmenes de memoria a corto plazo | 90 días después de la última actividad, de forma predeterminada |
 | Registros de errores | 90 días |
 | Registros de rendimiento e identificadores de mensajes del bot | 30 días |
@@ -102,6 +113,8 @@ Quitar el bot conserva los datos del servidor para volver a invitarlo; ejecuta `
 | Evitar que las personas te mencionen para iniciar una conversación | `/personal config` > `Privacidad` > `Menciones de personas` |
 | Consultar o quitar memorias personales | `/personal memories` |
 | Consultar o quitar memorias y documentos del servidor | `/memories` |
+| Exportar o eliminar las grabaciones de tu servidor actual | `/record data`; Markdown o JSON con versión, adjuntos de interacción privados, eliminación confirmada por rango o de todos los registros |
+| Detener la recolección de nuevos extractos sin eliminar los guardados | `/record stop` |
 | Exportar configuración o memorias personales | `/export personal config`, `/export personal memories` |
 | Exportar configuración o memorias del servidor | `/export config`, `/export memories` |
 | Restablecer la configuración personal | `/reset personal config` |
@@ -113,6 +126,8 @@ Quitar el bot conserva los datos del servidor para volver a invitarlo; ejecuta `
 Tus memorias y documentos del servidor permanecen, sin la asociación de autoría; pide a un administrador que los elimine con `/memories`. Si una memoria o documento compartido contiene datos personales sobre ti y no consigues que lo quiten, contáctanos directamente mediante la Sección 9. No necesitas permiso de un administrador para pedir revisión y eliminación.
 
 La configuración de privacidad limita la visibilidad de mensajes y personalización; no borra memorias existentes. Las elecciones para excluirte de la recopilación permanecen tras la eliminación para que esta no se reactive silenciosamente. Tu elección de Menciones de personas es un ajuste de personalización, por lo que `/personal nuke` lo borra; desactiva Menciones de personas nuevamente después si aún deseas tenerlas desactivadas.
+
+Las exportaciones de grabaciones siguen disponibles después de perder el acceso al canal de origen, sujetas a las exclusiones de privacidad actuales y a la retención. Los rangos de fechas seleccionan extractos por la hora de activación a la medianoche UTC, con el inicio incluido y el final excluido. Las ediciones observadas vuelven a aplicar el reemplazo de identidad; las eliminaciones individuales y masivas observadas en el origen quitan las copias almacenadas. Las exclusiones de privacidad posteriores purgan los datos almacenados afectados. No podemos garantizar la recepción de eventos sin conexión o tras cambios de acceso. La eliminación en vivo no revoca exportaciones descargadas ni reescribe copias de seguridad, las cuales siguen los ciclos de vida independientes en la Sección 5. Eliminar grabaciones deja habilitada la recolección a menos que también la detengas.
 
 Para suscripciones, usa el panel de suscripción para consultar tu asignación y patrocinios o dejar de patrocinar un servidor. Cancela la renovación en Patreon; detener un patrocinio o eliminar datos del bot no detiene los cobros.
 

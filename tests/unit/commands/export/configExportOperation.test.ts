@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it, mock } from "bun:test";
+import { beforeAll, describe, expect, it, mock, setSystemTime } from "bun:test";
 import type { Client } from "discord.js";
 import { execute as executeConfigExport } from "@/commands/export/config";
 import { runConfigExport, type ConfigExportDependencies } from "@/commands/export/configExportOperation";
@@ -166,8 +166,7 @@ describe("config export operation", () => {
     expect(calls.deliveries).toHaveLength(1);
     const deliveredFiles = calls.deliveries[0]?.files ?? [];
     expect(deliveredFiles).toHaveLength(1);
-    // `/persona export`'s shape: the workspace name, the scope, and an epoch-millisecond stamp for uniqueness.
-    expect(deliveredFiles[0]?.name).toMatch(/^tomori-juno_lounge-server-config-\d{13}\.json$/);
+    expect(deliveredFiles[0]?.name).toMatch(/^tomori-config-server-juno_lounge-\d{8}T\d{6}Z\.json$/);
     expect(deliveredFiles[0]?.name).not.toContain(GUILD_ID);
     expect(deliveredFiles[0]?.name).not.toContain(ACTOR_ID);
     expect(JSON.parse(deliveredFiles[0]?.attachment.toString("utf8") ?? "{}")).toEqual(WORKSPACE_CONFIG_EXPORT);
@@ -182,23 +181,29 @@ describe("config export operation", () => {
     const first = makeDependencies();
     const second = makeDependencies();
 
-    await runConfigExport(
-      makeWorkspaceInteraction({ inGuild: true, canManageGuild: true }) as never,
-      LOCALE,
-      "personal",
-      first.deps,
-    );
-    await new Promise((resolve) => setTimeout(resolve, 2));
-    await runConfigExport(
-      makeWorkspaceInteraction({ inGuild: true, canManageGuild: true }) as never,
-      LOCALE,
-      "personal",
-      second.deps,
-    );
+    try {
+      setSystemTime(new Date("2026-11-13T04:12:06.000Z"));
+      await runConfigExport(
+        makeWorkspaceInteraction({ inGuild: true, canManageGuild: true }) as never,
+        LOCALE,
+        "personal",
+        first.deps,
+      );
+      setSystemTime(new Date("2026-11-13T04:12:07.000Z"));
+      await runConfigExport(
+        makeWorkspaceInteraction({ inGuild: true, canManageGuild: true }) as never,
+        LOCALE,
+        "personal",
+        second.deps,
+      );
+    } finally {
+      setSystemTime();
+    }
 
     const firstFile = first.calls.deliveries[0]?.files[0];
     const secondFile = second.calls.deliveries[0]?.files[0];
-    expect(firstFile?.name).toMatch(/^tomori-bau_h-personal-config-\d{13}\.json$/);
+    expect(firstFile?.name).toBe("tomori-config-personal-bau_h-20261113T041206Z.json");
+    expect(secondFile?.name).toBe("tomori-config-personal-bau_h-20261113T041207Z.json");
     expect(secondFile?.name).not.toBe(firstFile?.name);
   });
 
@@ -222,7 +227,7 @@ describe("config export operation", () => {
       const fileName = calls.deliveries[0]?.files[0]?.name ?? "";
       expect({ guildName, name: fileName }).toMatchObject({
         guildName,
-        name: expect.stringMatching(/^tomori-[\w-]+-server-config-\d{13}\.json$/),
+        name: expect.stringMatching(/^tomori-config-server-[\w-]+-\d{8}T\d{6}Z\.json$/),
       });
       // The sanitizer is the boundary: none of these characters may survive into the attachment name.
       for (const forbidden of ["/", "\\", ":", "*", "?", "|", "..", " "]) {
@@ -243,7 +248,7 @@ describe("config export operation", () => {
 
     await runConfigExport(interaction as never, LOCALE, "workspace", deps);
 
-    expect(calls.deliveries[0]?.files[0]?.name).toMatch(/^tomori-bau_h-server-config-\d{13}\.json$/);
+    expect(calls.deliveries[0]?.files[0]?.name).toMatch(/^tomori-config-server-bau_h-\d{8}T\d{6}Z\.json$/);
   });
 
   it("acknowledges the interaction before reading the configuration", async () => {

@@ -1,3 +1,4 @@
+import { recordStoredCredentialRequest } from "@/utils/security/apiKeyRetention";
 import type {
   ProviderNativeVideoGenerationRequest,
   ProviderNativeVideoGenerationResult,
@@ -320,6 +321,9 @@ async function externalHttpRequest(
 
   try {
     limits.abortSignal?.throwIfAborted();
+    await recordStoredCredentialRequest(
+      new Headers(sanitizedHeaders).get("Authorization")?.replace(/^Bearer\s+/i, "") ?? "",
+    );
     return await (IS_WINDOWS
       ? pwshHttpRequest(url, method, sanitizedHeaders, limits, body)
       : curlHttpRequest(url, method, sanitizedHeaders, limits, body));

@@ -4915,9 +4915,17 @@ describe("config Persona Sprites routes", () => {
       await dispatch(harness, interaction);
 
       expect(harness.followUps.length).toBeGreaterThan(1);
+      const totalParts = harness.followUps.length;
+      const stems = new Set<string>();
       const keys: string[] = [];
-      for (const followUp of harness.followUps as Array<{ files: AttachmentBuilder[] }>) {
+      for (const [index, followUp] of (harness.followUps as Array<{ files: AttachmentBuilder[] }>).entries()) {
         expect(followUp.files).toHaveLength(1);
+        const attachmentName = followUp.files[0].name ?? "";
+        const match = attachmentName.match(
+          new RegExp(`^(tomori-sprites-[\\w-]+-\\d{8}T\\d{6}Z)-part-${index + 1}-of-${totalParts}\\.zip$`),
+        );
+        expect(match).not.toBeNull();
+        if (match?.[1]) stems.add(match[1]);
         const bytes = followUp.files[0].attachment;
         expect(Buffer.isBuffer(bytes)).toBe(true);
         if (!Buffer.isBuffer(bytes)) throw new Error("Expected archive bytes");
@@ -4927,6 +4935,7 @@ describe("config Persona Sprites routes", () => {
         if (parsed.ok) keys.push(...parsed.entries.map((entry) => entry.meta.sprite_key));
       }
       expect(keys.sort()).toEqual(stored.map((sprite) => sprite.sprite_key).sort());
+      expect(stems.size).toBe(1);
 
       const refused = makeHarness({ personas: [MAIN] });
       const smallInteraction = makeInteraction({
@@ -4963,6 +4972,7 @@ describe("config Persona Sprites routes", () => {
     const exported = await configSpriteOperations.exportSprites({ persona: MAIN, maxArchiveBytes: 10 * 1024 * 1024 });
     expect(exported.status).toBe("success");
     if (exported.status !== "success") return;
+    expect(exported.files[0]?.filename).toMatch(/^tomori-sprites-[\w-]+-\d{8}T\d{6}Z\.zip$/);
     expect(exported.spriteCount).toBe(2);
     expect(exported.skippedCount).toBe(0);
 

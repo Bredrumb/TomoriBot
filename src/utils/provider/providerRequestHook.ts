@@ -1,3 +1,6 @@
+import { createHash } from "node:crypto";
+import { currentStoredCredentialActivity } from "@/utils/provider/providerUsage";
+import { recordStoredCredentialRequest } from "@/utils/security/apiKeyRetention";
 import { z } from "zod";
 import { readBoundedResponse } from "@/utils/security/boundedResponse";
 
@@ -87,4 +90,35 @@ export async function fetchWithProviderRequest(
   } finally {
     hold.release(retainEstimate);
   }
+}
+
+export function createCredentialActivityFetch(delegate: typeof fetch): typeof fetch {
+  return Object.assign(async (input: string | URL | Request, init?: BunFetchRequestInit): Promise<Response> => {
+    const activity = currentStoredCredentialActivity();
+    if (activity) {
+      const request = input instanceof Request ? input : null;
+      (init?.signal ?? request?.signal)?.throwIfAborted();
+      const headers = new Headers(init?.headers ?? request?.headers);
+      const bearer = headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+      const url = new URL(request?.url ?? String(input));
+      const candidates = [bearer, url.searchParams.get("key")];
+      for (const name of ["x-api-key", "x-goog-api-key", "xi-api-key", "x-subscription-token"]) {
+        candidates.push(headers.get(name));
+      }
+      const key = candidates.find(
+        (candidate) => candidate && createHash("sha256").update(candidate).digest("hex") === activity.requestKeyDigest,
+      );
+      if (key) await recordStoredCredentialRequest(key);
+    }
+    return delegate(input, init);
+  }, delegate);
+}
+
+let activityFetchInstalled = false;
+
+export function initializeCredentialActivityFetch(): void {
+  if (activityFetchInstalled) return;
+  // The Google SDK exposes no asynchronous pre-dispatch hook, so its requests use the same fetch gate as direct HTTP adapters.
+  globalThis.fetch = createCredentialActivityFetch(globalThis.fetch);
+  activityFetchInstalled = true;
 }

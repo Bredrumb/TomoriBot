@@ -62,6 +62,8 @@ export default {
         "Este anfitrión desactivó el seguimiento de estadísticas, que necesito para saber qué tan activo está el servidor y dónde habla la gente conmigo, por lo que las intervenciones nunca se iniciarán.",
       notice_byok:
         "Este servidor paga el texto con la clave propia de cada miembro, por lo que ninguna clave cubre un mensaje que nadie pidió. Natural Nudges permanecerá desactivado hasta que el servidor tenga su propia clave.",
+      notice_cooldown:
+        "Pausé las intervenciones tras fallas repetidas. Pueden reintentarse {retry_at}, o antes después de mi próxima respuesta exitosa en este servidor.",
       idle_nudges_title: "Intervenciones espontáneas",
       idle_nudges_description: "Inicio algo en un canal por mi cuenta si se vuelve demasiado silencioso.",
       idle_nudges_off: "Solo hablo cuando alguien me habla.",
@@ -345,6 +347,10 @@ export default {
       channels_auto_trigger_updated_heading: `Canales de activación automática actualizados`,
       channels_auto_trigger_updated_detail: `Se actualizaron los canales de activación automática.`,
       channels_auto_trigger_threshold_modal_title: `Editar umbral de actividad`,
+      channels_auto_trigger_threshold_label: `Con qué frecuencia responder`,
+      channels_auto_trigger_threshold_input_description: `0 significa cada mensaje. 50 significa cada 50 mensajes. 50-60 elige una cantidad aleatoria cada vez.`,
+      channels_auto_trigger_threshold_placeholder: `0, 50 o 50-60`,
+      channels_auto_trigger_threshold_invalid_detail: `Usa 0, un número del 1 al 100 o un rango como 50-60.`,
       channels_auto_trigger_threshold_updated_heading: `Umbral de actividad actualizado`,
       channels_auto_trigger_threshold_updated_detail: `Se actualizó el umbral de actividad del canal.`,
       channels_rules_title: `Reglas de canal`,

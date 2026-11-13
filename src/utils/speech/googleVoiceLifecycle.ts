@@ -8,6 +8,7 @@ import type { OpenRouterModelScope } from "@/utils/db/repositories/LlmModelRepos
 import * as speechRepo from "@/utils/db/repositories/SpeechRepository";
 import type { SpeechVoiceBindingRow } from "@/types/db/schema";
 import { decryptApiKey } from "@/utils/security/crypto";
+import { withStoredCredentialUsage } from "@/utils/security/apiKeyRetention";
 import { log } from "@/utils/misc/logger";
 import { HOSTED_SPEECH_LIMITS, HostedSpeechError, type SpeechOperation } from "@/utils/speech/hostedSpeech";
 
@@ -89,7 +90,9 @@ export async function cleanupSpeechCredentialBeforeChange(
     if (!credential || (nextCiphertext && credential.apiKey.equals(nextCiphertext))) return;
     await speechRepo.retireSpeechCredentialBindings(credential.credentialId, owner.kind);
     const apiKey = await decryptApiKey(credential.apiKey, credential.keyVersion);
-    await cleanupPendingGoogleVoices(owner, credential.credentialId, credential.credentialRevision, apiKey, []);
+    await withStoredCredentialUsage(credential.apiKey, apiKey, () =>
+      cleanupPendingGoogleVoices(owner, credential.credentialId, credential.credentialRevision, apiKey, []),
+    );
   } catch (error) {
     reportCleanupFailure(owner.ownerId, owner.kind, error);
   }

@@ -73,7 +73,7 @@ const resolveCredentials = mock(async () => ({
   savedConfig: personalNaiConfig,
   source: "personal" as const,
 }));
-const getOptionalKey = mock(async () => "server-nai-key");
+const getOptionalKey = mock(async () => ({ apiKey: "server-nai-key", usageContext: {} }));
 const checkQuota = mock(async () => ({ allowed: true }));
 const reserveQuota = mock(async () => ({ allowed: true, reservation: null }));
 const generateImage = mock(async () => {
@@ -127,7 +127,7 @@ scopedMock.module("@/utils/provider/credentialResolver", () => ({
 }));
 scopedMock.module("@/utils/security/crypto", () => ({
   ...realCrypto,
-  getOptApiKey: getOptionalKey,
+  getOptApiKeyCredentials: getOptionalKey,
 }));
 scopedMock.module("@/utils/image/naiDiffusionModels", () => ({
   ...realNaiModels,

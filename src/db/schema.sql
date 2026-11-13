@@ -2,8 +2,10 @@
 CREATE OR REPLACE FUNCTION update_timestamp()
 RETURNS TRIGGER AS $$
 BEGIN
-   NEW.updated_at = CURRENT_TIMESTAMP;
-   RETURN NEW;
+  IF current_setting('tomori.credential_activity_update', true) = 'true'
+      OR current_setting('tomori.encryption_rotation', true) = 'true' THEN RETURN NEW; END IF;
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -1750,6 +1752,9 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- Optional API keys table for encrypted storage of optional service credentials per guild
 CREATE TABLE IF NOT EXISTS opt_api_keys (
+  credential_activity_epoch UUID NOT NULL DEFAULT gen_random_uuid(),
+  credential_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  credential_last_attempt_at TIMESTAMPTZ,
   opt_api_key_id SERIAL PRIMARY KEY,
   server_id INT NOT NULL,                    -- Foreign key to servers table
   service_name TEXT NOT NULL,                -- 'brave-search', 'duckduckgo-search', etc.
@@ -1839,6 +1844,9 @@ CREATE INDEX IF NOT EXISTS idx_opt_api_keys_version ON opt_api_keys(key_version)
 -- Stores additional API keys for round-robin distribution and automatic failover.
 -- Config/security columns only — runtime telemetry lives in api_key_rotation_runtime_state.
 CREATE TABLE IF NOT EXISTS api_key_rotation (
+  credential_activity_epoch UUID NOT NULL DEFAULT gen_random_uuid(),
+  credential_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  credential_last_attempt_at TIMESTAMPTZ,
   rotation_key_id SERIAL PRIMARY KEY,
   server_id INT NOT NULL,
   provider TEXT NOT NULL,                           -- Must match current provider in saved_provider_configs
@@ -2463,6 +2471,8 @@ CREATE TABLE IF NOT EXISTS mcp_oauth_clients (
 -- applicable here because the entire row is one logical "provider snapshot."
 -- ============================================================
 CREATE TABLE IF NOT EXISTS saved_provider_configs (
+  credential_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  credential_last_attempt_at TIMESTAMPTZ,
   saved_config_id SERIAL PRIMARY KEY,
   server_id INT NOT NULL,
   provider TEXT NOT NULL,
@@ -2862,6 +2872,8 @@ CREATE TRIGGER update_scoped_model_registrations_timestamp
 -- One row per provider per user. UPSERT on save, DELETE on remove.
 -- ============================================================
 CREATE TABLE IF NOT EXISTS user_saved_provider_configs (
+  credential_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  credential_last_attempt_at TIMESTAMPTZ,
   user_saved_config_id SERIAL PRIMARY KEY,
   user_id INT NOT NULL,
   provider TEXT NOT NULL,
@@ -3264,6 +3276,9 @@ CREATE TRIGGER update_server_memory_configs_timestamp
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS server_model_configs (
+  credential_activity_epoch UUID NOT NULL DEFAULT gen_random_uuid(),
+  credential_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  credential_last_attempt_at TIMESTAMPTZ,
   server_id                           INT         PRIMARY KEY REFERENCES servers(server_id) ON DELETE CASCADE,
   llm_id                              INT         REFERENCES llms(llm_id) ON DELETE SET NULL,
   embedding_model_id                  INT         REFERENCES embedding_models(embedding_model_id) ON DELETE SET NULL,
@@ -4148,6 +4163,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_speech_voice_bindings_identity
 
 CREATE OR REPLACE FUNCTION revise_speech_credentials() RETURNS TRIGGER AS $$
 BEGIN
+  IF current_setting('tomori.encryption_rotation', true) = 'true' THEN RETURN NEW; END IF;
   IF NEW.api_key IS DISTINCT FROM OLD.api_key THEN
     NEW.credential_revision = OLD.credential_revision + 1;
     IF TG_TABLE_NAME = 'saved_provider_configs' THEN
@@ -4495,3 +4511,55 @@ SELECT e.excerpt_id, e.session_id, e.triggered_at,
     WHERE r.excerpt_id = e.excerpt_id
   ) AS logical_bytes
 FROM conversation_recording_excerpts e;
+
+SELECT add_column_if_not_exists('saved_provider_configs', 'credential_created_at', 'TIMESTAMPTZ NOT NULL', 'NOW()');
+SELECT add_column_if_not_exists('saved_provider_configs', 'credential_last_attempt_at', 'TIMESTAMPTZ', 'NULL');
+SELECT add_column_if_not_exists('user_saved_provider_configs', 'credential_created_at', 'TIMESTAMPTZ NOT NULL', 'NOW()');
+SELECT add_column_if_not_exists('user_saved_provider_configs', 'credential_last_attempt_at', 'TIMESTAMPTZ', 'NULL');
+SELECT add_column_if_not_exists('api_key_rotation', 'credential_activity_epoch', 'UUID NOT NULL', 'gen_random_uuid()');
+SELECT add_column_if_not_exists('api_key_rotation', 'credential_created_at', 'TIMESTAMPTZ NOT NULL', 'NOW()');
+SELECT add_column_if_not_exists('api_key_rotation', 'credential_last_attempt_at', 'TIMESTAMPTZ', 'NULL');
+SELECT add_column_if_not_exists('opt_api_keys', 'credential_activity_epoch', 'UUID NOT NULL', 'gen_random_uuid()');
+SELECT add_column_if_not_exists('opt_api_keys', 'credential_created_at', 'TIMESTAMPTZ NOT NULL', 'NOW()');
+SELECT add_column_if_not_exists('opt_api_keys', 'credential_last_attempt_at', 'TIMESTAMPTZ', 'NULL');
+SELECT add_column_if_not_exists('server_model_configs', 'credential_activity_epoch', 'UUID NOT NULL', 'gen_random_uuid()');
+SELECT add_column_if_not_exists('server_model_configs', 'credential_created_at', 'TIMESTAMPTZ NOT NULL', 'NOW()');
+SELECT add_column_if_not_exists('server_model_configs', 'credential_last_attempt_at', 'TIMESTAMPTZ', 'NULL');
+CREATE OR REPLACE FUNCTION track_api_key_replacement() RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.api_key IS DISTINCT FROM OLD.api_key
+      AND current_setting('tomori.encryption_rotation', true) IS DISTINCT FROM 'true' THEN
+    IF TG_TABLE_NAME NOT IN ('saved_provider_configs', 'user_saved_provider_configs') THEN
+      NEW.credential_activity_epoch = gen_random_uuid();
+    END IF;
+    NEW.credential_created_at = clock_timestamp();
+    NEW.credential_last_attempt_at = NULL;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS track_api_key_replacement ON saved_provider_configs;
+CREATE TRIGGER track_api_key_replacement BEFORE UPDATE OF api_key ON saved_provider_configs
+  FOR EACH ROW EXECUTE FUNCTION track_api_key_replacement();
+DROP TRIGGER IF EXISTS track_api_key_replacement ON user_saved_provider_configs;
+CREATE TRIGGER track_api_key_replacement BEFORE UPDATE OF api_key ON user_saved_provider_configs
+  FOR EACH ROW EXECUTE FUNCTION track_api_key_replacement();
+DROP TRIGGER IF EXISTS track_api_key_replacement ON api_key_rotation;
+CREATE TRIGGER track_api_key_replacement BEFORE UPDATE OF api_key ON api_key_rotation
+  FOR EACH ROW EXECUTE FUNCTION track_api_key_replacement();
+DROP TRIGGER IF EXISTS track_api_key_replacement ON opt_api_keys;
+CREATE TRIGGER track_api_key_replacement BEFORE UPDATE OF api_key ON opt_api_keys
+  FOR EACH ROW EXECUTE FUNCTION track_api_key_replacement();
+DROP TRIGGER IF EXISTS track_api_key_replacement ON server_model_configs;
+CREATE TRIGGER track_api_key_replacement BEFORE UPDATE OF api_key ON server_model_configs
+  FOR EACH ROW EXECUTE FUNCTION track_api_key_replacement();
+
+CREATE INDEX IF NOT EXISTS idx_retention_saved_provider_configs_api_key ON saved_provider_configs USING hash (api_key) WHERE api_key IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_retention_user_saved_provider_configs_api_key ON user_saved_provider_configs USING hash (api_key) WHERE api_key IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_retention_api_key_rotation_api_key ON api_key_rotation USING hash (api_key) WHERE api_key IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_retention_opt_api_keys_api_key ON opt_api_keys USING hash (api_key) WHERE api_key IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_retention_server_model_configs_api_key ON server_model_configs USING hash (api_key) WHERE api_key IS NOT NULL;

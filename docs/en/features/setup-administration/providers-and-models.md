@@ -40,6 +40,10 @@ Never share your API key with anyone else. Add or replace a custom endpoint's Be
 from its `Edit Endpoint` action in `/providers`.
 :::
 
+An operator can enable automatic removal of unused API keys. If a saved configuration loses its key,
+use **Edit** in `/providers` or `/personal providers` to add it again. Saved model settings remain.
+Removing a stored key does not revoke it at the provider or erase copies in backups.
+
 Vertex AI authenticates with Application Default Credentials (ADC) rather than a stored secret.
 For local hosting, ADC can come from `gcloud`; hosted deployments should use a workload identity
 or service account. An AI Studio API key alone does not authenticate full Vertex AI. The selected

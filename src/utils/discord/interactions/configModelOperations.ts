@@ -72,9 +72,8 @@ import {
   type ProviderOptionScope,
 } from "@/utils/provider/providerOptionRegistry";
 import { getStaticProviderInfo } from "@/utils/provider/providerInfoRegistry";
-import { getNovelAIModelAccessError } from "@/providers/novelai/modelAccess";
+import { getStoredNovelAIModelAccessError } from "@/providers/novelai/modelAccess";
 import { getNovelAIProfile } from "@/providers/novelai/modelProfiles";
-import { decryptApiKey } from "@/utils/security/crypto";
 import { loadSavedProvidersForCapability, type SavedProviderCapability } from "@/utils/provider/savedProviderConfig";
 import { providerPanelOperations } from "@/utils/provider/providerPanelOperations";
 import {
@@ -691,9 +690,10 @@ export const configModelOperations: ConfigModelOperations = {
 
       if (capability === "text") {
         if (model.llm_provider === "novelai" && model.llm_codename === "xialong-v1") {
-          const descriptionKey = await getNovelAIModelAccessError(
+          const descriptionKey = await getStoredNovelAIModelAccessError(
             model.llm_codename,
-            savedConfig.api_key ? await decryptApiKey(savedConfig.api_key, savedConfig.key_version) : null,
+            savedConfig.api_key,
+            savedConfig.key_version,
           );
           if (descriptionKey) return { status: "novelai-unavailable", descriptionKey };
         }

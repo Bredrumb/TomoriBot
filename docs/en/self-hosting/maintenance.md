@@ -27,6 +27,30 @@ Host `bun run backup` needs `pg_dump`, and host `bun run restore-backup` needs `
 
 For local avatars, keep TomoriBot's managed webhooks: deleting them prevents the bot from editing older webhook messages.
 
+## Inactive API key cleanup
+
+Set `API_KEY_INACTIVITY_DAYS` to a positive integer and restart the bot to enable database credential
+cleanup. Leave it unset to disable deletion. For example:
+
+```dotenv
+API_KEY_INACTIVITY_DAYS=90
+```
+
+Keys expire after that many days without an authenticated request. Failed provider responses count as
+activity. Never-used keys age from insertion or replacement; existing keys receive a full grace period
+when activity tracking is first installed. Tracking continues with deletion disabled, so enabling the
+policy later can immediately remove already-dormant keys. Cleanup runs at startup and hourly in bounded
+batches on the primary process.
+
+The policy covers server, personal, additional rotation and optional-service API keys. Saved model
+settings remain. An eligible extra rotation key can replace an expired primary automatically. Re-enter a removed key through `/providers` or `/personal providers` to restore service;
+speech selections may also need to be selected again. Host credentials, including Vertex ADC, remain
+under the operator's control.
+
+Database removal does not revoke a key at its provider or erase retained backups. Revoke compromised
+keys through the provider console. Provider-side resources such as created voices can also require
+manual removal after their stored key is cleared. Configure backup retention separately.
+
 ## Database backups and recovery keys
 
 Database bundles contain private data and an inventory of required encryption versions. They do not

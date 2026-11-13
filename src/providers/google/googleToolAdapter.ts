@@ -308,24 +308,11 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
    */
   private extractRelevantData(data: Record<string, unknown>): string | null {
     try {
-      const relevantFields = ["summary", "preview", "selectionReason", "query", "resultLength"];
-      const extractedData: Record<string, unknown> = {};
-
-      for (const field of relevantFields) {
-        if (data[field] !== undefined && data[field] !== null) {
-          extractedData[field] = data[field];
-        }
-      }
-
-      if (Object.keys(extractedData).length === 0) {
+      if (Object.keys(data).length === 0) {
         return null;
       }
 
-      const entries = Object.entries(extractedData)
-        .map(([key, value]) => `${key}: ${String(value)}`)
-        .join(", ");
-
-      return entries.length > 200 ? `${entries.substring(0, 200)}...` : entries;
+      return JSON.stringify(data, null, 2);
     } catch (error) {
       log.warn("Failed to extract relevant data from tool result", error as Error);
       return null;

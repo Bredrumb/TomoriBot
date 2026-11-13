@@ -24,7 +24,7 @@ describe("recording configuration", () => {
       expect(recordingAttachmentsSchema.safeParse(metadata).success).toBe(false);
     }
   });
-  it("fails startup before loading credentials when retention is invalid", async () => {
+  it("rejects startup when retention is invalid", async () => {
     process.env.RECORD_RETENTION_DAYS = "0";
     await expect(startBot()).rejects.toBeInstanceOf(Error);
   });

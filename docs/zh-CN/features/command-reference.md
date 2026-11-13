@@ -297,13 +297,13 @@ TomoriBot 当前注册的全部斜杠指令，由与 Discord 注册所用的同�
 
 ## `/record`
 
-Manage your conversation recordings in this server
+管理你在当前服务器中的对话记录
 
 | 指令 | 摘要 |
 |---|---|
-| `/record data` | View, export or delete your recordings in this server |
-| `/record start` | Save anonymized conversation excerpts in this server whenever you send a message |
-| `/record stop` | Stop collecting excerpts and keep your saved recordings |
+| `/record data` | 查看、导出或删除你在当前服务器中的记录 |
+| `/record start` | 在当前服务器中每当你发送消息时，保存匿名化的对话摘录 |
+| `/record stop` | 停止收集摘录并保留已保存的记录 |
 
 ## `/refresh`
 

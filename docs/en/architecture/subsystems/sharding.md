@@ -72,7 +72,7 @@ accepted provider operation can still complete or incur cost after cancellation.
 ## Background work
 
 The live owner of shard 0 is the primary process. Discord command registration, command catalog
-sync, OpenRouter pricing writes, global STM/OAuth cleanup, message-proxy pruning, metric retention, Natural Nudges pruning,
+sync, OpenRouter pricing writes, global STM/OAuth cleanup, inactive API key cleanup, message-proxy pruning, metric retention, Natural Nudges pruning,
 and preset-art seeding check that predicate before shared side effects. These checks do not provide
 durable exactly-once execution across a crash or primary handover.
 

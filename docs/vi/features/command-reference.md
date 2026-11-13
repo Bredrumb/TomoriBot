@@ -297,13 +297,13 @@ Quản lý đặt lại hạn ngạch tạo sinh.
 
 ## `/record`
 
-Manage your conversation recordings in this server
+Quản lý bản ghi cuộc trò chuyện của bạn trong máy chủ này
 
 | Lệnh | Tóm tắt |
 |---|---|
-| `/record data` | View, export or delete your recordings in this server |
-| `/record start` | Save anonymized conversation excerpts in this server whenever you send a message |
-| `/record stop` | Stop collecting excerpts and keep your saved recordings |
+| `/record data` | Xem, xuất hoặc xóa bản ghi của bạn trong máy chủ này |
+| `/record start` | Lưu trích đoạn cuộc trò chuyện ẩn danh trong máy chủ này mỗi khi bạn gửi tin nhắn |
+| `/record stop` | Dừng thu thập trích đoạn và giữ lại các bản ghi đã lưu của bạn |
 
 ## `/refresh`
 

@@ -10,8 +10,6 @@ import { log } from "@/utils/misc/logger";
 export async function startBot(): Promise<void> {
   config({ quiet: true });
   const environment = resolveEnvironment();
-  const { readRecordingRetentionDays } = await import("@/modules/conversation-recording/config");
-  readRecordingRetentionDays();
   const { getPrivateNetworkStartupError } = await import("@/utils/security/remoteUrlSecurity");
   const privateNetworkError = getPrivateNetworkStartupError();
   if (privateNetworkError) throw new Error(privateNetworkError);

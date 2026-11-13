@@ -1,4 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it, spyOn } from "bun:test";
+import { AnthropicToolAdapter } from "@/providers/anthropic/anthropicToolAdapter";
+import { GoogleToolAdapter } from "@/providers/google/googleToolAdapter";
+import { OpenAICompatibleToolAdapter } from "@/providers/openaiCompatible/openaiCompatibleToolAdapter";
 import { OpenrouterToolAdapter } from "@/providers/openrouter/openrouterToolAdapter";
 import * as braveService from "@/tools/restAPIs/brave/braveSearchService";
 import * as searxngService from "@/tools/restAPIs/searxng/searxngService";
@@ -829,5 +832,44 @@ describe("web_search engine chain", () => {
 
     expect(result.success).toBe(false);
     expect(calls).toHaveLength(0);
+  });
+
+  it("formats up to 20 Brave search results when count is specified and preserves full tool result data across adapters", () => {
+    const response = {
+      type: "search" as const,
+      query: { original: "observatory" },
+      web: {
+        type: "search" as const,
+        results: Array.from({ length: 15 }, (_, index) => ({
+          type: "search_result" as const,
+          title: `Result ${index + 1}`,
+          url: `https://example.invalid/${index + 1}`,
+          description: `Snippet ${index + 1}`,
+        })),
+      },
+    };
+    const defaultFormatted = braveService.formatBraveSearchResults(response, "web");
+    expect(defaultFormatted).toContain("**10. Result 10**");
+    expect(defaultFormatted).not.toContain("**11. Result 11**");
+
+    const expandedFormatted = braveService.formatBraveSearchResults(response, "web", 15);
+    expect(expandedFormatted).toContain("**15. Result 15**");
+
+    const toolResult = {
+      success: true,
+      message: "Web search completed successfully",
+      data: {
+        source: "http",
+        functionName: "brave_web_search",
+        serverName: "http-brave-search",
+        rawResult: { content: expandedFormatted },
+        urlsFound: 15,
+        agentInstructions: `Follow-up tail instruction after 200 chars: ${"calibrate ".repeat(25)}final-directive`,
+      },
+    };
+    expect(String(new GoogleToolAdapter().convertResult(toolResult).text)).toContain("final-directive");
+    expect(new OpenrouterToolAdapter().convertResult(toolResult).content).toContain("final-directive");
+    expect(new OpenAICompatibleToolAdapter("custom").convertResult(toolResult).content).toContain("final-directive");
+    expect(AnthropicToolAdapter.getInstance().convertResult(toolResult).content).toContain("final-directive");
   });
 });

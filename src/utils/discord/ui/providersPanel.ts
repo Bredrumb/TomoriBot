@@ -1,3 +1,4 @@
+import { readApiKeyInactivityDays } from "@/utils/security/apiKeyRetention";
 import {
   ButtonStyle,
   ComponentType,
@@ -1149,10 +1150,14 @@ function buildEntryContent(
   guidance: string,
   availableTextLength: number,
 ): string {
-  let bodyLimit = Math.max(0, availableTextLength - guidance.length);
+  const days = readApiKeyInactivityDays();
+  const missing = entry.credentialMissing
+    ? `${localizer(locale, "commands.providers.credential_missing")}${days === null ? "" : ` ${localizer(locale, "commands.providers.credential_retention", { days })}`}\n\n`
+    : "";
+  let bodyLimit = Math.max(0, availableTextLength - guidance.length - missing.length);
   let content = "";
   for (let attempt = 0; attempt < ENTRY_FIT_ATTEMPTS; attempt++) {
-    content = `${buildEntryBody(locale, entry, routeNamespace, bodyLimit)}${guidance}`;
+    content = `${missing}${buildEntryBody(locale, entry, routeNamespace, bodyLimit)}${guidance}`;
     const overflow =
       measureFormattedPanelTextLength({ type: ComponentType.TextDisplay, content }) - availableTextLength;
     if (overflow <= 0) return content;

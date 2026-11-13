@@ -44,7 +44,7 @@ import {
   parseLorebookSelectiveLogic,
 } from "@/modules/lorebooks/discord/panelSection";
 import { IMPORT_LIMITS } from "@/utils/security/rateLimiter";
-import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
+import { buildExportFilename } from "@/utils/discord/attachmentFilename";
 import { deliverTransferExport } from "@/utils/discord/transferExportDelivery";
 import { safeDownload } from "@/utils/security/safeDownload";
 import type { GlobalInteractionRoute, GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
@@ -2501,7 +2501,11 @@ export function createMemoriesInteractionRoute(
             locale: route.locale,
             dmDescription: exportDetail,
             attachment: new AttachmentBuilder(Buffer.from(JSON.stringify(file, null, 2)), {
-              name: `${sanitizeAttachmentFilenamePart(name, { fallback: "lorebook" })}.json`,
+              name: buildExportFilename({
+                kind: "lorebook",
+                subject: { value: name, fallback: "lorebook" },
+                extension: "json",
+              }),
             }),
             operationLabel: "lorebook",
             sendDirectMessage: (payload) => interaction.user.send(payload),

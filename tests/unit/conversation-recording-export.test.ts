@@ -120,9 +120,9 @@ describe("recording exports", () => {
     if (result.status !== "ready") throw new Error("Expected split export");
     for (const [index, file] of result.files.entries()) {
       const part = parts[index];
-      const stamp = `${part.generatedAt.slice(0, 10)}_${part.generatedAt.slice(11, 19).replaceAll(":", "")}Z`;
+      const stamp = `${part.generatedAt.slice(0, 19).replace(/[-:]/g, "")}Z`;
       expect(file.name).toBe(
-        `tomori-recordings_${stamp}_${part.exportId.slice(0, 8)}_part-${index + 1}-of-${parts.length}.json`,
+        `tomori-recordings-${stamp}-${part.exportId.slice(0, 8)}-part-${index + 1}-of-${parts.length}.json`,
       );
     }
     const exported = parts.flatMap((part) => part.excerpts);
@@ -159,7 +159,7 @@ describe("recording exports", () => {
     const md = await render(windows, "markdown");
     if (md.status !== "ready") throw new Error("Expected Markdown export");
     const text = md.files[0]?.data.toString("utf8") ?? "";
-    expect(md.files[0]?.name).toMatch(/^tomori-recordings_\d{4}-\d{2}-\d{2}_\d{6}Z_[a-f0-9]{8}\.md$/);
+    expect(md.files[0]?.name).toMatch(/^tomori-recordings-\d{8}T\d{6}Z-[a-f0-9]{8}\.md$/);
     expect(text).not.toMatch(/```text\n\s*\n```/u);
     expect(text.match(/### \[SELF\]/g)).toHaveLength(2);
     expect(text).toContain(body);

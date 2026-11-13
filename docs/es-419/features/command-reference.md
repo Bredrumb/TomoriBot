@@ -297,13 +297,13 @@ Administra los reinicios de cuotas de generación.
 
 ## `/record`
 
-Manage your conversation recordings in this server
+Administra las grabaciones de tus conversaciones en este servidor
 
 | Comando | Resumen |
 |---|---|
-| `/record data` | View, export or delete your recordings in this server |
-| `/record start` | Save anonymized conversation excerpts in this server whenever you send a message |
-| `/record stop` | Stop collecting excerpts and keep your saved recordings |
+| `/record data` | Consulta, exporta o elimina tus grabaciones en este servidor |
+| `/record start` | Guarda extractos anonimizados de conversaciones en este servidor cada vez que envíes un mensaje |
+| `/record stop` | Detén la recolección de extractos y conserva tus grabaciones guardadas |
 
 ## `/refresh`
 

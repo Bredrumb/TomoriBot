@@ -785,6 +785,9 @@ export const personalFallbackSettingsSchema = userPersonalizationConfigsSchema.p
 export type PersonalFallbackSettings = z.infer<typeof personalFallbackSettingsSchema>;
 
 const serverModelConfigSchema = z.object({
+  credential_activity_epoch: z.uuid().optional(),
+  credential_created_at: z.date().optional(),
+  credential_last_attempt_at: z.date().nullable().optional(),
   server_id: z.number().int(),
   llm_id: z.number().int().nullable().optional(),
   embedding_model_id: z.number().int().nullable().optional(),
@@ -1556,6 +1559,9 @@ const coerceIntNumber = z.preprocess((value) => {
  * Runtime telemetry lives in api_key_rotation_runtime_state.
  */
 const apiKeyRotationConfigSchema = z.object({
+  credential_activity_epoch: z.uuid().optional(),
+  credential_created_at: z.date().optional(),
+  credential_last_attempt_at: z.date().nullable().optional(),
   rotation_key_id: z.number().optional(),
   server_id: z.number(),
   provider: z.string(),
@@ -1889,6 +1895,8 @@ export type GuildMcpFailureReason = NonNullable<GuildMcpServerRow["failure_reaso
  * One row per provider per server; UPSERT on save.
  */
 export const savedProviderConfigSchema = z.object({
+  credential_created_at: z.date().optional(),
+  credential_last_attempt_at: z.date().nullable().optional(),
   saved_config_id: z.number().optional(),
   server_id: z.number(),
   provider: z.string(),
@@ -1954,6 +1962,8 @@ export type PersonalProviderCapability = z.infer<typeof personalProviderCapabili
  * One row per provider per user; UPSERT on save.
  */
 export const userSavedProviderConfigSchema = z.object({
+  credential_created_at: z.date().optional(),
+  credential_last_attempt_at: z.date().nullable().optional(),
   user_saved_config_id: z.number().optional(),
   user_id: z.number(),
   provider: z.string(),

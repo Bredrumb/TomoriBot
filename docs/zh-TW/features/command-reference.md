@@ -297,13 +297,13 @@ TomoriBot 目前註冊的每一個斜線指令，都是從 Discord 註冊時使�
 
 ## `/record`
 
-Manage your conversation recordings in this server
+管理你在這個伺服器中的對話錄製
 
 | 指令 | 摘要 |
 |---|---|
-| `/record data` | View, export or delete your recordings in this server |
-| `/record start` | Save anonymized conversation excerpts in this server whenever you send a message |
-| `/record stop` | Stop collecting excerpts and keep your saved recordings |
+| `/record data` | 查看、匯出或刪除你在這個伺服器中的錄製內容 |
+| `/record start` | 每當你在這個伺服器發送訊息時，儲存匿名化的對話節錄 |
+| `/record stop` | 停止收集節錄並保留你已儲存的錄製內容 |
 
 ## `/refresh`
 

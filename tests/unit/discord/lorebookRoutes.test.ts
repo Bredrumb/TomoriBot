@@ -435,6 +435,7 @@ describe("lorebook panel routes", () => {
     expect(interaction.followUps).toHaveLength(0);
     const attachment = interaction.directMessages[0]?.files?.[0];
     expect(attachment).toBeInstanceOf(AttachmentBuilder);
+    expect(attachment?.name).toMatch(/^tomori-lorebook-[\w-]+-\d{8}T\d{6}Z\.json$/);
     if (!attachment || !Buffer.isBuffer(attachment.attachment)) throw new Error("Missing export buffer");
     const exported = JSON.parse(attachment.attachment.toString());
     expect(Object.values(exported.entries)).toHaveLength(1);

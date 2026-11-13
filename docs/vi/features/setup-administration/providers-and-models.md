@@ -42,6 +42,8 @@ Mỗi nhà cung cấp có các bước tạo khóa riêng. Trong `/help`, chọn
 Không bao giờ chia sẻ khóa API của bạn với bất kỳ ai khác. Thêm hoặc thay thế mã thông báo xác thực Bearer của điểm cuối tùy chỉnh từ hành động `Sửa endpoint` của nó trong `/providers`.
 :::
 
+Người vận hành có thể bật tính năng tự động xóa các API key không sử dụng. Nếu cấu hình đã lưu bị mất khóa, hãy dùng **Sửa** trong `/providers` hoặc `/personal providers` để thêm lại. Cài đặt model đã lưu vẫn được giữ nguyên. Việc xóa khóa đã lưu không thu hồi khóa đó tại nhà cung cấp hoặc xóa các bản sao trong bản sao lưu.
+
 Vertex AI xác thực bằng Thông tin xác thực mặc định của ứng dụng (ADC) thay vì bí mật được lưu trữ. Đối với lưu trữ cục bộ, ADC có thể đến từ `gcloud`; triển khai được lưu trữ trên máy chủ nên sử dụng danh tính khối lượng công việc hoặc tài khoản dịch vụ. Chỉ riêng khóa AI Studio API không thể xác thực toàn bộ Vertex AI. Dự án Google Cloud đã chọn phải có tính năng thanh toán và bật Vertex AI API, đồng thời danh tính máy chủ cần có quyền truy cập Vertex. Người host TomoriBot có thể giới hạn Vertex AI cho một số máy chủ và người dùng nhất định; những trường hợp còn lại được yêu cầu chọn nhà cung cấp khác. Hướng dẫn thiết lập có sẵn từ Google Vertex AI trên trang `API Keys` trong `/help`.
 
 Quá trình thiết lập Google Gemini và Vertex AI xác thực thông tin đăng nhập qua endpoint liệt kê model đã được xác thực, còn Vertex AI Express xác thực khóa API bằng `countTokens`, vì vậy quá trình thiết lập không bao giờ tạo văn bản.

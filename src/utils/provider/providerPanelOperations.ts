@@ -1,3 +1,5 @@
+import { withProviderUsageContext } from "@/utils/provider/providerUsage";
+import { withStoredCredentialUsage } from "@/utils/security/apiKeyRetention";
 import {
   registerHostedSpeechModelForScope,
   registerHostedTranscriptionModelForScope,
@@ -750,6 +752,10 @@ function buildEndpointEntries(
     return {
       id: `endpoint:${representativeId}`,
       kind: "endpoint",
+      credentialMissing: sortedConnections.some(
+        (connection) =>
+          connection.requires_auth && !savedConfigs.get(buildCustomProviderName(connection.connection_id))?.api_key,
+      ),
       displayName: sortedConnections[0]?.label ?? `Endpoint ${representativeId}`,
       savedAt: newestDate(sortedConnections.map((connection) => connection.updated_at ?? connection.created_at)),
       connectionIds,
@@ -875,6 +881,7 @@ export async function loadServerProviderPanelScope(
           kind: "provider",
           provider,
           rotationKeyCount,
+          credentialMissing: !config.api_key,
           displayName: getProviderDisplayName(provider),
           savedAt: config.updated_at ?? config.saved_at ?? null,
           capabilities,
@@ -963,6 +970,7 @@ async function loadPersonalProviderPanelScope(
           kind: "provider",
           provider,
           rotationKeyCount: 0,
+          credentialMissing: !config.api_key,
           displayName: getProviderDisplayName(provider),
           savedAt: config.updated_at ?? config.saved_at ?? null,
           capabilities: await buildCuratedCapabilities(provider, config, modelContext),
@@ -1635,7 +1643,7 @@ async function isModelRejectedByCatalog(
     if (!saved?.api_key) return false;
     // Decryption is itself a database round trip, so a retired pool connection can fail it too.
     const apiKey = await decryptApiKey(saved.api_key, saved.key_version);
-    return (await checkModel(apiKey, codeName)) === false;
+    return (await withStoredCredentialUsage(saved.api_key, apiKey, () => checkModel(apiKey, codeName))) === false;
   } catch (error) {
     await reportModelLookupFailure(provider, error);
     return false;
@@ -2026,12 +2034,16 @@ async function editServerEndpoint(input: EditEndpointInput): Promise<EditEndpoin
 
   if (changesUrl) {
     for (const connection of group) {
-      const credential = authToken || (await loadCustomConnectionCredential(connection));
-      const reachable = await validateCustomEndpointReachability({
-        apiStyle: connection.api_style,
-        endpointUrl,
-        apiKey: credential,
-      });
+      const credential = authToken
+        ? { apiKey: authToken, usageContext: undefined }
+        : await loadCustomConnectionCredential(connection);
+      const reachable = await withProviderUsageContext(credential?.usageContext, () =>
+        validateCustomEndpointReachability({
+          apiStyle: connection.api_style,
+          endpointUrl,
+          apiKey: credential?.apiKey,
+        }),
+      );
       if (!reachable.ok) {
         log.warn(
           `Custom endpoint update failed reachability (${connection.api_style}): ${reachable.reason.slice(0, 200)}`,
@@ -2053,11 +2065,16 @@ async function editServerEndpoint(input: EditEndpointInput): Promise<EditEndpoin
       // different server in one submit still records the new server's backend.
       const [textConnection] = textConnections;
       if (!textConnection) return { status: "handoff-unsupported" };
-      backend = await detectVramHandoffBackend({
-        apiStyle: textConnection.api_style,
-        endpointUrl: changesUrl ? endpointUrl : textConnection.endpoint_url,
-        apiKey: authToken || (await loadCustomConnectionCredential(textConnection)),
-      });
+      const credential = authToken
+        ? { apiKey: authToken, usageContext: undefined }
+        : await loadCustomConnectionCredential(textConnection);
+      backend = await withProviderUsageContext(credential?.usageContext, () =>
+        detectVramHandoffBackend({
+          apiStyle: textConnection.api_style,
+          endpointUrl: changesUrl ? endpointUrl : textConnection.endpoint_url,
+          apiKey: credential?.apiKey,
+        }),
+      );
       if (!backend) return { status: "handoff-unsupported" };
     }
     vramHandoff = { connectionIds: textConnections.map((connection) => connection.connection_id), backend };

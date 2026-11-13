@@ -3,6 +3,7 @@ import type { Embed } from "discord.js";
 import { extractPluralKitReplyTarget, isPluralKitReplyEmbed } from "@/utils/messageProxy/services/pluralkit/replyEmbed";
 import { processLinkEmbed } from "@/utils/discord/embedClassifier";
 import { findReplyContextTargetInMessage } from "@/utils/chat/contextAnnotations";
+import { processEmbedsFromMessage } from "@/utils/chat/contextEmbeds";
 
 const CHANNEL_ID = "111111111111111111";
 const MESSAGE_ID = "222222222222222222";
@@ -75,14 +76,36 @@ describe("PluralKit reply embed in the context pipeline", () => {
     });
   });
 
-  it("leaves genuine link previews intact", () => {
+  it("leaves genuine link previews intact with full descriptions past 500 characters and field content", () => {
+    const longDescription = `${"Detailed field report on the northern observatory calibration. ".repeat(10)}Final conclusion: the telescope mirror alignment drifted by 0.42 arcseconds.`;
+    expect(longDescription.length).toBeGreaterThan(500);
     const embed = pluralKitReplyEmbed({
       author: { name: "Example News" },
       title: "Headline",
-      description: "Some article summary",
+      description: longDescription,
+      fields: [{ name: "Instrument", value: "Primary spectrograph", inline: false }],
     } as unknown as Partial<Embed>);
     const result = processLinkEmbed(embed);
     expect(result.isLinkPreview).toBe(true);
     expect(result.textContent).toContain("Headline");
+    expect(result.textContent).toContain(
+      "Final conclusion: the telescope mirror alignment drifted by 0.42 arcseconds.",
+    );
+    expect(result.textContent).toContain("Instrument: Primary spectrograph");
+    expect(result.textContent).not.toContain("...");
+
+    const liveContext = processEmbedsFromMessage({
+      embeds: [embed],
+      content: "Check out this article",
+      imageAttachments: [],
+      isTomoriAuthoredMessage: false,
+      selfDebugEnabled: false,
+      tomoriNickname: "Mirri",
+    });
+    expect(liveContext.content).toContain(
+      "Final conclusion: the telescope mirror alignment drifted by 0.42 arcseconds.",
+    );
+    expect(liveContext.content).toContain("Instrument: Primary spectrograph");
+    expect(liveContext.content).not.toContain("...");
   });
 });

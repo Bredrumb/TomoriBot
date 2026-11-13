@@ -155,9 +155,7 @@ export function consumePendingBoomerang(channelId: string): PendingBoomerang | u
 export function buildBoomerangContext(boomerang: PendingBoomerang): StructuredContextItem[] {
   let messagesBlock = "";
   if (boomerang.targetChannelMessages.length > 0) {
-    const formatted = boomerang.targetChannelMessages.map((m) => `"${m.author}: ${m.content}"`).join("\n");
-    // Truncate if total exceeds ~1500 chars to stay within reasonable context size
-    messagesBlock = formatted.length > 1500 ? `${formatted.substring(0, 1497)}...` : formatted;
+    messagesBlock = boomerang.targetChannelMessages.map((m) => `"${m.author}: ${m.content}"`).join("\n");
   }
 
   const resultStr = boomerang.success ? "Success" : `Failed: ${boomerang.error ?? "unknown error"}`;

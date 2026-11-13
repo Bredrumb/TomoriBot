@@ -3,6 +3,7 @@ import type { UserSavedProviderConfigRow } from "@/types/db/schema";
 import * as realRepositories from "@/utils/db/repositories";
 import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
 import * as realCrypto from "@/utils/security/crypto";
+import * as retention from "@/utils/db/repositories/ApiKeyRetentionRepository";
 import { getResolvedCapabilityModelId, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
 import { savedProviderConfigSchema } from "@/types/db/schema";
 import { createLlmRow, createServerConfig } from "../../helpers/fixtures";
@@ -46,7 +47,13 @@ function makeSavedProviderConfigRow(
 const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/db/repositories": realRepositories,
   "@/utils/security/crypto": realCrypto,
+  "@/utils/db/repositories/ApiKeyRetentionRepository": retention,
 });
+
+scopedMock.module("@/utils/db/repositories/ApiKeyRetentionRepository", () => ({
+  ...retention,
+  loadCredentialActivityReferences: async () => [],
+}));
 
 scopedMock.module("@/utils/security/crypto", () => ({
   ...realCrypto,

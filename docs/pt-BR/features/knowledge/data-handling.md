@@ -19,14 +19,15 @@ Esta página aborda os controles do usuário no Discord. Em instâncias auto-hos
 - Definições de configuração do servidor
 - Chaves API do provedor criptografadas
 - Metadados de expressão, regras de acesso de persona e mídia de expressão carregada
+- [Gravações de conversa](/features/setup-administration/conversation-recordings/) opcionais, incluindo mensagens ao redor quando selecionado
 
 ### Não armazenado
 
-- Histórico de mensagens Discord (as mensagens não são arquivadas em um log de mensagens persistente)
+- Bytes de mídia, nomes de arquivos e URLs de anexos de gravações de conversa; apenas os metadados de tipo/quantidade de anexos são salvos.
 
 ### Enviado para seus provedores de IA
 
-Sempre que acionado, TomoriBot busca mensagens recentes no canal junto com memórias relevantes como contexto para o modelo. Ela não lê nem processa mensagens fora desses gatilhos.
+Sempre que acionado, TomoriBot busca mensagens recentes no canal junto com memórias relevantes como contexto para o modelo. A gravação de conversas opcional também lê mensagens elegíveis independentemente de gatilhos de resposta; ela não faz chamadas automáticas de provedor.
 
 Quando um modelo de embedding está configurado, o provedor dele recebe a mensagem mais recente e o texto de documentos e memórias pesquisado. Este pode ser um provedor diferente daquele que escreve as respostas. Memórias pessoais ocultas por configurações de privacidade ficam fora da busca. Os dados de busca são excluídos junto com a respectiva memória; consulte [Decaimento de memória](/features/knowledge/memory/memory-decay/) para saber mais sobre o repouso e a substituição automáticos.
 
@@ -47,7 +48,9 @@ As exportações de configuração incluem essas definições sem chaves de API 
 
 ## Exporte Seus Dados
 
-Os dados exportáveis são entregues aos seus DMs como um arquivo JSON:
+As gravações de conversa usam `/record data` para anexos privados em Markdown ou JSON no servidor atual. As regras de intervalo, retenção e exclusão estão no [guia de gravação](/features/setup-administration/conversation-recordings/).
+
+As exportações de configurações e memórias são entregues em suas DMs como um arquivo JSON, para que suas DMs mantenham uma cópia que você possa restaurar mais tarde. Se o TomoriBot não puder enviar uma DM para você, o arquivo será anexado a uma resposta privada; salve-o antes que a resposta desapareça.
 
 - `/export config`: valores de configuração do servidor (exclui chaves e credenciais API).
 - `/export personal config`: configurações de perfil pessoal (privacidade, tags de aparência, nomenclatura).
@@ -71,6 +74,7 @@ Anexe um arquivo exportado para restaurá-lo:
 
 Estas ações removem ou redefinem permanentemente os dados armazenados:
 
+- `/record data`: exclua os trechos de gravação do seu servidor atual após confirmação; interrompa a coleta separadamente com `/record stop`.
 - `/personal memories`: gerencie ou remova memórias pessoais.
 - `/memories`: gerencie ou remova memórias do servidor, documentos e lorebooks. Documentos e lorebooks
   exigem `Gerenciar Servidor`. Com o ensino por membros ativado, os membros podem ver, editar ou remover

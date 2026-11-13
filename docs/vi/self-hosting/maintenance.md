@@ -27,6 +27,30 @@ Lệnh `bun run backup` trên máy chủ cần `pg_dump`, và `bun run restore-b
 
 Đối với avatar cục bộ, hãy giữ lại các webhook do TomoriBot quản lý: việc xóa chúng sẽ khiến bot không thể chỉnh sửa các tin nhắn webhook cũ hơn.
 
+## Dọn dẹp API key không hoạt động
+
+Đặt `API_KEY_INACTIVITY_DAYS` thành một số nguyên dương và khởi động lại bot để bật tính năng dọn dẹp
+thông tin xác thực trong cơ sở dữ liệu. Để trống để tắt tính năng xóa. Ví dụ:
+
+```dotenv
+API_KEY_INACTIVITY_DAYS=90
+```
+
+Các khóa sẽ hết hạn sau từng đó ngày mà không có yêu cầu xác thực nào. Các phản hồi thất bại từ nhà cung cấp vẫn được tính
+là hoạt động. Các khóa chưa từng được sử dụng sẽ tính tuổi từ thời điểm thêm vào hoặc thay thế; các khóa hiện có nhận toàn bộ khoảng thời gian
+gia hạn khi tính năng theo dõi hoạt động được cài đặt lần đầu. Việc theo dõi vẫn tiếp tục khi tính năng xóa bị tắt, vì vậy việc bật
+chính sách sau đó có thể xóa ngay các khóa đã ngừng hoạt động từ trước. Quá trình dọn dẹp chạy khi khởi động và hằng giờ theo các đợt
+có giới hạn trên tiến trình chính.
+
+Chính sách này áp dụng cho các API key của máy chủ, cá nhân, khóa xoay vòng bổ sung và dịch vụ tùy chọn. Cài đặt model
+đã lưu vẫn được giữ nguyên. Một khóa xoay vòng bổ sung đủ điều kiện có thể tự động thay thế khóa chính đã hết hạn. Hãy nhập lại khóa đã bị xóa qua `/providers` hoặc `/personal providers` để khôi phục dịch vụ;
+các lựa chọn giọng nói cũng có thể cần phải được chọn lại. Thông tin xác thực của máy chủ lưu trữ, bao gồm cả Vertex ADC, vẫn nằm
+dưới quyền kiểm soát của người vận hành.
+
+Việc xóa khỏi cơ sở dữ liệu không thu hồi khóa tại nhà cung cấp của khóa đó hoặc xóa các bản sao lưu đã giữ lại. Hãy thu hồi các khóa
+bị xâm phạm thông qua bảng điều khiển của nhà cung cấp. Tài nguyên phía nhà cung cấp như giọng nói đã tạo cũng có thể yêu cầu
+xóa thủ công sau khi khóa đã lưu của chúng bị xóa sạch. Hãy cấu hình việc lưu trữ bản sao lưu một cách riêng biệt.
+
 ## Sao lưu cơ sở dữ liệu và khóa khôi phục
 <!-- anchor: database-backups-and-recovery-keys -->
 
@@ -44,6 +68,30 @@ Sao lưu riêng thư mục `data/` cục bộ, bao gồm avatar, mẫu giọng n
 Trong môi trường phi production, quá trình khởi động sẽ tạo bản sao lưu cơ sở dữ liệu khi phiên bản bot thay đổi hoặc bản sao lưu mới nhất đã cũ ít nhất `TOMORI_AUTO_BACKUP_INTERVAL_HOURS` (mặc định là 24 giờ). Hệ thống giữ lại `TOMORI_AUTO_BACKUP_MAX` bản sao lưu (mặc định là 5 bản); đặt `TOMORI_AUTO_BACKUP_ENABLED=false` để tắt tính năng này. Các bản sao lưu này không bao gồm media hoặc khóa mã hóa.
 
 Các bundle cũ hơn có thể chứa secret trong `config.env`. Quá trình khôi phục không nạp tệp này; hãy tự kiểm tra riêng tư và cung cấp các khóa bắt buộc thông qua nguồn secret thông thường của bạn.
+
+## Lưu trữ bản ghi cuộc trò chuyện
+<!-- anchor: conversation-recording-storage -->
+
+[Bản ghi cuộc trò chuyện](/features/setup-administration/conversation-recordings/) lưu trữ các trích đoạn máy chủ tự nguyện tham gia vào cơ sở
+dữ liệu của bạn. Chế độ tin nhắn xung quanh có thể bao gồm những người tham gia khác. Hãy bảo vệ quyền truy cập cơ sở dữ liệu và
+các bản sao lưu như dữ liệu cuộc trò chuyện riêng tư; việc thay thế danh tính không làm cho văn bản trở nên ẩn danh.
+
+Để các trích đoạn đã lưu hết hạn theo thời gian, hãy đặt `RECORD_RETENTION_DAYS` thành một số nguyên dương, ví dụ
+`RECORD_RETENTION_DAYS=30`, trong môi trường bot và khởi động lại tất cả các instance. Không đặt biến này
+để không hết hạn theo thời gian. Các giá trị trống, bằng không, số âm, phân số hoặc không hợp lệ sẽ không vượt qua bước xác thực
+khi khởi động. Sử dụng cùng một giá trị trên các instance dùng chung cơ sở dữ liệu.
+
+Giới hạn áp dụng cho cả trích đoạn hiện có và trích đoạn mới, được tính từ dấu thời gian kích hoạt.
+Các thao tác đọc và ghi sẽ thực thi việc hết hạn; quá trình dọn dẹp trên tiến trình chính chạy các đợt có giới hạn mỗi phút.
+Quá trình dọn dẹp vật lý có thể mất nhiều đợt. Thời lượng thu thập chỉ kiểm soát thời điểm dừng ghi.
+Hạn ngạch hợp lý 100 MiB cho mỗi chủ sở hữu trên các máy chủ vẫn áp dụng khi tắt tính năng hết hạn theo thời gian và có thể
+xóa các trích đoạn hoàn chỉnh cũ nhất sớm hơn. Mức sử dụng cơ sở dữ liệu/chỉ mục vật lý có thể khác với hạn ngạch đó.
+
+Các bản sao lưu cơ sở dữ liệu bao gồm dữ liệu bản ghi. Việc lưu trữ trực tiếp, cắt tỉa quyền riêng tư và xóa bỏ không ghi lại
+các bundle sao lưu hoặc bản xuất đã tải xuống. Hãy đặt vòng đời sao lưu riêng biệt, bảo vệ các bản sao khôi phục và
+xem xét lại dữ liệu đã khôi phục trước khi mở lại bot: các thao tác xóa nguồn bị bỏ lỡ không thể tái tạo lại từ
+các sự kiện gateway. Các bản xuất bản ghi là trích đoạn nguồn và không thể khôi phục cơ sở dữ liệu. Xem
+[hợp đồng kiến trúc](/architecture/subsystems/conversation-recording/) để biết về quyền sở hữu vòng đời.
 
 ## Xoay vòng khóa mã hóa
 <!-- anchor: rotating-encryption-keys -->

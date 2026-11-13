@@ -6,6 +6,7 @@ import type {
   RecordingRange,
   RecordingScope,
 } from "@/modules/conversation-recording/db/types";
+import { buildExportFilename } from "@/utils/discord/attachmentFilename";
 import { localizer } from "@/utils/text/localizer";
 
 // Exports stop at 16 MiB or 4096 excerpts; larger downloads need streaming before these ceilings increase.
@@ -110,8 +111,9 @@ export async function buildRecordingExport(options: {
     })),
   }));
   const exportId = randomUUID();
-  const generatedAt = new Date().toISOString();
-  const filename = `tomori-recordings_${generatedAt.slice(0, 10)}_${generatedAt.slice(11, 19).replaceAll(":", "")}Z_${exportId.slice(0, 8)}`;
+  const generatedAtDate = new Date();
+  const generatedAt = generatedAtDate.toISOString();
+  const shortExportId = exportId.slice(0, 8);
   const range = {
     from: options.range.from.toISOString(),
     until: options.range.until.toISOString(),
@@ -157,7 +159,13 @@ export async function buildRecordingExport(options: {
   }
   if (group.length) groups.push(group);
   const files = groups.map((entries, index) => ({
-    name: `${filename}${groups.length > 1 ? `_part-${index + 1}-of-${groups.length}` : ""}.${options.format === "json" ? "json" : "md"}`,
+    name: buildExportFilename({
+      kind: "recordings",
+      shortId: shortExportId,
+      part: groups.length > 1 ? { index: index + 1, total: groups.length } : undefined,
+      extension: options.format === "json" ? "json" : "md",
+      now: generatedAtDate,
+    }),
     data: Buffer.from(render(entries, index + 1, groups.length), "utf8"),
   }));
   if (files.reduce((sum, file) => sum + file.data.length, 0) > RECORDING_EXPORT_OUTPUT_BYTES)

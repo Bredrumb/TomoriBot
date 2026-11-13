@@ -27,6 +27,33 @@ TomoriBot aplica las migraciones de base de datos pendientes al iniciar. Algunas
 
 Para avatares locales, conserva los webhooks administrados de TomoriBot: eliminarlos impide que el bot edite mensajes de webhook más antiguos.
 
+## Limpieza de claves de API inactivas
+
+Establece `API_KEY_INACTIVITY_DAYS` en un número entero positivo y reinicia el bot para habilitar la
+limpieza de credenciales en la base de datos. Déjalo sin definir para desactivar la eliminación. Por ejemplo:
+
+```dotenv
+API_KEY_INACTIVITY_DAYS=90
+```
+
+Las claves vencen tras esa cantidad de días sin una solicitud autenticada. Las respuestas fallidas del
+proveedor cuentan como actividad. Las claves que nunca se usaron envejecen desde su inserción o reemplazo;
+las claves existentes reciben un período de gracia completo cuando se instala el seguimiento de actividad
+por primera vez. El seguimiento continúa con la eliminación desactivada, por lo que habilitar la política
+más adelante puede eliminar de inmediato claves que ya estaban inactivas. La limpieza se ejecuta al iniciar
+y cada hora en lotes limitados en el proceso principal.
+
+La política cubre claves de API del servidor, personales, de rotación adicional y de servicios opcionales.
+Los ajustes de modelos guardados se conservan. Una clave de rotación adicional apta puede reemplazar a una
+principal vencida automáticamente. Vuelve a ingresar una clave eliminada mediante `/providers` o `/personal providers`
+para restaurar el servicio; es posible que las selecciones de voz también deban elegirse de nuevo. Las credenciales
+del host, incluido Vertex ADC, permanecen bajo el control del operador.
+
+La eliminación de la base de datos no revoca una clave en su proveedor ni borra copias de seguridad conservadas.
+Revoca las claves comprometidas mediante la consola del proveedor. Los recursos en el proveedor, como las voces
+creadas, también pueden requerir eliminación manual después de borrar su clave almacenada. Configura la retención
+de copias de seguridad por separado.
+
 ## Copias de seguridad de la base de datos y claves de recuperación
 <!-- anchor: database-backups-and-recovery-keys -->
 
@@ -44,6 +71,32 @@ Haz una copia de seguridad del directorio local `data/` por separado, incluyendo
 En entornos que no son de producción, el inicio crea una copia de seguridad de la base de datos cuando la versión del bot cambia o la última copia de seguridad tiene al menos `TOMORI_AUTO_BACKUP_INTERVAL_HOURS` de antigüedad (24 horas por defecto). Conserva `TOMORI_AUTO_BACKUP_MAX` copias de seguridad (5 por defecto); establece `TOMORI_AUTO_BACKUP_ENABLED=false` para desactivar esto. Estas copias de seguridad no incluyen archivos multimedia ni claves de cifrado.
 
 Los paquetes más antiguos pueden contener secretos en `config.env`. La restauración no lo carga; revísalo en privado y proporciona las claves requeridas a través de tu fuente habitual de secretos.
+
+## Almacenamiento de grabaciones de conversaciones
+<!-- anchor: conversation-recording-storage -->
+
+Las [grabaciones de conversaciones](/features/setup-administration/conversation-recordings/) almacenan extractos del servidor
+con consentimiento en tu base de datos. El modo de mensajes circundantes puede incluir a otros participantes. Protege el acceso a
+la base de datos y a las copias de seguridad como datos de conversaciones privadas; el reemplazo de identidad no hace que el texto
+sea anónimo.
+
+Para hacer vencer los extractos guardados por antigüedad, establece `RECORD_RETENTION_DAYS` en un número entero positivo, por ejemplo
+`RECORD_RETENTION_DAYS=30`, en el entorno del bot y reinicia todas las instancias. Deja la variable ausente para no tener vencimiento
+por antigüedad. Los valores vacíos, cero, negativos, fraccionarios o no válidos fallarán en la validación al iniciar. Usa el mismo
+valor en todas las instancias que compartan una base de datos.
+
+El límite se aplica tanto a los extractos existentes como a los nuevos, medido desde la marca de tiempo de activación. Las lecturas
+y escrituras aplican el vencimiento; la limpieza en el proceso principal ejecuta lotes limitados cada minuto. La limpieza física puede
+tomar varios lotes. La duración de la recolección solo controla cuándo se detiene la captura. La cuota lógica de 100 MiB por propietario
+en todos los servidores se sigue aplicando cuando el vencimiento por antigüedad está desactivado y puede eliminar extractos completos
+más antiguos antes. El uso físico de la base de datos y los índices puede diferir de esa cuota.
+
+Las copias de seguridad de la base de datos incluyen los datos de las grabaciones. La retención en vivo, la depuración por privacidad
+y la eliminación no reescriben los paquetes de copias de seguridad ni las exportaciones descargadas. Establece un ciclo de vida de
+copias de seguridad independiente, protege las copias de recuperación y revisa los datos restaurados antes de reabrir el bot: las
+eliminaciones en el origen perdidas no se pueden reconstruir a partir de eventos del gateway. Las exportaciones de grabaciones son
+extractos de origen y no pueden restaurar la base de datos. Consulta el [contrato de arquitectura](/architecture/subsystems/conversation-recording/)
+para la propiedad del ciclo de vida.
 
 ## Rotación de claves de cifrado
 <!-- anchor: rotating-encryption-keys -->

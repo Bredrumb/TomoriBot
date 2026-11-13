@@ -20,12 +20,15 @@ export interface ContextBudget {
  * Resolves the budget the live pipeline truncates against, or null for a provider whose window
  * TomoriBot does not know (truncation is then skipped).
  */
-export async function resolveContextBudget(tomoriState: TomoriState): Promise<ContextBudget | null> {
+export async function resolveContextBudget(
+  tomoriState: TomoriState,
+  refreshLiveLimits = true,
+): Promise<ContextBudget | null> {
   if (providerUsesApiFamily(tomoriState.llm.llm_provider, "novelai")) {
     return null;
   }
 
-  const limits = await resolveModelLimits(tomoriState);
+  const limits = await resolveModelLimits(tomoriState, refreshLiveLimits);
   if (!limits.contextWindow) return null;
   // Reserve exactly what the request builder sends: over-reserving drops history that would have fit.
   // The one exception is an OpenRouter model with no known ceiling, whose request omits max_tokens:

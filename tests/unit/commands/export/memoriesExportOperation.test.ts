@@ -190,7 +190,7 @@ describe("memory export operation", () => {
     expect(calls.workspaceReads).toEqual([{ serverDiscId: GUILD_ID, scope: { mode: "main" } }]);
     expect(calls.personalReads).toEqual([]);
     const deliveredFile = calls.deliveries[0]?.files[0];
-    expect(deliveredFile?.name).toMatch(/^tomori-juno_lounge-server-memories-\d{13}\.json$/);
+    expect(deliveredFile?.name).toMatch(/^tomori-memories-server-juno_lounge-\d{8}T\d{6}Z\.json$/);
     expect(deliveredFile?.name).not.toContain(GUILD_ID);
     expect(deliveredFile?.name).not.toContain(ACTOR_ID);
     expect(JSON.parse(deliveredFile?.attachment.toString("utf8") ?? "{}")).toEqual(WORKSPACE_MEMORIES_EXPORT);

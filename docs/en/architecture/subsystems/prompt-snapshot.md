@@ -33,6 +33,8 @@ Inspection fetches raw history independently, then uses the live channel's histo
 reset slicing. This read does not create, advance, invalidate, or renew the anchor. Budget
 truncation shares the live stride rule and preserves the tail-slot facts and their prefix boundary.
 
+Inspection uses cached model limits and subscription facts, so opening a snapshot does not send authenticated provider lookups or renew credential activity. A cold NovelAI subscription cache makes fitted inspection unavailable until a normal request populates it.
+
 NovelAI inspection uses native context captured before preset reassembly, the resolved personal or
 server credential, and the saved response prefill. It runs the provider's allowlist, renderer, and
 exact fitter without selecting a rotation key. Both formats include the final flat prompt and a

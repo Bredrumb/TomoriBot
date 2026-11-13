@@ -1,3 +1,4 @@
+import { storedCredentialUsageContext } from "@/utils/security/apiKeyRetention";
 import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 import { readOpenRouterLimitResponse } from "@/providers/openrouter/openrouterLimit";
 import {
@@ -98,25 +99,30 @@ export class OpenRouterEngine implements WebSearchEngine {
       signal.throwIfAborted();
 
       const model = context.tomoriState.llm.llm_codename;
-      const response = await withProviderUsageContext(context.usageContext, async () =>
-        fetchWithProviderRequest(SEARCH_ENDPOINT, {
-          method: "POST",
-          redirect: "error",
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-            ...buildOpenRouterAttributionHeaders(),
-          },
-          body: JSON.stringify({
-            ...(model !== "other-model" ? { model } : {}),
-            stream: false,
-            // The plugin attaches excerpts independently of completion length, so one token avoids paying for synthesis.
-            plugins: [{ id: "web", engine: "exa", max_results: boundedCount }],
-            max_tokens: 1,
-            messages: [{ role: "user", content: `List search results for: ${searchQuery}` }],
+      const requestUsage =
+        owner || !encryptedKey ? context.usageContext : await storedCredentialUsageContext(encryptedKey, apiKey);
+      const response = await withProviderUsageContext(
+        context.usageContext,
+        async () =>
+          fetchWithProviderRequest(SEARCH_ENDPOINT, {
+            method: "POST",
+            redirect: "error",
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
+              ...buildOpenRouterAttributionHeaders(),
+            },
+            body: JSON.stringify({
+              ...(model !== "other-model" ? { model } : {}),
+              stream: false,
+              // The plugin attaches excerpts independently of completion length, so one token avoids paying for synthesis.
+              plugins: [{ id: "web", engine: "exa", max_results: boundedCount }],
+              max_tokens: 1,
+              messages: [{ role: "user", content: `List search results for: ${searchQuery}` }],
+            }),
+            signal,
           }),
-          signal,
-        }),
+        requestUsage?.storedCredentialActivity,
       );
 
       if (!response.ok) {

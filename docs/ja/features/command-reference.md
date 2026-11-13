@@ -297,13 +297,13 @@ Discordチャンネルを双方向リレーでMatrixルームにリンクしま�
 
 ## `/record`
 
-Manage your conversation recordings in this server
+このサーバーでの会話の記録を管理します
 
 | コマンド | 概要 |
 |---|---|
-| `/record data` | View, export or delete your recordings in this server |
-| `/record start` | Save anonymized conversation excerpts in this server whenever you send a message |
-| `/record stop` | Stop collecting excerpts and keep your saved recordings |
+| `/record data` | このサーバーでの記録の確認、エクスポート、削除を行います |
+| `/record start` | メッセージを送信するたびに、このサーバーで匿名化された会話の抜粋を保存します |
+| `/record stop` | 抜粋の収集を停止します。保存済みの記録は保持されます |
 
 ## `/refresh`
 

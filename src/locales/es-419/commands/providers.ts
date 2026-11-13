@@ -3,6 +3,10 @@ export default {
     description: `Agrega, edita y elimina credenciales, endpoints y catálogos de modelos de proveedores.`,
     title: `Proveedores del servidor`,
     personal_title: `Proveedores personales`,
+    credential_missing:
+      "No tengo una clave de API para esta configuración guardada. Usa **Editar** para agregarla de nuevo.",
+    credential_retention:
+      "Esta instalación elimina las claves guardadas después de {days} días sin solicitudes autenticadas.",
     selector_guidance:
       "**Selecciona** o **agrega** un proveedor o punto de conexión usando el menú desplegable a continuación.",
     select_placeholder: `Elige un proveedor, punto de conexión o acción...`,

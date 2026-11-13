@@ -1,5 +1,17 @@
 import { getCachedNovelAISubscription, refreshNovelAISubscription } from "@/utils/cache/novelaiSubscriptionCache";
 import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
+import { decryptApiKey } from "@/utils/security/crypto";
+import { withStoredCredentialUsage } from "@/utils/security/apiKeyRetention";
+
+export async function getStoredNovelAIModelAccessError(
+  model: string,
+  ciphertext: Buffer | null,
+  keyVersion: number,
+): Promise<string | null> {
+  if (!ciphertext) return getNovelAIModelAccessError(model, null);
+  const apiKey = await decryptApiKey(ciphertext, keyVersion);
+  return withStoredCredentialUsage(ciphertext, apiKey, () => getNovelAIModelAccessError(model, apiKey));
+}
 
 export async function getNovelAIModelAccessError(
   model: string,

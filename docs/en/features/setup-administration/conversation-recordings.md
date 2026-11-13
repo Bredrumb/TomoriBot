@@ -3,10 +3,11 @@ title: "Conversation recordings"
 description: "Save excerpts around your server messages and privately export or delete your recordings."
 sidebar:
   order: 5
-aiGenerated: true
 ---
 
-By default, TomoriBot does not save your messages. Conversation recordings is an opt-in feature that saves excerpts around your own server messages for your personal use only, with structured Discord identities replaced by placeholders before storage (free text and external links can still identify people).
+Conversation recordings is an opt-in feature that saves excerpts around your own server messages for your personal use only, with structured Discord identities replaced by placeholders before storage (free text and external links can still identify people).
+
+**By default, TomoriBot does not save your messages, recording is optional per-user for their own personal use only, and starts only after you confirm the `/record` command. TomoriBot does not automatically build personas, make AI-provider calls, or feed any training pipeline with these excerpts.**
 
 ## What it is used for
 
@@ -14,8 +15,6 @@ By default, TomoriBot does not save your messages. Conversation recordings is an
 - Reviewing past discussions with timestamps, message order, and reply links.
 - Reviewing your own writing style to draft persona notes or prompts offline.
 - Exporting structured Markdown or JSON transcripts for your own offline use.
-
-Recording is optional, starts only after you confirm, and does not automatically build personas, make AI-provider calls, or feed any training pipeline.
 
 ## Start and stop recording
 

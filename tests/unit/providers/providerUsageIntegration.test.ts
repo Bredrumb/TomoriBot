@@ -1,4 +1,5 @@
 import * as realCrypto from "@/utils/security/crypto";
+import * as retention from "@/utils/db/repositories/ApiKeyRetentionRepository";
 import { stubGlobalFetch } from "../../helpers/fetchStub";
 import { OpenRouterLimitError } from "@/providers/openrouter/openrouterLimit";
 import { afterEach, beforeAll, describe, expect, mock, spyOn, test } from "bun:test";
@@ -71,7 +72,12 @@ const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/security/userRemoteFetch": realRemoteFetch,
   "@/utils/image/imageExtractor": realImages,
   "@/utils/security/crypto": realCrypto,
+  "@/utils/db/repositories/ApiKeyRetentionRepository": retention,
 });
+scopedMock.module("@/utils/db/repositories/ApiKeyRetentionRepository", () => ({
+  ...retention,
+  loadCredentialActivityReferences: async () => [],
+}));
 scopedMock.module("@/utils/provider/credentialResolver", () => ({
   ...realCredentials,
   resolveCapabilityCredentials: async (): Promise<realCredentials.ResolvedCredentials> => {

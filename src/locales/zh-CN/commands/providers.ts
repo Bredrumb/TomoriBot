@@ -3,6 +3,8 @@ export default {
     description: `添加、查看、编辑和移除提供方凭据、端点和模型目录。`,
     title: `服务器提供方`,
     personal_title: `个人提供方`,
+    credential_missing: "我没有此已保存配置的 API 密钥。请使用**编辑**重新添加。",
+    credential_retention: "此实例会在连续 {days} 天无通过验证的请求后移除保存的密钥。",
     selector_guidance: `用下面的下拉菜单**选择**或**添加**提供方或端点。`,
     select_placeholder: `选择提供方、端点或操作...`,
     select_add_provider: `+ 添加新提供方`,
