@@ -22,7 +22,7 @@ and restores are host-side operations; see [Maintenance & Backups](/self-hosting
 - Server configuration settings
 - Encrypted provider API keys
 - Expression metadata, persona access rules, and uploaded expression media
-- Opt-in [conversation recordings](/features/conversation-recordings/), including surrounding messages when selected
+- Opt-in [conversation recordings](/features/setup-administration/conversation-recordings/), including surrounding messages when selected
 
 ### Not stored
 
@@ -48,7 +48,7 @@ privacy policy. Avoid sharing sensitive personal credentials or confidential dat
 
 Conversation recordings use `/record data` for private Markdown or JSON attachments in the current
 server. Their range, retention, and deletion rules are in the
-[recording guide](/features/conversation-recordings/).
+[recording guide](/features/setup-administration/conversation-recordings/).
 
 Settings and memory exports are delivered to your DMs as a JSON file, so your DMs keep a copy you can restore
 later. If TomoriBot can't DM you, the file is attached to a private reply instead; save it before

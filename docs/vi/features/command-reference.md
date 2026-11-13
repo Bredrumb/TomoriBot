@@ -302,7 +302,7 @@ Manage your conversation recordings in this server
 | Lệnh | Tóm tắt |
 |---|---|
 | `/record data` | View, export or delete your recordings in this server |
-| `/record start` | Choose recording settings and review consent before starting |
+| `/record start` | Save anonymized conversation excerpts in this server whenever you send a message |
 | `/record stop` | Stop collecting excerpts and keep your saved recordings |
 
 ## `/refresh`

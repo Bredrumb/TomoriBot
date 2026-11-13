@@ -30,7 +30,7 @@ import {
 } from "@/utils/chat/webhookIdentity";
 import { getOwnerWorkSignal, hasShardLeaseOwnership } from "@/utils/cluster/shardLeases";
 import { getShardTopology } from "@/utils/discord/shardOwnership";
-import { getChannelPrivacyReason } from "@/utils/discord/channelPrivacy";
+import { extractEmbedTextParts } from "@/utils/discord/embedClassifier";
 import { userRepository, isEligibleContextReferenceUserV1 } from "@/utils/db/repositories/UserRepository";
 import { messageProxyRepository } from "@/utils/db/repositories/MessageProxyRepository";
 import { resolveMessageProxyMessageIdentitiesForHistory } from "@/utils/messageProxy/historyAttribution";
@@ -88,6 +88,10 @@ type CaptureDependencies = typeof dependencies;
 type SourceIdentity = { key: ParticipantKey; privacyIds: string[]; aliases: ParticipantAlias[] };
 type Admission = { scope: RecordingScope; session: RecordingSession; token: RecordingToken };
 
+function recordingMessageText(message: Message): string {
+  return [message.content, ...message.embeds.flatMap(extractEmbedTextParts)].filter(Boolean).join("\n");
+}
+
 export class RecordingCaptureRuntime {
   private readonly deps: CaptureDependencies;
   private readonly tails = new Map<string, Promise<void>>();
@@ -111,12 +115,7 @@ export class RecordingCaptureRuntime {
     return next;
   }
 
-  private async permitted(channel: GuildTextBasedChannel, ownerId: string, serverId: number): Promise<boolean> {
-    if (
-      getChannelPrivacyReason(channel) !== null ||
-      (await this.deps.repository.channelExcluded(serverId, channel.id, channel.isThread() ? channel.parentId : null))
-    )
-      return false;
+  private async permitted(channel: GuildTextBasedChannel, ownerId: string): Promise<boolean> {
     const [owner, bot] = await Promise.all([
       channel.guild.members.fetch({ user: ownerId, force: true }),
       channel.guild.members.fetchMe({ force: true }),
@@ -164,7 +163,7 @@ export class RecordingCaptureRuntime {
       const current = () => owns() && deletion === (this.deletions.get(message.guildId) ?? 0);
       if (!admitted || !current()) return;
       const channel = message.channel;
-      if (!(await this.permitted(channel, message.author.id, admitted.scope.serverId)) || !current()) return;
+      if (!(await this.permitted(channel, message.author.id)) || !current()) return;
       const history = await channel.messages.fetch({ before: message.id, limit: HISTORY_REQUEST_LIMIT, cache: false });
       if (!current()) return;
       const candidates = [...history.values()].filter(
@@ -197,13 +196,7 @@ export class RecordingCaptureRuntime {
         client.user?.id,
         personas,
       );
-      if (
-        !inputs ||
-        !current() ||
-        !(await this.permitted(channel, message.author.id, admitted.scope.serverId)) ||
-        !current()
-      )
-        return;
+      if (!inputs || !current() || !(await this.permitted(channel, message.author.id)) || !current()) return;
       await this.deps.repository.append(admitted.scope, admitted.token, {
         sourceChannelId: channel.id,
         sourceParentChannelId: channel.isThread() ? channel.parentId : null,
@@ -302,7 +295,7 @@ export class RecordingCaptureRuntime {
     const candidates = await this.deps.candidates(
       first.guild.id,
       [...directIds].slice(0, REFERENCE_CANDIDATE_LIMIT),
-      messages.map((message) => message.content).join("\n"),
+      messages.map(recordingMessageText).join("\n"),
     );
     const allowed = await this.deps.repository.eligibleUsers(
       serverId,
@@ -354,7 +347,9 @@ export class RecordingCaptureRuntime {
     const mentionSources = new Map<string, string>();
     if (botId && main?.persona_id !== undefined)
       mentionSources.set(botId, recordingParticipantSource(createPersonaKey(main.persona_id)));
-    const bodies = messages.map((message) => prepareRecordingBody(message.content, aliases, mentionSources));
+    const bodies = messages.map((message) =>
+      prepareRecordingBody(recordingMessageText(message), aliases, mentionSources),
+    );
     const prepared = messages.map((message, index) => {
       const source = sources.get(message.id);
       if (!source) throw new Error("Recording source identity is missing");
@@ -415,11 +410,7 @@ export class RecordingCaptureRuntime {
       for (const initialCopy of copies) {
         let copy = initialCopy;
         for (let attempt = 0; attempt < 2; attempt++) {
-          if (
-            !owns() ||
-            !(await this.permitted(message.channel as GuildTextBasedChannel, copy.ownerDiscordId, serverId))
-          )
-            break;
+          if (!owns() || !(await this.permitted(message.channel as GuildTextBasedChannel, copy.ownerDiscordId))) break;
           const full = message.partial ? await message.fetch() : message;
           if (!full.editedAt || full.system) break;
           const identities = await this.sourceIdentities(client, [full], personas, serverId);

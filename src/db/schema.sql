@@ -4416,10 +4416,12 @@ CREATE TABLE IF NOT EXISTS conversation_recording_sessions (
   started_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
   ends_at TIMESTAMPTZ,
   stopped_at TIMESTAMPTZ,
+  last_deleted_at TIMESTAMPTZ,
   evicted_excerpts BIGINT NOT NULL DEFAULT 0,
   evicted_bytes BIGINT NOT NULL DEFAULT 0,
   last_evicted_at TIMESTAMPTZ
 );
+SELECT add_column_if_not_exists('conversation_recording_sessions', 'last_deleted_at', 'TIMESTAMPTZ');
 CREATE UNIQUE INDEX IF NOT EXISTS conversation_recording_active_owner_server
   ON conversation_recording_sessions (owner_user_id, server_id) WHERE stopped_at IS NULL;
 CREATE INDEX IF NOT EXISTS conversation_recording_sessions_server

@@ -54,7 +54,7 @@ supply the required keys through your normal secret source.
 ## Conversation recording storage
 <!-- anchor: conversation-recording-storage -->
 
-[Conversation recordings](/features/conversation-recordings/) store opted-in server excerpts in your
+[Conversation recordings](/features/setup-administration/conversation-recordings/) store opted-in server excerpts in your
 database. Surrounding-message mode can include other participants. Protect database access and
 backups as private conversation data; identity replacement does not make the text anonymous.
 

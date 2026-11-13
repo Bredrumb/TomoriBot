@@ -12,7 +12,12 @@ import {
   type RecordingToken,
   type RecordingRange,
 } from "@/modules/conversation-recording/db/types";
-import { parseRecordingRoute, type RecordingAction } from "@/modules/conversation-recording/discord/catalog";
+import {
+  parseRecordingRoute,
+  RECORDING_ROUTE_VERSION,
+  RECORDING_DATA_ACTIONS,
+  type RecordingAction,
+} from "@/modules/conversation-recording/discord/catalog";
 import {
   buildRecordingModal,
   buildRecordingPanel,
@@ -23,7 +28,7 @@ import { buildRecordingExport, type RecordingExportFile } from "@/modules/conver
 import { userRepository } from "@/utils/db/repositories/UserRepository";
 import type { GlobalInteractionRoute, GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
 import { deliverGuardedPanel } from "@/utils/discord/ui/interactionCore";
-import { replyPanelReceipt } from "@/utils/discord/ui/panel";
+import { buildPanelReceiptMessage, replyPanelReceipt } from "@/utils/discord/ui/panel";
 import { showRoutedRawModal, takeRawModalStringSelectValues } from "@/utils/discord/ui/modals";
 import { log } from "@/utils/misc/logger";
 import { recordPanelActionStat } from "@/utils/stats/panelActionMetrics";
@@ -57,7 +62,7 @@ interface Control {
   session?: RecordingSession;
   consent?: RecordingToken | null;
   settings?: RecordingSettings;
-  range?: RecordingRange | null;
+  range?: RecordingRange;
 }
 
 async function resolveScope(interaction: RecordingInteraction, userData?: UserRow): Promise<RecordingScope | null> {
@@ -127,14 +132,9 @@ export function createRecordingController(overrides: Partial<RecordingDependenci
     files?: RecordingExportFile[],
   ) {
     const summary = await deps.repository.summary(control.scope);
-    const nonce = store({
-      ...control,
-      actions: ["refresh", "settings", "stop", "export", "delete-range", "delete-all"],
-      session: summary.session ?? undefined,
-    });
     await deliverGuardedPanel(
       interaction,
-      buildRecordingPanel({ locale: control.locale, nonce, summary, receipt: notice, files }),
+      buildRecordingPanel({ locale: control.locale, nonce: "", binding: control, summary, receipt: notice, files }),
       { method: "editReply", locale: control.locale, receipt: notice },
     );
   }
@@ -161,14 +161,12 @@ export function createRecordingController(overrides: Partial<RecordingDependenci
   function stat(control: Control | Omit<Control, "expiresAt" | "actions">, action: PanelAction) {
     void deps.recordAction({ action, serverId: control.scope.serverId, userDiscId: control.owner });
   }
-  async function confirmDeletion(interaction: RecordingInteraction, control: Control, range: RecordingRange | null) {
+  async function confirmDeletion(interaction: RecordingInteraction, control: Control, range: RecordingRange) {
     const nonce = store({ ...control, range, actions: ["delete-confirm", "cancel"] });
-    const confirmation = range
-      ? localizer(control.locale, "commands.record.delete_confirmation", {
-          from: range.from.toISOString(),
-          until: range.until.toISOString(),
-        })
-      : localizer(control.locale, "commands.record.delete_all_confirmation");
+    const confirmation = localizer(control.locale, "commands.record.delete_confirmation", {
+      from: range.from.toISOString(),
+      until: range.until.toISOString(),
+    });
     await deliverGuardedPanel(
       interaction,
       buildRecordingPanel({ locale: control.locale, nonce, confirmation, confirmAction: "delete-confirm" }),
@@ -238,10 +236,40 @@ export function createRecordingController(overrides: Partial<RecordingDependenci
 
   const route: GlobalInteractionRoute = {
     namespace: "record",
-    version: "v1",
+    version: RECORDING_ROUTE_VERSION,
     async execute(_client, interaction, parsed) {
       const route = parseRecordingRoute(parsed);
-      const control = route ? controls.get(route.nonce) : undefined;
+      let control = route ? controls.get(route.nonce) : undefined;
+      if (route?.panel) {
+        const panel = route.panel;
+        if (!interaction.guildId || panel.owner !== interaction.user.id || panel.guild !== interaction.guildId) {
+          await replyPanelReceipt(interaction, receipt(interaction.locale, "commands.record.forbidden", {}, true));
+          return;
+        }
+        if (!interaction.isButton()) {
+          await replyPanelReceipt(interaction, receipt(panel.locale, "commands.record.stale", {}, true));
+          return;
+        }
+        const modal = ["settings", "export", "delete-range"].includes(route.action);
+        if (!modal) await interaction.deferUpdate();
+        try {
+          const scope = await deps.resolveScope(interaction);
+          if (!scope) return fail(interaction, panel.locale);
+          control = {
+            ...panel,
+            scope,
+            actions: RECORDING_DATA_ACTIONS,
+            expiresAt: Number.POSITIVE_INFINITY,
+            session:
+              route.action === "settings" || route.action === "stop"
+                ? ((await deps.repository.getActive(scope)) ?? undefined)
+                : undefined,
+          };
+        } catch {
+          await reportFailure(interaction, panel.locale, route.action);
+          return;
+        }
+      }
       const locale =
         control && control.owner === interaction.user.id && control.guild === interaction.guildId
           ? control.locale
@@ -279,8 +307,17 @@ export function createRecordingController(overrides: Partial<RecordingDependenci
           return;
         }
         controls.delete(route.nonce);
-        await interaction.deferUpdate();
-        if (action === "cancel") return paint(interaction, control, receipt(locale, "commands.record.cancelled"));
+        if (!interaction.deferred) await interaction.deferUpdate();
+        if (action === "cancel") {
+          const notice = receipt(locale, "commands.record.cancelled");
+          return control.actions.includes("start")
+            ? deliverGuardedPanel(interaction, buildPanelReceiptMessage(notice), {
+                method: "editReply",
+                locale,
+                receipt: notice,
+              })
+            : paint(interaction, control, notice);
+        }
         if (action === "refresh") return paint(interaction, control);
         if (action === "start") {
           if (!control.settings || control.consent === undefined)
@@ -314,7 +351,6 @@ export function createRecordingController(overrides: Partial<RecordingDependenci
             receipt(locale, stopped ? "commands.record.stopped" : "commands.record.stale", {}, !stopped),
           );
         }
-        if (action === "delete-all") return confirmDeletion(interaction, control, null);
         if (action === "delete-confirm") {
           if (control.range === undefined)
             return paint(interaction, control, receipt(locale, "commands.record.stale", {}, true));
@@ -340,10 +376,8 @@ export function createRecordingController(overrides: Partial<RecordingDependenci
             receipt(locale, saved ? "commands.record.saved" : "commands.record.stale", {}, !saved),
           );
         }
-        const range = parseRecordingRange(
-          interaction.fields.getTextInputValue("from"),
-          interaction.fields.getTextInputValue("until"),
-        );
+        const selected = deps.takeSelectValues(interaction.id, "range");
+        const range = selected?.length === 1 ? parseRecordingRange(selected[0], deps.now()) : null;
         if (!range) return paint(interaction, control, receipt(locale, "commands.record.invalid_range", {}, true));
         if (action === "delete-submit") return confirmDeletion(interaction, control, range);
         const format = deps.takeSelectValues(interaction.id, "format");

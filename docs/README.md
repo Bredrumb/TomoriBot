@@ -48,12 +48,12 @@ Pages are bucketed into task-based sub-categories:
   - [`server-moderation.md`](./en/features/setup-administration/server-moderation/)
   - [`age-restricted-commands.md`](./en/features/setup-administration/age-restricted-commands/)
   - [`stats-and-insights.md`](./en/features/setup-administration/stats-and-insights/)
+  - [`conversation-recordings.md`](./en/features/setup-administration/conversation-recordings/): optional server excerpts and private exports
 - **Integrations**:
   - [`message-proxy-support.md`](./en/features/integrations/message-proxy-support/)
   - [`matrix-bridge.md`](./en/features/integrations/matrix-bridge/)
   - [`sillytavern-support.md`](./en/features/integrations/sillytavern-support/)
   - [`novelai.md`](./en/features/integrations/novelai/)
-- [`features/conversation-recordings.md`](./en/features/conversation-recordings.md): optional server excerpts and private exports
 - [`features/command-reference.md`](./en/features/command-reference/): generated from command locales (Phase 3)
 
 ## Self-Hosting (order 3)

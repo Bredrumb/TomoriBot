@@ -57,14 +57,6 @@ export class ConversationRecordingRepository {
     return row ? { ownerUserId: row.owner_user_id, serverId: row.server_id } : null;
   }
 
-  async channelExcluded(serverId: number, channelId: string, parentId: string | null): Promise<boolean> {
-    const [row] = await this
-      .client`SELECT EXISTS (SELECT 1 FROM server_channel_scope_configs WHERE server_id = ${serverId}
-      AND (${channelId} = ANY(private_channel_ids) OR ${parentId} = ANY(private_channel_ids)
-        OR ${channelId} = ANY(crosschannel_blocklist_ids) OR ${parentId} = ANY(crosschannel_blocklist_ids))) AS excluded`;
-    return row.excluded;
-  }
-
   async eligibleUsers(serverId: number, userIds: readonly string[]): Promise<Set<string>> {
     if (!userIds.length) return new Set();
     const rows = await this.client<
@@ -122,11 +114,6 @@ export class ConversationRecordingRepository {
         OR EXISTS (SELECT 1 FROM persona_user_blocks b
           WHERE b.server_id = s.server_id AND b.user_disc_id = ANY(m.privacy_user_ids)
             AND b.block_type = 'block' AND b.expires_at > ${now})
-        OR EXISTS (SELECT 1 FROM server_channel_scope_configs c WHERE c.server_id = s.server_id
-          AND (m.source_channel_id = ANY(c.private_channel_ids)
-            OR m.source_parent_channel_id = ANY(c.private_channel_ids)
-            OR m.source_channel_id = ANY(c.crosschannel_blocklist_ids)
-            OR m.source_parent_channel_id = ANY(c.crosschannel_blocklist_ids)))
       ) RETURNING m.session_id`;
     if (removed.length) {
       await tx`UPDATE conversation_recording_sessions SET revision = revision + 1 WHERE owner_user_id = ${ownerUserId}`;
@@ -293,9 +280,6 @@ export class ConversationRecordingRepository {
       OR EXISTS (SELECT 1 FROM personalization_blacklist WHERE server_id = ${scope.serverId} AND user_disc_id IN ${tx(ids)})
       OR EXISTS (SELECT 1 FROM persona_user_blocks WHERE server_id = ${scope.serverId} AND user_disc_id IN ${tx(ids)}
         AND block_type = 'block' AND expires_at > ${now})
-      OR EXISTS (SELECT 1 FROM server_channel_scope_configs WHERE server_id = ${scope.serverId}
-        AND (${input.sourceChannelId} = ANY(private_channel_ids) OR ${input.sourceParentChannelId} = ANY(private_channel_ids)
-          OR ${input.sourceChannelId} = ANY(crosschannel_blocklist_ids) OR ${input.sourceParentChannelId} = ANY(crosschannel_blocklist_ids)))
       AS private`;
     return row.private;
   }
@@ -348,11 +332,14 @@ export class ConversationRecordingRepository {
     return this.transact(scope, async (tx, now) => {
       const current = await this.session(tx, scope, token);
       const cutoff = this.cutoff(now);
+      const [deletion] = await tx`SELECT last_deleted_at FROM conversation_recording_sessions
+        WHERE session_id = ${token.sessionId}`;
       if (
         !current ||
         current.stopped_at ||
         trigger.timestamp < current.started_at ||
         trigger.timestamp > now ||
+        (deletion?.last_deleted_at && trigger.timestamp <= deletion.last_deleted_at) ||
         (cutoff && trigger.timestamp <= cutoff)
       )
         return { status: "stale" };
@@ -503,8 +490,8 @@ export class ConversationRecordingRepository {
 
   async deleteRange(scope: RecordingScope, range: RecordingRange | null): Promise<number> {
     if (range) rangeSchema.parse(range);
-    return this.transact(scope, async (tx) => {
-      await tx`UPDATE conversation_recording_sessions SET revision = revision + 1
+    return this.transact(scope, async (tx, now) => {
+      await tx`UPDATE conversation_recording_sessions SET revision = revision + 1, last_deleted_at = ${now}
         WHERE owner_user_id = ${scope.ownerUserId} AND server_id = ${scope.serverId}`;
       const removed = range
         ? await tx`DELETE FROM conversation_recording_excerpts e USING conversation_recording_sessions s

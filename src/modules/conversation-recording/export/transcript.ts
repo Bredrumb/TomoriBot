@@ -45,7 +45,7 @@ function markdownExcerpt(excerpt: RecordingExcerpt, locale: string): string {
       t("commands.record.export.message_id", { id: message.id }),
       ...(message.editedTimestamp ? [t("commands.record.export.edited", { timestamp: message.editedTimestamp })] : []),
       ...(message.replyTo ? [t("commands.record.export.reply_to", { id: message.replyTo })] : []),
-      `${fence}text\n${message.body}\n${fence}`,
+      ...(message.body ? [`${fence}text\n${message.body}\n${fence}`] : []),
       ...markers,
     ].join("\n\n");
   });
@@ -111,6 +111,7 @@ export async function buildRecordingExport(options: {
   }));
   const exportId = randomUUID();
   const generatedAt = new Date().toISOString();
+  const filename = `tomori-recordings_${generatedAt.slice(0, 10)}_${generatedAt.slice(11, 19).replaceAll(":", "")}Z_${exportId.slice(0, 8)}`;
   const range = {
     from: options.range.from.toISOString(),
     until: options.range.until.toISOString(),
@@ -156,7 +157,7 @@ export async function buildRecordingExport(options: {
   }
   if (group.length) groups.push(group);
   const files = groups.map((entries, index) => ({
-    name: `conversation-recordings-${index + 1}.${options.format === "json" ? "json" : "md"}`,
+    name: `${filename}${groups.length > 1 ? `_part-${index + 1}-of-${groups.length}` : ""}.${options.format === "json" ? "json" : "md"}`,
     data: Buffer.from(render(entries, index + 1, groups.length), "utf8"),
   }));
   if (files.reduce((sum, file) => sum + file.data.length, 0) > RECORDING_EXPORT_OUTPUT_BYTES)

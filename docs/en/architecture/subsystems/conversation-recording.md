@@ -5,15 +5,17 @@ aiGenerated: true
 
 `src/modules/conversation-recording/` owns consent, capture, persistence, lifecycle, and private
 exports. It consumes Discord events independently of the chat pipeline and does not call providers.
-The [feature guide](/features/conversation-recordings/) owns user-visible behavior.
+The [feature guide](/features/setup-administration/conversation-recordings/) owns user-visible behavior.
 
 ## Consent and capture ownership
 
 Thin `/record` commands call `executeRecordingCommand`; the interaction router registers
 `recordingInteractionRoute`. Controls bind a random nonce to the caller, guild, action, and allowed
-interaction type. Submissions consume their control. These process-local controls expire after
-15 minutes; restart or controller ownership changes require reopening the command. They contain
-settings and scope metadata, never transcripts. Manager permissions provide no override.
+interaction type. Data-panel buttons carry the owner, guild, and locale in their custom IDs and
+reload current scope and session state on each click, so the panel survives restarts. Consent,
+modal submissions, and deletion confirmations use process-local controls that expire after
+15 minutes or a restart. Submissions consume those controls, which contain settings and scope
+metadata, never transcripts. Manager permissions provide no override.
 
 Activation requires explicit confirmation of both settings. The controller passes a repository
 consent token, so a stale confirmation cannot start collection after an intervening lifecycle change.
@@ -26,9 +28,11 @@ per-channel work queue preserves create/edit ordering; admission retains its ori
 There is no restart replay or backfill. Saturation skips windows instead of retaining an unbounded
 raw-message backlog.
 
-Before history retrieval, capture checks current owner and bot permissions and the shared channel
-privacy gate. It requests one bounded history page, filters eligibility, and selects at most ten
-preceding messages plus the trigger. Private/restricted channels and private threads are excluded.
+Before history retrieval, capture checks current owner and bot permissions.
+It requests one bounded history page, filters eligibility, and selects at most ten
+preceding messages plus the trigger. Restricted channels and private threads are eligible when the
+owner and bot can view the channel and read history; channel privacy and cross-channel context
+settings do not gate capture or prune stored recordings.
 Fresh repository eligibility checks prevent permissive cached privacy state from admitting excluded
 participants. Proxy and persona attribution reuse the existing verified identity paths.
 
@@ -39,7 +43,9 @@ participants. Proxy and persona attribution reuse the existing verified identity
 and original-text matching spans. Alias names remain transient. Structured identities stay bare;
 generated body replacements have square brackets. User-authored lookalikes convey no identity
 provenance. Neither persistence nor export runs template expansion. Attachment type/count metadata
-travels with each message, including edits and logical-size accounting.
+travels with each message, including edits and logical-size accounting. Capture reuses
+`extractEmbedTextParts` to append embed text before alias discovery and body normalization, including
+observed edits; embed media URLs are omitted.
 
 Sessions belong to one owner and server. Restricted source identifiers support ownership,
 deduplication, privacy pruning, and observed source updates; export never exposes them. Messages can
@@ -54,8 +60,9 @@ strategy.
 
 Repository transactions enforce retention, session expiry, and stored privacy pruning on reads and
 writes. Session/revision checks fence queued capture after stop, expiry, settings changes, or
-deletion. Source edits update existing copies only. Observed deletes remove shared copies and fence
-in-flight admission. FULL privacy writes also stop owned sessions, including empty sessions; other
+deletion. A stored deletion timestamp also rejects triggers at or before deletion when admission
+obtains a revision afterward. Source edits update existing copies only. Observed deletes remove shared
+copies and fence in-flight admission. FULL privacy writes also stop owned sessions, including empty sessions; other
 stored exclusions are reconciled through repository maintenance. Losing Discord channel access alone
 does not erase stored records or block their export.
 
@@ -66,7 +73,8 @@ Discord startup. Operator configuration and backup handling belong in
 
 ## Private export contract
 
-`export/range.ts` supplies the UTC half-open trigger range shared by exports and range deletion.
+`export/range.ts` resolves export and deletion presets to half-open trigger ranges ending at submission
+time. Deletion confirmation retains that fixed range while collection can continue.
 `export/transcript.ts` reads validated stored records with current privacy/retention enforcement,
 without fetching source channels. Rendering preserves individual messages and overlapping excerpt
 boundaries without provider roles or inferred conversations.

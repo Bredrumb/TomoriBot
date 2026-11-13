@@ -29,7 +29,9 @@ import {
 } from "../../helpers/routeInteraction";
 
 beforeAll(() => initializeLocalizer());
-const user = createUserRow();
+const user = createUserRow({ user_disc_id: "100000000000000001" });
+const guildId = "200000000000000001";
+const actor = { id: user.user_disc_id, username: "Mirri", displayName: "Mirri", globalName: "Mirri" };
 const scope = { ownerUserId: user.user_id as number, serverId: 2 };
 const nonce = "a".repeat(32);
 const session: RecordingSession = {
@@ -105,22 +107,28 @@ function harness(initial: RecordingSession | null = null) {
     context: ["surrounding"],
     duration: ["7d"],
     format: ["json"],
+    range: ["7d"],
   };
   const showModal = mock(async (_interaction: unknown, _payload: ReturnType<typeof buildRecordingModal>) => {});
-  const controller = createRecordingController({
-    repository: repo,
-    resolveScope: async () => scope,
-    showModal,
-    takeSelectValues: (_id, field) => selects[field],
-    recordAction: async () => {},
-    now: () => now,
-  });
+  const buildController = () =>
+    createRecordingController({
+      repository: repo,
+      resolveScope: async () => scope,
+      showModal,
+      takeSelectValues: (_id, field) => selects[field],
+      recordAction: async () => {},
+      now: () => now,
+    });
+  let controller = buildController();
   async function command(
     action: "start" | "stop" | "data" = "start",
     input = { context: "surrounding", duration: "7d" },
-    guildId: string | null = "guild-1",
+    commandGuildId: string | null = guildId,
   ) {
-    const interaction = createRouteInteraction({ guildId });
+    const interaction = createRouteInteraction({
+      guildId: commandGuildId,
+      overrides: { user: actor },
+    });
     await controller.executeCommand(
       interaction as unknown as ChatInputCommandInteraction,
       user,
@@ -134,7 +142,12 @@ function harness(initial: RecordingSession | null = null) {
     expect(customId.length).toBeGreaterThan(0);
     const parsed = parseInteractionRoute(customId);
     if (!parsed) throw new Error("Invalid fixture route");
-    const interaction = createRouteInteraction({ customId, ...options });
+    const interaction = createRouteInteraction({
+      guildId,
+      customId,
+      ...options,
+      overrides: { user: actor, ...options.overrides },
+    });
     await controller.route.execute({} as Client, interaction as unknown as GlobalRoutableInteraction, parsed);
     return interaction;
   }
@@ -152,6 +165,9 @@ function harness(initial: RecordingSession | null = null) {
     read,
     showModal,
     selects,
+    restart: () => {
+      controller = buildController();
+    },
     setNow: (value: number) => {
       now = value;
     },
@@ -169,7 +185,14 @@ describe("conversation recording controls", () => {
     expect(confirmation.calls[0]?.method).toBe("deferReply");
     expect(f.start).not.toHaveBeenCalled();
     expect(text(confirmation)).toMatch(localizedProse("en-US", "commands.record.consent"));
-    await f.press(actionId(confirmation.edits, "cancel"));
+    const summaryReads = f.totals.mock.calls.length;
+    const cancelled = await f.press(actionId(confirmation.edits, "cancel"));
+    expect(cancelled.calls[0]?.method).toBe("deferUpdate");
+    expect(text(cancelled)).toMatch(localizedProse("en-US", "commands.record.cancelled"));
+    expect(text(cancelled)).not.toMatch(localizedProse("en-US", "commands.record.concept"));
+    expect(actionId(cancelled.edits, "refresh")).toBe("");
+    expect(actionId(cancelled.edits, "start")).toBe("");
+    expect(f.totals).toHaveBeenCalledTimes(summaryReads);
     const stale = await f.press(actionId(confirmation.edits, "start"));
     expect(f.start).not.toHaveBeenCalled();
     expect(text(stale)).toMatch(localizedProse("en-US", "commands.record.stale"));
@@ -188,11 +211,39 @@ describe("conversation recording controls", () => {
     await f.press(startId.replace(":start:", ":delete-confirm:"));
     await f.press(recordingRouteId("start", "b".repeat(32)));
     expect(f.remove).not.toHaveBeenCalled();
-    const data = await f.command("data");
-    f.setNow(Date.now() + 16 * 60_000);
-    const expired = await f.press(actionId(data.edits, "stop"));
+    const expiringFixture = harness();
+    const expiring = await expiringFixture.command();
+    expiringFixture.setNow(Date.now() + 16 * 60_000);
+    const expired = await expiringFixture.press(actionId(expiring.edits, "start"));
     expect(text(expired)).toMatch(localizedProse("en-US", "commands.record.stale"));
     expect(f.stop).not.toHaveBeenCalled();
+  });
+
+  it("reconstructs every data-panel action after restart and timeout while keeping confirmations scoped", async () => {
+    for (const action of ["refresh", "settings", "stop", "export", "delete-range"] as const) {
+      const f = harness(session);
+      const data = await f.command("data");
+      const id = actionId(data.edits, action);
+      const consentFixture = harness();
+      const consent = await consentFixture.command();
+      consentFixture.restart();
+      const stale = await consentFixture.press(actionId(consent.edits, "start"));
+      expect(text(stale)).toMatch(localizedProse("en-US", "commands.record.stale"));
+      expect(consentFixture.start).not.toHaveBeenCalled();
+      f.restart();
+      f.setNow(Date.now() + 16 * 60_000);
+      const clicked = await f.press(id);
+      expect(text(clicked)).not.toMatch(localizedProse("en-US", "commands.record.stale"));
+      if (["settings", "export", "delete-range"].includes(action)) {
+        expect(f.showModal).toHaveBeenCalledTimes(1);
+        expect(clicked.calls.some((call) => call.method.startsWith("defer"))).toBe(false);
+      } else {
+        expect(clicked.calls[0]?.method).toBe("deferUpdate");
+        if (action === "stop")
+          expect(f.stop).toHaveBeenCalledWith(scope, { sessionId: session.session_id, revision: session.revision });
+        if (action === "refresh") expect(f.totals).toHaveBeenCalledTimes(2);
+      }
+    }
   });
 
   it("opens existing settings without replacing the session and keeps stop distinct from deletion", async () => {
@@ -245,14 +296,14 @@ describe("conversation recording controls", () => {
     const confirmation = await f.command();
     const ids = [actionId(confirmation.edits, "start"), actionId(confirmation.edits, "cancel")];
     const data = await f.command("data");
-    for (const action of ["refresh", "export", "delete-range", "delete-all"] as const)
-      ids.push(actionId(data.edits, action));
+    for (const action of ["refresh", "export", "delete-range"] as const) ids.push(actionId(data.edits, action));
     for (const action of ["export", "delete-range"] as const) {
       await f.press(actionId(data.edits, action));
       ids.push(f.modalId());
     }
     const deletionData = await f.command("data");
-    const deletion = await f.press(actionId(deletionData.edits, "delete-all"));
+    await f.press(actionId(deletionData.edits, "delete-range"));
+    const deletion = await f.press(f.modalId(), { kind: "modal" });
     ids.push(actionId(deletion.edits, "delete-confirm"));
     const active = harness(session);
     const activeData = await active.command("data");
@@ -267,7 +318,7 @@ describe("conversation recording controls", () => {
       for (const id of controls) {
         const kind = id.includes("submit") ? "modal" : "button";
         for (const options of [
-          { guildId: "guild-2", kind },
+          { guildId: "200000000000000002", kind },
           { guildId: null, kind },
           {
             kind,
@@ -290,29 +341,76 @@ describe("conversation recording controls", () => {
     const f = harness(session);
     const data = await f.command("data");
     await f.press(actionId(data.edits, "delete-range"));
-    const invalid = await f.press(f.modalId(), { kind: "modal", fields: { from: "2025-02-29", until: "2025-03-01" } });
+    f.selects.range = ["invalid"];
+    const invalid = await f.press(f.modalId(), { kind: "modal" });
     expect(text(invalid)).toMatch(localizedProse("en-US", "commands.record.invalid_range"));
     expect(f.remove).not.toHaveBeenCalled();
     await f.press(actionId(invalid.edits, "delete-range"));
-    const preview = await f.press(f.modalId(), { kind: "modal", fields: { from: "2025-01-01", until: "2025-02-01" } });
+    const now = Date.parse("2025-03-15T12:34:56.000Z");
+    f.setNow(now);
+    f.selects.range = ["14d"];
+    const preview = await f.press(f.modalId(), { kind: "modal" });
     expect(f.remove).not.toHaveBeenCalled();
     const id = actionId(preview.edits, "delete-confirm");
+    f.setNow(now + 1000);
     const deleted = await f.press(id);
     await f.press(id);
     expect(f.remove).toHaveBeenCalledTimes(1);
     expect(f.remove).toHaveBeenLastCalledWith(scope, {
-      from: new Date("2025-01-01T00:00:00.000Z"),
-      until: new Date("2025-02-01T00:00:00.000Z"),
+      from: new Date(now - 14 * 86_400_000),
+      until: new Date(now),
     });
-    const all = await f.press(actionId(deleted.edits, "delete-all"));
+    f.selects.range = ["all"];
+    await f.press(actionId(deleted.edits, "delete-range"));
+    const all = await f.press(f.modalId(), { kind: "modal" });
     await f.press(actionId(all.edits, "cancel"));
     await f.press(actionId(all.edits, "delete-confirm"));
     expect(f.remove).toHaveBeenCalledTimes(1);
     const newData = await f.command("data");
-    const allAgain = await f.press(actionId(newData.edits, "delete-all"));
+    await f.press(actionId(newData.edits, "delete-range"));
+    const allAgain = await f.press(f.modalId(), { kind: "modal" });
     await f.press(actionId(allAgain.edits, "delete-confirm"));
-    expect(f.remove).toHaveBeenLastCalledWith(scope, null);
+    expect(f.remove).toHaveBeenLastCalledWith(scope, { from: new Date(0), until: new Date(now + 1000) });
+    const after = await f.command("data");
+    await f.press(actionId(after.edits, "delete-range"));
+    const pending = await f.press(f.modalId(), { kind: "modal" });
+    f.restart();
+    const stale = await f.press(actionId(pending.edits, "delete-confirm"));
+    expect(text(stale)).toMatch(localizedProse("en-US", "commands.record.stale"));
+    expect(f.remove).toHaveBeenCalledTimes(2);
     expect(f.stop).not.toHaveBeenCalled();
+  });
+
+  it("resolves export presets at submission and rejects invalid selections", async () => {
+    const f = harness();
+    const now = Date.parse("2025-03-15T12:34:56.000Z");
+    f.setNow(now);
+    for (const [value, days] of [
+      ["24h", 1],
+      ["7d", 7],
+      ["14d", 14],
+      ["30d", 30],
+      ["all", 0],
+    ] as const) {
+      const data = await f.command("data");
+      await f.press(actionId(data.edits, "export"));
+      f.selects.range = [value];
+      f.setNow(now + 1000);
+      await f.press(f.modalId(), { kind: "modal" });
+      expect(f.read.mock.calls.at(-1)?.[1]).toEqual({
+        from: new Date(days === 0 ? 0 : now + 1000 - days * 86_400_000),
+        until: new Date(now + 1000),
+      });
+    }
+    const reads = f.read.mock.calls.length;
+    for (const value of [undefined, [], ["7d", "all"], ["toString"], ["invalid"]]) {
+      const data = await f.command("data");
+      await f.press(actionId(data.edits, "export"));
+      f.selects.range = value;
+      const invalid = await f.press(f.modalId(), { kind: "modal" });
+      expect(text(invalid)).toMatch(localizedProse("en-US", "commands.record.invalid_range"));
+    }
+    expect(f.read).toHaveBeenCalledTimes(reads);
   });
 
   it("validates export format and delivers scoped stored data ephemerally without source access checks", async () => {
@@ -438,7 +536,15 @@ describe("conversation recording controls", () => {
             evictedBytes: RECORDING_QUOTA_BYTES,
             lastEvictedAt: new Date(),
           };
-          expectSafePanelPayload(buildRecordingPanel({ locale, nonce, summary: totals }), `${locale} summary`);
+          expectSafePanelPayload(
+            buildRecordingPanel({
+              locale,
+              nonce,
+              summary: totals,
+              binding: { owner: "1".repeat(20), guild: "2".repeat(20) },
+            }),
+            `${locale} summary`,
+          );
           expectSafePanelPayload(
             buildRecordingPanel({
               locale,

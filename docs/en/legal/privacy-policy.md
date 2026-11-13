@@ -59,15 +59,16 @@ Temporary sign-in and membership-update records help secure account linking and 
 
 ### 2.7) Conversation recordings
 
-[Conversation recordings](/features/conversation-recordings/) are optional and scoped to the recording
+[Conversation recordings](/features/setup-administration/conversation-recordings/) are optional and scoped to the recording
 owner and Server. After confirmation, a new real message from the owner can save that message and up
 to ten preceding eligible messages in the same channel or thread, even without a bot reply. Context
 may predate activation. Surrounding-message mode can include other members, bots, and webhooks whose
 participants did not start a recording.
 
-We store normalized message text, timestamps, ordered excerpt boundaries, speaker labels, eligible
+We store normalized message and embed text, timestamps, ordered excerpt boundaries, speaker labels, eligible
 reply relationships, and attachment type/count metadata. We do not save attachment bytes, filenames,
-attachment URLs, OCR, generated descriptions, or embed bodies through this feature. Restricted source
+attachment URLs, OCR, or generated media descriptions through this feature. Embed text includes titles,
+descriptions, fields, author names, and footers, with the same identity replacement as message text. Restricted source
 identifiers support ownership, deduplication, privacy exclusions, and observed edits/deletions.
 
 Before storing bodies, structured Discord identities and exact unique known names/nicknames become

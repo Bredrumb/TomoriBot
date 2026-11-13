@@ -101,6 +101,38 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("conversation recording storage", () => {
     }
   });
 
+  it("rejects triggers at or before deletion even with a fresh revision", async () => {
+    for (const selected of [null, range]) {
+      await start();
+      const earlier = message();
+      let resume = () => {};
+      const admission = new Promise<void>((resolve) => {
+        resume = resolve;
+      });
+      const queued = (async () => {
+        await admission;
+        const active = await repo.getActive(scope);
+        if (!active) throw new Error("Missing active session");
+        return repo.append(scope, token(active), excerpt([earlier]));
+      })();
+      await peer.deleteRange(scope, selected);
+      resume();
+      expect((await queued).status).toBe("stale");
+      const current = await repo.getActive(scope);
+      if (!current) throw new Error("Missing active session");
+      const [row] = await testSql`SELECT last_deleted_at FROM conversation_recording_sessions
+        WHERE session_id = ${current.session_id}`;
+      const deletedAt = row.last_deleted_at as Date;
+      for (const offset of [-1, 0]) {
+        const trigger = message({ timestamp: new Date(deletedAt.getTime() + offset) });
+        expect((await repo.append(scope, token(current), excerpt([trigger]))).status).toBe("stale");
+      }
+      await testSql`SELECT pg_sleep(0.01)`;
+      expect((await repo.append(scope, token(current), excerpt([message()]))).status).toBe("stored");
+      await testSql`DELETE FROM conversation_recording_sessions WHERE session_id = ${current.session_id}`;
+    }
+  });
+
   it("round trips attachment-only messages and exact logical JSON bytes through overlapping excerpts and edits", async () => {
     const active = await start();
     const first = message({ body: "", attachments: { image: 2, video: 1, audio: 1, file: 1 } });
@@ -279,7 +311,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("conversation recording storage", () => {
     expect(following.excerpts.some((entry) => page.excerpts.some((previous) => previous.id === entry.id))).toBe(false);
   }, 60_000);
 
-  it("removes observed source deletions, reply links, private participants and newly private channels", async () => {
+  it("removes observed source deletions, reply links and private participants while preserving restricted channel records", async () => {
     const active = await start();
     const participant = message({ sourceAuthorId: "_rt_recording_user", speaker: "PARTICIPANT_1" });
     const trigger = message({ replyToSourceMessageId: participant.sourceMessageId });
@@ -297,8 +329,19 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("conversation recording storage", () => {
     ).toHaveLength(0);
     expect((await records()).every((entry) => entry.messages.every((m) => m.speaker === "SELF"))).toBe(true);
     await testSql`UPDATE server_channel_scope_configs SET private_channel_ids = ARRAY['200000000000000001'] WHERE server_id = ${scope.serverId}`;
-    expect(await records()).toHaveLength(0);
-    expect((await repo.summary(scope)).ownerBytes).toBe(0);
+    expect((await records()).length).toBeGreaterThan(0);
+    expect((await repo.summary(scope)).ownerBytes).toBeGreaterThan(0);
+    const current = await repo.getActive(scope);
+    if (!current) throw new Error("Missing active recording");
+    await testSql`UPDATE server_channel_scope_configs SET crosschannel_blocklist_ids = ARRAY['200000000000000099'] WHERE server_id = ${scope.serverId}`;
+    expect(
+      (
+        await repo.append(scope, token(current), {
+          ...excerpt([message()]),
+          sourceParentChannelId: "200000000000000099",
+        })
+      ).status,
+    ).toBe("stored");
   });
 
   it("bounds age cleanup and preserves old context until its whole excerpt expires", async () => {
@@ -341,6 +384,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("conversation recording storage", () => {
   it("applies migration rollback/reapply and cascades source ownership on user/server deletion", async () => {
     await executeTestSqlFile("src/db/migrations/137_conversation_recordings.down.sql");
     await executeTestSqlFile("src/db/migrations/137_conversation_recordings.sql");
+    await executeTestSqlFile("src/db/migrations/138_recording_deletion_fence.sql");
+    await setupTestDb();
     const active = await start(second);
     await repo.append(second, token(active), excerpt([message()]));
     await testSql`DELETE FROM servers WHERE server_id = ${secondServerId}`;
@@ -441,8 +486,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("conversation recording storage", () => {
     await userRepository.setPrivacyLevel(FIXTURE_IDS.userDiscId, PrivacyLevel.MINIMAL);
     expect((await repo.append(scope, token(active), excerpt([message()]))).status).toBe("stale");
     expect(await repo.getActive(scope)).toBeNull();
-    await testSql`UPDATE server_channel_scope_configs SET crosschannel_blocklist_ids = ARRAY['200000000000000099'] WHERE server_id = ${scope.serverId}`;
-    expect(await repo.channelExcluded(scope.serverId, "200000000000000001", "200000000000000099")).toBe(true);
     await testSql`INSERT INTO personalization_blacklist (server_id, user_disc_id) VALUES (${scope.serverId}, ${FIXTURE_IDS.userDiscId})`;
     expect(await repo.eligibleUsers(scope.serverId, [FIXTURE_IDS.userDiscId])).not.toContain(FIXTURE_IDS.userDiscId);
   });

@@ -75,6 +75,7 @@ function jsonParts(result: Awaited<ReturnType<typeof render>>) {
     const parsed = json as {
       version: number;
       exportId: string;
+      generatedAt: string;
       part: number;
       parts: number;
       range: Record<string, unknown>;
@@ -86,23 +87,21 @@ function jsonParts(result: Awaited<ReturnType<typeof render>>) {
 }
 
 describe("recording exports", () => {
-  it("validates UTC calendar dates and shared half-open trigger ranges", () => {
-    expect(parseRecordingRange("2024-02-29", "2024-03-01")).toEqual({
-      from: new Date("2024-02-29T00:00:00.000Z"),
-      until: new Date("2024-03-01T00:00:00.000Z"),
-    });
-    for (const [from, until] of [
-      ["2025-02-29", "2025-03-01"],
-      ["2025-04-31", "2025-05-01"],
-      ["2025-1-01", "2025-02-01"],
-      ["0000-01-01", "0001-01-01"],
-      ["2025-01-01Z", "2025-02-01"],
-      ["2025-01-01", "2025-01-01"],
-      ["2025-02-01", "2025-01-01"],
-      ["", "2025-01-01"],
-      ["2025-01-01", "2025-13-01"],
-    ])
-      expect(parseRecordingRange(from as string, until as string)).toBeNull();
+  it("resolves supported time presets and rejects unknown selections", () => {
+    const now = Date.parse("2025-03-15T12:34:56.000Z");
+    for (const [value, days] of [
+      ["24h", 1],
+      ["7d", 7],
+      ["14d", 14],
+      ["30d", 30],
+      ["all", 0],
+    ] as const) {
+      expect(parseRecordingRange(value, now)).toEqual({
+        from: new Date(days === 0 ? 0 : now - days * 86_400_000),
+        until: new Date(now),
+      });
+    }
+    for (const value of ["", "toString", "2025-01-01", "unknown"]) expect(parseRecordingRange(value, now)).toBeNull();
   });
 
   it("remaps storage identities once across overlapping excerpts and split files, and anew for each export", async () => {
@@ -118,6 +117,14 @@ describe("recording exports", () => {
     const result = await render(windows, "json", partLimit);
     const parts = jsonParts(result);
     expect(parts.length).toBeGreaterThan(1);
+    if (result.status !== "ready") throw new Error("Expected split export");
+    for (const [index, file] of result.files.entries()) {
+      const part = parts[index];
+      const stamp = `${part.generatedAt.slice(0, 10)}_${part.generatedAt.slice(11, 19).replaceAll(":", "")}Z`;
+      expect(file.name).toBe(
+        `tomori-recordings_${stamp}_${part.exportId.slice(0, 8)}_part-${index + 1}-of-${parts.length}.json`,
+      );
+    }
     const exported = parts.flatMap((part) => part.excerpts);
     expect(exported.map((entry) => entry.messages.length)).toEqual([2, 3]);
     const a = exported[0]?.messages;
@@ -152,6 +159,8 @@ describe("recording exports", () => {
     const md = await render(windows, "markdown");
     if (md.status !== "ready") throw new Error("Expected Markdown export");
     const text = md.files[0]?.data.toString("utf8") ?? "";
+    expect(md.files[0]?.name).toMatch(/^tomori-recordings_\d{4}-\d{2}-\d{2}_\d{6}Z_[a-f0-9]{8}\.md$/);
+    expect(text).not.toMatch(/```text\n\s*\n```/u);
     expect(text.match(/### \[SELF\]/g)).toHaveLength(2);
     expect(text).toContain(body);
     expect(text).not.toContain("[[SELF]]");

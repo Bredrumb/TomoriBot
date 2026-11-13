@@ -81,6 +81,32 @@ describe("recording identity replacement", () => {
     }
   });
 
+  it("normalizes wrapped destinations and closing punctuation while preserving external links", () => {
+    const url = "https://discord.com/channels/111111111111111111/222222222222222222/333333333333333333";
+    expect(replace(`[link](<${url}>) [link](${url} "title") (${url}) [${url}] \`${url}\` "${url}"`, [])).toBe(
+      '[link](<[message link]>) [link]([message link] "title") ([message link]) [[message link]] `[message link]` "[message link]"',
+    );
+    for (const [before, after] of [
+      [`[link]( ${url} )`, "[link]( [message link] )"],
+      [`[link]( <${url}> "title")`, '[link]( <[message link]> "title")'],
+      [`[link](\n${url}\n)`, "[link](\n[message link]\n)"],
+    ]) {
+      expect(replace(before, [])).toBe(after);
+    }
+    for (const delimiter of ["**", "*", "__", "_", "~~", "||"]) {
+      expect(replace(`${delimiter}${url}${delimiter}`, [])).toBe(`${delimiter}[message link]${delimiter}`);
+    }
+    expect(replace(`{${url}}`, [])).toBe("{[message link]}");
+    const external = "https://example.org/a_(b)";
+    expect(replace(`[link](<${external}> "title") (${external}) [SELF]`, [])).toBe(
+      `[link](<${external}> "title") (${external}) [SELF]`,
+    );
+    expect(replace(`**${external}** ||${external}|| {${external}}`, [])).toBe(
+      `**${external}** ||${external}|| {${external}}`,
+    );
+    expect(replace(`[link]( <${external}> "title")`, [])).toBe(`[link]( <${external}> "title")`);
+  });
+
   it("uses the same canonical persona token for a real mention and its name", () => {
     const catalog = buildPersonaAliases({ owner: createPersonaKey(7), nickname: "Juno" }).aliases;
     const body = prepareRecordingBody("Juno <@99>", catalog, new Map([["99", "persona:7"]]));

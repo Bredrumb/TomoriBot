@@ -11,7 +11,7 @@ import {
 const PROTECTED_MARKUP =
   /https?:\/\/[^\s<>]+|<a?:[A-Za-z0-9_~]+:\d+>|<@!?\d+>|<@&\d+>|<#\d+>|\[(?:SELF|PARTICIPANT_[1-9]\d*|CHANNEL_[1-9]\d*|ROLE_[1-9]\d*)\]|\b(?:SELF|PARTICIPANT_[1-9]\d*|CHANNEL_[1-9]\d*|ROLE_[1-9]\d*)\b|:[A-Za-z0-9_~]+:/giu;
 const MESSAGE_LINK =
-  /^https?:\/\/(?:(?:canary|ptb|www)\.)?discord(?:app)?\.com\/channels\/(?:\d+|@me)\/\d+\/\d+(?=$|[/?#.,!?;:])/iu;
+  /^https?:\/\/(?:(?:canary|ptb|www)\.)?discord(?:app)?\.com\/channels\/(?:\d+|@me)\/\d+\/\d+(?![\p{L}\p{N}])/iu;
 
 export function recordingParticipantSource(key: ParticipantKey): string {
   return key.kind === "discord_user" || key.kind === "bot" ? key.discordId : serializeParticipantKey(key);
@@ -43,7 +43,9 @@ export function prepareRecordingBody(
     const start = content.indexOf("](", link.start) + 2;
     const end = link.end - 1;
     const value = content.slice(start, end);
-    return [{ start, end, part: { text: MESSAGE_LINK.test(value) ? "[message link]" : value } as BodyPart }];
+    const url = /^\s*<?(https?:\/\/[^\s<>]+)/iu.exec(value)?.[1];
+    const normalized = url && MESSAGE_LINK.test(url) ? value.replace(url, "[message link]") : value;
+    return [{ start, end, part: { text: normalized } as BodyPart }];
   });
   const protectedSpans = [...content.matchAll(PROTECTED_MARKUP)]
     .filter(
@@ -63,7 +65,8 @@ export function prepareRecordingBody(
           },
         };
       } else {
-        part = { text: emoji ? `:${emoji[1]}:` : MESSAGE_LINK.test(value) ? "[message link]" : value };
+        const trailing = /[)\]}*_~|`'".,!?;:]+$/u.exec(value)?.[0] ?? "";
+        part = { text: emoji ? `:${emoji[1]}:` : MESSAGE_LINK.test(value) ? `[message link]${trailing}` : value };
       }
       return { start: match.index, end: match.index + value.length, part };
     })

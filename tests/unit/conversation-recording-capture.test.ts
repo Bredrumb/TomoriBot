@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
 import {
   ChannelType,
+  EmbedBuilder,
+  type Embed,
   Collection,
   MessageType,
   PermissionFlagsBits,
@@ -53,7 +55,6 @@ function fixture(context: "own" | "surrounding" = "surrounding") {
     stopped_at: null,
   };
   let active = true;
-  let excluded = false;
   let permission = true;
   let lease = true;
   const privateIds = new Set<string>();
@@ -111,7 +112,6 @@ function fixture(context: "own" | "surrounding" = "surrounding") {
   bind("findCaptureScope").mockImplementation(async () => (active ? { ownerUserId: 1, serverId: 7 } : null));
   bind("getActive").mockImplementation(async () => (active ? { ...session } : null));
   bind("findServerId").mockResolvedValue(7);
-  bind("channelExcluded").mockImplementation(async () => excluded);
   bind("eligibleUsers").mockImplementation(async (_server, ids) => new Set(ids.filter((id) => !privateIds.has(id))));
   const allocated = new Map<string, string>();
   const alias = (identity: RecordingIdentity) => {
@@ -182,6 +182,7 @@ function fixture(context: "own" | "surrounding" = "surrounding") {
       partial: false,
       type: MessageType.Default,
       content,
+      embeds: [],
       webhookId: null,
       createdTimestamp: 10000 + id,
       createdAt: new Date(10000 + id),
@@ -220,9 +221,6 @@ function fixture(context: "own" | "surrounding" = "surrounding") {
     },
     change: () => {
       session.revision++;
-    },
-    exclude: () => {
-      excluded = true;
     },
     deny: () => {
       permission = false;
@@ -328,29 +326,35 @@ describe("recording capture events", () => {
     }
   });
 
-  it("checks owner and bot history permissions and excludes private/restricted channels and parent lists before fetching", async () => {
-    for (const kind of ["permissions", "private", "restricted", "parent", "owner-block"] as const) {
+  it("requires owner and bot access before fetching, including history permission", async () => {
+    for (const kind of ["permissions", "owner", "bot", "owner-block"] as const) {
       const f = fixture();
       if (kind === "permissions") f.deny();
-      if (kind === "private") Object.assign(f.channel, { type: ChannelType.PrivateThread, isThread: () => true });
-      if (kind === "restricted") Object.assign(f.channel, { permissionsFor: () => ({ has: () => false }) });
-      if (kind === "parent") {
-        f.exclude();
-        Object.assign(f.channel, { isThread: () => true, parentId: "300000000000000002", parent: f.channel });
-      }
+      if (kind === "owner" || kind === "bot")
+        Object.assign(f.channel, {
+          permissionsFor: (member: { id: string }) => ({
+            has: () => member.id !== (kind === "owner" ? f.ownerId : f.client.user?.id),
+          }),
+        });
       if (kind === "owner-block") f.privateIds.add(f.ownerId);
       await f.runtime.observeCreate(f.client, f.message(1));
       expect(f.fetchHistory).not.toHaveBeenCalled();
     }
-    const f = fixture();
-    Object.assign(f.channel, {
-      type: ChannelType.PublicThread,
-      isThread: () => true,
-      parentId: "300000000000000002",
-      parent: f.channel,
-    });
-    await f.runtime.observeCreate(f.client, f.message(1));
-    expect(f.stored[0].sourceParentChannelId).toBe(f.channel.parentId);
+  });
+
+  it("captures restricted channels and public or private threads when owner and bot have access", async () => {
+    for (const type of [ChannelType.GuildText, ChannelType.PublicThread, ChannelType.PrivateThread]) {
+      const f = fixture();
+      Object.assign(f.channel, {
+        type,
+        isThread: () => type !== ChannelType.GuildText,
+        parentId: type === ChannelType.GuildText ? null : "300000000000000002",
+        permissionsFor: (member: unknown) => ({ has: () => member !== f.channel.guild.roles.everyone }),
+      });
+      await f.runtime.observeCreate(f.client, f.message(1));
+      expect(f.stored).toHaveLength(1);
+      expect(f.stored[0].sourceParentChannelId).toBe(f.channel.parentId);
+    }
   });
 
   it("filters privacy exclusions while allowing PARTIAL text, normalizes names and includes eligible replies only", async () => {
@@ -444,7 +448,7 @@ describe("recording capture events", () => {
   });
 
   it("cannot append after consent, privacy, permissions, lease or deletion changes during retrieval", async () => {
-    for (const kind of ["stop", "settings", "permission", "channel-privacy", "lease", "delete"] as const) {
+    for (const kind of ["stop", "settings", "permission", "lease", "delete"] as const) {
       const f = fixture();
       const started = deferred();
       const release = deferred();
@@ -460,7 +464,6 @@ describe("recording capture events", () => {
       if (kind === "stop") f.stop();
       if (kind === "settings") f.change();
       if (kind === "permission") f.deny();
-      if (kind === "channel-privacy") f.exclude();
       if (kind === "lease") f.loseLease();
       if (kind === "delete") deletion = f.runtime.observeDelete(f.guild.id, f.channel.id, [trigger.id]);
       release.resolve();
@@ -468,6 +471,42 @@ describe("recording capture events", () => {
       await deletion;
       expect(f.stored).toHaveLength(0);
     }
+  });
+
+  it("normalizes complete embed text with message text and replaces it on observed edits", async () => {
+    const f = fixture();
+    const description = "x".repeat(700);
+    const makeEmbed = (text: string) =>
+      new EmbedBuilder()
+        .setAuthor({ name: "Mirri" })
+        .setTitle(`<@${f.otherId}>`)
+        .setDescription(text)
+        .addFields({ name: `<#${f.channel.id}>`, value: "Bau" })
+        .setFooter({ text: `<@${f.ownerId}>` })
+        .setImage("https://example.org/private-image.png")
+        .toJSON() as unknown as Embed;
+    const preceding = f.message(1, f.otherId);
+    f.history.set(preceding.id, preceding);
+    const source = f.message(2, f.ownerId, "");
+    Object.assign(source, { embeds: [makeEmbed(description)] });
+    await f.runtime.observeCreate(f.client, source);
+    const body = f.stored[0].messages[1].body;
+    expect(body).toContain(description);
+    expect(body).toContain("[SELF]");
+    expect(body).toContain("[CHANNEL_1]");
+    expect(body).toMatch(/\[PARTICIPANT_\d+\]/u);
+    expect(body).not.toContain(f.ownerId);
+    expect(body).not.toContain(f.otherId);
+    expect(body).not.toContain("Mirri");
+    expect(body).not.toContain("Bau");
+    expect(body).not.toContain("https://example.org/private-image.png");
+    const replacement = "y".repeat(650);
+    const edited = f.message(2, f.ownerId, "");
+    Object.assign(edited, { embeds: [makeEmbed(replacement)], editedAt: new Date(20000) });
+    await f.runtime.observeUpdate(f.client, edited);
+    expect(f.update.mock.calls[0][3].body).toContain(replacement);
+    expect(f.update.mock.calls[0][3].body).not.toContain(description);
+    expect(f.update.mock.calls[0][3].body).not.toContain(f.otherId);
   });
 
   it("reconciles edits observed before append and replaces edited attachment metadata", async () => {

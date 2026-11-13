@@ -10,6 +10,7 @@ import {
   recordingContextKeys,
   recordingDurationKeys,
   recordingRouteId,
+  recordingDataRouteId,
   type RecordingAction,
 } from "@/modules/conversation-recording/discord/catalog";
 import type { RecordingExportFile } from "@/modules/conversation-recording/export/transcript";
@@ -25,6 +26,7 @@ const timestamp = (date: Date) => `<t:${Math.floor(date.getTime() / 1000)}:f>`;
 export function buildRecordingPanel(options: {
   locale: string;
   nonce: string;
+  binding?: { owner: string; guild: string };
   summary?: RecordingSummary;
   confirmation?: string;
   confirmAction?: "start" | "delete-confirm";
@@ -36,7 +38,9 @@ export function buildRecordingPanel(options: {
   const button = (action: RecordingAction, key: string, destructive = false): ButtonComponentData => ({
     type: ComponentType.Button as const,
     style: destructive ? ButtonStyle.Danger : ButtonStyle.Secondary,
-    customId: recordingRouteId(action, nonce),
+    customId: options.binding
+      ? recordingDataRouteId(action, locale, options.binding.owner, options.binding.guild)
+      : recordingRouteId(action, nonce),
     label: t(key),
   });
   const components: ComponentInContainerData[] = [
@@ -73,6 +77,8 @@ export function buildRecordingPanel(options: {
       t("commands.record.storage", {
         server: mib(summary.serverBytes),
         count: summary.excerpts,
+      }),
+      t("commands.record.global_storage", {
         used: mib(summary.ownerBytes),
         quota: mib(summary.quotaBytes),
       }),
@@ -93,7 +99,10 @@ export function buildRecordingPanel(options: {
         : []),
     ];
     components.push(
-      { type: ComponentType.TextDisplay, content: lines.map((line) => `> ${line}`).join("\n") },
+      {
+        type: ComponentType.TextDisplay,
+        content: `${t("commands.record.summary_intro")}\n${lines.map((line) => `> - ${line}`).join("\n")}`,
+      },
       {
         type: ComponentType.ActionRow,
         components: [
@@ -106,10 +115,7 @@ export function buildRecordingPanel(options: {
       },
       {
         type: ComponentType.ActionRow,
-        components: [
-          button("delete-range", "commands.record.delete_range_button", true),
-          button("delete-all", "commands.record.delete_all_button", true),
-        ],
+        components: [button("delete-range", "commands.record.delete_range_button", true)],
       },
     );
   }
@@ -130,13 +136,12 @@ export function recordingConsent(locale: string, settings: RecordingSettings, re
       context: localizer(locale, recordingContextKeys[settings.context]),
       duration: localizer(locale, recordingDurationKeys[settings.duration]),
     }),
-    localizer(locale, "commands.record.limits"),
     localizer(
       locale,
       retentionDays === null ? "commands.record.no_retention_consent" : "commands.record.retention_consent",
       { days: retentionDays ?? 0 },
     ),
-  ].join("\n\n");
+  ].join("\n");
 }
 
 export function buildRecordingModal(
@@ -196,22 +201,23 @@ export function buildRecordingModal(
     title: t(kind === "export" ? "commands.record.export_title" : "commands.record.delete_title"),
     components: [
       { type: 10, content: t("commands.record.range_description") },
-      ...(
-        [
-          ["from", "commands.record.from_label"],
-          ["until", "commands.record.until_label"],
-        ] as const
-      ).map(([field, key]) =>
-        label(key, {
-          type: 4,
-          custom_id: field,
-          style: 1,
-          required: true,
-          min_length: 10,
-          max_length: 10,
-          placeholder: "YYYY-MM-DD",
-        }),
-      ),
+      label("commands.record.range_label", {
+        type: 3,
+        custom_id: "range",
+        min_values: 1,
+        max_values: 1,
+        required: true,
+        options: ([
+          ["24h", "commands.record.range_24h_option"],
+          ["7d", "commands.record.range_7d_option"],
+          ["14d", "commands.record.range_14d_option"],
+          ["30d", "commands.record.range_30d_option"],
+          ["all", "commands.record.range_all_option"],
+        ] as const).map(([value, key]) => ({
+          value,
+          label: t(key),
+        })),
+      }),
       ...(kind === "export"
         ? [
             label("commands.record.format_label", {
