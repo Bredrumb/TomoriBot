@@ -177,6 +177,15 @@ const runChatInputCommand = async (client: Client, interaction: ChatInputCommand
   const initialLocale = interaction.locale ?? interaction.guildLocale ?? "en-US";
 
   try {
+    // These entry points render ephemeral panels, so acknowledge before dispatcher database work.
+    if (
+      ["help", "config", "setup"].includes(interaction.commandName) &&
+      !interaction.deferred &&
+      !interaction.replied
+    ) {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    }
+
     const maps = await ensureCommandsLoaded();
     if (!maps) {
       void log.error("Command load produced no commands; will retry on next interaction.", undefined, {

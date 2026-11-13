@@ -1,4 +1,5 @@
 import { ChannelType, TextInputStyle } from "discord.js";
+import { formatThresholdInput, THRESHOLD_INPUT_MAX_LENGTH } from "@/utils/discord/autoTriggerThreshold";
 import type { ChannelPromptMode, LlmRow, TomoriState } from "@/types/db/schema";
 import type { RawDiscordComponent } from "@/types/discord/rawApiTypes";
 import {
@@ -71,7 +72,6 @@ export const CONFIG_CHANNEL_AUTO_TRIGGER_CHANNEL_FIELD = "channels_autoch_channe
 export const CONFIG_CHANNEL_AUTO_TRIGGER_ENABLED_FIELD = "channels_autoch_enabled";
 export const CONFIG_CHANNEL_AUTO_TRIGGER_PERSONA_FIELD = "channels_autoch_persona";
 export const CONFIG_CHANNEL_AUTO_TRIGGER_THRESHOLD_FIELD = "channels_autoch_threshold";
-export const CONFIG_CHANNEL_AUTO_TRIGGER_MAX_THRESHOLD_FIELD = "channels_autoch_max_threshold";
 export const CONFIG_CHANNEL_PRIVATE_CHECKBOX_PREFIX = "channels_private_group";
 export const CONFIG_CHANNEL_RP_CHECKBOX_PREFIX = "channels_rp_group";
 export const CONFIG_CHANNEL_BLOCKLIST_CHECKBOX_PREFIX = "channels_blocklist_group";
@@ -360,23 +360,10 @@ export function buildConfigAutoTriggerThresholdModal(
           custom_id: buildConfigModalFieldId(CONFIG_CHANNEL_AUTO_TRIGGER_THRESHOLD_FIELD, nonce),
           style: TextInputStyle.Short,
           min_length: 1,
-          max_length: 3,
+          max_length: THRESHOLD_INPUT_MAX_LENGTH,
           required: true,
-          value: String(threshold),
-        },
-      },
-      {
-        type: LABEL,
-        label: modalLabel(locale, "commands.config.panel.channels_auto_trigger_max_threshold_label"),
-        description: modalDescription(locale, "commands.config.panel.channels_auto_trigger_max_threshold_description"),
-        component: {
-          type: TEXT_INPUT,
-          custom_id: buildConfigModalFieldId(CONFIG_CHANNEL_AUTO_TRIGGER_MAX_THRESHOLD_FIELD, nonce),
-          style: TextInputStyle.Short,
-          min_length: 1,
-          max_length: 3,
-          required: false,
-          value: String(maxThreshold),
+          placeholder: modalDescription(locale, "commands.config.panel.channels_auto_trigger_threshold_placeholder"),
+          value: formatThresholdInput(threshold, maxThreshold),
         },
       },
     ],

@@ -23,6 +23,7 @@ import {
   DAY_MS,
   IDLE_NUDGE_DAILY_PLANNER_CAPS,
   MAX_PLANNER_NUDGES,
+  NATURAL_NUDGE_FAILURE_COOLDOWN_MS,
   PLANNER_RECENT_TOPICS,
 } from "@/modules/natural-nudges/runtime/tuning";
 import * as leases from "@/utils/cluster/shardLeases";
@@ -577,6 +578,30 @@ describe("idle nudge shortlist", () => {
 });
 
 describe("server nudge tuning", () => {
+  it("admits an idle attempt after the persisted failure cooldown expires without a successful reply", async () => {
+    const stoppedAt = new Date();
+    const { processor, run } = fixture();
+    const clear = spyOn(naturalNudgeRepository, "clearFailures").mockResolvedValue(undefined);
+    spies.push(
+      clear,
+      spyOn(naturalNudgeRepository, "loadRuntimeState").mockResolvedValue({
+        server_id: SERVER_ID,
+        stopped_at: stoppedAt,
+        idle_nudge_jitter: 1,
+        consecutive_failures: 3,
+      }),
+    );
+    setSystemTime(new Date(stoppedAt.getTime() + NATURAL_NUDGE_FAILURE_COOLDOWN_MS - 1));
+    await processor.processDueIdleNudges();
+    expect(run).not.toHaveBeenCalled();
+
+    setSystemTime(new Date(stoppedAt.getTime() + NATURAL_NUDGE_FAILURE_COOLDOWN_MS));
+    await processor.processDueIdleNudges();
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(clear).not.toHaveBeenCalled();
+    await Bun.sleep(0);
+  });
+
   it("skips idle nudges when the gate snapshot has only active nudges enabled", async () => {
     const { processor, config, run } = fixture();
     config.idle_nudges_enabled = false;

@@ -46,7 +46,7 @@ export async function execute(
     requestedPage && !destination ? panelPageNotFoundReceipt(locale) : undefined,
   );
   await deliverGuardedPanel(interaction, payload, {
-    method: "reply",
+    method: interaction.deferred ? "editReply" : "reply",
     locale,
     flags: payload.flags | MessageFlags.Ephemeral,
   });

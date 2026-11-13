@@ -4,7 +4,10 @@ import { seedModelsFromCatalog } from "@/db/seed/catalog/modelSeed";
 import { llmModelRepo } from "@/utils/db/repositories";
 import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
 import { nudgeStudioOperations } from "@/modules/natural-nudges/discord/studioOperations";
-import { NATURAL_NUDGE_FAILURE_STOP_THRESHOLD } from "@/modules/natural-nudges/runtime/tuning";
+import {
+  NATURAL_NUDGE_FAILURE_COOLDOWN_MS,
+  NATURAL_NUDGE_FAILURE_STOP_THRESHOLD,
+} from "@/modules/natural-nudges/runtime/tuning";
 import { loadPersonaAgendas } from "@/modules/natural-nudges/runtime/agendas";
 import {
   defaultServerNaturalNudgeConfig,
@@ -1119,18 +1122,67 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Natural Nudges persistence: regression", (
     }
   });
 
-  it("stops a server after repeated failures and lifts the stop when cleared", async () => {
+  it("starts a cooldown after repeated failures and renews it on the next failed attempt", async () => {
     let state = null;
     for (let attempt = 0; attempt < NATURAL_NUDGE_FAILURE_STOP_THRESHOLD; attempt++) {
       state = await naturalNudgeRepository.recordFailure(refs.serverId);
       if (attempt < NATURAL_NUDGE_FAILURE_STOP_THRESHOLD - 1) expect(state?.stopped_at).toBeNull();
     }
     expect(state?.stopped_at).toBeInstanceOf(Date);
+    const expiredAt = new Date(Date.now() - NATURAL_NUDGE_FAILURE_COOLDOWN_MS);
+    await testSql`
+      UPDATE server_natural_nudge_runtime_state SET stopped_at = ${expiredAt} WHERE server_id = ${refs.serverId}
+    `;
+    state = await naturalNudgeRepository.recordFailure(refs.serverId);
+    expect(state?.consecutive_failures).toBe(NATURAL_NUDGE_FAILURE_STOP_THRESHOLD);
+    expect(state?.stopped_at?.getTime()).toBeGreaterThan(expiredAt.getTime());
     await naturalNudgeRepository.clearFailures(refs.serverId);
     expect(await naturalNudgeRepository.loadRuntimeState(refs.serverId)).toMatchObject({
       consecutive_failures: 0,
       stopped_at: null,
     });
+  });
+
+  it("clears an expired failure cooldown when either mode delivers a nudge", async () => {
+    const openerId = "1300000000000000999";
+    try {
+      for (const mode of ["idle", "active"] as const) {
+        for (let attempt = 0; attempt < NATURAL_NUDGE_FAILURE_STOP_THRESHOLD; attempt++) {
+          await naturalNudgeRepository.recordFailure(refs.serverId);
+        }
+        await testSql`
+          UPDATE server_natural_nudge_runtime_state SET stopped_at = ${new Date(Date.now() - NATURAL_NUDGE_FAILURE_COOLDOWN_MS)}
+          WHERE server_id = ${refs.serverId}
+        `;
+        const fire = {
+          serverId: refs.serverId,
+          channelDiscId: "1200000000000000001",
+          personaId: refs.personaId,
+          openerMessageDiscId: openerId,
+        };
+        expect(
+          mode === "idle"
+            ? await naturalNudgeRepository.recordIdleNudgeFire(
+                {
+                  ...fire,
+                  category: "start_topic",
+                  idleNudgeKey: "start_topic.show_and_tell",
+                  targetUserId: null,
+                  topic: "art",
+                },
+                [],
+              )
+            : await naturalNudgeRepository.recordActiveNudgeFire({ ...fire, detour: false }),
+        ).toBe(true);
+        expect(await naturalNudgeRepository.loadRuntimeState(refs.serverId)).toMatchObject({
+          consecutive_failures: 0,
+          stopped_at: null,
+        });
+      }
+    } finally {
+      await testSql`DELETE FROM natural_nudge_fires WHERE server_id = ${refs.serverId} AND opener_message_disc_id = ${openerId}`;
+      await naturalNudgeRepository.clearFailures(refs.serverId);
+    }
   });
 
   it("refuses a custom idle nudge past the cap", async () => {

@@ -9,6 +9,8 @@ import { invalidateUserCache } from "@/utils/cache/userCache";
 import * as interactionHelper from "@/utils/discord/interactionHelper";
 import { log } from "@/utils/misc/logger";
 import { makeFakeInteraction } from "../../../helpers/fakeInteraction";
+import { execute as executeHelp } from "@/commands/help";
+import type { UserRow } from "@/types/db/schema";
 import handler, { resolveCommandCooldown } from "@/events/interactionCreate/handleCommands";
 
 describe("handleCommands", () => {
@@ -222,6 +224,50 @@ describe("slash command blacklist read failures", () => {
         spy.mockRestore();
       }
       invalidateUserCache(interaction.user.id);
+    }
+  });
+});
+
+describe("panel command acknowledgement", () => {
+  it("acknowledges panel entries before dispatcher I/O", async () => {
+    const cooldownSpy = spyOn(cooldownRepository, "hasCommandCategoryCooldown");
+    const replySpy = spyOn(interactionHelper, "replyInfoEmbed").mockResolvedValue(undefined);
+    try {
+      for (const commandName of ["help", "config", "setup"]) {
+        const { interaction, calls } = makeFakeInteraction();
+        const command = Object.assign(interaction, {
+          commandName,
+          locale: "en-US",
+          isAutocomplete: () => false,
+          isChatInputCommand: () => true,
+          options: {
+            ...interaction.options,
+            getSubcommandGroup: () => null,
+            getSubcommand: () => null,
+          },
+        }) as unknown as ChatInputCommandInteraction;
+        cooldownSpy.mockImplementation(async () => {
+          expect(interaction.deferred).toBe(true);
+          return true;
+        });
+        const remainingSpy = spyOn(cooldownRepository, "getRemainingCommandCategoryCooldownSeconds").mockResolvedValue(
+          1,
+        );
+        try {
+          await handler({} as Client, command);
+          expect(calls.filter((call) => call.method === "deferReply")).toHaveLength(1);
+          if (commandName === "help") {
+            await executeHelp({} as Client, command, {} as UserRow, "en-US");
+            expect(calls.some((call) => call.method === "editReply")).toBe(true);
+            expect(calls.some((call) => call.method === "reply")).toBe(false);
+          }
+        } finally {
+          remainingSpy.mockRestore();
+        }
+      }
+    } finally {
+      cooldownSpy.mockRestore();
+      replySpy.mockRestore();
     }
   });
 });
