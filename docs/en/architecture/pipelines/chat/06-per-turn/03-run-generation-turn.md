@@ -12,13 +12,15 @@ continues the reply a failed attempt already posted instead of regenerating it.
 `runGenerationTurn()` in `src/utils/chat/generationTurn.ts` prepares the response sink, builds a
 `GenerationPlan`, and executes attempts in sequence:
 
-```text
-Prepare sink and generation plan
-  -> Prepare model context and prefill
-  -> Run tool loop with key rotation
-       -> Failure: carry posted text, advance key, model, or deferred server route
-       -> Success: finalize sink, report fallback when applicable
-  -> Always clean up sink
+```mermaid
+flowchart TD
+  prep["Prepare sink and generation plan"] --> model["Prepare model context and prefill"]
+  model --> loop["Run tool loop with key rotation"]
+  loop -->|"Failure"| fail["Carry posted text, advance key,<br/>model, or deferred server route"]
+  fail --> model
+  loop -->|"Success"| succ["Finalize sink, report fallback when applicable"]
+  succ --> clean["Always clean up sink"]
+  fail -->|"Exhausted"| clean
 ```
 
 ### Generation plan and model fallbacks

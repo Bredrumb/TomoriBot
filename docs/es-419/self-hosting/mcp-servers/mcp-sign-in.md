@@ -26,7 +26,7 @@ Configurar la variable inicia el servidor HTTP del bot en `PORT` (predeterminado
 - Termina el inicio de sesión en un navegador en la máquina del bot. Desde otra computadora, reenvía el puerto por SSH primero y luego elige `Iniciar sesión` en el navegador de esa computadora:
 
   ```sh
-  ssh -L 8080:127.0.0.1:8080 <user>@<bot-host>
+  ssh -L 8080:127.0.0.1:8080 "<user>@<bot-host>"
   ```
 
 - Cada servicio decide si acepta una dirección de bucle invertido. Si alguno la rechaza, usa una dirección HTTPS o un token en su lugar.

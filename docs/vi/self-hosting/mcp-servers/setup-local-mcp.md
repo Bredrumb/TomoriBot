@@ -18,7 +18,7 @@ Máy chủ MCP cục bộ chỉ được hỗ trợ trên các phiên bản self
 Khởi động máy chủ MCP hiển thị truyền tải HTTP/SSE trên một cổng cục bộ. Ví dụ: nhiều máy chủ MCP chạy qua Node:
 
 ```sh
-npx -y <some-mcp-server> --port 3000
+npx -y "<some-mcp-server>" --port 3000
 ```
 
 Lệnh chính xác phụ thuộc vào máy chủ bạn đang chạy. Lưu ý URL và đường dẫn truyền tải mà nó in ra (thường là `http://localhost:3000/sse`).

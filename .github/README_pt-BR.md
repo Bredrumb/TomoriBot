@@ -98,9 +98,13 @@ Você pode [convidar a TomoriBot pública](https://discord.com/oauth2/authorize?
 
 ## Hospedagem Própria
 
+Há duas formas simples de rodar a TomoriBot no seu PC:
+
+### Opção 1: Assistente de Configuração (Recomendado)
+
 1. **Pré-requisitos:**
    - [Bun](https://bun.sh/) v1.3.2+ (v1.4.0+ recomendado)
-   - [PostgreSQL](https://www.postgresql.org/) ou [Docker](https://www.docker.com/) (o assistente de configuração usa uma instalação existente do PostgreSQL ou inicia uma no Docker)`
+   - [PostgreSQL](https://www.postgresql.org/) ou [Docker](https://www.docker.com/) (o assistente de configuração usa uma instalação existente do PostgreSQL ou inicia uma no Docker para o banco de dados)
    - Um [token de bot do Discord](https://discord.com/developers/applications) com `Presence Intent`, `Server Members Intent` e `Message Content Intent` ativados
 2. **Execute o assistente de configuração:**
    ```sh
@@ -110,7 +114,22 @@ Você pode [convidar a TomoriBot pública](https://discord.com/oauth2/authorize?
    bun run dev # inicia o bot e executa as migrações do banco de dados automaticamente
    ```
 
-Para mais detalhes ou se tiver problemas com as etapas acima, consulte a [documentação de hospedagem própria](https://docs.tomoribot.app/pt-BR/self-hosting/) completa.
+### Opção 2: Docker Compose
+
+1. **Pré-requisitos:**
+   - [Docker](https://www.docker.com/) e Docker Compose v2+
+   - Um [token de bot do Discord](https://discord.com/developers/applications) com `Presence Intent`, `Server Members Intent` e `Message Content Intent` ativados
+2. **Execute com Docker Compose:**
+   ```sh
+   git clone https://github.com/Bredrumb/TomoriBot.git
+   cd TomoriBot
+   cp .env.example .env   # Windows PowerShell: Copy-Item .env.example .env
+   ```
+   Defina `DISCORD_TOKEN`, `CRYPTO_SECRET`, `POSTGRES_PASSWORD` e `ALLOW_PRIVATE_NETWORK` no `.env` e, em seguida, execute:
+   ```sh
+   docker compose up
+   ```
+   Veja o [guia do Docker Compose](https://docs.tomoribot.app/pt-BR/self-hosting/docker-compose/) para instruções de Windows, Linux e Mac (incluindo permissões de pasta no Linux).
 
 <!-- AFTER SETUP -->
 ### Após Convidar / Configuração

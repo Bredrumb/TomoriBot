@@ -4,7 +4,6 @@ sidebar:
   label: "概要"
   groupLabel: "プロキシとリモートアクセス"
   order: 8
-aiGenerated: true
 ---
 
 TomoriBotをローカルAPIプロキシ経由で接続するか、別のコンピューターで実行されているエンジンへ安全に接続します。
@@ -13,14 +12,15 @@ TomoriBotをローカルAPIプロキシ経由で接続するか、別のコン�
 
 1. [ChatMock](/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/)：お使いのマシン上でChatGPTを利用したブリッジを接続します。
 2. [CLIProxyAPI](/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/)：プロキシをインストールし、認可されたバックエンドからモデルを登録します。
-3. [Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/)：Access認証と本番リレーを使用して、別ホストで稼働するボットをローカルエンジンに接続します。
+3. [Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/)：別ホストで稼働するボット向けに、ローカルエンジンへHTTPS URLを付与します。
+4. [オプション：AccessとCaddy](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/)：個別の認証チェックとより厳格なAPIルーティングを追加します。
 
 プロキシが必要な場合は、まずプロキシのガイドから始めてください。Cloudflareガイドは、ボットが別のマシンで実行されている場合にのみ参照してください。
 
 ## アカウントのリスク
 <!-- anchor: account-risk -->
 
-:::caution[CLIアカウントプロキシの使用は自己責任で行ってください]
+:::danger[CLIアカウントプロキシの使用は自己責任で行ってください]
 Codex、Claude Code、Antigravity、またはその他のCLIアカウントをサードパーティ製ブリッジ経由で使用すると、プロバイダーの利用規約に違反し、アカウントの停止や終了につながる可能性があります。有料サブスクリプションやログインの成功は、ボットや汎用APIとしての利用許可を意味しません。ご利用のプロバイダー、プラン、および認証方法に関するルールを確認してください。TomoriBotはアカウントの安全性について一切保証しません。
 :::
 

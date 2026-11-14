@@ -1494,6 +1494,7 @@ Mức cường điệu: **{exaggeration}**`,
       choice_low: `Thấp`,
       choice_medium: `Trung bình`,
       choice_high: `Cao`,
+      choice_xhigh: `Rất cao`,
     },
     cooldown: {
       type: {

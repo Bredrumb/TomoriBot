@@ -1,0 +1,154 @@
+---
+title: "Configuração: Modelo de Decisão Local"
+sidebar:
+  label: "Modelo de Decisão Local"
+  order: 2
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Execute um pequeno modelo de Decisão na sua própria máquina e registre-o no TomoriBot. Um modelo de Decisão responde a perguntas sobre um texto, como sim ou não ou qual entre vários tópicos se encaixa melhor, retornando probabilidades. O [Kev](https://github.com/jaredpalmer/kev) é um modelo aberto que fala o protocolo System One, o mesmo que o Jev hospedado da TypeSafe usa.
+
+:::note[O que usa esse modelo]
+Depois de selecionado em `/config` > Modelos, ou como `Verificador de Toques Ativos` em `/config` > Plugins > Natural Nudges, o modelo de Decisão decide quando [Natural Nudges](/features/chatting-personality/natural-nudges/#active-nudges) entra em uma conversa, escolhendo um tópico entre vários. Consulte [Modelos de Decisão](/features/setup-administration/providers-and-models/#decision-models) para os detalhes.
+:::
+
+## 1. Executar o Kev
+
+O Kev precisa do [Git](https://git-scm.com), do [uv](https://docs.astral.sh/uv/) e de Python 3.12 ou 3.13 (`uv` instala o Python para você se necessário). Escolha um tamanho compatível com sua memória:
+
+| Modelo | ID no Hub | Pesos (aprox.) | Notas |
+|---|---|---|---|
+| Kev-0.8B | `jaredpalmer/kev-0.8b` | 2 GB | Roda em uma GPU de 4 GB. Menos preciso. |
+| Kev-4B | `jaredpalmer/kev-4b` | 8-9 GB | Ponto de partida recomendado do Kev se couber na sua memória. |
+
+Clone o Kev em algum lugar fora da pasta do TomoriBot e inicie o servidor para o seu sistema operacional:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+Estas etapas foram testadas no Windows nativo com uma GPU NVIDIA. Se o servidor não iniciar nativamente, execute as etapas de Linux dentro do WSL2.
+
+```powershell
+git clone https://github.com/jaredpalmer/kev.git
+cd kev
+uv sync --extra serve
+```
+
+No Windows com GPU NVIDIA, `uv sync` instala uma compilação apenas de CPU do PyTorch, que é lenta demais. Substitua pela compilação CUDA e verifique se ela reconhece sua GPU:
+
+```powershell
+uv pip install --reinstall-package torch "torch>=2.6,<2.9" --index-url https://download.pytorch.org/whl/cu128
+uv run --no-sync python -c "import torch; print(torch.cuda.is_available())"
+```
+
+Isso precisa imprimir `True`. A partir daí, inicie o Kev com `uv run --no-sync`, porque um `uv run` simples sincroniza a compilação de CPU de volta:
+
+```powershell
+uv run --no-sync python -m kev.serve --run jaredpalmer/kev-4b --port 8009 --device cuda
+```
+
+`--device cuda` faz o Kev falhar de forma visível caso não consiga usar sua GPU, em vez de rodar silenciosamente na CPU. Use `jaredpalmer/kev-0.8b` se o Kev-4B ficar sem memória.
+
+Deixe o servidor em execução e verifique em outra janela do PowerShell:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8009/v1/models
+$body = '{"state":"The fictional door is blue.","model":"kev-latest","questions":{"q":{"type":"noul","instructions":"Is the door blue?"}}}'
+Invoke-RestMethod http://127.0.0.1:8009/v1/systemone -Method Post -ContentType "application/json" -Body $body
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+git clone https://github.com/jaredpalmer/kev.git
+cd kev
+uv sync --extra serve
+```
+
+Verifique se o PyTorch detecta sua GPU antes de iniciar (os pacotes padrão do PyTorch no PyPI para Linux incluem suporte a CUDA):
+
+```bash
+uv run python -c "import torch; print(torch.cuda.is_available())"
+```
+
+Inicie o servidor. Adicione `--device cuda` em GPUs NVIDIA para que o Kev falhe visivelmente em vez de fazer fallback para CPU, ou omita `--device cuda` para seleção automática de dispositivo:
+
+```bash
+uv run --extra serve python -m kev.serve --run jaredpalmer/kev-4b --port 8009 --device cuda
+```
+
+Use `jaredpalmer/kev-0.8b` se o Kev-4B ficar sem VRAM. Em configurações AMD ROCm, instale uma compilação ROCm do PyTorch no ambiente primeiro e execute com `uv run --no-sync` para que o `uv` mantenha essa compilação.
+
+Deixe o servidor em execução e verifique em outro terminal:
+
+```bash
+curl -s http://127.0.0.1:8009/v1/models
+curl -s -X POST http://127.0.0.1:8009/v1/systemone \
+  -H "Content-Type: application/json" \
+  -d '{"state":"The fictional door is blue.","model":"kev-latest","questions":{"q":{"type":"noul","instructions":"Is the door blue?"}}}'
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+Em Macs Apple Silicon, o Kev usa MPS (e MLX quando disponível em `arm64`); não passe `--device cuda`. Macs Intel fazem fallback para CPU.
+
+```bash
+git clone https://github.com/jaredpalmer/kev.git
+cd kev
+uv sync --extra serve
+```
+
+Inicie o servidor (use `jaredpalmer/kev-0.8b` se o 4B exceder a memória unificada disponível):
+
+```bash
+uv run --extra serve python -m kev.serve --run jaredpalmer/kev-4b --port 8009
+```
+
+Deixe o servidor em execução e verifique em outro terminal:
+
+```bash
+curl -s http://127.0.0.1:8009/v1/models
+curl -s -X POST http://127.0.0.1:8009/v1/systemone \
+  -H "Content-Type: application/json" \
+  -d '{"state":"The fictional door is blue.","model":"kev-latest","questions":{"q":{"type":"noul","instructions":"Is the door blue?"}}}'
+```
+
+</TabItem>
+</Tabs>
+
+A primeira execução baixa o modelo, então leva alguns minutos. A verificação da lista de modelos retorna `kev-latest`, e a verificação do System One retorna uma probabilidade entre `0` e `1` para a pergunta de sim ou não.
+
+O Kev imprime um aviso de que `flash-linear-attention` está ausente quando esses kernels não estão disponíveis. Ele então usa um caminho mais lento que dá as mesmas respostas, portanto você pode ignorar esse aviso.
+
+## 2. Registrar no Discord
+
+Execute `/providers`, escolha `+ Adicionar Novo Endpoint Personalizado` e preencha:
+
+| Campo | Valor |
+|---|---|
+| `Rótulo do Endpoint` | `kev` |
+| `URL do Endpoint` | `http://127.0.0.1:8009/v1` |
+| `Compatibilidade de API` | `Compatível com System One` |
+| `Token de Autenticação` | Deixe em branco, a menos que tenha definido `KEV_API_KEY` |
+
+O TomoriBot verifica `GET /v1/models` ao salvar. Um servidor que responda `404` ou `405` lá ainda é aceito.
+
+Abra o endpoint `kev` salvo, escolha `+ Adicionar Novo Modelo de Decisão` no menu suspenso de modelos e preencha:
+
+- `Nome de Código`: `kev-latest`, o nome do modelo que os exemplos do Kev usam.
+- `Janela de Contexto`: `8192`, o texto mais longo para o qual Kev-0.8B e Kev-4B são validados. O Kev recusa qualquer entrada acima de 65.536 tokens.
+
+## 3. Selecionar o modelo
+
+Abra `/config` > `Modelos` > `Trocar Modelos` e escolha `kev-latest` no espaço `Decisões`. `- Nenhum Modelo` limpa a seleção sem excluir o registro.
+
+## Notas e armadilhas
+
+- **Parar o servidor** com `Ctrl+C`. O TomoriBot não inicia nem para o Kev para você.
+- **TomoriBot no Docker?** `127.0.0.1` dentro do contêiner não é o seu host. Use `http://host.docker.internal:8009/v1` e inicie o Kev com `--host 0.0.0.0`. O Kev não tem login por padrão, então defina `KEV_API_KEY` primeiro e coloque o mesmo valor em `Token de Autenticação`.
+- **Ambientes de produção** exigem HTTPS e bloqueiam endereços privados para endpoints de provedores. Uma URL HTTP local funciona fora da produção quando `ALLOW_PRIVATE_NETWORK` é `true` ou lista o `host:port`. Consulte [LLM Local](/self-hosting/local-endpoints/setup-local-llm/#notes--gotchas).
+- **Outros servidores System One** como o Laya seguem as mesmas etapas com sua própria URL e nome de modelo. Um servidor que implementa a OpenAI Decisions API usa `Compatível com OpenAI Decisions` em vez disso.

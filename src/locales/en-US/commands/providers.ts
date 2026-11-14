@@ -184,6 +184,16 @@ export default {
     model_compat_label: `Chat Completion Compatibilities`,
     model_compat_description: `Message-shape and protocol workarounds for a strict backend. Leave off unless needed.`,
     model_image_supports_label: `Image Capabilities`,
+    model_image_request_format_label: `Image Request Format`,
+    model_image_request_format_description: `Match the API format this image model accepts.`,
+    image_request_formats: {
+      images: `Images API`,
+      "chat-completions": `Chat Completions`,
+    },
+    image_request_format_descriptions: {
+      images: `Send prompts to /images/generations.`,
+      "chat-completions": `Send image requests as chat messages to /chat/completions.`,
+    },
     model_image_supports_description: `Declare only image features this model and endpoint actually support.`,
     model_image_supports: {
       txt2img: `Text to image`,

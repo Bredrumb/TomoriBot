@@ -30,15 +30,15 @@ When a server adopts an official preset via `/setup` or `/persona default`, the 
 
 Preset media is stored once and shared across servers:
 
-```
-Seeder / Sweep Lock (PostgreSQL Advisory Lock)
-  ├── Seed Pass ──> Uploads immutable assets to presets/{lineage}/...
-  │                 ├── preset_avatar_shared_url (avatars)
-  │                 ├── preset_char_ref_shared_url (character references)
-  │                 └── preset_sprites (expressions)
-  └── Fan-out
-      ├── Alters  ──> Live-resolve shared URL per webhook send (no local copy)
-      └── Main    ──> Reconciler PATCHes guild member avatar on hash delta
+```mermaid
+flowchart TD
+  lock["Seeder / Sweep Lock<br/>(PostgreSQL Advisory Lock)"] --> seed["Seed Pass<br/>Uploads immutable assets to presets/{lineage}/..."]
+  seed --> av["preset_avatar_shared_url (avatars)"]
+  seed --> ref["preset_char_ref_shared_url (character references)"]
+  seed --> spr["preset_sprites (expressions)"]
+  lock --> fan["Fan-out"]
+  fan -->|"Alters"| alters["Live-resolve shared URL per webhook send<br/>(no local copy)"]
+  fan -->|"Main"| main["Reconciler PATCHes guild member avatar<br/>on hash delta"]
 ```
 
 ### Alter avatars

@@ -15,7 +15,7 @@ aiGenerated: false
 ---
 
 <!-- STUB（第一阶段结构）。第二阶段会写入：环境要求 + 模块目录。
-     manual-setup.md 的来源：`git show HEAD:README.md` 的「Self-Hosting」一节。 -->
+     manual-setup.mdx 的来源：`git show HEAD:README.md` 的「Self-Hosting」一节。 -->
 
 按下面任意一条安装路径，开始运行你自己的 TomoriBot 实例：
 

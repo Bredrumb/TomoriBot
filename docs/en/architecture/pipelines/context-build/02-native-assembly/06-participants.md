@@ -9,27 +9,13 @@ The participant contributor keeps profiles and personal memories above history w
 
 Participant processing separates discovery from prompt rendering across two main phases:
 
-```
-prepareParticipantContext(sanitizedMessages, ...)
-  │  (extracts seeds from visible authors, mentions, references, bridges)
-  ▼
-PreparedParticipantContext { discoveryPlan, seeds, matrixUsers, syntheticUsers, ... }
-  │
-  ▼
-buildParticipantContextItems(params)
-  │
-  ├─ hydrateParticipantProfiles(seeds, activePersonaScope, ...)
-  │    ├─ load user rows, privacy levels, blacklist status
-  │    ├─ fetch member roles and presence details
-  │    ├─ load personal memories (filtered by lineage and corpus tags)
-  │    ├─ load user reminders and persona self-tasks
-  │    └─ resolve unique mention handles and collision indices
-  │
-  ├─ renderParticipantPrompt(hydratedProfiles, ...)
-  │    └─ separate profile, presence, and current-context text
-  │
-  └─ convertMentions(renderedText, ...)
-       → profile item plus presence and current-context items
+```mermaid
+flowchart TD
+  prep["prepareParticipantContext(sanitizedMessages, ...)<br/>(extracts seeds from visible authors, mentions, references, bridges)"] --> ctx["PreparedParticipantContext<br/>{ discoveryPlan, seeds, matrixUsers, syntheticUsers, ... }"]
+  ctx --> build["buildParticipantContextItems(params)"]
+  build --> hydrate["hydrateParticipantProfiles(seeds, activePersonaScope, ...)<br/>- load user rows, privacy levels, blacklist status<br/>- fetch member roles and presence details<br/>- load personal memories (filtered by lineage and corpus tags)<br/>- load user reminders and persona self-tasks<br/>- resolve unique mention handles and collision indices"]
+  hydrate --> render["renderParticipantPrompt(hydratedProfiles, ...)<br/>separate profile, presence, and current-context text"]
+  render --> convert["convertMentions(renderedText, ...)<br/>→ profile item plus presence and current-context items"]
 ```
 
 ### Discovery preparation

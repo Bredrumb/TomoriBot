@@ -4,7 +4,6 @@ sidebar:
   label: "总览"
   groupLabel: "代理与远程访问"
   order: 8
-aiGenerated: true
 ---
 
 通过本地 API 代理连接 TomoriBot，或者安全地访问另一台计算机上运行的引擎。
@@ -13,14 +12,15 @@ aiGenerated: true
 
 1. [ChatMock](/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/)：在本机连接基于 ChatGPT 的桥接服务。
 2. [CLIProxyAPI](/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/)：安装代理并从已获授权的后端注册模型。
-3. [Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/)：使用 Access 身份验证和生产环境中继，将独立托管的 bot 连接到你的本地引擎。
+3. [Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/)：为本地引擎提供HTTPS URL，供独立托管的bot连接。
+4. [可选：Access与Caddy](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/)：增加独立身份验证检查与更严格的API路由控制。
 
 如果你需要代理，请先看对应的代理指南。仅当 bot 运行在另一台计算机上时，才需要遵循 Cloudflare 指南。
 
 ## 账号风险
 <!-- anchor: account-risk -->
 
-:::caution[使用 CLI 账号代理需自行承担风险]
+:::danger[使用 CLI 账号代理需自行承担风险]
 通过第三方桥接使用 Codex、Claude Code、Antigravity 或其他 CLI 账号可能违反提供方条款，并导致账号被暂停或封禁。付费订阅或成功登录并不代表获得了用于 bot 或通用 API 的授权。请核对你的提供方、套餐以及认证方式对应的规则。TomoriBot 不提供任何账号安全保证。
 :::
 

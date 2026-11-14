@@ -15,19 +15,17 @@ The public entry point is `buildContext` in `src/utils/text/contextBuilder.ts`, 
 
 Context assembly follows a two-tier structure:
 
-```
-buildContext(BuildContextParams)
-  │
-  ├─ if SillyTavern preset active and not impersonation:
-  │     buildContextNative(...)
-  │     reassembleWithPreset(nativeOutput, presetData, ...)
-  │     resolveRandomChoiceMacrosInBuildOutput(...)
-  │     → preset-reassembled result
-  │
-  └─ else:
-        buildContextNative(...)
-        resolveRandomChoiceMacrosInBuildOutput(...)
-        → native result
+```mermaid
+flowchart TD
+  entry["buildContext(BuildContextParams)"] --> check{"SillyTavern preset active<br/>and not impersonation?"}
+  check -->|"yes"| nativePreset["buildContextNative(...)"]
+  nativePreset --> reassemble["reassembleWithPreset(nativeOutput, presetData, ...)"]
+  reassemble --> macros1["resolveRandomChoiceMacrosInBuildOutput(...)"]
+  macros1 --> out1["Preset-reassembled result"]
+
+  check -->|"no"| nativeOnly["buildContextNative(...)"]
+  nativeOnly --> macros2["resolveRandomChoiceMacrosInBuildOutput(...)"]
+  macros2 --> out2["Native result"]
 ```
 
 Native assembly always runs first. If a SillyTavern preset is active for the server and the current turn is not a user impersonation, the pipeline passes the native items into `reassembleWithPreset` in `src/utils/text/presetContextBuilder.ts` to arrange them into preset sections. Otherwise, the native build is returned directly.

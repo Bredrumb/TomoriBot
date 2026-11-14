@@ -118,6 +118,7 @@ export interface ProvidersRouteDependencies {
   ): Promise<void>;
   takeModelFlags(interactionId: string, nonce: string): string[] | undefined;
   takeImageSupports(interactionId: string, nonce: string): string[] | undefined;
+  takeImageRequestFormat(interactionId: string, nonce: string): string | undefined;
   takeCompatFlags(interactionId: string, nonce: string): string[] | undefined;
   takeVoiceMode(interactionId: string, nonce: string): string | undefined;
   takeScriptMarkup(interactionId: string, nonce: string): string | undefined;
@@ -472,6 +473,7 @@ function imageModalDefaults(
       image: {
         supports: editing?.imageSettings ?? getDefaultImageEndpointSupports(section.apiStyle ?? "openai-compatible"),
         allowInpaint: section.apiStyle === "comfyui",
+        ...(section.apiStyle === "openai-compatible" ? { requestFormat: editing?.imageRequestFormat ?? "images" } : {}),
       },
     };
   }
@@ -665,6 +667,8 @@ export function createProvidersInteractionRoute(
       takeRawModalCheckboxGroupValues(interactionId, buildProviderModelModalFieldId("flags", nonce)),
     takeImageSupports: (interactionId, nonce) =>
       takeRawModalCheckboxGroupValues(interactionId, buildProviderModelModalFieldId("image-supports", nonce)),
+    takeImageRequestFormat: (interactionId, nonce) =>
+      takeRawModalSelectValue(interactionId, buildProviderModelModalFieldId("image-request-format", nonce)),
     takeCompatFlags: (interactionId, nonce) =>
       takeRawModalCheckboxGroupValues(interactionId, buildProviderModelModalFieldId("compat", nonce)),
     takeEndpointBehavior: (interactionId, nonce) =>
@@ -925,6 +929,8 @@ export function createProvidersInteractionRoute(
         route.action === "model-submit" ? (dependencies.takeModelFlags(interaction.id, route.nonce) ?? []) : [];
       const selectedImageSupports =
         route.action === "model-submit" ? dependencies.takeImageSupports(interaction.id, route.nonce) : undefined;
+      const selectedImageRequestFormat =
+        route.action === "model-submit" ? dependencies.takeImageRequestFormat(interaction.id, route.nonce) : undefined;
       const selectedCompatFlags =
         route.action === "model-submit" ? dependencies.takeCompatFlags(interaction.id, route.nonce) : undefined;
       const selectedVoiceMode =
@@ -1272,6 +1278,7 @@ export function createProvidersInteractionRoute(
               supportsAssistantPrefill: resolveCompatFlag("prefill", target?.textSettings?.supportsAssistantPrefill),
               verbatimToolCalling: resolveCompatFlag("verbatim-tools", target?.textSettings?.verbatimToolCalling),
               imageSupportValues: route.capability === "image" ? selectedImageSupports : undefined,
+              imageRequestFormat: route.capability === "image" ? selectedImageRequestFormat : undefined,
               speechVoiceMode: route.capability === "speech" ? selectedVoiceMode : undefined,
               speechScriptMarkup: route.capability === "speech" ? selectedScriptMarkup : undefined,
               speechInstructValues: route.capability === "speech" ? selectedInstructValues : undefined,

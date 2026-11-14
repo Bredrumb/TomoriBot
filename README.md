@@ -123,9 +123,13 @@ There are two easy ways to get TomoriBot running on your PC:
    ```sh
    git clone https://github.com/Bredrumb/TomoriBot.git
    cd TomoriBot
-   cp .env.example .env # set DISCORD_TOKEN, CRYPTO_SECRET, and POSTGRES_PASSWORD
+   cp .env.example .env   # Windows PowerShell: Copy-Item .env.example .env
+   ```
+   Set `DISCORD_TOKEN`, `CRYPTO_SECRET`, `POSTGRES_PASSWORD`, and `ALLOW_PRIVATE_NETWORK` in `.env`, then run:
+   ```sh
    docker compose up
    ```
+   See the [Docker Compose guide](https://docs.tomoribot.app/en/self-hosting/docker-compose/) for Windows, Linux, and Mac steps (including Linux folder ownership).
 
 <!-- AFTER SETUP -->
 ### After Inviting / Setup

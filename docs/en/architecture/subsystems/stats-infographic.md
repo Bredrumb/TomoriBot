@@ -19,14 +19,11 @@ Cards summarize personal usage, one user-persona pairing, or server rankings. La
 
 ## Gather and render architecture
 
-```
-gatherXxxCardData()   ← DB and Discord API (async, sole external touchpoint)
-        ↓
-  renderXxxCard()     ← Pure VNode tree (statsInfographic.tsx, no DB)
-        ↓
-  renderCardToPng()   ← satori (JSX → SVG) + @resvg/resvg-js (SVG → PNG)
-        ↓
-  AttachmentBuilder   ← Discord PNG attachment
+```mermaid
+flowchart TD
+  gather["gatherXxxCardData()<br/>DB and Discord API (async, sole external touchpoint)"] --> render["renderXxxCard()<br/>Pure VNode tree (statsInfographic.tsx, no DB)"]
+  render --> png["renderCardToPng()<br/>satori (JSX → SVG) + @resvg/resvg-js (SVG → PNG)"]
+  png --> attach["AttachmentBuilder<br/>Discord PNG attachment"]
 ```
 
 ### Gather and render split

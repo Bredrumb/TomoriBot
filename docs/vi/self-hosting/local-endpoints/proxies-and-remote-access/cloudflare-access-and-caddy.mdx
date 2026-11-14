@@ -1,0 +1,274 @@
+---
+title: "Tăng cường bảo mật tùy chọn: Cloudflare Access và Caddy"
+sidebar:
+  label: "Tùy chọn: Access & Caddy"
+  order: 4
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Bổ sung bước kiểm tra xác thực thứ hai cho [Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/) bằng Cloudflare Access và một Caddy relay. Đây là lớp tăng cường bảo mật tùy chọn; TomoriBot có thể kết nối trực tiếp tới engine HTTPS công khai mà không cần cả hai dịch vụ này.
+
+## Lớp này bổ sung gì
+
+| Mức bảo vệ | Tunnel trực tiếp | Access và Caddy |
+|---|---|---|
+| HTTPS và không cần mở port đến trên PC | Được Tunnel cung cấp | Tương tự |
+| Ai có thể gọi engine | Engine tự kiểm tra khóa nếu đã cấu hình; một engine không xác thực sẽ chấp nhận bất kỳ ai biết URL | Access yêu cầu service token của relay; Caddy yêu cầu client key của nó |
+| Engine không có xác thực tích hợp | Phụ thuộc vào việc giữ bí mật URL trừ khi bạn thêm cổng xác thực khác | Được bảo vệ bởi Access và client key của relay |
+| Các route API được phép | Quy tắc đường dẫn trên tunnel giới hạn phần được mở ra ngoài | Caddy còn giới hạn thêm phương thức HTTP và từ chối chuyển hướng từ thượng nguồn |
+| Khóa vô tình bị lộ ra ngoài TomoriBot | Một engine key hợp lệ có thể gọi thẳng tới tunnel | Chỉ riêng engine key không thể gọi tunnel đã được bảo vệ, nhưng vẫn có thể gọi tới relay công khai |
+| Thu hồi quyền truy cập của một relay | Xoay vòng engine key để thu hồi khóa đó | Thu hồi Access service token của nó độc lập với engine key |
+
+Thiết lập này không thay đổi quyền máy chủ hay quyền cá nhân trong TomoriBot và cũng không ẩn cài đặt endpoint khỏi người vận hành bot. Người giữ khóa Caddy vẫn có thể dùng trực tiếp các route mà nó cho phép. Các quy trình ComfyUI vẫn chạy được các node đã cài đặt; giới hạn route không cô lập sandbox cho quy trình hay tách biệt người dùng.
+
+Bạn cần một hostname HTTPS công khai thứ hai, chẳng hạn `relay.example.net`, cùng một máy chủ nơi bạn có thể chạy [Caddy](https://caddyserver.com/docs/install). Máy chủ này có thể dùng chung với máy chạy bot hoặc là một máy chủ khác do bạn kiểm soát. Quy trình Azure/Hetzner không tự động triển khai relay này. Caddy bổ sung thêm một tiến trình và một chặng mạng trung gian; tải xử lý phụ thuộc vào các yêu cầu đi qua relay.
+
+Bảng cấu hình endpoint của TomoriBot chỉ gửi Bearer key và không thể thêm các header của Access service token. Caddy sẽ kiểm tra khóa đó rồi gắn thêm các header. Hãy giữ thông tin xác thực Access trên Caddy và chỉ lưu client key trong TomoriBot.
+
+## 1. Bảo vệ hostname của tunnel
+
+Trong bảng điều khiển Cloudflare One:
+
+1. Tại `Access controls` > `Service credentials` > `Service tokens`, [tạo một service token](https://developers.cloudflare.com/cloudflare-one/access-controls/service-credentials/service-tokens/) cho relay. Chọn thời hạn hết hạn mà bạn quản lý được và lưu Client ID cùng Client Secret vào kho bí mật trên máy chủ của bạn; secret chỉ hiển thị một lần.
+2. Tại `Access controls` > `Applications`, thêm một ứng dụng `Self-hosted` bao phủ toàn bộ `engine.example.com`, không giới hạn đường dẫn.
+3. Thêm một chính sách với hành động `Service Auth` và quy tắc `Include` loại `Service Token`, chỉ chọn token của bạn. Xóa các chính sách `Allow` hoặc `Bypass` rộng hơn và kiểm tra xem có ứng dụng cụ thể hơn nào đang bỏ qua lớp bảo vệ hay không.
+4. Lưu ứng dụng. Ghi lại thẻ Application Audience (AUD) và tên team Cloudflare One của bạn cho phần YAML bên dưới.
+
+Hãy đảm bảo lớp bảo vệ Access đã được bật trước khi xuất bản DNS của tunnel. Service token nằm trên Caddy; tệp JSON chứng chỉ tunnel tạo ở bước sau nằm trên máy tính cục bộ của bạn.
+
+## 2. Bắt buộc kiểm tra Access trong tunnel
+
+Cài đặt `cloudflared`, tạo tunnel có tên và chuẩn bị `config.yml` theo [hướng dẫn cơ bản](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/#configure-the-tunnel). Hoàn tất bảo vệ bằng Access trước khi xuất bản DNS. Nếu đang chuyển đổi từ một tunnel trực tiếp đang chạy, hãy dừng trình kết nối trong lúc thay đổi lớp bảo vệ.
+
+Thêm khối `originRequest` này vào từng quy tắc hostname của engine, thay thế tên team và thẻ Application Audience:
+
+```yaml title="config.yml hostname rule"
+  - hostname: engine.example.com
+    path: ^/v1/(models|chat/completions)$
+    service: http://127.0.0.1:8317
+    originRequest:
+      access:
+        required: true
+        teamName: YOUR_TEAM_NAME
+        audTag:
+          - YOUR_APPLICATION_AUD
+```
+
+Giữ nguyên các trường tunnel và chứng chỉ ở đầu tệp cùng quy tắc 404 cuối cùng từ hướng dẫn cơ bản. Với ComfyUI hoặc TTS, giữ nguyên `path` và `service` của engine đó. Bước [kiểm tra Access trên trình kết nối](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/configure-tunnels/origin-parameters/#access) sẽ kiểm tra JWT của ứng dụng ngay tại máy cục bộ ngay cả khi lớp bảo vệ ở edge vô tình bị gỡ bỏ.
+
+Kiểm tra tính hợp lệ của các quy tắc ingress, xuất bản DNS của tunnel và khởi động trình kết nối như trong hướng dẫn cơ bản. Yêu cầu không có thông tin xác thực Access giờ đây phải bị từ chối.
+
+## 3. Chạy Caddy relay
+
+Trên máy chủ relay:
+
+1. Cài đặt [Caddy](https://caddyserver.com/docs/install) hoặc thêm nó làm một dịch vụ vào bản triển khai của bạn.
+2. Sao chép `docker/cloudflare-relay.Caddyfile` từ mã nguồn sang một tệp được bảo vệ tên là `Caddyfile`. Thay thế `relay.example.net` và `engine.example.com` trong khối site cuối cùng của tệp. Giữ `chat_routes` cho CLIProxyAPI.
+3. Cung cấp các biến sau cho tiến trình Caddy từ kho bí mật của bạn:
+
+| Biến | Giá trị |
+|---|---|
+| `ENGINE_API_KEY` | Client key CLIProxyAPI của bạn, đồng thời là khóa đã lưu trong TomoriBot |
+| `CF_ACCESS_CLIENT_ID` | Client ID của Access service token |
+| `CF_ACCESS_CLIENT_SECRET` | Client Secret của Access service token |
+
+Dùng client key được tạo từ ít nhất 32 byte ngẫu nhiên, mã hóa dạng hex hoặc base64 không chứa khoảng trắng hay `*`. Không để bí mật dạng chữ thô trong lệnh shell, Git hay nhật ký.
+
+Từ thư mục chứa `Caddyfile`, kiểm tra tính hợp lệ và khởi động Caddy sau khi nạp đủ cả ba biến:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+foreach ($name in 'ENGINE_API_KEY', 'CF_ACCESS_CLIENT_ID', 'CF_ACCESS_CLIENT_SECRET') {
+  if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+    throw "Missing relay secret: $name"
+  }
+}
+caddy validate --config .\Caddyfile --adapter caddyfile
+caddy run --config .\Caddyfile --adapter caddyfile
+```
+
+Để tự động khởi động không cần giám sát, hãy làm theo [hướng dẫn dịch vụ Windows](https://caddyserver.com/docs/running#windows-service) của Caddy.
+
+</TabItem>
+<TabItem label="Linux / macOS">
+
+```bash
+if [ -n "${ENGINE_API_KEY:-}" ] && [ -n "${CF_ACCESS_CLIENT_ID:-}" ] && [ -n "${CF_ACCESS_CLIENT_SECRET:-}" ]; then
+  caddy validate --config ./Caddyfile --adapter caddyfile &&
+    caddy run --config ./Caddyfile --adapter caddyfile
+else
+  printf 'Load all three relay secrets before starting Caddy.\n' >&2
+fi
+```
+
+Để tự động khởi động không cần giám sát, hãy dùng [dịch vụ systemd](https://caddyserver.com/docs/running#linux-service) của Caddy trên Linux hoặc trình quản lý dịch vụ launchd/container của bạn trên macOS với cùng cấu hình và bí mật đó.
+
+</TabItem>
+
+</Tabs>
+
+Trỏ `relay.example.net` về cổng vào HTTPS của máy chủ relay. Caddy chạy độc lập cần mở port đến 443 và kết nối kiểm tra chứng chỉ, thường là các port 80/443. Hãy dùng bản ghi DNS-only cho relay để tránh phát sinh thêm một ngưỡng timeout proxy của Cloudflare. Nếu bản triển khai của bạn kết thúc TLS ở lớp riêng, hãy giữ trình lắng nghe backend của Caddy ở mạng riêng tư.
+
+Tệp cấu hình đi kèm sẽ kiểm tra client key, giới hạn các route và phương thức, đồng thời ẩn phần thân lỗi từ thượng nguồn. API quản trị của Caddy đã bị tắt, vì vậy hãy khởi động lại Caddy sau khi thay đổi cấu hình hoặc bí mật. Giữ riêng tư môi trường cùng cấu hình lưu trữ của Caddy và tắt ghi nhật ký gỡ lỗi hoặc header.
+
+## 4. Xác minh Access và xác thực relay
+{/* anchor: validate-each-authentication-check */}
+
+Từ máy chủ Caddy, hãy kiểm tra toàn bộ các trường hợp sau trước khi lưu endpoint relay:
+
+| Yêu cầu | Kết quả kỳ vọng |
+|---|---|
+| URL tunnel, thiếu hoặc sai Access token | Access từ chối; engine không nhận được yêu cầu nào |
+| URL tunnel, Access token hợp lệ nhưng sai client key | CLIProxyAPI trả về 401 |
+| URL tunnel, cả hai thông tin xác thực đều đúng | JSON từ engine, ví dụ danh sách model |
+| URL relay, thiếu hoặc sai client key | Relay trả về 401 |
+| URL relay, đúng khóa nhưng sai phương thức hoặc trỏ vào đường dẫn quản lý | Relay trả về 404 |
+
+Việc Access từ chối có thể trả về 401, 403 hoặc chuyển hướng đăng nhập. Hãy kiểm tra để chắc chắn phản hồi thành công chứa JSON của engine; một trang đăng nhập HTML vẫn là thất bại kể cả khi trả về mã trạng thái 200. Các đường dẫn quản lý trực tiếp qua tunnel cũng phải trả về 404 sau khi vượt qua xác thực Access.
+
+<details>
+<summary>Các lệnh kiểm tra xác thực</summary>
+
+Chạy từ máy chủ relay khi đã nạp đủ ba bí mật và đã tắt ghi phiên/theo dõi lệnh. Các lệnh này chỉ in mã trạng thái và kiểu nội dung mà không đi theo chuyển hướng hay in thông tin xác thực ra màn hình.
+
+Đối với ComfyUI hoặc TTS, hãy dùng đúng hostname và bí mật của chúng, bỏ `/v1`, và thay `/models` bằng `/system_stats` hoặc `/health`. Chỉ bỏ qua bước kiểm tra khóa tại origin nếu engine đó không có xác thực.
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+Add-Type -AssemblyName System.Net.Http
+$origin = 'https://engine.example.com/v1'
+$relay = 'https://relay.example.net/v1'
+$access = @{
+  'CF-Access-Client-Id' = $env:CF_ACCESS_CLIENT_ID
+  'CF-Access-Client-Secret' = $env:CF_ACCESS_CLIENT_SECRET
+}
+$good = $access.Clone()
+$good.Authorization = "Bearer $env:ENGINE_API_KEY"
+$badToken = $good.Clone()
+$badToken['CF-Access-Client-Secret'] = 'invalid-test-token'
+$badKey = $access.Clone()
+$badKey.Authorization = 'Bearer invalid-test-key'
+$cases = @(
+  @{ Uri = "$origin/models"; Headers = @{} },
+  @{ Uri = "$origin/models"; Headers = $badToken },
+  @{ Uri = "$origin/models"; Headers = $badKey },
+  @{ Uri = "$origin/models"; Headers = $good },
+  @{ Uri = "$relay/models"; Headers = @{} },
+  @{ Uri = "$relay/models"; Headers = @{ Authorization = "Bearer $env:ENGINE_API_KEY" } }
+)
+$handler = [Net.Http.HttpClientHandler]::new()
+$handler.AllowAutoRedirect = $false
+$client = [Net.Http.HttpClient]::new($handler)
+try {
+  foreach ($case in $cases) {
+    $request = [Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::Get, $case.Uri)
+    foreach ($header in $case.Headers.GetEnumerator()) {
+      $request.Headers.Add($header.Key, [string]$header.Value)
+    }
+    $result = $client.SendAsync($request).GetAwaiter().GetResult()
+    try {
+      [pscustomobject]@{ Url = $case.Uri; Status = [int]$result.StatusCode; Type = $result.Content.Headers.ContentType }
+    } finally {
+      $result.Dispose()
+      $request.Dispose()
+    }
+  }
+} finally {
+  $client.Dispose()
+}
+```
+
+</TabItem>
+<TabItem label="Linux / macOS">
+
+Thông tin xác thực được truyền qua cấu hình stdin của curl để giữ chúng tách khỏi danh sách tham số tiến trình.
+
+```bash
+set +x
+origin='https://engine.example.com/v1'
+relay='https://relay.example.net/v1'
+probe() {
+  probe_url=$1
+  access_mode=$2
+  key_mode=$3
+  {
+    if [ "$access_mode" != none ]; then
+      printf 'header = "CF-Access-Client-Id: %s"\n' "$CF_ACCESS_CLIENT_ID"
+      if [ "$access_mode" = bad ]; then
+        printf 'header = "CF-Access-Client-Secret: invalid-test-token"\n'
+      else
+        printf 'header = "CF-Access-Client-Secret: %s"\n' "$CF_ACCESS_CLIENT_SECRET"
+      fi
+    fi
+    if [ "$key_mode" = good ]; then
+      printf 'header = "Authorization: Bearer %s"\n' "$ENGINE_API_KEY"
+    elif [ "$key_mode" = bad ]; then
+      printf 'header = "Authorization: Bearer invalid-test-key"\n'
+    fi
+  } | curl --config - --silent --show-error --output /dev/null \
+    --write-out '%{http_code} %{content_type}\n' "$probe_url"
+}
+probe "$origin/models" none none
+probe "$origin/models" bad good
+probe "$origin/models" good bad
+probe "$origin/models" good good
+probe "$relay/models" none none
+probe "$relay/models" none good
+unset -f probe
+```
+
+</TabItem>
+
+</Tabs>
+
+</details>
+
+## 5. Lưu URL relay trong TomoriBot
+
+Dùng `/providers` cho kết nối máy chủ hoặc `/personal providers` cho kết nối của riêng bạn. Với chat, lưu `https://relay.example.net/v1` với độ tương thích `Tương thích OpenAI` và dùng `ENGINE_API_KEY` làm token xác thực. Thêm một model và kiểm thử trả lời cùng streaming trước khi bật công cụ.
+
+<details>
+<summary>ComfyUI, TTS hoặc nhiều engine</summary>
+
+Dùng `comfyui_routes` hoặc `tts_routes` làm tham số cuối cùng của dòng `import engine_relay` trong Caddyfile. Dòng đó lần lượt nhận hostname tunnel, client key, Access Client ID, Access Client Secret và hồ sơ route theo đúng thứ tự.
+
+Để chạy nhiều engine cùng lúc, hãy cấp cho mỗi engine hostname tunnel, ứng dụng/service token Access, hostname relay và client key riêng. Lặp lại quy tắc hostname của tunnel trước quy tắc 404 cuối cùng, kèm Access audience và cổng loopback riêng của nó. Bảo vệ từng hostname trước khi xuất bản DNS bằng `cloudflared tunnel route dns home-engine HOSTNAME`. Một trình kết nối có thể phục vụ toàn bộ các quy tắc.
+
+Nối thêm các site sau vào Caddyfile, thay thế các hostname tương ứng:
+
+```text
+comfy-relay.example.net {
+  import engine_relay comfy-engine.example.com {env.COMFYUI_ENGINE_API_KEY} {env.COMFYUI_CF_ACCESS_CLIENT_ID} {env.COMFYUI_CF_ACCESS_CLIENT_SECRET} comfyui_routes
+}
+
+tts-relay.example.net {
+  import engine_relay tts-engine.example.com {env.TTS_ENGINE_API_KEY} {env.TTS_CF_ACCESS_CLIENT_ID} {env.TTS_CF_ACCESS_CLIENT_SECRET} tts_routes
+}
+```
+
+Cung cấp đủ ba biến của mỗi site cho Caddy, đưa chúng vào bước kiểm tra khi khởi động, và cấp phát DNS/HTTPS cho từng hostname relay. Một dịch vụ Caddy có thể phục vụ toàn bộ các site.
+
+| Engine | Kết nối trong TomoriBot | Kiểm thử trước khi dùng |
+|---|---|---|
+| ComfyUI | Độ tương thích `ComfyUI`, gốc `https://comfy-relay.example.net`, client key của site đó | Tạo hình ảnh, tải lên ảnh tham chiếu, tải xuống kết quả và hủy tác vụ; kiểm thử riêng phần video |
+| TTS cục bộ | Độ tương thích `tts-clone`, gốc `https://tts-relay.example.net`, client key của site đó | Tổng hợp đoạn ngắn trả về âm thanh phát được; kiểm thử Voice Design nếu được hỗ trợ |
+
+Làm theo [thiết lập ComfyUI](/self-hosting/local-endpoints/setup-comfyui/) hoặc [thiết lập TTS](/self-hosting/local-endpoints/text-to-speech/) để cấu hình model và quy trình làm việc. Các kết nối này không có hậu tố `/v1`. Kiểm thử định tuyến và xác thực của từng hostname bằng `/system_stats` cho ComfyUI và `/health` cho TTS.
+
+Giữ các engine không có xác thực riêng luôn liên kết trên loopback. Bước kiểm tra khóa sai tại origin chỉ áp dụng nếu engine đó có bắt buộc khóa; mọi relay vẫn luôn yêu cầu client key của nó. Các quy trình ComfyUI không được chạy trong sandbox: người giữ khóa có thể chạy các node đã cài đặt, đọc tệp được mở qua `/view`, hủy tác vụ và gỡ mô hình. Hãy dùng một instance chuyên dụng riêng.
+
+Các hồ sơ đi kèm chỉ mở các route API. ComfyUI dùng cơ chế thăm dò tác vụ nên không cần route WebSocket. TTS chỉ cho phép `GET /health` và `POST /synthesize`; các API giọng nói hay phiên âm khác cần route riêng của chúng. Route gỡ mô hình của KoboldCPP đã bị loại trừ, nên tính năng tự động nhường VRAM giữa văn bản và ComfyUI không khả dụng qua hồ sơ chat.
+
+</details>
+
+## Xoay vòng hoặc thu hồi thông tin xác thực
+
+- Để ngắt truy cập ngay lập tức, hãy dừng relay và thu hồi Access service token của nó. Dừng trình kết nối và xóa các mục tunnel/DNS khi ngừng sử dụng thiết lập này.
+- Khi xoay vòng Access token định kỳ, hãy cập nhật chính sách và bí mật trên relay, khởi động lại và kiểm thử Caddy, rồi thu hồi token cũ.
+- Thay đổi client key trên engine nếu được hỗ trợ, trong kho bí mật của Caddy và trong mọi kết nối TomoriBot đã lưu đang dùng khóa đó. Thu hồi riêng thông tin xác thực OAuth thượng nguồn bị rò rỉ; chỉ xóa tệp cục bộ không thu hồi được chúng.

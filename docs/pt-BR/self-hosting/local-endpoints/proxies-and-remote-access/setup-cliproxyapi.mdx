@@ -3,124 +3,25 @@ title: "Configuração: CLIProxyAPI"
 sidebar:
   label: "CLIProxyAPI"
   order: 2
-aiGenerated: true
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
 
 Conecte o TomoriBot a um upstream autorizado por meio do [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI), um proxy local de Chat Completions.
 
-:::caution[Use proxies de conta CLI por sua conta e risco]
-O acesso de terceiros por meio do Codex, Claude Code, Antigravity ou outras contas de CLI pode violar os termos do provedor e gerar risco de suspensão da conta. Uma assinatura não garante permissão para uso de bot ou API. Revise as [restrições específicas de cada provedor e alternativas de API](/self-hosting/local-endpoints/proxies-and-remote-access/#account-risk) antes de fazer login. Os termos do Antigravity do Google proíbem explicitamente o acesso de terceiros por meio do Antigravity OAuth.
+:::danger[Use proxies de conta CLI por sua conta e risco]
+O acesso de terceiros por meio do Codex, Claude Code, Antigravity ou outras contas de CLI pode violar os termos do provedor e gerar risco de suspensão da conta. Uma assinatura não garante permissão para uso de bot ou API. Revise as [restrições específicas de cada provedor e alternativas de API](/self-hosting/local-endpoints/proxies-and-remote-access/#account-risk) antes de fazer login.
 :::
 
 ## 1. Instale o CLIProxyAPI
 
-1. Use a [versão estável mais recente](https://github.com/router-for-me/CLIProxyAPI/releases/latest) oficial. Os exemplos baixam o arquivo compactado e os checksums correspondentes juntos.
-2. Abra um terminal em uma pasta vazia pertencente à sua conta:
+Siga o [início rápido oficial](https://help.router-for.me/introduction/quick-start). Os [arquivos de lançamento](https://github.com/router-for-me/CLIProxyAPI/releases/latest) contêm executáveis prontos para uso; escolha seu sistema operacional e arquitetura de CPU, extraia o arquivo compactado e verifique o checksum. Compilar um clone do Git é opcional.
 
-<Tabs syncKey="operating-system">
-<TabItem label="Windows">
+## 2. Crie a configuração
 
-Execute no PowerShell. No Windows ARM64, altere `windows_amd64` para `windows_aarch64`.
+Configure o CLIProxyAPI antes de iniciá-lo. Se o instalador iniciou um serviço, pare-o primeiro.
 
-```powershell
-$release = Invoke-RestMethod 'https://api.github.com/repos/router-for-me/CLIProxyAPI/releases/latest'
-$asset = @($release.assets | Where-Object name -Like 'CLIProxyAPI_*_windows_amd64.zip')
-$checksums = @($release.assets | Where-Object name -EQ 'checksums.txt')
-if ($asset.Count -ne 1 -or $checksums.Count -ne 1) { throw 'Check the release assets before continuing' }
-$archive = $asset[0].name
-$release.tag_name
-Invoke-WebRequest $asset[0].browser_download_url -OutFile $archive
-Invoke-WebRequest $checksums[0].browser_download_url -OutFile checksums.txt
-$expected = ((Select-String -Path checksums.txt -Pattern ([regex]::Escape($archive) + '$')).Line -split '\s+')[0]
-if (!$expected -or (Get-FileHash $archive -Algorithm SHA256).Hash -ine $expected) {
-  throw 'Archive checksum mismatch'
-}
-Expand-Archive -LiteralPath $archive -DestinationPath .\app
-Set-Location .\app
-.\cli-proxy-api.exe --help
-```
-
-</TabItem>
-<TabItem label="Linux">
-
-Isto seleciona o arquivo x86-64 ou ARM64. Verifique os requisitos de sistema da versão; sistemas baseados em musl precisam da compilação `no-plugin`.
-
-```bash
-case "$(uname -m)" in
-  x86_64) arch=amd64 ;;
-  aarch64|arm64) arch=aarch64 ;;
-  *) arch=''; printf 'Unsupported architecture\n' >&2 ;;
-esac
-if [ -n "$arch" ] && release_page=$(curl --fail --silent --show-error --head --location \
-    --output /dev/null --write-out '%{url_effective}' \
-    'https://github.com/router-for-me/CLIProxyAPI/releases/latest'); then
-  release_tag=${release_page##*/}
-  release_version=${release_tag#v}
-  archive="CLIProxyAPI_${release_version}_linux_${arch}.tar.gz"
-  release_url="https://github.com/router-for-me/CLIProxyAPI/releases/download/$release_tag"
-  printf 'Selected release: %s\n' "$release_tag"
-  if curl --fail --location "$release_url/$archive" --output "$archive" &&
-     curl --fail --location "$release_url/checksums.txt" --output checksums.txt; then
-    expected=$(awk -v file="$archive" '$2 == file { print $1 }' checksums.txt)
-    actual=$(sha256sum "$archive" | awk '{ print $1 }')
-    if [ -n "$expected" ] && [ "$actual" = "$expected" ]; then
-      mkdir app && tar -xzf "$archive" -C app && cd app && ./cli-proxy-api --help
-    else
-      printf 'Archive checksum mismatch; stop here.\n' >&2
-    fi
-  fi
-fi
-```
-
-</TabItem>
-<TabItem label="Mac">
-
-Execute no Terminal do macOS. Isto seleciona Apple Silicon ou Intel automaticamente e usa um caminho de configuração explícito em vez dos padrões de serviço do Homebrew.
-
-```bash
-case "$(uname -m)" in
-  arm64) arch=aarch64 ;;
-  x86_64) arch=amd64 ;;
-  *) arch=''; printf 'Unsupported architecture\n' >&2 ;;
-esac
-if [ -n "$arch" ] && release_page=$(curl --fail --silent --show-error --head --location \
-    --output /dev/null --write-out '%{url_effective}' \
-    'https://github.com/router-for-me/CLIProxyAPI/releases/latest'); then
-  release_tag=${release_page##*/}
-  release_version=${release_tag#v}
-  archive="CLIProxyAPI_${release_version}_darwin_${arch}.tar.gz"
-  release_url="https://github.com/router-for-me/CLIProxyAPI/releases/download/$release_tag"
-  printf 'Selected release: %s\n' "$release_tag"
-  if curl --fail --location "$release_url/$archive" --output "$archive" &&
-     curl --fail --location "$release_url/checksums.txt" --output checksums.txt; then
-    expected=$(awk -v file="$archive" '$2 == file { print $1 }' checksums.txt)
-    actual=$(shasum -a 256 "$archive" | awk '{ print $1 }')
-    if [ -n "$expected" ] && [ "$actual" = "$expected" ]; then
-      mkdir app && tar -xzf "$archive" -C app && cd app && ./cli-proxy-api --help
-    else
-      printf 'Archive checksum mismatch; stop here.\n' >&2
-    fi
-  fi
-fi
-```
-
-Se o macOS bloquear o executável, consulte as [orientações da Apple](https://support.apple.com/en-us/102445) e verifique o publicador antes de aprová-lo.
-
-</TabItem>
-</Tabs>
-
-3. Confirme que o texto de ajuda corresponde à versão selecionada e inclui `--config`. Compare o arquivo `config.example.yaml` incluído com o layout v8 abaixo antes de configurá-lo. Se o esquema for diferente, siga o exemplo daquela versão.
-
-- Baixe tanto o arquivo compactado quanto os checksums da versão oficial. Os checksums detectam corrupção; verifique o publicador antes de executar o código.
-- Para outros métodos de instalação, consulte o [guia de início rápido](https://help.router-for.me/introduction/quick-start) oficial; caminhos de configuração de gerenciadores de pacotes podem ser diferentes.
-
-## 2. Configure um listener local
-
-1. Crie `config.yaml` ao lado do executável em um editor privado.
-2. Substitua o marcador da chave de cliente por pelo menos 32 bytes aleatórios codificados em hex ou base64, gerados pelo seu gerenciador de senhas.
-3. Restrinja esta pasta e o diretório de credenciais à sua conta e à conta do processo. Mantenha ambos fora do Git e de pastas compartilhadas.
+Crie `config.yaml` ao lado do executável (`cli-proxy-api.exe` no Windows). Uma pasta de configuração separada é opcional; estes exemplos mantêm ambos os arquivos juntos. Substitua o marcador da chave de cliente por pelo menos 32 bytes aleatórios codificados em hex ou base64, gerados pelo seu gerenciador de senhas.
 
 ```yaml
 config-version: 8
@@ -140,10 +41,56 @@ oauth:
   auth-dir: "~/.cli-proxy-api"
 ```
 
-- O segredo de gerenciamento vazio desativa `/v0/management` e `/v8/management`. Deixe `MANAGEMENT_PASSWORD` sem definição e evite `--password` e a TUI de gerenciamento.
-- Mantenha o gerenciamento desativado atrás de um túnel: o conector também alcança o motor via loopback.
+A chave de cliente sob `access.api-keys` autentica o TomoriBot no CLIProxyAPI. Mantenha `config.yaml` e os arquivos de credenciais em `oauth.auth-dir` privados e fora do Git. Restrinja o acesso à sua conta e à conta do processo.
 
-4. Adicione um backend autorizado. Para uma API compatível com OpenAI, mescle este bloco de nível superior separado com a URL, chave e ID do modelo reais:
+Deixe `MANAGEMENT_PASSWORD` sem definição e evite `--password` e a TUI de gerenciamento: o segredo de gerenciamento vazio mantém as rotas de gerenciamento desativadas, inclusive atrás do túnel. Se a sua versão usar um formato de configuração diferente, aplique essas definições ao `config.example.yaml` incluído.
+
+## 3. Conecte o upstream
+
+Escolha como o CLIProxyAPI se autentica no provedor de modelos. Ambos os métodos usam a configuração base acima.
+
+<Tabs syncKey="upstream-auth">
+<TabItem label="Login de conta (OAuth)">
+
+Execute o comando de login a partir da pasta que contém o executável e `config.yaml`. Estes exemplos usam Antigravity; substitua pela flag do seu provedor e revise a tela de consentimento dele antes de entrar:
+
+| Provedor | Flag de login |
+|---|---|
+| Antigravity | `--antigravity-login` |
+| Claude | `--claude-login` |
+| Codex | `--codex-login` ou `--codex-device-login` |
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$configPath = (Resolve-Path .\config.yaml).Path
+.\cli-proxy-api.exe --config $configPath --antigravity-login
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+./cli-proxy-api --config "$(pwd)/config.yaml" --antigravity-login
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+./cli-proxy-api --config "$(pwd)/config.yaml" --antigravity-login
+```
+
+</TabItem>
+</Tabs>
+
+Conclua o login no navegador e aguarde o terminal informar sucesso. O CLIProxyAPI salva as credenciais em `oauth.auth-dir`; uma configuração apenas com OAuth não precisa do bloco de chave de API upstream. Mantenha os listeners de callback OAuth locais e use o mesmo caminho de configuração para login e inicialização. Outras flags de login estão listadas em `--help` e nos [guias de provedores upstream](https://help.router-for.me/introduction/quick-start).
+
+</TabItem>
+<TabItem label="Chave de API upstream">
+
+Para uma API compatível com OpenAI, adicione este bloco de nível superior ao `config.yaml` e substitua a URL de exemplo, a chave upstream e o ID do modelo:
 
 ```yaml
 api-keys:
@@ -157,24 +104,12 @@ api-keys:
           alias: "home-chat"
 ```
 
-| Local da chave | Finalidade |
-|---|---|
-| `access.api-keys` | O TomoriBot se autentica no CLIProxyAPI |
-| `api-keys` de nível superior | O CLIProxyAPI se autentica no upstream |
+</TabItem>
+</Tabs>
 
-Substitua todos os valores de exemplo e ative apenas o backend de que precisar.
+## 4. Inicie o servidor
 
-### Alternativas de login com conta
-
-- As flags disponíveis incluem Gemini CLI `--login`, Claude `--claude-login` e Codex `--codex-login` / `--codex-device-login`. `--help` lista as outras flags específicas de cada provedor.
-- Use o login de conta apenas quando o provedor autorizar a ponte. Revise a tela de consentimento e as permissões solicitadas; os escopos variam conforme o provedor.
-- Passe o mesmo caminho `--config` absoluto para os comandos de login e de servidor. As credenciais de atualização ficam armazenadas em `oauth.auth-dir`, aqui o diretório `.cli-proxy-api` do seu perfil.
-- Mantenha os listeners temporários de callback OAuth locais. Para revogar o acesso, revogue-o nas configurações da conta upstream, pare o proxy e remova os arquivos locais de credenciais. Apagar os arquivos por si só não revoga tokens.
-- `--antigravity-login` existe, mas entra em conflito com a restrição do Google acima. Nenhum procedimento de login do Antigravity é fornecido aqui; sua implementação solicita permissões amplas do Cloud Platform, perfil/e-mail, código de IA, registro e experimento/configuração.
-
-## 3. Inicie e teste localmente
-
-1. Inicie o servidor:
+Inicie o servidor a partir da pasta que contém `config.yaml`. Substitua pelo caminho real do executável ou pelo comando instalado, se necessário; mantenha `--config` para que ele carregue este arquivo.
 
 <Tabs syncKey="operating-system">
 <TabItem label="Windows">
@@ -201,17 +136,132 @@ $configPath = (Resolve-Path .\config.yaml).Path
 </TabItem>
 </Tabs>
 
-2. Em outra janela de terminal, verifique o listener:
+Deixe o servidor em execução e siga para o passo 5. Mantenha `server.host` em `127.0.0.1`; nenhuma exceção de entrada no firewall ou redirecionamento de portas no roteador é necessária.
+
+## 5. Conecte o TomoriBot
+
+<Tabs syncKey="bot-location">
+<TabItem label="Bot neste PC">
+
+1. Para um bot fora de produção rodando no mesmo computador que o CLIProxyAPI, defina `ALLOW_PRIVATE_NETWORK=127.0.0.1:8317` no ambiente do TomoriBot e reinicie o bot. Use o listener local configurado acima; nenhum túnel é necessário.
+2. Execute `/providers` (gerenciadores do servidor) ou `/personal providers` e adicione um endpoint personalizado `Compatível com OpenAI` com estas configurações:
+
+| Campo | Valor |
+|---|---|
+| URL do Endpoint | `http://127.0.0.1:8317/v1` |
+| Token de Autenticação | A chave de cliente de `access.api-keys` |
+
+Selecione a conexão salva, adicione um Modelo de Texto usando um ID ou alias servido pelo CLIProxyAPI e confirme uma resposta no Discord.
+
+Esta URL pressupõe que o bot rode diretamente no host. No Docker, `127.0.0.1` identifica o contêiner, então ele não alcança o listener do host através desse endereço. Um bot rodando em modo de produção ainda exige o caminho de produção hospedado.
+
+</TabItem>
+<TabItem label="Bot de produção hospedado">
+
+1. Conclua o [Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/) usando o perfil de motores de texto e a porta 8317. A produção exige uma URL HTTPS pública e respostas de DNS públicas.
+2. Execute `/providers` (gerenciadores do servidor) ou `/personal providers` e adicione um endpoint personalizado `Compatível com OpenAI` com estas configurações:
+
+| Campo | Valor |
+|---|---|
+| URL do Endpoint | A base do seu túnel, como `https://engine.example.com/v1` |
+| Token de Autenticação | A chave de cliente de `access.api-keys` |
+
+Selecione a conexão salva, adicione um Modelo de Texto usando um ID ou alias servido pelo CLIProxyAPI e confirme uma resposta no Discord.
+
+</TabItem>
+</Tabs>
+
+<details>
+<summary>Como listar os modelos disponíveis</summary>
+
+Com o CLIProxyAPI em execução, abra outro terminal para listar os IDs dos modelos. Desative transcrições do PowerShell ou rastreamento de shell antes de carregar a chave de cliente. Feche este terminal quando terminar.
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+Execute a partir da pasta que contém `config.yaml`; isso lê a primeira chave de cliente do layout acima.
+
+```powershell
+$keyMatch = [regex]::Match((Get-Content -LiteralPath .\config.yaml -Raw), '(?m)^access:\r?\n  api-keys:\r?\n    - "([A-Za-z0-9+/=_-]+)"[ \t]*\r?$')
+if (!$keyMatch.Success) { throw 'Expected a quoted client key under access.api-keys in config.yaml.' }
+$engineKey = $keyMatch.Groups[1].Value
+$headers = @{ Authorization = "Bearer $engineKey" }
+$base = 'http://127.0.0.1:8317/v1'
+$models = Invoke-RestMethod "$base/models" -Headers $headers
+$models.data | Select-Object id
+Remove-Variable engineKey, keyMatch, headers
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+A chave é lida sem eco e passada ao curl via stdin, mantendo-a fora dos argumentos do processo.
+
+```bash
+set +x
+printf 'CLIProxyAPI client key: '
+read -r -s engine_key
+printf '\n'
+base='http://127.0.0.1:8317/v1'
+printf 'header = "Authorization: Bearer %s"\n' "$engine_key" |
+  curl --config - --fail --silent --show-error "$base/models"
+unset engine_key
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+A chave é lida sem eco e passada ao curl via stdin, mantendo-a fora dos argumentos do processo.
+
+```bash
+set +x
+printf 'CLIProxyAPI client key: '
+read -r -s engine_key
+printf '\n'
+base='http://127.0.0.1:8317/v1'
+printf 'header = "Authorization: Bearer %s"\n' "$engine_key" |
+  curl --config - --fail --silent --show-error "$base/models"
+unset engine_key
+```
+
+</TabItem>
+</Tabs>
+
+Uma lista vazia exige configuração do upstream. HTTP `401` significa que o servidor respondeu, mas rejeitou a chave de cliente.
+
+</details>
+
+## Solução de problemas
+
+| Sintoma | Ação |
+|---|---|
+| `401` | Verifique a chave de cliente separadamente da chave upstream. |
+| `404` | Use a base `/v1`, sem `/chat/completions`; verifique o ID do modelo. |
+| Parâmetros rejeitados | Deixe `Janela de Contexto` em branco e o raciocínio em `Automático`; o TomoriBot já tenta novamente rejeições de parâmetros elegíveis antes do início da saída. Verifique os logs em busca de requisições degradadas antes de ativar ferramentas ou depender de controles de amostragem. |
+| `403`, página de login em HTML ou erros de túnel | Verifique a [configuração do túnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/). Se você ativou o Cloudflare Access, ele precisa da [configuração opcional de Access e Caddy](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/); o painel do Discord não consegue fornecer cabeçalhos do Access diretamente. |
+| O stream é interrompido | Verifique a suspensão do PC, cota do upstream, integridade do túnel e os limites de stream no guia do Cloudflare. |
+
+Mantenha o log de requisições e depuração desativado, a menos que esteja diagnosticando uma reprodução local sem dados sensíveis. Faça a rotação de uma chave de cliente vazada no CLIProxyAPI e no endpoint salvo do TomoriBot, além de qualquer relay opcional que a utilize. Revogue credenciais upstream vazadas separadamente.
+
+<details>
+<summary>Desativar um login de conta</summary>
+
+Revogue o acesso nas configurações da conta upstream, pare o proxy e remova os arquivos locais de credenciais dele. A exclusão dos arquivos por si só não revoga tokens.
+
+</details>
+
+<details>
+<summary>Verificar o endereço de vinculação local</summary>
+
+Se a API local estiver inacessível, verifique o endereço de vinculação dela em outro terminal enquanto o CLIProxyAPI estiver em execução:
 
 <Tabs syncKey="operating-system">
 <TabItem label="Windows">
 
 ```powershell
-Get-NetTCPConnection -State Listen -LocalPort 8317 |
-  Select-Object LocalAddress, LocalPort, OwningProcess
+Get-NetTCPConnection -LocalPort 8317 |
+  Select-Object LocalAddress, LocalPort, State, OwningProcess
 ```
-
-Verifique as regras de permissão de firewall existentes em `wf.msc`.
 
 </TabItem>
 <TabItem label="Linux">
@@ -220,8 +270,6 @@ Verifique as regras de permissão de firewall existentes em `wf.msc`.
 ss -ltnp 'sport = :8317'
 ```
 
-Inspecione a política de firewall da sua distribuição em busca de exposições de entrada desnecessárias.
-
 </TabItem>
 <TabItem label="Mac">
 
@@ -229,139 +277,82 @@ Inspecione a política de firewall da sua distribuição em busca de exposiçõe
 lsof -nP -iTCP:8317 -sTCP:LISTEN
 ```
 
-Revise as opções de Firewall nos Ajustes do Sistema do macOS.
-
 </TabItem>
 </Tabs>
 
-   Espere apenas `127.0.0.1`. Pare se vir `0.0.0.0`, `::`, `*` ou um endereço da LAN. Não adicione regras de entrada no firewall nem redirecionamento de portas no roteador.
+Espere apenas `127.0.0.1`; pare se vir `0.0.0.0`, `::`, `*` ou um endereço da LAN. Revise as regras de firewall existentes (`wf.msc` no Windows); não abra uma porta de entrada nem adicione redirecionamento de portas no roteador. O relatório de estado TCP do Windows pode omitir um endpoint acessível, portanto a consulta inclui todos os estados; a consulta opcional de modelos testa a acessibilidade da API.
 
-3. Leia a chave de cliente de forma privada e liste os modelos. Mantenha este terminal aberto para a próxima requisição. Desative o rastreamento de shell ou transcrições do PowerShell antes de carregar segredos.
+</details>
+
+<details>
+<summary>Testar uma resposta local</summary>
+
+Se um modelo falhar ao responder no Discord, teste-o diretamente enquanto o CLIProxyAPI estiver em execução. Desative transcrições do PowerShell ou rastreamento de shell antes de carregar a chave de cliente.
 
 <Tabs syncKey="operating-system">
 <TabItem label="Windows">
 
+Execute a partir da pasta que contém `config.yaml`; isso lê a primeira chave de cliente do layout acima.
+
 ```powershell
-$secret = Read-Host 'CLIProxyAPI client key' -AsSecureString
-$engineKey = [Net.NetworkCredential]::new('', $secret).Password
+$keyMatch = [regex]::Match((Get-Content -LiteralPath .\config.yaml -Raw), '(?m)^access:\r?\n  api-keys:\r?\n    - "([A-Za-z0-9+/=_-]+)"[ \t]*\r?$')
+if (!$keyMatch.Success) { throw 'Expected a quoted client key under access.api-keys in config.yaml.' }
+$engineKey = $keyMatch.Groups[1].Value
 $headers = @{ Authorization = "Bearer $engineKey" }
 $base = 'http://127.0.0.1:8317/v1'
-$models = Invoke-RestMethod "$base/models" -Headers $headers
-$models.data | Select-Object id
-```
-
-</TabItem>
-<TabItem label="Linux">
-
-A chave é lida sem eco e enviada ao curl via stdin, permanecendo fora dos argumentos do processo.
-
-```bash
-set +x
-printf 'CLIProxyAPI client key: '
-read -r -s engine_key
-printf '\n'
-base='http://127.0.0.1:8317/v1'
-printf 'header = "Authorization: Bearer %s"\n' "$engine_key" |
-  curl --config - --fail --silent --show-error "$base/models"
-```
-
-</TabItem>
-<TabItem label="Mac">
-
-A chave é lida sem eco e enviada ao curl via stdin, permanecendo fora dos argumentos do processo.
-
-```bash
-set +x
-printf 'CLIProxyAPI client key: '
-read -r -s engine_key
-printf '\n'
-base='http://127.0.0.1:8317/v1'
-printf 'header = "Authorization: Bearer %s"\n' "$engine_key" |
-  curl --config - --fail --silent --show-error "$base/models"
-```
-
-</TabItem>
-</Tabs>
-
-4. Salve isto como `request.json` na mesma pasta. Substitua `REPLACE_WITH_MODEL_ID` por um ID exato da lista e execute a requisição no mesmo terminal:
-
-```json
-{
-  "model": "REPLACE_WITH_MODEL_ID",
-  "messages": [{ "role": "user", "content": "Reply with hello." }],
-  "stream": false
-}
-```
-
-<Tabs syncKey="operating-system">
-<TabItem label="Windows">
-
-```powershell
-$reply = Invoke-RestMethod "$base/chat/completions" -Method Post -Headers $headers -ContentType 'application/json' -InFile .\request.json
+$body = @{
+  model = Read-Host 'Model ID to test'
+  messages = @(@{ role = 'user'; content = 'Reply with hello.' })
+  stream = $false
+} | ConvertTo-Json -Depth 4
+$reply = Invoke-RestMethod "$base/chat/completions" -Method Post -Headers $headers -ContentType 'application/json' -Body $body
 $reply.choices.message.content
-Remove-Variable engineKey, secret, headers
+Remove-Variable engineKey, keyMatch, headers
 ```
 
 </TabItem>
 <TabItem label="Linux">
 
+A chave é lida sem eco e passada ao curl via stdin, mantendo-a fora dos argumentos do processo.
+
+Substitua `REPLACE_WITH_MODEL_ID` pelo ID a ser testado.
+
 ```bash
+set +x
+printf 'CLIProxyAPI client key: '
+read -r -s engine_key
+printf '\n'
+base='http://127.0.0.1:8317/v1'
 printf 'header = "Authorization: Bearer %s"\n' "$engine_key" |
   curl --config - --fail --silent --show-error "$base/chat/completions" \
-    --header 'Content-Type: application/json' --data-binary @request.json
+    --header 'Content-Type: application/json' \
+    --data '{"model":"REPLACE_WITH_MODEL_ID","messages":[{"role":"user","content":"Reply with hello."}],"stream":false}'
 unset engine_key
 ```
 
 </TabItem>
 <TabItem label="Mac">
 
+A chave é lida sem eco e passada ao curl via stdin, mantendo-a fora dos argumentos do processo.
+
+Substitua `REPLACE_WITH_MODEL_ID` pelo ID a ser testado.
+
 ```bash
+set +x
+printf 'CLIProxyAPI client key: '
+read -r -s engine_key
+printf '\n'
+base='http://127.0.0.1:8317/v1'
 printf 'header = "Authorization: Bearer %s"\n' "$engine_key" |
   curl --config - --fail --silent --show-error "$base/chat/completions" \
-    --header 'Content-Type: application/json' --data-binary @request.json
+    --header 'Content-Type: application/json' \
+    --data '{"model":"REPLACE_WITH_MODEL_ID","messages":[{"role":"user","content":"Reply with hello."}],"stream":false}'
 unset engine_key
 ```
 
 </TabItem>
 </Tabs>
 
-- Uma lista de modelos vazia significa que nenhum backend ou modelo utilizável está configurado.
-- Um modelo listado ainda precisa de um teste de conclusão bem-sucedido; ferramentas e imagens precisam de testes separados.
+Uma resposta gerada confirma o acesso ao upstream. Um resultado ausente na consulta de sockets por si só não prova que a API esteja inacessível.
 
-## 4. Registre e selecione modelos
-
-1. Execute `/providers` (gerenciadores do servidor) ou `/personal providers` (sua própria conexão).
-2. Escolha `Adicionar Novo Endpoint Personalizado` e preencha:
-
-| Campo | Valor |
-|---|---|
-| Rótulo do Endpoint | Um rótulo de conexão privado, como `home-proxy` |
-| Compatibilidade de API | `Compatível com OpenAI` |
-| URL do Endpoint, bot neste PC fora da produção | `http://127.0.0.1:8317/v1` |
-| URL do Endpoint, bot de produção hospedado separadamente | A base HTTPS do relay autenticado, como `https://relay.example.net/v1`, após concluir o [guia do Cloudflare](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/) |
-| Token de Autenticação | A chave de cliente do CLIProxyAPI; obrigatória nesta configuração |
-
-3. Selecione o endpoint salvo, adicione um Modelo de Texto e insira o ID exato ou alias de `/v1/models`.
-4. Deixe `Janela de Contexto` em branco e as opções de capacidade desativadas até testar. Mantenha o vídeo desativado.
-5. Para usar outro modelo, adicione o ID dele no mesmo endpoint e selecione-o no painel de modelos. O TomoriBot consulta `/v1/models`, mas não importa a lista automaticamente.
-
-- O desenvolvimento no mesmo host exige `ALLOW_PRIVATE_NETWORK=127.0.0.1:8317` no ambiente do TomoriBot.
-- No Docker, o loopback identifica o contêiner, então ele não alcança o listener do host através do próprio `127.0.0.1`.
-- A produção exige HTTPS público e respostas de DNS públicas. Conclua o [guia do Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/) e implante o relay antes de registrar uma URL remota.
-
-## Capacidades e solução de problemas
-
-- Os testes locais de protocolo cobrem texto, streaming, uma chamada de função por rodada com continuação e JSON sem streaming. OAuth ao vivo, upstreams pagos, qualidade de visão e conformidade estrita de esquema não foram testados.
-- O CLIProxyAPI aceita mensagens de sistema na porta 8317; nenhuma adaptação do ChatMock é necessária.
-- Mantenha as ferramentas desativadas, a menos que o backend produza uma chamada por rodada. Lotes paralelos de ferramentas não são suportados.
-- Modelos que exigem repetição de assinatura de raciocínio específica do provedor precisam de validação separada. O chat personalizado genérico não transporta vídeo nem usa a API Responses.
-
-| Sintoma | Ação |
-|---|---|
-| `401` | Verifique a chave de cliente separadamente da chave upstream. |
-| `404` | Use a base `/v1`, sem `/chat/completions`; verifique o ID do modelo. |
-| Parâmetros rejeitados | Deixe `Janela de Contexto` em branco e o raciocínio em Automático; o TomoriBot já tenta novamente rejeições de parâmetros elegíveis antes do início da saída. Verifique os logs em busca de requisições degradadas antes de ativar ferramentas ou depender de controles de amostragem. |
-| `403`, página de login em HTML ou erros de túnel | Conclua a [validação do Access e do relay](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/#validate-each-authentication-check). Um hostname direto do Access exige cabeçalhos extras que o painel do Discord não consegue fornecer. |
-| O stream é interrompido | Verifique a suspensão do PC, cota do upstream, integridade do túnel e os limites de stream no guia do Cloudflare. |
-
-Mantenha o log de requisições e depuração desativado, a menos que esteja diagnosticando uma reprodução local sem dados sensíveis. Faça a rotação de uma chave de cliente vazada no CLIProxyAPI, no endpoint salvo do TomoriBot e no relay de produção. Revogue credenciais upstream vazadas separadamente.
+</details>

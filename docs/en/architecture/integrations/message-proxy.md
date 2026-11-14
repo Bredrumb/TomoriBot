@@ -63,21 +63,24 @@ Personal memory creation, updates, and bio seeding check every linked host. Full
 
 ## Lifecycle
 
-```text
-user message
-  -> resolve users.message_proxy_service and message_proxy_instance_id through the catalog
-  -> create expectation(service, instance, original, sender, copied reply reference)
-  -> check the selected instance bot's guild presence alongside the normal wait
-  -> confirmed absence cancels a still-pending expectation and releases the original early
-  -> otherwise wait for delete or MESSAGE_PROXY_WAIT_MS timeout
+```mermaid
+flowchart TD
+  subgraph msg["User Message"]
+    userMsg["User message"] --> resolve["Resolve users.message_proxy_service and<br/>message_proxy_instance_id through catalog"]
+    resolve --> expect["Create expectation (service, instance,<br/>original, sender, copied reply reference)"]
+    expect --> presence["Check selected instance bot's guild presence<br/>alongside the normal wait"]
+    presence -->|"Confirmed absence"| cancel["Cancel still-pending expectation and<br/>release original early"]
+    presence -->|"Otherwise"| wait["Wait for delete or<br/>MESSAGE_PROXY_WAIT_MS timeout"]
+  end
 
-webhook in the same channel while expectations are live
-  -> route each distinct enabled candidate instance at most once (maximum four per channel)
-  -> adapter returns zero or one authoritative attestation
-  -> exact service/instance/sender/message match, plus original for PluralKit
-  -> mark the expectation proxied and remember the short-lived proxy record
-  -> stable identity: persist identity + host + immutable message index atomically
-  -> identity-free: admit without identity persistence or bio seeding
+  subgraph wh["Webhook While Expectations Are Live"]
+    webhook["Webhook in the same channel"] --> route["Route each distinct enabled candidate instance<br/>at most once (max 4 per channel)"]
+    route --> attest["Adapter returns zero or one<br/>authoritative attestation"]
+    attest --> match["Exact service/instance/sender/message match<br/>(plus original for PluralKit)"]
+    match --> mark["Mark expectation proxied and<br/>remember short-lived proxy record"]
+    mark -->|"Stable identity"| persist["Persist identity + host +<br/>immutable message index atomically"]
+    mark -->|"Identity-free"| admit["Admit without identity<br/>persistence or bio seeding"]
+  end
 ```
 
 The expectation is registered before any guild-member REST request, so a repost or deletion that

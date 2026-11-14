@@ -202,10 +202,13 @@ function buildSidebarTranslations(dirPath, slugPrefix) {
 /** Same rule as a group label, applied to a single page's sidebar entry. */
 function buildPageTranslations(filePath) {
   const translations = {};
+  const relativeStem = stripMarkdownExtension(relative(defaultLocaleTarget, filePath));
 
   for (const locale of translatedLocales) {
-    const localizedPath = join(docsTarget, locale.id, relative(defaultLocaleTarget, filePath));
-    if (!existsSync(localizedPath)) continue;
+    const localizedPath = [".md", ".mdx"]
+      .map((extension) => join(docsTarget, locale.id, `${relativeStem}${extension}`))
+      .find((candidate) => existsSync(candidate));
+    if (!localizedPath) continue;
 
     const data = readFrontmatter(localizedPath);
     const label = data.sidebar?.label ?? data.title;
@@ -781,6 +784,9 @@ export default defineConfig({
     }),
     starlight({
       title: "TomoriBot",
+      markdown: {
+        processedDirs: ["../../docs"],
+      },
       // Every locale is registered here, including the default one, because Starlight derives both
       // the route set and the hreflang locale list from this map. `routeData.ts` then removes the
       // alternates for routes that serve another locale's content.

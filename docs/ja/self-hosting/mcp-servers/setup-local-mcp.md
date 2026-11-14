@@ -18,7 +18,7 @@ sidebar:
 ローカルポートでHTTP/SSEトランスポートを公開するMCPサーバーを起動します。たとえば、多くのMCPサーバーはノード経由で実行されます。
 
 ```sh
-npx -y <some-mcp-server> --port 3000
+npx -y "<some-mcp-server>" --port 3000
 ```
 
 正確なコマンドは、実行しているサーバーによって異なります。出力されるURLとトランスポートパス (通常は`http://localhost:3000/sse`) に注目してください。

@@ -4,23 +4,23 @@ sidebar:
   label: "總覽"
   groupLabel: "代理與遠端存取"
   order: 8
-aiGenerated: true
 ---
 
-透過本機 API 代理連線 TomoriBot，或安全地存取在另一台電腦上運行的引擎。
+透過本機API代理連線TomoriBot，或安全地存取在另一台電腦上運行的引擎。
 
 ## 選擇指南
 
-1. [ChatMock](/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/)：在你的電腦上連線以 ChatGPT 為後端的橋接工具。
+1. [ChatMock](/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/)：在你的電腦上連線以ChatGPT為後端的橋接工具。
 2. [CLIProxyAPI](/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/)：安裝代理並從經授權的後端註冊模型。
-3. [Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/)：使用 Access 驗證與生產環境中繼，將分開架設的 bot 連線至你的本機引擎。
+3. [Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/)：為分開架設的bot提供本機引擎的HTTPS網址。
+4. [選用：Access與Caddy](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/)：新增獨立的驗證檢查與更嚴格的API路由。
 
-如果你需要代理，請先從代理指南開始。只有在 bot 運行於另一台電腦時，才需要依照 Cloudflare 指南設定。
+如果你需要代理，請先從代理指南開始。只有在bot運行於另一台電腦時，才需要依照Cloudflare指南設定。
 
 ## 帳號風險
 <!-- anchor: account-risk -->
 
-:::caution[使用 CLI 帳號代理需自行承擔風險]
+:::danger[使用 CLI 帳號代理需自行承擔風險]
 透過第三方橋接工具使用 Codex、Claude Code、Antigravity 或其他 CLI 帳號，可能會違反供應商條款並導致帳號遭停權或終止。付費訂閱或成功登入並不代表獲得 bot 或一般用途 API 的使用許可。請確認適用於你的供應商、方案與驗證方式的規則。TomoriBot 不提供任何帳號安全保證。
 :::
 

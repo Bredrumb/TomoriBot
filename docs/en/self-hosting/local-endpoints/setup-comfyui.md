@@ -50,15 +50,21 @@ node.
 
 ## 1. Run ComfyUI with the API enabled
 
-Install ComfyUI per [its README](https://github.com/comfyanonymous/ComfyUI) and start it so it
-listens on the network:
+Install ComfyUI per [its README](https://github.com/comfyanonymous/ComfyUI). For a bot on the same
+machine, or a Cloudflare Tunnel connector on this PC, keep it on loopback:
 
 ```sh
-python main.py --listen 0.0.0.0 --port 8188
+python main.py --listen 127.0.0.1 --port 8188
 ```
 
-`--listen 0.0.0.0` matters if TomoriBot runs in Docker or on a different machine: the
-default binds to loopback only. Confirm reachability from the machine the bot runs on:
+For the separately hosted production bot, follow the [Cloudflare Tunnel guide's ComfyUI profile](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/).
+It provides a public HTTPS endpoint while ComfyUI stays on loopback. Use its tunnel URL when
+registering below; review the guide's [known risks](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/#known-risks) if you share it without authentication.
+
+For a bot in Docker or on a trusted LAN, binding to `0.0.0.0` lets the bot reach the host's port.
+Restrict access with the host firewall; anyone who can reach an unauthenticated ComfyUI can submit workflows.
+Non-production TomoriBot also needs `ALLOW_PRIVATE_NETWORK` to admit the endpoint's host and port.
+Confirm the local API responds:
 
 ```sh
 curl http://127.0.0.1:8188/system_stats
@@ -100,8 +106,8 @@ Run `/providers` (or `/personal providers`), choose `Add New Custom Endpoint`, a
 |-------|-------------------|
 | `endpoint_label` | A name you choose, e.g. `home-comfy` |
 | API Compatibility | `ComfyUI` |
-| `endpoint_url` | `http://127.0.0.1:8188` (root, without `/v1`) |
-| `auth_token` | *(leave blank unless your ComfyUI is behind auth)* |
+| `endpoint_url` | Same-machine bot: `http://127.0.0.1:8188`; production tunnel: `https://engine.example.com` (root, without `/v1`) |
+| `auth_token` | Leave blank unless your endpoint's gateway requires a client key |
 
 After saving the connection, select it and choose `+ Add new Image Model` or `+ Add new Video Model`
 from the model dropdown. Enter the checkpoint's exact code name and upload the workflow `.json`
@@ -117,9 +123,8 @@ and select your registered ComfyUI endpoint.
 
 ## Troubleshooting
 
-- **Unreachable on add:** ComfyUI bound to loopback while the bot is in Docker / on another
-  host. Start it with `--listen 0.0.0.0` and use `http://host.docker.internal:8188` or the
-  LAN IP.
+- **Unreachable on add:** For production, check the tunnel, `/system_stats` route, and client key if your gateway requires one.
+  For Docker or a trusted LAN, check the listener, firewall, host address, and TomoriBot's private-network opt-in.
 - **Generation never completes:** TomoriBot polls `/history` until the output appears. Cold
   starts and large models on CPU can exceed the poll window.
 - **Prompt/size ignored or wrong output size:** the workflow is missing the required

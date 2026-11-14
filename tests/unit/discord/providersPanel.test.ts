@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "bun:test";
+import { beforeAll, describe, expect, it, spyOn } from "bun:test";
 import { ComponentType } from "discord.js";
 import type { ProviderPanelEntry } from "@/types/discord/providerPanel";
 import { parseProvidersPanelRoute, PERSONAL_PROVIDERS_ROUTE_NAMESPACE } from "@/utils/discord/providersPanelCatalog";
@@ -18,6 +18,7 @@ import {
 } from "@/utils/discord/ui/providersPanel";
 import { DISCORD_SELECT_OPTIONS_MAX, validateRawModalLimits } from "@/utils/discord/ui/componentsV2Limits";
 import { initializeLocalizer, hasLocaleKey } from "@/utils/text/localizer";
+import * as localizerModule from "@/utils/text/localizer";
 import { localizedCopy, localizedProse } from "../../helpers/localeCases";
 import { expectForEveryLocale } from "../../helpers/localeCases";
 import { useEnvSandbox } from "../../helpers/env";
@@ -720,6 +721,94 @@ describe("providers panel rendering", () => {
 
     // Nothing stores a declaration for a provider whose image path ignores it, so no section renders.
     expect(JSON.stringify(undeclarableModal)).not.toContain("image-supports_abcdefgh");
+  });
+
+  it("offers localized image request formats only for custom OpenAI-compatible models", () => {
+    expectForEveryLocale((locale) => {
+      for (const namespace of ["providers", PERSONAL_PROVIDERS_ROUTE_NAMESPACE] as const) {
+        for (const selected of [undefined, "chat-completions"] as const) {
+          const modal = buildProviderModelModal(
+            locale,
+            "endpoint",
+            "73",
+            "image",
+            42,
+            "abcdefgh",
+            {
+              apiStyle: "openai-compatible",
+              image: {
+                supports: { txt2img: true, img2img: false, inpaint: false, negative_prompt: false },
+                allowInpaint: false,
+                requestFormat: selected,
+              },
+            },
+            namespace,
+          );
+          expect(validateRawModalLimits(modal).violations).toEqual([]);
+          const field = modal.components.find(
+            (entry) => entry.component?.custom_id === "image-request-format_abcdefgh",
+          );
+          const copyLocale = hasLocaleKey(locale, "commands.providers.model_image_request_format_label")
+            ? locale
+            : "en-US";
+          expect(field?.label).toBe(localizedCopy(copyLocale, "commands.providers.model_image_request_format_label"));
+          expect(field?.component?.options?.map((option) => option.value)).toEqual(["images", "chat-completions"]);
+          expect(field?.component?.options?.filter((option) => option.default).map((option) => option.value)).toEqual([
+            selected ?? "images",
+          ]);
+        }
+      }
+      for (const [kind, apiStyle] of [
+        ["provider", "openai-compatible"],
+        ["endpoint", "comfyui"],
+      ] as const) {
+        const modal = buildProviderModelModal(locale, kind, "73", "image", null, "abcdefgh", {
+          apiStyle,
+          image: {
+            supports: { txt2img: true, img2img: false, inpaint: false, negative_prompt: false },
+            allowInpaint: false,
+          },
+        });
+        expect(modal.components.some((entry) => entry.component?.custom_id === "image-request-format_abcdefgh")).toBe(
+          false,
+        );
+      }
+    });
+  });
+
+  it("keeps the image request format field within Discord limits with oversized translations", () => {
+    const localized = spyOn(localizerModule, "localizer").mockReturnValue("x".repeat(200));
+    try {
+      for (const namespace of ["providers", PERSONAL_PROVIDERS_ROUTE_NAMESPACE] as const) {
+        const modal = buildProviderModelModal(
+          "en-US",
+          "endpoint",
+          "73",
+          "image",
+          null,
+          "abcdefgh",
+          {
+            apiStyle: "openai-compatible",
+            image: {
+              supports: { txt2img: true, img2img: false, inpaint: false, negative_prompt: false },
+              allowInpaint: false,
+            },
+          },
+          namespace,
+        );
+        const field = modal.components.find((entry) => entry.component?.custom_id === "image-request-format_abcdefgh");
+        expect(field).toBeDefined();
+        expect(field?.label?.length).toBeLessThanOrEqual(45);
+        expect(field?.description?.length).toBeLessThanOrEqual(100);
+        for (const option of field?.component?.options ?? []) {
+          expect(option.label.length).toBeLessThanOrEqual(100);
+          expect(option.description?.length).toBeLessThanOrEqual(100);
+        }
+        expect(validateRawModalLimits(modal).violations).toEqual([]);
+      }
+    } finally {
+      localized.mockRestore();
+    }
   });
 
   it("separates chat-completion compatibility from what the model can actually do", () => {

@@ -106,7 +106,7 @@ bun run update
 bun run backup
 bun run restore-backup --latest
 # またはバンドルを選択：
-bun run restore-backup --from backups/<bundle-directory>
+bun run restore-backup --from "backups/<bundle-directory>"
 ```
 
 バンドルは`backups/`または`TOMORI_BACKUP_DIR`に保存されます。復元する前に [リカバリ手順](#database-backups-and-recovery-keys) に従ってください。`bun run backup:personas`は`/persona import`用にペルソナとサーバーの記憶をエクスポートします。データベースを復元することはできません。

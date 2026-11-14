@@ -21,7 +21,7 @@ sidebar:
 2. 從 TomoriBot 存放庫中，以官方實例 ID 與相同的回呼 URL 執行輔助程式：
 
    ```sh
-   bun scripts/db/authorize-pluralbuddy-instance.ts pluralbuddy:official <callback-url>
+   bun scripts/db/authorize-pluralbuddy-instance.ts pluralbuddy:official "<callback-url>"
    ```
 
 3. 在終端機提示符號處輸入客戶端 ID 與密鑰。在該電腦的瀏覽器中開啟印出的授權 URL、登入 PluralBuddy，並同意授權畫面。輔助程式會在收到一次回呼或三分鐘後關閉，並將連線存放在 PostgreSQL 中。
@@ -36,7 +36,7 @@ sidebar:
 1. 在可存取部署資料庫的電腦上，註冊一個停用的實例：
 
    ```sh
-   bun scripts/db/register-message-proxy-instance.ts register pluralbuddy https://<instance-host> "<display-name>" <bot-user-id>
+   bun scripts/db/register-message-proxy-instance.ts register pluralbuddy "https://<instance-host>" "<display-name>" "<bot-user-id>"
    bun scripts/db/register-message-proxy-instance.ts inspect
    ```
 
@@ -44,14 +44,14 @@ sidebar:
 2. 對於 PluralBuddy，請在該實例上註冊獨立的 OAuth 應用程式，並使用與上方相同的 loopback 回呼模式。使用註冊時返回的實例 ID 進行授權：
 
    ```sh
-   bun scripts/db/authorize-pluralbuddy-instance.ts <instance-id> <callback-url>
+   bun scripts/db/authorize-pluralbuddy-instance.ts "<instance-id>" "<callback-url>"
    ```
 
    重複授權可用於替換憑證，或在重新整理權杖遭撤銷時進行復原。PluralKit 不需要此步驟。
 3. 從對應代理 bot 發送的訊息中，記錄其 Discord 轉貼 ID 與寄件者帳號 ID。檢查該實例 API 是否能解析該筆轉貼，然後啟用它：
 
    ```sh
-   bun scripts/db/register-message-proxy-instance.ts enable <instance-id> <repost-id> <sender-id>
+   bun scripts/db/register-message-proxy-instance.ts enable "<instance-id>" "<repost-id>" "<sender-id>"
    ```
 
    對於新的分支版本（fork），請先在一次性部署中測試 bot、OAuth 交換與重新整理以及 TomoriBot 查詢，再開放給使用者。
@@ -60,14 +60,14 @@ sidebar:
 若替換了自訂代理 bot，請在重新提供該實例前更新其 Discord bot 使用者 ID：
 
 ```sh
-bun scripts/db/register-message-proxy-instance.ts set-bot <instance-id> <bot-user-id>
+bun scripts/db/register-message-proxy-instance.ts set-bot "<instance-id>" "<bot-user-id>"
 ```
 
 使用以下指令停用或移除自訂實例：
 
 ```sh
-bun scripts/db/register-message-proxy-instance.ts disable <instance-id>
-bun scripts/db/register-message-proxy-instance.ts remove <instance-id>
+bun scripts/db/register-message-proxy-instance.ts disable "<instance-id>"
+bun scripts/db/register-message-proxy-instance.ts remove "<instance-id>"
 ```
 
 移除會刪除 OAuth 連線，並永久防止該來源被再次註冊。若日後可能恢復該實例，請使用 `disable`。現有的身分與記憶仍可使用，且變更無需重新啟動即可生效。

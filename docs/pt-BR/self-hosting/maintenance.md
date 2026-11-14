@@ -129,7 +129,7 @@ Servidores locais de TTS não autenticam mais solicitações com as antigas conf
 bun run backup
 bun run restore-backup --latest
 # Ou escolha um pacote:
-bun run restore-backup --from backups/<diretorio-do-pacote>
+bun run restore-backup --from "backups/<diretorio-do-pacote>"
 ```
 
 Os pacotes são armazenados em `backups/` ou `TOMORI_BACKUP_DIR`. Siga as [etapas de recuperação](#database-backups-and-recovery-keys) antes de restaurar. `bun run backup:personas` exporta personas e memórias do servidor para `/persona import`; ele não pode restaurar um banco de dados.

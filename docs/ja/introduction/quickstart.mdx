@@ -14,16 +14,16 @@ sidebar:
 aiGenerated: false
 ---
 
-import { LinkButton, Aside } from "@astrojs/starlight/components";
+import { LinkButton, Aside, Tabs, TabItem } from "@astrojs/starlight/components";
 
-このガイドでは、TomoriBotでの最初のメッセージまでをゼロから案内します。最も簡単な方法は、準備済みの公開インスタンスを招待することです（[プライバシーポリシー](/ja/legal/privacy-policy/)をご覧ください）。もし独自のインスタンスを稼働させたい場合は、ページ下部の[セルフホスト](#セルフホスト)までジャンプしてください。
+このガイドでは、TomoriBotでの最初のメッセージまでをゼロから案内します。準備済みの公開インスタンスを招待するか、独自のインスタンスをセルフホストしてから、Discord内でセットアップを完了できます。
 
-## ホストされたBotを使用する
+## 1. DiscordにTomoriBotを追加する
 
-### ステップ1：招待する
+### 方法A：ホストされたBotを招待する
 
-以下のボタンを使用して公開インスタンスを招待し、参加させたいサーバーを選択します。
-Botを追加するには、サーバー管理権限が必要です。
+手軽に使いたい場合は、下のボタンから公開インスタンスを招待し、参加させたいサーバーを選択します（直接DMを送ることもできます）。
+Botを追加するには、`サーバー管理`権限が必要です。
 
 <div class="button-row">
   <LinkButton href="https://discord.com/oauth2/authorize?client_id=841644102059556915" variant="primary">
@@ -31,56 +31,89 @@ Botを追加するには、サーバー管理権限が必要です。
   </LinkButton>
 </div>
 
-直接DMを送ることもできます。セットアップ手順は同じです。
 
-### ステップ2：APIキーを取得する
+### 方法B：ご自身でセルフホストする
 
-TomoriBot自体にはAIの頭脳は組み込まれていません。`APIキー`を通じて`プロバイダー`から接続します。多くのプロバイダーをサポートしており、始めるために必要なのは1つだけです。現在サポートしているプロバイダーの一部を以下に示します。
+プライバシーやデータを完全に制御したい場合は、ご自身のハードウェアで独自のTomoriBotインスタンスを稼働させることができます：
 
-- **Google Gemini**：汎用性が高く、無料枠があり、すべての機能を実行できます。初めてのセットアップにおすすめです。
-- **OpenRouter**：1つのキーで、最新のテキスト、動画、画像、埋め込みモデルのすべてにアクセスできます。
-- **NovelAI**：サブスクリプションベースで、検閲のない画像、ロールプレイ、ストーリーテリングに適しています。
-- DeepSeek、NVIDIA NIM、Anthropic、Vertex AI、Z.ai、またはOpenAI互換の任意のCustomエンドポイント。
+- **方法1：セットアップウィザード（推奨）**：[Bun](https://bun.sh/) v1.3.2以上、[PostgreSQL](https://www.postgresql.org/)または[Docker](https://www.docker.com/)、および`Presence Intent`、`Server Members Intent`、`Message Content Intent`が有効な[Discord Botトークン](https://discord.com/developers/applications)が必要です：
+  ```sh
+  git clone https://github.com/Bredrumb/TomoriBot.git
+  cd TomoriBot
+  bun run setup # 依存関係のインストール、.envの設定、PostgreSQLのセットアップを行います
+  bun run dev # Botを起動し、データベースのマイグレーションを自動実行します
+  ```
+- **方法2：Docker Compose**：[Docker](https://www.docker.com/)およびDocker Compose v2以上と、同じ3つのIntentが有効な[Discord Botトークン](https://discord.com/developers/applications)が必要です（必要な`.env`変数とLinuxのディレクトリ権限については、[Docker Composeガイド](/self-hosting/docker-compose/)を参照してください）：
 
-Discord内で`/help`を実行し、`TomoriBotをセットアップ`、ステップ 1: APIキーの取得の順に選択し、プロバイダーを選んでAPIキーの取得方法を確認するか、完全なリストについては[プロバイダーとモデル](/ja/features/setup-administration/providers-and-models/#api-keys)をご覧ください。
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
 
-<Aside type="caution">
-APIキーは絶対に他の人と共有しないでください。TomoriBotのスラッシュコマンドを通じてのみ提供してください。これにより安全に保存・暗号化されます。
-</Aside>
+```powershell
+git clone https://github.com/Bredrumb/TomoriBot.git
+cd TomoriBot
+Copy-Item .env.example .env
+# .env に DISCORD_TOKEN、CRYPTO_SECRET、POSTGRES_PASSWORD、ALLOW_PRIVATE_NETWORK を設定します
+docker compose up
+```
 
-### ステップ3：セットアップを実行する
+</TabItem>
+<TabItem label="Linux">
 
-`/setup`を実行します。あなただけが操作できるプライベートなチェックリストパネルが開きます。各項目を進め、`設定完了`を押します。
+```bash
+git clone https://github.com/Bredrumb/TomoriBot.git
+cd TomoriBot
+cp .env.example .env
+# .env に DISCORD_TOKEN、CRYPTO_SECRET、POSTGRES_PASSWORD、ALLOW_PRIVATE_NETWORK を設定します
+docker compose up
+```
 
-- **AIプロバイダー**：`AIプロバイダー（推奨）`を選択し、プロバイダーを選んでキーを貼り付けます。セルフホストの場合は`カスタムエンドポイント`を選択してエンドポイントの接続とテキストモデルを登録できます。サーバーでは、`ユーザーBYOK`によって各メンバーが個人のプロバイダーを提供できます。
-- **初期設定**：開始時のペルソナ、返信スタイル、タイムゾーン、およびデフォルトのシステムプロンプトを選択します。
-- ポリシー（ホストされたインスタンスのみ）：利用規約とプライバシーポリシーを1つのモーダルで承認します。
+</TabItem>
+<TabItem label="Mac">
 
-作業中は何も保存されません。パネルはドラフトであり、`設定完了`を押すことでキーが暗号化され、サーバー用の設定が初期化され、話す準備が整います。`キャンセル`を押すとドラフトは破棄され、操作されないパネルは自動的に期限切れになります。各サーバーは独自の独立した設定を保持します。
+```bash
+git clone https://github.com/Bredrumb/TomoriBot.git
+cd TomoriBot
+cp .env.example .env
+# .env に DISCORD_TOKEN、CRYPTO_SECRET、POSTGRES_PASSWORD、ALLOW_PRIVATE_NETWORK を設定します
+docker compose up
+```
 
-推奨： その後`/expressions initialize`を実行して、サーバーのカスタム絵文字やスタンプを正確に使用できるようにしてください。
+</TabItem>
+</Tabs>
 
-### ステップ4：チャットを開始する
+その後、`サーバー管理`権限を持つ任意のサーバーに招待するか、DMで話しかけてください。
 
-メンションするか、メッセージに`返信`するだけです。
+<div class="button-row">
+  <LinkButton href="/self-hosting/" variant="secondary">
+    セルフホストの完全なガイド
+  </LinkButton>
+</div>
+
+## 2. `/setup`を実行する
+
+`/setup`を実行し、すべての項目を完了してから`セットアップを完了`を押します：
+
+- **AIプロバイダー**：`AIプロバイダー（推奨）`を選択し、プロバイダーを選んでキーを貼り付けます。セルフホストの場合は`カスタムエンドポイント`を選択してエンドポイント接続とテキストモデルを登録できます。サーバーでは、`ユーザーBYOK`によって各メンバーが個人のプロバイダーを提供できます。
+- **初期設定**：初期ペルソナ、返信スタイル、タイムゾーン、デフォルトのシステムプロンプト、および追加機能を選択します。9つの追加機能はすべて初期状態でチェックが入っているため、不要なものはチェックを外してください。これらの設定は後から`/config`で調整できます。
+
+作業中は何も保存されません。パネルは下書きであり、`セットアップを完了`を押すことでキーが暗号化され、サーバー用の設定が初期化されて会話の準備が整います。`キャンセル`を押すと下書きは破棄され、操作されないパネルは自動的に期限切れになります。各サーバーは独自の独立した設定を保持します。
+
+推奨の次のステップとして、`/expressions initialize`を実行し、サーバーのカスタム絵文字やスタンプを正確に使用できるようにしてください。
+
+## 3. チャットを開始する
+
+メンションするか、メッセージに返信してください（または直接DMを送って挨拶してください）：
 
 ```text
 @TomoriBot やあ、調子はどう？
 ```
 
-ここから、トリガー条件や振る舞いを形作ることができます。
-- `/persona`で個性を与える：[複数のペルソナ](/ja/features/chatting-personality/multiple-personas/)をご覧ください。
-- `/memories`で教える：[記憶](/ja/features/knowledge/memory/long-term-memory/)をご覧ください。
-- 他のカスタマイズオプションを探る：[コマンドリファレンス](/ja/features/command-reference/)または[機能](/ja/features/)をご覧ください。
+### 基本コマンドと次のステップ
 
-ホストされたインスタンスでは、TomoriBotをセットアップすることは、あなたとサーバーのメンバーが`/legal terms-of-service`および`/legal privacy-policy`の通知に同意することを意味します。ガイド付きセットアップでは両方の承認を求められます。これら2つのコマンド、およびそれらを伴うPoliciesステップは、ホストされたデプロイメントに属します。セルフホストされたインスタンスは、すべての環境で`/legal license`を登録し、2つのポリシーは`RUN_ENV=production`の下でのみ登録します。
+- `/setup`：サーバーの初期ボットセットアップ。
+- `/config`および`/personal config`：現在のDiscordサーバーまたは個人向けにTomoriBotを調整します。
+- `/providers`および`/personal providers`：モデルエンドポイントやクラウドプロバイダーを追加します。
+- `/persona`：性格を与えたり、新しいキャラクターを追加したりします。[複数のペルソナ](/features/chatting-personality/multiple-personas/)をご覧ください。
+- `/memories`：会話を通じて事実を教えます。[記憶](/features/knowledge/memory/long-term-memory/)をご覧ください。
 
-## セルフホスト
-
-データ、モデル、APIキーを完全に制御したいですか？独自のTomoriBotインスタンスをご自身のハードウェアで稼働させることができます。推奨される方法は、ガイド付きセットアップウィザードです。
-
-<div class="button-row">
-  <LinkButton href="/ja/self-hosting/" variant="secondary">
-    TomoriBotをセルフホスト
-  </LinkButton>
-</div>
+その他のカスタマイズオプションは、[コマンドリファレンス](/features/command-reference/)や[機能](/features/)ツアーをご覧ください。

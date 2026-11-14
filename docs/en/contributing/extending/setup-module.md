@@ -31,6 +31,6 @@ Add an entry to `SETUP_MODULES` and its id to `FULL_INSTALL_MODULE_IDS`:
 - Spawn existing CLI scripts instead of importing them, since they may call `process.exit()`.
 - When a required local tool is missing, print the commands to run instead.
 - Do not save temporary access tokens the bot does not need at runtime.
-- Update `docs/en/self-hosting/setup-wizard.md` when Full Install changes.
+- Update `docs/en/self-hosting/setup-wizard.mdx` when Full Install changes.
 
 Run `bun run check` and `bun run lint`.

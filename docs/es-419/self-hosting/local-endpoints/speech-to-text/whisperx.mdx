@@ -1,0 +1,121 @@
+---
+title: "Transcripción de WhisperX"
+sidebar:
+  order: 1
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Configura conversión de voz a texto local y precisa para TomoriBot utilizando el servidor [WhisperX](https://github.com/m-bain/whisperX) incluido. WhisperX proporciona una transcripción de audio rápida con alineación a nivel de palabra.
+
+## Configuración
+
+Ejecuta estos comandos desde la raíz del repositorio TomoriBot:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+cd servers/stt
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+python whisperx_server.py
+```
+
+Asegúrate de que `ffmpeg` esté disponible en tu `PATH`. Para aceleración por GPU NVIDIA, las DLL de CUDA 12 cuBLAS y cuDNN también deben estar en tu `PATH`.
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+cd servers/stt
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python whisperx_server.py
+```
+
+Asegúrate de que `ffmpeg` esté instalado (`sudo apt-get install ffmpeg` en Debian/Ubuntu). En sistemas con GPU NVIDIA, las bibliotecas de tiempo de ejecución de CUDA 12 habilitan la transcripción por GPU.
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+cd servers/stt
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python whisperx_server.py
+```
+
+Asegúrate de que `ffmpeg` esté instalado (`brew install ffmpeg`). Como `servers/stt/requirements.txt` hace referencia a `--extra-index-url https://download.pytorch.org/whl/cu124` (solo CUDA para Linux/Windows), `pip` recurre a los paquetes estándar de PyPI en Mac. CTranslate2 no usa Apple MPS, por lo que la transcripción se ejecuta en la CPU (`int8` por defecto, o establece `WHISPERX_COMPUTE_TYPE=float32` si es necesario).
+
+</TabItem>
+</Tabs>
+
+Mantén esa terminal abierta mientras TomoriBot esté usando WhisperX. La URL del punto de conexión predeterminado es `http://127.0.0.1:8021`. En Windows, usa `127.0.0.1` en lugar de `localhost`.
+
+## Elegir un modelo
+
+Establece `WHISPERX_MODEL` antes de iniciar el servidor:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$env:WHISPERX_MODEL = "large-v3-turbo"
+python servers\stt\whisperx_server.py
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+WHISPERX_MODEL=large-v3-turbo python servers/stt/whisperx_server.py
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+WHISPERX_MODEL=large-v3-turbo python servers/stt/whisperx_server.py
+```
+
+</TabItem>
+</Tabs>
+
+| `WHISPERX_MODEL` | Tamaño | Uso |
+|---|---|---|
+| `large-v3` | 1.55B | Mejor precisión multilingüe; alrededor de 0.6 GiB más de VRAM que turbo |
+| `large-v3-turbo` | 809M | Multilingüe, decodificador más rápido; japonés ligeramente inferior |
+| `kotoba-tech/kotoba-whisper-v2.0-faster` | 756M | Solo japonés; más preciso que turbo en clips de prueba en japonés, a la misma velocidad |
+
+En clips cortos el codificador domina, por lo que los tres funcionan a una velocidad similar. Elige según el idioma y la memoria. `small` y `base` pierden demasiada precisión en japonés como para recomendarlos. Los modelos de Whisper aún pueden inventar texto en clips muy cortos o casi silenciosos.
+
+## Comportamiento de GPU y dispositivo
+
+El servidor usa una GPU NVIDIA automáticamente cuando CUDA y CTranslate2 son utilizables. Consulta `http://127.0.0.1:8021/health`: `device` muestra `cuda` en configuraciones con GPU o `cpu` en configuraciones de CPU y Mac.
+
+En Windows, el reconocimiento de voz necesita las DLL de CUDA 12 cuBLAS y cuDNN en tu `PATH`. Sin ellas, el servidor muestra `GPU found but unusable` al iniciar y recurre a la CPU, lo cual es mucho más lento: instálalas y reinicia el servidor. Si estableces `WHISPERX_DEVICE=cuda`, el servidor se detiene al iniciar en lugar de recurrir a la CPU.
+
+En Mac, CTranslate2 transcribe en la CPU; `WHISPERX_DEVICE=cuda` falla allí.
+
+## Registro en TomoriBot
+
+Ejecuta `/providers`, elige `+ Agregar nuevo punto de conexión personalizado` y usa la compatibilidad de API de transcripción:
+
+- Compatibilidad de API: `openai-compatible-transcription`
+- `endpoint_url`: `http://127.0.0.1:8021`
+
+Después de guardar la conexión, selecciónala y usa su menú desplegable de modelos para agregar el valor exacto de `WHISPERX_MODEL` (`large-v3` por defecto, o el ID de repositorio completo como `kotoba-tech/kotoba-whisper-v2.0-faster`) como un modelo de `Transcripción`.
+
+Usa `/providers` para el registro del punto de conexión y la configuración del modelo. Luego abre `/config` > Modelos > Cambiar modelos para seleccionar y activar el punto de conexión registrado.
+
+## Usar transcripciones
+
+Después del registro, TomoriBot transcribe los archivos adjuntos de audio en segundo plano y agrega el texto al contexto del chat. Usa `/config` > Comportamiento > Comportamiento de avisos solo si también quieres que las transcripciones se publiquen de manera visible en el chat.

@@ -1,4 +1,13 @@
 import type { CustomEndpointApiStyle, CustomEndpointRow } from "@/types/db/schema";
+import { z } from "zod";
+
+export const IMAGE_REQUEST_FORMATS = ["images", "chat-completions"] as const;
+export const imageRequestFormatSchema = z.enum(IMAGE_REQUEST_FORMATS);
+export type ImageRequestFormat = z.infer<typeof imageRequestFormatSchema>;
+
+export function readImageRequestFormat(endpoint: Pick<CustomEndpointRow, "extra_config">): ImageRequestFormat {
+  return imageRequestFormatSchema.default("images").parse(endpoint.extra_config.image_request_format);
+}
 
 export interface ImageEndpointSupports {
   txt2img: boolean;

@@ -15,36 +15,24 @@ delivery configurations before consuming the generator yielded by
 
 The state machine runs through a `for await` loop over the raw chunk generator:
 
-```
-Stream generator
-       |
-       v
-Check stop registry (pre-chunk)
-       |
-       +---> Stop / Interrupt detected? ---> Return stop result
-       |
-Reset caller watchdog (onStreamProgress)
-       |
-Normalize chunk (stage 03 processChunk)
-       |
-Route chunk by type:
-  - "text"          -> stage 05 processTextChunk
-  - "function_call" -> flush pending buffer -> return { status: "function_call" }
-  - "error"         -> flush pending buffer -> show error embed -> return { status: "error" }
-  - "done"          -> record terminal metadata; continue loop
-       |
-Check stop registry (post-write)
-       |
-Loop exhausted?
-       |
-       v
-completeStreamAfterProviderEnd()
-       |  (flushFinalBuffer, clear internal stops, assemble StreamResult)
-       v
-Check wasEmptyStreamResponse()
-       |
-       +---> Empty? ---> return { status: "empty_response" }
-       +---> Output? -> return { status: "completed" }
+```mermaid
+flowchart TD
+  gen["Stream generator"] --> stopPre{"Check stop registry<br/>(pre-chunk)"}
+  stopPre -->|"Stop / Interrupt detected"| retStop["Return stop result"]
+  stopPre -->|"Continue"| watchdog["Reset caller watchdog (onStreamProgress)"]
+  watchdog --> norm["Normalize chunk (stage 03 processChunk)"]
+  norm -->|"type = text"| text["Stage 05 processTextChunk"]
+  norm -->|"type = function_call"| fn["Flush pending buffer →<br/>return { status: function_call }"]
+  norm -->|"type = error"| err["Flush pending buffer → show error embed →<br/>return { status: error }"]
+  norm -->|"type = done"| done["Record terminal metadata"]
+  text --> stopPost{"Check stop registry<br/>(post-write)"}
+  done --> stopPost
+  stopPost -->|"Stop detected"| retStop
+  stopPost -->|"More chunks"| stopPre
+  stopPost -->|"Loop exhausted"| complete["completeStreamAfterProviderEnd()<br/>(flushFinalBuffer, clear internal stops, assemble StreamResult)"]
+  complete --> empty{"wasEmptyStreamResponse()?"}
+  empty -->|"Empty"| retEmpty["return { status: empty_response }"]
+  empty -->|"Output"| retOk["return { status: completed }"]
 ```
 
 ## Stop and interrupt resolution

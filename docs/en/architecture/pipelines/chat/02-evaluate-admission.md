@@ -13,27 +13,19 @@ for turn planning.
 It returns a discriminated `ChatAdmission`: runnable (`"run"`) or non-runnable (`"ignore"`, `"blocked"`,
 `"queued"`, or `"error"`).
 
-```
-ChatIncoming
-  │
-  ├─► Suppressed / bot / easter egg?       ──► ignore
-  ├─► Privacy-FULL / blacklisted / scope?  ──► blocked
-  ├─► Sendability checks failed?           ──► blocked
-  │
-  ▼
-Load early TomoriState & allPersonas
-  │
-  ├─► Audio attachment present?            ──► STT transcription & inline content mutation
-  │
-  ▼
-evaluateAdmissionQueueAndTriggerGate()
-  │
-  ├─► Channel locked?
-  │     ├─► Natural stop phrasing?         ──► requestNaturalStopForLockedTurn() → ignore
-  │     ├─► Eligible same-user follow-up?  ──► queueFollowUpForLockedTurn() → queued
-  │     └─► Eligible trigger & quota?      ──► enqueueBusyChannelMessage() → queued
-  │
-  └─► Channel free & trigger matches?      ──► RunnableChatAdmission { disposition: "run" }
+```mermaid
+flowchart TD
+  inc["ChatIncoming"] -->|"Suppressed / bot / easter egg?"| ign1["ignore"]
+  inc -->|"Privacy-FULL / blacklisted / scope?"| blk1["blocked"]
+  inc -->|"Sendability checks failed?"| blk2["blocked"]
+  inc --> load["Load early TomoriState & allPersonas"]
+  load -->|"Audio attachment present?"| stt["STT transcription & inline content mutation"]
+  stt --> gate["evaluateAdmissionQueueAndTriggerGate()"]
+  load --> gate
+  gate -->|"Channel locked: natural stop phrasing?"| stop["requestNaturalStopForLockedTurn() → ignore"]
+  gate -->|"Channel locked: eligible same-user follow-up?"| follow["queueFollowUpForLockedTurn() → queued"]
+  gate -->|"Channel locked: eligible trigger & quota?"| busy["enqueueBusyChannelMessage() → queued"]
+  gate -->|"Channel free & trigger matches"| run["RunnableChatAdmission { disposition: run }"]
 ```
 
 ### Channel scope and DM resolution

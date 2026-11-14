@@ -18,7 +18,7 @@ Os servidores locais MCP são suportados apenas em instâncias auto-hospedadas. 
 Inicie um servidor MCP que expõe um transporte HTTP/SSE em uma porta local. Por exemplo, muitos servidores MCP são executados via Node:
 
 ```sh
-npx -y <some-mcp-server> --port 3000
+npx -y "<some-mcp-server>" --port 3000
 ```
 
 O comando exato depende do servidor que você está executando. Observe o URL e o caminho de transporte impresso (geralmente `http://localhost:3000/sse`).

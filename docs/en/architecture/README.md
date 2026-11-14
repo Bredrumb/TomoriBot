@@ -33,23 +33,24 @@ The codebase is organized into three architectural tiers:
 
 Incoming Discord gateway events follow a common path from client connection to response delivery:
 
-```text
-Discord Gateway
-  -> discord.js Client (src/init/discord.ts)
-  -> Event Handler (src/handlers/eventHandler.ts)
-     -> interactionCreate -> Slash Command Dispatch (src/commands/)
-     -> messageCreate     -> Chat Pipeline Coordinator (src/events/messageCreate/tomoriChat.ts)
+```mermaid
+flowchart TD
+  gateway["Discord Gateway"] --> client["discord.js Client<br/>src/init/discord.ts"]
+  client --> handler["Event Handler<br/>src/handlers/eventHandler.ts"]
+  handler -->|"interactionCreate"| commands["Slash Command Dispatch<br/>src/commands/"]
+  handler -->|"messageCreate"| chat["Chat Pipeline Coordinator<br/>src/events/messageCreate/tomoriChat.ts"]
 
-Chat Pipeline
-  -> Normalization and Admission Guard (src/utils/chat/admission.ts)
-  -> Channel Lock and Queue (src/utils/chat/channelQueue.ts)
-  -> Turn Planning and Persona Routing (src/utils/chat/turnPlanner.ts)
-  -> Context Assembly (src/utils/chat/contextPipeline.ts)
-  -> Generation Turn (src/utils/chat/generationTurn.ts)
-     -> Tool-Loop Pipeline (src/utils/chat/toolLoop.ts)
-     -> Provider Pipeline (src/types/stream/interfaces.ts)
-     -> Stream Delivery to Discord (src/utils/discord/stream/uiUpdater.ts)
-  -> Post-Turn Effects (src/utils/chat/postTurnEffects.ts)
+  subgraph chatPipeline["Chat Pipeline"]
+    chat --> admission["Normalization and Admission Guard<br/>src/utils/chat/admission.ts"]
+    admission --> lock["Channel Lock and Queue<br/>src/utils/chat/channelQueue.ts"]
+    lock --> planner["Turn Planning and Persona Routing<br/>src/utils/chat/turnPlanner.ts"]
+    planner --> context["Context Assembly<br/>src/utils/chat/contextPipeline.ts"]
+    context --> gen["Generation Turn<br/>src/utils/chat/generationTurn.ts"]
+    gen --> toolLoop["Tool-Loop Pipeline<br/>src/utils/chat/toolLoop.ts"]
+    toolLoop --> provider["Provider Pipeline<br/>src/types/stream/interfaces.ts"]
+    provider --> delivery["Stream Delivery to Discord<br/>src/utils/discord/stream/uiUpdater.ts"]
+    gen --> post["Post-Turn Effects<br/>src/utils/chat/postTurnEffects.ts"]
+  end
 ```
 
 1. **Gateway dispatch**: The Discord client receives events and passes them to `src/handlers/eventHandler.ts`.

@@ -11,18 +11,17 @@ cross-channel boomerangs, and usage statistics.
 
 `runPostTurnEffects()` in `src/utils/chat/postTurnEffects.ts` runs after `runGenerationTurn()` settles:
 
-```
-ChatTurnContext & GenerationTurnResult
-  │
-  ├─► 1. recordReunionPresence()           ──► commits or releases triggerer presence claim
-  ├─► 2. maybeScheduleEmptyResponseRetry() ──► re-enters tomoriChat(skipLock=true) on empty output
-  ├─► 3. settleTextQuota()                 ──► keeps the reservation for a reply or releases it
-  ├─► 4. updateSelfReplyBookkeeping()      ──► updates last-responded persona and chain counters
-  ├─► 5. writeShortTermMemory()            ──► stores conversation turn in STM cache per persona
-  ├─► 6. emitThoughtLog()                  ──► sends reasoning or BYOK attribution embeds
-  ├─► 7. scheduleBoomerangFollowUp()       ──► schedules cross-channel re-entry via setImmediate
-  ├─► 8. rememberLastReplyUsage()          ──► caches prompt token usage for /context inspection
-  └─► 9. recordUsageStats()                ──► fire-and-forget dispatch of turn & token metrics
+```mermaid
+flowchart TD
+  in["ChatTurnContext & GenerationTurnResult"] --> s1["1. recordReunionPresence()<br/>commits or releases triggerer presence claim"]
+  s1 --> s2["2. maybeScheduleEmptyResponseRetry()<br/>re-enters tomoriChat(skipLock=true) on empty output"]
+  s2 --> s3["3. settleTextQuota()<br/>keeps the reservation for a reply or releases it"]
+  s3 --> s4["4. updateSelfReplyBookkeeping()<br/>updates last-responded persona and chain counters"]
+  s4 --> s5["5. writeShortTermMemory()<br/>stores conversation turn in STM cache per persona"]
+  s5 --> s6["6. emitThoughtLog()<br/>sends reasoning or BYOK attribution embeds"]
+  s6 --> s7["7. scheduleBoomerangFollowUp()<br/>schedules cross-channel re-entry via setImmediate"]
+  s7 --> s8["8. rememberLastReplyUsage()<br/>caches prompt token usage for /context inspection"]
+  s8 --> s9["9. recordUsageStats()<br/>fire-and-forget dispatch of turn & token metrics"]
 ```
 
 ### Side effect sequence

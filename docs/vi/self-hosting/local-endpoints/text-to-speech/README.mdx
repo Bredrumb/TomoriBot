@@ -37,26 +37,28 @@ TomoriBot coi giọng nói như một tính năng endpoint tùy chỉnh. Các en
 
 1. Chọn một engine từ các thẻ ở trên và thiết lập wrapper của nó từ `servers/tts/`.
 2. Trong `/providers`, chọn `Thêm endpoint tùy chỉnh mới` và sử dụng API Compatibility `tts-clone`.
-3. Chọn endpoint đã lưu và sử dụng dropdown model của nó để thêm model Speech, Voice Source Mode và Script Markup.
-4. Mở `/config` > Models > Switch Models và chọn endpoint dưới mục `TTS (Voice Design)` hoặc `TTS (Voice Clone)`. Các endpoint Auto sẽ kích hoạt cả hai lựa chọn; xóa một lựa chọn vẫn giữ nguyên lựa chọn còn lại.
+3. Chọn endpoint đã lưu và sử dụng dropdown model của nó để thêm model `Giọng nói`, `Chế độ nguồn giọng đọc` và `Kiểu định dạng kịch bản`.
+4. Mở `/config` > `Model` > `Chuyển đổi model` và chọn endpoint dưới mục `TTS (Voice Design)` hoặc `TTS (Sao chép giọng đọc)`. Các endpoint `Tự động` sẽ kích hoạt cả hai lựa chọn; xóa một lựa chọn vẫn giữ nguyên lựa chọn còn lại.
 
 Để biết các nhà cung cấp giọng nói được lưu trữ trên đám mây và tùy chọn cá nhân, hãy xem [Giọng nói: TTS & STT](/features/capabilities/media-generation/tts-and-stt/).
 
 ## Truy cập mạng
 {/* anchor: network-access */}
 
-Mọi máy chủ TTS cục bộ đều mặc định liên kết với `127.0.0.1`, nên chỉ bot trên cùng máy mới có thể kết nối được. Khi TomoriBot chạy trong Docker hoặc trên một máy khác, hãy đặt `TOMORI_TTS_HOST=0.0.0.0` cho máy chủ và đăng ký endpoint bằng địa chỉ của máy chủ vật lý, ví dụ `http://host.docker.internal:8015`.
+Mọi máy chủ TTS cục bộ đều mặc định liên kết với `127.0.0.1`. Với bot production được lưu trữ riêng, hãy giữ cấu hình liên kết này và làm theo [cấu hình TTS trong hướng dẫn Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/). Đăng ký URL tunnel HTTPS của nó (không kèm `/v1`), chọn `tts-clone` và để trống token xác thực trừ khi bạn đã thêm cổng xác thực. Cấu hình này cho phép kiểm tra trạng thái và tổng hợp giọng nói cho cả sao chép giọng đọc lẫn thiết kế giọng nói (Voice Design). Các kết nối văn bản và ComfyUI vẫn có thể hoạt động song song với giọng nói.
+
+Với bot ngoài môi trường production chạy trong Docker hoặc trên mạng LAN tin cậy, hãy đặt `TOMORI_TTS_HOST=0.0.0.0` và đăng ký địa chỉ của máy chủ vật lý, ví dụ `http://host.docker.internal:8015`. Hãy giới hạn quyền truy cập cổng bằng tường lửa của máy chủ và cấu hình `ALLOW_PRIVATE_NETWORK` trong TomoriBot để cho phép máy chủ và cổng đó.
 
 Mỗi máy chủ đọc biến cổng riêng (`CHATTERBOX_PORT`, `QWEN3TTS_PORT`, `IRODORI_TTS_PORT`, `FISH_S2_PORT`, `VOXCPM2_PORT`, `COSYVOICE3_PORT`, `MOSS_TTS_PORT`), nên nhiều máy chủ có thể chạy cùng lúc từ một `.env`. `bun run launch` truyền `.env` cho các máy chủ mà nó khởi động; một máy chủ được khởi động thủ công chỉ đọc môi trường shell của nó.
 
-Các máy chủ không có xác thực: bất kỳ ai kết nối được tới cổng đều có thể chạy tổng hợp trên GPU của bạn. Chỉ liên kết ra ngoài loopback trên mạng bạn tin cậy, và đặt một reverse proxy có xác thực phía trước bất kỳ máy chủ nào bạn mở ra ngoài mạng đó.
+Các máy chủ không có xác thực: bất kỳ ai kết nối được trực tiếp hoặc qua tunnel đều có thể chạy tổng hợp giọng nói trên GPU của bạn. Hãy xem mục [rủi ro đã biết](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/#known-risks) trong hướng dẫn tunnel trước khi chấp nhận chia sẻ không xác thực. [Access và Caddy](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/) là tùy chọn bổ sung nếu bạn muốn có bước kiểm tra xác thực riêng. Chỉ liên kết ra ngoài loopback trên mạng bạn tin cậy.
 
 ## Giọng nói của persona
 
-Để nhân bản giọng nói, hãy tải lên một mẫu âm thanh rõ ràng, đơn giọng trong `/config` > Models > TTS Parameters & Voices, sau đó gán mẫu đó trong Persona > Voice. Hãy kiểm tra hướng dẫn của engine để biết độ dài clip được khuyến nghị và yêu cầu bản ghi văn bản.
+Để nhân bản giọng nói, hãy tải lên một mẫu âm thanh rõ ràng, đơn giọng trong `/config` > `Model` > `Tham số & Giọng đọc TTS`, sau đó gán mẫu đó trong `Persona` > `Giọng nói`. Hãy kiểm tra hướng dẫn của engine để biết độ dài clip được khuyến nghị và yêu cầu bản chép lời.
 
 TomoriBot chấp nhận các mẫu âm thanh lên đến 130 giây và chuyển đổi chúng thành WAV đơn âm (mono). Giới hạn dung lượng tải lên mặc định là 10 MB; `SPEECH_SAMPLE_MAX_MB` có thể thay đổi giá trị này. Một định dạng nén như FLAC có thể giúp clip dài vừa vặn với dung lượng giới hạn.
 
-Đối với các engine hỗ trợ thiết kế giọng nói, hãy lưu mô tả giọng nói trong Persona > Voice. Một persona có thể có cả mô tả và mẫu âm thanh; mức ưu tiên Voice Source sẽ chọn nguồn khả dụng nào để thử trước. Xem hướng dẫn của từng engine để biết các chế độ và script markup được hỗ trợ.
+Đối với các engine hỗ trợ thiết kế giọng nói, hãy lưu mô tả giọng nói trong `Persona` > `Giọng nói`. Một persona có thể có cả mô tả và mẫu âm thanh; mức ưu tiên `Chế độ nguồn giọng đọc` sẽ chọn nguồn khả dụng nào để thử trước. Xem hướng dẫn của từng engine để biết các chế độ và kiểu định dạng kịch bản được hỗ trợ.
 
 Bật tin nhắn thoại trong `/config` > Permissions, sau đó yêu cầu một persona gửi tin nhắn thoại hoặc sử dụng `/generate voice-message` để dùng thử.

@@ -45,11 +45,13 @@ TomoriBot 将语音视为自定义端点功能。本地引擎作为 HTTP 服务�
 ## 网络访问
 {/* anchor: network-access */}
 
-所有 TTS 本地服务器默认绑定到 `127.0.0.1`，因此只有同一台机器上的 bot 能访问它们。当 TomoriBot 运行在 Docker 中或另一台机器上时，请为服务器设置 `TOMORI_TTS_HOST=0.0.0.0`，并使用宿主机的地址注册端点，例如 `http://host.docker.internal:8015`。
+所有TTS本地服务器默认绑定到`127.0.0.1`。对于独立托管的生产环境bot，请保持该绑定，并遵循[Cloudflare Tunnel指南中的TTS配置](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/)。注册其不带`/v1`的HTTPS隧道URL，API兼容性选择`TTS 克隆`，除非你额外配置了身份验证网关，否则将认证令牌留空。该配置同时允许健康检查以及语音克隆与VoiceDesign的语音合成。文本与ComfyUI连接可以与语音服务并行保持启用。
 
-这些服务器均没有身份验证：任何能访问该端口的人都可以使用你的 GPU 进行语音合成。仅在受信任的网络中绑定到回环地址以外的网络；若要将服务器暴露到该网络之外，请在前面配置具备身份验证的反向代理。
+对于运行在Docker中或受信任局域网内的非生产环境bot，请设置`TOMORI_TTS_HOST=0.0.0.0`，并使用宿主机的地址注册端点，例如`http://host.docker.internal:8015`。请通过宿主机防火墙限制该端口的访问范围，并配置TomoriBot的`ALLOW_PRIVATE_NETWORK`以允许该主机和端口。
 
 每个服务器读取其专属的端口变量（`CHATTERBOX_PORT`、`QWEN3TTS_PORT`、`IRODORI_TTS_PORT`、`FISH_S2_PORT`、`VOXCPM2_PORT`、`COSYVOICE3_PORT`、`MOSS_TTS_PORT`），因此可以在一个 `.env` 中同时运行多个服务器。`bun run launch` 会将 `.env` 传递给其启动的服务器；手动启动的服务器仅读取其当前的 shell 环境变量。
+
+这些服务器均没有身份验证：任何能直接访问或通过隧道访问它们的人都可以占用你的GPU进行语音合成。在未做身份验证直接共享之前，请先查看隧道指南中的[已知风险](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/#known-risks)。如果你需要单独的身份验证检查，[Access与Caddy](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/)是可选方案。请仅在受信任的网络上绑定到回环地址以外的网络接口。
 
 ## 人格语音
 

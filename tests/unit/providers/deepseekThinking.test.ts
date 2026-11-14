@@ -2,6 +2,16 @@ import { describe, expect, it } from "bun:test";
 import { buildDeepSeekThinkingRequest } from "@/utils/provider/thinkingControl";
 
 describe("buildDeepSeekThinkingRequest", () => {
+  it("requests max for extra-high effort on supported models and their aliases", () => {
+    for (const model of ["deepseek-flash", "deepseek-v4-pro", "deepseek-v4-flash", "deepseek-reasoner"]) {
+      expect(buildDeepSeekThinkingRequest(model, "xhigh")).toEqual({
+        thinking: { type: "enabled" },
+        reasoning_effort: "max",
+        omitSampling: true,
+      });
+    }
+  });
+
   // V4 models think by default, so a level that means "off" must send the switch explicitly.
   it("disables default thinking at none for every V4 model, including aliased codenames", () => {
     for (const model of ["deepseek-flash", "deepseek-v4-flash-vision", "deepseek-reasoner", "deepseek-v4-pro"]) {

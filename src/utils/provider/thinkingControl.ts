@@ -18,14 +18,14 @@ export interface AnthropicThinkingRequest {
     type: "adaptive" | "disabled" | "between_tools";
   };
   output_config?: {
-    effort: "low" | "medium" | "high";
+    effort: "low" | "medium" | "high" | "xhigh" | "max";
   };
   omitSampling: boolean;
 }
 
 export interface OpenRouterReasoningRequest {
   reasoning?: {
-    effort: "none" | "low" | "medium" | "high";
+    effort: "none" | "low" | "medium" | "high" | "xhigh";
   };
 }
 
@@ -37,14 +37,14 @@ export interface ThinkingModeRequest {
 }
 
 export interface DeepSeekThinkingRequest extends ThinkingModeRequest {
-  reasoning_effort?: "low" | "medium" | "high";
+  reasoning_effort?: "low" | "medium" | "high" | "max";
 }
 
 export interface CustomThinkingRequest {
   /** Ollama-native boolean thinking toggle (on/off only). */
   think?: boolean;
   /** OpenAI-convention effort level (vLLM, other compatible servers). */
-  reasoning_effort?: "none" | "low" | "medium" | "high";
+  reasoning_effort?: "none" | "low" | "medium" | "high" | "xhigh";
 }
 
 export interface NvidiaThinkingRequest {
@@ -56,7 +56,7 @@ export interface NvidiaThinkingRequest {
 }
 
 type ProviderEffortLevel = "low" | "medium" | "high";
-type ProviderReasoningEffortLevel = "none" | ProviderEffortLevel;
+type ProviderReasoningEffortLevel = "none" | ProviderEffortLevel | "xhigh";
 
 function getLevelBudget(level: Exclude<ThinkingLevelValue, "auto" | "none">): number {
   switch (level) {
@@ -67,6 +67,7 @@ function getLevelBudget(level: Exclude<ThinkingLevelValue, "auto" | "none">): nu
     case "medium":
       return DEFAULT_MEDIUM_BUDGET_TOKENS;
     case "high":
+    case "xhigh":
       return DEFAULT_HIGH_BUDGET_TOKENS;
   }
 }
@@ -112,6 +113,7 @@ interface AnthropicThinkingProfile {
   off: "disabled" | "between_tools" | null;
   /** The API rejects `top_p` and any `temperature` other than 1 with a 400 even when thinking is off. */
   samplingLocked: boolean;
+  extraHighEffort: "xhigh" | "max";
 }
 
 // Each family answers another family's off switch or sampling fields with a 400, so every profile
@@ -119,17 +121,17 @@ interface AnthropicThinkingProfile {
 // fields, sampling sent); add it here once its accepted fields are confirmed. A longer codename
 // precedes its prefix so `claude-sonnet-5-5` is not read as `claude-sonnet-5`.
 const ANTHROPIC_THINKING_PROFILES: ReadonlyArray<readonly [prefix: string, profile: AnthropicThinkingProfile]> = [
-  ["claude-fable-", { off: null, samplingLocked: true }],
-  ["claude-opus-5-5", { off: null, samplingLocked: true }],
-  ["claude-sonnet-5-5", { off: "between_tools", samplingLocked: true }],
-  ["claude-haiku-5-5", { off: "disabled", samplingLocked: true }],
-  ["claude-opus-5", { off: "disabled", samplingLocked: true }],
-  ["claude-sonnet-5", { off: "disabled", samplingLocked: true }],
-  ["claude-opus-4-8", { off: "disabled", samplingLocked: true }],
-  ["claude-opus-4-7", { off: "disabled", samplingLocked: true }],
-  ["claude-opus-4-6", { off: "disabled", samplingLocked: false }],
-  ["claude-sonnet-4-6", { off: "disabled", samplingLocked: false }],
-  ["claude-mythos-preview", { off: "disabled", samplingLocked: false }],
+  ["claude-fable-", { off: null, samplingLocked: true, extraHighEffort: "xhigh" }],
+  ["claude-opus-5-5", { off: null, samplingLocked: true, extraHighEffort: "xhigh" }],
+  ["claude-sonnet-5-5", { off: "between_tools", samplingLocked: true, extraHighEffort: "xhigh" }],
+  ["claude-haiku-5-5", { off: "disabled", samplingLocked: true, extraHighEffort: "xhigh" }],
+  ["claude-opus-5", { off: "disabled", samplingLocked: true, extraHighEffort: "xhigh" }],
+  ["claude-sonnet-5", { off: "disabled", samplingLocked: true, extraHighEffort: "xhigh" }],
+  ["claude-opus-4-8", { off: "disabled", samplingLocked: true, extraHighEffort: "xhigh" }],
+  ["claude-opus-4-7", { off: "disabled", samplingLocked: true, extraHighEffort: "xhigh" }],
+  ["claude-opus-4-6", { off: "disabled", samplingLocked: false, extraHighEffort: "max" }],
+  ["claude-sonnet-4-6", { off: "disabled", samplingLocked: false, extraHighEffort: "max" }],
+  ["claude-mythos-preview", { off: "disabled", samplingLocked: false, extraHighEffort: "max" }],
 ];
 
 function resolveAnthropicThinkingProfile(model: string): AnthropicThinkingProfile | undefined {
@@ -151,11 +153,14 @@ function looksLikeOllamaEndpoint(endpointUrl: string): boolean {
 }
 
 function toProviderEffortLevel(level: Exclude<ThinkingLevelValue, "auto" | "none">): ProviderEffortLevel {
-  return level === "minimal" ? "low" : level;
+  if (level === "minimal") {
+    return "low";
+  }
+  return level === "xhigh" ? "high" : level;
 }
 
 function toProviderReasoningEffortLevel(level: Exclude<ThinkingLevelValue, "auto">): ProviderReasoningEffortLevel {
-  return level === "none" ? "none" : toProviderEffortLevel(level);
+  return level === "none" || level === "xhigh" ? level : toProviderEffortLevel(level);
 }
 
 function resolveConfiguredThinkingLevel(value: string | null | undefined): ThinkingLevelValue {
@@ -282,7 +287,9 @@ export function buildAnthropicThinkingRequest(
 
   return {
     thinking: { type: "adaptive" },
-    output_config: { effort: toProviderEffortLevel(effectiveLevel) },
+    output_config: {
+      effort: effectiveLevel === "xhigh" ? profile.extraHighEffort : toProviderEffortLevel(effectiveLevel),
+    },
     omitSampling: true,
   };
 }
@@ -322,10 +329,10 @@ export function buildDeepSeekThinkingRequest(
     };
   }
 
-  // DeepSeek folds medium into high and minimal into low on its side.
+  // DeepSeek maps native xhigh to high, so the extra-high setting must request max.
   return {
     thinking: { type: "enabled" },
-    reasoning_effort: toProviderEffortLevel(effectiveLevel),
+    reasoning_effort: effectiveLevel === "xhigh" ? "max" : toProviderEffortLevel(effectiveLevel),
     omitSampling: true,
   };
 }

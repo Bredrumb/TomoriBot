@@ -1,0 +1,151 @@
+---
+title: "Docker Compose"
+sidebar:
+  order: 3
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Docker Compose會在容器中同時執行TomoriBot與PostgreSQL。它是與[安裝精靈](/self-hosting/setup-wizard/)和[手動設定](/self-hosting/manual-setup/)並列的第三個安裝選項：當你想在Docker中執行所有項目，而不在主機系統上安裝Bun或PostgreSQL時，請選擇它。它會略過互動式設定精靈，並自動設定資料庫連線。
+
+## 1.取得程式碼
+
+```sh
+git clone https://github.com/Bredrumb/TomoriBot.git
+cd TomoriBot
+```
+
+## 2.必填的`.env`設定值
+
+從範例檔案開始：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+Copy-Item .env.example .env
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+cp .env.example .env
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+cp .env.example .env
+```
+
+</TabItem>
+</Tabs>
+
+在`.env`中設定以下必填變數：
+
+| 變數 | 值 |
+|---|---|
+| `DISCORD_TOKEN` | 你的Discord bot權杖（啟用`GuildMembers`、`MessageContent`與`GuildPresences`特權意圖）。 |
+| `CRYPTO_SECRET` | 32個字元的加密金鑰，用來加密已儲存的API金鑰。 |
+| `POSTGRES_PASSWORD` | 資料庫密碼。其他所有`POSTGRES_*`設定值都會自動設定。 |
+| `ALLOW_PRIVATE_NETWORK` | `true`允許本機或區域網路上的自訂端點與MCP伺服器運作，`host:port`清單僅允許列出的伺服器，而`false`則封鎖它們。未設定此項目時bot不會啟動。請參閱[私人網路](/self-hosting/setup-wizard/#private-networks)進行選擇。 |
+
+使用Docker為`CRYPTO_SECRET`產生一個隨機的32字元值，然後複製到`.env`：
+
+```sh
+docker run --rm alpine:3.22 sh -c "head -c 24 /dev/urandom | base64"
+```
+
+為`POSTGRES_PASSWORD`另外產生一組密碼。你可以從`.env.optional.example`複製選用的調校設定。
+
+:::note[資料庫連線會自動設定]
+請勿在`.env`中設定`POSTGRES_HOST`、`POSTGRES_PORT`、`POSTGRES_USER`或`POSTGRES_DB`；Compose會自動設定它們。
+:::
+
+在啟動堆疊之前，請先準備主機的繫結掛載資料夾：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+New-Item -ItemType Directory -Force -Path backups, logs, data | Out-Null
+```
+
+Docker Desktop會對應Windows主機目錄，不需要Unix的`chown`。
+
+</TabItem>
+<TabItem label="Linux">
+
+bot容器以UID 1001執行，需要對主機的`backups/`、`logs/`與`data/`目錄具備寫入權限。請在首次啟動前建立它們並指派擁有權：
+
+```bash
+mkdir -p backups logs data
+sudo chown 1001:1001 backups logs data
+```
+
+如果你已經執行過Compose並讓Docker以root建立這些目錄，可以在事後執行這些指令。它們不會變更目錄內既有檔案的擁有權。
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+mkdir -p backups logs data
+```
+
+Mac上的Docker Desktop會對應繫結掛載，不需要Unix的`chown 1001:1001`。
+
+</TabItem>
+</Tabs>
+
+## 3.建置並執行
+
+```sh
+docker compose build   # first time, or after code/dependency changes
+docker compose up      # bot + database
+```
+
+之後啟動時，除非變更程式碼或相依套件，否則單獨執行`docker compose up`即可。bot連上Discord後，請在任意伺服器頻道中執行`/setup`以新增你的AI供應商金鑰。Discord中的設定選項請參閱[快速開始](/introduction/quickstart/)。
+
+Compose在服務定義中固定了`RUN_ENV=development`，好讓`.env`秘密資訊與本機HTTP端點正常運作。像`http://host.docker.internal:11434`這樣的本機端點需要`ALLOW_PRIVATE_NETWORK`允許它們（設為`true`，或包含`host.docker.internal:11434`的清單）；Windows與Mac上的Docker Desktop會提供`host.docker.internal`，而`docker-compose.yaml`在Linux上也會將該名稱對應到主機閘道。修改`.env`後，請執行`docker compose up -d`讓容器重新讀取設定。容器健康檢查只回報bot處理程序是否在執行，不會測試Discord閘道連線能力。
+
+## 單一主機上的選用分區設定
+
+將`SHARD_COUNT`與`SHARD_IDS`維持未設定以使用預設行為：由單一處理程序擁有Discord在啟動時建議的所有分區。小型安裝通常只會收到一個分區。此模式不使用分區租約或快取失效接聽程式。多個分區可以共用同一個處理程序。
+
+若要在現有服務中執行四個分區，請在`.env`中新增`SHARD_COUNT=4`並維持`SHARD_IDS`未設定。在`compose.override.yaml`中新增此服務覆寫，讓有界限的關機能順利完成：
+
+```yaml
+services:
+  tomoribot:
+    stop_grace_period: 40s
+```
+
+使用`docker compose up -d --build tomoribot`重新建立服務。如果指令碼呼叫`docker stop`或提供自訂的Compose停止逾時，也請在那裡至少預留40秒。自動選取不會在執行時變更分區數量；變更總數需要協調重新啟動。
+
+選用的靜態子集需要為每個群組設定獨立的服務，並使用相同的明確`SHARD_COUNT`與互斥的`SHARD_IDS`（例如總數`4`搭配`0,1`與`2,3`）。請為服務指定相異且穩定的名稱、容器名稱以及任何發布的健康狀態連接埠。應用程式會從每個群組衍生穩定的計量標籤。請維持單一資料庫，在閘道啟動前使用結構描述管理憑證執行現有的一次性`bun run src/db/initializeCli.ts`，並在每個閘道處理程序上設定`DATABASE_SCHEMA_MANAGEMENT_ENABLED=false`。請勿將原本擁有所有分區的服務與這些群組同時啟動。在變更總數或分割前，請先停止舊的擁有者。
+
+子集模式會拒絕完整設定的Matrix橋接。每個使用者的對話輪與上傳限制仍以處理程序為單位計算，因此在啟用第二個處理程序之前，請先確認倍增後的額度是否可接受。使用release分支限定的贊助者計費的安裝，在從多個處理程序提供資助請求前，還需要共用支出准入與對帳協調。安全與健康狀態限制請參閱[分區與處理程序擁有權](/architecture/subsystems/sharding/)。
+
+## 4.選用的本機伺服器（Compose設定檔）
+
+使用Compose設定檔執行選用的本機輔助伺服器，只啟動你需要的元件：
+
+```sh
+# SearXNG (private web search) + Crawl4AI (browser-rendered fetch)
+docker compose --profile searxng --profile fetch-crawl4ai up
+```
+
+啟用SearXNG時，請在`.env`中設定`SEARXNG_BASE_URL=http://searxng:8080/`。停用時請維持未設定。將`SEARXNG_SECRET`設為另一組隨機值，供SearXNG簽署請求使用。
+
+個別伺服器的設定請參閱[SearXNG](/self-hosting/local-endpoints/setup-searxng/)、[Crawl4AI](/self-hosting/local-endpoints/setup-crawl4ai/)與[本機監控](/self-hosting/local-monitoring/)。
+
+## 維護、更新與備份
+
+更新之前，請先停止bot並備份資料庫與媒體；請參閱[維護與備份](/self-hosting/maintenance/)。接著拉取最新程式碼並重建容器：
+
+```sh
+git pull
+docker compose up -d --build
+```

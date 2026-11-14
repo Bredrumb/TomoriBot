@@ -9,7 +9,7 @@ sidebar:
 aiGenerated: false
 ---
 
-import { LinkButton, Aside } from "@astrojs/starlight/components";
+import { LinkButton, Aside, Tabs, TabItem } from "@astrojs/starlight/components";
 
 Esta guía te lleva desde cero hasta tu primer mensaje con TomoriBot. La forma más sencilla es invitar a la instancia pública lista para usar (consulta la [Política de privacidad](/es-419/legal/privacy-policy/)). Si prefieres ejecutar tu propia instancia, ve a [Autoalojamiento](#autoalojamiento) al final.
 
@@ -72,10 +72,57 @@ En la instancia alojada, configurar TomoriBot significa que tú y los miembros d
 
 ## Autoalojamiento
 
-¿Quieres tener control total sobre tus datos, modelos y claves de API? Puedes ejecutar tu propia instancia de TomoriBot en tu propio hardware. La ruta recomendada es el asistente de configuración guiada.
+Si prefieres tener control total sobre tu privacidad y tus datos, puedes ejecutar tu propia instancia de TomoriBot en tu propio hardware:
+
+- **Opción 1: Asistente de instalación (Recomendado)**: requiere [Bun](https://bun.sh/) v1.3.2+, [PostgreSQL](https://www.postgresql.org/) o [Docker](https://www.docker.com/) y un [token de bot de Discord](https://discord.com/developers/applications) con `Presence Intent`, `Server Members Intent` y `Message Content Intent` habilitados:
+  ```sh
+  git clone https://github.com/Bredrumb/TomoriBot.git
+  cd TomoriBot
+  bun run setup # instala dependencias, configura .env y prepara PostgreSQL
+  bun run dev # inicia el bot y ejecuta las migraciones de la base de datos automáticamente
+  ```
+- **Opción 2: Docker Compose**: requiere [Docker](https://www.docker.com/) y Docker Compose v2+, y un [token de bot de Discord](https://discord.com/developers/applications) con los mismos tres intents habilitados (consulta la [guía de Docker Compose](/self-hosting/docker-compose/) para conocer las variables de `.env` requeridas y los permisos de directorio en Linux):
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+git clone https://github.com/Bredrumb/TomoriBot.git
+cd TomoriBot
+Copy-Item .env.example .env
+# Configura DISCORD_TOKEN, CRYPTO_SECRET, POSTGRES_PASSWORD y ALLOW_PRIVATE_NETWORK en .env
+docker compose up
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+git clone https://github.com/Bredrumb/TomoriBot.git
+cd TomoriBot
+cp .env.example .env
+# Configura DISCORD_TOKEN, CRYPTO_SECRET, POSTGRES_PASSWORD y ALLOW_PRIVATE_NETWORK en .env
+docker compose up
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+git clone https://github.com/Bredrumb/TomoriBot.git
+cd TomoriBot
+cp .env.example .env
+# Configura DISCORD_TOKEN, CRYPTO_SECRET, POSTGRES_PASSWORD y ALLOW_PRIVATE_NETWORK en .env
+docker compose up
+```
+
+</TabItem>
+</Tabs>
+
+Después, invítala a cualquier servidor en el que tengas permisos de `Administrar servidor`, o háblale por mensaje directo.
 
 <div class="button-row">
-  <LinkButton href="/es-419/self-hosting/" variant="secondary">
-    Autoalojar TomoriBot
+  <LinkButton href="/self-hosting/" variant="secondary">
+    Guías completas de autoalojamiento
   </LinkButton>
 </div>

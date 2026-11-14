@@ -11,20 +11,16 @@ blocked, queued, or errored messages, triggers caller discard callbacks, and ret
 When `evaluateChatAdmission()` returns a disposition other than `"run"`, the coordinator in
 `src/events/messageCreate/tomoriChat.ts` routes the admission to `handleChatDisposition()`:
 
-```
-NonRunnableChatAdmission
-  │
-  ├─► admission.error? ──► log.warn()
-  └─► else             ──► log.info()
-  │
-  ▼
-disposition !== "queued"?
-  │
-  ├─► yes: await incoming.onQueueDiscard?.("admission_rejected")
-  └─► no:  retain queued callbacks for replay
-  │
-  ▼
-return admission.disposition
+```mermaid
+flowchart TD
+  adm["NonRunnableChatAdmission"] -->|"admission.error present"| warn["log.warn()"]
+  adm -->|"no admission.error"| info["log.info()"]
+  warn --> check{"disposition !== queued?"}
+  info --> check
+  check -->|"yes"| discard["await incoming.onQueueDiscard?.(admission_rejected)"]
+  check -->|"no"| retain["Retain queued callbacks for replay"]
+  discard --> ret["return admission.disposition"]
+  retain --> ret
 ```
 
 ### Logging and error reporting

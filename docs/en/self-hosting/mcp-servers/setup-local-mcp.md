@@ -18,7 +18,7 @@ Local MCP servers are supported on self-hosted instances only. The public hosted
 Start an MCP server that exposes an HTTP/SSE transport on a local port. For example, many MCP servers run via Node:
 
 ```sh
-npx -y <some-mcp-server> --port 3000
+npx -y "<some-mcp-server>" --port 3000
 ```
 
 The exact command depends on the server you are running. Note the URL and transport path it prints (commonly `http://localhost:3000/sse`).

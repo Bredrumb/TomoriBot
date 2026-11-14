@@ -3,12 +3,11 @@ title: "ChatMock"
 sidebar:
   label: "ChatMock"
   order: 1
-aiGenerated: true
 ---
 
 Connect TomoriBot to a local Chat Completions bridge using [ChatMock](https://github.com/RayBytes/ChatMock).
 
-:::caution[Use CLI account proxies at your own risk]
+:::danger[Use CLI account proxies at your own risk]
 Third-party access through a CLI account may violate provider terms and risk account suspension. A subscription does not establish permission for bot/API use. Review the [account-risk guidance](/self-hosting/local-endpoints/proxies-and-remote-access/#account-risk) before signing in; TomoriBot provides no account-safety guarantee.
 :::
 
@@ -39,7 +38,7 @@ chatmock serve
 - A bare `http://127.0.0.1:8000` normalizes to `/v1`; do not append `/chat/completions`.
 - Allow `127.0.0.1:8000` in TomoriBot's development `ALLOW_PRIVATE_NETWORK` setting. Docker's loopback refers to the container.
 - Enable tools, images, or structured output only after testing the bridge and selected model. Keep video off.
-- For a separately hosted production bot, follow [Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/). Production requires public HTTPS. Direct loopback/port-based ChatMock prompt detection does not apply to the relay's public hostname, so validate system-instruction behavior separately.
+- For a separately hosted production bot, follow [Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/). Production requires public HTTPS. Direct loopback/port-based ChatMock prompt detection does not apply to the tunnel's public hostname, so validate system-instruction behavior separately. Account login authorizes ChatMock's upstream requests; it does not authenticate clients of your public endpoint. Review the tunnel guide's [known risks](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/#known-risks) before sharing.
 
 :::note[System prompt handling and port configuration]
 TomoriBot detects a loopback endpoint on `CHATMOCK_PORT` (default `8000`) and converts system instructions into an initial user turn for ChatMock compatibility. Set `CHATMOCK_PORT` to match a different local ChatMock port.

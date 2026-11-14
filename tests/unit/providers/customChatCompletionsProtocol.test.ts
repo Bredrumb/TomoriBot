@@ -84,6 +84,28 @@ async function collect(endpointUrl: string, streamContext: StreamContext): Promi
 describe("custom Chat Completions proxy protocol", () => {
   useEnvSandbox(["RUN_ENV", "ALLOW_PRIVATE_NETWORK"]);
 
+  it("sends extra-high effort in the streaming request body", async () => {
+    process.env.RUN_ENV = "development";
+    process.env.ALLOW_PRIVATE_NETWORK = "true";
+    const bodies: Array<Record<string, unknown>> = [];
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      async fetch(request) {
+        bodies.push((await request.json()) as Record<string, unknown>);
+        return sse([{ choices: [{ index: 0, delta: { content: "Ready." }, finish_reason: "stop" }] }]);
+      },
+    });
+    try {
+      const streamContext = context();
+      streamContext.tomoriState.config.thinking_level = "xhigh";
+      await collect(`http://127.0.0.1:${server.port}/v1`, streamContext);
+      expect(bodies[0]?.reasoning_effort).toBe("xhigh");
+    } finally {
+      server.stop(true);
+    }
+  });
+
   it("authenticates discovery, preserves system turns, and continues a fragmented tool call", async () => {
     process.env.RUN_ENV = "development";
     process.env.ALLOW_PRIVATE_NETWORK = "true";
@@ -203,6 +225,7 @@ describe("custom Chat Completions proxy protocol", () => {
         const body = (await request.json()) as Record<string, unknown>;
         expect(body.stream).not.toBe(true);
         expect(body.response_format).toMatchObject({ type: "json_schema" });
+        expect(body.reasoning_effort).toBe("xhigh");
         return Response.json({ choices: [{ message: { content: JSON.stringify({ ready: true }) } }] });
       },
     });
@@ -214,6 +237,7 @@ describe("custom Chat Completions proxy protocol", () => {
           model,
           systemPrompt: "Return JSON.",
           userPrompt: "Check the fixture.",
+          thinkingLevel: "xhigh",
         },
         {
           type: "object",

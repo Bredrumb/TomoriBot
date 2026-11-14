@@ -1,21 +1,21 @@
 import { isOpenRouterGeminiModelCodename } from "@/utils/provider/openrouterModelCapabilities";
 import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAttribution";
 import { log, redactLogString } from "@/utils/misc/logger";
-import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
-import { safeDownload } from "@/utils/security/safeDownload";
 import { z } from "zod";
-import {
-  formatProviderErrorCodeForDisplay,
-  getProviderContentRejectionCode,
-} from "@/utils/provider/providerErrorClassification";
+import { formatProviderErrorCodeForDisplay } from "@/utils/provider/providerErrorClassification";
 import { readBoundedResponse } from "@/utils/security/boundedResponse";
 import { readOpenRouterLimitError } from "@/providers/openrouter/openrouterLimit";
 import { fetchWithProviderRequest } from "@/utils/provider/providerRequestHook";
+import {
+  buildChatImageRequest,
+  readChatImageResponse,
+  IMAGE_GENERATION_RESPONSE_MAX_BYTES,
+  imageUsageCostSchema,
+} from "@/utils/provider/chatImageGeneration";
 
 const OPENROUTER_ORIGIN = "https://openrouter.ai";
 const OPENROUTER_CHAT_URL = `${OPENROUTER_ORIGIN}/api/v1/chat/completions`;
 const OPENROUTER_IMAGES_URL = `${OPENROUTER_ORIGIN}/api/v1/images`;
-export const OPENROUTER_IMAGE_RESPONSE_MAX_BYTES = 64 * 1024 * 1024;
 const IMAGE_ERROR_RESPONSE_MAX_BYTES = 1024 * 1024;
 
 interface OpenRouterImageReference {
@@ -38,8 +38,6 @@ export interface OpenRouterImageGenerationResult {
   costUsd?: number;
 }
 
-const usageCostSchema = z.object({ cost: z.number().finite().nonnegative().nullish() }).nullish().catch(undefined);
-
 export function usesChatCompletionsImageGeneration(modelCodename: string): boolean {
   return isOpenRouterGeminiModelCodename(modelCodename);
 }
@@ -49,21 +47,13 @@ function buildOpenRouterImageRequest(
 ): { url: string; body: Record<string, unknown> } {
   const { modelCodename, prompt, aspectRatio, referenceImages } = request;
   if (usesChatCompletionsImageGeneration(modelCodename)) {
-    const content: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
-      { type: "text", text: prompt },
-      ...(referenceImages ?? []).map((image) => ({
-        type: "image_url",
-        image_url: { url: `data:${image.mimeType};base64,${image.data}` },
-      })),
-    ];
+    const body = buildChatImageRequest({ model: modelCodename, prompt, aspectRatio, referenceImages });
     return {
       url: OPENROUTER_CHAT_URL,
       body: {
-        model: modelCodename,
-        messages: [{ role: "user", content }],
-        modalities: ["image", "text"],
+        ...body,
         image_config: {
-          aspect_ratio: aspectRatio,
+          ...body.image_config,
           ...(modelCodename === "google/gemini-nano-banana-2.1" ? { image_size: "1K" } : {}),
         },
       },
@@ -130,29 +120,6 @@ function buildRequestFailure(
   );
 }
 
-async function resolveImageUrl(imageUrl: string, abortSignal?: AbortSignal): Promise<OpenRouterImageGenerationResult> {
-  const dataUrlMatches = imageUrl.match(/^data:([^;]+);base64,(.+)$/);
-  if (dataUrlMatches) {
-    return { imageData: dataUrlMatches[2], mimeType: dataUrlMatches[1] };
-  }
-
-  if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
-    const imageResponse = await safeDownload(imageUrl, {
-      maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,
-      timeoutMs: 15_000,
-      ...(abortSignal ? { externalSignal: abortSignal } : {}),
-    });
-    if (imageResponse.success && imageResponse.buffer) {
-      return {
-        imageData: imageResponse.buffer.toString("base64"),
-        mimeType: imageResponse.contentType?.split(";")[0] || null,
-      };
-    }
-  }
-
-  return { imageData: null, mimeType: null };
-}
-
 async function generateViaChatCompletions(
   request: OpenRouterImageGenerationRequest,
 ): Promise<OpenRouterImageGenerationResult> {
@@ -181,52 +148,7 @@ async function generateViaChatCompletions(
     throw failure;
   }
 
-  const result = z
-    .object({
-      choices: z
-        .array(
-          z.object({
-            finish_reason: z.string().nullish(),
-            message: z
-              .object({
-                images: z
-                  .array(
-                    z.object({
-                      image_url: z.object({ url: z.string() }).optional(),
-                      imageUrl: z.object({ url: z.string() }).optional(),
-                    }),
-                  )
-                  .optional(),
-                content: z.union([z.string(), z.array(z.unknown())]).nullish(),
-              })
-              .optional(),
-          }),
-        )
-        .optional(),
-      usage: usageCostSchema,
-    })
-    .parse(JSON.parse((await readBoundedResponse(response, OPENROUTER_IMAGE_RESPONSE_MAX_BYTES)).toString("utf8")));
-  const rejection = getProviderContentRejectionCode(result);
-  if (rejection) throw Object.assign(new Error("Image request blocked by the provider"), { code: rejection });
-  const message = result.choices?.[0]?.message;
-  const costUsd = result.usage?.cost ?? undefined;
-
-  let imageUrl: string | null = null;
-  if (message?.images?.[0]) {
-    const firstImage = message.images[0];
-    // OpenRouter returns either snake_case (image_url) or camelCase (imageUrl) here.
-    imageUrl = firstImage?.image_url?.url || firstImage?.imageUrl?.url || null;
-  } else if (Array.isArray(message?.content)) {
-    const firstImagePart = message.content.find(
-      (part: unknown) =>
-        typeof part === "object" && part !== null && "type" in part && (part as { type?: string }).type === "image_url",
-    ) as { image_url?: { url?: string } } | undefined;
-    imageUrl = firstImagePart?.image_url?.url || null;
-  }
-
-  return imageUrl
-    ? { ...(await resolveImageUrl(imageUrl, abortSignal)), costUsd }
-    : { imageData: null, mimeType: null, costUsd };
+  return readChatImageResponse(response, abortSignal);
 }
 
 async function generateViaImagesEndpoint(
@@ -264,9 +186,9 @@ async function generateViaImagesEndpoint(
   const result = z
     .object({
       data: z.array(z.object({ b64_json: z.string().optional(), media_type: z.string().nullish() })).optional(),
-      usage: usageCostSchema,
+      usage: imageUsageCostSchema,
     })
-    .parse(JSON.parse((await readBoundedResponse(response, OPENROUTER_IMAGE_RESPONSE_MAX_BYTES)).toString("utf8")));
+    .parse(JSON.parse((await readBoundedResponse(response, IMAGE_GENERATION_RESPONSE_MAX_BYTES)).toString("utf8")));
   const first = result?.data?.[0];
   const base64 = typeof first?.b64_json === "string" ? first.b64_json : null;
   const costUsd = result.usage?.cost ?? undefined;

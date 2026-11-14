@@ -4,7 +4,6 @@ sidebar:
   label: "Visão Geral"
   groupLabel: "Proxies e Acesso Remoto"
   order: 8
-aiGenerated: true
 ---
 
 Conecte o TomoriBot por meio de um proxy de API local ou acesse com segurança um motor em execução em outro computador.
@@ -13,14 +12,15 @@ Conecte o TomoriBot por meio de um proxy de API local ou acesse com segurança u
 
 1. [ChatMock](/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/): conecte uma ponte baseada no ChatGPT na sua máquina.
 2. [CLIProxyAPI](/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/): instale um proxy e registre modelos de um backend autorizado.
-3. [Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/): conecte um bot hospedado separadamente ao seu motor local usando autenticação do Access e um relay de produção.
+3. [Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/): dê a um motor local uma URL HTTPS para um bot hospedado separadamente.
+4. [Opcional: Access e Caddy](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/): adicione uma verificação de autenticação separada e roteamento de API mais restrito.
 
 Comece pelo guia de proxy se precisar de um. Siga o guia do Cloudflare apenas quando o bot rodar em outra máquina.
 
 ## Risco de conta
 <!-- anchor: account-risk -->
 
-:::caution[Use proxies de conta CLI por sua conta e risco]
+:::danger[Use proxies de conta CLI por sua conta e risco]
 Usar contas do Codex, Claude Code, Antigravity ou outras contas de CLI por meio de uma ponte de terceiros pode violar os termos do provedor e levar à suspensão ou encerramento da conta. Uma assinatura paga ou login bem-sucedido não garante permissão para uso com bot ou API de uso geral. Verifique as regras do seu provedor, plano e método de autenticação. O TomoriBot não oferece garantia de segurança da conta.
 :::
 

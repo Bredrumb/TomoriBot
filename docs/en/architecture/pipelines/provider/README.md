@@ -341,53 +341,21 @@ fallback ref's payer tag. A deployment that needs it keeps that tag on its own b
 
 ## Stage flow
 
-```
-tool loop pipeline -> LLMProvider.streamToDiscord()
-                            |  (builds StreamConfig + StreamAdapter)
-                            v
-                    [Stage 01] startStream: Context assembly
-                            |  contextItems -> provider-native payload
-                            |  tools, history replay, stop strings
-                            v
-                    [Stage 02] startStream: Raw chunk generation
-                            |  HTTP stream open -> yield RawStreamChunk
-                            |  parameter degradation, speaker tail holdback
-                            v
-                    [Stage 03] processChunk: Chunk normalization
-                            |  RawStreamChunk -> ProcessedChunk
-                            |  (text, function_call, error, done, thoughts)
-                            v
-                    [Stage 04] executeStream: Orchestrator state machine
-                      for-await loop -> checks stop signals and heartbeats
-                            |
-                       +----+-------------------------------------------+
-                       | type="text"          | type="function_call"    | type="done"
-                       v                      v                         v
-               [Stage 05]               flush buffer -> return      record terminal
-           processTextChunk          { status: "function_call" }   metadata; continue
-            Buffer management
-                       |
-                       v
-               [Stage 06]
-           sendBufferSegment
-            Segment normalization
-            (clean, mentions, guard)
-                       |
-                       v
-               [Stage 07]
-            sendSegment ->
-          sendSinglePayload
-            Discord delivery
-          (webhook / channel,
-           typing simulation)
-                       |
-                       v
-             StreamResult
-           { status, accumulatedText,
-             thoughtLog, detailsContent }
-                       |
-                       v
-              tool loop pipeline
+```mermaid
+flowchart TD
+  in["tool loop pipeline → LLMProvider.streamToDiscord()<br/>(builds StreamConfig + StreamAdapter)"] --> s01["[Stage 01] startStream: Context assembly<br/>contextItems → provider-native payload<br/>tools, history replay, stop strings"]
+  s01 --> s02["[Stage 02] startStream: Raw chunk generation<br/>HTTP stream open → yield RawStreamChunk<br/>parameter degradation, speaker tail holdback"]
+  s02 --> s03["[Stage 03] processChunk: Chunk normalization<br/>RawStreamChunk → ProcessedChunk<br/>(text, function_call, error, done, thoughts)"]
+  s03 --> s04["[Stage 04] executeStream: Orchestrator state machine<br/>for-await loop → checks stop signals and heartbeats"]
+  s04 -->|"type = text"| s05["[Stage 05] processTextChunk<br/>Buffer management"]
+  s04 -->|"type = function_call"| fn["Flush buffer →<br/>return { status: function_call }"]
+  s04 -->|"type = done"| done["Record terminal metadata;<br/>continue"]
+  s05 --> s06["[Stage 06] sendBufferSegment<br/>Segment normalization (clean, mentions, guard)"]
+  s06 --> s07["[Stage 07] sendSegment → sendSinglePayload<br/>Discord delivery (webhook / channel, typing simulation)"]
+  s07 --> res["StreamResult<br/>{ status, accumulatedText, thoughtLog, detailsContent }"]
+  fn --> res
+  done --> res
+  res --> out["tool loop pipeline"]
 ```
 
 ## Stage index

@@ -148,35 +148,74 @@ export function changedLineCount(before: string, after: string): number {
   return Math.max(added, removed);
 }
 
+const DOC_MARKDOWN_EXTENSIONS = [".md", ".mdx"] as const;
+
+function stripMarkdownExtension(path: string): string {
+  return path.replace(/\.mdx?$/i, "");
+}
+
+function isGeneratedDocPage(page: string): boolean {
+  const stem = stripMarkdownExtension(page);
+  return GENERATED_DOC_PAGES.some((generated) => stripMarkdownExtension(generated) === stem);
+}
+
+function extensionVariants(path: string): string[] {
+  if (!/\.mdx?$/i.test(path)) return [path];
+  const stem = stripMarkdownExtension(path);
+  return DOC_MARKDOWN_EXTENSIONS.map((extension) => `${stem}${extension}`).sort((a, b) =>
+    a === path ? -1 : b === path ? 1 : 0,
+  );
+}
+
 interface PagePath {
   page: string;
   english: string;
+  stem: string;
   translation(locale: string): string;
+  translationCandidates(locale: string): string[];
+  englishCandidates(): string[];
 }
 
 /** Maps a repository path to its page identity, or null when it is not a tracked translation surface. */
 export function englishPageFor(path: string): PagePath | null {
   if (path === "README.md") {
-    return { page: "README.md", english: path, translation: (locale) => `.github/README_${locale}.md` };
+    return {
+      page: "README.md",
+      english: path,
+      stem: "README",
+      translation: (locale) => `.github/README_${locale}.md`,
+      translationCandidates: (locale) => [`.github/README_${locale}.md`],
+      englishCandidates: () => [path],
+    };
   }
   const match = /^docs\/en\/(.+\.mdx?)$/.exec(path);
   if (!match) return null;
   const page = match[1];
   if (ENGLISH_ONLY_DOC_SECTIONS.some((section) => page.startsWith(section))) return null;
-  if ((GENERATED_DOC_PAGES as readonly string[]).includes(page)) return null;
-  return { page, english: path, translation: (locale) => `docs/${locale}/${page}` };
+  if (isGeneratedDocPage(page)) return null;
+  return {
+    page,
+    english: path,
+    stem: stripMarkdownExtension(page),
+    translation: (locale) => `docs/${locale}/${page}`,
+    translationCandidates: (locale) => extensionVariants(`docs/${locale}/${page}`),
+    englishCandidates: () => extensionVariants(path),
+  };
 }
 
 /** Maps a translated path back to its page identity and locale. */
 function translatedPageFor(
   path: string,
   locales: readonly string[],
-): { page: string; locale: string; english: string } | null {
+): { page: string; locale: string; english: string; englishCandidates: string[] } | null {
   const readme = /^\.github\/README_(.+)\.md$/.exec(path);
-  if (readme && locales.includes(readme[1])) return { page: "README.md", locale: readme[1], english: "README.md" };
+  if (readme && locales.includes(readme[1])) {
+    return { page: "README.md", locale: readme[1], english: "README.md", englishCandidates: ["README.md"] };
+  }
   const doc = /^docs\/([^/]+)\/(.+\.mdx?)$/.exec(path);
   if (doc && doc[1] !== "en" && locales.includes(doc[1])) {
-    return { page: doc[2], locale: doc[1], english: `docs/en/${doc[2]}` };
+    const english = `docs/en/${doc[2]}`;
+    return { page: doc[2], locale: doc[1], english, englishCandidates: extensionVariants(english) };
   }
   return null;
 }
@@ -193,43 +232,61 @@ function sortEntries(entries: DocsStaleEntry[]): DocsStaleEntry[] {
 export function findDocsTreeStaleness(git: DocsGit, locales: readonly string[]): DocsStaleEntry[] {
   const files = new Set(git.listFiles("HEAD"));
   const entries: DocsStaleEntry[] = [];
-  const driftCandidates: { page: PagePath; locale: string; baseline: string }[] = [];
+  const driftCandidates: { page: PagePath; locale: string; translation: string; baseline: string }[] = [];
   const lastCommits = git.lastCommits();
 
   for (const path of files) {
     const page = englishPageFor(path);
     if (!page) continue;
     for (const locale of locales) {
-      const translation = page.translation(locale);
-      if (!files.has(translation)) {
-        entries.push({ reason: "missing", page: page.page, locale, english: page.english, translation });
+      const translation = page.translationCandidates(locale).find((candidate) => files.has(candidate));
+      if (!translation) {
+        entries.push({
+          reason: "missing",
+          page: page.page,
+          locale,
+          english: page.english,
+          translation: page.translation(locale),
+        });
         continue;
       }
       const baseline = lastCommits.get(translation);
-      if (baseline) driftCandidates.push({ page, locale, baseline });
+      if (baseline) driftCandidates.push({ page, locale, translation, baseline });
     }
   }
 
   for (const path of files) {
     const translated = translatedPageFor(path, locales);
-    if (!translated || (GENERATED_DOC_PAGES as readonly string[]).includes(translated.page)) continue;
+    if (!translated || isGeneratedDocPage(translated.page)) continue;
     const englishOnly = ENGLISH_ONLY_DOC_SECTIONS.some((section) => translated.page.startsWith(section));
-    if (englishOnly || !files.has(translated.english)) {
-      entries.push({ reason: "orphaned", ...translated, translation: path });
+    const englishExists = translated.englishCandidates.some((candidate) => files.has(candidate));
+    if (englishOnly || !englishExists) {
+      entries.push({
+        reason: "orphaned",
+        page: translated.page,
+        locale: translated.locale,
+        english: translated.english,
+        translation: path,
+      });
     }
   }
 
   const texts = git.readMany([
-    ...driftCandidates.map((candidate) => ({ revision: candidate.baseline, path: candidate.page.english })),
+    ...driftCandidates.flatMap((candidate) =>
+      candidate.page.englishCandidates().map((english) => ({ revision: candidate.baseline, path: english })),
+    ),
     ...[...new Set(driftCandidates.map((candidate) => candidate.page.english))].map((path) => ({
       revision: "HEAD",
       path,
     })),
   ]);
-  for (const { page, locale, baseline } of driftCandidates) {
+  for (const { page, locale, translation, baseline } of driftCandidates) {
     // A missing English page at the baseline means the translation predates its source (a rename,
     // or a page written ahead of English), so every line counts as unconfirmed.
-    const before = texts.get(specKey(baseline, page.english));
+    const before = page
+      .englishCandidates()
+      .map((english) => texts.get(specKey(baseline, english)))
+      .find((content) => content !== null && content !== undefined);
     const beforeText = before ? translatableText(before) : "";
     const afterText = translatableText(texts.get(specKey("HEAD", page.english)) ?? "");
     if (beforeText === afterText) continue;
@@ -238,7 +295,7 @@ export function findDocsTreeStaleness(git: DocsGit, locales: readonly string[]):
       page: page.page,
       locale,
       english: page.english,
-      translation: page.translation(locale),
+      translation,
       baseline: git.shortRevision(baseline),
       changedLines: changedLineCount(beforeText, afterText),
     });
@@ -253,36 +310,47 @@ export function findDocsTreeStaleness(git: DocsGit, locales: readonly string[]):
  */
 export function findDocsUnfollowed(git: DocsGit, mergeBase: string, locales: readonly string[]): DocsStaleEntry[] {
   const changed = new Set(git.changedPaths(mergeBase, "HEAD"));
-  const pages = [...changed].map(englishPageFor).filter((page): page is PagePath => page !== null);
-  if (pages.length === 0) return [];
+  const changedPages = [...changed].map(englishPageFor).filter((page): page is PagePath => page !== null);
+  if (changedPages.length === 0) return [];
 
-  const texts = git.readMany(
-    pages.flatMap((page) => [
-      { revision: mergeBase, path: page.english },
-      { revision: "HEAD", path: page.english },
-    ]),
-  );
+  const byStem = new Map<string, PagePath[]>();
+  for (const page of changedPages) {
+    byStem.set(page.stem, [...(byStem.get(page.stem) ?? []), page]);
+  }
+  const candidateSpecs = [...byStem.values()].flatMap((group) => {
+    const candidates = [...new Set(group.flatMap((page) => page.englishCandidates()))];
+    return candidates.flatMap((english) => [
+      { revision: mergeBase, path: english },
+      { revision: "HEAD", path: english },
+    ]);
+  });
+  const texts = git.readMany(candidateSpecs);
   const headFiles = new Set(git.listFiles("HEAD"));
   const entries: DocsStaleEntry[] = [];
 
-  for (const page of pages) {
-    const before = texts.get(specKey(mergeBase, page.english)) ?? null;
-    const after = texts.get(specKey("HEAD", page.english)) ?? null;
+  for (const group of byStem.values()) {
+    const candidates = [...new Set(group.flatMap((page) => page.englishCandidates()))];
+    const beforePath = candidates.find((candidate) => (texts.get(specKey(mergeBase, candidate)) ?? null) !== null);
+    const afterPath = candidates.find((candidate) => (texts.get(specKey("HEAD", candidate)) ?? null) !== null);
+    const before = beforePath ? (texts.get(specKey(mergeBase, beforePath)) ?? null) : null;
+    const after = afterPath ? (texts.get(specKey("HEAD", afterPath)) ?? null) : null;
     const beforeText = before === null ? null : translatableText(before);
     const afterText = after === null ? null : translatableText(after);
     if (beforeText === afterText) continue;
     const change = beforeText === null ? "added" : afterText === null ? "removed" : "changed";
+    const activePage = englishPageFor(afterPath ?? beforePath ?? group[0].english) ?? group[0];
 
     for (const locale of locales) {
-      const translation = page.translation(locale);
-      const exists = headFiles.has(translation);
-      if (change === "removed" ? !exists : changed.has(translation)) continue;
+      const candidatesForLocale = activePage.translationCandidates(locale);
+      const existing = candidatesForLocale.find((candidate) => headFiles.has(candidate));
+      const touched = candidatesForLocale.some((candidate) => changed.has(candidate));
+      if (change === "removed" ? !existing : touched) continue;
       entries.push({
         reason: "unfollowed",
-        page: page.page,
+        page: activePage.page,
         locale,
-        english: page.english,
-        translation,
+        english: activePage.english,
+        translation: existing ?? activePage.translation(locale),
         change,
         changedLines: changedLineCount(beforeText ?? "", afterText ?? ""),
       });

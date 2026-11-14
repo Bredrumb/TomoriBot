@@ -1,0 +1,276 @@
+---
+title: "Configuración: Crawl4AI"
+sidebar:
+  label: "Crawl4AI"
+  order: 5
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Renderiza páginas web con mucho JavaScript en Markdown limpio para TomoriBot utilizando un servidor local [Crawl4AI](https://github.com/unclecode/crawl4ai).
+
+La herramienta `fetch_url` incorporada utiliza el motor liviano `safe_http` de forma predeterminada. Crawl4AI agrega un navegador Playwright sin cabeza opcional que ejecuta scripts del lado del cliente y extrae el contenido de la página antes de devolver Markdown al bot.
+
+Debido a que Crawl4AI sigue redireccionamientos fuera del cliente HTTP protegido de TomoriBot, solo se admite donde se permite la recuperación de redes privadas. Fuera de producción (`RUN_ENV` != `production`), la recuperación de red privada se habilita automáticamente. En entornos de producción, es necesario configurar `FETCH_URL_ALLOW_PRIVATE_NETWORK=true`.
+
+:::caution[Lo que TomoriBot puede y no puede comprobar]
+TomoriBot rechaza una URL cuyo nombre de host no se resuelve, o se resuelve en una dirección de metadatos en la nube, antes de pedirle a Crawl4AI que la abra. No puede controlar lo que hace el navegador a continuación: Crawl4AI vuelve a resolver el nombre, sigue las redirecciones y carga imágenes y scripts por su cuenta. El bloqueo de metadatos siempre activo de TomoriBot no cubre esas solicitudes.
+
+La imagen fijada (`unclecode/crawl4ai:0.9.4`) envía su navegador a través de su propio proxy, que bloquea las direcciones privadas, de bucle invertido y de metadatos en cada solicitud y redirección. Deja `CRAWL4AI_ALLOW_INTERNAL_URLS` sin configurar: establecerlo en `true` desactiva ese proxy, metadatos incluidos.
+:::
+
+Crawl4AI 0.9.4 necesita un token de API antes de aceptar conexiones desde fuera de su propio contenedor. Genera un token aleatorio (por ejemplo con `openssl rand -hex 32` o `docker run --rm alpine:3.22 sh -c "head -c 24 /dev/urandom | base64"`) y guárdalo como `CRAWL4AI_TOKEN` en `.env` para cada ruta de configuración a continuación. Sin él, el contenedor se inicia pero TomoriBot no puede alcanzarlo y recurre a `safe_http`.
+
+Elige una ruta de instalación:
+
+### Opción A: Docker Compose (cuando TomoriBot se ejecuta en Docker)
+
+Usa esta ruta si ejecutas TomoriBot con la pila Docker Compose del repositorio. Primero, configura `CRAWL4AI_BASE_URL=http://crawl4ai:11235/`, `CRAWL4AI_TOKEN` y `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` en `.env`.
+
+Luego comienza con:
+
+```sh
+docker compose --profile fetch-crawl4ai up -d
+```
+
+Esto inicia la pila Compose con el contenedor Crawl4AI en la red Docker de TomoriBot. Compose pasa `CRAWL4AI_TOKEN` al contenedor como `CRAWL4AI_API_TOKEN`, y TomoriBot lo envía como un token bearer. El puerto 11235 se publica solo en `127.0.0.1` para depuración local; TomoriBot se conecta a través de la red de Docker.
+
+Si ejecutas TomoriBot directamente con `bun run dev`, utiliza la ruta independiente a continuación.
+
+Si también quieres SearXNG, encadena los perfiles:
+
+```sh
+docker compose --profile searxng --profile fetch-crawl4ai up -d
+```
+
+---
+
+### Opción B: Docker independiente (cuando se ejecuta `bun run dev`)
+
+Primero, configura `CRAWL4AI_BASE_URL=http://localhost:11235/` y `CRAWL4AI_TOKEN` en `.env` para que el bot se conecte al puerto del contenedor publicado en `127.0.0.1`. Fuera de producción no es necesario optar por una red privada; solo agrega `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` si ejecutas con `RUN_ENV=production`.
+
+Luego, en lugar de ejecutar TomoriBot directamente con `bun run dev`, usa `bun run launch --crawl4ai`. Esto maneja el ciclo de vida del contenedor automáticamente y espera a que el servidor esté en buen estado antes de iniciar el bot. Se detiene con un error si falta `CRAWL4AI_TOKEN`:
+
+```sh
+bun run launch --crawl4ai
+```
+
+Si también quieres SearXNG:
+
+```sh
+bun run launch --searxng --crawl4ai
+```
+
+Si prefieres administrar el contenedor por tu cuenta, mantén `CRAWL4AI_BASE_URL=http://localhost:11235/` en `.env` e inicia el contenedor con el token coincidente guardado en `CRAWL4AI_API_TOKEN` sin poner el secreto en el historial del shell:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$secureToken = Read-Host -Prompt "Crawl4AI token (match CRAWL4AI_TOKEN)" -AsSecureString
+$env:CRAWL4AI_API_TOKEN = [System.Net.NetworkCredential]::new("", $secureToken).Password
+try {
+  docker run -d --name crawl4ai -p 127.0.0.1:11235:11235 --shm-size=3g `
+    -e CRAWL4AI_API_TOKEN unclecode/crawl4ai:0.9.4
+} finally {
+  Remove-Item Env:\CRAWL4AI_API_TOKEN -ErrorAction SilentlyContinue
+}
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+read -r -s -p "Crawl4AI token (match CRAWL4AI_TOKEN): " CRAWL4AI_API_TOKEN
+echo
+CRAWL4AI_API_TOKEN="$CRAWL4AI_API_TOKEN" docker run -d --name crawl4ai \
+  -p 127.0.0.1:11235:11235 --shm-size=3g \
+  -e CRAWL4AI_API_TOKEN unclecode/crawl4ai:0.9.4
+unset CRAWL4AI_API_TOKEN
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+printf 'Crawl4AI token (match CRAWL4AI_TOKEN): '
+read -r -s CRAWL4AI_API_TOKEN
+echo
+CRAWL4AI_API_TOKEN="$CRAWL4AI_API_TOKEN" docker run -d --name crawl4ai \
+  -p 127.0.0.1:11235:11235 --shm-size=3g \
+  -e CRAWL4AI_API_TOKEN unclecode/crawl4ai:0.9.4
+unset CRAWL4AI_API_TOKEN
+```
+
+</TabItem>
+</Tabs>
+
+Luego ejecuta `bun run dev` una vez que el contenedor esté en buen estado (`docker ps` muestra `(healthy)`).
+
+---
+
+### Opción C: Sin servidor de renderizado del navegador
+
+Deja `CRAWL4AI_BASE_URL` sin configurar. La herramienta `fetch_url` utiliza el motor `safe_http` protegido.
+
+---
+
+## Orden de inicio
+
+TomoriBot analiza el estado del servidor en la primera llamada a `fetch_url` después del inicio y almacena en caché el resultado durante 60 segundos. Si el contenedor no está listo cuando se activa la primera sonda, el bot lo considera no disponible durante el siguiente minuto.
+
+Para Docker independiente, inicia tu contenedor Crawl4AI antes de iniciar TomoriBot. `bun run launch --crawl4ai` ya hace esto por ti.
+
+### Configuración por primera vez
+
+1. Inicia el contenedor y espera hasta que muestre `(healthy)` en `docker ps`:
+   ```sh
+   docker ps
+   ```
+2. Comprueba que la API responde antes de iniciar TomoriBot:
+   <Tabs syncKey="operating-system">
+   <TabItem label="Windows">
+
+   ```powershell
+   Invoke-RestMethod http://127.0.0.1:11235/health
+   ```
+
+   </TabItem>
+   <TabItem label="Linux">
+
+   ```bash
+   curl -fsS http://127.0.0.1:11235/health
+   ```
+
+   </TabItem>
+   <TabItem label="Mac">
+
+   ```bash
+   curl -fsS http://127.0.0.1:11235/health
+   ```
+
+   </TabItem>
+   </Tabs>
+3. Ejecuta una prueba rápida de rastreo autenticado contra una URL externa (pasando tu token por stdin o variable de entorno en lugar de argumentos):
+   <Tabs syncKey="operating-system">
+   <TabItem label="Windows">
+
+   ```powershell
+   $secureToken = Read-Host -Prompt "Crawl4AI token" -AsSecureString
+   $token = [System.Net.NetworkCredential]::new("", $secureToken).Password
+   try {
+     $headers = @{ Authorization = "Bearer $token" }
+     Invoke-RestMethod http://127.0.0.1:11235/md -Method Post -Headers $headers `
+       -ContentType "application/json" -Body '{"url":"https://example.com","f":"fit"}'
+   } finally {
+     Remove-Variable token -ErrorAction SilentlyContinue
+   }
+   ```
+
+   </TabItem>
+   <TabItem label="Linux">
+
+   ```bash
+   read -r -s -p "Crawl4AI token: " CRAWL4AI_TEST_TOKEN
+   echo
+   printf 'header = "Authorization: Bearer %s"\n' "$CRAWL4AI_TEST_TOKEN" | \
+     curl -fsS --config - -X POST http://127.0.0.1:11235/md \
+       -H "Content-Type: application/json" \
+       -d '{"url":"https://example.com","f":"fit"}'
+   unset CRAWL4AI_TEST_TOKEN
+   ```
+
+   </TabItem>
+   <TabItem label="Mac">
+
+   ```bash
+   printf 'Crawl4AI token: '
+   read -r -s CRAWL4AI_TEST_TOKEN
+   echo
+   printf 'header = "Authorization: Bearer %s"\n' "$CRAWL4AI_TEST_TOKEN" | \
+     curl -fsS --config - -X POST http://127.0.0.1:11235/md \
+       -H "Content-Type: application/json" \
+       -d '{"url":"https://example.com","f":"fit"}'
+   unset CRAWL4AI_TEST_TOKEN
+   ```
+
+   </TabItem>
+   </Tabs>
+4. Configura `CRAWL4AI_BASE_URL` en `.env` usando el valor de tu ruta de configuración anterior.
+5. Inicia TomoriBot (`bun run dev` o `docker compose up`).
+
+### Actualización desde `latest`
+
+Un contenedor `crawl4ai` existente conserva la imagen a partir de la cual se creó, por lo que `docker start` no lo actualiza. Elimínalo una vez y luego vuelve a usar tu ruta de instalación:
+
+```sh
+docker rm -f crawl4ai
+```
+
+Con Compose, `docker compose --profile fetch-crawl4ai up -d` recrea el contenedor a partir de la imagen fijada.
+
+### Regresar después de un reinicio
+
+Si el contenedor ya existe desde una ejecución anterior, usa `docker start` en lugar de `docker run` para evitar un conflicto de nombres:
+
+```sh
+docker start crawl4ai
+docker ps
+```
+
+Luego inicia TomoriBot como de costumbre. Al reiniciar `bun run dev` se restablece el caché de estado en memoria, por lo que siempre que el contenedor esté listo primero, el motor correcto se activará inmediatamente.
+
+---
+
+## Inyección de cookies
+
+Crawl4AI admite la inyección de cookies a nivel del navegador, por lo que el navegador sin cabeza parece haber iniciado sesión al obtener una página. Esto es útil para sitios que requieren una sesión para ver el contenido (por ejemplo, noticias de pago, foros privados, paneles con acceso controlado).
+
+El respaldo `safe_http` no admite la inyección de cookies. Las cookies solo se aplican cuando Crawl4AI está activo.
+
+:::note[Límites de detección de bots]
+La inyección de cookies evita los muros de inicio de sesión, pero no las huellas dactilares del bot. Los sitios con detección agresiva anti-bot (en particular, Twitter/X) detectan a Playwright sin cabeza a través de huellas digitales de Canvas/WebGL y muestran páginas vacías incluso con cookies de sesión válidas. La inyección de cookies funciona bien para sitios que se controlan únicamente mediante autenticación.
+:::
+
+### Cómo obtener tus cookies
+
+1. Abre tu navegador e inicia sesión en el sitio de destino.
+2. Abre DevTools (`F12`) > pestaña `Application` > `Storage` > `Cookies` > selecciona el dominio del sitio.
+3. Copia el `Value` de cada cookie requerida (normalmente un token de sesión; verifica los nombres de las cookies del sitio).
+
+### Crawl4AI
+
+Configura `CRAWL4AI_COOKIES_JSON` en `.env` como un arreglo JSON:
+
+```dotenv
+CRAWL4AI_COOKIES_JSON=[{"name":"session","value":"YOUR_SESSION_TOKEN","domain":".example.com"}]
+```
+
+Cuando se configura esto, `fetch_url` cambia automáticamente del punto de conexión `/md` a `/crawl` con `browser_config.cookies`. `/md` no admite la inyección de cookies.
+
+### Campos de objetos de cookies
+
+| Campo | Requerido | Descripción |
+|---|---|---|
+| `name` | Sí | Nombre de la cookie |
+| `value` | Sí | Valor de la cookie |
+| `domain` | No | Alcance del dominio (por ejemplo, `.x.com`). Recomendado para la exactitud. |
+| `path` | No | Alcance de la ruta. El valor predeterminado es `/` si se omite. |
+
+:::caution[Protege los tokens de sesión]
+Los valores de las cookies son confidenciales, así que trátalos como contraseñas. Otorgan acceso completo a la sesión de tu cuenta. No subas `.env` al control de versiones.
+:::
+
+---
+
+## Variables de entorno
+
+| Variable | Por defecto | Descripción |
+|---|---|---|
+| `CRAWL4AI_BASE_URL` | sin configurar | Habilita Crawl4AI cuando está configurado: TomoriBot lo intenta primero y recurre a `safe_http` cuando no está disponible o falla una obtención. Se ignora en producción a menos que `FETCH_URL_ALLOW_PRIVATE_NETWORK=true`. Usa `http://crawl4ai:11235/` desde Docker Compose, o `http://localhost:11235/` cuando TomoriBot se ejecuta directamente en tu máquina. |
+| `CRAWL4AI_TOKEN` | sin configurar | Token bearer obligatorio. Debe coincidir con `CRAWL4AI_API_TOKEN` en el contenedor Crawl4AI, que rechaza conexiones externas sin él. |
+| `FETCH_URL_TIMEOUT_MS` | `15000` | Tiempo de espera de solicitud por motor para Crawl4AI y otros motores de obtención de URL. |
+| `FETCH_URL_MAX_CONTENT_LENGTH` | `50000` | Máximo de caracteres devueltos por una llamada de obtención antes de que se requiera la continuación. |
+| `FETCH_URL_ALLOW_PRIVATE_NETWORK` | `false` | Opción de habilitación solo para producción. Fuera de producción (`RUN_ENV` != `production`), la protección SSRF se relaja automáticamente, por lo que las obtenciones locales/privadas/internas y el envío a Crawl4AI funcionan sin configuración. Configura `true` solo para permitir obtenciones de redes privadas en una implementación de producción confiable. |
+| `FETCH_URL_FILTER_MODE` | `fit` | Modo de filtro `/md` de Crawl4AI. `fit` mantiene el Markdown más limpio para uso de LLM; `fetch_url(..., raw=true)` lo reemplaza por solicitud. |

@@ -185,6 +185,16 @@ export default {
     model_compat_label: `チャット補完の互換性`,
     model_compat_description: `厳格なバックエンド向けのメッセージ形式とプロトコルの回避策です。不要な場合はオフのままにしてください。`,
     model_image_supports_label: `画像機能`,
+    model_image_request_format_label: `画像リクエスト形式`,
+    model_image_request_format_description: `この画像モデルが受け付けるAPI形式に合わせます。`,
+    image_request_formats: {
+      images: `画像API`,
+      "chat-completions": `チャット補完`,
+    },
+    image_request_format_descriptions: {
+      images: `プロンプトを /images/generations に送信します。`,
+      "chat-completions": `画像リクエストをチャットメッセージとして /chat/completions に送信します。`,
+    },
     model_image_supports_description: `このモデルとエンドポイントが実際に対応する画像機能のみを選択してください。`,
     model_image_supports: {
       txt2img: `テキストから画像`,

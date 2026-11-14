@@ -1,0 +1,280 @@
+---
+title: "Configuração Manual"
+aiGenerated: false
+sidebar:
+  order: 2
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+:::note
+Usuários que desejam usar o Docker Compose devem pular este guia; consulte [Docker Compose](/self-hosting/docker-compose/) para o caminho de instalação em contêiner.
+:::
+
+Este é o procedimento de instalação manual para usuários técnicos que preferem não usar o assistente guiado. Se você quiser o caminho guiado, use o [assistente de configuração](/self-hosting/setup-wizard/), pois ele cria o `.env`, gera um `CRYPTO_SECRET` seguro, configura o PostgreSQL e executa a instalação para você.
+
+## Pré-requisitos
+
+- [Bun](https://bun.sh/)
+- PostgreSQL instalado nativamente, ou executado em um contêiner Docker (veja o passo 2)
+
+O esquema do PostgreSQL, `pgcrypto`, seeds e migrações são inicializados automaticamente na primeira inicialização do bot.
+
+## 1. Instalar
+
+```sh
+git clone https://github.com/Bredrumb/TomoriBot.git
+cd TomoriBot
+bun install --frozen-lockfile
+```
+
+## 2. Configurar
+
+Crie seu arquivo de ambiente a partir do exemplo e preencha os valores obrigatórios:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+Copy-Item .env.example .env
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+cp .env.example .env
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+cp .env.example .env
+```
+
+</TabItem>
+</Tabs>
+
+Obrigatórios:
+
+- `DISCORD_TOKEN`: seu token de bot do Discord (ative as intents privilegiadas `GuildMembers`, `MessageContent` e `GuildPresences`).
+- `CRYPTO_SECRET`: uma chave de criptografia de 32 caracteres (usada para criptografar chaves de API armazenadas).
+- Conexão com o PostgreSQL: `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`.
+- `ALLOW_PRIVATE_NETWORK`: `true`, `false`, ou uma lista `host:port`. Consulte [Redes privadas](/self-hosting/setup-wizard/#private-networks) para escolher.
+
+Mantenha uma cópia protegida da sua chave de criptografia separada dos backups do banco de dados. Novos backups não contêm o arquivo `.env`. Para rotação, use `CRYPTO_SECRET_V1`, `CRYPTO_SECRET_V2` ou qualquer versão inteira positiva posterior, com seleção opcional via `CRYPTO_SECRET_CURRENT`.
+
+:::note[Sem PostgreSQL nativo?]
+Execute apenas o banco de dados em um contêiner e aponte os valores `POSTGRES_*` para ele:
+
+```sh
+docker run -d --name tomori-db \
+  -e POSTGRES_USER=tomori -e POSTGRES_PASSWORD=yourpassword -e POSTGRES_DB=tomori \
+  -p 5432:5432 pgvector/pgvector:pg16
+```
+
+Em seguida, defina `POSTGRES_HOST=localhost`, `POSTGRES_PORT=5432` e o usuário/senha/banco acima. A imagem `pgvector/pgvector` já traz a extensão RAG pré-instalada; troque para `postgres:16` se não precisar de memória de documentos/RAG. Isso executa apenas o banco de dados no Docker e o bot continua rodando no Bun do host. Para um bot e banco de dados totalmente em contêineres, use o [Docker Compose](/self-hosting/docker-compose/).
+:::
+
+Ajustes opcionais ficam em `.env.optional.example`. Copie quaisquer valores que quiser personalizar (limites, tempos limite, alternadores de recursos, URLs de servidores locais, etc.).
+
+Mantenha o diretório `data/` em armazenamento persistente. Arquivos locais podem incluir avatares e sprites de personas em `data/avatars/`, amostras de voz em `data/voice-samples/` e expressões personalizadas em `data/custom-expressions/`. O banco de dados é armazenado separadamente, então faça backup dele junto com esses arquivos.
+
+## 3. Executar
+
+```sh
+bun run dev
+```
+
+Quando vir `TomoriBot up and running!`, vá ao Discord e execute `/setup` no seu servidor para conectar um provedor de IA e inicializar o bot. O comando abre um painel com uma lista de verificação guiada, e nada é gravado até você pressionar `Concluir Configuração`.
+
+Use `bun run launch` em vez de `bun run dev` se quiser iniciar servidores locais opcionais (SearXNG, Crawl4AI, TTS/STT locais) junto com o bot:
+
+```sh
+bun run launch --searxng --crawl4ai
+bun run launch --help        # ver todas as opções
+```
+
+## Extras opcionais (a "Instalação Completa" manual)
+{/* anchor: optional-extras-the-manual-full-install */}
+
+O caminho `Instalação Completa` do [assistente de configuração](/self-hosting/setup-wizard/) adiciona extras leves sobre a instalação base. Nenhum deles é obrigatório para executar o bot, mas cada um desbloqueia um recurso. Se você estiver instalando manualmente, adicione os que desejar:
+
+### `pgvector`: memória de documentos/RAG
+
+O RAG (envio de documentos e recordação entre canais) armazena incorporações (embeddings) em uma coluna `vector`, o que requer a extensão [pgvector](https://github.com/pgvector/pgvector).
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+Não há pacote `pgvector` pré-compilado para o PostgreSQL nativo no Windows. Instalá-lo nativamente exige compilar a partir do código-fonte para a sua versão exata do PostgreSQL com o Visual Studio C++ e `nmake` (consulte as [instruções para Windows](https://github.com/pgvector/pgvector#windows) do pgvector). O caminho mais simples no Windows é executar o PostgreSQL no contêiner `pgvector/pgvector` mostrado em [Configurar](#2-configurar) e abrir o `psql` dentro dele:
+
+```powershell
+docker exec -it tomori-db psql -U tomori -d tomori
+```
+
+Se você compilou o `pgvector` para o PostgreSQL nativo do Windows, conecte-se com o `psql`:
+
+```powershell
+psql -h localhost -p 5432 -U tomori -d tomodb
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+Instale o pacote `pgvector` para a sua versão principal do PostgreSQL (exemplo Debian/Ubuntu para PostgreSQL 16):
+
+```bash
+sudo apt-get install -y postgresql-16-pgvector
+```
+
+Conecte-se ao banco de dados com o `psql` (ou `docker exec -it tomori-db psql -U tomori -d tomori` se estiver usando Docker):
+
+```bash
+psql -h localhost -p 5432 -U tomori -d tomodb
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+Instale o `pgvector` via Homebrew correspondente à fórmula do PostgreSQL do Homebrew instalada (se você fixar uma fórmula mais antiga cujo pacote não corresponda, compile o `pgvector` a partir do código-fonte com `make && make install` contra o `pg_config` dessa fórmula):
+
+```bash
+brew install pgvector
+```
+
+Conecte-se ao banco de dados com o `psql` (ou `docker exec -it tomori-db psql -U tomori -d tomori` se estiver usando Docker):
+
+```bash
+psql -h localhost -p 5432 -U tomori -d tomodb
+```
+
+</TabItem>
+</Tabs>
+
+Assim que estiver conectado (o `psql` solicitará a senha `POSTGRES_PASSWORD`), habilite a extensão:
+
+```sql
+CREATE EXTENSION vector;
+```
+
+Sem o `pgvector`, o bot ainda é executado, mas os recursos de RAG ficam completamente indisponíveis. Essa extensão também é obrigatória no banco de dados de destino antes de restaurar um backup; consulte [Manutenção e Backups](/self-hosting/maintenance/) para detalhes.
+
+### `pg_cron`: tarefas de limpeza programadas
+
+O `pg_cron` executa manutenção periódica opcional do banco de dados (limpeza de linhas expiradas de recarga e lembretes). O Docker Compose deste repositório já o configura.
+
+:::caution[Não é obrigatório para lembretes ou palavras-gatilho]
+O `pg_cron` realiza apenas limpeza interna de registros antigos. A entrega de lembretes e os acionamentos aleatórios rodam na própria aplicação, então esses recursos funcionam com ou sem `pg_cron`.
+:::
+
+Para um PostgreSQL autogerenciado, instale o pacote da extensão se necessário antes de carregá-lo no `postgresql.conf`:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+Não existem binários pré-compilados padrão do `pg_cron` para o PostgreSQL nativo no Windows; compilá-lo exige uma compilação com Visual Studio C++ (`nmake`) contra os cabeçalhos do servidor PostgreSQL, ou executar o PostgreSQL via [Docker Compose](/self-hosting/docker-compose/) ou Linux no WSL2. Como o `pg_cron` apenas limpa linhas expiradas, ignorá-lo mantém todos os recursos do bot funcionando.
+
+</TabItem>
+<TabItem label="Linux">
+
+Instale o pacote `pg_cron` para a sua versão principal do PostgreSQL (exemplo Debian/Ubuntu para PostgreSQL 16):
+
+```bash
+sudo apt-get install -y postgresql-16-cron
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+Instale o `pg_cron` via Homebrew correspondente à fórmula do PostgreSQL do Homebrew:
+
+```bash
+brew install pg_cron
+```
+
+</TabItem>
+</Tabs>
+
+Encontre seu arquivo de configuração ativo no `psql`:
+
+```sql
+SHOW config_file;
+```
+
+Habilite a extensão no `postgresql.conf`: adicione-a ao `shared_preload_libraries` se ele já listar outras bibliotecas:
+
+```ini
+shared_preload_libraries = 'pg_cron'   # ex.: 'pg_stat_statements,pg_cron'
+cron.database_name = 'your_dbname'
+```
+
+Reinicie o PostgreSQL e depois execute:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+```
+
+### Recursos de tokenizadores
+
+A geração de texto do NovelAI e o logit bias ciente de modelo exigem arquivos locais de tokenizadores:
+
+```sh
+bun run setup:tokenizers
+```
+
+Algumas famílias (ex.: Gemma) têm acesso restrito e exigem um [token do HuggingFace](https://huggingface.co/settings/tokens) após você aceitar a licença delas:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$secureToken = Read-Host -Prompt "Hugging Face token" -AsSecureString
+$env:HF_TOKEN = [System.Net.NetworkCredential]::new("", $secureToken).Password
+try {
+  bun run setup:tokenizers
+} finally {
+  Remove-Item Env:\HF_TOKEN -ErrorAction SilentlyContinue
+}
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+read -r -s -p "Hugging Face token: " HF_TOKEN
+echo
+HF_TOKEN="$HF_TOKEN" bun run setup:tokenizers
+unset HF_TOKEN
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+printf 'Hugging Face token: '
+read -r -s HF_TOKEN
+echo
+HF_TOKEN="$HF_TOKEN" bun run setup:tokenizers
+unset HF_TOKEN
+```
+
+</TabItem>
+</Tabs>
+
+Arquivos ausentes desativam o logit bias opcional. A geração de texto do NovelAI exige suas três famílias de tokenizadores e retorna um erro de configuração se estiverem ausentes ou inválidas. Essas famílias usam definições MIT públicas fixadas e não precisam de token do Hugging Face. Para instalar apenas essas famílias:
+
+```sh
+bun run setup:tokenizers --family novelai_nerdstash_v2
+bun run setup:tokenizers --family novelai_llama3
+bun run setup:tokenizers --family novelai_glm
+```
+
+O utilitário de download grava no diretório `tokenizers/` do repositório. Se `TOKENIZER_ASSET_DIR` apontar para outro local, copie os diretórios das famílias baixadas para lá. Reinicie o TomoriBot após instalar ou reparar os arquivos, pois o tempo de execução armazena falhas de carregamento em cache.
+
+O fallback seguro de `fetch_url` e o fallback do DuckDuckGo para `web_search` são executados no próprio processo, portanto nenhum deles precisa de instalação extra.
+
+## Manutenção, atualização e backups
+
+Depois que a instalação estiver pronta, os scripts do host (`bun run update`, `bun run backup`, `bun run restore-backup`, `bun run nuke-db`, `bun run rotate-keys`, ...) e os procedimentos de atualização e backup ficam na página [Manutenção e Backups](/self-hosting/maintenance/). Se você estiver prestes a baixar uma nova versão, comece por [Manutenção e Backups](/self-hosting/maintenance/).

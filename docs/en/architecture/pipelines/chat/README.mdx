@@ -17,35 +17,22 @@ and memory persistence are all reached through this pipeline.
 
 ## Stage flow
 
-```
-tomoriChat(TomoriChatInput)
-  │
-  ▼
-[01] normalizeChatInvocation                  → ChatIncoming
-  │
-  ▼
-[02] evaluateChatAdmission                    → ChatAdmission
-  │                                              (run | ignore | queued | blocked | error)
-  │   disposition === "run"?
-  │       no  ─────────────────────────────→ [03] handleChatDisposition → end
-  │       yes
-  ▼
-[04] runWithChannelLock {                     ← concurrency wrapper
-  │
-  ▼
-[05] planChatTurns                            → ChatTurnPlan { turns: ChatTurn[] }
-  │
-  │   turns.length === 0? ────────────────→ release lock, replay queue, end
-  │   else: for each turn:
-  │     │
-  │     ▼
-  │   [06-per-turn]
-  │     ├─ [01] buildChatTurnContext         → ChatTurnContext
-  │     ├─ [02] createChatResponseSink       → ChatResponseSink
-  │     ├─ [03] runGenerationTurn            → GenerationTurnResult
-  │     └─ [04] runPostTurnEffects
-  │
-} ← lock released, queued messages replayed
+```mermaid
+flowchart TD
+  entry["tomoriChat(TomoriChatInput)"] --> s01["[01] normalizeChatInvocation<br/>→ ChatIncoming"]
+  s01 --> s02["[02] evaluateChatAdmission<br/>→ ChatAdmission (run | ignore | queued | blocked | error)"]
+  s02 -->|"disposition !== run"| s03["[03] handleChatDisposition"]
+  s03 --> endRejected["End"]
+  s02 -->|"disposition === run"| s04
+
+  subgraph s04["[04] runWithChannelLock (concurrency wrapper)"]
+    s05["[05] planChatTurns<br/>→ ChatTurnPlan { turns: ChatTurn[] }"]
+    s05 -->|"turns.length === 0"| skip["Release lock, replay queue, end"]
+    s05 -->|"for each turn"| s0601["[06.01] buildChatTurnContext<br/>→ ChatTurnContext"]
+    s0601 --> s0602["[06.02] createChatResponseSink<br/>→ ChatResponseSink"]
+    s0602 --> s0603["[06.03] runGenerationTurn<br/>→ GenerationTurnResult"]
+    s0603 --> s0604["[06.04] runPostTurnEffects"]
+  end
 ```
 
 ## Stage index

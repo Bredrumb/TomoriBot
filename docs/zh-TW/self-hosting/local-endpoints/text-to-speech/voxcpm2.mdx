@@ -1,0 +1,182 @@
+---
+title: "VoxCPM2"
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+使用OpenBMB的[VoxCPM2](https://github.com/OpenBMB/VoxCPM)文字轉語音模型，合成跨30種語言的富有表現力的48kHz語音。
+
+VoxCPM2是一個2B參數的多語言語音模型，支援聲音複製、逐字稿輔助的Ultimate Cloning與自然語言Voice Design。TomoriBot透過`servers/tts/voxcpm2/`中的伺服器連接至官方`voxcpm` Python函式庫，在16GB VRAM內舒適執行官方未量化的`openbmb/VoxCPM2` BF16檢查點。
+
+## 授權條款
+
+VoxCPM2程式碼與模型權重均在Apache-2.0授權條款下發布，包含遵循條款的商業用途。TomoriBot不重新散布模型權重；安裝程式會直接從官方Hugging Face存放庫下載。
+
+官方上游資源：
+
+- [OpenBMB/VoxCPM](https://github.com/OpenBMB/VoxCPM)
+- [openbmb/VoxCPM2 on Hugging Face](https://huggingface.co/openbmb/VoxCPM2)
+- [VoxCPM documentation](https://voxcpm.readthedocs.io/)
+
+## 支援語言
+
+VoxCPM2官方支援30種語言且不需要指定語言標籤：
+
+阿拉伯語、緬甸語、中文、丹麥語、荷蘭語、英語、芬蘭語、法語、德語、希臘語、希伯來語、印地語、印尼語、義大利語、日語、高棉語、韓語、寮語、馬來語、挪威語、波蘭語、葡萄牙語、俄語、西班牙語、史瓦希里語、瑞典語、他加祿語、泰語、土耳其語與越南語。
+
+OpenBMB亦記錄了多種中文方言。TomoriBot仍可能為了符合通用的TTS協定而發送`language`欄位，但VoxCPM2會從合成文字中偵測語言，且包裝器不會強制加上語言標籤。
+
+## 語音模式
+
+聲音複製與語音設計請使用`自動`與`純文字`標記。參考逐字稿可啟用Ultimate Cloning；發音風格指示具有較高優先權，且在該次請求中會省略逐字稿。
+
+## 硬體與執行時期
+
+建議起點規格：
+
+- Python 3.10到3.12（兩個安裝程式均要求此版本）
+- 官方BF16執行時期建議配備8GB VRAM或以上的NVIDIA GPU（12到16GB具備舒適的餘裕），或具備足夠統一記憶體執行2B模型的Apple Silicon
+- 支援CPU作為備援，但速度大幅放緩
+
+在CUDA上執行時，預設的`VOXCPM2_OPTIMIZE=1`會使用`torch.compile`與Triton編譯模型：首次啟動需要約2到3分鐘讓PyTorch編譯模型，後續啟動由於已快取編譯好的kernel只需不到一分鐘，合成速度則比未編譯時快約2.5到3倍，同時會多消耗約2GB系統記憶體。若CUDA環境缺少Triton，請重新執行安裝程式或設定`VOXCPM2_OPTIMIZE=0`。
+
+在非CUDA裝置（CPU與Apple Silicon `mps`）上，包裝器會讓`VOXCPM2_OPTIMIZE`的Triton防護保持停用，因此啟動時不需要Triton，且`VOXCPM2_LOAD_DENOISER=0`會預設停用受限於CPU的降噪器。
+
+## 安裝
+
+伺服器固定目前的穩定版`voxcpm` 2.0.3套件，並將`openbmb/VoxCPM2`下載至一般的Hugging Face快取中。從TomoriBot存放庫根目錄執行對應作業系統的安裝程式：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+PowerShell安裝程式會原生執行（不需要WSL），並安裝支援CUDA的PyTorch 2.10（`cu128`）與`triton-windows`，供`VOXCPM2_OPTIMIZE=1`使用：
+
+```powershell
+.\servers\tts\voxcpm2\install-voxcpm2.ps1
+.\servers\tts\voxcpm2\.venv\Scripts\python.exe servers\tts\voxcpm2\server.py
+```
+
+在沒有NVIDIA GPU的純CPU機器上，請傳入`-Cpu`：
+
+```powershell
+.\servers\tts\voxcpm2\install-voxcpm2.ps1 -Cpu
+```
+
+若原生Windows PyTorch需要手動重新安裝CUDA支援或重新對齊驅動程式：
+
+```powershell
+.\servers\tts\voxcpm2\.venv\Scripts\pip.exe install --force-reinstall torch==2.10.0 torchaudio==2.10.0 --index-url https://download.pytorch.org/whl/cu128
+.\servers\tts\voxcpm2\.venv\Scripts\pip.exe install "triton-windows>=3.6,<3.7"
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+bash servers/tts/voxcpm2/install-voxcpm2.sh
+servers/tts/voxcpm2/.venv/bin/python servers/tts/voxcpm2/server.py
+```
+
+標準Linux PyPI `torch` wheel已包含CUDA支援與供`VOXCPM2_OPTIMIZE=1`使用的Triton。若要以未編譯模式或在CPU上執行，請在啟動`server.py`前設定`VOXCPM2_OPTIMIZE=0`。
+
+</TabItem>
+<TabItem label="Mac">
+
+請確認目前啟用Python 3.10到3.12（例如`PYTHON_BIN=python3.12`），接著執行shell安裝程式：
+
+```bash
+bash servers/tts/voxcpm2/install-voxcpm2.sh
+servers/tts/voxcpm2/.venv/bin/python servers/tts/voxcpm2/server.py
+```
+
+設定`VOXCPM2_DEVICE=auto`時，上游`voxcpm`會在可用時使用Apple Silicon `mps`，否則使用`cpu`。若你在目前的macOS/PyTorch版本上遇到不支援的MPS運算子，請改用`VOXCPM2_DEVICE=cpu`（較慢）或`VOXCPM2_OPTIMIZE=0`啟動。若環境中的音訊工具要求，你可能需要執行`brew install ffmpeg`。
+
+</TabItem>
+</Tabs>
+
+首次設定會下載數GB的模型權重。若要僅安裝Python環境而不預先擷取模型（讓`voxcpm`改在伺服器首次啟動時下載檢查點），請設定`VOXCPM2_PREFETCH=0`：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$env:VOXCPM2_PREFETCH = "0"
+.\servers\tts\voxcpm2\install-voxcpm2.ps1
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+VOXCPM2_PREFETCH=0 bash servers/tts/voxcpm2/install-voxcpm2.sh
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+VOXCPM2_PREFETCH=0 bash servers/tts/voxcpm2/install-voxcpm2.sh
+```
+
+</TabItem>
+</Tabs>
+
+設定完成後，`bun run launch --voxcpm2`可與TomoriBot一同啟動伺服器。預設端點為`http://127.0.0.1:8016`。
+
+## 在TomoriBot中註冊
+
+執行`/providers`，選擇`+ 新增自訂端點`，並設定語音端點：
+
+- 功能：`語音`
+- `API 相容性`：`TTS 複製`（`tts-clone`）
+- `端點 URL`：`http://127.0.0.1:8016`
+- `語音來源模式`：`自動`
+- `腳本標記風格`：`純文字`
+- `指令支援`：`可接受腳本之外的指示`（是）
+
+儲存連線後，選取它並使用其模型下拉選單選擇`+ 新增語音模型`。接著開啟`/config` > `模型` > `切換模型`並選取VoxCPM2語音模型。
+
+建議使用`自動`，因為同一伺服器支援參考音訊複製與Voice Design。你不需要為兩種模式啟動各自獨立的VoxCPM2行程。
+
+## 人格聲音複製
+
+適用於需要複製既有講者的人格：
+
+1. 準備一段乾淨的參考音訊，單一講者且背景音樂極少或無背景音樂。上游將5到30秒視為實用範圍。
+2. 在`/config`的`模型` > `TTS 參數與語音`底下上傳該音訊。
+3. 若有對應的`參考逐字稿`請一併加入。VoxCPM2會將其用於Ultimate Cloning，並能重現更多參考音訊的節奏、情緒與風格。
+4. 在`/config`的`人格` > `語音`底下選擇人格並指派已儲存的樣本。
+
+若未儲存逐字稿，VoxCPM2仍會執行一般的參考音訊複製。
+
+## 人格語音設計
+
+適用於從書面語音描述而非音訊樣本建立的人格：
+
+1. 開啟`/config`底下的`人格` > `語音`，並選擇VoiceDesign。
+2. 選擇人格。
+3. 輸入自然語言描述，例如`Young adult woman, soft warm voice, relaxed pace, slightly playful delivery`。
+
+對於已複製的語音，單次的發音風格指示優先於參考逐字稿。
+
+## 環境變數
+
+| 變數 | 預設值 | 用途 |
+|---|---|---|
+| `VOXCPM2_MODEL_ID` | `openbmb/VoxCPM2` | Hugging Face模型ID或本機模型目錄 |
+| `VOXCPM2_DEVICE` | `auto` | 執行時期裝置：`auto`、`cuda`、`cuda:N`、`cpu`或`mps` |
+| `VOXCPM2_OPTIMIZE` | `1` | 在CUDA上使用`torch.compile`編譯模型；需要Triton，若缺少則伺服器會在啟動時停止 |
+| `VOXCPM2_LOAD_DENOISER` | `0` | 載入選用的上游降噪器；預設停用以節省記憶體 |
+| `VOXCPM2_CFG_VALUE` | `2.0` | 引導強度 |
+| `VOXCPM2_INFERENCE_TIMESTEPS` | `10` | Flow-matching推論步數；更多步數可提升品質，但會犧牲速度 |
+| `VOXCPM2_MAX_LEN` | `4096` | 最大生成長度 |
+| `VOXCPM2_NORMALIZE` | `0` | 啟用上游文字正規化 |
+| `VOXCPM2_RETRY_BADCASE` | `1` | 為異常生成啟用上游重試行為 |
+| `VOXCPM2_RETRY_BADCASE_MAX_TIMES` | `3` | 最大自動重試次數 |
+| `VOXCPM2_RETRY_BADCASE_RATIO_THRESHOLD` | `6.0` | 上游瑕疵案例長度門檻值 |
+| `VOXCPM2_PREFETCH` | `1` | 僅安裝程式：設定時下載模型 |
+| `VOXCPM2_PORT` | `8016` | VoxCPM2本機伺服器連接埠 |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | 本機伺服器繫結位址；請參閱[網路存取](/self-hosting/local-endpoints/text-to-speech/#network-access) |
+
+參考音訊必須為解碼後不超過10MB的非空WAV容器，包裝器會在寫入暫存檔前進行檢查。

@@ -31,13 +31,19 @@ Para reducir aún más el tamaño, descarga una compilación GGUF del modelo des
 
 ## 1. Ejecuta ComfyUI con la API habilitada
 
-Instala ComfyUI según [su README](https://github.com/comfyanonymous/ComfyUI) e inícialo para que escuche en la red:
+Instala ComfyUI según [su README](https://github.com/comfyanonymous/ComfyUI). Para un bot en la misma máquina, o un conector de Cloudflare Tunnel en esta PC, mantenlo en bucle invertido:
 
 ```sh
-python main.py --listen 0.0.0.0 --port 8188
+python main.py --listen 127.0.0.1 --port 8188
 ```
 
-`--listen 0.0.0.0` es fundamental si TomoriBot se ejecuta en Docker o en una máquina diferente: el valor predeterminado solo se vincula al bucle invertido. Confirma la conectividad desde la máquina donde se ejecuta el bot:
+Para el bot de producción alojado por separado, sigue el [perfil de ComfyUI de la guía de Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/).
+Proporciona un punto de conexión HTTPS público mientras ComfyUI permanece en bucle invertido. Usa la URL de ese túnel al registrarlo abajo; revisa los [riesgos conocidos](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/#known-risks) de la guía si lo compartes sin autenticación.
+
+Para un bot en Docker o en una LAN de confianza, vincularlo a `0.0.0.0` permite que el bot alcance el puerto del host.
+Restringe el acceso con el firewall del host; cualquiera que pueda acceder a un ComfyUI sin autenticación puede enviar flujos de trabajo.
+Una instancia de TomoriBot que no sea de producción también necesita `ALLOW_PRIVATE_NETWORK` para admitir el host y puerto del punto de conexión.
+Confirma que la API local responde:
 
 ```sh
 curl http://127.0.0.1:8188/system_stats
@@ -64,8 +70,8 @@ Ejecuta `/providers` (o `/personal providers`), elige `+ Agregar nuevo punto de 
 |-------|-------------------|
 | `endpoint_label` | Un nombre que elijas, p. ej. `home-comfy` |
 | Compatibilidad de API | `ComfyUI` |
-| `endpoint_url` | `http://127.0.0.1:8188` (raíz, sin `/v1`) |
-| `auth_token` | *(déjalo en blanco a menos que tu ComfyUI requiera autenticación)* |
+| `endpoint_url` | Bot en la misma máquina: `http://127.0.0.1:8188`; túnel de producción: `https://engine.example.com` (raíz, sin `/v1`) |
+| `auth_token` | Déjalo en blanco a menos que la puerta de enlace de tu punto de conexión requiera una clave de cliente |
 
 Después de guardar la conexión, selecciónala y elige `+ Agregar nuevo modelo de imagen` o `+ Agregar nuevo modelo de video` en el menú desplegable de modelos. Ingresa el nombre en código exacto del checkpoint y sube el archivo `.json` del flujo de trabajo descargado en el Paso 2 en `Flujo de trabajo de ComfyUI`. La capacidad del modelo debe coincidir con el flujo de trabajo (flujo de trabajo de imagen → `image`, flujo de trabajo de video → `video`).
 
@@ -73,7 +79,8 @@ Agregar el modelo lo activa automáticamente como el modelo de `image`/`video`. 
 
 ## Solución de problemas
 
-- **Inaccesible al agregar:** ComfyUI se vinculó solo al bucle invertido mientras el bot está en Docker o en otro host. Inícialo con `--listen 0.0.0.0` y usa `http://host.docker.internal:8188` o la IP de tu LAN.
+- **Inaccesible al agregar:** Para producción, revisa el túnel, la ruta `/system_stats` y la clave de cliente si tu puerta de enlace requiere una.
+  Para Docker o una LAN de confianza, revisa el proceso en escucha, el firewall, la dirección del host y la habilitación de red privada en TomoriBot.
 - **La generación nunca finaliza:** TomoriBot sondea `/history` hasta que aparece el resultado. Los inicios en frío y los modelos grandes ejecutados en CPU pueden sobrepasar la ventana de sondeo.
 - **Prompt o tamaño ignorados, o dimensiones de salida incorrectas:** al flujo de trabajo le faltan los marcadores de posición requeridos `{TOMORI_*}`, o se subió una exportación de la interfaz gráfica en lugar del formato API.
 - **Capacidad incorrecta:** un flujo de trabajo de `image` registrado bajo `video` (o viceversa) no se ejecutará. Agrégalo nuevamente bajo la capacidad correspondiente.

@@ -85,3 +85,63 @@ const translatedBody = (notices?.translatedBody ?? "").replace("{english}", engl
   }
   <slot />
 </Default>
+
+<script>
+  const getMermaidTheme = (): "dark" | "default" =>
+    document.documentElement.dataset.theme === "light" ? "default" : "dark";
+
+  const extractMermaidSource = (pre: HTMLPreElement): string => {
+    const lines = pre.querySelectorAll<HTMLElement>(".ec-line .code");
+    if (lines.length > 0) {
+      return Array.from(lines, (line) => line.textContent ?? "").join("\n");
+    }
+    return pre.textContent ?? "";
+  };
+
+  let mermaidPromise: Promise<(typeof import("mermaid"))["default"]> | undefined;
+
+  const renderMermaidDiagrams = async (): Promise<void> => {
+    const figures = document.querySelectorAll<HTMLElement>(
+      ".sl-markdown-content .expressive-code:has(pre[data-language='mermaid'])",
+    );
+    for (const figure of figures) {
+      const pre = figure.querySelector("pre");
+      if (!pre) continue;
+      const container = document.createElement("div");
+      container.className = "mermaid-diagram not-content";
+      container.dataset.mermaidSource = extractMermaidSource(pre);
+      figure.replaceWith(container);
+    }
+
+    const containers = document.querySelectorAll<HTMLElement>(
+      ".sl-markdown-content .mermaid-diagram[data-mermaid-source]",
+    );
+    if (containers.length === 0) return;
+
+    mermaidPromise ??= import("mermaid").then((mod) => mod.default);
+    const mermaid = await mermaidPromise;
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: "strict",
+      theme: getMermaidTheme(),
+    });
+
+    for (const [index, container] of Array.from(containers).entries()) {
+      const source = container.dataset.mermaidSource?.trim();
+      if (!source) continue;
+      try {
+        const { svg } = await mermaid.render(`mermaid-${Date.now()}-${index}`, source);
+        container.innerHTML = svg;
+      } catch {
+        container.textContent = source;
+      }
+    }
+  };
+
+  void renderMermaidDiagrams();
+  document.addEventListener("astro:page-load", () => void renderMermaidDiagrams());
+  new MutationObserver(() => void renderMermaidDiagrams()).observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["data-theme"],
+  });
+</script>

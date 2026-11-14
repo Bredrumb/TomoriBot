@@ -45,11 +45,13 @@ Para provedores de voz hospedados e seleções pessoais, consulte [Voz: TTS & ST
 ## Acesso à rede
 {/* anchor: network-access */}
 
-Todo servidor local de TTS vincula-se a `127.0.0.1` por padrão, de modo que apenas um bot na mesma máquina pode acessá-lo. Quando o TomoriBot rodar no Docker ou em outra máquina, defina `TOMORI_TTS_HOST=0.0.0.0` para o servidor e registre o endpoint com o endereço do host, por exemplo `http://host.docker.internal:8015`.
+Todo servidor local de TTS vincula-se a `127.0.0.1` por padrão. Para o bot de produção hospedado separadamente, mantenha esse vínculo e siga o [perfil de TTS do guia do Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/). Registre a URL HTTPS do túnel sem `/v1`, use `tts-clone` e deixe o token de autenticação em branco, a menos que você tenha adicionado um gateway de autenticação. O perfil permite verificações de saúde e síntese tanto para clonagem de voz quanto para Design de Voz. Conexões de texto e ComfyUI podem permanecer ativas junto com fala.
+
+Para um bot fora de produção no Docker ou em uma LAN confiável, defina `TOMORI_TTS_HOST=0.0.0.0` e registre o endereço do host, por exemplo `http://host.docker.internal:8015`. Restrinja a porta com o firewall do host e configure `ALLOW_PRIVATE_NETWORK` no TomoriBot para admitir esse host e porta.
 
 Cada servidor lê sua própria variável de porta (`CHATTERBOX_PORT`, `QWEN3TTS_PORT`, `IRODORI_TTS_PORT`, `FISH_S2_PORT`, `VOXCPM2_PORT`, `COSYVOICE3_PORT`, `MOSS_TTS_PORT`), permitindo que vários rodem simultaneamente a partir de um único `.env`. O comando `bun run launch` passa o `.env` para os servidores que inicia; um servidor iniciado manualmente lê apenas as variáveis do seu shell.
 
-Os servidores não possuem autenticação: qualquer pessoa com acesso à porta pode executar sínteses na sua GPU. Vincule fora do loopback apenas em redes confiáveis e coloque um proxy reverso com autenticação na frente de qualquer servidor exposto além dela.
+Os servidores não possuem autenticação: qualquer pessoa que possa alcançá-los diretamente ou pelo túnel pode executar sínteses na sua GPU. Revise os [riscos conhecidos](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/#known-risks) do guia do túnel antes de aceitar o compartilhamento sem autenticação. [Access e Caddy](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/) são opcionais se você quiser uma verificação de autenticação separada. Vincule fora do loopback apenas em redes confiáveis.
 
 ## Vozes da persona
 

@@ -62,18 +62,16 @@ live expectation exactly. A display-name or timing resemblance is never accepted
 
 PluralKit maps its concepts into generic persistence as follows:
 
-```text
-PluralKit member UUID
-  -> external_identities(kind = pluralkit_member, instance_id = pluralkit:official)
-  -> users(user_disc_id = pk:<member-uuid>)
-  -> message_proxy_identities
+```mermaid
+flowchart LR
+  memberUuid["PluralKit member UUID"] --> extId["external_identities<br/>(kind = pluralkit_member,<br/>instance_id = pluralkit:official)"]
+  extId --> users["users<br/>(user_disc_id = pk:&lt;member-uuid&gt;)"]
+  users --> mpId["message_proxy_identities"]
 
-PluralKit system UUID
-  -> message_proxy_namespaces(instance_id = pluralkit:official)
-  -> message_proxy_namespace_accounts(host Discord accounts)
+  sysUuid["PluralKit system UUID"] --> ns["message_proxy_namespaces<br/>(instance_id = pluralkit:official)"]
+  ns --> nsAcc["message_proxy_namespace_accounts<br/>(host Discord accounts)"]
 
-Proxy message ID
-  -> message_proxy_message_index(member identity + attested sender)
+  msgId["Proxy message ID"] --> msgIdx["message_proxy_message_index<br/>(member identity + attested sender)"]
 ```
 
 The host account owns authorization, privacy, blacklist state, cooldowns, quotas, usage telemetry,

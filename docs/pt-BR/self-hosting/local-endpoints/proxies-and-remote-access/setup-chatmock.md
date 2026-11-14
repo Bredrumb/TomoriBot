@@ -3,12 +3,11 @@ title: "ChatMock"
 sidebar:
   label: "ChatMock"
   order: 1
-aiGenerated: true
 ---
 
 Conecte o TomoriBot a uma ponte local de Chat Completions usando o [ChatMock](https://github.com/RayBytes/ChatMock).
 
-:::caution[Use proxies de conta CLI por sua conta e risco]
+:::danger[Use proxies de conta CLI por sua conta e risco]
 O acesso de terceiros por meio de uma conta CLI pode violar os termos do provedor e gerar risco de suspensão da conta. Uma assinatura não garante permissão para uso de bot ou API. Revise as [orientações de risco de conta](/self-hosting/local-endpoints/proxies-and-remote-access/#account-risk) antes de fazer login; o TomoriBot não oferece garantia de segurança da conta.
 :::
 
@@ -39,7 +38,7 @@ chatmock serve
 - Um `http://127.0.0.1:8000` simples normaliza para `/v1`; não adicione `/chat/completions`.
 - Permita `127.0.0.1:8000` na configuração de desenvolvimento `ALLOW_PRIVATE_NETWORK` do TomoriBot. O loopback do Docker refere-se ao contêiner.
 - Ative ferramentas, imagens ou saída estruturada somente após testar a ponte e o modelo selecionado. Mantenha o vídeo desativado.
-- Para um bot de produção hospedado separadamente, siga o [Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/). A produção exige HTTPS público. A detecção direta de prompt do ChatMock baseada em loopback e porta não se aplica ao hostname público do relay, portanto valide o comportamento de instruções do sistema separadamente.
+- Para um bot de produção hospedado separadamente, siga o [Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/). A produção exige HTTPS público. A detecção direta de prompt do ChatMock baseada em loopback e porta não se aplica ao hostname público do túnel, portanto valide o comportamento de instruções do sistema separadamente. O login da conta autoriza as requisições upstream do ChatMock; ele não autentica os clientes do seu endpoint público. Revise os [riscos conhecidos](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/#known-risks) do guia do túnel antes de compartilhar.
 
 :::note[Tratamento do prompt de sistema e configuração de porta]
 O TomoriBot detecta um endpoint em loopback na porta `CHATMOCK_PORT` (padrão `8000`) e converte instruções de sistema em um turno inicial de usuário para compatibilidade com o ChatMock. Defina `CHATMOCK_PORT` para corresponder a uma porta local diferente do ChatMock.

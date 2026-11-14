@@ -98,9 +98,13 @@ TomoriBotは、SillyTavernとDiscordの廃止されたClydeにインスパイア
 
 ## セルフホスト
 
+PCでTomoriBotを実行する簡単な方法が2つあります：
+
+### 方法1：セットアップウィザード（推奨）
+
 1. **事前準備：**
    - [Bun](https://bun.sh/) v1.3.2以上（v1.4.0以上を推奨）
-   - [PostgreSQL](https://www.postgresql.org/) または [Docker](https://www.docker.com/)（セットアップウィザードが既存のPostgreSQLを使用するか、Dockerで起動します）
+   - [PostgreSQL](https://www.postgresql.org/)または[Docker](https://www.docker.com/)（セットアップウィザードが既存のPostgreSQLを使用するか、データベース用にDockerで起動します）
    - `Presence Intent`、`Server Members Intent`、`Message Content Intent`が有効な[Discord Botトークン](https://discord.com/developers/applications)
 2. **セットアップウィザードの実行：**
    ```sh
@@ -110,7 +114,22 @@ TomoriBotは、SillyTavernとDiscordの廃止されたClydeにインスパイア
    bun run dev # Botを起動し、データベースのマイグレーションを自動実行します
    ```
 
-詳細や上記の手順で問題が発生した場合は、[セルフホストの完全なドキュメント](https://docs.tomoribot.app/ja/self-hosting/)を参照してください。
+### 方法2：Docker Compose
+
+1. **事前準備：**
+   - [Docker](https://www.docker.com/)およびDocker Compose v2以上
+   - `Presence Intent`、`Server Members Intent`、`Message Content Intent`が有効な[Discord Botトークン](https://discord.com/developers/applications)
+2. **Docker Composeで実行：**
+   ```sh
+   git clone https://github.com/Bredrumb/TomoriBot.git
+   cd TomoriBot
+   cp .env.example .env   # Windows PowerShell: Copy-Item .env.example .env
+   ```
+   `.env`に`DISCORD_TOKEN`、`CRYPTO_SECRET`、`POSTGRES_PASSWORD`、`ALLOW_PRIVATE_NETWORK`を設定してから、次を実行します：
+   ```sh
+   docker compose up
+   ```
+   Windows、Linux、Macの手順（Linuxのフォルダ所有権を含む）については、[Docker Composeガイド](https://docs.tomoribot.app/ja/self-hosting/docker-compose/)を参照してください。
 
 <!-- AFTER SETUP -->
 ### 招待・セットアップ後

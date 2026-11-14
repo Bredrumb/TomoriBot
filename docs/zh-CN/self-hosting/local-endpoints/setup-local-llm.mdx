@@ -1,0 +1,186 @@
+---
+title: "配置：本地 LLM"
+aiGenerated: false
+sidebar:
+  label: "本地 LLM"
+  order: 1
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+TomoriBot可以使用任何与OpenAI兼容的本地LLM服务器进行文本生成和嵌入。
+
+:::note[不需要环境变量]
+本地模型通过Discord斜杠指令注册，并加密存储在数据库中。它们没有对应的`.env`设置。
+:::
+
+## 1. 运行你的模型服务器
+
+本指南以Ollama为例走一遍流程，因为它最容易上手；如果你已经是比较有经验的技术用户，也完全可以用任何你偏好的推理引擎！
+
+安装[Ollama](https://ollama.com)。下面的示例使用的是Google的Gemma 4，但[Ollama的模型库](https://ollama.com/library)中的任何模型均可使用。
+
+### 该拉取哪个尺寸？
+
+本地模型运行在GPU的显存（在Mac上则为Apple Silicon统一内存）中。经验法则：模型至少需要在内存中留出相当于其下载体积的空间，再加上约1到2 GB用于对话上下文。根据你的显存容量挑选能装下的最大Gemma 4：
+
+| 可用显存 / GPU内存 | 最合适的选择 | 下载大小（约） |
+|---|---|---|
+| 约8 GB | `gemma4:e2b` | 7.2 GB |
+| 约12 GB | `gemma4:12b` | 7.6 GB |
+| 约16 GB | `gemma4:12b`（能完全装下），或`gemma4:26b` | 7.6 / 18 GB |
+| 24 GB以上 | `gemma4:26b`或`gemma4:31b` | 18 / 20 GB |
+
+下载大小基于Ollama的默认量化配置；精确数值请参见[模型页面](https://ollama.com/library/gemma4)。
+
+下面演示如何查看你的GPU显存、在Ollama未作为后台服务自动运行时启动它，以及验证它能否正常响应：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+打开`任务管理器` > `性能` > `GPU`查看**专用GPU内存**（NVIDIA显卡也可以运行`nvidia-smi`）。Ollama桌面安装器会自动在端口`11434`上启动后台服务；只有在服务已停止时才需要手动运行`ollama serve`。
+
+```powershell
+ollama pull gemma4:12b     # 换成适合你显存大小的标签
+Invoke-RestMethod http://127.0.0.1:11434/v1/models
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+运行`nvidia-smi`（或对应GPU厂商的工具）查看显存。如果Ollama的systemd服务尚未运行，请在另一个终端中启动`ollama serve`：
+
+```bash
+ollama pull gemma4:12b     # 换成适合你显存大小的标签
+curl -fsS http://127.0.0.1:11434/v1/models
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+点击苹果菜单 > **关于本机**查看统一内存总容量（macOS会将部分统一内存分配给GPU）。Ollama桌面应用会自动在端口`11434`上运行后台服务；只有在未运行桌面应用的无界面环境中才需要运行`ollama serve`。
+
+```bash
+ollama pull gemma4:12b     # 换成适合你内存大小的标签
+curl -fsS http://127.0.0.1:11434/v1/models
+```
+
+</TabItem>
+</Tabs>
+
+记下实际安装的确切标签，这就是你要注册的模型名称：
+
+```sh
+ollama list
+# NAME              ID            SIZE
+# gemma4:12b        a1b2c3d4...   7.6 GB
+```
+
+## 2. 在Discord里注册它
+
+运行`/providers`（全服务器生效）或`/personal providers`（仅自己生效），选择`+ 添加新自定义端点`，然后填入：
+
+| 字段 | Ollama的取值 |
+|---|---|
+| `端点标签` | 你自选的名称，例如`home-ollama` |
+| API兼容性 | `OpenAI 兼容`（推荐）或`Ollama` |
+| `端点 URL` | OpenAI兼容模式使用`http://127.0.0.1:11434/v1` · Ollama模式使用`http://127.0.0.1:11434` |
+| `认证令牌` | *（留空）* |
+
+:::tip[选择与API兼容类型匹配的URL]
+`OpenAI 兼容`和`Ollama`均接受裸根地址，并会将其规范化为`/v1`基础路径。`/chat/completions`会自动追加，请勿手动填写。已经包含路径的URL（例如`https://openrouter.ai/api/v1`或某个网关前缀）会按原样保存。
+:::
+
+保存连接之后，选中它，并从模型下拉菜单中选择`+ 添加新的文本模型`。填入：
+
+- **模型名称（确切的API ID）**：`gemma4:12b`，即`ollama list`中显示的确切标签。
+- **上下文窗口**：可选，仅适用于Ollama与KoboldCPP。设置该数值（例如`8192`、`16384`）可调高Ollama默认较小的`num_ctx`，否则可能会截断TomoriBot的长上下文。留空则使用服务器默认值。
+- **各项开关**：若模型支持函数调用，请启用`工具调用`；仅视觉模型才启用`图像输入`；若模型能够良好处理JSON Schema，则启用`结构化输出`。在我们的示例中，Gemma 4全部支持，因此全部勾选即可。
+
+TomoriBot会在保存时验证连接。如果提示端点无法访问，常见原因是`localhost`与Docker网络不匹配，或者缺少/多写了`/v1`（参见[注意事项与踩坑点](#notes--gotchas)）。
+
+添加模型会自动将其设为当前启用的`文本`模型。直接在聊天中开始对话即可体验。如果由于某种原因未生效，请运行`/config` > 模型 > 切换模型，选择你新注册的模型。
+
+## 3.（可选）用于RAG的本地嵌入
+
+选中已保存的端点，并在模型下拉菜单中添加一个嵌入模型（例如`ollama pull nomic-embed-text`，模型名称填写`nomic-embed-text:latest`）。RAG功能还需要在PostgreSQL中安装pgvector。你可以参考此处的[手动安装](/self-hosting/manual-setup/)指南。
+
+## 4.（可选）与ComfyUI共享单张GPU
+{/* anchor: 4-optional-share-one-gpu-with-comfyui */}
+
+如果文本模型与ComfyUI运行在同一张GPU上，TomoriBot可以在ComfyUI图像或视频任务运行时卸载文本模型。任务执行期间收到的文本回复会等待GPU重新释放后再处理。
+
+打开已保存的端点，点击`编辑端点`，并在`端点行为`下勾选`ComfyUI 任务期间卸载模型`。保存时TomoriBot会检查该URL处的服务器类型：
+
+- **Ollama**：安装后即可直接使用。TomoriBot会在任务开始前请求Ollama卸载模型，Ollama会在收到下一次文本请求时重新加载它。
+- **KoboldCpp**：使用`--admin`和`--admindir`启动KoboldCpp，并将端点的认证令牌设置为管理员密码。TomoriBot会使用KoboldCpp的管理员重载API卸载模型，并在任务完成后重新加载。
+
+保存时其他服务器均会被拒绝，因为通用的OpenAI兼容服务器没有统一的模型卸载方式。
+
+## 其他服务器
+
+TomoriBot支持任何兼容OpenAI的端点，但推荐使用以下服务器。它们均采用相同的流程：仅URL和少数注意事项有所不同。
+
+### KoboldCPP
+
+- 启动时启用内置的OpenAI兼容模式。默认：`http://127.0.0.1:5001/v1`。
+- API兼容性：`OpenAI 兼容`。`端点 URL`：`http://127.0.0.1:5001/v1`。
+- 与Ollama一样支持`上下文窗口`设置。
+- 若要在ComfyUI任务期间卸载模型，启动时还需添加`--admin`与`--admindir`（参见[与ComfyUI共享单张GPU](#4-optional-share-one-gpu-with-comfyui)）。
+- 支持加载GGUF模型；模型名称填写已加载模型报告的名称（通常为文件名主干），可查看KoboldCPP的`/v1/models`响应。
+
+### llama.cpp（`llama-server`）
+
+- 构建或安装[llama.cpp](https://github.com/ggml-org/llama.cpp)，然后使用其自带的OpenAI兼容服务器提供GGUF服务：
+  ```sh
+  llama-server -m model.gguf -c 16384 --host 0.0.0.0 --port 8080
+  ```
+- API兼容性：`OpenAI 兼容`。`端点 URL`：`http://127.0.0.1:8080/v1`。
+- 启动时使用`-c`设置上下文窗口；弹窗中的`上下文窗口`仅适用于Ollama/KoboldCPP，在此处不起作用。
+- 模型名称填写`/v1/models`报告的内容；可以使用`--alias my-model`指定一个整洁的别名。
+- 如果使用`--api-key`启动，请将该密钥填入`认证令牌`。
+
+### LM Studio
+
+- 在LM Studio中，启动`Local Server`（`Developer`标签页）。默认：`http://127.0.0.1:1234/v1`。
+- API兼容性：`OpenAI 兼容`。`端点 URL`：`http://127.0.0.1:1234/v1`。
+- 模型名称填写LM Studio为已加载模型显示的标识符。
+
+### vLLM
+
+- 使用OpenAI兼容服务器启动服务：`vllm serve "<model>"` → `http://127.0.0.1:8000/v1`。
+- API兼容性：`OpenAI 兼容`。`端点 URL`：`http://127.0.0.1:8000/v1`。
+- 如果使用`--api-key`启动vLLM，请将该密钥填入`认证令牌`。
+- 模型名称填写所提供服务的模型路径或名称（与`/v1/models`匹配）。
+
+### LiteLLM（多后端代理）
+
+- 运行LiteLLM代理；默认：`http://127.0.0.1:4000/v1`。
+- API兼容性：`OpenAI 兼容`。`端点 URL`：`http://127.0.0.1:4000/v1`。
+- 模型名称填写在LiteLLM配置中定义的模型别名。
+- 如果代理启用了主密钥验证，请将其填入`认证令牌`。
+
+### ChatMock（ChatGPT账户 / Codex CLI）
+
+由于需要系统提示词兼容处理，它配有专用的配置指南：[配置：ChatMock](/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/)。
+
+## 从Hugging Face挑选模型
+
+除了Ollama精选的模型库，[Hugging Face](https://huggingface.co)还托管着成千上万的社区模型。KoboldCPP、llama.cpp和LM Studio均支持加载GGUF格式：这是一种单文件打包格式，只需下载文件并将服务器指向它即可。
+
+1. **寻找GGUF**：在Hugging Face上搜索你的模型名称加上"GGUF"，社区量化维护者（如[bartowski](https://huggingface.co/bartowski)）通常会在热门模型发布后不久提供GGUF构建版本。优先选择指令/对话变体（名称以`-Instruct`或`-Chat`结尾）；基础模型无法进行连贯对话。
+2. **选择适合你显存的量化档位**：一个仓库通常会列出同一模型的多个量化等级，文件大小大致等于其所需的显存（加上约1到2 GB用于上下文，规则与上方的[尺寸表](#该拉取哪个尺寸)相同）。下载你选定档位的单个`.gguf`文件。
+3. **加载模型**：使用该文件启动KoboldCPP或`llama-server`（参见[其他服务器](#其他服务器)），然后照常在Discord中注册端点。
+
+:::tip[选择哪种量化档位？Q4或Q5是最佳平衡点]
+量化通过以更少的比特存储每个权重来缩小模型体积，代价是微小的质量损失。名称中像`Q4_K_M` / `Q5_K_M`这样的代号代表每个权重的比特数：**4比特（Q4）或5比特（Q5）是通常的最佳平衡点**，能在仅占用8比特约一半体积的同时保留绝大部分质量。低于4比特质量会迅速劣化。在固定的显存预算下，**采用Q4量化的较大模型通常优于采用Q8量化的较小模型**。
+:::
+
+## 注意事项与踩坑点
+{/* anchor: notes--gotchas */}
+
+- **Bot独立托管在其他地方？** 请遵循[通过Cloudflare安全地远程访问](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/)。生产环境中的bot无法通过`127.0.0.1`访问你的电脑；该指南会为推理引擎提供一个公网HTTPS URL。只要引擎支持，就请使用其自身的API密钥；Access和Caddy属于可选的额外加固措施。
+- **每个标签对应一个端点条目**：若要注册共享同一服务器的多个模型，请选中已保存的端点并再次使用其模型下拉菜单。对于真正不同的服务器或API协议，请使用不同的标签。
+- **模型名称是API标识符**：它是发送给服务器的确切字符串。填写错误是「连接成功但回复失败」最常见的原因。
+- **在Docker中运行TomoriBot？** 容器内的`localhost`不是你的宿主机。请使用`http://host.docker.internal:<port>`或宿主机的局域网IP，并将模型服务器绑定到`0.0.0.0`。仓库自带的Compose文件在Linux上也会自动映射该主机名。如果在Linux上使用你自己的Compose文件或`docker run`，请添加`extra_hosts: ["host.docker.internal:host-gateway"]`（`docker run`对应`--add-host=host.docker.internal:host-gateway`）。
+- **私有地址需要配置`ALLOW_PRIVATE_NETWORK`才能放行**：设为`true`时，`localhost`、局域网主机和`host.docker.internal`上的端点均可通过明文HTTP使用。像`localhost:5001`这样的`host:port`列表只允许列出的服务器，适合面向整个Discord服务器共享模型时使用。`FETCH_URL_ALLOW_PRIVATE_NETWORK`是专用于`fetch_url`工具的独立设置，不会改变模型端点的规则。

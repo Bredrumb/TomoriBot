@@ -147,7 +147,7 @@ beyond your machine. Each engine uses its own port setting.
 bun run backup
 bun run restore-backup --latest
 # Or choose a bundle:
-bun run restore-backup --from backups/<bundle-directory>
+bun run restore-backup --from "backups/<bundle-directory>"
 ```
 
 Bundles are stored in `backups/` or `TOMORI_BACKUP_DIR`. Follow the

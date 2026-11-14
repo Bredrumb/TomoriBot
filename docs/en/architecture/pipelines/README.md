@@ -14,38 +14,15 @@ receives, what each produces, and where side effects occur.
 
 TomoriBot organizes conversation turn handling into five interconnected pipelines:
 
-```text
-Incoming Message
-       |
-       v
-[Chat Pipeline]
-  1. Admission & Channel Lock
-  2. Persona Turn Planning
-  3. Per-Turn Execution
-       |
-       +---> [Context-Build Pipeline]
-       |       - Persona & Server Metadata
-       |       - Participant Profile Hydration
-       |       - Dialogue History & Tail Directives
-       |
-       +---> Generation Turn: Model Fallback Chain & Key Rotation
-       |       [Tool-Loop Pipeline]
-       |       - Tool Call Validation & Dispatch
-       |       - Enhanced Context Restarts
-       |       - Memory Tool Writes
-       |            |
-       |            v
-       |     [Provider Pipeline]
-       |       - Native Request Serialization
-       |       - Chunk Normalization & Reasoning
-       |       - Markdown Buffer Management
-       |       - Discord Stream Delivery
-       |
-       v
-  4. Post-Turn Effects
-       |
-       +---> [Memory Pipeline]
-               - Passive Short-Term Memory Capture
+```mermaid
+flowchart TD
+  msg["Incoming Message"] --> chat["Chat Pipeline<br/>1. Admission & Channel Lock<br/>2. Persona Turn Planning<br/>3. Per-Turn Execution"]
+  chat --> ctx["Context-Build Pipeline<br/>- Persona & Server Metadata<br/>- Participant Profile Hydration<br/>- Dialogue History & Tail Directives"]
+  ctx --> gen["Generation Turn<br/>Model Fallback Chain & Key Rotation"]
+  gen --> tool["Tool-Loop Pipeline<br/>- Tool Call Validation & Dispatch<br/>- Enhanced Context Restarts<br/>- Memory Tool Writes"]
+  tool --> prov["Provider Pipeline<br/>- Native Request Serialization<br/>- Chunk Normalization & Reasoning<br/>- Markdown Buffer Management<br/>- Discord Stream Delivery"]
+  prov --> post["4. Post-Turn Effects"]
+  post --> mem["Memory Pipeline<br/>- Passive Short-Term Memory Capture"]
 ```
 
 ## Pipeline index

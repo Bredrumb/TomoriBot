@@ -32,7 +32,7 @@ means starting it again from Discord.
   SSH first, then choose `Sign In` in that computer's browser:
 
   ```sh
-  ssh -L 8080:127.0.0.1:8080 <user>@<bot-host>
+  ssh -L 8080:127.0.0.1:8080 "<user>@<bot-host>"
   ```
 
 - Each service decides whether it accepts a loopback address. If one refuses, use an HTTPS address

@@ -50,7 +50,7 @@ API_KEY_INACTIVITY_DAYS=90
 
 1. 停止所有 bot 实例。配置目标数据库、Discord 令牌和原始加密密钥。
 2. 安装 `psql` 和所需的数据库扩展，包括 `pgvector`。数据库账户必须有权启用 `pgcrypto`，或者必须由管理员预先启用它。
-3. 运行 `bun run restore-backup --latest` 或 `bun run restore-backup --from backups/<bundle-directory>`。检查目标并确认提示。恢复程序会在执行具有破坏性的 SQL 前检查密钥。
+3. 运行 `bun run restore-backup --latest` 或 `bun run restore-backup --from "backups/<bundle-directory>"`。检查目标并确认提示。恢复程序会在执行具有破坏性的 SQL 前检查密钥。
 4. 在重启前运行 `bun run audit-keys` 和 `bun run rotate-keys --dry-run`。如果凭据需要迁移，请运行 `bun run rotate-keys --bot-stopped` 并再次审计。如果恢复失败，请保持 bot 处于停止状态：先前的 SQL 语句可能已经更改了数据库。
 
 单独备份本地 `data/` 目录，包括头像、语音样本和 `data/custom-expressions/`。将文件恢复到相同路径。对于 GCS 或 S3 表情图片，请备份 `custom-expressions/` 对象并将它们的键恢复到相同的已配置存储桶。外链表情图片取决于其外部主机。
@@ -106,7 +106,7 @@ bun run update
 bun run backup
 bun run restore-backup --latest
 # 或选择具体的备份包：
-bun run restore-backup --from backups/<bundle-directory>
+bun run restore-backup --from "backups/<bundle-directory>"
 ```
 
 备份包保存在 `backups/` 或 `TOMORI_BACKUP_DIR` 中。在恢复前请遵循[恢复步骤](#database-backups-and-recovery-keys)。`bun run backup:personas` 仅导出人格和服务器记忆以供 `/persona import` 使用；它不能用于恢复数据库。

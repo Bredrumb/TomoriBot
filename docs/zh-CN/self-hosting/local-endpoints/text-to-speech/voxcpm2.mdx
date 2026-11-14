@@ -1,0 +1,182 @@
+---
+title: "VoxCPM2"
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+使用OpenBMB的[VoxCPM2](https://github.com/OpenBMB/VoxCPM)语音合成模型合成跨30种语言的富有表现力的48 kHz语音。
+
+VoxCPM2是一款2B参数的多语言语音模型，支持声音克隆、转写辅助终极克隆（Ultimate Cloning）以及自然语言语音设计。TomoriBot通过`servers/tts/voxcpm2/`中的服务器连接到官方`voxcpm` Python库，在16 GB显存内即可轻松运行官方未量化的`openbmb/VoxCPM2` BF16检查点。
+
+## 许可证
+
+VoxCPM2代码与模型权重基于Apache-2.0许可证发布，在遵守许可条款的前提下允许商用。TomoriBot本身不分发模型权重；安装脚本会直接从官方Hugging Face仓库下载它们。
+
+官方上游资源：
+
+- [OpenBMB/VoxCPM](https://github.com/OpenBMB/VoxCPM)
+- [Hugging Face上的openbmb/VoxCPM2](https://huggingface.co/openbmb/VoxCPM2)
+- [VoxCPM文档](https://voxcpm.readthedocs.io/)
+
+## 支持的语言
+
+VoxCPM2官方支持30种语言，无需语言标签：
+
+阿拉伯语、缅甸语、中文、丹麦语、荷兰语、英语、芬兰语、法语、德语、希腊语、希伯来语、印地语、印度尼西亚语、意大利语、日语、高棉语、韩语、老挝语、马来语、挪威语、波兰语、葡萄牙语、俄语、西班牙语、斯瓦希里语、瑞典语、他加禄语、泰语、土耳其语和越南语。
+
+OpenBMB还记载了若干中文方言。为了兼容通用的TTS规范，TomoriBot仍可能发送`language`字段，但VoxCPM2会直接从合成文本中检测语言，包装脚本不会强制添加语言标签。
+
+## 语音模式
+
+对于克隆和语音设计，请使用`自动`声音来源模式与`纯文本`脚本标记风格。提供参考文本可启用终极克隆；表达方式指令具有更高优先级，并在该请求中忽略参考文本。
+
+## 硬件与运行时
+
+推荐的起步配置：
+
+- Python 3.10-3.12（两个安装脚本均要求此版本）
+- 配备8 GB显存或更多的NVIDIA GPU用于官方BF16运行时（12-16 GB显存更为宽裕），或拥有足够统一内存以容纳2B模型的Apple Silicon
+- 支持CPU作为后备方案，但速度会慢得多
+
+在CUDA上运行时，默认的`VOXCPM2_OPTIMIZE=1`会使用`torch.compile`和Triton编译模型：首次启动约需2-3分钟由PyTorch完成模型编译，之后由于内核已缓存，启动时间不到1分钟，且合成速度比未编译快约2.5-3倍，同时多占用约2 GB系统内存。如果CUDA环境下缺少Triton，请重新运行安装脚本或设置`VOXCPM2_OPTIMIZE=0`。
+
+在非CUDA设备（CPU与Apple Silicon `mps`）上，包装脚本不会启用`VOXCPM2_OPTIMIZE`的Triton检查，因此启动不依赖Triton；同时`VOXCPM2_LOAD_DENOISER=0`默认禁用高CPU占用的降噪器。
+
+## 安装
+
+服务器固定使用当前稳定的`voxcpm` 2.0.3包，并将`openbmb/VoxCPM2`下载到标准的Hugging Face缓存目录中。在TomoriBot代码仓库根目录下根据你的操作系统运行安装脚本：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+PowerShell安装脚本直接在原生Windows运行（无需WSL），并安装支持CUDA的PyTorch 2.10（`cu128`）以及用于`VOXCPM2_OPTIMIZE=1`的`triton-windows`：
+
+```powershell
+.\servers\tts\voxcpm2\install-voxcpm2.ps1
+.\servers\tts\voxcpm2\.venv\Scripts\python.exe servers\tts\voxcpm2\server.py
+```
+
+在没有NVIDIA GPU的纯CPU设备上，请传入`-Cpu`：
+
+```powershell
+.\servers\tts\voxcpm2\install-voxcpm2.ps1 -Cpu
+```
+
+如果原生Windows PyTorch需要手动重装CUDA或重新对齐驱动：
+
+```powershell
+.\servers\tts\voxcpm2\.venv\Scripts\pip.exe install --force-reinstall torch==2.10.0 torchaudio==2.10.0 --index-url https://download.pytorch.org/whl/cu128
+.\servers\tts\voxcpm2\.venv\Scripts\pip.exe install "triton-windows>=3.6,<3.7"
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+bash servers/tts/voxcpm2/install-voxcpm2.sh
+servers/tts/voxcpm2/.venv/bin/python servers/tts/voxcpm2/server.py
+```
+
+标准Linux PyPI的`torch` wheel已包含CUDA支持与用于`VOXCPM2_OPTIMIZE=1`的Triton。若在未编译模式或CPU上运行，请在启动`server.py`前设置`VOXCPM2_OPTIMIZE=0`。
+
+</TabItem>
+<TabItem label="Mac">
+
+请确保已激活Python 3.10-3.12（例如`PYTHON_BIN=python3.12`），然后运行shell安装脚本：
+
+```bash
+bash servers/tts/voxcpm2/install-voxcpm2.sh
+servers/tts/voxcpm2/.venv/bin/python servers/tts/voxcpm2/server.py
+```
+
+在`VOXCPM2_DEVICE=auto`下，上游`voxcpm`会在Apple Silicon可用时使用`mps`，否则回退到`cpu`。如果在你的macOS/PyTorch版本上遇到不受支持的MPS算子，请先使用`VOXCPM2_DEVICE=cpu`（速度较慢）或`VOXCPM2_OPTIMIZE=0`启动。如果环境中的音频工具请求缺少依赖，可能还需要执行`brew install ffmpeg`。
+
+</TabItem>
+</Tabs>
+
+初次配置会下载数GB的模型权重。若想只配置Python环境而不预取模型（改为由`voxcpm`在首次启动服务器时下载检查点），请设置`VOXCPM2_PREFETCH=0`：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$env:VOXCPM2_PREFETCH = "0"
+.\servers\tts\voxcpm2\install-voxcpm2.ps1
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+VOXCPM2_PREFETCH=0 bash servers/tts/voxcpm2/install-voxcpm2.sh
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+VOXCPM2_PREFETCH=0 bash servers/tts/voxcpm2/install-voxcpm2.sh
+```
+
+</TabItem>
+</Tabs>
+
+配置完成后，运行`bun run launch --voxcpm2`可将服务器与TomoriBot一同启动。默认端点为`http://127.0.0.1:8016`。
+
+## 在TomoriBot中注册
+
+运行`/providers`，选择`+ 添加新自定义端点`，并配置语音合成端点：
+
+- 能力：`语音合成`
+- API兼容性：`TTS 克隆`（`tts-clone`）
+- 端点URL：`http://127.0.0.1:8016`
+- 声音来源模式：`自动`
+- 脚本标记风格：`纯文本`
+- 支持指令：`是`（勾选`可以在脚本之外接收一条指令`）
+
+保存连接之后，选中它并使用其模型下拉菜单添加一个语音合成模型。然后打开`/config` > 模型 > 切换模型，选择VoxCPM2语音模型。
+
+推荐使用`自动`，因为同一个服务器同时支持参考音频克隆与语音设计。你不需要为这两种模式分别运行独立的VoxCPM2进程。
+
+## 人格语音克隆
+
+用于需要模仿现有说话者音色的人格：
+
+1. 准备一段干净的参考音频片段，仅包含单人说话，几乎无背景音乐。上游将5到30秒视为实用区间。
+2. 打开`/config`下的模型 > TTS参数与语音并上传音频片段。
+3. 若有参考音频片段的精确文本，请一并输入。VoxCPM2会将其用于终极克隆，能够还原更多参考音频的节奏、情感与风格。
+4. 打开`/config`下的人格 > 语音，选择对应人格并分配保存好的语音样本。
+
+如果未提供参考文本，VoxCPM2仍会执行常规的参考音频声音克隆。
+
+## 人格语音设计
+
+用于需要根据文本描述而非参考音频创建的人格：
+
+1. 打开`/config`下的人格 > 语音并选择「语音设计」。
+2. 选择对应人格。
+3. 输入自然语言描述，例如`Young adult woman, soft warm voice, relaxed pace, slightly playful delivery`。
+
+对于克隆语音，单次表达方式指令的优先级高于参考文本。
+
+## 环境变量
+
+| 变量 | 默认值 | 用途 |
+|---|---|---|
+| `VOXCPM2_MODEL_ID` | `openbmb/VoxCPM2` | Hugging Face模型ID或本地模型目录 |
+| `VOXCPM2_DEVICE` | `auto` | 运行时设备：`auto`、`cuda`、`cuda:N`、`cpu`或`mps` |
+| `VOXCPM2_OPTIMIZE` | `1` | 在CUDA上使用`torch.compile`编译模型；需要Triton，缺少时服务器会在启动时停止 |
+| `VOXCPM2_LOAD_DENOISER` | `0` | 加载可选的上游降噪器；默认禁用以节省内存 |
+| `VOXCPM2_CFG_VALUE` | `2.0` | 引导强度 |
+| `VOXCPM2_INFERENCE_TIMESTEPS` | `10` | 流匹配推理步数；增加步数可提高质量但会牺牲速度 |
+| `VOXCPM2_MAX_LEN` | `4096` | 最大生成长度 |
+| `VOXCPM2_NORMALIZE` | `0` | 启用上游文本规范化 |
+| `VOXCPM2_RETRY_BADCASE` | `1` | 启用上游针对异常生成结果的自动重试行为 |
+| `VOXCPM2_RETRY_BADCASE_MAX_TIMES` | `3` | 最大自动重试次数 |
+| `VOXCPM2_RETRY_BADCASE_RATIO_THRESHOLD` | `6.0` | 上游异常长度阈值 |
+| `VOXCPM2_PREFETCH` | `1` | 仅限安装脚本：在安装过程中下载模型 |
+| `VOXCPM2_PORT` | `8016` | VoxCPM2本地服务器端口 |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | 本地服务器绑定地址；参见[网络访问](/self-hosting/local-endpoints/text-to-speech/#network-access) |
+
+参考音频必须是解码后不超过10 MB的非空WAV容器，包装脚本会在写入临时文件之前对此进行验证。

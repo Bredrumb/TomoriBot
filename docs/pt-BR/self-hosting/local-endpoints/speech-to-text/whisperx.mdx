@@ -1,0 +1,121 @@
+---
+title: "Transcrição WhisperX"
+sidebar:
+  order: 1
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Configure a transcrição local e precisa de fala para texto no TomoriBot usando o servidor [WhisperX](https://github.com/m-bain/whisperX) incluído. O WhisperX oferece transcrição rápida de áudio com alinhamento em nível de palavra.
+
+## Configuração
+
+Execute estes comandos a partir da raiz do repositório do TomoriBot:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+cd servers/stt
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+python whisperx_server.py
+```
+
+Certifique-se de que o `ffmpeg` esteja disponível no `PATH`. Para aceleração em GPU NVIDIA, as DLLs cuBLAS e cuDNN do CUDA 12 também precisam estar no `PATH`.
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+cd servers/stt
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python whisperx_server.py
+```
+
+Certifique-se de que o `ffmpeg` esteja instalado (`sudo apt-get install ffmpeg` no Debian/Ubuntu). Em sistemas com GPU NVIDIA, as bibliotecas de execução do CUDA 12 habilitam a transcrição na GPU.
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+cd servers/stt
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python whisperx_server.py
+```
+
+Certifique-se de que o `ffmpeg` esteja instalado (`brew install ffmpeg`). Como `servers/stt/requirements.txt` referencia `--extra-index-url https://download.pytorch.org/whl/cu124` (apenas CUDA para Linux/Windows), o `pip` usa pacotes padrão do PyPI no Mac. O CTranslate2 não usa Apple MPS, então a transcrição roda na CPU (`int8` por padrão, ou defina `WHISPERX_COMPUTE_TYPE=float32` se necessário).
+
+</TabItem>
+</Tabs>
+
+Mantenha esse terminal aberto enquanto o TomoriBot estiver usando o WhisperX. A URL do endpoint padrão é `http://127.0.0.1:8021`. No Windows, use `127.0.0.1` em vez de `localhost`.
+
+## Escolher um modelo
+
+Defina `WHISPERX_MODEL` antes de iniciar o servidor:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$env:WHISPERX_MODEL = "large-v3-turbo"
+python servers\stt\whisperx_server.py
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+WHISPERX_MODEL=large-v3-turbo python servers/stt/whisperx_server.py
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+WHISPERX_MODEL=large-v3-turbo python servers/stt/whisperx_server.py
+```
+
+</TabItem>
+</Tabs>
+
+| `WHISPERX_MODEL` | Tamanho | Uso |
+|---|---|---|
+| `large-v3` | 1.55B | Melhor precisão multilíngue; usa cerca de 0,6 GiB a mais de VRAM que o turbo |
+| `large-v3-turbo` | 809M | Multilíngue, decodificador mais rápido; japonês levemente inferior |
+| `kotoba-tech/kotoba-whisper-v2.0-faster` | 756M | Apenas japonês; mais preciso que o turbo em clipes de teste em japonês, na mesma velocidade |
+
+Em clipes curtos, o codificador domina o tempo de execução, portanto os três rodam em velocidade semelhante. Escolha pelo idioma e pela memória disponível. `small` e `base` perdem precisão demais em japonês para serem recomendados. Modelos Whisper ainda podem inventar texto em clipes muito curtos ou quase silenciosos.
+
+## GPU e comportamento de dispositivo
+
+O servidor usa uma GPU NVIDIA automaticamente quando o CUDA e o CTranslate2 estão utilizáveis. Verifique `http://127.0.0.1:8021/health`: `device` exibe `cuda` em configurações com GPU ou `cpu` em configurações de CPU e Mac.
+
+No Windows, o reconhecimento de fala precisa das DLLs cuBLAS e cuDNN do CUDA 12 no `PATH`. Sem elas, o servidor imprime `GPU found but unusable` na inicialização e faz fallback para a CPU, o que é bem mais lento: instale-as e reinicie o servidor. Se você definir `WHISPERX_DEVICE=cuda`, o servidor para na inicialização em vez de fazer fallback.
+
+No Mac, o CTranslate2 transcreve na CPU; `WHISPERX_DEVICE=cuda` falha lá.
+
+## Registrar no TomoriBot
+
+Execute `/providers`, escolha `+ Adicionar Novo Endpoint Personalizado` e use a compatibilidade de API de transcrição:
+
+- Compatibilidade de API: `Transcrição Compatível com OpenAI` (`openai-compatible-transcription`)
+- `endpoint_url`: `http://127.0.0.1:8021`
+
+Depois de salvar a conexão, selecione-a e use o menu suspenso de modelos para adicionar o valor exato de `WHISPERX_MODEL` (`large-v3` por padrão, ou o ID completo do repositório, como `kotoba-tech/kotoba-whisper-v2.0-faster`) como um modelo de Transcrição.
+
+Use `/providers` para registro do endpoint e configuração do modelo. Em seguida, abra `/config` > Modelos > Trocar Modelos para selecionar e ativar o endpoint registrado.
+
+## Usar transcrições
+
+Após o registro, o TomoriBot transcreve anexos de áudio em segundo plano e adiciona o texto ao contexto do chat. Use `/config` > Comportamento > Comportamento de Avisos apenas se também quiser que as transcrições sejam postadas visivelmente no chat.

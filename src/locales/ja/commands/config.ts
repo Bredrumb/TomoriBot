@@ -1494,6 +1494,7 @@ Exaggeration: **{exaggeration}**`,
       choice_low: `低`,
       choice_medium: `中`,
       choice_high: `高`,
+      choice_xhigh: `最高`,
     },
     cooldown: {
       type: {

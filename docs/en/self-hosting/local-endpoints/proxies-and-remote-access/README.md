@@ -4,7 +4,6 @@ sidebar:
   label: "Overview"
   groupLabel: "Proxies & Remote Access"
   order: 8
-aiGenerated: true
 ---
 
 Connect TomoriBot through a local API proxy, or securely reach an engine running on another computer.
@@ -13,14 +12,15 @@ Connect TomoriBot through a local API proxy, or securely reach an engine running
 
 1. [ChatMock](/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/): connect a ChatGPT-backed bridge on your machine.
 2. [CLIProxyAPI](/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/): install a proxy and register models from an authorized backend.
-3. [Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/): connect a separately hosted bot to your local engine using Access authentication and a production relay.
+3. [Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/): give a local engine an HTTPS URL for a separately hosted bot.
+4. [Optional: Access and Caddy](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/): add a separate authentication check and stricter API routing.
 
 Start with the proxy guide if you need one. Follow the Cloudflare guide only when the bot runs on another machine.
 
 ## Account risk
 <!-- anchor: account-risk -->
 
-:::caution[Use CLI account proxies at your own risk]
+:::danger[Use CLI account proxies at your own risk]
 Using Codex, Claude Code, Antigravity, or another CLI account through a third-party bridge may violate the provider's terms and lead to account suspension or termination. A paid subscription or successful login does not establish permission for bot or general-purpose API use. Check the rules for your provider, plan, and authentication method. TomoriBot provides no account-safety guarantee.
 :::
 

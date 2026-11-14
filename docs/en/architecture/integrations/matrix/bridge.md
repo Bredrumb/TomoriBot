@@ -34,26 +34,14 @@ address or hostname, a `MATRIX_MAX_ATTACHMENT_MB` of 0 or less or above 100, or 
 `MATRIX_MEDIA_TIMEOUT_MS` outside 1000-120000 logs the offending variable and leaves the bridge
 disabled.
 
-```
-Matrix Homeserver
-  │  (HTTP push to appservice listener)
-  ▼
-handleMatrixEvent (src/utils/bridges/matrix/events.ts)
-  │  Strips reply fallback, enforces size limits, builds username
-  ▼
-Discord Webhook ("[Matrix|@user:host] localpart")
-  │  (Discord messageCreate gateway event)
-  ▼
-TomoriBot Core Engine (Admission, Context Assembly, LLM)
-  │  Emits AI response in Discord channel
-  ▼
-matrixRelay Handler (src/events/messageCreate/matrixRelay.ts)
-  │  Detects self-message, maps persona to virtual user, formats mentions
-  ▼
-sendToMatrixRoom (src/utils/bridges/matrix/media.ts)
-  │  (Appservice intent API call)
-  ▼
-Matrix Room
+```mermaid
+flowchart TD
+  hs["Matrix Homeserver"] -->|"HTTP push to appservice listener"| handle["handleMatrixEvent<br/>src/utils/bridges/matrix/events.ts<br/>Strips reply fallback, enforces size limits, builds username"]
+  handle --> wh["Discord Webhook<br/>[Matrix|@user:host] localpart"]
+  wh -->|"Discord messageCreate gateway event"| core["TomoriBot Core Engine<br/>Admission, Context Assembly, LLM"]
+  core -->|"Emits AI response in Discord channel"| relay["matrixRelay Handler<br/>src/events/messageCreate/matrixRelay.ts<br/>Detects self-message, maps persona to virtual user, formats mentions"]
+  relay --> send["sendToMatrixRoom<br/>src/utils/bridges/matrix/media.ts"]
+  send -->|"Appservice intent API call"| room["Matrix Room"]
 ```
 
 ### Inbound relay (Matrix to Discord)

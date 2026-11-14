@@ -18,7 +18,7 @@ Los servidores locales MCP solo se admiten en instancias autohospedadas. El bot 
 Inicia un servidor MCP que exponga un transporte HTTP/SSE en un puerto local. Por ejemplo, muchos servidores MCP se ejecutan a través de Node:
 
 ```sh
-npx -y <some-mcp-server> --port 3000
+npx -y "<some-mcp-server>" --port 3000
 ```
 
 El comando exacto depende del servidor que esté ejecutando. Tenga en cuenta la URL y la ruta de transporte que imprime (comúnmente `http://localhost:3000/sse`).

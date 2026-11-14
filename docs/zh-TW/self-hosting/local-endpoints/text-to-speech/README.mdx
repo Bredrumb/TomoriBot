@@ -35,28 +35,30 @@ TomoriBot 將語音視為自訂端點功能。本機引擎作為 HTTP 伺服器�
 
 ## 設定流程
 
-1. 從上方卡片中選擇一個引擎，並從 `servers/tts/` 設定其包裝器。
-2. 在 `/providers` 中，選擇 `+ 新增自訂端點`，API 相容性選擇 `tts-clone`。
-3. 選取已儲存的端點，並使用其模型下拉選單新增其 Speech 模型、語音來源模式與腳本標記。
-4. 開啟 `/config` > 模型 > 切換模型，並在 `TTS（Voice Design）` 或 `TTS（Voice Clone）` 底下選取該端點。自動端點會同時啟用這兩個選項；清除其中一個會保留另一個。
+1. 從上方卡片中選擇一個引擎，並從`servers/tts/`設定其包裝器。
+2. 在`/providers`中，選擇`+ 新增自訂端點`，API相容性選擇`tts-clone`。
+3. 選取已儲存的端點，並使用其模型下拉選單新增其語音模型、`語音來源模式`與`腳本標記風格`。
+4. 開啟`/config` > `模型` > `切換模型`，並在`TTS（語音設計）`或`TTS（語音複製）`底下選取該端點。自動端點會同時啟用這兩個選項；清除其中一個會保留另一個。
 
-關於託管語音供應商與個人選擇，請參閱[語音：TTS 與 STT](/features/capabilities/media-generation/tts-and-stt/)。
+關於託管語音供應商與個人選擇，請參閱[語音：TTS與STT](/features/capabilities/media-generation/tts-and-stt/)。
 
 ## 網路存取
 {/* anchor: network-access */}
 
-每個 TTS 本機伺服器預設繫結到 `127.0.0.1`，因此只有同一台機器上的 bot 才能連線。當 TomoriBot 執行在 Docker 中或另一台機器上時，請為伺服器設定 `TOMORI_TTS_HOST=0.0.0.0`，並使用主機位址註冊端點，例如 `http://host.docker.internal:8015`。
+每個TTS本機伺服器預設繫結到`127.0.0.1`。對於分開架設的生產環境bot，請保持該繫結設定，並依照[Cloudflare Tunnel指南的TTS設定檔](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/)操作。註冊其HTTPS通道URL時不要加上`/v1`，使用`tts-clone`，除非你另外加入了驗證閘道，否則驗證權杖請留空。該設定檔允許健康檢查以及語音複製與VoiceDesign的合成請求。文字與ComfyUI連線可與語音同時保持啟用。
 
-每個伺服器讀取自己的連接埠變數（`CHATTERBOX_PORT`、`QWEN3TTS_PORT`、`IRODORI_TTS_PORT`、`FISH_S2_PORT`、`VOXCPM2_PORT`、`COSYVOICE3_PORT`、`MOSS_TTS_PORT`），因此可以從同一個 `.env` 同時執行多個伺服器。`bun run launch` 會將 `.env` 傳遞給其啟動的伺服器；手動啟動的伺服器僅會讀取其 shell 環境。
+對於位於Docker或受信任區域網路中的非生產環境bot，請設定`TOMORI_TTS_HOST=0.0.0.0`並註冊主機位址，例如`http://host.docker.internal:8015`。請透過主機防火牆限制該連接埠，並設定TomoriBot的`ALLOW_PRIVATE_NETWORK`以允許該主機與連接埠。
 
-這些伺服器沒有身分驗證機制：任何能連線到該連接埠的人都可以在你的 GPU 上執行語音合成。請僅在受信任的網路中解除 loopback 繫結；若要公開至該網路之外，請在任何公開伺服器前方設置具備驗證功能的反向代理。
+每個伺服器讀取自己的連接埠變數（`CHATTERBOX_PORT`、`QWEN3TTS_PORT`、`IRODORI_TTS_PORT`、`FISH_S2_PORT`、`VOXCPM2_PORT`、`COSYVOICE3_PORT`、`MOSS_TTS_PORT`），因此可以從同一個`.env`同時執行多個伺服器。`bun run launch`會將`.env`傳遞給其啟動的伺服器；手動啟動的伺服器僅會讀取其shell環境。
+
+這些伺服器沒有身分驗證機制：任何能直接連線或透過通道連上它們的人都能在你的GPU上執行語音合成。在接受未經驗證的共用之前，請先檢視通道指南中的[已知風險](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/#known-risks)。如果你想要額外的獨立驗證檢查，可選用[Access與Caddy](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/)。請僅在受信任的網路中解除loopback繫結。
 
 ## 人格語音
 
-對於聲音複製，請在 `/config` > 模型 > TTS 參數與語音 底下上傳乾淨的單一講者樣本，接著在 人格 > 語音 底下指派它。請查看引擎指南以了解建議的音訊長度與文字稿要求。
+對於語音複製，請在`/config` > `模型` > `TTS 參數與語音`底下上傳乾淨的單一講者樣本，接著在`人格` > `語音`底下指派它。請查看引擎指南以了解建議的音訊長度與逐字稿要求。
 
-TomoriBot 接受最長 130 秒的樣本，並將其轉換為單聲道 WAV。預設上傳大小限制為 10 MB；可透過 `SPEECH_SAMPLE_MAX_MB` 調整。FLAC 等壓縮格式有助於容納較長的片段。
+TomoriBot接受最長130秒的樣本，並將其轉換為單聲道WAV。預設上傳大小限制為10 MB；可透過`SPEECH_SAMPLE_MAX_MB`調整。FLAC等壓縮格式有助於容納較長的片段。
 
-對於支援語音設計的引擎，請在 人格 > 語音 底下儲存語音描述。一個人格可以同時擁有描述與樣本；語音來源優先順序會決定先嘗試哪一個可用來源。支援的模式與腳本標記請參閱各引擎指南。
+對於支援語音設計的引擎，請在`人格` > `語音`底下儲存語音描述。一個人格可以同時擁有描述與樣本；優先語音來源會決定先嘗試哪一個可用來源。支援的模式與腳本標記請參閱各引擎指南。
 
-在 `/config` > 權限 底下啟用語音訊息，接著請人格發送一則語音訊息，或使用 `/generate voice-message` 進行測試。
+在`/config` > `權限`底下啟用語音訊息，接著請人格發送一則語音訊息，或使用`/generate voice-message`進行測試。

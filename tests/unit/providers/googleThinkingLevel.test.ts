@@ -12,6 +12,11 @@ const MINIMAL_REJECTING_MODELS = [
 ];
 
 describe("buildGoogleThinkingConfig", () => {
+  it("caps extra-high at the existing high enum or token budget", () => {
+    expect(buildGoogleThinkingConfig("gemini-3.1-pro", "xhigh")).toEqual({ thinkingLevel: ThinkingLevel.HIGH });
+    expect(buildGoogleThinkingConfig("gemini-2.5-pro", "xhigh")).toEqual({ thinkingBudget: 8192 });
+  });
+
   // These models answer MINIMAL with a 400, so the lowest levels must clamp to LOW for them.
   it("never sends MINIMAL to a model that rejects it", () => {
     for (const model of MINIMAL_REJECTING_MODELS) {

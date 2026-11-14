@@ -26,7 +26,7 @@ Việc đặt biến này sẽ khởi động máy chủ HTTP của bot trên c�
 - Hoàn tất đăng nhập trong trình duyệt trên máy chạy bot. Từ một máy tính khác, hãy chuyển tiếp cổng qua SSH trước, rồi chọn `Đăng nhập` trong trình duyệt của máy tính đó:
 
   ```sh
-  ssh -L 8080:127.0.0.1:8080 <user>@<bot-host>
+  ssh -L 8080:127.0.0.1:8080 "<user>@<bot-host>"
   ```
 
 - Từng dịch vụ sẽ quyết định có chấp nhận địa chỉ loopback hay không. Nếu một dịch vụ từ chối, hãy dùng địa chỉ HTTPS hoặc token thay thế.

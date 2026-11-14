@@ -184,6 +184,16 @@ export default {
     model_compat_label: `聊天完成相容性`,
     model_compat_description: `針對嚴格後端的訊息格式與協定調整。非必要時請保持關閉。`,
     model_image_supports_label: `圖片功能`,
+    model_image_request_format_label: `圖片請求格式`,
+    model_image_request_format_description: `符合這個圖片模型接受的API格式。`,
+    image_request_formats: {
+      images: `Images API`,
+      "chat-completions": `Chat Completions`,
+    },
+    image_request_format_descriptions: {
+      images: `將提示詞傳送到/images/generations。`,
+      "chat-completions": `將圖片請求作為聊天訊息傳送到/chat/completions。`,
+    },
     model_image_supports_description: `請只宣告這個模型與端點真正支援的圖片功能。`,
     model_image_supports: {
       txt2img: `文字生圖`,

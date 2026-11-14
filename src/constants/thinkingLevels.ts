@@ -1,4 +1,4 @@
-export const THINKING_LEVEL_VALUES = ["auto", "none", "minimal", "low", "medium", "high"] as const;
+export const THINKING_LEVEL_VALUES = ["auto", "none", "minimal", "low", "medium", "high", "xhigh"] as const;
 
 export type ThinkingLevelValue = (typeof THINKING_LEVEL_VALUES)[number];
 
@@ -11,6 +11,7 @@ export const THINKING_LEVEL_LOCALIZER_KEYS: Record<ThinkingLevelValue, string> =
   low: "commands.config.thinking-level.choice_low",
   medium: "commands.config.thinking-level.choice_medium",
   high: "commands.config.thinking-level.choice_high",
+  xhigh: "commands.config.thinking-level.choice_xhigh",
 };
 
 export function isThinkingLevelValue(value: string): value is ThinkingLevelValue {

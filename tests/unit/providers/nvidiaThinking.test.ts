@@ -92,6 +92,7 @@ describe("buildNvidiaThinkingRequest", () => {
       ["low", "low"],
       ["medium", "medium"],
       ["high", "high"],
+      ["xhigh", "high"],
     ] as const) {
       expect(buildNvidiaThinkingRequest(level)).toEqual({
         chat_template_kwargs: { enable_thinking: true, thinking: true },

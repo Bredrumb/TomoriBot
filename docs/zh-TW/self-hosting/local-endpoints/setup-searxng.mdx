@@ -1,0 +1,105 @@
+---
+title: "設定：SearXNG"
+sidebar:
+  label: "SearXNG"
+  order: 4
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+使用[SearXNG](https://docs.searxng.org/)為TomoriBot新增私密、自架的網頁搜尋功能。
+
+`web_search`工具會依序查詢Brave、SearXNG、OpenRouter Search與DuckDuckGo。在使用已儲存金鑰的OpenRouter對話輪中，若前面的引擎失敗，OpenRouter Search會處理文字搜尋並涵蓋新聞、論文與程式碼搜尋。當外部供應商遇到速率限制或失敗時，執行本機SearXNG執行個體可提供自架的搜尋來源，並啟用專屬的搜尋類別：`science`、`it`、`files`與`music`。
+
+選擇設定路徑：
+
+### 選項A：Docker Compose（當TomoriBot在Docker中執行時）
+
+若你使用存放庫的Docker Compose堆疊執行TomoriBot，請使用此路徑。接著以`searxng`設定檔執行：
+
+```sh
+docker compose --profile searxng up -d
+```
+
+啟動此設定檔前，請先在`.env`中設定`SEARXNG_BASE_URL=http://searxng:8080/`。bot會使用該位址連線至`searxng`服務。關閉此設定檔時請讓變數保持未設定。
+
+若你是直接使用`bun run dev`執行TomoriBot，請改用下方的獨立Docker路徑。
+
+在`.env`中將`SEARXNG_SECRET`設為另一組隨機值，作為容器的簽章金鑰。
+
+---
+
+### 選項B：獨立Docker（執行`bun run dev`時）
+
+首先在`.env`中設定`SEARXNG_BASE_URL=http://localhost:8080/`，讓bot知道要連線到哪裡。
+
+接著不要直接執行`bun run dev`啟動TomoriBot，改用`bun run launch --searxng`。它會自動處理容器生命週期，並在啟動bot前等待容器進入健康狀態：
+
+```sh
+bun run launch --searxng
+```
+
+如果你偏好自行管理容器，請將`SEARXNG_BASE_URL=http://localhost:8080/`保留在`.env`中。先建置存放庫的映像檔，以便載入JSON搜尋設定並替換簽章金鑰：
+
+```sh
+docker build -t tomoribot-searxng:latest -f servers/searxng/Dockerfile servers/searxng
+```
+
+接著啟動容器：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+docker run -d --name searxng -p 8080:8080 `
+  --tmpfs /etc/searxng `
+  tomoribot-searxng:latest
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+docker run -d --name searxng -p 8080:8080 \
+  --tmpfs /etc/searxng \
+  tomoribot-searxng:latest
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+docker run -d --name searxng -p 8080:8080 \
+  --tmpfs /etc/searxng \
+  tomoribot-searxng:latest
+```
+
+</TabItem>
+</Tabs>
+
+當容器進入健康狀態後（`docker ps`顯示`(healthy)`），再執行`bun run dev`。若容器環境中沒有`SEARXNG_SECRET`，映像檔會產生臨時簽章金鑰。
+
+---
+
+### 選項C：無SearXNG
+
+讓`SEARXNG_BASE_URL`保持未設定。文字搜尋會依序嘗試Brave、OpenRouter對話輪中的OpenRouter Search，然後是DuckDuckGo。OpenRouter Search會使用目前啟用的模型與OpenRouter額度，包含免費聊天模型。失敗的文字搜尋（包含額度不足錯誤）會退回至DuckDuckGo。
+
+當未設定SearXNG伺服器時，組裝出的`web_search`結構描述不再列出僅限SearXNG的類別。當已設定Brave時，常見類別（`text`、`image`、`video`、`news`）仍會顯示。OpenRouter Search與DuckDuckGo僅提供文字搜尋。
+
+若Brave或SearXNG在對話輪期間失敗，OpenRouter Search可以文字引用結果滿足`news`、`papers`與`code`呼叫。它無法提供圖片、影片、檔案或音樂結果。當其中一個類別的所有引擎都失敗時，模型會收到類別無法使用的結果，並可改為要求文字搜尋。
+
+---
+
+## 圖片結果調校
+
+SearXNG圖片結果會經過HEAD驗證、視需要壓縮，並作為Discord附件張貼：使用體驗與Brave圖片相同。若所有候選URL皆未通過驗證，SearXNG會回傳圖片連結的文字清單，而不是直接失敗。
+
+| 變數 | 預設值 | 說明 |
+|---|---|---|
+| `SEARXNG_IMAGE_COUNT` | `3`（最多10張） | 傳送到Discord的有效圖片數量。會被LLM的`count`引數覆寫。 |
+| `SEARXNG_IMAGE_POOL` | `10` | LLM未指定`count`時的候選URL池大小。指定`count`時，池大小為`count × 3`（上限30），以吸收防盜連保護造成的失敗。 |
+| `WEB_SEARCH_TIMEOUT_MS` | 未設定 | 每個引擎的請求逾時時間。 |
+
+*（所有可調校項目請參閱`.env.optional.example`。）*

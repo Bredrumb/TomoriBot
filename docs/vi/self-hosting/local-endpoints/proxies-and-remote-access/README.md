@@ -4,7 +4,6 @@ sidebar:
   label: "Tổng quan"
   groupLabel: "Proxy và truy cập từ xa"
   order: 8
-aiGenerated: true
 ---
 
 Kết nối TomoriBot thông qua proxy API cục bộ, hoặc kết nối an toàn tới engine đang chạy trên một máy tính khác.
@@ -13,14 +12,15 @@ Kết nối TomoriBot thông qua proxy API cục bộ, hoặc kết nối an to�
 
 1. [ChatMock](/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/): kết nối cầu nối dùng tài khoản ChatGPT trên máy của bạn.
 2. [CLIProxyAPI](/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/): cài đặt proxy và đăng ký các model từ một backend được ủy quyền.
-3. [Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/): kết nối bot được lưu trữ riêng tới engine cục bộ của bạn bằng xác thực Access và relay production.
+3. [Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/): cấp cho engine cục bộ một URL HTTPS cho bot được lưu trữ riêng.
+4. [Tùy chọn: Access và Caddy](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/): thêm một bước kiểm tra xác thực riêng và định tuyến API chặt chẽ hơn.
 
 Hãy bắt đầu với hướng dẫn proxy nếu bạn cần. Chỉ làm theo hướng dẫn Cloudflare khi bot chạy trên một máy khác.
 
 ## Rủi ro tài khoản
 <!-- anchor: account-risk -->
 
-:::caution[Tự chịu rủi ro khi dùng proxy tài khoản CLI]
+:::danger[Tự chịu rủi ro khi dùng proxy tài khoản CLI]
 Việc sử dụng Codex, Claude Code, Antigravity hoặc tài khoản CLI khác thông qua cầu nối của bên thứ ba có thể vi phạm điều khoản của nhà cung cấp và dẫn đến tạm khóa hoặc chấm dứt tài khoản. Gói đăng ký trả phí hoặc việc đăng nhập thành công không đồng nghĩa với quyền sử dụng cho bot hoặc API mục đích chung. Hãy kiểm tra quy định đối với nhà cung cấp, gói dịch vụ và phương thức xác thực của bạn. TomoriBot không đưa ra bất kỳ đảm bảo an toàn tài khoản nào.
 :::
 

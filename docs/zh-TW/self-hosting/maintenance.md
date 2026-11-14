@@ -107,7 +107,7 @@ bun run update
 bun run backup
 bun run restore-backup --latest
 # 或選擇一個套件：
-bun run restore-backup --from backups/<bundle-directory>
+bun run restore-backup --from "backups/<bundle-directory>"
 ```
 
 套件儲存在`backups/`或`TOMORI_BACKUP_DIR`中。還原前請遵循[復原步驟](#database-backups-and-recovery-keys)。`bun run backup:personas`會為`/persona import`匯出人格與伺服器記憶；它無法還原資料庫。

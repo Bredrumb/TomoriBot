@@ -19,29 +19,15 @@ three layers:
 3. `src/utils/text/stPresetEngine.ts`: expands variables and content macros. Reassembly then uses
    `toolPromptMacroResolver` for capability and tool conditionals, followed by mention conversion.
 
-```
-buildContext (contextBuilder.ts)
-  │
-  ├─► User Impersonation Active? ──► Native Context Assembly (presets bypassed)
-  │
-  └─► Active Preset Found in Cache (stPresetCache.ts)
-        │
-        ▼
-buildContextNative (context/nativeBuilder.ts)
-  │  Produces tagged blocks for reassembleWithPreset (presetContextBuilder.ts)
-  │
-  ├─► stPresetEngine.ts ───────────► Two-pass macro evaluation on custom preset nodes
-  │                                  (Pass 1: branch selection and variables; Pass 2: value expansion)
-  │
-  ├─► Node Ordering Walk ──────────► Pulls tagged blocks at marker nodes (main, charDescription...)
-  │                                  Inserts custom nodes at declared sequence positions
-  │
-  ├─► Automatic Flushing ──────────► Injects TomoriBot-only blocks (memories, emojis, STM)
-  │
-  └─► Depth Injection Merging ─────► Folds depth-injected nodes into existing history turns
-        │
-        ▼
-Final Assembled Context to Provider Adapter
+```mermaid
+flowchart TD
+  entry["buildContext<br/>contextBuilder.ts"] -->|"User Impersonation Active?"| bypass["Native Context Assembly<br/>(presets bypassed)"]
+  entry -->|"Active Preset Found in Cache<br/>stPresetCache.ts"| native["buildContextNative<br/>context/nativeBuilder.ts<br/>Produces tagged blocks for reassembleWithPreset"]
+  native --> engine["stPresetEngine.ts<br/>Two-pass macro evaluation on custom preset nodes<br/>(Pass 1: branch selection & variables; Pass 2: value expansion)"]
+  engine --> order["Node Ordering Walk<br/>Pulls tagged blocks at marker nodes (main, charDescription...)<br/>Inserts custom nodes at declared sequence positions"]
+  order --> flush["Automatic Flushing<br/>Injects TomoriBot-only blocks (memories, emojis, STM)"]
+  flush --> depth["Depth Injection Merging<br/>Folds depth-injected nodes into existing history turns"]
+  depth --> final["Final Assembled Context to Provider Adapter"]
 ```
 
 ### Build-then-rearrange strategy

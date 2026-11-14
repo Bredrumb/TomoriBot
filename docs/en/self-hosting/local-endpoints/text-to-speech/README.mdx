@@ -45,11 +45,13 @@ For hosted speech providers and personal selections, see [Voice: TTS & STT](/fea
 ## Network access
 {/* anchor: network-access */}
 
-Every TTS local server binds to `127.0.0.1` by default, so only a bot on the same machine can reach it. When TomoriBot runs in Docker or on another machine, set `TOMORI_TTS_HOST=0.0.0.0` for the server and register the endpoint with the host's address, for example `http://host.docker.internal:8015`.
+Every TTS local server binds to `127.0.0.1` by default. For the separately hosted production bot, keep that binding and follow the [Cloudflare Tunnel guide's TTS profile](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/). Register its HTTPS tunnel URL without `/v1`, use `tts-clone`, and leave the auth token blank unless you added an authentication gateway. The profile permits health checks and synthesis for both voice cloning and Voice Design. Text and ComfyUI connections can remain active alongside speech.
+
+For a non-production bot in Docker or on a trusted LAN, set `TOMORI_TTS_HOST=0.0.0.0` and register the host's address, for example `http://host.docker.internal:8015`. Restrict the port with the host firewall and configure TomoriBot's `ALLOW_PRIVATE_NETWORK` to admit that host and port.
 
 Each server reads its own port variable (`CHATTERBOX_PORT`, `QWEN3TTS_PORT`, `IRODORI_TTS_PORT`, `FISH_S2_PORT`, `VOXCPM2_PORT`, `COSYVOICE3_PORT`, `MOSS_TTS_PORT`), so several can run at once from one `.env`. `bun run launch` passes `.env` to the servers it starts; a server started by hand reads only its shell environment.
 
-The servers have no authentication: anyone who can reach the port can run synthesis on your GPU. Bind off loopback only on a network you trust, and put an authenticating reverse proxy in front of any server you expose beyond it.
+The servers have no authentication: anyone who can reach them directly or through the tunnel can run synthesis on your GPU. Review the tunnel guide's [known risks](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/#known-risks) before accepting unauthenticated sharing. [Access and Caddy](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/) are optional if you want a separate authentication check. Bind off loopback only on a network you trust.
 
 ## Persona voices
 

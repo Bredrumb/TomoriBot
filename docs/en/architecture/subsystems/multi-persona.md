@@ -99,12 +99,12 @@ Multi-persona turns within the same request share sanitized visible history thro
 
 Main and alter personas use different Discord delivery mechanisms:
 
-```
-Incoming Turn
-  ├── Main Persona  ──> Discord Bot User (Guild Member Nickname)
-  └── Alter Persona ──> Managed Parent-Channel Webhook Pool
-                         ├── Username: persona nickname or sprite label
-                         └── AvatarURL: S3 URL / local asset / shared preset
+```mermaid
+flowchart LR
+  turn["Incoming Turn"] -->|"Main Persona"| main["Discord Bot User<br/>(Guild Member Nickname)"]
+  turn -->|"Alter Persona"| alter["Managed Parent-Channel Webhook Pool"]
+  alter --> user["Username: persona nickname or sprite label"]
+  alter --> avatar["AvatarURL: S3 URL / local asset / shared preset"]
 ```
 
 ### Webhook delivery
