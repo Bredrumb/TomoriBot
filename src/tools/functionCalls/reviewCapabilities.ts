@@ -68,7 +68,7 @@ function buildToolAssemblyState(context: ToolContext): ToolStateForContext {
 
 async function describeProvider(context: ToolContext): Promise<string> {
   const funding = getSupporterFundingFromUsageContext(context.usageContext);
-  if (!funding) return context.tomoriState.llm.llm_provider;
+  if (!funding) return getProviderDisplayName(context.tomoriState.llm.llm_provider);
   const sponsor = await getCachedUserRow(funding.sponsorDiscordUserId);
   const label = getProviderDisplayName(funding.credentialSource);
   return sponsor?.user_nickname ? `${label} from ${sponsor.user_nickname}` : label;
