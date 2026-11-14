@@ -53,11 +53,13 @@ import * as documentService from "@/utils/documents/documentService";
 import * as textExtractor from "@/utils/documents/textExtractor";
 import * as embeddingProvider from "@/utils/embeddings/embeddingProvider";
 import * as credentialResolver from "@/utils/provider/credentialResolver";
+import * as providerErrorMetrics from "@/utils/provider/providerErrorMetrics";
+import { currentProviderUsageContext, ProviderRequestDeniedError } from "@/utils/provider/providerUsage";
 import * as rateLimiter from "@/utils/security/rateLimiter";
 import * as safeDownloadModule from "@/utils/security/safeDownload";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 import { createPersona } from "../../helpers/fixtures";
-import { localizedProse } from "../../helpers/localeCases";
+import { localizedCopy, localizedProse } from "../../helpers/localeCases";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -252,6 +254,7 @@ describe("memories panel route catalog", () => {
       "memories:v1:document-add-submit:en-US:0:nonce123",
       { action: "document-add-submit", locale: "en-US", personaId: 0, nonce: "nonce123" },
     ],
+    ["memories:v1:document-reembed:en-US:10", { action: "document-reembed", locale: "en-US", personaId: 10 }],
     [
       "memories:v1:document-remove-prompt:en-US:10:77",
       { action: "document-remove-prompt", locale: "en-US", personaId: 10, documentId: 77 },
@@ -610,6 +613,7 @@ describe("memories permissions and scoping", () => {
         return { documents: 0, chunks: 0 };
       },
       getDocumentCountsByPersona: async () => ({ byPersona: new Map([[10, 3]]), serverwide: 1 }),
+      getMismatchedEmbeddingDocumentCount: async () => 0,
       getEligibleHistoryPersonaIds: async () => new Set(),
       loadLorebooks: async () => ({ status: "fresh" as const, entries: [] }),
       getLorebookCounts: async () => new Map(),
@@ -2519,6 +2523,186 @@ describe("memories permissions and scoping", () => {
     }
   });
 
+  function createReembedButtonInteraction(canManage: boolean, edits: unknown[]) {
+    let deferred = false;
+    return {
+      id: "int-doc-reembed",
+      customId: "memories:v1:document-reembed:en-US:10",
+      user: { id: "user-42", username: "user42" },
+      guildId: "guild-123",
+      memberPermissions: { has: (permission: string) => permission === "ManageGuild" && canManage },
+      get deferred() {
+        return deferred;
+      },
+      replied: false,
+      isButton: () => true,
+      isStringSelectMenu: () => false,
+      isModalSubmit: () => false,
+      deferUpdate: async () => {
+        deferred = true;
+      },
+      editReply: async (payload: unknown) => {
+        if (!deferred) throw new Error("Expected deferUpdate before editReply");
+        edits.push(payload);
+      },
+    };
+  }
+
+  it("emits a working receipt, invokes re-embed, refreshes scope, and clears the notice on success", async () => {
+    const edits: unknown[] = [];
+    const scopeRefreshes: boolean[] = [];
+    const reembedInputs: Array<Parameters<typeof serverDocumentsOperations.reembed>[0]> = [];
+    const actions: string[] = [];
+    let mismatchedCount = 2;
+
+    const { dependencies } = createTestDependencies({
+      resolveScope: async (_interaction, forceRefresh) => {
+        scopeRefreshes.push(Boolean(forceRefresh));
+        return {
+          serverId: 1,
+          workspaceId: "guild-123",
+          guildId: "guild-123",
+          userDiscId: "user-42",
+          userId: 42,
+          canManage: true,
+          isBlacklisted: false,
+          memteachingEnabled: true,
+          configuredEmbeddingModelId: 5,
+          personas: [makePersona(10, 1770, "Tomori"), makePersona(20, 1880, "Anon")],
+          readStatus: "fresh",
+        };
+      },
+      getMismatchedEmbeddingDocumentCount: async () => mismatchedCount,
+      recordAction: ({ action }) => {
+        actions.push(action);
+      },
+      documentOperations: {
+        ...serverDocumentsOperations,
+        reembed: async (input) => {
+          reembedInputs.push(input);
+          mismatchedCount = 0;
+          return { status: "success", documentCount: 2 };
+        },
+      },
+    });
+
+    const route = createMemoriesInteractionRoute(dependencies);
+    const interaction = createReembedButtonInteraction(true, edits);
+    await route.execute({} as Client, interaction as unknown as ButtonInteraction, requireRoute(interaction.customId));
+
+    expect(edits).toHaveLength(2);
+    const workingText = collectTextDisplays(edits[0]).join("\n");
+    expect(workingText).toMatch(localizedProse("en-US", "commands.memories.document_reembed_working_heading"));
+    expect(workingText).toMatch(localizedProse("en-US", "commands.memories.document_reembed_working_detail"));
+    expect(workingText).toMatch(localizedProse("en-US", "commands.memories.document_reembed_notice", { count: 2 }));
+
+    const finalText = collectTextDisplays(edits[1]).join("\n");
+    expect(finalText).toMatch(localizedProse("en-US", "commands.memories.document_reembedded_heading"));
+    expect(finalText).toMatch(localizedProse("en-US", "commands.memories.document_reembedded_detail", { count: 2 }));
+    expect(finalText).not.toMatch(localizedProse("en-US", "commands.memories.document_reembed_notice"));
+    expect(
+      collectButtons(edits[1]).some((button) => button.customId?.startsWith("memories:v1:document-reembed:")),
+    ).toBe(false);
+
+    expect(reembedInputs).toEqual([
+      { serverId: 1, workspaceId: "guild-123", configuredEmbeddingModelId: 5, canManage: true },
+    ]);
+    expect(scopeRefreshes).toEqual([false, true]);
+    expect(actions).toEqual(["memories.workspace.document.reembed"]);
+  });
+
+  it("maps non-success re-embed outcomes to receipts and refuses non-managers", async () => {
+    const context = {};
+    const denied = new ProviderRequestDeniedError(context, (locale) => ({
+      titleKey: "general.errors.api_key_error_title",
+      description: localizedCopy(locale, "general.errors.api_key_error_description"),
+    }));
+
+    const cases = [
+      {
+        result: { status: "nothing-to-reembed" as const },
+        headingKey: "commands.memories.document_reembed_up_to_date_heading",
+        detailKey: "commands.memories.document_reembed_up_to_date_detail",
+      },
+      {
+        result: { status: "reembed-failed" as const },
+        headingKey: "commands.memories.document_reembed_failed_heading",
+        detailKey: "commands.memories.document_reembed_failed_detail",
+      },
+    ];
+
+    for (const testCase of cases) {
+      const edits: unknown[] = [];
+      const actions: string[] = [];
+      const { dependencies } = createTestDependencies({
+        getMismatchedEmbeddingDocumentCount: async () => 2,
+        recordAction: ({ action }) => {
+          actions.push(action);
+        },
+        documentOperations: {
+          ...serverDocumentsOperations,
+          reembed: async () => testCase.result,
+        },
+      });
+      const route = createMemoriesInteractionRoute(dependencies);
+      const interaction = createReembedButtonInteraction(true, edits);
+      await route.execute(
+        {} as Client,
+        interaction as unknown as ButtonInteraction,
+        requireRoute(interaction.customId),
+      );
+
+      expect(actions).toEqual([]);
+      const finalText = collectTextDisplays(edits[1]).join("\n");
+      expect(finalText).toMatch(localizedProse("en-US", testCase.headingKey));
+      expect(finalText).toMatch(localizedProse("en-US", testCase.detailKey));
+    }
+
+    const deniedEdits: unknown[] = [];
+    const deniedRoute = createMemoriesInteractionRoute(
+      createTestDependencies({
+        getMismatchedEmbeddingDocumentCount: async () => 2,
+        documentOperations: {
+          ...serverDocumentsOperations,
+          reembed: async () => ({ status: "provider-denied", denied }),
+        },
+      }).dependencies,
+    );
+    const deniedInteraction = createReembedButtonInteraction(true, deniedEdits);
+    await deniedRoute.execute(
+      {} as Client,
+      deniedInteraction as unknown as ButtonInteraction,
+      requireRoute(deniedInteraction.customId),
+    );
+    const deniedText = collectTextDisplays(deniedEdits[1]).join("\n");
+    expect(deniedText).toMatch(localizedProse("en-US", "general.errors.api_key_error_title"));
+    expect(deniedText).toMatch(localizedProse("en-US", "general.errors.api_key_error_description"));
+
+    const refusedEdits: unknown[] = [];
+    let calledReembed = false;
+    const refusedRoute = createMemoriesInteractionRoute(
+      createTestDependencies({
+        documentOperations: {
+          ...serverDocumentsOperations,
+          reembed: async () => {
+            calledReembed = true;
+            return { status: "success", documentCount: 1 };
+          },
+        },
+      }).dependencies,
+    );
+    const refusedInteraction = createReembedButtonInteraction(false, refusedEdits);
+    await refusedRoute.execute(
+      {} as Client,
+      refusedInteraction as unknown as ButtonInteraction,
+      requireRoute(refusedInteraction.customId),
+    );
+    expect(calledReembed).toBe(false);
+    expect(collectTextDisplays(refusedEdits[0]).join("\n")).toMatch(
+      localizedProse("en-US", "commands.memories.manager_only_heading"),
+    );
+  });
+
   it("resolves all panel locale keys, including every composed receipt pair", () => {
     const requiredKeys = [
       "selector_guidance",
@@ -2576,6 +2760,7 @@ describe("memories permissions and scoping", () => {
         skipped: 0,
         available: 5,
         requested: 10,
+        count: 1,
       });
       expect(resolved).not.toBe(fullKey);
       expect(resolved.length).toBeGreaterThan(0);
@@ -3283,6 +3468,112 @@ describe("memories document operation ordering", () => {
       chunkCountSpy.mockRestore();
       removeSpy.mockRestore();
       invalidateSpy.mockRestore();
+    }
+  });
+});
+
+describe("memories document re-embedding", () => {
+  it("enforces guards, resolves server credentials without userId, and reports non-denied failures in serverDocumentsOperations.reembed", async () => {
+    const ragSpy = spyOn(ragAvailability, "isRagAvailable").mockReturnValue(true);
+    const memorySpy = spyOn(rateLimiter.memoryGuard, "checkMemory").mockReturnValue({
+      status: "safe",
+      rssUsedMB: 1,
+      memoryLimitMB: 2,
+      percentUsed: 0,
+      shouldProcessMedia: true,
+    });
+    const context = {};
+    const credentialSpy = spyOn(credentialResolver, "resolveCapabilityCredentials").mockResolvedValue({
+      provider: "google",
+      apiKey: "secret-api-key",
+      keyVersion: 1,
+      savedConfig: SAVED_PROVIDER_CONFIG,
+      source: "server",
+      usageContext: context,
+    });
+    const modelIdSpy = spyOn(credentialResolver, "getResolvedCapabilityModelId").mockReturnValue(5);
+    const modelSpy = spyOn(llmModelRepo, "loadEmbeddingModelById").mockResolvedValue({
+      embedding_model_id: 5,
+      provider: "google",
+      codename: "embedding-model",
+      model_family: "gemini",
+      is_scoped_registration: false,
+      is_default: false,
+      is_deprecated: false,
+    });
+    const mismatchedSpy = spyOn(serverMemoryRepository, "countMismatchedEmbeddingDocuments").mockResolvedValue(2);
+    const reembedSpy = spyOn(ragRepository, "reembedServerDocuments").mockImplementation(async () => {
+      expect(currentProviderUsageContext()).toBe(context);
+    });
+    const reportSpy = spyOn(providerErrorMetrics, "reportProviderFailure").mockResolvedValue(undefined as never);
+
+    const input = {
+      serverId: 1,
+      workspaceId: "guild-123",
+      configuredEmbeddingModelId: 5,
+      canManage: true,
+    };
+
+    try {
+      expect(await serverDocumentsOperations.reembed({ ...input, canManage: false })).toEqual({ status: "forbidden" });
+
+      ragSpy.mockReturnValueOnce(false);
+      expect(await serverDocumentsOperations.reembed(input)).toEqual({ status: "rag-disabled" });
+
+      memorySpy.mockReturnValueOnce({
+        status: "critical",
+        rssUsedMB: 1,
+        memoryLimitMB: 2,
+        percentUsed: 99,
+        shouldProcessMedia: false,
+      });
+      expect(await serverDocumentsOperations.reembed(input)).toEqual({ status: "memory-critical" });
+
+      expect(await serverDocumentsOperations.reembed(input)).toEqual({ status: "success", documentCount: 2 });
+      expect(credentialSpy).toHaveBeenCalledWith(1, "embedding", { userId: null });
+      expect(mismatchedSpy).toHaveBeenCalledWith(1, "gemini");
+      expect(reembedSpy).toHaveBeenCalledTimes(1);
+
+      mismatchedSpy.mockResolvedValueOnce(0);
+      expect(await serverDocumentsOperations.reembed(input)).toEqual({ status: "nothing-to-reembed" });
+      expect(reembedSpy).toHaveBeenCalledTimes(1);
+
+      credentialSpy.mockRejectedValueOnce(
+        new credentialResolver.CredentialUnavailableError("google", "embedding", "missing_model_id"),
+      );
+      expect(await serverDocumentsOperations.reembed(input)).toEqual({ status: "model-missing" });
+
+      credentialSpy.mockRejectedValueOnce(
+        new credentialResolver.CredentialUnavailableError("google", "embedding", "no_saved_config"),
+      );
+      expect(await serverDocumentsOperations.reembed(input)).toEqual({ status: "credentials-missing" });
+
+      const denied = new ProviderRequestDeniedError(context, (locale) => ({
+        titleKey: "general.errors.api_key_error_title",
+        description: localizedCopy(locale, "general.errors.api_key_error_description"),
+      }));
+      reembedSpy.mockRejectedValueOnce(new Error("wrapped", { cause: denied }));
+      expect(await serverDocumentsOperations.reembed(input)).toEqual({ status: "provider-denied", denied });
+      expect(reportSpy).not.toHaveBeenCalled();
+
+      reembedSpy.mockRejectedValueOnce(
+        new Error("Document re-embedding incomplete", { cause: new Error("upstream failed for secret-api-key") }),
+      );
+      expect(await serverDocumentsOperations.reembed(input)).toEqual({ status: "reembed-failed" });
+      expect(reportSpy).toHaveBeenCalledTimes(1);
+      const reportArg = reportSpy.mock.calls[0]?.[0];
+      expect(reportArg?.errorType).toBe("DocumentReembedFailed");
+      expect(reportArg?.detail).not.toContain("secret-api-key");
+      expect(reportArg?.redactValues).toEqual(["secret-api-key"]);
+    } finally {
+      ragSpy.mockRestore();
+      memorySpy.mockRestore();
+      credentialSpy.mockRestore();
+      modelIdSpy.mockRestore();
+      modelSpy.mockRestore();
+      mismatchedSpy.mockRestore();
+      reembedSpy.mockRestore();
+      reportSpy.mockRestore();
     }
   });
 });

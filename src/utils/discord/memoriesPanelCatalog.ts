@@ -51,6 +51,7 @@ type MemoriesAction =
   | "document-persona-page"
   | "document-select"
   | "document-range"
+  | "document-reembed"
   | "document-add-submit"
   | "document-remove-prompt"
   | "document-remove-confirm"
@@ -129,6 +130,7 @@ export type MemoriesPanelRoute = (
   | { action: "document-persona-page"; locale: string; personaId: number; rangeIndex: number }
   | { action: "document-select"; locale: string; personaId: number; rangeIndex?: number }
   | { action: "document-range"; locale: string; personaId: number; rangeIndex: number }
+  | { action: "document-reembed"; locale: string; personaId: number }
   | { action: "document-add-submit"; locale: string; personaId: number; nonce: string }
   | {
       action:
@@ -378,6 +380,10 @@ export const MEMORIES_ROUTE_CODECS: Record<
   "document-range": {
     wireToken: "document-range",
     fields: [personaIdField, rangeIndexField],
+  },
+  "document-reembed": {
+    wireToken: "document-reembed",
+    fields: [personaIdField],
   },
   "document-add-submit": {
     wireToken: "document-add-submit",

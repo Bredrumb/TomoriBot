@@ -1562,6 +1562,116 @@ describe("config models capability writes", () => {
     }
   });
 
+  it("re-embeds when re-selecting the already configured embedding model if mismatched chunks remain", async () => {
+    const providers = spyOn(llmProviderRepo, "loadSavedProviderConfigs").mockResolvedValue([
+      makeSavedProvider("google", { embedding_model_id: 3 }),
+    ]);
+    const embeddings = spyOn(llmModelRepo, "loadAvailableEmbeddingModels").mockResolvedValue([
+      { embedding_model_id: 3, codename: "text-embedding-004", provider: "google", model_family: "gemini" },
+    ] as never);
+    const byId = spyOn(llmModelRepo, "loadEmbeddingModelById").mockResolvedValue({
+      embedding_model_id: 3,
+      codename: "text-embedding-004",
+      model_family: "gemini",
+    } as never);
+    const update = spyOn(configRepository, "updateModelConfig").mockResolvedValue(true);
+    const ragAvailable = spyOn(ragAvailability, "isRagAvailable").mockReturnValue(true);
+    const countMismatched = spyOn(serverMemoryRepository, "countMismatchedEmbeddingDocuments").mockResolvedValue(2);
+    const context = {};
+    const credentials = spyOn(credentialResolver, "resolveCapabilityCredentials").mockResolvedValue({
+      apiKey: "key",
+      usageContext: context,
+    } as never);
+    const reembed = spyOn(ragRepository, "reembedServerDocuments").mockImplementation(async () => {
+      expect(currentProviderUsageContext()).toBe(context);
+    });
+
+    try {
+      const recovered = await configModelOperations.setCapabilityModel({
+        tomoriState: makeState({ config: { embedding_model_id: 3 } }),
+        serverDiscId: "guild-1",
+        capability: "embedding",
+        provider: "google",
+        modelId: 3,
+      });
+
+      expect(recovered).toMatchObject({ status: "success", modelName: "text-embedding-004", reembedded: true });
+      expect(countMismatched).toHaveBeenCalledWith(9, "gemini");
+      expect(update).not.toHaveBeenCalled();
+      expect(reembed).toHaveBeenCalledTimes(1);
+
+      countMismatched.mockResolvedValueOnce(0);
+      const upToDate = await configModelOperations.setCapabilityModel({
+        tomoriState: makeState({ config: { embedding_model_id: 3 } }),
+        serverDiscId: "guild-1",
+        capability: "embedding",
+        provider: "google",
+        modelId: 3,
+      });
+
+      expect(upToDate).toEqual({ status: "already-selected", modelName: "text-embedding-004" });
+      expect(update).not.toHaveBeenCalled();
+      expect(reembed).toHaveBeenCalledTimes(1);
+    } finally {
+      for (const spy of [providers, embeddings, byId, update, ragAvailable, countMismatched, credentials, reembed]) {
+        spy.mockRestore();
+      }
+    }
+  });
+
+  it("re-embeds on a same-family embedding switch only when mismatched chunks remain", async () => {
+    const providers = spyOn(llmProviderRepo, "loadSavedProviderConfigs").mockResolvedValue([
+      makeSavedProvider("google", { embedding_model_id: 2 }),
+    ]);
+    const embeddings = spyOn(llmModelRepo, "loadAvailableEmbeddingModels").mockResolvedValue([
+      { embedding_model_id: 3, codename: "text-embedding-005", provider: "google", model_family: "gemini" },
+    ] as never);
+    const byId = spyOn(llmModelRepo, "loadEmbeddingModelById").mockImplementation(async (id: number) =>
+      id === 3
+        ? ({ embedding_model_id: 3, codename: "text-embedding-005", model_family: "gemini" } as never)
+        : ({ embedding_model_id: 2, codename: "text-embedding-004", model_family: "gemini" } as never),
+    );
+    const update = spyOn(configRepository, "updateModelConfig").mockResolvedValue(true);
+    const ragAvailable = spyOn(ragAvailability, "isRagAvailable").mockReturnValue(true);
+    const countMismatched = spyOn(serverMemoryRepository, "countMismatchedEmbeddingDocuments").mockResolvedValue(3);
+    const credentials = spyOn(credentialResolver, "resolveCapabilityCredentials").mockResolvedValue({
+      apiKey: "key",
+      usageContext: {},
+    } as never);
+    const reembed = spyOn(ragRepository, "reembedServerDocuments").mockResolvedValue(undefined);
+
+    try {
+      const withMismatch = await configModelOperations.setCapabilityModel({
+        tomoriState: makeState({ config: { embedding_model_id: 2 } }),
+        serverDiscId: "guild-1",
+        capability: "embedding",
+        provider: "google",
+        modelId: 3,
+      });
+
+      expect(withMismatch).toMatchObject({ status: "success", modelName: "text-embedding-005", reembedded: true });
+      expect(update).toHaveBeenCalledTimes(1);
+      expect(reembed).toHaveBeenCalledTimes(1);
+
+      countMismatched.mockResolvedValueOnce(0);
+      const cleanSwitch = await configModelOperations.setCapabilityModel({
+        tomoriState: makeState({ config: { embedding_model_id: 2 } }),
+        serverDiscId: "guild-1",
+        capability: "embedding",
+        provider: "google",
+        modelId: 3,
+      });
+
+      expect(cleanSwitch).toMatchObject({ status: "success", modelName: "text-embedding-005", reembedded: false });
+      expect(update).toHaveBeenCalledTimes(2);
+      expect(reembed).toHaveBeenCalledTimes(1);
+    } finally {
+      for (const spy of [providers, embeddings, byId, update, ragAvailable, countMismatched, credentials, reembed]) {
+        spy.mockRestore();
+      }
+    }
+  });
+
   it("refuses to clear a slot whose absorbed command has no clear path", async () => {
     const update = spyOn(configRepository, "updateModelConfig").mockResolvedValue(true);
     for (const capability of CATALOG_MODEL_CAPABILITIES.filter(

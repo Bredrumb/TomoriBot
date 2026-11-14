@@ -11,9 +11,9 @@ import { localizer } from "@/utils/text/localizer";
 
 // Exports stop at 16 MiB or 4096 excerpts; larger downloads need streaming before these ceilings increase.
 export const RECORDING_EXPORT_INPUT_BYTES = 16 * 1024 * 1024;
-export const RECORDING_EXPORT_OUTPUT_BYTES = 24 * 1024 * 1024;
-export const RECORDING_EXPORT_FILE_BYTES = 8 * 1024 * 1024;
-export const RECORDING_EXPORT_MAX_FILES = 10;
+const RECORDING_EXPORT_OUTPUT_BYTES = 24 * 1024 * 1024;
+const RECORDING_EXPORT_FILE_BYTES = 8 * 1024 * 1024;
+const RECORDING_EXPORT_MAX_FILES = 10;
 export const RECORDING_EXPORT_MAX_EXCERPTS = 4096;
 
 export type RecordingExportFormat = "markdown" | "json";

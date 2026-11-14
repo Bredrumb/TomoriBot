@@ -46,13 +46,13 @@ function buildFilenameHash(value: string): string {
   return createHash("sha1").update(value).digest("hex").slice(0, 8);
 }
 
-export interface ExportFilenameSubject {
+interface ExportFilenameSubject {
   value: string;
   fallback: string;
   maxLength?: number;
 }
 
-export interface ExportFilenamePart {
+interface ExportFilenamePart {
   index: number;
   total: number;
 }

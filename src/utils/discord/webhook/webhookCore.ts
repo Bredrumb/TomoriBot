@@ -37,12 +37,6 @@ import {
 const webhookCache = new Map<string, Webhook>();
 
 /**
- * In-memory persona webhook cache: channelId:personaId -> Webhook
- * Retained for legacy persona-webhook compatibility and recovery helpers.
- */
-const personaWebhookCache = new Map<string, Webhook>();
-
-/**
  * Channels whose last webhook resolution failed: channelId -> reason and expiry.
  *
  * Without this the failure is retried on every turn, because `webhookCache` stores only successes
@@ -129,7 +123,6 @@ const managedWebhookSlots = new Map<
  */
 export function getWebhookCacheSizes(): {
   webhookChannel: number;
-  webhookPersona: number;
   webhookManagedSlots: number;
   webhookMutationLocks: number;
   webhookAvatarState: number;
@@ -138,7 +131,6 @@ export function getWebhookCacheSizes(): {
 } {
   return {
     webhookChannel: webhookCache.size,
-    webhookPersona: personaWebhookCache.size,
     webhookManagedSlots: managedWebhookSlots.size,
     webhookMutationLocks: webhookMutationLocks.size,
     webhookAvatarState: webhookAvatarStateCache.size,
@@ -147,34 +139,8 @@ export function getWebhookCacheSizes(): {
   };
 }
 
-function toWebhookAvatarData(avatar?: Buffer | string | null): string | null {
-  if (!avatar) {
-    return null;
-  }
-
-  if (typeof avatar === "string") {
-    if (avatar.startsWith("data:image/")) {
-      return avatar;
-    }
-    log.warn("[Webhook Manager] Ignoring avatar string that is not a data URI");
-    return null;
-  }
-
-  if (avatar.length > MAX_AVATAR_SIZE_BYTES) {
-    log.warn(`[Webhook Manager] Avatar buffer exceeds max size (${avatar.length} bytes)`);
-    return null;
-  }
-
-  const base64 = avatar.toString("base64");
-  return `data:image/png;base64,${base64}`;
-}
-
 function getPersonaWebhookName(personaId: number): string {
   return `${PERSONA_WEBHOOK_PREFIX} ${personaId}`;
-}
-
-function getPersonaWebhookCacheKey(channelId: string, personaId: number): string {
-  return `${channelId}:${personaId}`;
 }
 
 function getWebhookErrorReason(error: unknown): WebhookCreateErrorReason {
@@ -768,16 +734,6 @@ export function getCachedManagedWebhookForChannel(channelId: string, webhookId?:
   const slot = managedWebhookSlots.get(webhookId);
   if (slot?.webhook.channelId === channelId && slot.webhook.token) return slot.webhook;
 
-  for (const [cacheKey, webhook] of personaWebhookCache.entries()) {
-    if (!cacheKey.startsWith(`${channelId}:`)) {
-      continue;
-    }
-
-    if (webhook.id === webhookId && webhook.token) {
-      return webhook;
-    }
-  }
-
   return null;
 }
 
@@ -1161,7 +1117,7 @@ export async function sendSelectedWebhookMessage(
   return await selection.webhook.send(buildIdentityPayload(payload, selection.identity));
 }
 
-export async function sendWebhookMessageWithIdentityDelivery(
+async function sendWebhookMessageWithIdentityDelivery(
   webhook: Webhook,
   payload: WebhookSendPayload,
   identity?: ResolvedWebhookIdentity,
@@ -1214,90 +1170,6 @@ export async function sendWebhookMessageWithIdentity(
   identity?: ResolvedWebhookIdentity,
 ): Promise<Message> {
   return (await sendWebhookMessageWithIdentityDelivery(webhook, payload, identity)).result;
-}
-
-/**
- * Updates existing persona webhooks across a guild to use the latest avatar.
- * Legacy maintenance helper for surviving persona webhooks in non-production.
- *
- * @param avatar - Avatar data (Buffer or data URI)
- */
-export async function updatePersonaWebhooksAvatar(
-  guild: Guild,
-  personaId: number,
-  avatar?: Buffer | string | null,
-): Promise<number> {
-  const assertOwned = captureDiscordOwnership(guild.id);
-  if (IS_PRODUCTION) {
-    return 0;
-  }
-
-  const avatarData = toWebhookAvatarData(avatar);
-  if (!avatarData) {
-    log.warn(`[Webhook Manager] Skipping persona webhook update for persona ${personaId} due to missing avatar data`);
-    return 0;
-  }
-
-  const personaWebhookName = getPersonaWebhookName(personaId);
-  let updatedCount = 0;
-
-  for (const channel of guild.channels.cache.values()) {
-    if (!channel.isTextBased()) {
-      continue;
-    }
-
-    if (!("fetchWebhooks" in channel)) {
-      continue;
-    }
-
-    try {
-      const webhooks = await (channel as TextChannel).fetchWebhooks();
-      const matching = webhooks.filter((wh) => wh.name === personaWebhookName);
-
-      for (const webhook of matching.values()) {
-        assertOwned();
-        await webhook.edit({
-          avatar: avatarData,
-          reason: "TomoriBot persona avatar updated",
-        });
-        updatedCount++;
-        const cacheKey = getPersonaWebhookCacheKey(channel.id, personaId);
-        personaWebhookCache.set(cacheKey, webhook);
-
-        // Store permanent webhook avatar URL (first channel only, all webhooks have same avatar)
-        if (updatedCount === 1) {
-          const webhookAvatarUrl = webhook.avatarURL({
-            extension: "png",
-            size: 256,
-          });
-          if (webhookAvatarUrl) {
-            try {
-              const updated = await personaRepository.setAvatar(personaId, webhookAvatarUrl);
-              if (!updated) {
-                throw new Error(`Failed to store permanent webhook avatar URL for persona ${personaId}`);
-              }
-              invalidateTomoriStateCache(guild.id);
-              log.info(`[Webhook Manager] Stored permanent webhook avatar URL for persona ${personaId}`);
-            } catch (dbError) {
-              log.warn(
-                `[Webhook Manager] Failed to store permanent webhook avatar URL for persona ${personaId}`,
-                dbError,
-              );
-            }
-          }
-        }
-      }
-    } catch (error) {
-      assertOwned();
-      log.warn(`[Webhook Manager] Failed to update persona webhook in channel ${channel.id}`, error);
-    }
-  }
-
-  if (updatedCount > 0) {
-    log.info(`[Webhook Manager] Updated ${updatedCount} persona webhook(s) for persona ${personaId}`);
-  }
-
-  return updatedCount;
 }
 
 export async function resolvePersonaWebhookIdentity(
@@ -1390,7 +1262,7 @@ export async function sendUserTranscriptViaWebhook(
  *
  * @returns Avatar URL string, or undefined to use webhook default
  */
-export function resolvePersonaAvatarURL(persona: TomoriState, guild: Guild | null | undefined): string | undefined {
+function resolvePersonaAvatarURL(persona: TomoriState, guild: Guild | null | undefined): string | undefined {
   const validateAvatarURL = (avatarReference: string): string | undefined => {
     const resolvedUrl = resolvePersonaAvatarPublicUrl(avatarReference);
     if (!resolvedUrl) {
@@ -1449,39 +1321,7 @@ export function invalidateWebhookCache(channelId: string, webhookId?: string): v
   if (webhookId) {
     webhookAvatarStateCache.delete(webhookId);
     persistedManagedWebhookIds.delete(webhookId);
-    for (const [key, webhook] of personaWebhookCache) {
-      if (webhook.channelId === channelId && webhook.id === webhookId) personaWebhookCache.delete(key);
-    }
-  } else {
-    invalidatePersonaWebhookCacheForChannel(channelId);
   }
-}
-
-function invalidatePersonaWebhookCacheForChannel(channelId: string): number {
-  let removed = 0;
-  const prefix = `${channelId}:`;
-  for (const key of personaWebhookCache.keys()) {
-    if (key.startsWith(prefix)) {
-      personaWebhookCache.delete(key);
-      removed++;
-    }
-  }
-  return removed;
-}
-
-export function invalidatePersonaWebhookCacheForPersona(personaId: number): number {
-  let removed = 0;
-  const suffix = `:${personaId}`;
-  for (const key of personaWebhookCache.keys()) {
-    if (key.endsWith(suffix)) {
-      personaWebhookCache.delete(key);
-      removed++;
-    }
-  }
-  if (removed > 0) {
-    log.info(`[Webhook Manager] Invalidated persona webhook cache for persona ${personaId}`);
-  }
-  return removed;
 }
 
 /**
@@ -1492,13 +1332,11 @@ export function clearWebhookCache(): void {
   const slotSize = managedWebhookSlots.size;
   managedWebhookSlots.clear();
   managedWebhookUseSequence = 0;
-  const personaSize = personaWebhookCache.size;
-  personaWebhookCache.clear();
   webhookAvatarStateCache.clear();
   persistedManagedWebhookIds.clear();
   webhookFailureCache.clear();
 
-  log.info(`[Webhook Manager] Cleared entire webhook cache (${slotSize + personaSize} entries)`);
+  log.info(`[Webhook Manager] Cleared entire webhook cache (${slotSize} entries)`);
 }
 
 /**
@@ -1509,57 +1347,10 @@ export function getWebhookCacheStats(): {
   cacheSize: number;
 } {
   return {
-    cacheSize:
-      new Set(
-        [...webhookCache.values(), ...[...managedWebhookSlots.values()].map((slot) => slot.webhook)].map(
-          (webhook) => webhook.id,
-        ),
-      ).size + personaWebhookCache.size,
+    cacheSize: new Set(
+      [...webhookCache.values(), ...[...managedWebhookSlots.values()].map((slot) => slot.webhook)].map(
+        (webhook) => webhook.id,
+      ),
+    ).size,
   };
-}
-
-/**
- * Deletes persona-specific webhooks across all channels in a guild.
- * Legacy cleanup helper. Normal avatar/storage flows no longer depend on these webhooks.
- *
- */
-export async function deletePersonaWebhooks(guild: Guild, personaId: number): Promise<number> {
-  const assertOwned = captureDiscordOwnership(guild.id);
-  const personaWebhookName = getPersonaWebhookName(personaId);
-  let deletedCount = 0;
-
-  invalidatePersonaWebhookCacheForPersona(personaId);
-
-  for (const channel of guild.channels.cache.values()) {
-    if (!channel.isTextBased()) {
-      continue;
-    }
-
-    if (!("fetchWebhooks" in channel)) {
-      continue;
-    }
-
-    try {
-      const webhooks = await (channel as TextChannel).fetchWebhooks();
-      const matching = webhooks.filter((wh) => wh.name === personaWebhookName);
-
-      for (const webhook of matching.values()) {
-        assertOwned();
-        await webhook.delete("Persona removed");
-        deletedCount++;
-      }
-
-      const cacheKey = getPersonaWebhookCacheKey(channel.id, personaId);
-      personaWebhookCache.delete(cacheKey);
-    } catch (error) {
-      assertOwned();
-      log.warn(`[Webhook Manager] Failed to delete persona webhook in channel ${channel.id}`, error);
-    }
-  }
-
-  if (deletedCount > 0) {
-    log.info(`[Webhook Manager] Deleted ${deletedCount} persona webhook(s) for persona ${personaId}`);
-  }
-
-  return deletedCount;
 }

@@ -30,6 +30,8 @@ export default {
     persona_not_found_title: `Persona Não Encontrada`,
     persona_not_found_description: `Essa persona não existe mais neste servidor. Escolha uma da lista.`,
     build_failed_title: `Contexto Indisponível`,
+    novelai_unavailable_description:
+      "A inspeção ajustada do NovelAI está indisponível. Verifique a chave configurada e a configuração do tokenizador local, depois envie uma mensagem normal para carregar as informações da assinatura antes de tentar inspecionar novamente.",
     build_failed_description: `Não foi possível ler o histórico deste canal para construir o prompt. Tente novamente em um canal de texto visível para mim.`,
     no_permission_title: `Permissão Negada`,
     no_permission_description: `Você precisa da permissão **Gerenciar Servidor**, ou um gerente pode permitir prompts completos para membros em \`/moderation\`.`,

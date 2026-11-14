@@ -248,7 +248,8 @@ Migration 140 moves active server selections and saved server/personal selection
 the bot stopped and restart every worker afterward so configuration caches reload. The migration
 preserves stored vectors and their original family labels. Memory recall can fill vectors in the
 new family; existing documents remain unavailable to the new family's search until explicitly
-re-embedded through `RagRepository.reembedServerDocuments`. SQL migration does not call providers.
+re-embedded through `RagRepository.reembedServerDocuments` (by re-picking the active embedding model
+in `/config` or choosing `Re-embed Documents` in `/memories`). SQL migration does not call providers.
 Rollback preserves the supported selections because it cannot distinguish migrated rows from
 later choices.
 

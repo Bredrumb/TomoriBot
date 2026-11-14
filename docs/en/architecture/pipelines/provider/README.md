@@ -118,7 +118,8 @@ An embedding family switch re-embeds stored chunks in place, preserving their ID
 and boundaries, including history facts and edited chunks. Vector generation runs outside the write
 transaction; each document commits only if its stored chunk set still matches the embedded snapshot.
 A conflict gets one fresh attempt. An incomplete re-embed processes the remaining documents, then
-raises a failure instead of reporting a successful model switch; a retry skips chunks already on the
+raises a failure instead of reporting a successful model switch; a retry (re-picking the target
+model in `/config` or choosing `Re-embed Documents` in `/memories`) skips chunks already on the
 target model.
 
 Stream usage is normalized by `normalizeProviderUsage` in `src/utils/text/tokenEstimate.ts`.

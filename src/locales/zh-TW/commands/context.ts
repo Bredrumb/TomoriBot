@@ -30,6 +30,8 @@ export default {
     persona_not_found_title: `找不到人格`,
     persona_not_found_description: `該人格已不存在於這個伺服器。請從清單中選擇。`,
     build_failed_title: `無法取得脈絡`,
+    novelai_unavailable_description:
+      "目前無法檢查已配適的 NovelAI 提示詞。請確認設定的金鑰與本機 tokenizer，然後傳送一般訊息載入訂閱資訊，再重新檢查。",
     build_failed_description: `我無法讀取此頻道的紀錄來建構提示詞。請在允許我讀取的文字頻道中重試。`,
     no_permission_title: `權限不足`,
     no_permission_description: `你需要 **管理伺服器** 權限，或由管理員在 \`/moderation\` 中允許成員檢視完整提示詞。`,

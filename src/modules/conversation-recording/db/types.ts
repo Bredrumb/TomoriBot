@@ -3,7 +3,7 @@ import { z } from "zod";
 export const RECORDING_QUOTA_BYTES = 100 * 1024 * 1024;
 export const RECORDING_READ_BYTES = 4 * 1024 * 1024;
 export const RECORDING_READ_EXCERPTS = 100;
-export const RECORDING_DURATIONS = ["24h", "7d", "14d", "30d", "unlimited"] as const;
+const RECORDING_DURATIONS = ["24h", "7d", "14d", "30d", "unlimited"] as const;
 export const recordingSettingsSchema = z
   .object({
     context: z.enum(["own", "surrounding"]),
@@ -61,7 +61,7 @@ export const storedRecordingMessageSchema = z
   })
   .strict();
 export type RecordingMessage = z.infer<typeof storedRecordingMessageSchema>;
-export const recordingMessageInputSchema = z
+const recordingMessageInputSchema = z
   .object({
     sourceMessageId: z.string().regex(/^\d{1,20}$/),
     sourceAuthorId: z.string().min(1).max(100),

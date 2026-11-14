@@ -743,10 +743,10 @@ export const configModelOperations: ConfigModelOperations = {
         throw error;
       }
     }
-    if (
+    const alreadySelected =
       choice.id === currentModelIdForCapability(tomoriState, capability) &&
-      savedProviderOwnsSlot(tomoriState, savedConfig.provider, capability)
-    ) {
+      savedProviderOwnsSlot(tomoriState, savedConfig.provider, capability);
+    if (capability !== "embedding" && alreadySelected) {
       return { status: "already-selected", modelName: choice.name };
     }
 
@@ -756,27 +756,42 @@ export const configModelOperations: ConfigModelOperations = {
         : null;
       const chosenModel = await llmModelRepo.loadEmbeddingModelById(choice.id);
       if (!chosenModel) return { status: "not-found" };
-      // A change of embedding family leaves stored vectors in a space the new model does not share,
-      // so the documents are re-embedded rather than left silently unsearchable.
-      const shouldReembed =
+
+      const ragAvailable = isRagAvailable();
+      const familyChanged =
         !!currentEmbeddingModel?.model_family && currentEmbeddingModel.model_family !== chosenModel.model_family;
+      const hasMismatchedChunks =
+        ragAvailable &&
+        !familyChanged &&
+        (await serverMemoryRepository.countMismatchedEmbeddingDocuments(
+          tomoriState.server_id,
+          chosenModel.model_family,
+        )) > 0;
+      if (alreadySelected && !hasMismatchedChunks) {
+        return { status: "already-selected", modelName: choice.name };
+      }
 
-      const updated = await applyProviderModelSelection({
-        scope: serverOptionScope(tomoriState),
-        provider: savedConfig.provider,
-        capability: "embedding",
-        onWritten: () => invalidateTomoriStateCache(serverDiscId),
-        write: () =>
-          configRepository.updateModelConfig(tomoriState.server_id, {
-            embedding_model_id: choice.id,
-          }),
-      });
-      if (!updated) return { status: "write-failed" };
+      if (!alreadySelected) {
+        const updated = await applyProviderModelSelection({
+          scope: serverOptionScope(tomoriState),
+          provider: savedConfig.provider,
+          capability: "embedding",
+          onWritten: () => invalidateTomoriStateCache(serverDiscId),
+          write: () =>
+            configRepository.updateModelConfig(tomoriState.server_id, {
+              embedding_model_id: choice.id,
+            }),
+        });
+        if (!updated) return { status: "write-failed" };
+      }
 
+      // Stored vectors from another embedding family cannot be searched by the active model, so mismatched documents are re-embedded rather than left unsearchable.
+      const shouldReembed = familyChanged || hasMismatchedChunks;
       let reembedded = false;
-      if (shouldReembed && isRagAvailable()) {
-        const documentCount = await serverMemoryRepository.countDocuments(tomoriState.server_id);
-        if (documentCount > 0) {
+      if (shouldReembed && ragAvailable) {
+        const hasDocuments =
+          hasMismatchedChunks || (await serverMemoryRepository.countDocuments(tomoriState.server_id)) > 0;
+        if (hasDocuments) {
           let credentials: Awaited<ReturnType<typeof resolveCapabilityCredentials>>;
           try {
             credentials = await resolveCapabilityCredentials(tomoriState.server_id, "embedding");

@@ -189,6 +189,7 @@ function createDependencies(
     loadDocumentChunks: async () => [],
     getDocumentCounts: async () => ({ documents: 0, chunks: 0 }),
     getDocumentCountsByPersona: async () => ({ byPersona: new Map(), serverwide: 0 }),
+    getMismatchedEmbeddingDocumentCount: async () => 0,
     getEligibleHistoryPersonaIds: async () => new Set(),
     loadLorebooks: async (serverId, lineageId) => {
       calls.push(`loadLorebooks:${serverId}:${lineageId ?? "serverwide"}`);
@@ -240,6 +241,7 @@ function createDependencies(
       editChunk: async () => ({ status: "write-failed" }),
       removeChunk: async () => ({ status: "write-failed" }),
       vectorize: async () => ({ status: "write-failed" }),
+      reembed: async () => ({ status: "reembed-failed" }),
     },
     recordAction: (input) => {
       calls.push(`record:${input.action}`);

@@ -417,6 +417,7 @@ export interface MemoriesPanelRenderInput {
   documents?: DocumentListRow[];
   documentCount?: number;
   documentChunkCount?: number;
+  mismatchedEmbeddingDocuments?: number;
   documentChunks?: DocumentChunkRow[];
   documentCountsByPersona?: ReadonlyMap<number, number>;
   eligibleHistoryPersonaIds?: ReadonlySet<number>;
@@ -1019,16 +1020,52 @@ ${localizer(locale, "commands.memories.documents_description")}`,
       ),
     );
 
-    components.push({
-      type: ComponentType.TextDisplay,
-      content: withLinePrefix(
-        "> ",
-        localizer(locale, "commands.memories.document_counts", {
-          documents: input.documentCount ?? 0,
-          chunks: input.documentChunkCount ?? 0,
-        }),
-      ),
-    });
+    const countsContent = withLinePrefix(
+      "> ",
+      localizer(locale, "commands.memories.document_counts", {
+        documents: input.documentCount ?? 0,
+        chunks: input.documentChunkCount ?? 0,
+      }),
+    );
+    const mismatchedEmbeddingDocuments = input.mismatchedEmbeddingDocuments ?? 0;
+    if (mismatchedEmbeddingDocuments > 0 && page.kind !== "document-remove" && page.kind !== "document-chunk-remove") {
+      components.push({
+        type: ComponentType.Section,
+        components: [
+          {
+            type: ComponentType.TextDisplay,
+            content: [
+              countsContent,
+              withLinePrefix(
+                "-# ",
+                statusNote(
+                  "warning",
+                  localizer(locale, "commands.memories.document_reembed_notice", {
+                    count: mismatchedEmbeddingDocuments,
+                  }),
+                ),
+              ),
+            ].join("\n"),
+          },
+        ],
+        accessory: {
+          type: ComponentType.Button,
+          style: ButtonStyle.Secondary,
+          customId: buildMemoriesRouteId({
+            action: "document-reembed",
+            locale,
+            personaId: selectedPersonaId,
+          }),
+          label: safeSelectOptionText(localizer(locale, "commands.memories.document_reembed_button"), 80),
+          disabled: writesDisabled,
+        },
+      });
+    } else {
+      components.push({
+        type: ComponentType.TextDisplay,
+        content: countsContent,
+      });
+    }
 
     const documents = input.documents ?? [];
     if (page.kind === "document-remove") {

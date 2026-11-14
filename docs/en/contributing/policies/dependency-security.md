@@ -56,10 +56,10 @@ a patched KaTeX version, and verify the docs build before removing it.
 
 ### Advisory exceptions
 
-- **`CVE-2026-25128`, fast-xml-parser (Trivy only)**: reached through the AWS SDK v3, whose input comes
-only from AWS endpoints. The global `"fast-xml-parser": ">=5.7.0"` override in `package.json` raises
-every copy, including the one nested under `@aws-sdk/xml-builder` (5.7.0 in `bun.lock`). Recheck with
-Trivy whether the advisory still matches before keeping this entry.
+- **`CVE-2026-25128`, fast-xml-parser (Trivy only)**: the global
+`"fast-xml-parser": ">=5.12.0"` override raises the parser used by `@google-cloud/storage`.
+`@aws-sdk/xml-builder` has no parser dependency. Recheck with Trivy whether the advisory still
+matches before keeping this entry.
 - **`GHSA-vfj7-8cjw-p6xm`, braces (`bun audit` only)**: no patched release exists (3.0.3 is both the
 latest and affected), and the newest `starlight-llms-txt` still depends on `micromatch` and so on
 `braces`. It is reached only while building the docs site, where `micromatch` expands glob patterns

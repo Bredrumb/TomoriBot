@@ -44,7 +44,7 @@ export function usesChatCompletionsImageGeneration(modelCodename: string): boole
   return isOpenRouterGeminiModelCodename(modelCodename);
 }
 
-export function buildOpenRouterImageRequest(
+function buildOpenRouterImageRequest(
   request: Pick<OpenRouterImageGenerationRequest, "modelCodename" | "prompt" | "aspectRatio" | "referenceImages">,
 ): { url: string; body: Record<string, unknown> } {
   const { modelCodename, prompt, aspectRatio, referenceImages } = request;
