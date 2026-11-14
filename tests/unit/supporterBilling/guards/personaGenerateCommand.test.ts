@@ -103,6 +103,8 @@ describe("generate persona command billing guards", () => {
       providerRequestId: null,
       inputTokens: 120,
       outputTokens: 30,
+      cacheReadTokens: null,
+      cacheWriteTokens: null,
     });
   });
 

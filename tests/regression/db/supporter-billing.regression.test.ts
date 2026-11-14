@@ -1883,135 +1883,140 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
     const repository = new SupporterUsageStatisticsRepository(testSql);
     const identity = await createSupporterFixture(`usage_${Date.now()}`);
     const [server] = await testSql`
-      INSERT INTO servers (server_disc_id) VALUES (${`_rt_usage_server_${Date.now()}`}) RETURNING server_id
+      INSERT INTO servers (server_disc_id) VALUES (${String(1700000000000000000n + BigInt(Date.now()))}) RETURNING server_id
     `;
-    const funding = {
-      credentialSource: "supporter" as const,
-      provider: "openrouter" as const,
-      capability: "video" as const,
-      modelCodename: "example/video-model",
-      tierKey: "test_tier",
-      sponsorIdentityId: identity.supporter_identity_id,
-      sponsorDiscordUserId: identity.discord_user_id,
-      entitlementId: 1,
-      renewalAt: null,
-      fundingScope: "server" as const,
-      sponsorshipId: 1,
-      serverId: server.server_id as number,
-      personalUserId: null,
-    };
-    const jobId = `_rt_video_job_${Date.now()}`;
-    for (let poll = 0; poll < 3; poll++)
+    try {
+      const funding = {
+        credentialSource: "supporter" as const,
+        provider: "openrouter" as const,
+        capability: "video" as const,
+        modelCodename: "example/video-model",
+        tierKey: "test_tier",
+        sponsorIdentityId: identity.supporter_identity_id,
+        sponsorDiscordUserId: identity.discord_user_id,
+        entitlementId: 1,
+        renewalAt: null,
+        fundingScope: "server" as const,
+        sponsorshipId: 1,
+        serverId: server.server_id as number,
+        personalUserId: null,
+      };
+      const jobId = `_rt_video_job_${Date.now()}`;
+      for (let poll = 0; poll < 3; poll++)
+        recordSupporterUsage(
+          funding,
+          {
+            modelCodename: funding.modelCodename,
+            costUsd: 0.25,
+            providerRequestId: jobId,
+            inputTokens: 1000,
+            outputTokens: 20,
+            cacheReadTokens: 400,
+            cacheWriteTokens: 100,
+          },
+          repository,
+        );
       recordSupporterUsage(
-        funding,
+        { ...funding, capability: "text" },
+        { modelCodename: "example/text-model", costUsd: 0.001 },
+        repository,
+      );
+      recordSupporterUsage(
+        { ...funding, capability: "text" },
         {
-          modelCodename: funding.modelCodename,
-          costUsd: 0.25,
-          providerRequestId: jobId,
-          inputTokens: 1000,
-          outputTokens: 20,
-          cacheReadTokens: 400,
-          cacheWriteTokens: 100,
+          modelCodename: "example/text-model",
+          costUsd: 0.001,
+          inputTokens: 10,
+          outputTokens: 1,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
         },
         repository,
       );
-    recordSupporterUsage(
-      { ...funding, capability: "text" },
-      { modelCodename: "example/text-model", costUsd: 0.001 },
-      repository,
-    );
-    recordSupporterUsage(
-      { ...funding, capability: "text" },
-      {
-        modelCodename: "example/text-model",
-        costUsd: 0.001,
-        inputTokens: 10,
-        outputTokens: 1,
-        cacheReadTokens: 0,
-        cacheWriteTokens: 0,
-      },
-      repository,
-    );
-    const readRows = async () =>
-      testSql`
-        SELECT funding_scope, server_id, capability, model_codename, cost_usd, provider_request_id,
-          input_tokens::float8 AS input_tokens, output_tokens::float8 AS output_tokens,
-          cache_read_tokens::float8 AS cache_read_tokens, cache_write_tokens::float8 AS cache_write_tokens
-        FROM supporter_usage_statistics
-        WHERE supporter_identity_id = ${identity.supporter_identity_id}
-        ORDER BY capability DESC, usage_statistic_id
-      `;
-    for (let attempt = 0; attempt < 50 && (await readRows()).length < 3; attempt++) await Bun.sleep(10);
-    expect(await readRows()).toEqual([
-      {
-        funding_scope: "server",
-        server_id: server.server_id,
-        capability: "video",
-        model_codename: "example/video-model",
-        cost_usd: 0.25,
-        provider_request_id: jobId,
-        input_tokens: 1000,
-        output_tokens: 20,
-        cache_read_tokens: 400,
-        cache_write_tokens: 100,
-      },
-      {
-        funding_scope: "server",
-        server_id: server.server_id,
-        capability: "text",
-        model_codename: "example/text-model",
-        cost_usd: 0.001,
-        provider_request_id: null,
-        input_tokens: null,
-        output_tokens: null,
-        cache_read_tokens: null,
-        cache_write_tokens: null,
-      },
-      {
-        funding_scope: "server",
-        server_id: server.server_id,
-        capability: "text",
-        model_codename: "example/text-model",
-        cost_usd: 0.001,
-        provider_request_id: null,
-        input_tokens: 10,
-        output_tokens: 1,
-        cache_read_tokens: 0,
-        cache_write_tokens: 0,
-      },
-    ]);
-    expect(
-      await repository.record({
-        supporterIdentityId: identity.supporter_identity_id,
-        fundingScope: "server",
-        serverId: server.server_id,
-        capability: "video",
-        modelCodename: "example/video-model",
-        costUsd: 0.25,
-        providerRequestId: jobId,
-      }),
-    ).toBe(false);
+      const readRows = async () =>
+        testSql`
+          SELECT funding_scope, server_id, capability, model_codename, cost_usd, provider_request_id,
+            input_tokens::float8 AS input_tokens, output_tokens::float8 AS output_tokens,
+            cache_read_tokens::float8 AS cache_read_tokens, cache_write_tokens::float8 AS cache_write_tokens
+          FROM supporter_usage_statistics
+          WHERE supporter_identity_id = ${identity.supporter_identity_id}
+          ORDER BY capability DESC, input_tokens NULLS FIRST
+        `;
+      for (let attempt = 0; attempt < 50 && (await readRows()).length < 3; attempt++) await Bun.sleep(10);
+      expect(await readRows()).toEqual([
+        {
+          funding_scope: "server",
+          server_id: server.server_id,
+          capability: "video",
+          model_codename: "example/video-model",
+          cost_usd: 0.25,
+          provider_request_id: jobId,
+          input_tokens: 1000,
+          output_tokens: 20,
+          cache_read_tokens: 400,
+          cache_write_tokens: 100,
+        },
+        {
+          funding_scope: "server",
+          server_id: server.server_id,
+          capability: "text",
+          model_codename: "example/text-model",
+          cost_usd: 0.001,
+          provider_request_id: null,
+          input_tokens: null,
+          output_tokens: null,
+          cache_read_tokens: null,
+          cache_write_tokens: null,
+        },
+        {
+          funding_scope: "server",
+          server_id: server.server_id,
+          capability: "text",
+          model_codename: "example/text-model",
+          cost_usd: 0.001,
+          provider_request_id: null,
+          input_tokens: 10,
+          output_tokens: 1,
+          cache_read_tokens: 0,
+          cache_write_tokens: 0,
+        },
+      ]);
+      expect(
+        await repository.record({
+          supporterIdentityId: identity.supporter_identity_id,
+          fundingScope: "server",
+          serverId: server.server_id,
+          capability: "video",
+          modelCodename: "example/video-model",
+          costUsd: 0.25,
+          providerRequestId: jobId,
+        }),
+      ).toBe(false);
 
-    await initializeSupporterBillingSchema(testSql);
-    expect(await repository.totalSince(identity.supporter_identity_id, new Date(0))).toBeCloseTo(0.252, 10);
-    expect(
-      (await readRows()).map(
-        (row: { input_tokens: number | null; cache_read_tokens: number | null; cache_write_tokens: number | null }) => [
-          row.input_tokens,
-          row.cache_read_tokens,
-          row.cache_write_tokens,
-        ],
-      ),
-    ).toEqual([
-      [1000, 400, 100],
-      [null, null, null],
-      [10, 0, 0],
-    ]);
+      await initializeSupporterBillingSchema(testSql);
+      expect(await repository.totalSince(identity.supporter_identity_id, new Date(0))).toBeCloseTo(0.252, 10);
+      expect(
+        (await readRows()).map(
+          (row: {
+            input_tokens: number | null;
+            cache_read_tokens: number | null;
+            cache_write_tokens: number | null;
+          }) => [row.input_tokens, row.cache_read_tokens, row.cache_write_tokens],
+        ),
+      ).toEqual([
+        [1000, 400, 100],
+        [null, null, null],
+        [10, 0, 0],
+      ]);
 
-    await testSql`DELETE FROM servers WHERE server_id = ${server.server_id}`;
-    expect((await readRows()).map((row: { server_id: number | null }) => row.server_id)).toEqual([null, null, null]);
-    await testSql`DELETE FROM supporter_identities WHERE supporter_identity_id = ${identity.supporter_identity_id}`;
-    expect(await readRows()).toEqual([]);
+      await testSql`DELETE FROM servers WHERE server_id = ${server.server_id}`;
+      expect((await readRows()).map((row: { server_id: number | null }) => row.server_id)).toEqual([null, null, null]);
+      await testSql`DELETE FROM supporter_identities WHERE supporter_identity_id = ${identity.supporter_identity_id}`;
+      expect(await readRows()).toEqual([]);
+    } finally {
+      await testSql`DELETE FROM servers WHERE server_id = ${server.server_id}`;
+      await testSql`DELETE FROM supporter_identities WHERE supporter_identity_id = ${identity.supporter_identity_id}`;
+    }
   });
 
   it("aggregates the allowance period and keeps purged spend in the member key's logged total", async () => {

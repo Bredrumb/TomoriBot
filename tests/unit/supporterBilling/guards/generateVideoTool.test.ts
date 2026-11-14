@@ -110,6 +110,8 @@ describe("generate video tool billing guards", () => {
       providerRequestId: "synthetic-video-job",
       inputTokens: null,
       outputTokens: null,
+      cacheReadTokens: null,
+      cacheWriteTokens: null,
     });
   });
 

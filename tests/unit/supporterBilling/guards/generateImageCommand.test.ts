@@ -127,6 +127,8 @@ describe("generate image command billing guards", () => {
       providerRequestId: null,
       inputTokens: null,
       outputTokens: null,
+      cacheReadTokens: null,
+      cacheWriteTokens: null,
     });
   });
 

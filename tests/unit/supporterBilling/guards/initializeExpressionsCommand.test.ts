@@ -128,6 +128,8 @@ describe("initialize expressions command billing guards", () => {
       providerRequestId: null,
       inputTokens: 80,
       outputTokens: 20,
+      cacheReadTokens: null,
+      cacheWriteTokens: null,
     });
   });
 

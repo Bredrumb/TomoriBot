@@ -81,6 +81,8 @@ describe("OpenRouter web search billing guards", () => {
       providerRequestId: "synthetic-search",
       inputTokens: 100,
       outputTokens: 1,
+      cacheReadTokens: null,
+      cacheWriteTokens: null,
     });
   });
 

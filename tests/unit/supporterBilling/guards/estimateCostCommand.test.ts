@@ -144,6 +144,8 @@ describe("estimate cost command billing guards", () => {
       providerRequestId: null,
       inputTokens: 100,
       outputTokens: 0,
+      cacheReadTokens: null,
+      cacheWriteTokens: null,
     });
   });
 

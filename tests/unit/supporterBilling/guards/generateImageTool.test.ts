@@ -106,6 +106,8 @@ describe("generate image tool billing guards", () => {
       providerRequestId: null,
       inputTokens: null,
       outputTokens: null,
+      cacheReadTokens: null,
+      cacheWriteTokens: null,
     });
   });
 

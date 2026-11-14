@@ -199,6 +199,8 @@ describe("learn history command billing guards", () => {
       providerRequestId: null,
       inputTokens: 300,
       outputTokens: 40,
+      cacheReadTokens: null,
+      cacheWriteTokens: null,
     });
     expect(record.mock.calls[1]?.[0]).toEqual({
       supporterIdentityId: embeddingFunding().sponsorIdentityId,
@@ -210,6 +212,8 @@ describe("learn history command billing guards", () => {
       providerRequestId: null,
       inputTokens: 20,
       outputTokens: 0,
+      cacheReadTokens: null,
+      cacheWriteTokens: null,
     });
   });
 

@@ -97,6 +97,8 @@ describe("profile picture vision billing guards", () => {
       providerRequestId: null,
       inputTokens: 40,
       outputTokens: 12,
+      cacheReadTokens: null,
+      cacheWriteTokens: null,
     });
   });
 
