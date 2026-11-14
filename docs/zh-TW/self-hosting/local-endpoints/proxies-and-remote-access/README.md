@@ -11,7 +11,7 @@ aiGenerated: true
 
 ## 選擇指南
 
-1. [透過 ChatMock 使用 Codex CLI](/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/)：在你的電腦上連線以 ChatGPT 為後端的橋接工具。
+1. [ChatMock](/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/)：在你的電腦上連線以 ChatGPT 為後端的橋接工具。
 2. [CLIProxyAPI](/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/)：安裝代理並從經授權的後端註冊模型。
 3. [Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/)：使用 Access 驗證與生產環境中繼，將分開架設的 bot 連線至你的本機引擎。
 

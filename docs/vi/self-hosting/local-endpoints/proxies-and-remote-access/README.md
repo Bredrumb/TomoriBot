@@ -11,7 +11,7 @@ Kết nối TomoriBot thông qua proxy API cục bộ, hoặc kết nối an to�
 
 ## Chọn hướng dẫn
 
-1. [Codex CLI qua ChatMock](/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/): kết nối cầu nối dùng tài khoản ChatGPT trên máy của bạn.
+1. [ChatMock](/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/): kết nối cầu nối dùng tài khoản ChatGPT trên máy của bạn.
 2. [CLIProxyAPI](/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/): cài đặt proxy và đăng ký các model từ một backend được ủy quyền.
 3. [Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/): kết nối bot được lưu trữ riêng tới engine cục bộ của bạn bằng xác thực Access và relay production.
 

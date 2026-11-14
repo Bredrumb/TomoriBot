@@ -69,6 +69,9 @@ New OpenRouter configurations use DeepSeek Flash Latest for chat and Gemini 3.1 
 the vision fallback. Both use OpenRouter credits. Replacing a key preserves your vision selection,
 including `- No Model`.
 
+New NVIDIA NIM configurations use Nemotron 3.5 Lightning 30B for chat. It accepts text only;
+select a Vision model to read images.
+
 In `/config` > Models > Switch Models, you can assign models and endpoints across these capability slots:
 
 - **Text**: the main chat model.

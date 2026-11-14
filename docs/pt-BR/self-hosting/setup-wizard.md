@@ -11,7 +11,7 @@ Usuários que desejam usar o Docker Compose devem ignorar este assistente; veja
 [Docker Compose](/self-hosting/docker-compose/) para o caminho de instalação em contêineres.
 :::
 
-`bun run setup` é o caminho de hospedagem própria recomendado para instalações locais baseadas em Bun. O comando instala as dependências a partir do `bun.lock` antes de carregar o assistente, inclusive em um clone novo. O assistente cria seu `.env`, gera um `CRYPTO_SECRET`, solicita o token do seu bot do Discord e configura o PostgreSQL. É seguro
+`bun run setup` é o caminho de hospedagem própria recomendado para instalações locais baseadas em Bun. O comando instala as dependências a partir do `bun.lock` antes de carregar o assistente, inclusive em um clone novo. O assistente cria seu `.env`, gera um `CRYPTO_SECRET`, solicita o token do seu bot do Discord, pergunta se deve [permitir redes privadas](#private-networks) e configura o PostgreSQL. É seguro
 executá-lo novamente; os valores existentes no `.env` são mantidos, a menos que você opte por reconfigurá-los.
 
 ## O que ter em mãos
@@ -46,6 +46,35 @@ Depois de executar o comando, você escolherá um de dois caminhos:
 |---|---|---|
 | Full Install | Você quer a configuração recomendada com recursos extras leves. | Executa a Base Install e depois tenta instalar os extras abaixo. |
 | Base Install | Você quer apenas o mínimo necessário para o bot funcionar. | Cria/configura o `.env`, token do Discord, PostgreSQL e dependências. |
+
+### Redes privadas
+<!-- anchor: private-networks -->
+
+O assistente pergunta se o TomoriBot pode acessar `localhost` e a sua LAN, e salva a resposta como
+`ALLOW_PRIVATE_NETWORK` no `.env`. Fora da produção, o TomoriBot não inicia até que isso esteja definido, então uma
+configuração feita manualmente também precisa dessa linha. Qualquer membro que puder adicionar um endpoint personalizado ou servidor MCP pode
+alcançar o que você permitir aqui, portanto escolha conforme quem usa o bot:
+
+| Valor | Escolha quando |
+|---|---|
+| `true` | Apenas você ou uma comunidade confiável do Discord usa o bot. Modelos locais e servidores MCP em `localhost` ou na sua LAN funcionam, inclusive em HTTP simples. |
+| Uma lista `host:port`, como `localhost:5001,localhost:8188` | Você compartilha servidores locais, como KoboldCPP ou ComfyUI, com membros em quem não confia totalmente. Apenas os servidores listados funcionam, impedindo que os endpoints deles alcancem qualquer outra coisa na sua rede. |
+| `false` | Membros não confiáveis usam o bot e você não compartilha nenhum servidor local. |
+
+Endpoints HTTPS públicos, como APIs hospedadas compatíveis com OpenAI, funcionam com qualquer valor. Para um modelo
+em outra máquina, use uma [conexão remota autenticada](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/).
+Um túnel fornece conectividade e exige controles de acesso separados. A produção recusa endpoints
+privados independentemente de `ALLOW_PRIVATE_NETWORK`.
+
+Uma lista corresponde ao endereço exatamente como o endpoint é registrado, portanto `localhost:5001` não cobre
+`127.0.0.1:5001`; liste cada grafia que você usar. Um servidor listado continua aberto para todos os membros, em qualquer
+caminho, então mantenha os recursos administrativos dele protegidos por senha (para o KoboldCPP, `--adminpassword`).
+
+Endereços do Tailscale e nomes `*.ts.net` contam como privados, então exigem `true` ou uma lista; com
+`false`, apenas o Tailscale Funnel funciona.
+
+Imagens, arquivos e prévias de links enviados pelos membros nunca alcançam endereços privados, qualquer que seja a sua
+escolha. A ferramenta `fetch_url` tem sua própria configuração, `FETCH_URL_ALLOW_PRIVATE_NETWORK` (desativada por padrão).
 
 ### Extras da Full Install
 

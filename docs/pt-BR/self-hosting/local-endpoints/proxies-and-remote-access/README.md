@@ -11,7 +11,7 @@ Conecte o TomoriBot por meio de um proxy de API local ou acesse com segurança u
 
 ## Escolha um guia
 
-1. [Codex CLI via ChatMock](/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/): conecte uma ponte baseada no ChatGPT na sua máquina.
+1. [ChatMock](/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/): conecte uma ponte baseada no ChatGPT na sua máquina.
 2. [CLIProxyAPI](/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/): instale um proxy e registre modelos de um backend autorizado.
 3. [Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/): conecte um bot hospedado separadamente ao seu motor local usando autenticação do Access e um relay de produção.
 

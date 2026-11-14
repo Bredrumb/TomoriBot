@@ -1,7 +1,7 @@
 ---
-title: "Configuración: Codex CLI a través de ChatMock"
+title: "ChatMock"
 sidebar:
-  label: "Codex CLI a través de ChatMock"
+  label: "ChatMock"
   order: 1
 aiGenerated: true
 ---

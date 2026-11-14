@@ -984,12 +984,17 @@ class PresetRepository {
         : attributeRows.length > 0
           ? attributeRows.map((row) => row.is_public)
           : exportedAttributes.map(() => false);
-      const exportedSampleDialoguesIn = pointerPreset
-        ? pointerPreset.preset_sample_dialogues_in
-        : ((presetData.sample_dialogues_in as string[] | undefined) ?? []);
+      const exportedSampleDialoguesIn = [
+        ...(pointerPreset
+          ? pointerPreset.preset_sample_dialogues_in
+          : ((presetData.sample_dialogues_in as string[] | undefined) ?? [])),
+      ];
       const exportedSampleDialoguesOut = pointerPreset
         ? pointerPreset.preset_sample_dialogues_out
         : ((presetData.sample_dialogues_out as string[] | undefined) ?? []);
+      while (exportedSampleDialoguesIn.length < exportedSampleDialoguesOut.length) {
+        exportedSampleDialoguesIn.push(UNPAIRED_SAMPLE_DIALOGUE_SENTINEL);
+      }
       const exportedPresetLineageId = pointerPreset
         ? normalizeLineageId(pointerPreset.preset_lineage_id)
         : normalizeLineageId(presetData.preset_lineage_id);
@@ -1042,8 +1047,8 @@ class PresetRepository {
         },
       };
 
-      const validated = presetExportSchema.safeParse(exportData);
-      if (!validated.success) {
+      const validated = this.validatePresetFile(exportData);
+      if (!validated.valid || !validated.data) {
         log.error(`Preset export validation failed for server ${serverDiscId}:`, validated.error);
         return { success: false, error: "commands.persona.export.error_validation_failed" };
       }
@@ -1052,7 +1057,7 @@ class PresetRepository {
         `Successfully exported preset for server ${serverDiscId}, persona ${presetData.persona_id}: ${presetData.persona_nickname}`,
       );
 
-      return { success: true, data: validated.data };
+      return { success: true, data: { ...exportData, data: validated.data } };
     } catch (error) {
       log.error(`Error exporting preset data for server ${serverDiscId}:`, error);
       return { success: false, error: "commands.persona.export.error_export_failed" };

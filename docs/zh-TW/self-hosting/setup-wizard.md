@@ -11,7 +11,7 @@ sidebar:
 [Docker Compose](/self-hosting/docker-compose/)。
 :::
 
-`bun run setup` 是推薦的本機 Bun 自架路徑。該指令會在載入精靈之前先從 `bun.lock` 安裝相依套件，包含在全新複製的環境中。精靈會建立你的 `.env`、產生 `CRYPTO_SECRET`、詢問你的 Discord bot 權杖並設定 PostgreSQL。重複執行也很安全；既有的 `.env` 值會保留，除非你選擇重新設定它們。
+`bun run setup` 是推薦的本機 Bun 自架路徑。該指令會在載入精靈之前先從 `bun.lock` 安裝相依套件，包含在全新複製的環境中。精靈會建立你的 `.env`、產生 `CRYPTO_SECRET`、詢問你的 Discord bot 權杖、詢問是否[允許私人網路](#private-networks)，並設定 PostgreSQL。重複執行也很安全；既有的 `.env` 值會保留，除非你選擇重新設定它們。
 
 ## 事前準備
 
@@ -40,6 +40,25 @@ bun run setup
 |---|---|---|
 | 完整安裝 | 你想要推薦的設定加上輕量的額外項目。 | 先執行基礎安裝，接著嘗試底下的額外項目。 |
 | 基礎安裝 | 你只需要最低限度可運作的 bot。 | 建立/設定 `.env`、Discord 權杖、PostgreSQL 與相依套件。 |
+
+### 私人網路
+<!-- anchor: private-networks -->
+
+精靈會詢問 TomoriBot 是否可以存取 `localhost` 與你的區域網路，並將答案儲存為 `.env` 中的 `ALLOW_PRIVATE_NETWORK`。在非生產環境中，未設定此項目時 TomoriBot 將無法啟動，因此手動設定時也需要加上這一行。任何能新增自訂端點或 MCP 伺服器的成員，都能存取你在這裡允許的對象，請依使用 bot 的對象來選擇：
+
+| 值 | 適用時機 |
+|---|---|
+| `true` | 只有你或受信任的 Discord 社群使用這個 bot。位於 `localhost` 或區域網路上的本機模型與 MCP 伺服器皆可使用，包含透過純 HTTP 連線。 |
+| `host:port` 清單，例如 `localhost:5001,localhost:8188` | 你與並非完全信任的成員共用本機伺服器（例如 KoboldCPP 或 ComfyUI）。只有列出的伺服器能正常運作，因此對方的端點無法存取你網路上的其他服務。 |
+| `false` | 有不受信任的成員使用 bot，且你沒有共用任何本機伺服器。 |
+
+公開 HTTPS 端點（例如託管的 OpenAI 相容 API）在任何設定值下都能運作。若模型位於另一台電腦上，請使用[經授權的遠端連線](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/)。通道本身僅提供連線能力，還需要另外設定存取控制。無論 `ALLOW_PRIVATE_NETWORK` 為何，生產環境一律拒絕私人端點。
+
+清單會依照端點註冊時的位址進行完全比對，因此 `localhost:5001` 不涵蓋 `127.0.0.1:5001`；請列出所有會用到的寫法。列出的伺服器依然對所有成員開放其任何路徑，因此請替該伺服器自身的管理功能加上密碼保護（例如 KoboldCPP 使用 `--adminpassword`）。
+
+Tailscale 位址與 `*.ts.net` 名稱也視為私人位址，因此需要設為 `true` 或加入清單；若設為 `false`，則只有 Tailscale Funnel 能夠運作。
+
+無論你選擇哪個設定，成員張貼的圖片、檔案與連結預覽都絕對不會存取私人位址。`fetch_url` 工具則有自己獨立的設定 `FETCH_URL_ALLOW_PRIVATE_NETWORK`（預設為關閉）。
 
 ### 完整安裝的額外項目
 
