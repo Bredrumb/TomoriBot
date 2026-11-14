@@ -154,6 +154,7 @@ function createTestDependencies(overrides: Partial<MemoriesRouteDependencies> = 
       return { documents: 0, chunks: 0 };
     },
     getDocumentCountsByPersona: async () => ({ byPersona: new Map([[10, 3]]), serverwide: 1 }),
+    getMismatchedEmbeddingDocumentCount: async () => 0,
     getEligibleHistoryPersonaIds: async () => new Set(),
     loadLorebooks: async () => ({ status: "fresh" as const, entries: [] }),
     getLorebookCounts: async () => new Map(),
