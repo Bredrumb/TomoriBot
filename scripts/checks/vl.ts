@@ -849,7 +849,7 @@ async function main() {
     "Linting (bun run lint)": "Review the warning or commit the auto-fixed files.",
     "Runtime Imports":
       "Run `bun install --frozen-lockfile`, then `bun run check-runtime-imports`. Confirm bun.lock resolves gaxios to uuid@9.",
-    Knip: "Run `bun run knip` and remove unused files, dependencies, or exports, or update scripts/knip.json for intentional entry points.",
+    Knip: "Run `bun run knip`. Before removing an export, check its callers with `git grep <symbol> release -- src tests`; if release uses it, keep the export and add a JSDoc @public tag naming its release caller.",
     "Comment Audit":
       "Run `bun run audit-comments` and review each finding against docs/en/contributing/policies/comments.md before editing.",
     "Command Mentions":

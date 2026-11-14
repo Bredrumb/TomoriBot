@@ -56,7 +56,7 @@
     "//audit": "audit:clean runs bun audit --audit-level=high — only high/critical advisories block the pipeline",
     "audit:clean": "bun run scripts/checks/auditClean.ts",
     "db:lifecycle": "bun scripts/checks/validateLifecycle.ts",
-    "knip": "bunx --bun knip --config scripts/knip.json",
+    "knip": "bun run scripts/checks/checkKnip.ts",
     "vl": "bun run scripts/checks/vl.ts"
   },
   "workspaces": [
