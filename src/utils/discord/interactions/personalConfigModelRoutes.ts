@@ -346,9 +346,9 @@ export async function handlePersonalConfigModelRoutes(context: PersonalConfigPos
   }
 
   if (route.action === "fallbacks-page") {
-    let availableOptions: Array<{ refKey: string; label: string }> = [];
+    let availableOptions: Array<{ refKey: string; label: string; description?: string }> = [];
     try {
-      availableOptions = await loadFallbackSelectionOptions(context.scope.userId, route.provider);
+      availableOptions = await loadFallbackSelectionOptions(context.scope.userId, route.provider, route.locale);
     } catch (error) {
       log.warn("Failed to load available models for fallbacks modal", { provider: route.provider, error });
     }

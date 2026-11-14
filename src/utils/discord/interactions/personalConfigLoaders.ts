@@ -1,5 +1,5 @@
 import type { ChatInputCommandInteraction } from "discord.js";
-import type { TomoriState, UserRow, UserSavedProviderConfigRow } from "@/types/db/schema";
+import type { FallbackModelRef, TomoriState, UserRow, UserSavedProviderConfigRow } from "@/types/db/schema";
 import type { PanelReadStatus } from "@/types/discord/panel";
 import type { UserPersonaNamingPreference } from "@/types/personaNaming";
 import { getShortTermMemoriesForUser, preWarmUserStmEntries } from "@/utils/cache/shortTermMemoryCache";
@@ -35,10 +35,10 @@ import {
 } from "@/utils/provider/providerOptionRegistry";
 import { getProviderOptionFallbackRefOwner } from "@/utils/provider/providerOptionRegistry";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
-import { resolveDescription } from "@/utils/text/localizer";
+import { localizer, resolveDescription } from "@/utils/text/localizer";
 import { freeModelPriceLabel, resolveRowPricing } from "@/utils/provider/modelPricing";
 import { openRouterMediaRates } from "@/utils/provider/openrouterMediaPricing";
-import type { ModelSelectChoice } from "@/utils/discord/ui/modelSelectOption";
+import { modelOptionDetail, type ModelSelectChoice } from "@/utils/discord/ui/modelSelectOption";
 import { messageProxyRepository } from "@/utils/db/repositories/MessageProxyRepository";
 import { formatManagedIdentityLabel } from "@/utils/discord/interactions/managedIdentityPanelRoutes";
 
@@ -183,6 +183,7 @@ async function loadPersonalCatalogModels(
       return models.map((model) => ({
         id: model.transcription_model_id,
         name: model.codename,
+        description: resolveDescription(model.descriptions, locale) ?? undefined,
         isDefault: model.is_default,
       }));
     }
@@ -194,6 +195,7 @@ async function loadPersonalCatalogModels(
         .map((model) => ({
           id: model.speech_model_id,
           name: model.codename,
+          description: resolveDescription(model.descriptions, locale) ?? undefined,
           pricing: openRouterMediaRates(provider, "speech", model.codename),
           isDefault: model.is_default,
         }));
@@ -303,7 +305,8 @@ async function loadPersonalCatalogModels(
 export async function loadFallbackSelectionOptions(
   userId: number,
   provider: string,
-): Promise<Array<{ refKey: string; label: string }>> {
+  locale = "en-US",
+): Promise<Array<{ refKey: string; label: string; description?: string }>> {
   const customProvider = parseCustomProvider(provider);
   if (customProvider) {
     const endpoints = await llmProviderRepo.loadCustomEndpointsForUser(userId);
@@ -320,18 +323,53 @@ export async function loadFallbackSelectionOptions(
       }));
   }
 
-  const models =
-    (await llmModelRepo.loadAvailableModelsForProvider(
-      findProviderOption(provider)?.catalogProvider ?? provider,
-      false,
-      {
-        kind: "personal",
-        ownerId: userId,
-      },
-    )) ?? [];
-  return models
-    .filter((model) => typeof model.llm_id === "number" && model.llm_codename !== "other-model")
-    .map((model) => ({ refKey: `llm:${model.llm_id}`, label: model.llm_codename }));
+  const models = await loadPersonalCatalogModels(
+    userId,
+    findProviderOption(provider)?.catalogProvider ?? provider,
+    "text",
+    locale,
+  );
+  const choices = await describeProviderOptionModelChoices(provider, {
+    scope: { kind: "personal", ownerId: userId },
+    capability: "text",
+    locale,
+    choices: models.filter((model) => model.name !== "other-model"),
+  });
+  return choices.map((choice) => ({
+    refKey: `llm:${choice.id}`,
+    label: choice.name,
+    description: modelOptionDetail(locale, provider, choice),
+  }));
+}
+
+export async function loadPersonalFallbackDisplaySlots(
+  refs: readonly FallbackModelRef[],
+  locale: string,
+): Promise<PersonalConfigFallbackDisplaySlot[]> {
+  return Promise.all(
+    Array.from({ length: 5 }, async (_, index) => {
+      const ref = refs[index];
+      let modelName: string | null = null;
+      if (ref) {
+        try {
+          if (ref.type === "llm") {
+            const model = await llmModelRepo.loadById(ref.id);
+            const owner = getProviderOptionFallbackRefOwner(ref);
+            modelName = model
+              ? `${model.llm_codename}${owner || model.llm_provider === "openrouter" ? ` (${getProviderDisplayName(owner ?? model.llm_provider, locale)})` : ""}`
+              : null;
+          } else {
+            const endpoints = await llmProviderRepo.loadCustomEndpointsByIds([ref.id]);
+            modelName = endpoints[0]?.model_name ?? endpoints[0]?.label ?? null;
+          }
+        } catch {
+          modelName = null;
+        }
+        modelName ??= `${localizer(locale, "general.unknown")} (#${ref.id})`;
+      }
+      return { slot: index + 1, modelName };
+    }),
+  );
 }
 
 export async function loadPersonalModelDisplayInfo(
@@ -540,29 +578,7 @@ export async function loadPersonalModelDisplayInfo(
 
   const { fallback_model_refs: fallbackRefs, model_randomizer_enabled: randomizerEnabled } =
     await llmProviderRepo.loadPersonalFallbackSettings(userId);
-  const fallbackSlots: PersonalConfigFallbackDisplaySlot[] = [];
-
-  for (let slot = 1; slot <= 5; slot++) {
-    const ref = fallbackRefs[slot - 1];
-    let modelName: string | null = null;
-    if (ref) {
-      try {
-        if (ref.type === "llm") {
-          const m = await llmModelRepo.loadById(ref.id);
-          const owner = getProviderOptionFallbackRefOwner(ref);
-          modelName = m
-            ? `${m.llm_codename}${owner || m.llm_provider === "openrouter" ? ` (${getProviderDisplayName(owner ?? m.llm_provider, locale)})` : ""}`
-            : null;
-        } else if (ref.type === "custom_endpoint") {
-          const endpoints = await llmProviderRepo.loadCustomEndpointsByIds([ref.id]);
-          modelName = endpoints[0]?.model_name ?? endpoints[0]?.label ?? `Endpoint #${ref.id}`;
-        }
-      } catch {
-        modelName = null;
-      }
-    }
-    fallbackSlots.push({ slot, modelName });
-  }
+  const fallbackSlots = await loadPersonalFallbackDisplaySlots(fallbackRefs, locale);
 
   const canEnableRandomizer = fallbackRefs.length > 0;
 

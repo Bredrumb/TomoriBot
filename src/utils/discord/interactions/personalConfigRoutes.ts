@@ -11,6 +11,7 @@ import {
   getMemoryCount,
   getStmCount,
   loadAvailableModelsForCapability,
+  loadPersonalFallbackDisplaySlots,
   loadPersonalModelDisplayInfo,
   loadPersonaNamingPreference,
   loadUserSavedProviders,
@@ -149,8 +150,13 @@ const defaultDependencies: PersonalConfigRouteDependencies = {
     showRoutedRawModal(interaction, buildParameters1Modal(locale, nonce, provider, currentConfig)),
   showParameters2Modal: (interaction, locale, nonce, provider, currentConfig) =>
     showRoutedRawModal(interaction, buildParameters2Modal(locale, nonce, provider, currentConfig)),
-  showFallbacksModal: (interaction, locale, nonce, provider, availableOptions, currentRefs) =>
-    showRoutedRawModal(interaction, buildFallbacksModal(locale, nonce, provider, availableOptions, currentRefs)),
+  showFallbacksModal: async (interaction, locale, nonce, provider, availableOptions, currentRefs) => {
+    const slots = await loadPersonalFallbackDisplaySlots(currentRefs, locale);
+    await showRoutedRawModal(
+      interaction,
+      buildFallbacksModal(locale, nonce, provider, availableOptions, currentRefs, slots),
+    );
+  },
   showImpersonationModal: (interaction, locale, nonce, currentPrompt) =>
     showRoutedRawModal(interaction, buildImpersonationModal(locale, nonce, currentPrompt)),
   showSpotlightStep1Modal: (interaction, locale, nonce) =>
