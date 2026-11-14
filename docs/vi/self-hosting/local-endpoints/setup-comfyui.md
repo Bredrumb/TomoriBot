@@ -3,7 +3,7 @@ title: "Thiết lập: ComfyUI"
 aiGenerated: false
 sidebar:
   label: "ComfyUI"
-  order: 2
+  order: 3
 ---
 
 TomoriBot có thể tạo hình ảnh và video thông qua instance [ComfyUI](https://github.com/comfyanonymous/ComfyUI) của riêng bạn. Bot điều khiển ComfyUI bằng cách gửi một quy trình làm việc định dạng API với prompt/kích thước của bạn được thay thế vào, sau đó liên tục thăm dò endpoint `/history` của ComfyUI cho đến khi kết quả sẵn sàng.

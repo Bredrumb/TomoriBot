@@ -2,7 +2,7 @@
 title: "Setup: Local Decision Model"
 sidebar:
   label: "Local Decision Model"
-  order: 7
+  order: 2
 aiGenerated: true
 ---
 

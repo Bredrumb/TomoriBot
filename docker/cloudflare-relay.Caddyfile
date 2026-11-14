@@ -1,0 +1,49 @@
+{
+	admin off
+}
+
+(access_upstream) {
+	header_up -*
+	header_up Host engine.example.com
+	header_up Authorization "Bearer {env.ENGINE_API_KEY}"
+	header_up CF-Access-Client-Id {env.CF_ACCESS_CLIENT_ID}
+	header_up CF-Access-Client-Secret {env.CF_ACCESS_CLIENT_SECRET}
+	header_up Content-Type application/json
+	header_up Accept {http.request.header.Accept}
+	@redirect status 3xx
+	handle_response @redirect {
+		respond 502
+	}
+	@failure status 4xx 5xx
+	handle_response @failure {
+		respond "Upstream request failed" {rp.status_code}
+	}
+}
+
+relay.example.net {
+	@unauthorized not header Authorization "Bearer {env.ENGINE_API_KEY}"
+
+	@models {
+		method GET
+		path /v1/models
+	}
+	@chat {
+		method POST
+		path /v1/chat/completions
+	}
+
+	route {
+		respond @unauthorized 401
+		handle @models {
+			reverse_proxy https://engine.example.com {
+				import access_upstream
+			}
+		}
+		handle @chat {
+			reverse_proxy https://engine.example.com {
+				import access_upstream
+			}
+		}
+		respond 404
+	}
+}

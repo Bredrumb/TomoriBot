@@ -125,7 +125,7 @@ OpenCode Go (`https://opencode.ai/zen/go/v1`) và OpenCode Zen (`https://opencod
 
 - [Thiết lập: LLM cục bộ](/vi/self-hosting/local-endpoints/setup-local-llm/): Ollama, KoboldCPP, LM Studio, vLLM, LiteLLM.
 - [Thiết lập: ComfyUI](/vi/self-hosting/local-endpoints/setup-comfyui/): tạo hình ảnh và video cục bộ.
-- [Thiết lập: ChatMock](/vi/self-hosting/local-endpoints/setup-chatmock/): Tài khoản ChatGPT hoặc Codex CLI.
+- [Thiết lập: ChatMock](/vi/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/): Tài khoản ChatGPT hoặc Codex CLI.
 
 ## Các nhà cung cấp được hỗ trợ
 <!-- anchor: supported-providers -->
@@ -145,7 +145,7 @@ Nếu bạn không có phần cứng để lưu trữ các model của riêng m�
 | Z.ai | ✅ | ✅ | ✅ | - | Model miễn phí; 🟡 ToS = chỉ sử dụng mã hóa và tác nhân |
 | Mã hóa Z.ai | ✅ | ✅ | - | - | Gói đăng ký |
 | Google Vertex AI | ✅ | ✅ | ✅ | ✅ | Bao gồm phiên bản Express 'miễn phí' |
-| Codex CLI (thông qua ChatMock) | ✅ | ✅ | ✅ | - | [Thiết lập](/vi/self-hosting/local-endpoints/setup-chatmock/) |
+| Codex CLI (thông qua ChatMock) | ✅ | ✅ | ✅ | - | [Thiết lập](/vi/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/) |
 
 ### Tạo hình ảnh
 

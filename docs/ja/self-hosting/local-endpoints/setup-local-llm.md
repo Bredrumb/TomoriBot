@@ -142,7 +142,7 @@ TomoriBotは任意のOpenAI互換エンドポイントをサポートしてい�
 ### ChatMock（ChatGPTアカウント / Codex CLI）
 
 システムプロンプトの回避策があるため、独自の専用ガイドがあります：
-[セットアップ: ChatMock](/self-hosting/local-endpoints/setup-chatmock/)。
+[セットアップ: ChatMock](/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/)。
 
 ## Hugging Faceからのモデルの選択
 
@@ -159,6 +159,7 @@ Ollamaの厳選されたライブラリに加えて、[Hugging Face](https://hug
 ## 注意事項と落とし穴
 <!-- anchor: notes--gotchas -->
 
+- **ボットを別の場所でホストしている場合：** [Cloudflareによる安全なリモートアクセス](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/)に従ってください。本番ボットは `127.0.0.1` 経由でお使いのPCに到達できません。このガイドでは、Accessサービス認証と認証付きリレーによって公開ホスト名を保護します。
 - **1つのラベルにつき1つのエンドポイント項目：** 1つのサーバーを共有する複数のモデルを登録するには、保存したエンドポイントを選択し、モデルのドロップダウンを再度使用します。まったく異なるサーバーまたはAPIプロトコルには別々のラベルを使用してください。
 - **モデル名はAPI識別子です：** サーバーに送信される正確な文字列です。これを間違えることが、「接続できたが応答に失敗する」最も一般的な原因です。
 - **TomoriBotをDockerで実行している場合：** コンテナ内の `localhost` はホストではありません。`http://host.docker.internal:<port>`（Windows/macOS）またはホストのLAN IPを使用し、モデルサーバーを `0.0.0.0` にバインドしてください。

@@ -147,7 +147,7 @@ TomoriBot 支持任何兼容 OpenAI 的端点，但推荐使用以下服务器�
 ### ChatMock（ChatGPT 账户 / Codex CLI）
 
 由于需要系统提示词兼容处理，它配有专用的配置指南：
-[配置：ChatMock](/self-hosting/local-endpoints/setup-chatmock/)。
+[配置：ChatMock](/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/)。
 
 ## 从 Hugging Face 挑选模型
 
@@ -168,6 +168,8 @@ TomoriBot 支持任何兼容 OpenAI 的端点，但推荐使用以下服务器�
 ## 注意事项与踩坑点
 <!-- anchor: notes-gotchas -->
 
+- **Bot 独立托管在其他地方？** 请参阅[通过 Cloudflare 安全地远程访问](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/)。
+  生产环境中的 bot 无法通过 `127.0.0.1` 访问你的电脑；该指南会使用 Access 服务身份验证和经过身份验证的中继来保护公网主机名。
 - **每个标签对应一个端点条目**：若要注册共享同一服务器的多个模型，请选中已保存的端点并再次使用其模型下拉菜单。对于真正不同的服务器或 API 协议，请使用不同的标签。
 - **模型名称是 API 标识符**：它是发送给服务器的确切字符串。填写错误是“连接成功但回复失败”最常见的原因。
 - **在 Docker 中运行 TomoriBot？** 容器内的 `localhost` 不是你的宿主机。请使用

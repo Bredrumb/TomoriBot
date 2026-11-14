@@ -2,7 +2,7 @@
 title: "PluralBuddy OAuth設定"
 description: "承認されたPluralBuddyインスタンスからのメッセージを検証するように、セルフホストのTomoriBotを認証します。"
 sidebar:
-  order: 8
+  order: 7
 ---
 
 セルフホストのTomoriBotは、公式サービスおよび承認された各カスタムインスタンスに対して認証済みのPluralBuddyアプリケーションを必要とします。

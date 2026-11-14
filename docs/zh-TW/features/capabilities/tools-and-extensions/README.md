@@ -132,7 +132,7 @@ Brave → SearXNG → DuckDuckGo
 
 ### 本機MCP伺服器
 
-本機MCP伺服器只支援自架執行個體：公開託管的bot要求HTTPS，並封鎖本機與私人位址。如果你自己跑執行個體，請看[設定：本機MCP伺服器](/zh-TW/self-hosting/local-endpoints/setup-local-mcp/)。
+本機MCP伺服器只支援自架執行個體：公開託管的bot要求HTTPS，並封鎖本機與私人位址。如果你自己跑執行個體，請看[設定：本機MCP伺服器](/zh-TW/self-hosting/mcp-servers/setup-local-mcp/)。
 
 :::danger[只新增你信任的MCP伺服器]
 惡意的MCP伺服器可以用隱藏的指示對她進行提示詞注入、外洩使用者傳給它工具的資料，或回傳有害或錯誤的結果，再由她轉達到你伺服器。把MCP伺服器當成瀏覽器擴充功能看待：有疑慮就不要新增。新增之前一定要先檢視MCP所描述的工具。

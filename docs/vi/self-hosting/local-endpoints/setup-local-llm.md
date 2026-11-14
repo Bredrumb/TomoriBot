@@ -141,7 +141,7 @@ TomoriBot hỗ trợ bất kỳ endpoint nào tương thích với OpenAI, nhưn
 ### ChatMock (tài khoản ChatGPT / Codex CLI)
 
 Có hướng dẫn chuyên biệt riêng do giải pháp thay thế prompt system:
-[Thiết lập: ChatMock](/self-hosting/local-endpoints/setup-chatmock/).
+[Thiết lập: ChatMock](/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/).
 
 ## Chọn model từ Hugging Face
 
@@ -158,6 +158,9 @@ Lượng hóa lưu trữ từng trọng số bằng ít bit hơn để thu nhỏ
 ## Lưu ý và các vấn đề thường gặp
 <!-- anchor: notes--gotchas -->
 
+- **Bot được lưu trữ riêng?** Làm theo [Truy cập từ xa an toàn qua Cloudflare](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/).
+  Một bot production không thể chạm tới máy tính của bạn qua `127.0.0.1`; hướng dẫn này bảo vệ hostname công khai
+  bằng xác thực dịch vụ Access và một relay có xác thực.
 - **Một mục endpoint cho mỗi nhãn.** Để đăng ký nhiều model dùng chung một máy chủ, hãy chọn endpoint đã lưu và sử dụng lại dropdown model của nó. Sử dụng các nhãn riêng biệt cho các máy chủ hoặc giao thức API thực sự khác nhau.
 - **Model Name là định danh API.** Đây là chuỗi chính xác được gửi đến máy chủ. Điền sai tên này là nguyên nhân phổ biến nhất dẫn đến tình trạng "kết nối được nhưng phản hồi thất bại".
 - **Chạy TomoriBot trong Docker?** `localhost` bên trong container không phải là máy chủ lưu trữ của bạn. Hãy sử dụng `http://host.docker.internal:<port>` (Windows/macOS) hoặc IP mạng LAN của máy chủ lưu trữ, và liên kết máy chủ model với `0.0.0.0`.

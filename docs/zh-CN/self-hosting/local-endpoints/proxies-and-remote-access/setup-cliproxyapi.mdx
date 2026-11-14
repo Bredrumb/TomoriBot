@@ -1,0 +1,367 @@
+---
+title: "配置：CLIProxyAPI"
+sidebar:
+  label: "CLIProxyAPI"
+  order: 2
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+通过本地 Chat Completions 代理 [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) 将 TomoriBot 连接到已获授权的上游服务。
+
+:::caution[使用 CLI 账号代理需自行承担风险]
+通过 Codex、Claude Code、Antigravity 或其他 CLI 账号进行第三方访问可能违反提供方条款，并存在账号被封禁的风险。订阅并不代表获得了用于 bot 或 API 的授权。登录前请先查阅[各提供方限制说明与 API 替代方案](/self-hosting/local-endpoints/proxies-and-remote-access/#account-risk)。Google 的 Antigravity 条款明确禁止通过 Antigravity OAuth 进行第三方访问。
+:::
+
+## 1. 安装 CLIProxyAPI
+
+1. 使用官方的[最新稳定版本](https://github.com/router-for-me/CLIProxyAPI/releases/latest)。下列示例会同时下载压缩包及对应的校验和文件。
+2. 在归你当前账号所有的空文件夹中打开终端：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+在 PowerShell 中运行。在 ARM64 架构的 Windows 上，请将 `windows_amd64` 替换为 `windows_aarch64`。
+
+```powershell
+$release = Invoke-RestMethod 'https://api.github.com/repos/router-for-me/CLIProxyAPI/releases/latest'
+$asset = @($release.assets | Where-Object name -Like 'CLIProxyAPI_*_windows_amd64.zip')
+$checksums = @($release.assets | Where-Object name -EQ 'checksums.txt')
+if ($asset.Count -ne 1 -or $checksums.Count -ne 1) { throw 'Check the release assets before continuing' }
+$archive = $asset[0].name
+$release.tag_name
+Invoke-WebRequest $asset[0].browser_download_url -OutFile $archive
+Invoke-WebRequest $checksums[0].browser_download_url -OutFile checksums.txt
+$expected = ((Select-String -Path checksums.txt -Pattern ([regex]::Escape($archive) + '$')).Line -split '\s+')[0]
+if (!$expected -or (Get-FileHash $archive -Algorithm SHA256).Hash -ine $expected) {
+  throw 'Archive checksum mismatch'
+}
+Expand-Archive -LiteralPath $archive -DestinationPath .\app
+Set-Location .\app
+.\cli-proxy-api.exe --help
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+此脚本会自动选择 x86-64 或 ARM64 压缩包。请查看该版本的系统要求；基于 musl 的系统需要使用其 `no-plugin` 构建版本。
+
+```bash
+case "$(uname -m)" in
+  x86_64) arch=amd64 ;;
+  aarch64|arm64) arch=aarch64 ;;
+  *) arch=''; printf 'Unsupported architecture\n' >&2 ;;
+esac
+if [ -n "$arch" ] && release_page=$(curl --fail --silent --show-error --head --location \
+    --output /dev/null --write-out '%{url_effective}' \
+    'https://github.com/router-for-me/CLIProxyAPI/releases/latest'); then
+  release_tag=${release_page##*/}
+  release_version=${release_tag#v}
+  archive="CLIProxyAPI_${release_version}_linux_${arch}.tar.gz"
+  release_url="https://github.com/router-for-me/CLIProxyAPI/releases/download/$release_tag"
+  printf 'Selected release: %s\n' "$release_tag"
+  if curl --fail --location "$release_url/$archive" --output "$archive" &&
+     curl --fail --location "$release_url/checksums.txt" --output checksums.txt; then
+    expected=$(awk -v file="$archive" '$2 == file { print $1 }' checksums.txt)
+    actual=$(sha256sum "$archive" | awk '{ print $1 }')
+    if [ -n "$expected" ] && [ "$actual" = "$expected" ]; then
+      mkdir app && tar -xzf "$archive" -C app && cd app && ./cli-proxy-api --help
+    else
+      printf 'Archive checksum mismatch; stop here.\n' >&2
+    fi
+  fi
+fi
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+在 macOS 的「终端」中运行。此脚本会自动选择 Apple Silicon 或 Intel 架构，并使用显式配置路径，而非 Homebrew 的默认服务配置。
+
+```bash
+case "$(uname -m)" in
+  arm64) arch=aarch64 ;;
+  x86_64) arch=amd64 ;;
+  *) arch=''; printf 'Unsupported architecture\n' >&2 ;;
+esac
+if [ -n "$arch" ] && release_page=$(curl --fail --silent --show-error --head --location \
+    --output /dev/null --write-out '%{url_effective}' \
+    'https://github.com/router-for-me/CLIProxyAPI/releases/latest'); then
+  release_tag=${release_page##*/}
+  release_version=${release_tag#v}
+  archive="CLIProxyAPI_${release_version}_darwin_${arch}.tar.gz"
+  release_url="https://github.com/router-for-me/CLIProxyAPI/releases/download/$release_tag"
+  printf 'Selected release: %s\n' "$release_tag"
+  if curl --fail --location "$release_url/$archive" --output "$archive" &&
+     curl --fail --location "$release_url/checksums.txt" --output checksums.txt; then
+    expected=$(awk -v file="$archive" '$2 == file { print $1 }' checksums.txt)
+    actual=$(shasum -a 256 "$archive" | awk '{ print $1 }')
+    if [ -n "$expected" ] && [ "$actual" = "$expected" ]; then
+      mkdir app && tar -xzf "$archive" -C app && cd app && ./cli-proxy-api --help
+    else
+      printf 'Archive checksum mismatch; stop here.\n' >&2
+    fi
+  fi
+fi
+```
+
+如果 macOS 阻止运行该可执行文件，请参考 [Apple 官方指南](https://support.apple.com/en-us/102445)，并在批准前核实发布者身份。
+
+</TabItem>
+</Tabs>
+
+3. 确认帮助信息与你下载的版本一致，并且包含 `--config` 参数。配置前，请先将压缩包内的 `config.example.yaml` 与下方 v8 配置结构进行对比；若配置结构有所不同，请以对应版本自带的示例为准。
+
+- 请同时从官方发布页面下载压缩包和校验和文件。校验和用于检测文件损坏；运行代码前请先确认发布者。
+- 如需了解其他安装方式，请查阅上游[快速入门](https://help.router-for.me/introduction/quick-start)；通过包管理器安装时，配置文件路径可能会有所不同。
+
+## 2. 配置本地监听
+
+1. 在私有编辑器中，于可执行文件同级目录下创建 `config.yaml`。
+2. 使用密码管理器生成至少 32 字节的随机内容，编码为十六进制或 base64，替换掉客户端密钥占位符。
+3. 将该文件夹与凭据目录的访问权限仅限制为你自己的账号以及运行进程的账号。不要把它们放进 Git 仓库或共享文件夹。
+
+```yaml
+config-version: 8
+server:
+  host: "127.0.0.1"
+  port: 8317
+  discovery:
+    enabled: false
+management:
+  allow-remote: false
+  secret-key: ""
+  disable-control-panel: true
+access:
+  api-keys:
+    - "REPLACE_WITH_RANDOM_CLIENT_KEY"
+oauth:
+  auth-dir: "~/.cli-proxy-api"
+```
+
+- 将管理密钥留空会禁用 `/v0/management` 和 `/v8/management`。请不要设置 `MANAGEMENT_PASSWORD`，也不要使用 `--password` 和管理 TUI。
+- 在隧道后方也请保持管理功能禁用：隧道连接器同样是通过环回地址访问引擎的。
+
+4. 添加一个已获授权的后端。对于兼容 OpenAI 的 API，请将下方独立的顶层配置块合并进去，并替换为实际的 URL、密钥和模型 ID：
+
+```yaml
+api-keys:
+  openai-compatibility:
+    - name: "authorized-backend"
+      base-url: "https://api.example.com/v1"
+      keys:
+        - api-key: "REPLACE_WITH_UPSTREAM_KEY"
+      models:
+        - name: "upstream-model-id"
+          alias: "home-chat"
+```
+
+| 密钥位置 | 用途 |
+|---|---|
+| `access.api-keys` | TomoriBot 向 CLIProxyAPI 进行身份验证 |
+| 顶层 `api-keys` | CLIProxyAPI 向上游进行身份验证 |
+
+请替换所有示例值，并只启用你需要的后端。
+
+### 账号登录替代方案
+
+- 可用的参数包括 Gemini CLI 的 `--login`、Claude 的 `--claude-login`，以及 Codex 的 `--codex-login` / `--codex-device-login`。运行 `--help` 可查看其他提供方的专用参数。
+- 仅当提供方明确授权该桥接方式时再使用账号登录。请仔细查看授权同意界面及所请求的权限；不同提供方请求的权限范围各不相同。
+- 登录命令与服务器启动命令必须传入完全相同的 `--config` 绝对路径。刷新凭据保存在 `oauth.auth-dir` 中（此处为你个人目录下的 `.cli-proxy-api` 文件夹）。
+- 让临时 OAuth 回调监听保持在本地。如果要撤销访问权限，请在上游账号设置中取消授权，停止代理，然后删除本地凭据文件。仅删除文件并不会使令牌失效。
+- 虽然存在 `--antigravity-login` 参数，但它与上文提到的 Google 限制冲突。此处不提供 Antigravity 登录流程；该功能在实现中会请求范围广泛的 Cloud Platform、个人资料与邮箱、AI 代码、日志以及实验与配置权限。
+
+## 3. 启动并在本地测试
+
+1. 启动服务器：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$configPath = (Resolve-Path .\config.yaml).Path
+.\cli-proxy-api.exe --config $configPath
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+./cli-proxy-api --config "$(pwd)/config.yaml"
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+./cli-proxy-api --config "$(pwd)/config.yaml"
+```
+
+</TabItem>
+</Tabs>
+
+2. 在另一个终端窗口中验证监听地址：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+Get-NetTCPConnection -State Listen -LocalPort 8317 |
+  Select-Object LocalAddress, LocalPort, OwningProcess
+```
+
+在 `wf.msc` 中检查现有的防火墙允许规则。
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+ss -ltnp 'sport = :8317'
+```
+
+检查你的发行版防火墙策略，确保没有不必要的入站暴露。
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+lsof -nP -iTCP:8317 -sTCP:LISTEN
+```
+
+在 macOS「系统设置」中检查防火墙选项。
+
+</TabItem>
+</Tabs>
+
+   监听地址应当只有 `127.0.0.1`。如果看到 `0.0.0.0`、`::`、`*` 或局域网地址，请立即停止。不要添加入站防火墙放行或路由器端口转发规则。
+
+3. 以私密方式读取客户端密钥并列出模型。保持此终端打开，用于下一步请求测试。在加载密钥前，请关闭 Shell 命令追踪或 PowerShell 脚本记录。
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$secret = Read-Host 'CLIProxyAPI client key' -AsSecureString
+$engineKey = [Net.NetworkCredential]::new('', $secret).Password
+$headers = @{ Authorization = "Bearer $engineKey" }
+$base = 'http://127.0.0.1:8317/v1'
+$models = Invoke-RestMethod "$base/models" -Headers $headers
+$models.data | Select-Object id
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+密钥会在关闭回显的情况下读取，并通过标准输入传给 curl，避免出现在进程参数中。
+
+```bash
+set +x
+printf 'CLIProxyAPI client key: '
+read -r -s engine_key
+printf '\n'
+base='http://127.0.0.1:8317/v1'
+printf 'header = "Authorization: Bearer %s"\n' "$engine_key" |
+  curl --config - --fail --silent --show-error "$base/models"
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+密钥会在关闭回显的情况下读取，并通过标准输入传给 curl，避免出现在进程参数中。
+
+```bash
+set +x
+printf 'CLIProxyAPI client key: '
+read -r -s engine_key
+printf '\n'
+base='http://127.0.0.1:8317/v1'
+printf 'header = "Authorization: Bearer %s"\n' "$engine_key" |
+  curl --config - --fail --silent --show-error "$base/models"
+```
+
+</TabItem>
+</Tabs>
+
+4. 在同一文件夹中将以下内容保存为 `request.json`。将 `REPLACE_WITH_MODEL_ID` 替换为列表中出现的精确 ID，然后在同一个终端中运行请求：
+
+```json
+{
+  "model": "REPLACE_WITH_MODEL_ID",
+  "messages": [{ "role": "user", "content": "Reply with hello." }],
+  "stream": false
+}
+```
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$reply = Invoke-RestMethod "$base/chat/completions" -Method Post -Headers $headers -ContentType 'application/json' -InFile .\request.json
+$reply.choices.message.content
+Remove-Variable engineKey, secret, headers
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+printf 'header = "Authorization: Bearer %s"\n' "$engine_key" |
+  curl --config - --fail --silent --show-error "$base/chat/completions" \
+    --header 'Content-Type: application/json' --data-binary @request.json
+unset engine_key
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+printf 'header = "Authorization: Bearer %s"\n' "$engine_key" |
+  curl --config - --fail --silent --show-error "$base/chat/completions" \
+    --header 'Content-Type: application/json' --data-binary @request.json
+unset engine_key
+```
+
+</TabItem>
+</Tabs>
+
+- 模型列表为空表示尚未配置可用的后端或模型。
+- 列表中出现的模型仍需通过一次补全测试；工具调用和图像输入也需要单独测试。
+
+## 4. 注册并选择模型
+
+1. 运行 `/providers`（服务器管理员）或 `/personal providers`（你自己的连接）。
+2. 选择 `+ 添加新自定义端点` 并填入：
+
+| 字段 | 值 |
+|---|---|
+| 端点标签 | 一个私下使用的连接名称，例如 `home-proxy` |
+| API 兼容性 | `OpenAI 兼容` |
+| 端点 URL（非生产环境下 bot 与代理同机） | `http://127.0.0.1:8317/v1` |
+| 端点 URL（独立托管的生产环境 bot） | 完成 [Cloudflare 指南](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/)后配置的已认证中继 HTTPS 基础地址，例如 `https://relay.example.net/v1` |
+| 认证令牌 | CLIProxyAPI 客户端密钥；此配置下为必填项 |
+
+3. 选中已保存的端点，添加`文本模型`，并填入 `/v1/models` 中的精确 ID 或别名。
+4. 在完成测试之前，将`上下文窗口`留空，并保持所有能力开关处于关闭状态。视频功能保持关闭。
+5. 如需使用其他模型，请在同一端点下继续添加其 ID，然后在模型面板中切换选中。TomoriBot 会探测 `/v1/models`，但不会自动导入列表。
+
+- 同机开发时需要在 TomoriBot 的环境变量中设置 `ALLOW_PRIVATE_NETWORK=127.0.0.1:8317`。
+- 在 Docker 中，环回地址指向容器自身，因此容器无法通过自身的 `127.0.0.1` 访问宿主机监听。
+- 生产环境需要公网 HTTPS 和公网 DNS 解析结果。注册远程 URL 前，请先完成 [Cloudflare Tunnel 指南](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/)并部署其中继服务。
+
+## 能力与故障排查
+
+- 本地协议测试覆盖文本生成、流式传输、每轮单次函数调用及续写，以及非流式 JSON。实际 OAuth 流程、付费上游、视觉识别质量与 Schema 遵循度未经测试。
+- CLIProxyAPI 在 8317 端口上可以直接接收系统消息，无需 ChatMock 的兼容处理。
+- 除非确认后端每轮只产生一次工具调用，否则请关闭工具调用。目前不支持并行批量工具调用。
+- 需要回放提供方专属推理签名的模型必须单独验证。通用自定义聊天不支持视频，也不使用 Responses API。
+
+| 症状 | 处理方式 |
+|---|---|
+| `401` | 核对客户端密钥（注意与上游密钥区分）。 |
+| `404` | 使用 `/v1` 基础路径，不要包含 `/chat/completions`；同时核对模型 ID。 |
+| 参数被拒绝 | 将上下文窗口覆盖留空，并将推理保持在 Auto；在开始输出前，TomoriBot 本身就会对符合条件的参数拒绝进行重试。在开启工具调用或依赖采样参数前，先检查日志中是否存在降级请求。 |
+| `403`、HTML 登录页或隧道错误 | 完成[Access 与中继验证](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/#validate-each-authentication-check)。直接访问受 Access 保护的主机名需要额外的请求头，Discord 面板无法直接提供。 |
+| 流式输出中断 | 检查电脑是否休眠、上游配额、隧道健康状况，以及 Cloudflare 指南中提到的流式传输限制。 |
+
+除非正在排查经过脱敏的本地复现问题，否则请保持请求/调试日志关闭。如果客户端密钥泄露，请在 CLIProxyAPI、TomoriBot 已保存的端点以及生产中继中同时轮换密钥。若上游凭据泄露，请另行撤销。

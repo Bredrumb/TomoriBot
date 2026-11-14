@@ -9,9 +9,7 @@ aiGenerated: false
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
 
-完全可以把一套 TomoriBot 实例的所有环节都跑在本地，从文本生成到 MCP 工具都是如此。下面每个
-端点要么与 OpenAI 兼容，要么是一个很小的参考封装程序，通过
-`/providers` 指令注册，并加密存储在数据库里（不需要 `.env`）。
+你可以在自己的机器上运行文本生成、媒体引擎和 MCP 工具。通过 `/providers` 或 `/personal providers` 注册模型连接；保存的 API 密钥会加密存储在数据库中。如果引擎运行在另一台机器上，还需要配合下方的远程访问设置。
 挑一个你要配置的功能：
 
 ## 文本与嵌入
@@ -19,8 +17,6 @@ import { CardGrid, LinkCard } from "@astrojs/starlight/components";
 <CardGrid>
   <LinkCard title="本地 LLM" href="/zh-CN/self-hosting/local-endpoints/setup-local-llm/"
     description="任何与 OpenAI 兼容的服务器，例如 Ollama、KoboldCPP、LM Studio、vLLM 或 LiteLLM，用于文本生成与嵌入。" />
-  <LinkCard title="通过 ChatMock 使用 Codex CLI" href="/zh-CN/self-hosting/local-endpoints/setup-chatmock/"
-    description="一个本地 OpenAI 兼容桥接层，让 TomoriBot 可以使用 Codex CLI 的模型。" />
 </CardGrid>
 
 ## 图像与视频
@@ -51,10 +47,23 @@ import { CardGrid, LinkCard } from "@astrojs/starlight/components";
 ## 自定义工具
 
 <CardGrid>
-  <LinkCard title="slop-guard" href="/zh-CN/self-hosting/local-endpoints/setup-slop-guard/"
+  <LinkCard title="slop-guard" href="/zh-CN/self-hosting/mcp-servers/setup-slop-guard/"
     description="一个基于规则的文本校对器，回复审核可将其用作规则检查器。" />
-  <LinkCard title="本地 MCP 服务器" href="/zh-CN/self-hosting/local-endpoints/setup-local-mcp/"
+  <LinkCard title="本地 MCP 服务器" href="/zh-CN/self-hosting/mcp-servers/setup-local-mcp/"
     description="运行一个本地 MCP 服务器，用你自己的工具扩展 TomoriBot（仅限自部署实例）。" />
+</CardGrid>
+
+## 代理与远程访问
+
+通过第三方桥接使用 CLI 账号之前，请先查看[账号风险](/self-hosting/local-endpoints/proxies-and-remote-access/#account-risk)。
+
+<CardGrid>
+  <LinkCard title="通过 ChatMock 使用 Codex CLI" href="/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/"
+    description="在本机连接已获授权的 ChatGPT 桥接服务。" />
+  <LinkCard title="CLIProxyAPI" href="/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/"
+    description="安装本地代理并从已获授权的上游注册模型。" />
+  <LinkCard title="Cloudflare Tunnel" href="/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/"
+    description="通过 Access 身份验证与中继服务，让生产环境中的 bot 访问家中的引擎。" />
 </CardGrid>
 
 ## 用 `bun run launch` 启动本地服务器

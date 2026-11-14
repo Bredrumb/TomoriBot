@@ -141,7 +141,7 @@ TomoriBot admite cualquier punto de conexión compatible con OpenAI, pero se rec
 ### ChatMock (cuenta de ChatGPT / CLI de Codex)
 
 Cuenta con su propia guía dedicada debido a un ajuste necesario para el prompt del sistema:
-[Configuración: ChatMock](/self-hosting/local-endpoints/setup-chatmock/).
+[Configuración: ChatMock](/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/).
 
 ## Elección de modelos en Hugging Face
 
@@ -158,6 +158,9 @@ La cuantización almacena cada peso en menos bits para reducir el modelo, con un
 ## Notas y problemas comunes
 <!-- anchor: notes--gotchas -->
 
+- **¿Bot alojado por separado?** Sigue [Acceso remoto seguro mediante Cloudflare](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/).
+  Un bot en producción no puede alcanzar tu PC mediante `127.0.0.1`; la guía protege el nombre de host público
+  con autenticación de servicio de Access y un relé autenticado.
 - **Una entrada de punto de conexión por etiqueta.** Para registrar varios modelos que comparten el mismo servidor, selecciona el punto de conexión guardado y utiliza su menú desplegable de modelos nuevamente. Usa etiquetas distintas para servidores o protocolos de API realmente diferentes.
 - **El Nombre del modelo es el identificador de API.** Es la cadena exacta enviada al servidor. Escribirlo mal es la causa más frecuente de que "se conectó pero las respuestas fallan".
 - **¿Ejecutas TomoriBot en Docker?** `localhost` dentro del contenedor no es tu host. Usa `http://host.docker.internal:<port>` (Windows/macOS) o la IP de la red local del host, y vincula el servidor de modelos a `0.0.0.0`.

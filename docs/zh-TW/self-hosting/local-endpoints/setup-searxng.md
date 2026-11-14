@@ -2,7 +2,7 @@
 title: "設定：SearXNG"
 sidebar:
   label: "SearXNG"
-  order: 3
+  order: 4
 aiGenerated: true
 ---
 

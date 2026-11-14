@@ -2,7 +2,7 @@
 title: "配置：ComfyUI"
 sidebar:
   label: "ComfyUI"
-  order: 2
+  order: 3
 aiGenerated: false
 ---
 

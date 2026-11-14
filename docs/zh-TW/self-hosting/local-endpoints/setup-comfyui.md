@@ -3,7 +3,7 @@ title: "設定：ComfyUI"
 aiGenerated: false
 sidebar:
   label: "ComfyUI"
-  order: 2
+  order: 3
 ---
 
 TomoriBot 可以透過你自己的

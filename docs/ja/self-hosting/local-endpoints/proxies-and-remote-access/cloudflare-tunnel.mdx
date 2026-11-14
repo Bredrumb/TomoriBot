@@ -1,0 +1,553 @@
+---
+title: "Cloudflare Tunnel"
+sidebar:
+  label: "Cloudflare Tunnel"
+  order: 3
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Cloudflare Tunnel、Accessサービス認証、および認証付きCaddyリレーを使用して、別の場所でホストされているTomoriBotをWindows、Linux、またはMacコンピューター上のエンジンに接続します。
+
+このガイドは、[CLIProxyAPI](/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/)、KoboldCPP、Ollama、LM StudioなどのChat Completionsエンジン向けです。その他のプロトコルについては、以下のエンジンに関する注意事項を参照してください。
+
+:::note[最初にリレーをデプロイする]
+提供されているCaddyfileは設定のみです。本番デプロイ環境では、明示的にCaddyを起動し、シークレットを読み込み、HTTPSホスト名を提供する必要があります。ファイルを `docker/` に追加したり、TomoriBotをビルドしたり、Discordエンドポイントを登録したりするだけでは、リレーは起動しません。そのURLを使用する前に、デプロイ管理者にステップ4を完了してもらってください。
+:::
+
+## アーキテクチャと前提条件
+
+```text
+Production host                              Local computer
+TomoriBot -> HTTPS Caddy relay -> Cloudflare Access -> Tunnel -> cloudflared -> engine
+            Bearer key check      service token                  HTTP loopback
+                                  + engine Bearer key             127.0.0.1
+```
+
+準備するもの：
+
+- Cloudflare上で有効なドメインと、DNS、Tunnel、Accessアプリケーションを管理する権限。
+- 動作するローカルエンジンと、使用を認可されたモデル。
+- エンジンのPC上の `cloudflared` と、Cloudflareへのアウトバウンド接続（QUICまたはHTTP/2用のポート7844）。
+- 本番デプロイ環境のシークレットストアの制御権限と、そこで[Caddy](https://caddyserver.com/docs/install)を実行する権限。
+- 2つのHTTPSホスト名：保護されたトンネル用の `engine.example.com` と、Caddy用の `relay.example.net`。これらのプレースホルダーは、ご自身が管理するホスト名に置き換えてください。
+- 公開DNS、有効なTLS証明書、およびリレー用の本番HTTPSイングレス。この構成には、これらを提供できるホストが必要です。
+
+認証チェックは個別に実行されます：
+
+1. TomoriBotは、保存されているエンジンキーを `Authorization: Bearer ...` としてリレーに送信します。
+2. リレーはそのキーを検証し、エンジン向けに保持したうえで、`CF-Access-Client-Id` と `CF-Access-Client-Secret` を付加します。TomoriBotのエンドポイントパネルでは、これらの追加ヘッダーを直接送信できません。
+3. Cloudflare Accessがサービストークンを検証し、エンジンが認証に対応している場合はエンジン側でも独立してキーを検証します。
+
+この接続には専用の長いランダムキーを使用してください。このキーを持つ者は誰でもリレーを使用できます。Cloudflareはリレーのサービストークンを識別します。Discordユーザーの権限管理は引き続きTomoriBot側の責務です。
+
+## 1. ローカルオリジンを保護する
+
+1. エンジンのセットアップガイドに従い、`127.0.0.1` にバインドします。[CLIProxyAPIの例](/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/)ではポート8317を使用していますが、このガイド全体を通じてご自身のエンジンのポートに置き換えてください。
+2. 対応している場合は、長いランダムな推論キーを設定します。管理パスワードは別にしておき、不要なダッシュボード、ディスカバリー、管理APIは無効化します。
+3. リスナーとファイアウォールプロファイルを確認します：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+Get-NetTCPConnection -State Listen -LocalPort 8317 |
+  Select-Object LocalAddress, LocalPort, OwningProcess
+Get-NetFirewallProfile | Select-Object Name, Enabled, DefaultInboundAction
+```
+
+`wf.msc` で実行ファイルやポートの許可ルールを確認します。
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+ss -ltnp 'sport = :8317'
+```
+
+不要なインバウンド許可ルールがないか、ディストリビューションのファイアウォールポリシーを確認します。
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+lsof -nP -iTCP:8317 -sTCP:LISTEN
+```
+
+macOSのシステム設定でファイアウォールオプションを確認します。
+
+</TabItem>
+</Tabs>
+
+4. `127.0.0.1:8317` のみがリッスンされていることを確認します。IPv4またはIPv6がすべてのインターフェース（`0.0.0.0` または `::`）やLANアドレスでリッスンしている場合は停止してください。
+5. 不要なインバウンド公開を削除します。ルーターのポートフォワーディングやエンジン用のファイアウォール例外を追加しないでください。
+6. エンジンキーを使用して、ローカルで `/v1/models` と小規模な補完リクエストを1回テストします。
+
+`cloudflared` はこの同じPC上で実行してください。本番ボットの `127.0.0.1` はボット自身のマシンを指します。
+
+## 2. DNSを公開する前にAccess保護を作成する
+
+Cloudflare Oneダッシュボードで、[サービストークンの手順](https://developers.cloudflare.com/cloudflare-one/access-controls/service-credentials/service-tokens/)に従います：
+
+1. `Access controls` > `Service credentials` > `Service tokens` で、この本番リレー用のトークンを、管理可能な有効期限で1つ作成します。Client IDとClient Secretは本番シークレットストアに直接保存してください。シークレットは作成時にのみ表示されます。
+2. `Access controls` > `Applications` で、パス制限なしでホスト名 `engine.example.com` 全体を対象とした `Self-hosted` アプリケーションを追加します。
+3. アクションが `Service Auth` で、種類が `Service Token` の `Include` ルールを持ち、作成したトークンのみを選択したポリシーをアタッチします。広範な `Allow` や `Bypass` ポリシーは削除し、別のパスで保護をバイパスするより具体的なアプリケーションが存在しないことを確認します。
+4. アプリケーションを保存し、コネクタ検証用にApplication Audience（AUD）タグとCloudflare Oneチーム名を控えます。トンネルルートを公開する前に、この保護を有効な状態にしておいてください。
+
+- この無人のクライアントには `Service Auth` を使用してください。ブラウザーログイン、ブラウザーCookie、IP許可リスト、広範なBypassルールはこの認証を提供しません。
+- Accessサービストークンはリレーを識別します。トンネル認証情報JSONまたはコネクタトークンは、`cloudflared` にトンネルを実行する権限を与えます。これらは別個に管理してください。
+- 他のクライアントについてはCloudflareの[マシン認証ガイド](https://developers.cloudflare.com/cloudflare-one/access-controls/authenticate-agents/)で解説されています。このリレーでは対話型のエージェントログインは不要です。
+
+## 3. 名前付きトンネルを作成する
+
+1. 公式の[ダウンロードページ](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/downloads/)またはパッケージリポジトリから `cloudflared` をインストールします。これらのルールは `2026.11.0` で構文チェック済みです。アップグレード時には再検証してください。
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+インストール前にWindowsパッケージマネージャーのエントリーを確認します：
+
+```powershell
+winget show --id Cloudflare.cloudflared --exact
+winget install --id Cloudflare.cloudflared --exact
+cloudflared --version
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+Debian/Ubuntuの場合は、Cloudflareの署名付き[APTリポジトリ](https://pkg.cloudflare.com/index.html)を設定します：
+
+```bash
+sudo mkdir -p --mode=0755 /usr/share/keyrings
+curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg |
+  sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+printf '%s\n' 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' |
+  sudo tee /etc/apt/sources.list.d/cloudflared.list >/dev/null
+sudo apt-get update && sudo apt-get install cloudflared
+cloudflared --version
+```
+
+その他のディストリビューションでは、公式ダウンロードから該当するパッケージまたはアーキテクチャを使用してください。
+
+</TabItem>
+<TabItem label="Mac">
+
+[Homebrew](https://brew.sh/)がインストールされている場合：
+
+```bash
+brew install cloudflared
+cloudflared --version
+```
+
+</TabItem>
+</Tabs>
+
+2. `tunnel login` で開いたブラウザーでドメインを認可し、名前付きトンネルを作成します：
+
+```sh
+cloudflared tunnel login
+cloudflared tunnel create home-engine
+```
+
+生成されたアカウント証明書とトンネル認証情報JSONは非公開で保管してください。コマンドが異なる場合は、Cloudflareの[名前付きトンネルの手順](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/local-management/create-local-tunnel/)を参照してください。
+
+3. お使いのOSに応じた場所に `config.yml` を作成します。以下の共有YAML内の認証情報ファイルパスを、生成されたトンネルJSONの絶対パスに置き換えてください：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+- 設定：`%USERPROFILE%\.cloudflared\config.yml`
+- 認証情報ファイル：`C:\Users\LOCAL_ACCOUNT\.cloudflared\TUNNEL_UUID.json`
+
+```powershell
+$tunnelConfig = Join-Path $env:USERPROFILE '.cloudflared\config.yml'
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+- 設定：`~/.cloudflared/config.yml`
+- 認証情報ファイル：通常のユーザーアカウントでは `/home/LOCAL_ACCOUNT/.cloudflared/TUNNEL_UUID.json` となります。実際のホームディレクトリを使用してください。
+
+```bash
+tunnel_config="$HOME/.cloudflared/config.yml"
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+- 設定：`~/.cloudflared/config.yml`
+- 認証情報ファイル：`/Users/LOCAL_ACCOUNT/.cloudflared/TUNNEL_UUID.json`
+
+```bash
+tunnel_config="$HOME/.cloudflared/config.yml"
+```
+
+</TabItem>
+</Tabs>
+
+UUID、認証情報パス、チーム名、アプリケーションオーディエンスのプレースホルダーを置き換えます：
+
+```yaml
+tunnel: TUNNEL_UUID
+credentials-file: 'ABSOLUTE_PATH_TO_TUNNEL_JSON'
+ingress:
+  - hostname: engine.example.com
+    path: ^/v1/(models|chat/completions)$
+    service: http://127.0.0.1:8317
+    originRequest:
+      access:
+        required: true
+        teamName: YOUR_TEAM_NAME
+        audTag:
+          - YOUR_APPLICATION_AUD
+  - service: http_status:404
+```
+
+- [コネクタのAccessチェック](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/configure-tunnels/origin-parameters/#access)により、エッジの保護が誤って削除された場合でもアプリケーションのJWTが必須になります。
+- 許可リストにより、`/v0/management`、`/v8/management`、`/management.html`、OAuthコールバック、`/v1/tunnel`、およびその他の[CLIProxyAPIルート](https://github.com/router-for-me/CLIProxyAPI/blob/main/internal/api/server_routes.go)が除外されます。管理機能はローカルでも無効のままにしてください。コネクタのトラフィックはループバック経由で到着します。
+- イングレスは `/v1` を保持します。以下のリレーでもメソッドを制限します。
+
+4. DNSを公開する前にルーティングを検証し、コネクタを起動します：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$tunnelConfig = Join-Path $env:USERPROFILE '.cloudflared\config.yml'
+cloudflared tunnel --config $tunnelConfig ingress validate
+cloudflared tunnel --config $tunnelConfig ingress rule https://engine.example.com/v1/models
+cloudflared tunnel --config $tunnelConfig ingress rule https://engine.example.com/v8/management
+cloudflared tunnel route dns home-engine engine.example.com
+cloudflared tunnel --config $tunnelConfig run home-engine
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+tunnel_config="$HOME/.cloudflared/config.yml"
+cloudflared tunnel --config "$tunnel_config" ingress validate
+cloudflared tunnel --config "$tunnel_config" ingress rule https://engine.example.com/v1/models
+cloudflared tunnel --config "$tunnel_config" ingress rule https://engine.example.com/v8/management
+cloudflared tunnel route dns home-engine engine.example.com
+cloudflared tunnel --config "$tunnel_config" run home-engine
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+tunnel_config="$HOME/.cloudflared/config.yml"
+cloudflared tunnel --config "$tunnel_config" ingress validate
+cloudflared tunnel --config "$tunnel_config" ingress rule https://engine.example.com/v1/models
+cloudflared tunnel --config "$tunnel_config" ingress rule https://engine.example.com/v8/management
+cloudflared tunnel route dns home-engine engine.example.com
+cloudflared tunnel --config "$tunnel_config" run home-engine
+```
+
+</TabItem>
+</Tabs>
+
+5. modelsがループバックルールを選択し、managementが末尾の404を選択することを確認します。AccessおよびDNSでホスト名を確認します。
+6. フォアグラウンドでの検証後、CloudflareのOS別サービス手順を使用します。サービスアカウントには明示的な設定ファイルパスと認証情報パスを指定してください。ホームディレクトリがご自身のものと異なる場合があります。
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+[Windowsサービスの手順](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/local-management/as-a-service/windows/)または制限付きスケジュールタスクを使用します。
+
+</TabItem>
+<TabItem label="Linux">
+
+systemdベースのインストールには[Linuxサービスの手順](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/local-management/as-a-service/linux/)を使用します。
+
+</TabItem>
+<TabItem label="Mac">
+
+launchdには[macOSサービスの手順](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/local-management/as-a-service/macos/)を使用します。
+
+</TabItem>
+</Tabs>
+
+Cloudflareが公開HTTPSを提供し、HTTPはPC上のループバックでのみ通信します。TLS検証は有効のままにしてください。Quick Tunnels、共有公開URL、および保護されていない代替ホスト名は避けてください。
+
+## 4. 本番リレーを設定する
+
+これらの手順は本番デプロイ管理者が実施する必要があります：
+
+1. [Caddy](https://caddyserver.com/docs/install)をインストールするか、デプロイ構成にCaddyサービスを追加します。TomoriBotのイメージおよび既存のComposeファイルでは自動起動されません。
+2. チェックアウトから `docker/cloudflare-relay.Caddyfile` を保護されたサービス設定にコピーします。`relay.example.net` と、アップストリームの `Host` ヘッダーを含むすべての `engine.example.com` を置き換えます。
+3. 本番シークレットストアからCaddyプロセスに次の変数を渡します：
+
+| シークレット | 他に配置する場所 |
+|---|---|
+| `ENGINE_API_KEY` | エンジンのクライアントキー設定およびTomoriBotの暗号化保存済みエンドポイント認証情報 |
+| `CF_ACCESS_CLIENT_ID` | 上記と同じAccessサービストークン |
+| `CF_ACCESS_CLIENT_SECRET` | 同じAccessサービストークン |
+
+- エンジンキーは、空白やCaddyのワイルドカード文字 `*` を含まない、hexまたはbase64エンコードされた32バイト以上のランダムバイトから生成してください。
+- 保護されたシークレット参照またはマウントを使用してください。生のシークレットをシェルコマンド、コンテナー引数、Git、ログに含めないでください。
+- エンジンキーはTomoriBotの `auth_token` に保存し、Access認証情報はCaddy側に配置してください。
+
+4. 保護されたCaddyfileのディレクトリから、本番シークレットストアが変数を注入した状態でCaddyを検証して起動します。フォアグラウンド起動は次のとおりです：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+foreach ($name in 'ENGINE_API_KEY', 'CF_ACCESS_CLIENT_ID', 'CF_ACCESS_CLIENT_SECRET') {
+  if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+    throw "Missing relay secret: $name"
+  }
+}
+caddy validate --config .\Caddyfile --adapter caddyfile
+caddy run --config .\Caddyfile --adapter caddyfile
+```
+
+無人起動には、Caddyの[Windowsサービス手順](https://caddyserver.com/docs/running#windows-service)に従ってください。
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+if [ -n "${ENGINE_API_KEY:-}" ] && [ -n "${CF_ACCESS_CLIENT_ID:-}" ] && [ -n "${CF_ACCESS_CLIENT_SECRET:-}" ]; then
+  caddy validate --config ./Caddyfile --adapter caddyfile &&
+    caddy run --config ./Caddyfile --adapter caddyfile
+else
+  printf 'Load all three relay secrets before starting Caddy.\n' >&2
+fi
+```
+
+無人起動には、正しい設定パスと保護されたサービス環境を指定してCaddyの[systemdサービス](https://caddyserver.com/docs/running#linux-service)を使用します。
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+if [ -n "${ENGINE_API_KEY:-}" ] && [ -n "${CF_ACCESS_CLIENT_ID:-}" ] && [ -n "${CF_ACCESS_CLIENT_SECRET:-}" ]; then
+  caddy validate --config ./Caddyfile --adapter caddyfile &&
+    caddy run --config ./Caddyfile --adapter caddyfile
+else
+  printf 'Load all three relay secrets before starting Caddy.\n' >&2
+fi
+```
+
+同じ設定パスと保護された環境を指定し、launchdまたはコンテナーサービスマネージャーで無人起動を設定します。
+
+</TabItem>
+</Tabs>
+
+5. リレーのDNSを本番HTTPSイングレスに向けます。スタンドアロンCaddyにはインバウンド443と証明書チャレンジの接続（通常80/443）が必要です。2重のCloudflareプロキシタイムアウトを避けるため、リレーのレコードはDNSのみ（プロキシ無効）にしてください。マネージドTLSイングレスを使用する場合は、バックエンドリスナーを非公開のままにしてください。自宅のトンネルにはエンジン用ホスト名のみを向けます。
+6. サービスの起動と再起動処理を設定します。この例ではCaddyの管理APIを無効にしているため、シークレットや設定を更新した後は再起動してください。環境変数と永続設定は非公開のままにし、デバッグログやリクエストヘッダーのログ記録は避けてください。
+
+提供されている設定はCaddy 2.11.9で検証済みです。主な動作は次のとおりです：
+
+- `GET /v1/models` または `POST /v1/chat/completions` を許可する前にエンジンキーを要求します。
+- 受信ヘッダーを削除してから、1つの固定アップストリーム用の認証情報を付加します。クライアントは別のターゲットを選択したり、Accessヘッダーを上書きしたりできません。
+- アップストリームのリダイレクトを502で拒否し、アップストリームのエラー本文をマスクします。
+- レスポンスのバッファリングや管理APIなしでSSEを自動フラッシュします。[Caddyのプロキシリファレンス](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy)を参照してください。
+
+## 5. 接続を検証する
+{/* anchor: validate-each-authentication-check */}
+
+エンドポイントを登録する前に、本番環境から以下のすべての項目を検証してください。認証失敗の原因を切り分けるために、Accessログとローカルエンジンの証跡を確認してください。
+
+| リクエスト | 期待される結果 |
+|---|---|
+| トンネルURL、Accessトークンなしまたは不正なトークン | Accessが拒否し、エンジンにはリクエストが届かない |
+| 有効なAccessトークン、不正なエンジンキー | エンジンが認証に対応している場合、エンジンが401を返す |
+| 両方の認証情報が正しい | `data` とモデルIDを含むモデル一覧JSON |
+| リレーURL、Bearerキーの欠落または誤り | リレーがAccessに接続する前に401を返す |
+| 正しいキー、誤ったメソッドまたは管理パス | リレーが404を返す。直接トンネル上の管理パスもAccess認証後に404を返す |
+
+<details>
+<summary>認証チェック用コマンド</summary>
+
+シークレットストアから変数を供給し、トランスクリプトを無効にした状態でこの例を実行します。リダイレクトを追跡せず、本文やヘッダーも出力せずに、ステータスとContent-Typeを出力します。
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+Add-Type -AssemblyName System.Net.Http
+$origin = 'https://engine.example.com/v1'
+$relay = 'https://relay.example.net/v1'
+$access = @{
+  'CF-Access-Client-Id' = $env:CF_ACCESS_CLIENT_ID
+  'CF-Access-Client-Secret' = $env:CF_ACCESS_CLIENT_SECRET
+}
+$good = $access.Clone()
+$good.Authorization = "Bearer $env:ENGINE_API_KEY"
+$badToken = $good.Clone()
+$badToken['CF-Access-Client-Secret'] = 'invalid-test-token'
+$badKey = $access.Clone()
+$badKey.Authorization = 'Bearer invalid-test-key'
+$cases = @(
+  @{ Uri = "$origin/models"; Headers = @{} },
+  @{ Uri = "$origin/models"; Headers = $badToken },
+  @{ Uri = "$origin/models"; Headers = $badKey },
+  @{ Uri = "$origin/models"; Headers = $good },
+  @{ Uri = "$relay/models"; Headers = @{} },
+  @{ Uri = "$relay/models"; Headers = @{ Authorization = "Bearer $env:ENGINE_API_KEY" } }
+)
+$handler = [Net.Http.HttpClientHandler]::new()
+$handler.AllowAutoRedirect = $false
+$client = [Net.Http.HttpClient]::new($handler)
+try {
+  foreach ($case in $cases) {
+    $request = [Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::Get, $case.Uri)
+    foreach ($header in $case.Headers.GetEnumerator()) {
+      $request.Headers.Add($header.Key, [string]$header.Value)
+    }
+    $result = $client.SendAsync($request).GetAwaiter().GetResult()
+    try {
+      [pscustomobject]@{ Url = $case.Uri; Status = [int]$result.StatusCode; Type = $result.Content.Headers.ContentType }
+    } finally {
+      $result.Dispose()
+      $request.Dispose()
+    }
+  }
+} finally {
+  $client.Dispose()
+}
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+シェルのトレースを無効にします。この関数はcurlの標準入力設定経由で認証情報を渡すため、プロセス引数に残りません。
+
+```bash
+set +x
+origin='https://engine.example.com/v1'
+relay='https://relay.example.net/v1'
+probe() {
+  probe_url=$1
+  access_mode=$2
+  key_mode=$3
+  {
+    if [ "$access_mode" != none ]; then
+      printf 'header = "CF-Access-Client-Id: %s"\n' "$CF_ACCESS_CLIENT_ID"
+      if [ "$access_mode" = bad ]; then
+        printf 'header = "CF-Access-Client-Secret: invalid-test-token"\n'
+      else
+        printf 'header = "CF-Access-Client-Secret: %s"\n' "$CF_ACCESS_CLIENT_SECRET"
+      fi
+    fi
+    if [ "$key_mode" = good ]; then
+      printf 'header = "Authorization: Bearer %s"\n' "$ENGINE_API_KEY"
+    elif [ "$key_mode" = bad ]; then
+      printf 'header = "Authorization: Bearer invalid-test-key"\n'
+    fi
+  } | curl --config - --silent --show-error --output /dev/null \
+    --write-out '%{http_code} %{content_type}\n' "$probe_url"
+}
+probe "$origin/models" none none
+probe "$origin/models" bad good
+probe "$origin/models" good bad
+probe "$origin/models" good good
+probe "$relay/models" none none
+probe "$relay/models" none good
+unset -f probe
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+シェルのトレースを無効にします。この関数はcurlの標準入力設定経由で認証情報を渡すため、プロセス引数に残りません。
+
+```bash
+set +x
+origin='https://engine.example.com/v1'
+relay='https://relay.example.net/v1'
+probe() {
+  probe_url=$1
+  access_mode=$2
+  key_mode=$3
+  {
+    if [ "$access_mode" != none ]; then
+      printf 'header = "CF-Access-Client-Id: %s"\n' "$CF_ACCESS_CLIENT_ID"
+      if [ "$access_mode" = bad ]; then
+        printf 'header = "CF-Access-Client-Secret: invalid-test-token"\n'
+      else
+        printf 'header = "CF-Access-Client-Secret: %s"\n' "$CF_ACCESS_CLIENT_SECRET"
+      fi
+    fi
+    if [ "$key_mode" = good ]; then
+      printf 'header = "Authorization: Bearer %s"\n' "$ENGINE_API_KEY"
+    elif [ "$key_mode" = bad ]; then
+      printf 'header = "Authorization: Bearer invalid-test-key"\n'
+    fi
+  } | curl --config - --silent --show-error --output /dev/null \
+    --write-out '%{http_code} %{content_type}\n' "$probe_url"
+}
+probe "$origin/models" none none
+probe "$origin/models" bad good
+probe "$origin/models" good bad
+probe "$origin/models" good good
+probe "$relay/models" none none
+probe "$relay/models" none good
+unset -f probe
+```
+
+</TabItem>
+</Tabs>
+
+</details>
+
+- Accessによる拒否は401/403またはログインへのリダイレクトになります。ステータス200のHTMLページが返された場合は検証失敗です。
+- 成功時のレスポンス本文がエンジンのJSONであることを確認してください。200だけでは十分な証明になりません。
+- 小規模な補完をテストし、次に `stream: true` をテストします。ストリーミングクライアントで増分のSSE `data:` フレームと正常終了を確認します。途中で中断し、オリジン側が生成を停止することを確認してください。
+- リポジトリのフィクスチャは、実環境のAccessポリシー、ネットワーク動作、またはアップストリームの権限を保証するものではありません。
+
+## 6. モデルを登録して選択する
+
+1. `/providers` または `/personal providers` で、`OpenAI互換`、URL `https://relay.example.net/v1`、および `auth_token` としてエンジンキーを追加します。
+2. 保存したエンドポイントを選択し、`テキストモデル` を追加して、`/v1/models` の正確なIDを入力します。TomoriBotは保存されたキーを暗号化しますが、モデルIDを自動ではインポートしません。
+3. 同じ接続配下にさらにモデルIDを追加すると、パネルで切り替えられるようになります。トンネルはモデルを選択しません。
+4. Discord上で補完応答を確認します。ツールは、無害な呼び出し1回、その結果、および次の返信をテストした後にのみ有効にしてください。並列ツールバッチはサポートされていません。その他の機能はテストするまでオフのままにしてください。
+
+## その他のエンジンと制限事項
+
+| エンジン | 必要な調整 |
+|---|---|
+| CLIProxyAPI | ポート8317を使用します。許可された2つの `/v1` ルートでテキストとモデル登録に十分です。管理機能は無効のままにしてください。[規約とバックエンドのセットアップ](/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/)に従ってください。 |
+| KoboldCPP / LM Studio | 実際のループバックポートに置き換え、対応している場合は推論キー認証を有効にします。OpenAI互換を使用してください。GPUのアンロードや管理操作はこの許可リストから除外されます。 |
+| Ollama | 登録確認で `/api/tags` を呼び出すネイティブ形式ではなく、`OpenAI互換` と `/v1` を使用してください。OllamaのローカルAPIには組み込みのAPIキー認証がありません。リレーのキーが呼び出し元を認証し、Accessがトンネルを保護しますが、キー自体はOllama側では認証を行いません。Ollamaはループバック専用に保ち、独立したオリジン認証が必要な場合はローカルの認証付きゲートウェイを追加してください。 |
+| ComfyUI | このテキスト用リレーでは不十分です。登録時には `/system_stats` を確認し、ジョブには `/prompt` と履歴ポーリングを使用し、ファイルにはアップロード・閲覧ルートを使用します。これらの操作用に明示的なルートとメソッドの許可リストを設計し、公開前にローカルゲートウェイを認証してください。拡張機能、ファイルブラウザー、管理ルートを丸ごと公開しないでください。 |
+| 音声エンジン | テキスト用の許可リストでは不十分です。`tts-clone` の登録には `/health` が必要であり、文字起こしにはモデル検出と音声ルート（多くは `/v1/audio/transcriptions`）が必要で、音声合成には独自のプロトコルがあります。リレーを調整する前に、各エンジンのTomoriBotガイドで正確なルートとマルチパートまたはバイナリ要件を確認してください。 |
+
+- 認証のないエンジンはループバック専用にしておく必要があります。Accessがそのトンネルを保護し、リレーはランダムなクライアントキーを要求します。独立したエンジン認証が必要な場合は、ローカルの認証付きゲートウェイを追加してください。そうしない場合、アップストリームの401チェックに合格できません。
+- [接続制限](https://developers.cloudflare.com/fundamentals/reference/connection-limits/)：既定の読み取りタイムアウトは125秒、書き込みタイムアウトは30秒です。無応答時間が長い生成をテストしてください。CLIProxyAPIの `requests.streaming.keepalive-seconds` と `send-keepalive-before-ft` はSSEハートビートを送信できますが、TomoriBot自身のタイムアウト予算を延長するものではありません。
+- [アップロード制限](https://developers.cloudflare.com/support/troubleshooting/http-status-codes/4xx-client-error/error-413/)：Free/Proは100 MB、Businessは200 MB、Enterpriseは最大5 GBです（設定上の制限がさらに低い場合もあります）。Base64エンコードにより画像は大きくなり、各イングレス、エンジン、ボット側の制限も引き続き適用されます。
+- [WebSocket](https://developers.cloudflare.com/network/websockets/)はCloudflareでサポートされていますが、このテキストリレーからは除外されています。WebSocketを必要とするエンジンには、別途テストされたルーティングとハンドシェイク認証が必要です。
+- ローカルのファイルパス、`file://`、およびループバック出力URLは本番環境では使用できません。通常のメディアダウンロードにもAccessヘッダーがありません。認証された操作を通じてバイト列を返すか、認可されたダウンロードルートを設計してください。認証情報ディレクトリを公開したり、URLにシークレットを含めたりしないでください。
+
+## トラブルシューティングと復旧
+
+| 症状 | 確認事項 |
+|---|---|
+| オリジンが拒否 / 502 | エンジンプロセス、正確なループバックポート、およびコネクタのマシンを確認します。トンネルは別のPCのループバックに到達できません。 |
+| トンネル切断 / 1033 | コネクタのプロセスやサービス、アウトバウンドの7844、ISP接続、スリープ、およびWindowsの再起動を確認します。 |
+| 403またはログインHTML | Accessアプリケーションの完全なホスト名、`Service Auth` ポリシー、正確なトークン、有効期限、およびヘッダーの欠落を確認します。修正のためにBypassを追加しないでください。 |
+| アップストリーム401 | オリジンのクライアントキーとAccessトークンを切り分けます。リレーキーとエンジンキーは一致している必要があります。 |
+| 404 | `/v1` が正確に1つ含まれていること、正しいモデルID、トンネルルールの一致、およびリレーのメソッドとパスの許可リストを確認します。 |
+| 5xx / 524 / ストリーム切断 | 読み取りタイムアウト、エンジンのクラッシュ、クォータ、バッファリング、およびPCのスリープを確認し、機密情報をマスクしたローカルエンジンログとAccessログを調査します。リレーはアップストリームのエラー本文を隠します。 |
+| SSRF URL拒否 | すべてのA/AAAAレコードの応答を含む、リレー用の公開HTTPS DNSを確認します。本番環境ではプライベート、ループバック、メタデータ、プライベートとパブリックが混在するDNS、および安全でないリダイレクトは引き続き拒否されます。 |
+| DNSまたはTLSの失敗 | 伝播済みのレコード、トンネルのUUIDとホスト名、有効なリレー証明書、および正確なアップストリーム `Host` を確認します。TLS検証は絶対にスキップしないでください。 |
+| モデルが見つからない | エンジンの認可されたバックエンドとモデル一覧JSONを確認します。エイリアスを変更した後は、正確なIDを手動で再登録してください。 |
+| ローカル出力ファイルURL | エンジンのファイル配信プロトコルを調整します。UIをトンネルしてもローカルパスはダウンロード可能になりません。 |
+
+- スリープ、再起動、またはISPの切断後は、エンジン、`cloudflared` の順に復旧し、Accessとリレーをテストしてください。新しい小さなリクエストを開始してください。中断されたストリームは再開できず、ツールターンを再試行するとその効果が重複して実行される可能性があります。
+- WARPやプライベートルートには、ワークロードの登録、ルーティング、およびGatewayルールが必要です。現在の本番版TomoriBotはプライベート宛先を拒否します。このガイドではプライベートルートの例外を提供していません。SSRFチェックは有効のままにしてください。
+
+## アクセスの取り消しとクリーンアップ
+
+1. 推論を遮断するには、リレーを停止します。ローカルコネクタを廃止する場合は、停止してDNSルートとトンネルを削除します。
+2. Accessトークンを失効させ、未使用のポリシー、アプリケーション、リレーDNS、および証明書を削除します。
+3. 定期的なトークンローテーションでは、ポリシーと本番シークレットを更新し、リレーを再起動および検証してから、古いトークンを失効させます。
+4. エンジンキーは、エンジン、リレーのシークレットストア、およびTomoriBotの保存済みエンドポイントでローテーションします。パネルのエントリーを1つ変更しても、エンジンキーが失効したり、他の保存済み接続が更新されたりすることはありません。
+5. インシデント発生時は、まず取り消しを行い、ダウンタイムを許容してください。OAuthベースのプロキシの場合は、アップストリームの認可を取り消し、ローカルトークンファイルを削除します。古い認証情報を含む保持済みのバックアップやログも保護してください。

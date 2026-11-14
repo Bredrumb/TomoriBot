@@ -135,7 +135,7 @@ Nếu máy chủ không yêu cầu xác thực, hãy để trống ô `Token xá
 
 Máy chủ MCP cục bộ chỉ được hỗ trợ trên các phiên bản self-hosted, vì bot công khai yêu cầu HTTPS
 và chặn các địa chỉ cục bộ/nội bộ. Nếu bạn tự vận hành phiên bản của riêng mình, hãy xem
-[Cài đặt: Máy chủ MCP cục bộ](/vi/self-hosting/local-endpoints/setup-local-mcp/).
+[Cài đặt: Máy chủ MCP cục bộ](/vi/self-hosting/mcp-servers/setup-local-mcp/).
 
 :::danger[Chỉ thêm máy chủ MCP bạn tin cậy]
 Một máy chủ MCP độc hại có thể prompt-inject vào bot với các hướng dẫn ẩn, chiếm đoạt dữ liệu

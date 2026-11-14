@@ -1,0 +1,553 @@
+---
+title: "Cloudflare Tunnel"
+sidebar:
+  label: "Cloudflare Tunnel"
+  order: 3
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Connect a separately hosted TomoriBot to an engine on your Windows, Linux, or Mac computer using Cloudflare Tunnel, Access service authentication, and an authenticated Caddy relay.
+
+Use this guide for Chat Completions engines such as [CLIProxyAPI](/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/), KoboldCPP, Ollama, and LM Studio. See the engine notes below for other protocols.
+
+:::note[Deploy the relay first]
+The supplied Caddyfile is configuration only. Your production deployment must explicitly run Caddy, load its secrets, and provide an HTTPS hostname. Adding the file to `docker/`, building TomoriBot, or registering a Discord endpoint does not start the relay. Have the deployment operator complete step 4 before using its URL.
+:::
+
+## Architecture and prerequisites
+
+```text
+Production host                              Local computer
+TomoriBot -> HTTPS Caddy relay -> Cloudflare Access -> Tunnel -> cloudflared -> engine
+            Bearer key check      service token                  HTTP loopback
+                                  + engine Bearer key             127.0.0.1
+```
+
+Prepare:
+
+- A domain active on Cloudflare and permission to manage DNS, Tunnel, and Access applications.
+- A working local engine and a model you are authorized to use.
+- `cloudflared` on the engine's PC, with outbound connectivity to Cloudflare (port 7844 for QUIC or HTTP/2).
+- Control of the production deployment's secret store and permission to run [Caddy](https://caddyserver.com/docs/install) there.
+- Two HTTPS hostnames: `engine.example.com` for the protected tunnel and `relay.example.net` for Caddy. Replace these placeholders with hostnames you control.
+- Public DNS, a valid TLS certificate, and a production HTTPS ingress for the relay. This setup requires a host where you can provide them.
+
+The authentication checks are separate:
+
+1. TomoriBot sends its saved engine key as `Authorization: Bearer ...` to the relay.
+2. The relay checks that key, retains it for the engine, and adds `CF-Access-Client-Id` and `CF-Access-Client-Secret`. TomoriBot's endpoint panel cannot supply those extra headers directly.
+3. Cloudflare Access checks the service token; the engine independently checks its key where supported.
+
+Use a dedicated long random key for this connection. Anyone holding it can use the relay. Cloudflare identifies the relay's service token; Discord user permissions remain TomoriBot's responsibility.
+
+## 1. Secure the local origin
+
+1. Follow the engine's setup guide and bind it to `127.0.0.1`. The [CLIProxyAPI example](/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/) uses port 8317; substitute your engine's port throughout this guide.
+2. Set a long random inference key where supported. Keep admin passwords separate and disable unnecessary dashboards, discovery, and management APIs.
+3. Verify the listener and firewall profiles:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+Get-NetTCPConnection -State Listen -LocalPort 8317 |
+  Select-Object LocalAddress, LocalPort, OwningProcess
+Get-NetFirewallProfile | Select-Object Name, Enabled, DefaultInboundAction
+```
+
+Inspect executable/port allow rules in `wf.msc`.
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+ss -ltnp 'sport = :8317'
+```
+
+Review your distribution's firewall policy for unnecessary inbound allow rules.
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+lsof -nP -iTCP:8317 -sTCP:LISTEN
+```
+
+Review Firewall options in macOS System Settings.
+
+</TabItem>
+</Tabs>
+
+4. Expect only `127.0.0.1:8317`. Stop if IPv4 or IPv6 listens on all interfaces (`0.0.0.0` or `::`) or a LAN address.
+5. Remove unnecessary inbound exposure; do not add router port forwarding or an engine firewall exception.
+6. Test `/v1/models` and one small completion locally with the engine key.
+
+Run `cloudflared` on this same PC. The production bot's `127.0.0.1` points to its own machine.
+
+## 2. Create Access protection before publishing DNS
+
+In the Cloudflare One dashboard, follow the [service-token instructions](https://developers.cloudflare.com/cloudflare-one/access-controls/service-credentials/service-tokens/):
+
+1. Under `Access controls` > `Service credentials` > `Service tokens`, create one token for this production relay, with an expiry you can maintain. Save its Client ID and Client Secret directly in the production secret store. The secret is shown only when created.
+2. Under `Access controls` > `Applications`, add a `Self-hosted` application for the entire hostname `engine.example.com`, with no path restriction.
+3. Attach a policy with action `Service Auth`, an `Include` rule of type `Service Token`, and only that token selected. Remove broad `Allow` and `Bypass` policies; check that no more-specific application bypasses protection on another path.
+4. Save the application and record its Application Audience (AUD) tag and your Cloudflare One team name for connector validation. Keep this protection in place before publishing the tunnel route.
+
+- Use `Service Auth` for this unattended client. Browser login, browser cookies, IP allowlists, and broad Bypass rules do not provide this authentication.
+- The Access service token identifies the relay. The tunnel credential JSON or connector token authorizes `cloudflared` to run a tunnel. Keep them separate.
+- Cloudflare's [machine-authentication guide](https://developers.cloudflare.com/cloudflare-one/access-controls/authenticate-agents/) covers other clients; this relay needs no interactive agent login.
+
+## 3. Create a named tunnel
+
+1. Install `cloudflared` using its official [downloads](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/downloads/) or package repository. These rules were syntax-checked with `2026.11.0`; repeat validation when upgrading.
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+Inspect the Windows Package Manager entry before installing:
+
+```powershell
+winget show --id Cloudflare.cloudflared --exact
+winget install --id Cloudflare.cloudflared --exact
+cloudflared --version
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+For Debian/Ubuntu, configure Cloudflare's signed [APT repository](https://pkg.cloudflare.com/index.html):
+
+```bash
+sudo mkdir -p --mode=0755 /usr/share/keyrings
+curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg |
+  sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+printf '%s\n' 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' |
+  sudo tee /etc/apt/sources.list.d/cloudflared.list >/dev/null
+sudo apt-get update && sudo apt-get install cloudflared
+cloudflared --version
+```
+
+For other distributions, use the matching package or architecture from the official downloads.
+
+</TabItem>
+<TabItem label="Mac">
+
+With [Homebrew](https://brew.sh/) installed:
+
+```bash
+brew install cloudflared
+cloudflared --version
+```
+
+</TabItem>
+</Tabs>
+
+2. Authorize the domain in the browser opened by `tunnel login`, then create the named tunnel:
+
+```sh
+cloudflared tunnel login
+cloudflared tunnel create home-engine
+```
+
+Keep the resulting account certificate and tunnel credential JSON private. See Cloudflare's [named-tunnel procedure](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/local-management/create-local-tunnel/) if a command differs.
+
+3. Create `config.yml` at the location for your OS. Replace the credential-file path in the shared YAML below with the absolute path to the generated tunnel JSON:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+- Config: `%USERPROFILE%\.cloudflared\config.yml`
+- Credential file: `C:\Users\LOCAL_ACCOUNT\.cloudflared\TUNNEL_UUID.json`
+
+```powershell
+$tunnelConfig = Join-Path $env:USERPROFILE '.cloudflared\config.yml'
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+- Config: `~/.cloudflared/config.yml`
+- Credential file: `/home/LOCAL_ACCOUNT/.cloudflared/TUNNEL_UUID.json` for a typical user account; use your actual home directory.
+
+```bash
+tunnel_config="$HOME/.cloudflared/config.yml"
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+- Config: `~/.cloudflared/config.yml`
+- Credential file: `/Users/LOCAL_ACCOUNT/.cloudflared/TUNNEL_UUID.json`
+
+```bash
+tunnel_config="$HOME/.cloudflared/config.yml"
+```
+
+</TabItem>
+</Tabs>
+
+Replace the UUID, credential path, team name, and application audience placeholders:
+
+```yaml
+tunnel: TUNNEL_UUID
+credentials-file: 'ABSOLUTE_PATH_TO_TUNNEL_JSON'
+ingress:
+  - hostname: engine.example.com
+    path: ^/v1/(models|chat/completions)$
+    service: http://127.0.0.1:8317
+    originRequest:
+      access:
+        required: true
+        teamName: YOUR_TEAM_NAME
+        audTag:
+          - YOUR_APPLICATION_AUD
+  - service: http_status:404
+```
+
+- The [connector Access check](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/configure-tunnels/origin-parameters/#access) requires the application's JWT even if edge protection is accidentally removed.
+- The allowlist excludes `/v0/management`, `/v8/management`, `/management.html`, OAuth callbacks, `/v1/tunnel`, and other [CLIProxyAPI routes](https://github.com/router-for-me/CLIProxyAPI/blob/main/internal/api/server_routes.go). Keep management disabled locally: connector traffic arrives through loopback.
+- Ingress preserves `/v1`; the relay below also restricts methods.
+
+4. Validate routing before publishing DNS, then start the connector:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$tunnelConfig = Join-Path $env:USERPROFILE '.cloudflared\config.yml'
+cloudflared tunnel --config $tunnelConfig ingress validate
+cloudflared tunnel --config $tunnelConfig ingress rule https://engine.example.com/v1/models
+cloudflared tunnel --config $tunnelConfig ingress rule https://engine.example.com/v8/management
+cloudflared tunnel route dns home-engine engine.example.com
+cloudflared tunnel --config $tunnelConfig run home-engine
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+tunnel_config="$HOME/.cloudflared/config.yml"
+cloudflared tunnel --config "$tunnel_config" ingress validate
+cloudflared tunnel --config "$tunnel_config" ingress rule https://engine.example.com/v1/models
+cloudflared tunnel --config "$tunnel_config" ingress rule https://engine.example.com/v8/management
+cloudflared tunnel route dns home-engine engine.example.com
+cloudflared tunnel --config "$tunnel_config" run home-engine
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+tunnel_config="$HOME/.cloudflared/config.yml"
+cloudflared tunnel --config "$tunnel_config" ingress validate
+cloudflared tunnel --config "$tunnel_config" ingress rule https://engine.example.com/v1/models
+cloudflared tunnel --config "$tunnel_config" ingress rule https://engine.example.com/v8/management
+cloudflared tunnel route dns home-engine engine.example.com
+cloudflared tunnel --config "$tunnel_config" run home-engine
+```
+
+</TabItem>
+</Tabs>
+
+5. Confirm models selects the loopback rule and management selects the final 404. Check the hostname in Access and DNS.
+6. After foreground validation, use Cloudflare's OS-specific service instructions. Give the service account explicit config/credential paths; its home directory may differ from yours.
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+Use the [Windows service procedure](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/local-management/as-a-service/windows/) or a restricted scheduled task.
+
+</TabItem>
+<TabItem label="Linux">
+
+Use the [Linux service procedure](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/local-management/as-a-service/linux/) for systemd-based installations.
+
+</TabItem>
+<TabItem label="Mac">
+
+Use the [macOS service procedure](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/local-management/as-a-service/macos/) for launchd.
+
+</TabItem>
+</Tabs>
+
+Cloudflare supplies public HTTPS; HTTP travels only over loopback on the PC. Keep TLS verification enabled. Avoid Quick Tunnels, shared public URLs, and alternative unprotected hostnames.
+
+## 4. Configure the production relay
+
+These steps require the production deployment operator:
+
+1. Install [Caddy](https://caddyserver.com/docs/install) or add a Caddy service to the deployment. The TomoriBot image and existing Compose files do not start it automatically.
+2. Copy `docker/cloudflare-relay.Caddyfile` from the checkout to a protected service configuration. Replace `relay.example.net` and every `engine.example.com`, including the upstream `Host` header.
+3. Supply the following variables to the Caddy process from the production secret store:
+
+| Secret | Where else it belongs |
+|---|---|
+| `ENGINE_API_KEY` | The engine's client-key configuration and TomoriBot's encrypted saved endpoint credential |
+| `CF_ACCESS_CLIENT_ID` | The one Access service token |
+| `CF_ACCESS_CLIENT_SECRET` | The same Access service token |
+
+- Generate the engine key from at least 32 random bytes encoded as hex/base64, without whitespace or Caddy's wildcard character `*`.
+- Use protected secret references or mounts. Keep literal secrets out of shell commands, container arguments, Git, and logs.
+- Keep the engine key in TomoriBot's `auth_token`; Access credentials belong on Caddy.
+
+4. From the protected Caddyfile directory, validate and run Caddy after the production secret store injects its variables. Foreground startup uses:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+foreach ($name in 'ENGINE_API_KEY', 'CF_ACCESS_CLIENT_ID', 'CF_ACCESS_CLIENT_SECRET') {
+  if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+    throw "Missing relay secret: $name"
+  }
+}
+caddy validate --config .\Caddyfile --adapter caddyfile
+caddy run --config .\Caddyfile --adapter caddyfile
+```
+
+For unattended startup, follow Caddy's [Windows service instructions](https://caddyserver.com/docs/running#windows-service).
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+if [ -n "${ENGINE_API_KEY:-}" ] && [ -n "${CF_ACCESS_CLIENT_ID:-}" ] && [ -n "${CF_ACCESS_CLIENT_SECRET:-}" ]; then
+  caddy validate --config ./Caddyfile --adapter caddyfile &&
+    caddy run --config ./Caddyfile --adapter caddyfile
+else
+  printf 'Load all three relay secrets before starting Caddy.\n' >&2
+fi
+```
+
+For unattended startup, use Caddy's [systemd service](https://caddyserver.com/docs/running#linux-service) with the correct config path and protected service environment.
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+if [ -n "${ENGINE_API_KEY:-}" ] && [ -n "${CF_ACCESS_CLIENT_ID:-}" ] && [ -n "${CF_ACCESS_CLIENT_SECRET:-}" ]; then
+  caddy validate --config ./Caddyfile --adapter caddyfile &&
+    caddy run --config ./Caddyfile --adapter caddyfile
+else
+  printf 'Load all three relay secrets before starting Caddy.\n' >&2
+fi
+```
+
+Configure unattended startup with your launchd or container service manager and the same config path and protected environment.
+
+</TabItem>
+</Tabs>
+
+5. Point relay DNS at the production HTTPS ingress. Standalone Caddy needs inbound 443 and certificate-challenge connectivity, normally 80/443. Use a DNS-only relay record to avoid a second Cloudflare proxy timeout. With managed TLS ingress, keep the backend listener private. Point only the engine hostname at the home tunnel.
+6. Configure service startup and restart handling. The example disables Caddy's admin API, so restart it after secret/config updates. Keep its environment and persisted configuration private; avoid debug or request-header logging.
+
+The supplied configuration was checked with Caddy 2.11.9. It:
+
+- Requires the engine key before allowing `GET /v1/models` or `POST /v1/chat/completions`.
+- Removes incoming headers, then supplies credentials for one fixed upstream. Clients cannot choose another target or override its Access headers.
+- Rejects upstream redirects with 502 and masks upstream error bodies.
+- Flushes SSE automatically, with no response buffering or admin API. See [Caddy's proxy reference](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy).
+
+## 5. Validate the connection
+{/* anchor: validate-each-authentication-check */}
+
+From production, verify every row before registering the endpoint. Check Access logs and local engine evidence to distinguish their authentication failures.
+
+| Request | Expected result |
+|---|---|
+| Tunnel URL, no Access token or bad token | Access denies it; the engine sees no request |
+| Valid Access token, bad engine key | The engine returns 401, if it supports authentication |
+| Both credentials correct | Model-list JSON containing `data` and model IDs |
+| Relay URL, missing/wrong Bearer key | Relay returns 401 before contacting Access |
+| Correct key, wrong method or management path | Relay returns 404; direct tunnel management paths also return 404 after Access authentication |
+
+<details>
+<summary>Authentication-check commands</summary>
+
+Have the secret store supply the variables, disable transcripts, and run this example. It prints statuses and content types without following redirects or printing bodies/headers.
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+Add-Type -AssemblyName System.Net.Http
+$origin = 'https://engine.example.com/v1'
+$relay = 'https://relay.example.net/v1'
+$access = @{
+  'CF-Access-Client-Id' = $env:CF_ACCESS_CLIENT_ID
+  'CF-Access-Client-Secret' = $env:CF_ACCESS_CLIENT_SECRET
+}
+$good = $access.Clone()
+$good.Authorization = "Bearer $env:ENGINE_API_KEY"
+$badToken = $good.Clone()
+$badToken['CF-Access-Client-Secret'] = 'invalid-test-token'
+$badKey = $access.Clone()
+$badKey.Authorization = 'Bearer invalid-test-key'
+$cases = @(
+  @{ Uri = "$origin/models"; Headers = @{} },
+  @{ Uri = "$origin/models"; Headers = $badToken },
+  @{ Uri = "$origin/models"; Headers = $badKey },
+  @{ Uri = "$origin/models"; Headers = $good },
+  @{ Uri = "$relay/models"; Headers = @{} },
+  @{ Uri = "$relay/models"; Headers = @{ Authorization = "Bearer $env:ENGINE_API_KEY" } }
+)
+$handler = [Net.Http.HttpClientHandler]::new()
+$handler.AllowAutoRedirect = $false
+$client = [Net.Http.HttpClient]::new($handler)
+try {
+  foreach ($case in $cases) {
+    $request = [Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::Get, $case.Uri)
+    foreach ($header in $case.Headers.GetEnumerator()) {
+      $request.Headers.Add($header.Key, [string]$header.Value)
+    }
+    $result = $client.SendAsync($request).GetAwaiter().GetResult()
+    try {
+      [pscustomobject]@{ Url = $case.Uri; Status = [int]$result.StatusCode; Type = $result.Content.Headers.ContentType }
+    } finally {
+      $result.Dispose()
+      $request.Dispose()
+    }
+  }
+} finally {
+  $client.Dispose()
+}
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+Disable shell tracing. The function passes credentials through curl's stdin config, keeping them out of process arguments.
+
+```bash
+set +x
+origin='https://engine.example.com/v1'
+relay='https://relay.example.net/v1'
+probe() {
+  probe_url=$1
+  access_mode=$2
+  key_mode=$3
+  {
+    if [ "$access_mode" != none ]; then
+      printf 'header = "CF-Access-Client-Id: %s"\n' "$CF_ACCESS_CLIENT_ID"
+      if [ "$access_mode" = bad ]; then
+        printf 'header = "CF-Access-Client-Secret: invalid-test-token"\n'
+      else
+        printf 'header = "CF-Access-Client-Secret: %s"\n' "$CF_ACCESS_CLIENT_SECRET"
+      fi
+    fi
+    if [ "$key_mode" = good ]; then
+      printf 'header = "Authorization: Bearer %s"\n' "$ENGINE_API_KEY"
+    elif [ "$key_mode" = bad ]; then
+      printf 'header = "Authorization: Bearer invalid-test-key"\n'
+    fi
+  } | curl --config - --silent --show-error --output /dev/null \
+    --write-out '%{http_code} %{content_type}\n' "$probe_url"
+}
+probe "$origin/models" none none
+probe "$origin/models" bad good
+probe "$origin/models" good bad
+probe "$origin/models" good good
+probe "$relay/models" none none
+probe "$relay/models" none good
+unset -f probe
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+Disable shell tracing. The function passes credentials through curl's stdin config, keeping them out of process arguments.
+
+```bash
+set +x
+origin='https://engine.example.com/v1'
+relay='https://relay.example.net/v1'
+probe() {
+  probe_url=$1
+  access_mode=$2
+  key_mode=$3
+  {
+    if [ "$access_mode" != none ]; then
+      printf 'header = "CF-Access-Client-Id: %s"\n' "$CF_ACCESS_CLIENT_ID"
+      if [ "$access_mode" = bad ]; then
+        printf 'header = "CF-Access-Client-Secret: invalid-test-token"\n'
+      else
+        printf 'header = "CF-Access-Client-Secret: %s"\n' "$CF_ACCESS_CLIENT_SECRET"
+      fi
+    fi
+    if [ "$key_mode" = good ]; then
+      printf 'header = "Authorization: Bearer %s"\n' "$ENGINE_API_KEY"
+    elif [ "$key_mode" = bad ]; then
+      printf 'header = "Authorization: Bearer invalid-test-key"\n'
+    fi
+  } | curl --config - --silent --show-error --output /dev/null \
+    --write-out '%{http_code} %{content_type}\n' "$probe_url"
+}
+probe "$origin/models" none none
+probe "$origin/models" bad good
+probe "$origin/models" good bad
+probe "$origin/models" good good
+probe "$relay/models" none none
+probe "$relay/models" none good
+unset -f probe
+```
+
+</TabItem>
+</Tabs>
+
+</details>
+
+- Access denial may be 401/403 or a login redirect. An HTML page with status 200 fails validation.
+- Check the successful response body is engine JSON; a 200 alone proves little.
+- Test a small completion, then `stream: true`. Verify incremental SSE `data:` frames and normal termination with a streaming client. Interrupt it and confirm the origin stops generating.
+- Repository fixtures do not establish your live Access policy, network behavior, or upstream permissions.
+
+## 6. Register and select a model
+
+1. In `/providers` or `/personal providers`, add `OpenAI-Compatible` with `https://relay.example.net/v1` and the engine key as `auth_token`.
+2. Select the saved endpoint, add a Text Model, and enter its exact ID from `/v1/models`. TomoriBot encrypts the saved key but does not import model IDs automatically.
+3. Add more model IDs under the same connection to switch between them in the panel. The tunnel does not choose a model.
+4. Confirm a Discord completion. Enable tools only after testing one harmless call, its result, and the next reply. Parallel tool batches are unsupported; keep other capabilities off until tested.
+
+## Other engines and limits
+
+| Engine | Required adaptation |
+|---|---|
+| CLIProxyAPI | Port 8317; the two allowed `/v1` routes suffice for text and model registration. Keep management disabled. Follow its [terms and backend setup](/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/). |
+| KoboldCPP / LM Studio | Substitute the actual loopback port and enable inference-key authentication where supported. Use OpenAI compatibility. GPU unload/admin operations are excluded by this allowlist. |
+| Ollama | Use `OpenAI-Compatible` and `/v1`, not the native style whose probe calls `/api/tags`. Ollama's local API has no built-in API-key authentication; the relay's key authenticates callers, while Access protects the tunnel. The key does not authenticate at Ollama itself. Keep Ollama loopback-only; add a local authenticated gateway if independent origin authentication is required. |
+| ComfyUI | This text relay is insufficient. Its registration probes `/system_stats`, jobs use `/prompt` and history polling, and files use upload/view routes. Design an explicit route/method allowlist for those operations and authenticate the local gateway before publishing it. Never expose extensions, file-browser, or admin routes wholesale. |
+| Speech engines | The text allowlist is insufficient. `tts-clone` registration needs `/health`; transcription needs model discovery and its audio route, often `/v1/audio/transcriptions`; synthesis has its own protocol. Use the engine's TomoriBot guide to list exact routes and multipart/binary requirements before adapting the relay. |
+
+- Engines without authentication must stay loopback-only. Access protects their tunnel and the relay requires a random client key; add a local authenticated gateway if you need independent engine authentication. The upstream 401 check otherwise cannot pass.
+- [Connection limits](https://developers.cloudflare.com/fundamentals/reference/connection-limits/): default read timeout 125 seconds, write timeout 30 seconds. Test long silent generation. CLIProxyAPI's `requests.streaming.keepalive-seconds` and `send-keepalive-before-ft` can send SSE heartbeats, but do not extend TomoriBot's own time budgets.
+- [Upload limits](https://developers.cloudflare.com/support/troubleshooting/http-status-codes/4xx-client-error/error-413/): Free/Pro 100 MB, Business 200 MB, Enterprise up to 5 GB; configured limits may be lower. Base64 enlarges images, and every ingress/engine/bot limit still applies.
+- [WebSockets](https://developers.cloudflare.com/network/websockets/) are supported by Cloudflare but excluded by this text relay. Engines needing them require separately tested routing and handshake authentication.
+- Local file paths, `file://`, and loopback output URLs are unusable by production. Ordinary media downloads also lack Access headers. Return bytes through the authenticated operation or design an authorized download route; never expose credential directories or put secrets in URLs.
+
+## Troubleshooting and recovery
+
+| Symptom | Check |
+|---|---|
+| Origin refused / 502 | The engine process, exact loopback port, and connector's machine; a tunnel cannot reach another PC's loopback. |
+| Tunnel disconnected / 1033 | Connector process/service, outbound 7844, ISP connectivity, sleep, and Windows restart. |
+| 403 or login HTML | Access application's full hostname, `Service Auth` policy, exact token, expiry, and missing headers. Never add Bypass to fix it. |
+| Upstream 401 | Origin client key versus Access token; the relay key and engine key must agree. |
+| 404 | Exactly one `/v1`, correct model ID, tunnel rule match, and relay method/path allowlist. |
+| 5xx / 524 / stream cutoff | Read timeout, engine crash, quota, buffering, and PC sleep; inspect redacted local engine and Access logs. The relay hides upstream error bodies. |
+| SSRF URL rejected | Public HTTPS DNS for the relay, including every A/AAAA answer. Private, loopback, metadata, mixed private/public DNS, and unsafe redirects remain refused in production. |
+| DNS/TLS failure | Propagated records, tunnel UUID/hostname, valid relay certificate, and exact upstream `Host`; never skip TLS verification. |
+| Model missing | Engine's authorized backend and model-list JSON. Manually register the exact ID again after changing aliases. |
+| Local output file URL | Adapt the engine's file-delivery protocol; tunneling its UI does not make local paths downloadable. |
+
+- After sleep, restart, or ISP loss, restore the engine, then `cloudflared`, then test Access and the relay. Start a new small request; interrupted streams cannot resume, and retrying tool turns can repeat their effects.
+- WARP/private routes need workload enrollment, routing, and Gateway rules. Current production TomoriBot rejects private destinations. This guide provides no private-route exception; keep SSRF checks enabled.
+
+## Revoke access and clean up
+
+1. To cut off inference, stop the relay. Stop the local connector and remove its DNS route/tunnel when retiring it.
+2. Revoke the Access token and remove unused policies, applications, relay DNS, and certificates.
+3. For routine token rotation, update the policy and production secret, restart/validate the relay, then revoke the old token.
+4. Rotate the engine key in the engine, relay secret store, and TomoriBot's saved endpoint. Changing one panel entry does not revoke the engine key or update other saved connections.
+5. During an incident, revoke first and accept downtime. For OAuth-backed proxies, revoke upstream authorization and remove local token files. Protect retained backups/logs containing old credentials.

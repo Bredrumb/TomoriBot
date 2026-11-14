@@ -2,7 +2,7 @@
 title: "Configuración de OAuth de PluralBuddy"
 description: "Autoriza tu instancia autoalojada de TomoriBot para verificar mensajes de instancias aprobadas de PluralBuddy."
 sidebar:
-  order: 8
+  order: 7
 ---
 
 Una instancia autoalojada de TomoriBot necesita una aplicación autorizada de PluralBuddy para el servicio oficial y cada instancia personalizada aprobada.

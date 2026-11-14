@@ -122,7 +122,7 @@ endpoints are not supported.
 
 For setup instructions, see [Local LLM](/self-hosting/local-endpoints/setup-local-llm/),
 [ComfyUI](/self-hosting/local-endpoints/setup-comfyui/), and
-[ChatMock](/self-hosting/local-endpoints/setup-chatmock/).
+[ChatMock](/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/).
 
 ## Supported Providers
 <!-- anchor: supported-providers -->
@@ -143,7 +143,7 @@ cloud services. Not every feature is available on every provider.
 | Z.ai | ✅ | ✅ | ✅ | - | Free models; 🟡 ToS = coding and agent use only |
 | Z.ai Coding | ✅ | ✅ | - | - | Subscription plan |
 | Google Vertex AI | ✅ | ✅ | ✅ | ✅ | Includes 'free' Express version |
-| Codex CLI (via ChatMock) | ✅ | ✅ | ✅ | - | [Setup](/self-hosting/local-endpoints/setup-chatmock/) |
+| Codex CLI (via ChatMock) | ✅ | ✅ | ✅ | - | [Setup](/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/) |
 
 ### Image Generation
 

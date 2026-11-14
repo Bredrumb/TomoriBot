@@ -9,9 +9,7 @@ aiGenerated: false
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
 
-Hoàn toàn có thể vận hành một bản cài đặt TomoriBot với mọi thứ đều chạy cục bộ, từ sinh văn bản cho đến các tiện ích MCP. Mọi
-endpoint dưới đây đều tương thích với OpenAI hoặc là một trình bao bọc tham chiếu nhỏ, được đăng ký thông qua các lệnh
-`/providers` và được lưu trữ mã hóa trong cơ sở dữ liệu (không cần đến `.env`).
+Chạy trình tạo văn bản, các engine đa phương tiện và tiện ích MCP trên chính máy của bạn. Đăng ký các kết nối model qua `/providers` hoặc `/personal providers`; các API key đã lưu được mã hóa trong cơ sở dữ liệu. Các engine nằm trên máy riêng cũng cần thiết lập truy cập từ xa bên dưới.
 Hãy chọn một tính năng để thiết lập:
 
 ## Văn bản và vector nhúng
@@ -19,8 +17,6 @@ Hãy chọn một tính năng để thiết lập:
 <CardGrid>
   <LinkCard title="LLM cục bộ" href="/vi/self-hosting/local-endpoints/setup-local-llm/"
     description="Bất kỳ máy chủ tương thích OpenAI nào như Ollama, KoboldCPP, LM Studio, vLLM hoặc LiteLLM để sinh văn bản và vector nhúng." />
-  <LinkCard title="Codex CLI qua ChatMock" href="/vi/self-hosting/local-endpoints/setup-chatmock/"
-    description="Cầu nối tương thích OpenAI cục bộ cho phép TomoriBot sử dụng các model Codex CLI." />
 </CardGrid>
 
 ## Hình ảnh và video
@@ -51,10 +47,23 @@ Hãy chọn một tính năng để thiết lập:
 ## Công cụ tùy chỉnh
 
 <CardGrid>
-  <LinkCard title="slop-guard" href="/vi/self-hosting/local-endpoints/setup-slop-guard/"
+  <LinkCard title="slop-guard" href="/vi/self-hosting/mcp-servers/setup-slop-guard/"
     description="Một trình kiểm tra văn phong dựa trên quy tắc mà Duyệt phản hồi có thể dùng làm công cụ kiểm tra quy tắc." />
-  <LinkCard title="Máy chủ MCP cục bộ" href="/vi/self-hosting/local-endpoints/setup-local-mcp/"
+  <LinkCard title="Máy chủ MCP cục bộ" href="/vi/self-hosting/mcp-servers/setup-local-mcp/"
     description="Chạy máy chủ MCP cục bộ để mở rộng TomoriBot bằng các công cụ của riêng bạn (chỉ dành cho phiên bản self-host)." />
+</CardGrid>
+
+## Proxy và truy cập từ xa
+
+Hãy xem [các rủi ro tài khoản](/self-hosting/local-endpoints/proxies-and-remote-access/#account-risk) trước khi sử dụng tài khoản gắn với CLI thông qua các cầu nối của bên thứ ba.
+
+<CardGrid>
+  <LinkCard title="Codex CLI qua ChatMock" href="/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/"
+    description="Kết nối cầu nối dùng tài khoản ChatGPT được ủy quyền trên máy của bạn." />
+  <LinkCard title="CLIProxyAPI" href="/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/"
+    description="Cài đặt proxy cục bộ và đăng ký các model từ một dịch vụ thượng nguồn được ủy quyền." />
+  <LinkCard title="Cloudflare Tunnel" href="/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/"
+    description="Kết nối tới engine tại nhà từ bot production bằng xác thực Access và một relay." />
 </CardGrid>
 
 ## Khởi động các máy chủ cục bộ bằng `bun run launch`

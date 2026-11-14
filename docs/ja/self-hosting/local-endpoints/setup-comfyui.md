@@ -3,7 +3,7 @@ title: "セットアップ: ComfyUI"
 aiGenerated: false
 sidebar:
   label: "ComfyUI"
-  order: 2
+  order: 3
 ---
 
 TomoriBotは、自身の [ComfyUI](https://github.com/comfyanonymous/ComfyUI) インスタンスを通じて画像や動画を生成できます。プロンプトやサイズを置換したAPIフォーマットのワークフローを送信することでComfyUIを操作し、出力の準備ができるまでComfyUIの `/history` エンドポイントをポーリングします。

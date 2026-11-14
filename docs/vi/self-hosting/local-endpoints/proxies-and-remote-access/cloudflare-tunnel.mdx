@@ -1,0 +1,553 @@
+---
+title: "Cloudflare Tunnel"
+sidebar:
+  label: "Cloudflare Tunnel"
+  order: 3
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Kết nối TomoriBot được lưu trữ riêng tới một engine trên máy tính Windows, Linux hoặc Mac của bạn bằng Cloudflare Tunnel, xác thực dịch vụ Access và một relay Caddy có xác thực.
+
+Dùng hướng dẫn này cho các engine Chat Completions như [CLIProxyAPI](/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/), KoboldCPP, Ollama và LM Studio. Xem phần ghi chú engine bên dưới cho các giao thức khác.
+
+:::note[Triển khai relay trước]
+Tệp Caddyfile được cung cấp chỉ là cấu hình. Bản triển khai production của bạn phải chủ động chạy Caddy, nạp các bí mật của nó và cung cấp một hostname HTTPS. Việc thêm tệp vào `docker/`, build TomoriBot hoặc đăng ký endpoint trên Discord không tự khởi chạy relay. Hãy nhờ người vận hành triển khai hoàn tất bước 4 trước khi dùng URL của relay.
+:::
+
+## Kiến trúc và điều kiện tiên quyết
+
+```text
+Production host                              Local computer
+TomoriBot -> HTTPS Caddy relay -> Cloudflare Access -> Tunnel -> cloudflared -> engine
+            Bearer key check      service token                  HTTP loopback
+                                  + engine Bearer key             127.0.0.1
+```
+
+Chuẩn bị:
+
+- Một tên miền đang hoạt động trên Cloudflare cùng quyền quản lý DNS, Tunnel và các ứng dụng Access.
+- Một engine cục bộ đang chạy ổn định và một model mà bạn được phép sử dụng.
+- `cloudflared` trên máy tính chạy engine, có kết nối chiều đi tới Cloudflare (cổng 7844 cho QUIC hoặc HTTP/2).
+- Quyền kiểm soát kho bí mật của bản triển khai production và quyền chạy [Caddy](https://caddyserver.com/docs/install) tại đó.
+- Hai hostname HTTPS: `engine.example.com` cho tunnel được bảo vệ và `relay.example.net` cho Caddy. Thay thế các placeholder này bằng hostname do bạn kiểm soát.
+- DNS công khai, chứng chỉ TLS hợp lệ và một lối vào HTTPS production cho relay. Thiết lập này yêu cầu một máy chủ nơi bạn có thể cung cấp những thành phần đó.
+
+Các bước kiểm tra xác thực được tách biệt:
+
+1. TomoriBot gửi khóa engine đã lưu của mình dưới dạng `Authorization: Bearer ...` tới relay.
+2. Relay kiểm tra khóa đó, giữ lại cho engine và thêm `CF-Access-Client-Id` cùng `CF-Access-Client-Secret`. Bảng endpoint của TomoriBot không thể tự cung cấp các header bổ sung này trực tiếp.
+3. Cloudflare Access kiểm tra service token; engine kiểm tra độc lập khóa của mình khi có hỗ trợ.
+
+Hãy dùng một khóa ngẫu nhiên dài riêng biệt cho kết nối này. Bất kỳ ai nắm giữ nó đều có thể dùng relay. Cloudflare định danh service token của relay; quyền của người dùng Discord vẫn do TomoriBot quản lý.
+
+## 1. Bảo vệ máy chủ gốc cục bộ
+
+1. Làm theo hướng dẫn thiết lập của engine và gắn nó vào `127.0.0.1`. Ví dụ [CLIProxyAPI](/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/) dùng cổng 8317; hãy thay bằng cổng engine của bạn xuyên suốt hướng dẫn này.
+2. Đặt một khóa suy luận ngẫu nhiên dài khi engine hỗ trợ. Tách riêng mật khẩu quản trị và tắt các bảng điều khiển, cơ chế tự khám phá và API quản lý không cần thiết.
+3. Kiểm tra trình lắng nghe và cấu hình tường lửa:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+Get-NetTCPConnection -State Listen -LocalPort 8317 |
+  Select-Object LocalAddress, LocalPort, OwningProcess
+Get-NetFirewallProfile | Select-Object Name, Enabled, DefaultInboundAction
+```
+
+Kiểm tra các quy tắc cho phép theo tệp thực thi/cổng trong `wf.msc`.
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+ss -ltnp 'sport = :8317'
+```
+
+Kiểm tra chính sách tường lửa của bản phân phối để tránh các quy tắc cho phép kết nối đến không cần thiết.
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+lsof -nP -iTCP:8317 -sTCP:LISTEN
+```
+
+Kiểm tra các tùy chọn Tường lửa trong Cài đặt hệ thống của macOS.
+
+</TabItem>
+</Tabs>
+
+4. Chỉ được phép thấy `127.0.0.1:8317`. Dừng lại nếu IPv4 hoặc IPv6 lắng nghe trên mọi giao diện (`0.0.0.0` hoặc `::`) hoặc một địa chỉ LAN.
+5. Gỡ bỏ mọi phơi bày kết nối đến không cần thiết; không thêm chuyển tiếp cổng trên router hoặc ngoại lệ tường lửa cho engine.
+6. Kiểm tra `/v1/models` và một lượt hoàn thiện văn bản nhỏ ở cục bộ bằng khóa engine.
+
+Chạy `cloudflared` trên chính máy tính này. Địa chỉ `127.0.0.1` của bot production trỏ tới máy của chính nó.
+
+## 2. Tạo lớp bảo vệ Access trước khi công bố DNS
+
+Trong bảng điều khiển Cloudflare One, làm theo [hướng dẫn service token](https://developers.cloudflare.com/cloudflare-one/access-controls/service-credentials/service-tokens/):
+
+1. Trong `Access controls` > `Service credentials` > `Service tokens`, tạo một token cho relay production này với thời hạn phù hợp để bạn duy trì. Lưu trực tiếp Client ID và Client Secret của nó vào kho bí mật production. Secret chỉ hiển thị duy nhất một lần khi tạo.
+2. Trong `Access controls` > `Applications`, thêm một ứng dụng `Self-hosted` cho toàn bộ hostname `engine.example.com`, không giới hạn đường dẫn.
+3. Gắn một chính sách có hành động `Service Auth`, một quy tắc `Include` loại `Service Token`, và chỉ chọn duy nhất token đó. Xóa các chính sách `Allow` và `Bypass` quá rộng; kiểm tra để chắc chắn không có ứng dụng cụ thể hơn nào bỏ qua lớp bảo vệ trên đường dẫn khác.
+4. Lưu ứng dụng rồi ghi lại thẻ Application Audience (AUD) và tên nhóm Cloudflare One của bạn để xác thực trên trình kết nối. Duy trì lớp bảo vệ này trước khi công bố tuyến tunnel.
+
+- Dùng `Service Auth` cho client chạy tự động này. Đăng nhập trình duyệt, cookie trình duyệt, danh sách IP cho phép và các quy tắc Bypass rộng không cung cấp kiểu xác thực này.
+- Service token của Access định danh cho relay. Tệp JSON thông tin xác thực của tunnel hoặc token trình kết nối cấp quyền cho `cloudflared` chạy một tunnel. Giữ chúng tách biệt.
+- [Hướng dẫn xác thực máy](https://developers.cloudflare.com/cloudflare-one/access-controls/authenticate-agents/) của Cloudflare đề cập đến các client khác; relay này không cần đăng nhập agent tương tác.
+
+## 3. Tạo một tunnel định danh
+
+1. Cài đặt `cloudflared` từ [trang tải xuống chính thức](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/downloads/) hoặc kho gói. Các quy tắc này đã được kiểm tra cú pháp với phiên bản `2026.11.0`; hãy kiểm tra lại khi nâng cấp.
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+Kiểm tra mục trong Windows Package Manager trước khi cài đặt:
+
+```powershell
+winget show --id Cloudflare.cloudflared --exact
+winget install --id Cloudflare.cloudflared --exact
+cloudflared --version
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+Với Debian/Ubuntu, cấu hình [kho APT đã ký của Cloudflare](https://pkg.cloudflare.com/index.html):
+
+```bash
+sudo mkdir -p --mode=0755 /usr/share/keyrings
+curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg |
+  sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+printf '%s\n' 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' |
+  sudo tee /etc/apt/sources.list.d/cloudflared.list >/dev/null
+sudo apt-get update && sudo apt-get install cloudflared
+cloudflared --version
+```
+
+Với các bản phân phối khác, hãy dùng gói hoặc kiến trúc tương ứng từ trang tải xuống chính thức.
+
+</TabItem>
+<TabItem label="Mac">
+
+Khi đã cài đặt [Homebrew](https://brew.sh/):
+
+```bash
+brew install cloudflared
+cloudflared --version
+```
+
+</TabItem>
+</Tabs>
+
+2. Ủy quyền tên miền trong trình duyệt được mở bởi `tunnel login`, sau đó tạo tunnel định danh:
+
+```sh
+cloudflared tunnel login
+cloudflared tunnel create home-engine
+```
+
+Giữ riêng tư chứng chỉ tài khoản và tệp JSON thông tin xác thực tunnel được tạo ra. Xem [quy trình tạo tunnel định danh](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/local-management/create-local-tunnel/) của Cloudflare nếu lệnh có khác biệt.
+
+3. Tạo `config.yml` tại vị trí dành cho hệ điều hành của bạn. Thay đường dẫn tệp thông tin xác thực trong cấu hình YAML chung bên dưới bằng đường dẫn tuyệt đối tới tệp JSON tunnel đã tạo:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+- Cấu hình: `%USERPROFILE%\.cloudflared\config.yml`
+- Tệp thông tin xác thực: `C:\Users\LOCAL_ACCOUNT\.cloudflared\TUNNEL_UUID.json`
+
+```powershell
+$tunnelConfig = Join-Path $env:USERPROFILE '.cloudflared\config.yml'
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+- Cấu hình: `~/.cloudflared/config.yml`
+- Tệp thông tin xác thực: `/home/LOCAL_ACCOUNT/.cloudflared/TUNNEL_UUID.json` cho tài khoản người dùng thông thường; hãy dùng thư mục home thực tế của bạn.
+
+```bash
+tunnel_config="$HOME/.cloudflared/config.yml"
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+- Cấu hình: `~/.cloudflared/config.yml`
+- Tệp thông tin xác thực: `/Users/LOCAL_ACCOUNT/.cloudflared/TUNNEL_UUID.json`
+
+```bash
+tunnel_config="$HOME/.cloudflared/config.yml"
+```
+
+</TabItem>
+</Tabs>
+
+Thay thế các placeholder UUID, đường dẫn thông tin xác thực, tên nhóm và Application Audience:
+
+```yaml
+tunnel: TUNNEL_UUID
+credentials-file: 'ABSOLUTE_PATH_TO_TUNNEL_JSON'
+ingress:
+  - hostname: engine.example.com
+    path: ^/v1/(models|chat/completions)$
+    service: http://127.0.0.1:8317
+    originRequest:
+      access:
+        required: true
+        teamName: YOUR_TEAM_NAME
+        audTag:
+          - YOUR_APPLICATION_AUD
+  - service: http_status:404
+```
+
+- [Bước kiểm tra Access của trình kết nối](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/configure-tunnels/origin-parameters/#access) bắt buộc phải có JWT của ứng dụng ngay cả khi lớp bảo vệ ở biên vô tình bị gỡ bỏ.
+- Danh sách cho phép loại trừ `/v0/management`, `/v8/management`, `/management.html`, các callback OAuth, `/v1/tunnel` và các [đường dẫn CLIProxyAPI khác](https://github.com/router-for-me/CLIProxyAPI/blob/main/internal/api/server_routes.go). Luôn tắt phần quản lý ở cục bộ: lưu lượng từ trình kết nối đi vào qua loopback.
+- Ingress giữ nguyên `/v1`; relay bên dưới cũng giới hạn các phương thức HTTP.
+
+4. Kiểm tra định tuyến trước khi công bố DNS, sau đó khởi chạy trình kết nối:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$tunnelConfig = Join-Path $env:USERPROFILE '.cloudflared\config.yml'
+cloudflared tunnel --config $tunnelConfig ingress validate
+cloudflared tunnel --config $tunnelConfig ingress rule https://engine.example.com/v1/models
+cloudflared tunnel --config $tunnelConfig ingress rule https://engine.example.com/v8/management
+cloudflared tunnel route dns home-engine engine.example.com
+cloudflared tunnel --config $tunnelConfig run home-engine
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+tunnel_config="$HOME/.cloudflared/config.yml"
+cloudflared tunnel --config "$tunnel_config" ingress validate
+cloudflared tunnel --config "$tunnel_config" ingress rule https://engine.example.com/v1/models
+cloudflared tunnel --config "$tunnel_config" ingress rule https://engine.example.com/v8/management
+cloudflared tunnel route dns home-engine engine.example.com
+cloudflared tunnel --config "$tunnel_config" run home-engine
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+tunnel_config="$HOME/.cloudflared/config.yml"
+cloudflared tunnel --config "$tunnel_config" ingress validate
+cloudflared tunnel --config "$tunnel_config" ingress rule https://engine.example.com/v1/models
+cloudflared tunnel --config "$tunnel_config" ingress rule https://engine.example.com/v8/management
+cloudflared tunnel route dns home-engine engine.example.com
+cloudflared tunnel --config "$tunnel_config" run home-engine
+```
+
+</TabItem>
+</Tabs>
+
+5. Xác nhận đường dẫn models khớp với quy tắc loopback và đường dẫn management khớp với quy tắc 404 cuối cùng. Kiểm tra lại hostname trong Access và DNS.
+6. Sau khi kiểm tra chạy trực tiếp thành công, hãy làm theo hướng dẫn chạy dịch vụ theo hệ điều hành của Cloudflare. Cung cấp cho tài khoản dịch vụ đường dẫn cấu hình và thông tin xác thực tường minh; thư mục home của nó có thể khác với của bạn.
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+Dùng [quy trình dịch vụ Windows](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/local-management/as-a-service/windows/) hoặc một tác vụ định kỳ bị giới hạn quyền.
+
+</TabItem>
+<TabItem label="Linux">
+
+Dùng [quy trình dịch vụ Linux](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/local-management/as-a-service/linux/) cho các bản cài đặt dùng systemd.
+
+</TabItem>
+<TabItem label="Mac">
+
+Dùng [quy trình dịch vụ macOS](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/local-management/as-a-service/macos/) cho launchd.
+
+</TabItem>
+</Tabs>
+
+Cloudflare cung cấp HTTPS công khai; HTTP chỉ đi qua loopback trên máy tính. Luôn bật xác minh TLS. Tránh dùng Quick Tunnels, URL công khai dùng chung và các hostname thay thế không được bảo vệ.
+
+## 4. Cấu hình relay production
+
+Các bước này cần người vận hành triển khai production thực hiện:
+
+1. Cài đặt [Caddy](https://caddyserver.com/docs/install) hoặc thêm dịch vụ Caddy vào bản triển khai. Image của TomoriBot và các tệp Compose hiện có không tự khởi chạy Caddy.
+2. Sao chép `docker/cloudflare-relay.Caddyfile` từ kho mã nguồn sang cấu hình dịch vụ được bảo vệ. Thay thế `relay.example.net` và mọi chỗ `engine.example.com`, bao gồm cả header `Host` thượng nguồn.
+3. Cung cấp các biến sau cho tiến trình Caddy từ kho bí mật production:
+
+| Bí mật | Nơi khác cần lưu |
+|---|---|
+| `ENGINE_API_KEY` | Cấu hình client key của engine và thông tin xác thực endpoint đã lưu (được mã hóa) của TomoriBot |
+| `CF_ACCESS_CLIENT_ID` | Một service token của Access |
+| `CF_ACCESS_CLIENT_SECRET` | Cùng service token Access đó |
+
+- Tạo khóa engine từ ít nhất 32 byte ngẫu nhiên mã hóa dạng hex hoặc base64, không chứa khoảng trắng hay ký tự đại diện `*` của Caddy.
+- Dùng tham chiếu bí mật hoặc mount được bảo vệ. Giữ bí mật gốc nằm ngoài lệnh shell, tham số container, Git và nhật ký.
+- Giữ khóa engine trong `auth_token` của TomoriBot; thông tin xác thực Access chỉ thuộc về Caddy.
+
+4. Từ thư mục chứa Caddyfile được bảo vệ, kiểm tra và chạy Caddy sau khi kho bí mật production đã nạp các biến môi trường. Khởi chạy trực tiếp trên terminal dùng lệnh sau:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+foreach ($name in 'ENGINE_API_KEY', 'CF_ACCESS_CLIENT_ID', 'CF_ACCESS_CLIENT_SECRET') {
+  if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+    throw "Missing relay secret: $name"
+  }
+}
+caddy validate --config .\Caddyfile --adapter caddyfile
+caddy run --config .\Caddyfile --adapter caddyfile
+```
+
+Để chạy tự động không cần tương tác, hãy làm theo [hướng dẫn dịch vụ Windows](https://caddyserver.com/docs/running#windows-service) của Caddy.
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+if [ -n "${ENGINE_API_KEY:-}" ] && [ -n "${CF_ACCESS_CLIENT_ID:-}" ] && [ -n "${CF_ACCESS_CLIENT_SECRET:-}" ]; then
+  caddy validate --config ./Caddyfile --adapter caddyfile &&
+    caddy run --config ./Caddyfile --adapter caddyfile
+else
+  printf 'Load all three relay secrets before starting Caddy.\n' >&2
+fi
+```
+
+Để chạy tự động, hãy dùng [dịch vụ systemd](https://caddyserver.com/docs/running#linux-service) của Caddy với đúng đường dẫn cấu hình và môi trường dịch vụ được bảo vệ.
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+if [ -n "${ENGINE_API_KEY:-}" ] && [ -n "${CF_ACCESS_CLIENT_ID:-}" ] && [ -n "${CF_ACCESS_CLIENT_SECRET:-}" ]; then
+  caddy validate --config ./Caddyfile --adapter caddyfile &&
+    caddy run --config ./Caddyfile --adapter caddyfile
+else
+  printf 'Load all three relay secrets before starting Caddy.\n' >&2
+fi
+```
+
+Cấu hình khởi chạy tự động bằng trình quản lý dịch vụ launchd hoặc container với cùng đường dẫn cấu hình và môi trường được bảo vệ.
+
+</TabItem>
+</Tabs>
+
+5. Trỏ DNS của relay về lối vào HTTPS production. Caddy chạy độc lập cần mở chiều vào cổng 443 và kết nối cho xác thực chứng chỉ, thường là 80/443. Dùng bản ghi chỉ DNS (DNS-only) cho relay để tránh gặp giới hạn timeout thứ hai từ proxy của Cloudflare. Với lối vào TLS được quản lý sẵn, giữ trình lắng nghe backend ở mạng riêng. Chỉ trỏ hostname của engine về tunnel tại nhà.
+6. Cấu hình khởi chạy dịch vụ và xử lý khởi động lại. Ví dụ này tắt API quản trị của Caddy, nên hãy khởi động lại Caddy sau mỗi lần cập nhật bí mật hoặc cấu hình. Giữ riêng tư môi trường và cấu hình đã lưu của nó; tránh ghi nhật ký gỡ lỗi hoặc header yêu cầu.
+
+Cấu hình được cung cấp đã được kiểm tra với Caddy 2.11.9. Cấu hình này:
+
+- Yêu cầu khóa engine trước khi cho phép `GET /v1/models` hoặc `POST /v1/chat/completions`.
+- Xóa các header gửi đến, sau đó cấp thông tin xác thực cho một máy chủ thượng nguồn cố định. Client không thể chọn đích đến khác hoặc ghi đè các header Access của nó.
+- Từ chối chuyển hướng từ thượng nguồn bằng mã 502 và che phần thân lỗi thượng nguồn.
+- Tự động đẩy dữ liệu SSE ngay lập tức, không đệm phản hồi hay bật API quản trị. Xem [tài liệu tham khảo proxy của Caddy](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy).
+
+## 5. Xác thực kết nối
+{/* anchor: validate-each-authentication-check */}
+
+Từ môi trường production, kiểm tra mọi trường hợp trong bảng trước khi đăng ký endpoint. Đối chiếu nhật ký Access và nhật ký trên engine cục bộ để phân biệt lỗi xác thực của từng lớp.
+
+| Yêu cầu | Kết quả kỳ vọng |
+|---|---|
+| URL tunnel, không có Access token hoặc sai token | Access từ chối; engine không nhận được yêu cầu nào |
+| Access token hợp lệ, sai khóa engine | Engine trả về 401, nếu engine có hỗ trợ xác thực |
+| Cả hai thông tin xác thực đều đúng | JSON danh sách model chứa `data` và các ID model |
+| URL relay, thiếu hoặc sai Bearer key | Relay trả về 401 trước khi liên hệ tới Access |
+| Đúng khóa, sai phương thức hoặc đường dẫn quản lý | Relay trả về 404; các đường dẫn quản lý trực tiếp qua tunnel cũng trả về 404 sau khi xác thực Access |
+
+<details>
+<summary>Các lệnh kiểm tra xác thực</summary>
+
+Để kho bí mật cung cấp các biến môi trường, tắt ghi phiên bản lệnh và chạy ví dụ này. Lệnh in ra mã trạng thái và kiểu nội dung mà không đi theo chuyển hướng hay in phần thân/header.
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+Add-Type -AssemblyName System.Net.Http
+$origin = 'https://engine.example.com/v1'
+$relay = 'https://relay.example.net/v1'
+$access = @{
+  'CF-Access-Client-Id' = $env:CF_ACCESS_CLIENT_ID
+  'CF-Access-Client-Secret' = $env:CF_ACCESS_CLIENT_SECRET
+}
+$good = $access.Clone()
+$good.Authorization = "Bearer $env:ENGINE_API_KEY"
+$badToken = $good.Clone()
+$badToken['CF-Access-Client-Secret'] = 'invalid-test-token'
+$badKey = $access.Clone()
+$badKey.Authorization = 'Bearer invalid-test-key'
+$cases = @(
+  @{ Uri = "$origin/models"; Headers = @{} },
+  @{ Uri = "$origin/models"; Headers = $badToken },
+  @{ Uri = "$origin/models"; Headers = $badKey },
+  @{ Uri = "$origin/models"; Headers = $good },
+  @{ Uri = "$relay/models"; Headers = @{} },
+  @{ Uri = "$relay/models"; Headers = @{ Authorization = "Bearer $env:ENGINE_API_KEY" } }
+)
+$handler = [Net.Http.HttpClientHandler]::new()
+$handler.AllowAutoRedirect = $false
+$client = [Net.Http.HttpClient]::new($handler)
+try {
+  foreach ($case in $cases) {
+    $request = [Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::Get, $case.Uri)
+    foreach ($header in $case.Headers.GetEnumerator()) {
+      $request.Headers.Add($header.Key, [string]$header.Value)
+    }
+    $result = $client.SendAsync($request).GetAwaiter().GetResult()
+    try {
+      [pscustomobject]@{ Url = $case.Uri; Status = [int]$result.StatusCode; Type = $result.Content.Headers.ContentType }
+    } finally {
+      $result.Dispose()
+      $request.Dispose()
+    }
+  }
+} finally {
+  $client.Dispose()
+}
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+Tắt ghi dấu vết shell. Hàm dưới đây truyền thông tin xác thực qua tệp cấu hình stdin của curl để không lộ trong tham số tiến trình.
+
+```bash
+set +x
+origin='https://engine.example.com/v1'
+relay='https://relay.example.net/v1'
+probe() {
+  probe_url=$1
+  access_mode=$2
+  key_mode=$3
+  {
+    if [ "$access_mode" != none ]; then
+      printf 'header = "CF-Access-Client-Id: %s"\n' "$CF_ACCESS_CLIENT_ID"
+      if [ "$access_mode" = bad ]; then
+        printf 'header = "CF-Access-Client-Secret: invalid-test-token"\n'
+      else
+        printf 'header = "CF-Access-Client-Secret: %s"\n' "$CF_ACCESS_CLIENT_SECRET"
+      fi
+    fi
+    if [ "$key_mode" = good ]; then
+      printf 'header = "Authorization: Bearer %s"\n' "$ENGINE_API_KEY"
+    elif [ "$key_mode" = bad ]; then
+      printf 'header = "Authorization: Bearer invalid-test-key"\n'
+    fi
+  } | curl --config - --silent --show-error --output /dev/null \
+    --write-out '%{http_code} %{content_type}\n' "$probe_url"
+}
+probe "$origin/models" none none
+probe "$origin/models" bad good
+probe "$origin/models" good bad
+probe "$origin/models" good good
+probe "$relay/models" none none
+probe "$relay/models" none good
+unset -f probe
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+Tắt ghi dấu vết shell. Hàm dưới đây truyền thông tin xác thực qua tệp cấu hình stdin của curl để không lộ trong tham số tiến trình.
+
+```bash
+set +x
+origin='https://engine.example.com/v1'
+relay='https://relay.example.net/v1'
+probe() {
+  probe_url=$1
+  access_mode=$2
+  key_mode=$3
+  {
+    if [ "$access_mode" != none ]; then
+      printf 'header = "CF-Access-Client-Id: %s"\n' "$CF_ACCESS_CLIENT_ID"
+      if [ "$access_mode" = bad ]; then
+        printf 'header = "CF-Access-Client-Secret: invalid-test-token"\n'
+      else
+        printf 'header = "CF-Access-Client-Secret: %s"\n' "$CF_ACCESS_CLIENT_SECRET"
+      fi
+    fi
+    if [ "$key_mode" = good ]; then
+      printf 'header = "Authorization: Bearer %s"\n' "$ENGINE_API_KEY"
+    elif [ "$key_mode" = bad ]; then
+      printf 'header = "Authorization: Bearer invalid-test-key"\n'
+    fi
+  } | curl --config - --silent --show-error --output /dev/null \
+    --write-out '%{http_code} %{content_type}\n' "$probe_url"
+}
+probe "$origin/models" none none
+probe "$origin/models" bad good
+probe "$origin/models" good bad
+probe "$origin/models" good good
+probe "$relay/models" none none
+probe "$relay/models" none good
+unset -f probe
+```
+
+</TabItem>
+</Tabs>
+
+</details>
+
+- Từ chối của Access có thể trả về mã 401/403 hoặc chuyển hướng tới trang đăng nhập. Một trang HTML có mã 200 là kiểm tra thất bại.
+- Kiểm tra phần thân phản hồi thành công phải là JSON của engine; chỉ riêng mã 200 không chứng minh được nhiều.
+- Thử một yêu cầu hoàn thiện nhỏ, sau đó thử `stream: true`. Xác minh các khung `data:` của SSE đến từng phần và kết thúc bình thường với client phát trực tuyến. Ngắt giữa chừng và xác nhận máy chủ gốc dừng sinh văn bản.
+- Các bộ kiểm thử trong kho mã nguồn không thay thế cho việc kiểm tra chính sách Access thực tế, hành vi mạng hoặc quyền sử dụng dịch vụ thượng nguồn của bạn.
+
+## 6. Đăng ký và chọn model
+
+1. Trong `/providers` hoặc `/personal providers`, thêm mục `Tương thích OpenAI` với `https://relay.example.net/v1` và khóa engine vào ô `Token xác thực` (`auth_token`).
+2. Chọn endpoint đã lưu, thêm một `Model văn bản` và nhập đúng ID từ `/v1/models`. TomoriBot mã hóa khóa đã lưu nhưng không tự động nhập các ID model.
+3. Thêm thêm các ID model dưới cùng kết nối đó để chuyển đổi giữa chúng trong bảng. Tunnel không tự chọn model.
+4. Xác nhận phản hồi hoàn tất trong Discord. Chỉ bật công cụ sau khi đã thử nghiệm một lượt gọi vô hại, kết quả trả về và câu trả lời kế tiếp. Các lô công cụ song song không được hỗ trợ; tắt các tính năng khác cho đến khi đã kiểm thử.
+
+## Các engine khác và giới hạn
+
+| Engine | Điều chỉnh cần thiết |
+|---|---|
+| CLIProxyAPI | Cổng 8317; hai đường dẫn `/v1` được phép là đủ cho văn bản và đăng ký model. Luôn tắt phần quản lý. Làm theo [hướng dẫn điều khoản và thiết lập backend](/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/) của nó. |
+| KoboldCPP / LM Studio | Thay đúng cổng loopback thực tế và bật xác thực bằng khóa suy luận khi có hỗ trợ. Dùng độ tương thích OpenAI. Thao tác dỡ nạp GPU/quản trị bị loại khỏi danh sách cho phép này. |
+| Ollama | Dùng `Tương thích OpenAI` và `/v1`, không dùng kiểu gốc vì phép thăm dò của kiểu đó gọi `/api/tags`. API cục bộ của Ollama không có xác thực API key tích hợp sẵn; khóa của relay dùng để xác thực bên gọi, còn Access bảo vệ tunnel. Khóa đó không xác thực tại chính Ollama. Giữ Ollama chỉ lắng nghe loopback; thêm một gateway cục bộ có xác thực nếu bạn cần xác thực độc lập ở máy chủ gốc. |
+| ComfyUI | Relay văn bản này không đủ dùng. Quá trình đăng ký của ComfyUI thăm dò `/system_stats`, tác vụ dùng `/prompt` và thăm dò lịch sử, còn tệp dùng các đường dẫn tải lên/xem. Hãy thiết kế danh sách cho phép đường dẫn và phương thức tường minh cho các thao tác đó rồi xác thực gateway cục bộ trước khi công bố. Tuyệt đối không mở toàn bộ các đường dẫn tiện ích mở rộng, trình duyệt tệp hoặc quản trị. |
+| Các engine giọng nói | Danh sách cho phép văn bản là không đủ. Đăng ký `tts-clone` cần `/health`; chép lời cần bước khám phá model và đường dẫn âm thanh của nó, thường là `/v1/audio/transcriptions`; tổng hợp giọng nói có giao thức riêng. Hãy xem hướng dẫn TomoriBot của từng engine để liệt kê chính xác đường dẫn và yêu cầu multipart/nhị phân trước khi điều chỉnh relay. |
+
+- Các engine không có xác thực bắt buộc chỉ lắng nghe loopback. Access bảo vệ tunnel của chúng và relay yêu cầu một client key ngẫu nhiên; thêm một gateway cục bộ có xác thực nếu bạn cần xác thực độc lập cho engine. Nếu không, bài kiểm tra 401 ở máy chủ gốc sẽ không thể đạt.
+- [Giới hạn kết nối](https://developers.cloudflare.com/fundamentals/reference/connection-limits/): thời gian chờ đọc mặc định 125 giây, thời gian chờ ghi 30 giây. Hãy kiểm thử các lượt sinh văn bản im lặng kéo dài. Tùy chọn `requests.streaming.keepalive-seconds` và `send-keepalive-before-ft` của CLIProxyAPI có thể gửi tín hiệu duy trì SSE, nhưng không kéo dài ngân sách thời gian của chính TomoriBot.
+- [Giới hạn tải lên](https://developers.cloudflare.com/support/troubleshooting/http-status-codes/4xx-client-error/error-413/): Free/Pro 100 MB, Business 200 MB, Enterprise tối đa 5 GB; giới hạn cấu hình sẵn có thể thấp hơn. Base64 làm phình kích thước ảnh, và mọi giới hạn của lối vào/engine/bot đều vẫn áp dụng.
+- [WebSocket](https://developers.cloudflare.com/network/websockets/) được Cloudflare hỗ trợ nhưng bị loại trừ khỏi relay văn bản này. Các engine cần WebSocket đòi hỏi cấu hình định tuyến và xác thực bắt tay được kiểm thử riêng.
+- Đường dẫn tệp cục bộ, `file://` và các URL đầu ra loopback không thể dùng từ môi trường production. Lượt tải phương tiện thông thường cũng không có header của Access. Hãy trả về byte trực tiếp qua thao tác đã xác thực hoặc thiết kế một đường dẫn tải xuống được ủy quyền; không bao giờ phơi bày thư mục chứa thông tin xác thực hoặc đặt bí mật vào URL.
+
+## Xử lý sự cố và khôi phục
+
+| Triệu chứng | Mục cần kiểm tra |
+|---|---|
+| Máy chủ gốc từ chối / 502 | Tiến trình engine, đúng cổng loopback và máy chạy trình kết nối; một tunnel không thể chạm tới loopback của máy tính khác. |
+| Ngắt kết nối tunnel / 1033 | Tiến trình/dịch vụ trình kết nối, kết nối chiều đi cổng 7844, đường truyền ISP, chế độ ngủ và khởi động lại Windows. |
+| 403 hoặc HTML đăng nhập | Toàn bộ hostname của ứng dụng Access, chính sách `Service Auth`, đúng token, hạn dùng và các header bị thiếu. Tuyệt đối không thêm Bypass để sửa lỗi. |
+| 401 từ máy chủ gốc | So sánh client key gốc với Access token; khóa của relay và khóa của engine phải khớp nhau. |
+| 404 | Đúng một hậu tố `/v1`, đúng ID model, khớp quy tắc tunnel và danh sách cho phép phương thức/đường dẫn của relay. |
+| 5xx / 524 / ngắt luồng | Thời gian chờ đọc, engine bị treo, hạn mức, bộ đệm và chế độ ngủ của máy tính; kiểm tra nhật ký engine cục bộ và Access đã ẩn thông tin nhạy cảm. Relay ẩn phần thân lỗi của máy chủ gốc. |
+| URL bị từ chối bởi SSRF | DNS HTTPS công khai cho relay, bao gồm mọi bản ghi A/AAAA trả về. Địa chỉ riêng tư, loopback, metadata, DNS lẫn lộn riêng tư/công khai và chuyển hướng không an toàn vẫn bị từ chối trong production. |
+| Lỗi DNS/TLS | Bản ghi đã lan truyền, UUID/hostname của tunnel, chứng chỉ hợp lệ của relay và đúng `Host` thượng nguồn; không bao giờ tắt xác minh TLS. |
+| Thiếu model | Backend được ủy quyền của engine và JSON danh sách model. Đăng ký thủ công lại đúng ID sau khi đổi bí danh. |
+| URL tệp đầu ra cục bộ | Điều chỉnh giao thức giao nhận tệp của engine; đưa giao diện web qua tunnel không làm cho đường dẫn cục bộ tải xuống được. |
+
+- Sau khi máy ngủ, khởi động lại hoặc mất kết nối ISP, hãy khôi phục engine trước, rồi đến `cloudflared`, sau đó kiểm tra lại Access và relay. Bắt đầu một yêu cầu nhỏ mới; các luồng bị gián đoạn không thể nối tiếp, và việc thử lại các lượt gọi công cụ có thể lặp lại tác động của chúng.
+- Tuyến riêng tư/WARP yêu cầu ghi danh workload, cấu hình định tuyến và các quy tắc Gateway. TomoriBot bản production hiện tại từ chối các đích đến riêng tư. Hướng dẫn này không cung cấp ngoại lệ cho tuyến riêng tư; giữ nguyên các kiểm tra SSRF ở trạng thái bật.
+
+## Thu hồi quyền truy cập và dọn dẹp
+
+1. Để ngắt suy luận ngay lập tức, hãy dừng relay. Dừng trình kết nối cục bộ và xóa tuyến DNS/tunnel của nó khi ngừng sử dụng hẳn.
+2. Thu hồi Access token và xóa các chính sách, ứng dụng, DNS relay và chứng chỉ không còn dùng.
+3. Khi xoay vòng token định kỳ, cập nhật chính sách và bí mật production, kiểm tra/khởi động lại relay, rồi mới thu hồi token cũ.
+4. Xoay vòng khóa engine ở phía engine, kho bí mật của relay và endpoint đã lưu trong TomoriBot. Việc sửa một mục trên bảng Discord không tự thu hồi khóa engine hay cập nhật các kết nối đã lưu khác.
+5. Khi xảy ra sự cố bảo mật, hãy thu hồi trước và chấp nhận gián đoạn dịch vụ. Với các proxy dùng OAuth, thu hồi ủy quyền ở dịch vụ thượng nguồn và xóa các tệp token cục bộ. Bảo vệ các bản sao lưu/nhật ký còn lưu trữ chứa thông tin xác thực cũ.

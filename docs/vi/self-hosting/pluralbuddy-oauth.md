@@ -2,7 +2,7 @@
 title: "Thiết lập PluralBuddy OAuth"
 description: "Ủy quyền cho instance TomoriBot self-hosting của bạn xác minh tin nhắn từ các instance PluralBuddy đã được phê duyệt."
 sidebar:
-  order: 8
+  order: 7
 ---
 
 Một instance TomoriBot self-hosting cần một ứng dụng PluralBuddy đã được ủy quyền cho dịch vụ chính thức và từng instance tùy chỉnh đã được phê duyệt.

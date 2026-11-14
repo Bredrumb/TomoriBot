@@ -125,7 +125,7 @@ OpenCode Go (`https://opencode.ai/zen/go/v1`) とOpenCode Zen (`https://opencode
 
 - [セットアップ: ローカルLLM](/ja/self-hosting/local-endpoints/setup-local-llm/): Ollama、KoboldCPP、LM Studio、vLLM、LiteLLM。
 - [セットアップ: ComfyUI](/ja/self-hosting/local-endpoints/setup-comfyui/): ローカルの画像とビデオの生成。
-- [セットアップ: ChatMock](/ja/self-hosting/local-endpoints/setup-chatmock/): ChatGPTアカウントまたはCodex CLI。
+- [セットアップ: ChatMock](/ja/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/): ChatGPTアカウントまたはCodex CLI。
 
 ## サポートされているプロバイダー
 <!-- anchor: supported-providers -->
@@ -145,7 +145,7 @@ OpenCode Go (`https://opencode.ai/zen/go/v1`) とOpenCode Zen (`https://opencode
 | Z.ai | ✅ | ✅ | ✅ | - | 無料モデル。🟡 ToS = コーディングとエージェントのみの使用 |
 | Z.aiコーディング | ✅ | ✅ | - | - | 定期購入プラン |
 | Google Vertex AI | ✅ | ✅ | ✅ | ✅ | 「無料」Expressバージョンが含まれています |
-| Codex CLI (ChatMock経由) | ✅ | ✅ | ✅ | - | [セットアップ](/ja/self-hosting/local-endpoints/setup-chatmock/) |
+| Codex CLI (ChatMock経由) | ✅ | ✅ | ✅ | - | [セットアップ](/ja/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/) |
 
 ### 画像生成
 

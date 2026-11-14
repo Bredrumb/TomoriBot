@@ -1,0 +1,553 @@
+---
+title: "Cloudflare Tunnel"
+sidebar:
+  label: "Cloudflare Tunnel"
+  order: 3
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+使用 Cloudflare Tunnel、Access 服务身份验证以及经过身份验证的 Caddy 中继，将独立托管的 TomoriBot 连接到你 Windows、Linux 或 Mac 电脑上的引擎。
+
+本指南适用于 [CLIProxyAPI](/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/)、KoboldCPP、Ollama 和 LM Studio 等 Chat Completions 引擎。其他协议请参阅下方的引擎说明。
+
+:::note[请先部署中继]
+仓库提供的 Caddyfile 仅包含配置。你的生产部署必须显式运行 Caddy、加载其密钥，并提供 HTTPS 主机名。仅将文件添加到 `docker/`、构建 TomoriBot 或在 Discord 中注册端点，并不会启动中继。请先让部署运维人员完成第 4 步，再使用其 URL。
+:::
+
+## 架构与前提条件
+
+```text
+Production host                              Local computer
+TomoriBot -> HTTPS Caddy relay -> Cloudflare Access -> Tunnel -> cloudflared -> engine
+            Bearer key check      service token                  HTTP loopback
+                                  + engine Bearer key             127.0.0.1
+```
+
+请准备以下内容：
+
+- 一个已在 Cloudflare 上激活的域名，以及管理 DNS、Tunnel 和 Access 应用程序的权限。
+- 一个正常运行中的本地引擎，以及你有权使用的模型。
+- 引擎所在电脑上的 `cloudflared`，且能够出站连接到 Cloudflare（7844 端口，用于 QUIC 或 HTTP/2）。
+- 生产部署密钥库的控制权限，以及在生产环境中运行 [Caddy](https://caddyserver.com/docs/install) 的权限。
+- 两个 HTTPS 主机名：受保护隧道使用的 `engine.example.com` 和 Caddy 使用的 `relay.example.net`。请将这些占位符替换为你自己控制的主机名。
+- 中继所需的公网 DNS、有效 TLS 证书以及生产环境 HTTPS 入口。本方案要求你拥有可提供这些条件的主机环境。
+
+各层身份验证彼此独立：
+
+1. TomoriBot 将其保存的引擎密钥通过 `Authorization: Bearer ...` 发送给中继。
+2. 中继校验该密钥并保留给引擎使用，同时附加 `CF-Access-Client-Id` 和 `CF-Access-Client-Secret`。TomoriBot 的端点面板无法直接提供这些额外请求头。
+3. Cloudflare Access 校验服务令牌；在引擎支持验证时，引擎也会独立校验自己的密钥。
+
+请为此连接使用专用的长随机密钥。任何持有该密钥的人都可以使用此中继。Cloudflare 只负责识别中继的服务令牌；Discord 用户的权限控制仍由 TomoriBot 负责。
+
+## 1. 加固本地源站
+
+1. 按照引擎的配置指南进行设置，并将其绑定到 `127.0.0.1`。本处的 [CLIProxyAPI 示例](/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/)使用 8317 端口；在后续步骤中请替换为你的引擎实际端口。
+2. 在引擎支持的情况下设置长随机推理密钥。将管理密码单独存放，并禁用不必要的仪表盘、服务发现与管理 API。
+3. 验证监听地址与防火墙配置文件：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+Get-NetTCPConnection -State Listen -LocalPort 8317 |
+  Select-Object LocalAddress, LocalPort, OwningProcess
+Get-NetFirewallProfile | Select-Object Name, Enabled, DefaultInboundAction
+```
+
+在 `wf.msc` 中检查可执行文件与端口的允许规则。
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+ss -ltnp 'sport = :8317'
+```
+
+检查你的发行版防火墙策略，确认没有不必要的入站允许规则。
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+lsof -nP -iTCP:8317 -sTCP:LISTEN
+```
+
+在 macOS「系统设置」中检查防火墙选项。
+
+</TabItem>
+</Tabs>
+
+4. 确认只有 `127.0.0.1:8317`。如果发现 IPv4 或 IPv6 监听在所有接口（`0.0.0.0` 或 `::`）或局域网地址上，请立即停止。
+5. 移除不必要的入站暴露；不要添加路由器端口转发，也不要为引擎添加防火墙例外规则。
+6. 在本地使用引擎密钥测试 `/v1/models` 和一次简短补全请求。
+
+请在同一台电脑上运行 `cloudflared`。生产环境 bot 机器上的 `127.0.0.1` 指向的是它自己。
+
+## 2. 发布 DNS 前先创建 Access 保护
+
+在 Cloudflare One 控制台按照[服务令牌说明](https://developers.cloudflare.com/cloudflare-one/access-controls/service-credentials/service-tokens/)操作：
+
+1. 在 `Access controls` > `Service credentials` > `Service tokens` 下，为此生产中继创建一个令牌，并设置可维护的有效期。将其 Client ID 和 Client Secret 直接存入生产环境的密钥库。Secret 只会在创建时显示一次。
+2. 在 `Access controls` > `Applications` 下，为整个主机名 `engine.example.com` 添加一个 `Self-hosted` 应用程序，不要设置路径限制。
+3. 附加一条规则：操作选 `Service Auth`，包含一条类型为 `Service Token` 的 `Include` 规则，并且只选中上面创建的那个令牌。移除宽泛的 `Allow` 和 `Bypass` 策略；检查是否还有更具体的应用程序在其他路径上绕过了保护。
+4. 保存该应用程序，并记下它的 Application Audience (AUD) 标签以及你的 Cloudflare One 团队名称，用于后续的连接器校验。务必先让此保护生效，再发布隧道路由。
+
+- 这种无人值守客户端请使用 `Service Auth`。浏览器登录、浏览器 Cookie、IP 白名单和宽泛的 Bypass 规则都无法提供此类身份验证。
+- Access 服务令牌用于识别中继；隧道凭据 JSON 或连接器令牌用于授权 `cloudflared` 运行隧道。两者请分开保管。
+- Cloudflare 的[机器身份验证指南](https://developers.cloudflare.com/cloudflare-one/access-controls/authenticate-agents/)涵盖了其他客户端；此中继不需要交互式代理登录。
+
+## 3. 创建命名隧道
+
+1. 通过官方[下载页](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/downloads/)或软件包仓库安装 `cloudflared`。以下规则已在 `2026.11.0` 上完成语法检查；升级后请重新验证。
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+安装前先检查 Windows Package Manager 中的软件包信息：
+
+```powershell
+winget show --id Cloudflare.cloudflared --exact
+winget install --id Cloudflare.cloudflared --exact
+cloudflared --version
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+对于 Debian/Ubuntu，请配置 Cloudflare 已签名的 [APT 仓库](https://pkg.cloudflare.com/index.html)：
+
+```bash
+sudo mkdir -p --mode=0755 /usr/share/keyrings
+curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg |
+  sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+printf '%s\n' 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' |
+  sudo tee /etc/apt/sources.list.d/cloudflared.list >/dev/null
+sudo apt-get update && sudo apt-get install cloudflared
+cloudflared --version
+```
+
+其他发行版请从官方下载页选用对应的软件包或架构版本。
+
+</TabItem>
+<TabItem label="Mac">
+
+已安装 [Homebrew](https://brew.sh/) 时：
+
+```bash
+brew install cloudflared
+cloudflared --version
+```
+
+</TabItem>
+</Tabs>
+
+2. 在 `tunnel login` 打开的浏览器中为域名授权，然后创建命名隧道：
+
+```sh
+cloudflared tunnel login
+cloudflared tunnel create home-engine
+```
+
+请妥善私密保管生成的账号证书和隧道凭据 JSON。如果命令存在差异，请参阅 Cloudflare 的[命名隧道步骤](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/local-management/create-local-tunnel/)。
+
+3. 在对应操作系统的路径创建 `config.yml`。将下方共享 YAML 中的凭据文件路径替换为生成的隧道 JSON 的绝对路径：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+- 配置路径：`%USERPROFILE%\.cloudflared\config.yml`
+- 凭据文件：`C:\Users\LOCAL_ACCOUNT\.cloudflared\TUNNEL_UUID.json`
+
+```powershell
+$tunnelConfig = Join-Path $env:USERPROFILE '.cloudflared\config.yml'
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+- 配置路径：`~/.cloudflared/config.yml`
+- 凭据文件：常规用户账号下通常为 `/home/LOCAL_ACCOUNT/.cloudflared/TUNNEL_UUID.json`；请使用你的实际主目录。
+
+```bash
+tunnel_config="$HOME/.cloudflared/config.yml"
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+- 配置路径：`~/.cloudflared/config.yml`
+- 凭据文件：`/Users/LOCAL_ACCOUNT/.cloudflared/TUNNEL_UUID.json`
+
+```bash
+tunnel_config="$HOME/.cloudflared/config.yml"
+```
+
+</TabItem>
+</Tabs>
+
+替换其中的 UUID、凭据路径、团队名称和应用程序 Audience 占位符：
+
+```yaml
+tunnel: TUNNEL_UUID
+credentials-file: 'ABSOLUTE_PATH_TO_TUNNEL_JSON'
+ingress:
+  - hostname: engine.example.com
+    path: ^/v1/(models|chat/completions)$
+    service: http://127.0.0.1:8317
+    originRequest:
+      access:
+        required: true
+        teamName: YOUR_TEAM_NAME
+        audTag:
+          - YOUR_APPLICATION_AUD
+  - service: http_status:404
+```
+
+- [连接器 Access 检查](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/configure-tunnels/origin-parameters/#access)会要求提供该应用的 JWT，即使边缘保护被意外移除也依然生效。
+- 白名单排除了 `/v0/management`、`/v8/management`、`/management.html`、OAuth 回调、`/v1/tunnel` 以及其他 [CLIProxyAPI 路由](https://github.com/router-for-me/CLIProxyAPI/blob/main/internal/api/server_routes.go)。请在本地保持管理功能禁用：连接器流量也是通过环回地址进入的。
+- 入站规则会保留 `/v1`；下方中继还会进一步限制请求方法。
+
+4. 在发布 DNS 前先验证路由，然后启动连接器：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$tunnelConfig = Join-Path $env:USERPROFILE '.cloudflared\config.yml'
+cloudflared tunnel --config $tunnelConfig ingress validate
+cloudflared tunnel --config $tunnelConfig ingress rule https://engine.example.com/v1/models
+cloudflared tunnel --config $tunnelConfig ingress rule https://engine.example.com/v8/management
+cloudflared tunnel route dns home-engine engine.example.com
+cloudflared tunnel --config $tunnelConfig run home-engine
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+tunnel_config="$HOME/.cloudflared/config.yml"
+cloudflared tunnel --config "$tunnel_config" ingress validate
+cloudflared tunnel --config "$tunnel_config" ingress rule https://engine.example.com/v1/models
+cloudflared tunnel --config "$tunnel_config" ingress rule https://engine.example.com/v8/management
+cloudflared tunnel route dns home-engine engine.example.com
+cloudflared tunnel --config "$tunnel_config" run home-engine
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+tunnel_config="$HOME/.cloudflared/config.yml"
+cloudflared tunnel --config "$tunnel_config" ingress validate
+cloudflared tunnel --config "$tunnel_config" ingress rule https://engine.example.com/v1/models
+cloudflared tunnel --config "$tunnel_config" ingress rule https://engine.example.com/v8/management
+cloudflared tunnel route dns home-engine engine.example.com
+cloudflared tunnel --config "$tunnel_config" run home-engine
+```
+
+</TabItem>
+</Tabs>
+
+5. 确认 models 请求命中环回规则，而 management 请求命中末尾的 404。在 Access 与 DNS 中核对主机名。
+6. 前台验证无误后，按照 Cloudflare 针对各系统的服务指南配置后台服务。请为服务账号显式指定配置文件和凭据路径，因为服务账号的主目录可能与你的不同。
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+使用 [Windows 服务步骤](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/local-management/as-a-service/windows/)或受限的计划任务。
+
+</TabItem>
+<TabItem label="Linux">
+
+对于基于 systemd 的系统，请使用 [Linux 服务步骤](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/local-management/as-a-service/linux/)。
+
+</TabItem>
+<TabItem label="Mac">
+
+对于 launchd，请使用 [macOS 服务步骤](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/local-management/as-a-service/macos/)。
+
+</TabItem>
+</Tabs>
+
+Cloudflare 提供公网 HTTPS，HTTP 只在本机的环回地址上传输。请保持 TLS 验证开启。避免使用 Quick Tunnels、共享公网 URL 或其他未受保护的主机名。
+
+## 4. 配置生产中继
+
+以下步骤需要由生产部署运维人员完成：
+
+1. 安装 [Caddy](https://caddyserver.com/docs/install) 或在部署中添加 Caddy 服务。TomoriBot 镜像与现有的 Compose 文件不会自动启动它。
+2. 将代码仓库中的 `docker/cloudflare-relay.Caddyfile` 复制到受保护的服务配置目录。替换其中的 `relay.example.net` 和每一处 `engine.example.com`，包括上游 `Host` 请求头。
+3. 从生产密钥库向 Caddy 进程提供以下环境变量：
+
+| 密钥 | 同时配置于何处 |
+|---|---|
+| `ENGINE_API_KEY` | 引擎的客户端密钥配置，以及 TomoriBot 加密保存的端点凭据 |
+| `CF_ACCESS_CLIENT_ID` | 同一个 Access 服务令牌 |
+| `CF_ACCESS_CLIENT_SECRET` | 同一个 Access 服务令牌 |
+
+- 使用至少 32 字节的随机内容生成引擎密钥并编码为 hex/base64，避免包含空白字符以及 Caddy 的通配符 `*`。
+- 使用受保护的密钥引用或挂载方式。切勿将明文密钥写入 Shell 命令、容器启动参数、Git 或日志。
+- 将引擎密钥保存在 TomoriBot 的 `auth_token` 中；Access 凭据只放在 Caddy 上。
+
+4. 在生产密钥库注入上述变量后，进入受保护的 Caddyfile 目录执行验证并启动 Caddy。前台启动命令如下：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+foreach ($name in 'ENGINE_API_KEY', 'CF_ACCESS_CLIENT_ID', 'CF_ACCESS_CLIENT_SECRET') {
+  if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+    throw "Missing relay secret: $name"
+  }
+}
+caddy validate --config .\Caddyfile --adapter caddyfile
+caddy run --config .\Caddyfile --adapter caddyfile
+```
+
+如需无人值守启动，请遵循 Caddy 的 [Windows 服务指南](https://caddyserver.com/docs/running#windows-service)。
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+if [ -n "${ENGINE_API_KEY:-}" ] && [ -n "${CF_ACCESS_CLIENT_ID:-}" ] && [ -n "${CF_ACCESS_CLIENT_SECRET:-}" ]; then
+  caddy validate --config ./Caddyfile --adapter caddyfile &&
+    caddy run --config ./Caddyfile --adapter caddyfile
+else
+  printf 'Load all three relay secrets before starting Caddy.\n' >&2
+fi
+```
+
+如需无人值守启动，请配合正确的配置路径与受保护的服务环境使用 Caddy 的 [systemd 服务](https://caddyserver.com/docs/running#linux-service)。
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+if [ -n "${ENGINE_API_KEY:-}" ] && [ -n "${CF_ACCESS_CLIENT_ID:-}" ] && [ -n "${CF_ACCESS_CLIENT_SECRET:-}" ]; then
+  caddy validate --config ./Caddyfile --adapter caddyfile &&
+    caddy run --config ./Caddyfile --adapter caddyfile
+else
+  printf 'Load all three relay secrets before starting Caddy.\n' >&2
+fi
+```
+
+使用 launchd 或容器服务管理器配合相同的配置路径与受保护环境来配置无人值守启动。
+
+</TabItem>
+</Tabs>
+
+5. 将中继的 DNS 指向生产环境的 HTTPS 入口。独立运行的 Caddy 需要入站 443 端口及证书签发验证连接（通常为 80/443）。中继记录请使用仅 DNS（DNS-only）模式，避免触发第二层 Cloudflare 代理超时。若使用托管 TLS 入口，请保持后端监听私有。仅将引擎主机名指向家庭隧道。
+6. 配置服务自动启动与重启处理。示例配置禁用了 Caddy 的管理 API，因此更新密钥或配置后需要重启 Caddy。保持其环境变量与持久化配置私有，避免开启调试日志或记录请求头。
+
+随附配置已在 Caddy 2.11.9 上验证通过，具备以下特性：
+
+- 在允许 `GET /v1/models` 或 `POST /v1/chat/completions` 之前校验引擎密钥。
+- 移除传入请求头，再为单一固定上游附加凭据。客户端无法选择其他目标，也无法覆盖其 Access 请求头。
+- 对上游重定向直接返回 502，并屏蔽上游错误响应体。
+- 自动刷新 SSE 流且不缓冲响应，同时禁用管理 API。请参阅 [Caddy 代理参考](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy)。
+
+## 5. 验证连接
+{/* anchor: validate-each-authentication-check */}
+
+在注册端点前，请先从生产环境逐行验证下表中的每一项。结合 Access 日志与本地引擎记录，可以区分失败发生在哪一层身份验证。
+
+| 请求 | 预期结果 |
+|---|---|
+| 隧道 URL，无 Access 令牌或令牌无效 | Access 拒绝请求；引擎收不到任何请求 |
+| Access 令牌有效，引擎密钥无效 | 若引擎支持验证，引擎返回 401 |
+| 两组凭据均正确 | 返回包含 `data` 与模型 ID 的模型列表 JSON |
+| 中继 URL，缺少或错误的 Bearer 密钥 | 中继在联系 Access 之前直接返回 401 |
+| 密钥正确，但请求方法或管理路径错误 | 中继返回 404；通过 Access 验证后直接访问隧道的管理路径也会返回 404 |
+
+<details>
+<summary>身份验证检查命令</summary>
+
+让密钥库注入变量，关闭脚本记录后运行以下示例。该脚本只打印状态码与内容类型，不跟随重定向，也不打印响应体或请求头。
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+Add-Type -AssemblyName System.Net.Http
+$origin = 'https://engine.example.com/v1'
+$relay = 'https://relay.example.net/v1'
+$access = @{
+  'CF-Access-Client-Id' = $env:CF_ACCESS_CLIENT_ID
+  'CF-Access-Client-Secret' = $env:CF_ACCESS_CLIENT_SECRET
+}
+$good = $access.Clone()
+$good.Authorization = "Bearer $env:ENGINE_API_KEY"
+$badToken = $good.Clone()
+$badToken['CF-Access-Client-Secret'] = 'invalid-test-token'
+$badKey = $access.Clone()
+$badKey.Authorization = 'Bearer invalid-test-key'
+$cases = @(
+  @{ Uri = "$origin/models"; Headers = @{} },
+  @{ Uri = "$origin/models"; Headers = $badToken },
+  @{ Uri = "$origin/models"; Headers = $badKey },
+  @{ Uri = "$origin/models"; Headers = $good },
+  @{ Uri = "$relay/models"; Headers = @{} },
+  @{ Uri = "$relay/models"; Headers = @{ Authorization = "Bearer $env:ENGINE_API_KEY" } }
+)
+$handler = [Net.Http.HttpClientHandler]::new()
+$handler.AllowAutoRedirect = $false
+$client = [Net.Http.HttpClient]::new($handler)
+try {
+  foreach ($case in $cases) {
+    $request = [Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::Get, $case.Uri)
+    foreach ($header in $case.Headers.GetEnumerator()) {
+      $request.Headers.Add($header.Key, [string]$header.Value)
+    }
+    $result = $client.SendAsync($request).GetAwaiter().GetResult()
+    try {
+      [pscustomobject]@{ Url = $case.Uri; Status = [int]$result.StatusCode; Type = $result.Content.Headers.ContentType }
+    } finally {
+      $result.Dispose()
+      $request.Dispose()
+    }
+  }
+} finally {
+  $client.Dispose()
+}
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+请关闭 Shell 追踪。该函数通过 curl 的标准输入配置传递凭据，避免出现在进程参数中。
+
+```bash
+set +x
+origin='https://engine.example.com/v1'
+relay='https://relay.example.net/v1'
+probe() {
+  probe_url=$1
+  access_mode=$2
+  key_mode=$3
+  {
+    if [ "$access_mode" != none ]; then
+      printf 'header = "CF-Access-Client-Id: %s"\n' "$CF_ACCESS_CLIENT_ID"
+      if [ "$access_mode" = bad ]; then
+        printf 'header = "CF-Access-Client-Secret: invalid-test-token"\n'
+      else
+        printf 'header = "CF-Access-Client-Secret: %s"\n' "$CF_ACCESS_CLIENT_SECRET"
+      fi
+    fi
+    if [ "$key_mode" = good ]; then
+      printf 'header = "Authorization: Bearer %s"\n' "$ENGINE_API_KEY"
+    elif [ "$key_mode" = bad ]; then
+      printf 'header = "Authorization: Bearer invalid-test-key"\n'
+    fi
+  } | curl --config - --silent --show-error --output /dev/null \
+    --write-out '%{http_code} %{content_type}\n' "$probe_url"
+}
+probe "$origin/models" none none
+probe "$origin/models" bad good
+probe "$origin/models" good bad
+probe "$origin/models" good good
+probe "$relay/models" none none
+probe "$relay/models" none good
+unset -f probe
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+请关闭 Shell 追踪。该函数通过 curl 的标准输入配置传递凭据，避免出现在进程参数中。
+
+```bash
+set +x
+origin='https://engine.example.com/v1'
+relay='https://relay.example.net/v1'
+probe() {
+  probe_url=$1
+  access_mode=$2
+  key_mode=$3
+  {
+    if [ "$access_mode" != none ]; then
+      printf 'header = "CF-Access-Client-Id: %s"\n' "$CF_ACCESS_CLIENT_ID"
+      if [ "$access_mode" = bad ]; then
+        printf 'header = "CF-Access-Client-Secret: invalid-test-token"\n'
+      else
+        printf 'header = "CF-Access-Client-Secret: %s"\n' "$CF_ACCESS_CLIENT_SECRET"
+      fi
+    fi
+    if [ "$key_mode" = good ]; then
+      printf 'header = "Authorization: Bearer %s"\n' "$ENGINE_API_KEY"
+    elif [ "$key_mode" = bad ]; then
+      printf 'header = "Authorization: Bearer invalid-test-key"\n'
+    fi
+  } | curl --config - --silent --show-error --output /dev/null \
+    --write-out '%{http_code} %{content_type}\n' "$probe_url"
+}
+probe "$origin/models" none none
+probe "$origin/models" bad good
+probe "$origin/models" good bad
+probe "$origin/models" good good
+probe "$relay/models" none none
+probe "$relay/models" none good
+unset -f probe
+```
+
+</TabItem>
+</Tabs>
+
+</details>
+
+- Access 拒绝请求时可能返回 401/403 或登录重定向。返回状态码为 200 的 HTML 页面同样视为验证失败。
+- 请检查成功响应的响应体确实是引擎返回的 JSON；单看 200 状态码不足以说明问题。
+- 先测试一次简短补全，再测试 `stream: true`。使用流式客户端确认收到递增的 SSE `data:` 帧并能正常结束。手动中断流式请求，确认源站停止生成。
+- 仓库中的固定测试数据不能代表你实际的 Access 策略、网络行为或上游权限。
+
+## 6. 注册并选择模型
+
+1. 在 `/providers` 或 `/personal providers` 中添加 `OpenAI 兼容` 端点，URL 填写 `https://relay.example.net/v1`，并将引擎密钥填入 `认证令牌`（`auth_token`）。
+2. 选中已保存的端点，添加`文本模型`，并填入 `/v1/models` 中的精确 ID。TomoriBot 会加密保存密钥，但不会自动导入模型 ID。
+3. 在同一连接下继续添加更多模型 ID，即可在面板中切换。隧道本身不负责选择模型。
+4. 在 Discord 中确认补全正常。仅在测试过一次无害工具调用、工具返回结果及随后的回复后，再开启工具调用。目前不支持并行批量工具调用；测试前请保持其他能力处于关闭状态。
+
+## 其他引擎与限制
+
+| 引擎 | 需要做的调整 |
+|---|---|
+| CLIProxyAPI | 8317 端口；仅靠允许的两个 `/v1` 路由即可满足文本对话和模型注册。保持管理功能禁用。遵循其[条款与后端设置指南](/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/)。 |
+| KoboldCPP / LM Studio | 替换为实际环回端口，并在支持时启用推理密钥验证。使用 `OpenAI 兼容` 模式。此白名单会排除 GPU 卸载与管理操作。 |
+| Ollama | 请使用 `OpenAI 兼容` 协议与 `/v1` 路径，不要使用原生模式（原生模式探测会调用 `/api/tags`）。Ollama 本地 API 没有内置 API 密钥验证；中继密钥用于验证调用方，Access 负责保护隧道，该密钥不会在 Ollama 本体上做验证。请让 Ollama 仅监听环回地址；如需源站独立验证，请在其前方加一层本地认证网关。 |
+| ComfyUI | 这套文本中继并不适用。ComfyUI 注册会探测 `/system_stats`，任务需要 `/prompt` 与历史轮询，文件处理需要上传与查看路由。请为这些操作设计专门的路由与方法白名单，并在发布前为本地网关加上身份验证。切勿将扩展、文件浏览器或管理路由整段暴露。 |
+| 语音引擎 | 这套文本白名单并不适用。`tts-clone` 注册需要 `/health`；语音识别需要模型发现以及其音频路由（通常为 `/v1/audio/transcriptions`）；语音合成也有自己的协议。调整中继前，请先查阅对应引擎的 TomoriBot 指南以列出精确路由以及 multipart/二进制传输要求。 |
+
+- 不支持身份验证的引擎必须仅限环回访问。Access 保护隧道，中继要求随机客户端密钥；如需源站独立验证，请加一层本地认证网关，否则上游 401 检查无法通过。
+- [连接限制](https://developers.cloudflare.com/fundamentals/reference/connection-limits/)：默认读取超时 125 秒，写入超时 30 秒。请测试长时间无输出的生成过程。CLIProxyAPI 的 `requests.streaming.keepalive-seconds` 与 `send-keepalive-before-ft` 可以发送 SSE 心跳包，但不会延长 TomoriBot 自身的超时预算。
+- [上传限制](https://developers.cloudflare.com/support/troubleshooting/http-status-codes/4xx-client-error/error-413/)：Free/Pro 套餐 100 MB，Business 200 MB，Enterprise 最高 5 GB；实际配置上限可能更低。Base64 会增大图像体积，且各层入口、引擎和 bot 的限制依然生效。
+- Cloudflare 支持 [WebSockets](https://developers.cloudflare.com/network/websockets/)，但本文本中继已将其排除。依赖 WebSocket 的引擎需要单独测试路由与握手认证。
+- 生产环境无法使用本地文件路径、`file://` 和环回输出 URL。常规媒体下载也不携带 Access 请求头。请通过经过验证的操作直接返回字节流，或设计受保护的下载路由；切勿暴露凭据目录或在 URL 中放置密钥。
+
+## 故障排查与恢复
+
+| 症状 | 检查项 |
+|---|---|
+| 源站拒绝连接 / 502 | 检查引擎进程、精确环回端口，以及连接器所在的计算机；隧道无法访问另一台电脑的环回地址。 |
+| 隧道断开 / 1033 | 检查连接器进程或服务、出站 7844 端口、网络连通性、电脑休眠以及 Windows 重启状态。 |
+| 403 或登录 HTML 页面 | 检查 Access 应用程序的完整主机名、`Service Auth` 策略、精确令牌、有效期以及缺失的请求头。切勿通过添加 Bypass 规则来解决。 |
+| 上游 401 | 区分源站客户端密钥与 Access 令牌；中继密钥必须与引擎密钥一致。 |
+| 404 | 确认路径中恰好只有一个 `/v1`、模型 ID 正确、隧道规则匹配，以及中继的方法与路径白名单。 |
+| 5xx / 524 / 流中断 | 检查读取超时、引擎崩溃、配额、响应缓冲以及电脑休眠；查看脱敏后的本地引擎与 Access 日志。中继会隐藏上游错误响应体。 |
+| SSRF URL 被拒绝 | 确认中继使用公网 HTTPS DNS，且每一条 A/AAAA 解析记录均指向公网。生产环境依然会拒绝私有地址、环回地址、元数据地址、公私混合 DNS 解析以及不安全的重定向。 |
+| DNS/TLS 失败 | 检查已传播的 DNS 记录、隧道 UUID/主机名、有效的中继证书以及精确的上游 `Host` 请求头；切勿跳过 TLS 验证。 |
+| 模型缺失 | 检查引擎已授权的后端与模型列表 JSON。修改别名后需要手动重新注册精确 ID。 |
+| 本地输出文件 URL | 调整引擎的文件交付协议；只给界面加隧道并不能让本地路径变为可下载链接。 |
+
+- 电脑休眠、重启或网络中断恢复后，请先恢复引擎，再恢复 `cloudflared`，然后测试 Access 与中继。发起一个小的测试请求；中断的流无法续传，而重试工具调用轮次可能会重复执行其效果。
+- WARP 与私有路由需要工作负载注册、路由配置以及 Gateway 规则。当前生产环境中的 TomoriBot 会拒绝私有目标地址。本指南不提供私有路由例外方案；请保持 SSRF 检查开启。
+
+## 撤销访问权限与清理
+
+1. 要立即切断推理访问，请停止中继。退役时，停止本地连接器并移除其 DNS 路由和隧道。
+2. 撤销 Access 令牌，并移除不再使用的策略、应用程序、中继 DNS 记录以及证书。
+3. 常规轮换令牌时，先更新策略和生产密钥，重启并验证中继，再撤销旧令牌。
+4. 轮换引擎密钥时，需同步修改引擎、中继密钥库以及 TomoriBot 中已保存的端点。只修改面板中的一条记录不会使引擎密钥失效，也不会更新其他已保存的连接。
+5. 发生安全事件时，优先撤销权限，宁可接受停机时间。对于基于 OAuth 的代理，请撤销上游授权并删除本地令牌文件。妥善保护包含旧凭据的留存备份和日志。

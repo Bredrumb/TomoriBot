@@ -2,7 +2,7 @@
 title: "PluralBuddy OAuth 設定"
 description: "授權你的自架 TomoriBot 驗證來自已核准 PluralBuddy 實例的訊息。"
 sidebar:
-  order: 8
+  order: 7
 ---
 
 自架的 TomoriBot 需要為官方服務以及每個已核准的自訂實例建立授權的 PluralBuddy 應用程式。

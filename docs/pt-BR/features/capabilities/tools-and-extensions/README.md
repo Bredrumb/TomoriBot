@@ -132,7 +132,7 @@ Se um servidor não precisar de autenticação, deixe `Token de Autenticação` 
 
 ### Servidores MCP Locais
 
-Servidores MCP locais são suportados apenas em instâncias de hospedagem própria: o bot público hospedado exige HTTPS e bloqueia endereços locais/privados. Se você executa sua própria instância, veja [Configuração: Servidor MCP Local](/pt-BR/self-hosting/local-endpoints/setup-local-mcp/).
+Servidores MCP locais são suportados apenas em instâncias de hospedagem própria: o bot público hospedado exige HTTPS e bloqueia endereços locais/privados. Se você executa sua própria instância, veja [Configuração: Servidor MCP Local](/pt-BR/self-hosting/mcp-servers/setup-local-mcp/).
 
 :::danger[Adicione apenas servidores MCP em que você confia]
 Um servidor MCP malicioso pode injetar prompts nela com instruções ocultas, exfiltrar dados que os usuários passam para suas ferramentas ou retornar resultados prejudiciais/falsos que ela retransmitirá para o seu servidor. Trate servidores MCP como extensões de navegador; em caso de dúvida, não adicione. Sempre revise as ferramentas descritas de um MCP antes de adicioná-lo.

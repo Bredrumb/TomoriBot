@@ -1,0 +1,367 @@
+---
+title: "Thiết lập: CLIProxyAPI"
+sidebar:
+  label: "CLIProxyAPI"
+  order: 2
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Kết nối TomoriBot với một dịch vụ thượng nguồn được ủy quyền thông qua [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI), một proxy Chat Completions cục bộ.
+
+:::caution[Tự chịu rủi ro khi dùng proxy tài khoản CLI]
+Việc truy cập của bên thứ ba qua Codex, Claude Code, Antigravity hoặc các tài khoản CLI khác có thể vi phạm điều khoản của nhà cung cấp và có nguy cơ bị tạm khóa tài khoản. Gói đăng ký không đồng nghĩa với quyền sử dụng cho bot hoặc API. Hãy xem [các hạn chế theo từng nhà cung cấp và giải pháp API thay thế](/self-hosting/local-endpoints/proxies-and-remote-access/#account-risk) trước khi đăng nhập. Điều khoản Antigravity của Google nghiêm cấm rõ ràng việc truy cập của bên thứ ba thông qua Antigravity OAuth.
+:::
+
+## 1. Cài đặt CLIProxyAPI
+
+1. Dùng [bản phát hành ổn định mới nhất](https://github.com/router-for-me/CLIProxyAPI/releases/latest) chính thức. Các ví dụ dưới đây tải về đồng thời gói nén và tệp checksum tương ứng.
+2. Mở terminal trong một thư mục trống thuộc quyền sở hữu của tài khoản bạn:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+Chạy trong PowerShell. Trên Windows ARM64, đổi `windows_amd64` thành `windows_aarch64`.
+
+```powershell
+$release = Invoke-RestMethod 'https://api.github.com/repos/router-for-me/CLIProxyAPI/releases/latest'
+$asset = @($release.assets | Where-Object name -Like 'CLIProxyAPI_*_windows_amd64.zip')
+$checksums = @($release.assets | Where-Object name -EQ 'checksums.txt')
+if ($asset.Count -ne 1 -or $checksums.Count -ne 1) { throw 'Check the release assets before continuing' }
+$archive = $asset[0].name
+$release.tag_name
+Invoke-WebRequest $asset[0].browser_download_url -OutFile $archive
+Invoke-WebRequest $checksums[0].browser_download_url -OutFile checksums.txt
+$expected = ((Select-String -Path checksums.txt -Pattern ([regex]::Escape($archive) + '$')).Line -split '\s+')[0]
+if (!$expected -or (Get-FileHash $archive -Algorithm SHA256).Hash -ine $expected) {
+  throw 'Archive checksum mismatch'
+}
+Expand-Archive -LiteralPath $archive -DestinationPath .\app
+Set-Location .\app
+.\cli-proxy-api.exe --help
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+Lệnh này chọn gói nén x86-64 hoặc ARM64. Hãy kiểm tra yêu cầu hệ thống của bản phát hành; các hệ thống dùng musl cần bản dựng `no-plugin`.
+
+```bash
+case "$(uname -m)" in
+  x86_64) arch=amd64 ;;
+  aarch64|arm64) arch=aarch64 ;;
+  *) arch=''; printf 'Unsupported architecture\n' >&2 ;;
+esac
+if [ -n "$arch" ] && release_page=$(curl --fail --silent --show-error --head --location \
+    --output /dev/null --write-out '%{url_effective}' \
+    'https://github.com/router-for-me/CLIProxyAPI/releases/latest'); then
+  release_tag=${release_page##*/}
+  release_version=${release_tag#v}
+  archive="CLIProxyAPI_${release_version}_linux_${arch}.tar.gz"
+  release_url="https://github.com/router-for-me/CLIProxyAPI/releases/download/$release_tag"
+  printf 'Selected release: %s\n' "$release_tag"
+  if curl --fail --location "$release_url/$archive" --output "$archive" &&
+     curl --fail --location "$release_url/checksums.txt" --output checksums.txt; then
+    expected=$(awk -v file="$archive" '$2 == file { print $1 }' checksums.txt)
+    actual=$(sha256sum "$archive" | awk '{ print $1 }')
+    if [ -n "$expected" ] && [ "$actual" = "$expected" ]; then
+      mkdir app && tar -xzf "$archive" -C app && cd app && ./cli-proxy-api --help
+    else
+      printf 'Archive checksum mismatch; stop here.\n' >&2
+    fi
+  fi
+fi
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+Chạy trong macOS Terminal. Lệnh này tự động chọn Apple Silicon hoặc Intel và dùng đường dẫn cấu hình tường minh thay cho các mặc định dịch vụ của Homebrew.
+
+```bash
+case "$(uname -m)" in
+  arm64) arch=aarch64 ;;
+  x86_64) arch=amd64 ;;
+  *) arch=''; printf 'Unsupported architecture\n' >&2 ;;
+esac
+if [ -n "$arch" ] && release_page=$(curl --fail --silent --show-error --head --location \
+    --output /dev/null --write-out '%{url_effective}' \
+    'https://github.com/router-for-me/CLIProxyAPI/releases/latest'); then
+  release_tag=${release_page##*/}
+  release_version=${release_tag#v}
+  archive="CLIProxyAPI_${release_version}_darwin_${arch}.tar.gz"
+  release_url="https://github.com/router-for-me/CLIProxyAPI/releases/download/$release_tag"
+  printf 'Selected release: %s\n' "$release_tag"
+  if curl --fail --location "$release_url/$archive" --output "$archive" &&
+     curl --fail --location "$release_url/checksums.txt" --output checksums.txt; then
+    expected=$(awk -v file="$archive" '$2 == file { print $1 }' checksums.txt)
+    actual=$(shasum -a 256 "$archive" | awk '{ print $1 }')
+    if [ -n "$expected" ] && [ "$actual" = "$expected" ]; then
+      mkdir app && tar -xzf "$archive" -C app && cd app && ./cli-proxy-api --help
+    else
+      printf 'Archive checksum mismatch; stop here.\n' >&2
+    fi
+  fi
+fi
+```
+
+Nếu macOS chặn tệp thực thi, hãy xem [hướng dẫn của Apple](https://support.apple.com/en-us/102445) và xác minh nhà phát hành trước khi cho phép chạy.
+
+</TabItem>
+</Tabs>
+
+3. Xác nhận phần trợ giúp hiển thị đúng với bản phát hành đã chọn và có cờ `--config`. So sánh tệp `config.example.yaml` đi kèm với bố cục v8 bên dưới trước khi cấu hình. Nếu schema khác đi, hãy làm theo tệp ví dụ của bản phát hành đó.
+
+- Tải cả gói nén lẫn tệp checksum từ bản phát hành chính thức. Checksum giúp phát hiện lỗi hỏng tệp; hãy kiểm tra nhà phát hành trước khi chạy mã của họ.
+- Với các phương thức cài đặt khác, hãy xem [hướng dẫn khởi động nhanh](https://help.router-for.me/introduction/quick-start) của dự án gốc; đường dẫn cấu hình của trình quản lý gói có thể khác.
+
+## 2. Cấu hình trình lắng nghe cục bộ
+
+1. Tạo tệp `config.yaml` cạnh tệp thực thi bằng trình soạn thảo riêng tư.
+2. Thay thế placeholder client key bằng ít nhất 32 byte ngẫu nhiên được mã hóa dạng hex hoặc base64, do trình quản lý mật khẩu của bạn tạo ra.
+3. Giới hạn quyền truy cập thư mục này và thư mục thông tin xác thực chỉ cho tài khoản của bạn và tài khoản chạy tiến trình. Giữ cả hai thư mục nằm ngoài Git và các thư mục dùng chung.
+
+```yaml
+config-version: 8
+server:
+  host: "127.0.0.1"
+  port: 8317
+  discovery:
+    enabled: false
+management:
+  allow-remote: false
+  secret-key: ""
+  disable-control-panel: true
+access:
+  api-keys:
+    - "REPLACE_WITH_RANDOM_CLIENT_KEY"
+oauth:
+  auth-dir: "~/.cli-proxy-api"
+```
+
+- Giá trị management secret rỗng sẽ vô hiệu hóa `/v0/management` và `/v8/management`. Không đặt `MANAGEMENT_PASSWORD` và tránh dùng `--password` cũng như giao diện TUI quản lý.
+- Luôn tắt phần quản lý khi đứng sau tunnel: trình kết nối của tunnel cũng đi vào engine qua loopback.
+
+4. Thêm một backend được ủy quyền. Với API tương thích OpenAI, gộp khối cấp cao nhất riêng biệt này cùng URL, khóa và ID model thực tế của backend đó:
+
+```yaml
+api-keys:
+  openai-compatibility:
+    - name: "authorized-backend"
+      base-url: "https://api.example.com/v1"
+      keys:
+        - api-key: "REPLACE_WITH_UPSTREAM_KEY"
+      models:
+        - name: "upstream-model-id"
+          alias: "home-chat"
+```
+
+| Vị trí khóa | Mục đích |
+|---|---|
+| `access.api-keys` | TomoriBot xác thực với CLIProxyAPI |
+| `api-keys` ở cấp cao nhất | CLIProxyAPI xác thực với dịch vụ thượng nguồn |
+
+Thay thế toàn bộ giá trị mẫu và chỉ bật backend mà bạn cần.
+
+### Các lựa chọn đăng nhập bằng tài khoản
+
+- Các cờ khả dụng bao gồm Gemini CLI `--login`, Claude `--claude-login` và Codex `--codex-login` / `--codex-device-login`. `--help` liệt kê các cờ dành riêng cho những nhà cung cấp khác.
+- Chỉ dùng đăng nhập tài khoản khi nhà cung cấp cho phép cầu nối này. Kiểm tra màn hình cấp quyền và các quyền được yêu cầu; phạm vi quyền khác nhau tùy theo nhà cung cấp.
+- Truyền cùng một đường dẫn `--config` tuyệt đối cho cả lệnh đăng nhập lẫn lệnh chạy máy chủ. Thông tin xác thực làm mới được lưu trong `oauth.auth-dir`, ở đây là thư mục `.cli-proxy-api` trong hồ sơ người dùng của bạn.
+- Giữ các trình lắng nghe callback OAuth tạm thời ở phạm vi cục bộ. Để thu hồi quyền truy cập, hãy thu hồi trong cài đặt tài khoản thượng nguồn, dừng proxy và xóa các tệp thông tin xác thực cục bộ. Chỉ xóa tệp không làm mất hiệu lực token.
+- Cờ `--antigravity-login` có tồn tại, nhưng xung đột với hạn chế của Google nêu ở trên. Hướng dẫn này không cung cấp quy trình đăng nhập Antigravity; phần cài đặt của nó yêu cầu quyền rộng trên Cloud Platform, hồ sơ/email, mã AI, nhật ký và thử nghiệm/cấu hình.
+
+## 3. Khởi động và kiểm tra cục bộ
+
+1. Khởi động máy chủ:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$configPath = (Resolve-Path .\config.yaml).Path
+.\cli-proxy-api.exe --config $configPath
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+./cli-proxy-api --config "$(pwd)/config.yaml"
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+./cli-proxy-api --config "$(pwd)/config.yaml"
+```
+
+</TabItem>
+</Tabs>
+
+2. Trong một cửa sổ terminal khác, kiểm tra trình lắng nghe:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+Get-NetTCPConnection -State Listen -LocalPort 8317 |
+  Select-Object LocalAddress, LocalPort, OwningProcess
+```
+
+Kiểm tra các quy tắc cho phép tường lửa hiện có trong `wf.msc`.
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+ss -ltnp 'sport = :8317'
+```
+
+Kiểm tra chính sách tường lửa của bản phân phối để tránh mở kết nối đến không cần thiết.
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+lsof -nP -iTCP:8317 -sTCP:LISTEN
+```
+
+Kiểm tra các tùy chọn Tường lửa trong Cài đặt hệ thống của macOS.
+
+</TabItem>
+</Tabs>
+
+   Chỉ được phép thấy `127.0.0.1`. Dừng lại nếu bạn thấy `0.0.0.0`, `::`, `*` hoặc một địa chỉ LAN. Không thêm quy tắc tường lửa cho lưu lượng đến hoặc mở chuyển tiếp cổng trên router.
+
+3. Đọc client key một cách riêng tư và liệt kê các model. Giữ terminal này mở cho yêu cầu tiếp theo. Tắt ghi nhật ký dấu vết shell hoặc bản ghi phiên PowerShell trước khi nạp bí mật.
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$secret = Read-Host 'CLIProxyAPI client key' -AsSecureString
+$engineKey = [Net.NetworkCredential]::new('', $secret).Password
+$headers = @{ Authorization = "Bearer $engineKey" }
+$base = 'http://127.0.0.1:8317/v1'
+$models = Invoke-RestMethod "$base/models" -Headers $headers
+$models.data | Select-Object id
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+Khóa được đọc ở chế độ không hiển thị ký tự và truyền vào curl qua stdin để không lộ trong tham số tiến trình.
+
+```bash
+set +x
+printf 'CLIProxyAPI client key: '
+read -r -s engine_key
+printf '\n'
+base='http://127.0.0.1:8317/v1'
+printf 'header = "Authorization: Bearer %s"\n' "$engine_key" |
+  curl --config - --fail --silent --show-error "$base/models"
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+Khóa được đọc ở chế độ không hiển thị ký tự và truyền vào curl qua stdin để không lộ trong tham số tiến trình.
+
+```bash
+set +x
+printf 'CLIProxyAPI client key: '
+read -r -s engine_key
+printf '\n'
+base='http://127.0.0.1:8317/v1'
+printf 'header = "Authorization: Bearer %s"\n' "$engine_key" |
+  curl --config - --fail --silent --show-error "$base/models"
+```
+
+</TabItem>
+</Tabs>
+
+4. Lưu nội dung sau thành `request.json` trong cùng thư mục. Thay `REPLACE_WITH_MODEL_ID` bằng một ID chính xác từ danh sách, rồi chạy yêu cầu trong cùng terminal đó:
+
+```json
+{
+  "model": "REPLACE_WITH_MODEL_ID",
+  "messages": [{ "role": "user", "content": "Reply with hello." }],
+  "stream": false
+}
+```
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$reply = Invoke-RestMethod "$base/chat/completions" -Method Post -Headers $headers -ContentType 'application/json' -InFile .\request.json
+$reply.choices.message.content
+Remove-Variable engineKey, secret, headers
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+printf 'header = "Authorization: Bearer %s"\n' "$engine_key" |
+  curl --config - --fail --silent --show-error "$base/chat/completions" \
+    --header 'Content-Type: application/json' --data-binary @request.json
+unset engine_key
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+printf 'header = "Authorization: Bearer %s"\n' "$engine_key" |
+  curl --config - --fail --silent --show-error "$base/chat/completions" \
+    --header 'Content-Type: application/json' --data-binary @request.json
+unset engine_key
+```
+
+</TabItem>
+</Tabs>
+
+- Danh sách model rỗng nghĩa là chưa có backend hoặc model khả dụng nào được cấu hình.
+- Một model có mặt trong danh sách vẫn cần vượt qua bài kiểm tra hoàn thiện văn bản; công cụ và hình ảnh cần kiểm tra riêng.
+
+## 4. Đăng ký và chọn model
+
+1. Chạy `/providers` (quản lý máy chủ) hoặc `/personal providers` (kết nối của riêng bạn).
+2. Chọn `+ Thêm endpoint tùy chỉnh mới` và nhập:
+
+| Trường | Giá trị |
+|---|---|
+| `Nhãn endpoint` | Một nhãn kết nối riêng, ví dụ `home-proxy` |
+| `Độ tương thích API` | `Tương thích OpenAI` |
+| `URL endpoint`, bot trên máy này ngoài môi trường production | `http://127.0.0.1:8317/v1` |
+| `URL endpoint`, bot production được lưu trữ riêng | Đường dẫn cơ sở HTTPS của relay đã xác thực, ví dụ `https://relay.example.net/v1`, sau khi hoàn tất [hướng dẫn Cloudflare](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/) |
+| `Token xác thực` | Client key của CLIProxyAPI; bắt buộc với cấu hình này |
+
+3. Chọn endpoint đã lưu, thêm một `Model văn bản` và nhập đúng ID hoặc bí danh từ `/v1/models`.
+4. Để trống `Cửa sổ ngữ cảnh` và tắt các nút bật tắt tính năng cho đến khi đã kiểm tra. Luôn tắt video.
+5. Để dùng thêm model khác, hãy thêm ID của nó dưới cùng một endpoint, rồi chọn trong bảng model. TomoriBot thăm dò `/v1/models` nhưng không tự động nhập danh sách.
+
+- Phát triển trên cùng máy chủ cần `ALLOW_PRIVATE_NETWORK=127.0.0.1:8317` trong môi trường của TomoriBot.
+- Trong Docker, địa chỉ loopback trỏ tới chính container, nên nó không thể chạm tới trình lắng nghe của máy chủ qua `127.0.0.1` của riêng mình.
+- Môi trường production yêu cầu HTTPS công khai và bản ghi DNS công khai. Hãy hoàn tất [hướng dẫn Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/) và triển khai relay của nó trước khi đăng ký URL từ xa.
+
+## Tính năng và xử lý sự cố
+
+- Các bộ kiểm thử giao thức cục bộ chỉ bao phủ văn bản, phát trực tuyến, một lệnh gọi hàm mỗi lượt kèm tiếp tục, và JSON không phát trực tuyến. OAuth thực tế, dịch vụ thượng nguồn trả phí, chất lượng thị giác và mức độ tuân thủ schema chưa được kiểm thử.
+- CLIProxyAPI chấp nhận tin nhắn hệ thống trên cổng 8317; không cần giải pháp thay thế của ChatMock.
+- Giữ công cụ ở trạng thái tắt trừ khi backend tạo một lệnh gọi mỗi lượt. Các lô công cụ song song không được hỗ trợ.
+- Các model yêu cầu phát lại chữ ký suy luận riêng theo từng nhà cung cấp cần được kiểm tra riêng. Trò chuyện tùy chỉnh thông thường không hỗ trợ video hoặc dùng Responses API.
+
+| Triệu chứng | Hành động |
+|---|---|
+| `401` | Kiểm tra client key, tách biệt với khóa thượng nguồn. |
+| `404` | Dùng đường dẫn cơ sở `/v1`, không thêm `/chat/completions`; kiểm tra ID model. |
+| Tham số bị từ chối | Để trống mục tùy chỉnh ngữ cảnh và đặt mức độ suy luận ở Tự động; TomoriBot đã tự động thử lại các lỗi từ chối tham số hợp lệ trước khi bắt đầu xuất dữ liệu. Kiểm tra nhật ký để tìm các yêu cầu bị hạ cấp trước khi bật công cụ hoặc phụ thuộc vào các tham số lấy mẫu. |
+| `403`, trang đăng nhập HTML hoặc lỗi tunnel | Hoàn tất [kiểm tra xác thực Access và relay](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/#validate-each-authentication-check). Tên miền Access trực tiếp cần các header bổ sung mà bảng Discord không thể cung cấp. |
+| Luồng bị ngắt | Kiểm tra chế độ ngủ của máy tính, hạn mức thượng nguồn, tình trạng tunnel và các giới hạn luồng trong hướng dẫn Cloudflare. |
+
+Luôn tắt ghi nhật ký yêu cầu/gỡ lỗi trừ khi đang chẩn đoán một bản tái hiện cục bộ đã ẩn dữ liệu nhạy cảm. Khi lộ client key, hãy xoay vòng khóa trong CLIProxyAPI, endpoint đã lưu của TomoriBot và relay production. Thu hồi riêng các thông tin xác thực thượng nguồn bị lộ.

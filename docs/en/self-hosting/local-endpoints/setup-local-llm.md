@@ -167,7 +167,7 @@ TomoriBot supports any OpenAI-compatible endpoint, but the servers below are rec
 ### ChatMock (ChatGPT account / Codex CLI)
 
 Has its own dedicated guide because of a system-prompt workaround:
-[Setup: ChatMock](/self-hosting/local-endpoints/setup-chatmock/).
+[Setup: ChatMock](/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/).
 
 ## Picking models from Hugging Face
 
@@ -195,6 +195,9 @@ model at Q8**.
 
 ## Notes & gotchas
 
+- **Bot hosted separately?** Follow [Secure remote access through Cloudflare](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/).
+  A production bot cannot reach your PC through `127.0.0.1`; the guide protects the public hostname
+  with Access service authentication and an authenticated relay.
 - **One endpoint entry per label.** To register several models that share one server, select the
   saved endpoint and use its model dropdown again. Use distinct labels for genuinely different
   servers or API protocols.

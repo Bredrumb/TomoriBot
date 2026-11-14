@@ -140,7 +140,7 @@ TomoriBot 支援任何 OpenAI 相容的端點，但推薦使用以下伺服器�
 ### ChatMock（ChatGPT 帳號 / Codex CLI）
 
 因為需要系統提示詞變通方案，擁有專門的指南：
-[設定：ChatMock](/self-hosting/local-endpoints/setup-chatmock/)。
+[設定：ChatMock](/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/)。
 
 ## 從 Hugging Face 選擇模型
 
@@ -157,6 +157,7 @@ TomoriBot 支援任何 OpenAI 相容的端點，但推薦使用以下伺服器�
 ## 注意事項與陷阱
 <!-- anchor: notes--gotchas -->
 
+- **Bot 分開架設？** 請依照[透過 Cloudflare 安全遠端存取](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/)設定。生產環境的 bot 無法透過 `127.0.0.1` 連上你的電腦；該指南會使用 Access 服務驗證與經授權的中繼來保護公開主機名稱。
 - **每個標籤一個端點項目：** 若要註冊共用同一個伺服器的多個模型，請選取已儲存的端點並再次使用其模型下拉選單。真正不同的伺服器或 API 協定才使用相異的標籤。
 - **Model Name 即為 API 識別碼：** 它是發送到伺服器的確切字串。填寫錯誤是「已連線但回覆失敗」最常見的原因。
 - **在 Docker 中執行 TomoriBot？** 容器內的 `localhost` 並非你的主機。請使用 `http://host.docker.internal:<port>`（Windows/macOS）或主機的區域網路 IP，並將模型伺服器繫結到 `0.0.0.0`。

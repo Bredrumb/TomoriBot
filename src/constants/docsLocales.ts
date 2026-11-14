@@ -343,7 +343,7 @@ export const DOCS_ROUTES = {
   SELF_HOSTING_SETUP_WIZARD: "/self-hosting/setup-wizard/",
   LOCAL_ENDPOINTS: "/self-hosting/local-endpoints/",
   COMFYUI_SETUP: "/self-hosting/local-endpoints/setup-comfyui/",
-  LOCAL_MCP_SETUP: "/self-hosting/local-endpoints/setup-local-mcp/",
+  LOCAL_MCP_SETUP: "/self-hosting/mcp-servers/setup-local-mcp/",
   LOCAL_TTS_SETUP: "/self-hosting/local-endpoints/text-to-speech/",
   LOCAL_STT_SETUP: "/self-hosting/local-endpoints/speech-to-text/",
   MAINTENANCE: "/self-hosting/maintenance/",

@@ -2,7 +2,7 @@
 title: "セットアップ: ローカル判定モデル"
 sidebar:
   label: "ローカル判定モデル"
-  order: 7
+  order: 2
 aiGenerated: true
 ---
 

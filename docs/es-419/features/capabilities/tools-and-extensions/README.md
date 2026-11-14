@@ -136,7 +136,7 @@ Si un servidor no necesita autenticación, deja vacío `Token de autenticación`
 Los servidores MCP locales solo son compatibles con instancias con autoalojamiento: el bot
 público alojado requiere HTTPS y bloquea direcciones locales o privadas. Si ejecutas tu propia
 instancia, consulta
-[Configuración: servidor MCP local](/es-419/self-hosting/local-endpoints/setup-local-mcp/).
+[Configuración: servidor MCP local](/es-419/self-hosting/mcp-servers/setup-local-mcp/).
 
 :::danger[Agrega solo servidores MCP de confianza]
 Un servidor MCP malicioso puede hacerle inyección de prompt con instrucciones ocultas,

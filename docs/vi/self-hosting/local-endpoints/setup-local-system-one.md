@@ -2,7 +2,7 @@
 title: "Thiết lập: Model quyết định cục bộ"
 sidebar:
   label: "Model quyết định cục bộ"
-  order: 7
+  order: 2
 aiGenerated: true
 ---
 

@@ -3,7 +3,7 @@ title: "Configuración: ComfyUI"
 aiGenerated: false
 sidebar:
   label: "ComfyUI"
-  order: 2
+  order: 3
 ---
 
 TomoriBot puede generar imágenes y videos a través de tu propia instancia de [ComfyUI](https://github.com/comfyanonymous/ComfyUI). Controla ComfyUI enviando un flujo de trabajo en formato API con tu prompt/tamaño sustituido, y luego sondea el punto de conexión `/history` de ComfyUI hasta que la salida esté lista.

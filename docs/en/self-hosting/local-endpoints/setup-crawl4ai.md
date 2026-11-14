@@ -2,7 +2,7 @@
 title: "Setup: Crawl4AI"
 sidebar:
   label: "Crawl4AI"
-  order: 4
+  order: 5
 aiGenerated: true
 ---
 

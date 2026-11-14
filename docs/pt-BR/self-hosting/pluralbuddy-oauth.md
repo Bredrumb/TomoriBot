@@ -2,7 +2,7 @@
 title: "Configuração do OAuth do PluralBuddy"
 description: "Autorize seu TomoriBot autohospedado a verificar mensagens de instâncias aprovadas do PluralBuddy."
 sidebar:
-  order: 8
+  order: 7
 ---
 
 Um TomoriBot autohospedado precisa de um aplicativo autorizado do PluralBuddy para o serviço oficial e para cada instância personalizada aprovada.

@@ -125,7 +125,7 @@ Para ver tutoriales completos sobre la ejecución de servidores locales, consult
 
 - [Configuración: LLM local](/es-419/self-hosting/local-endpoints/setup-local-llm/): Ollama, KoboldCPP, LM Studio, vLLM, LiteLLM.
 - [Configuración: ComfyUI](/es-419/self-hosting/local-endpoints/setup-comfyui/): generación de imagen y video local.
-- [Configuración: ChatMock](/es-419/self-hosting/local-endpoints/setup-chatmock/): cuenta ChatGPT o CLI del Codex.
+- [Configuración: ChatMock](/es-419/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/): cuenta ChatGPT o CLI del Codex.
 
 ## Proveedores compatibles
 <!-- anchor: supported-providers -->
@@ -145,7 +145,7 @@ Si no tiene el hardware para alojar sus propios modelos, TomoriBot admite una am
 | Z.ai | ✅ | ✅ | ✅ | - | Modelos gratuitos; 🟡 ToS = codificación y uso exclusivo del agente |
 | Codificación Z.ai | ✅ | ✅ | - | - | Plan de suscripción |
 | Google Vertex AI | ✅ | ✅ | ✅ | ✅ | Incluye versión Express 'gratuita' |
-| CLI del códice (a través de ChatMock) | ✅ | ✅ | ✅ | - | [Configuración](/es-419/self-hosting/local-endpoints/setup-chatmock/) |
+| CLI del códice (a través de ChatMock) | ✅ | ✅ | ✅ | - | [Configuración](/es-419/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/) |
 
 ### Generación de imágenes
 

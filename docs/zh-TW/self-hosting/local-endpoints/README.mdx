@@ -9,7 +9,7 @@ aiGenerated: false
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
 
-TomoriBot 完全可以在所有東西都本機的情況下運行，從文字生成到 MCP 工具都是。底下每一個端點都是 OpenAI 相容，或是小型的參考包裝，透過 `/providers` 指令註冊，並以加密形式存在資料庫中（不需要 `.env`）。
+在你自己的電腦上運行文字生成、媒體引擎與 MCP 工具。透過 `/providers` 或 `/personal providers` 註冊模型連線；已儲存的 API 金鑰會加密保存在資料庫中。位於另一台電腦上的引擎還需要完成下方的遠端存取設定。
 挑一項功能來設定：
 
 ## 文字與嵌入
@@ -17,8 +17,6 @@ TomoriBot 完全可以在所有東西都本機的情況下運行，從文字生�
 <CardGrid>
   <LinkCard title="本機 LLM" href="/zh-TW/self-hosting/local-endpoints/setup-local-llm/"
     description="任何 OpenAI 相容的伺服器，例如 Ollama、KoboldCPP、LM Studio、vLLM 或 LiteLLM，用於文字生成與嵌入。" />
-  <LinkCard title="透過 ChatMock 使用 Codex CLI" href="/zh-TW/self-hosting/local-endpoints/setup-chatmock/"
-    description="本機的 OpenAI 相容橋接，讓 TomoriBot 使用 Codex CLI 的模型。" />
 </CardGrid>
 
 ## 圖片與影片
@@ -49,10 +47,23 @@ TomoriBot 完全可以在所有東西都本機的情況下運行，從文字生�
 ## 自訂工具
 
 <CardGrid>
-  <LinkCard title="slop-guard" href="/zh-TW/self-hosting/local-endpoints/setup-slop-guard/"
+  <LinkCard title="slop-guard" href="/zh-TW/self-hosting/mcp-servers/setup-slop-guard/"
     description="一個基於規則的文章檢查器，回覆審查可將其用作規則檢查器。" />
-  <LinkCard title="本機 MCP 伺服器" href="/zh-TW/self-hosting/local-endpoints/setup-local-mcp/"
+  <LinkCard title="本機 MCP 伺服器" href="/zh-TW/self-hosting/mcp-servers/setup-local-mcp/"
     description="運行本機 MCP 伺服器，用你自己的工具擴充 TomoriBot（僅限自架執行個體）。" />
+</CardGrid>
+
+## 代理與遠端存取
+
+透過第三方橋接工具使用 CLI 帳號前，請先檢視[帳號風險](/self-hosting/local-endpoints/proxies-and-remote-access/#account-risk)。
+
+<CardGrid>
+  <LinkCard title="透過 ChatMock 使用 Codex CLI" href="/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/"
+    description="在你的電腦上連線經授權且以 ChatGPT 為後端的橋接工具。" />
+  <LinkCard title="CLIProxyAPI" href="/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/"
+    description="安裝本機代理並從經授權的上游註冊模型。" />
+  <LinkCard title="Cloudflare Tunnel" href="/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/"
+    description="使用 Access 驗證與中繼，從生產環境 bot 存取家中的引擎。" />
 </CardGrid>
 
 ## 用 `bun run launch` 啟動本機伺服器

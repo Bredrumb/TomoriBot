@@ -64,8 +64,10 @@ reach whatever you allow here, so pick by who uses the bot:
 | A `host:port` list, such as `localhost:5001,localhost:8188` | You share local servers, such as KoboldCPP or ComfyUI, with members you don't fully trust. Only the listed servers work, so their endpoints can't reach anything else on your network. |
 | `false` | Untrusted members use the bot and you share no local server. |
 
-Public HTTPS endpoints, such as hosted OpenAI-compatible APIs, work with every value. So does a local
-model behind an HTTPS tunnel such as Cloudflare Tunnel or ngrok.
+Public HTTPS endpoints, such as hosted OpenAI-compatible APIs, work with every value. For a model
+on another machine, use an [authenticated remote connection](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/).
+A tunnel supplies connectivity and needs separate access controls. Production refuses private
+endpoints regardless of `ALLOW_PRIVATE_NETWORK`.
 
 A list matches the address exactly as an endpoint is registered, so `localhost:5001` doesn't cover
 `127.0.0.1:5001`; list each spelling you use. A listed server is still open to every member, on any

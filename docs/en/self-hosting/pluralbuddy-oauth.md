@@ -2,7 +2,7 @@
 title: "PluralBuddy OAuth Setup"
 description: "Authorize your self-hosted TomoriBot to verify messages from approved PluralBuddy instances."
 sidebar:
-  order: 8
+  order: 7
 ---
 
 A self-hosted TomoriBot needs an authorized PluralBuddy application for the official service and each approved custom instance.

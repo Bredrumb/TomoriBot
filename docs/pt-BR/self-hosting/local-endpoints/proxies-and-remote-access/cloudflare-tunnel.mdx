@@ -1,0 +1,553 @@
+---
+title: "Cloudflare Tunnel"
+sidebar:
+  label: "Cloudflare Tunnel"
+  order: 3
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Conecte um TomoriBot hospedado separadamente a um motor no seu computador Windows, Linux ou Mac usando o Cloudflare Tunnel, autenticação de serviço do Access e um relay Caddy autenticado.
+
+Use este guia para motores de Chat Completions como [CLIProxyAPI](/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/), KoboldCPP, Ollama e LM Studio. Veja as notas de motores abaixo para outros protocolos.
+
+:::note[Implante o relay primeiro]
+O Caddyfile fornecido é apenas configuração. Sua implantação de produção deve executar o Caddy explicitamente, carregar seus segredos e fornecer um hostname HTTPS. Adicionar o arquivo em `docker/`, compilar o TomoriBot ou registrar um endpoint no Discord não inicia o relay. Peça ao operador da implantação que conclua o passo 4 antes de usar a URL.
+:::
+
+## Arquitetura e pré-requisitos
+
+```text
+Production host                              Local computer
+TomoriBot -> HTTPS Caddy relay -> Cloudflare Access -> Tunnel -> cloudflared -> engine
+            Bearer key check      service token                  HTTP loopback
+                                  + engine Bearer key             127.0.0.1
+```
+
+Prepare:
+
+- Um domínio ativo no Cloudflare e permissão para gerenciar DNS, Tunnel e aplicativos do Access.
+- Um motor local funcionando e um modelo que você tenha autorização para usar.
+- `cloudflared` no PC do motor, com conectividade de saída para o Cloudflare (porta 7844 para QUIC ou HTTP/2).
+- Controle do repositório de segredos da implantação de produção e permissão para executar o [Caddy](https://caddyserver.com/docs/install) lá.
+- Dois hostnames HTTPS: `engine.example.com` para o túnel protegido e `relay.example.net` para o Caddy. Substitua esses marcadores por hostnames que você controla.
+- DNS público, um certificado TLS válido e uma entrada HTTPS de produção para o relay. Esta configuração exige um host onde você possa fornecê-los.
+
+As verificações de autenticação são separadas:
+
+1. O TomoriBot envia sua chave salva do motor como `Authorization: Bearer ...` ao relay.
+2. O relay verifica essa chave, a mantém para o motor e adiciona `CF-Access-Client-Id` e `CF-Access-Client-Secret`. O painel de endpoints do TomoriBot não consegue enviar esses cabeçalhos extras diretamente.
+3. O Cloudflare Access verifica o token de serviço; o motor verifica independentemente sua chave quando suportado.
+
+Use uma chave aleatória longa e dedicada para esta conexão. Qualquer pessoa com ela pode usar o relay. O Cloudflare identifica o token de serviço do relay; as permissões de usuário do Discord continuam sendo responsabilidade do TomoriBot.
+
+## 1. Proteja a origem local
+
+1. Siga o guia de configuração do motor e vincule-o a `127.0.0.1`. O [exemplo do CLIProxyAPI](/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/) usa a porta 8317; substitua pela porta do seu motor ao longo deste guia.
+2. Defina uma chave de inferência longa e aleatória quando suportado. Mantenha senhas administrativas separadas e desative painéis, descoberta e APIs de gerenciamento desnecessários.
+3. Verifique o listener e os perfis de firewall:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+Get-NetTCPConnection -State Listen -LocalPort 8317 |
+  Select-Object LocalAddress, LocalPort, OwningProcess
+Get-NetFirewallProfile | Select-Object Name, Enabled, DefaultInboundAction
+```
+
+Inspecione regras de permissão de executáveis e portas em `wf.msc`.
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+ss -ltnp 'sport = :8317'
+```
+
+Revise a política de firewall da sua distribuição em busca de regras de permissão de entrada desnecessárias.
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+lsof -nP -iTCP:8317 -sTCP:LISTEN
+```
+
+Revise as opções de Firewall nos Ajustes do Sistema do macOS.
+
+</TabItem>
+</Tabs>
+
+4. Espere apenas `127.0.0.1:8317`. Pare se IPv4 ou IPv6 estiver escutando em todas as interfaces (`0.0.0.0` ou `::`) ou em um endereço da LAN.
+5. Remova exposições de entrada desnecessárias; não adicione redirecionamento de portas no roteador nem exceção de firewall para o motor.
+6. Teste `/v1/models` e uma pequena conclusão localmente com a chave do motor.
+
+Execute o `cloudflared` neste mesmo PC. O endereço `127.0.0.1` do bot de produção aponta para a própria máquina dele.
+
+## 2. Crie a proteção do Access antes de publicar o DNS
+
+No painel do Cloudflare One, siga as [instruções de token de serviço](https://developers.cloudflare.com/cloudflare-one/access-controls/service-credentials/service-tokens/):
+
+1. Em `Access controls` > `Service credentials` > `Service tokens`, crie um token para este relay de produção, com uma validade que você consiga manter. Salve o Client ID e o Client Secret diretamente no repositório de segredos de produção. O segredo só é exibido na criação.
+2. Em `Access controls` > `Applications`, adicione um aplicativo `Self-hosted` para todo o hostname `engine.example.com`, sem restrição de caminho.
+3. Anexe uma política com ação `Service Auth`, uma regra `Include` do tipo `Service Token` e apenas esse token selecionado. Remova políticas amplas de `Allow` e `Bypass`; verifique se nenhum aplicativo mais específico contorna a proteção em outro caminho.
+4. Salve o aplicativo e anote a tag Application Audience (AUD) e o nome da sua equipe do Cloudflare One para a validação do conector. Mantenha essa proteção ativa antes de publicar a rota do túnel.
+
+- Use `Service Auth` para este cliente sem supervisão. Login no navegador, cookies de navegador, listas de permissão de IP e regras amplas de Bypass não fornecem essa autenticação.
+- O token de serviço do Access identifica o relay. O JSON de credenciais do túnel ou token de conector autoriza o `cloudflared` a executar um túnel. Mantenha-os separados.
+- O [guia de autenticação de máquina](https://developers.cloudflare.com/cloudflare-one/access-controls/authenticate-agents/) do Cloudflare cobre outros clientes; este relay não precisa de login interativo de agente.
+
+## 3. Crie um túnel nomeado
+
+1. Instale o `cloudflared` usando os [downloads](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/downloads/) oficiais ou o repositório de pacotes. Estas regras tiveram a sintaxe verificada com a versão `2026.11.0`; repita a validação ao atualizar.
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+Inspecione a entrada do Gerenciador de Pacotes do Windows antes de instalar:
+
+```powershell
+winget show --id Cloudflare.cloudflared --exact
+winget install --id Cloudflare.cloudflared --exact
+cloudflared --version
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+Para Debian/Ubuntu, configure o [repositório APT](https://pkg.cloudflare.com/index.html) assinado do Cloudflare:
+
+```bash
+sudo mkdir -p --mode=0755 /usr/share/keyrings
+curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg |
+  sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+printf '%s\n' 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' |
+  sudo tee /etc/apt/sources.list.d/cloudflared.list >/dev/null
+sudo apt-get update && sudo apt-get install cloudflared
+cloudflared --version
+```
+
+Para outras distribuições, use o pacote ou a arquitetura correspondente nos downloads oficiais.
+
+</TabItem>
+<TabItem label="Mac">
+
+Com o [Homebrew](https://brew.sh/) instalado:
+
+```bash
+brew install cloudflared
+cloudflared --version
+```
+
+</TabItem>
+</Tabs>
+
+2. Autorize o domínio no navegador aberto por `tunnel login` e depois crie o túnel nomeado:
+
+```sh
+cloudflared tunnel login
+cloudflared tunnel create home-engine
+```
+
+Mantenha o certificado de conta e o JSON de credenciais do túnel gerados em sigilo. Consulte o [procedimento de túnel nomeado](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/local-management/create-local-tunnel/) do Cloudflare se algum comando for diferente.
+
+3. Crie `config.yml` no local correspondente ao seu sistema operacional. Substitua o caminho do arquivo de credenciais no YAML compartilhado abaixo pelo caminho absoluto do JSON de túnel gerado:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+- Configuração: `%USERPROFILE%\.cloudflared\config.yml`
+- Arquivo de credenciais: `C:\Users\LOCAL_ACCOUNT\.cloudflared\TUNNEL_UUID.json`
+
+```powershell
+$tunnelConfig = Join-Path $env:USERPROFILE '.cloudflared\config.yml'
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+- Configuração: `~/.cloudflared/config.yml`
+- Arquivo de credenciais: `/home/LOCAL_ACCOUNT/.cloudflared/TUNNEL_UUID.json` para uma conta de usuário comum; use o seu diretório inicial real.
+
+```bash
+tunnel_config="$HOME/.cloudflared/config.yml"
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+- Configuração: `~/.cloudflared/config.yml`
+- Arquivo de credenciais: `/Users/LOCAL_ACCOUNT/.cloudflared/TUNNEL_UUID.json`
+
+```bash
+tunnel_config="$HOME/.cloudflared/config.yml"
+```
+
+</TabItem>
+</Tabs>
+
+Substitua os marcadores de UUID, caminho de credenciais, nome da equipe e audiência do aplicativo:
+
+```yaml
+tunnel: TUNNEL_UUID
+credentials-file: 'ABSOLUTE_PATH_TO_TUNNEL_JSON'
+ingress:
+  - hostname: engine.example.com
+    path: ^/v1/(models|chat/completions)$
+    service: http://127.0.0.1:8317
+    originRequest:
+      access:
+        required: true
+        teamName: YOUR_TEAM_NAME
+        audTag:
+          - YOUR_APPLICATION_AUD
+  - service: http_status:404
+```
+
+- A [verificação de Access do conector](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/configure-tunnels/origin-parameters/#access) exige o JWT do aplicativo mesmo que a proteção de borda seja removida acidentalmente.
+- A lista de permissão exclui `/v0/management`, `/v8/management`, `/management.html`, callbacks OAuth, `/v1/tunnel` e outras [rotas do CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI/blob/main/internal/api/server_routes.go). Mantenha o gerenciamento desativado localmente: o tráfego do conector chega via loopback.
+- O ingress preserva `/v1`; o relay abaixo também restringe os métodos.
+
+4. Valide o roteamento antes de publicar o DNS e depois inicie o conector:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$tunnelConfig = Join-Path $env:USERPROFILE '.cloudflared\config.yml'
+cloudflared tunnel --config $tunnelConfig ingress validate
+cloudflared tunnel --config $tunnelConfig ingress rule https://engine.example.com/v1/models
+cloudflared tunnel --config $tunnelConfig ingress rule https://engine.example.com/v8/management
+cloudflared tunnel route dns home-engine engine.example.com
+cloudflared tunnel --config $tunnelConfig run home-engine
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+tunnel_config="$HOME/.cloudflared/config.yml"
+cloudflared tunnel --config "$tunnel_config" ingress validate
+cloudflared tunnel --config "$tunnel_config" ingress rule https://engine.example.com/v1/models
+cloudflared tunnel --config "$tunnel_config" ingress rule https://engine.example.com/v8/management
+cloudflared tunnel route dns home-engine engine.example.com
+cloudflared tunnel --config "$tunnel_config" run home-engine
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+tunnel_config="$HOME/.cloudflared/config.yml"
+cloudflared tunnel --config "$tunnel_config" ingress validate
+cloudflared tunnel --config "$tunnel_config" ingress rule https://engine.example.com/v1/models
+cloudflared tunnel --config "$tunnel_config" ingress rule https://engine.example.com/v8/management
+cloudflared tunnel route dns home-engine engine.example.com
+cloudflared tunnel --config "$tunnel_config" run home-engine
+```
+
+</TabItem>
+</Tabs>
+
+5. Confirme que `models` seleciona a regra de loopback e `management` seleciona o 404 final. Verifique o hostname no Access e no DNS.
+6. Após a validação em primeiro plano, use as instruções de serviço específicas do seu sistema operacional no Cloudflare. Forneça caminhos explícitos de configuração e credenciais à conta de serviço; o diretório inicial dela pode ser diferente do seu.
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+Use o [procedimento de serviço do Windows](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/local-management/as-a-service/windows/) ou uma tarefa agendada restrita.
+
+</TabItem>
+<TabItem label="Linux">
+
+Use o [procedimento de serviço do Linux](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/local-management/as-a-service/linux/) para instalações baseadas em systemd.
+
+</TabItem>
+<TabItem label="Mac">
+
+Use o [procedimento de serviço do macOS](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/local-management/as-a-service/macos/) para launchd.
+
+</TabItem>
+</Tabs>
+
+O Cloudflare fornece HTTPS público; o HTTP trafega apenas via loopback no PC. Mantenha a verificação TLS ativada. Evite Quick Tunnels, URLs públicas compartilhadas e hostnames alternativos desprotegidos.
+
+## 4. Configure o relay de produção
+
+Estes passos exigem o operador da implantação de produção:
+
+1. Instale o [Caddy](https://caddyserver.com/docs/install) ou adicione um serviço Caddy à implantação. A imagem do TomoriBot e os arquivos Compose existentes não o iniciam automaticamente.
+2. Copie `docker/cloudflare-relay.Caddyfile` do repositório para uma configuração de serviço protegida. Substitua `relay.example.net` e todas as ocorrências de `engine.example.com`, incluindo o cabeçalho `Host` de upstream.
+3. Forneça as seguintes variáveis ao processo do Caddy a partir do repositório de segredos de produção:
+
+| Segredo | Onde mais ele pertence |
+|---|---|
+| `ENGINE_API_KEY` | A configuração de chave de cliente do motor e a credencial salva criptografada do endpoint no TomoriBot |
+| `CF_ACCESS_CLIENT_ID` | O mesmo token de serviço do Access |
+| `CF_ACCESS_CLIENT_SECRET` | O mesmo token de serviço do Access |
+
+- Gere a chave do motor a partir de pelo menos 32 bytes aleatórios codificados em hex/base64, sem espaços em branco e sem o caractere curinga `*` do Caddy.
+- Use referências ou montagens de segredos protegidas. Mantenha segredos literais fora de comandos de shell, argumentos de contêiner, Git e logs.
+- Mantenha a chave do motor no `auth_token` do TomoriBot; as credenciais do Access pertencem ao Caddy.
+
+4. A partir do diretório protegido do Caddyfile, valide e execute o Caddy após o repositório de segredos de produção injetar as variáveis. A inicialização em primeiro plano usa:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+foreach ($name in 'ENGINE_API_KEY', 'CF_ACCESS_CLIENT_ID', 'CF_ACCESS_CLIENT_SECRET') {
+  if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+    throw "Missing relay secret: $name"
+  }
+}
+caddy validate --config .\Caddyfile --adapter caddyfile
+caddy run --config .\Caddyfile --adapter caddyfile
+```
+
+Para inicialização sem supervisão, siga as [instruções de serviço do Windows](https://caddyserver.com/docs/running#windows-service) do Caddy.
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+if [ -n "${ENGINE_API_KEY:-}" ] && [ -n "${CF_ACCESS_CLIENT_ID:-}" ] && [ -n "${CF_ACCESS_CLIENT_SECRET:-}" ]; then
+  caddy validate --config ./Caddyfile --adapter caddyfile &&
+    caddy run --config ./Caddyfile --adapter caddyfile
+else
+  printf 'Load all three relay secrets before starting Caddy.\n' >&2
+fi
+```
+
+Para inicialização sem supervisão, use o [serviço systemd](https://caddyserver.com/docs/running#linux-service) do Caddy com o caminho de configuração correto e ambiente de serviço protegido.
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+if [ -n "${ENGINE_API_KEY:-}" ] && [ -n "${CF_ACCESS_CLIENT_ID:-}" ] && [ -n "${CF_ACCESS_CLIENT_SECRET:-}" ]; then
+  caddy validate --config ./Caddyfile --adapter caddyfile &&
+    caddy run --config ./Caddyfile --adapter caddyfile
+else
+  printf 'Load all three relay secrets before starting Caddy.\n' >&2
+fi
+```
+
+Configure a inicialização sem supervisão com o seu launchd ou gerenciador de serviços de contêiner usando o mesmo caminho de configuração e ambiente protegido.
+
+</TabItem>
+</Tabs>
+
+5. Aponte o DNS do relay para a entrada HTTPS de produção. O Caddy autônomo precisa da porta 443 de entrada e conectividade para desafio de certificado, normalmente 80/443. Use um registro de relay somente DNS (DNS-only) para evitar um segundo timeout do proxy do Cloudflare. Com entrada TLS gerenciada, mantenha o listener do backend privado. Aponte apenas o hostname do motor para o túnel doméstico.
+6. Configure a inicialização do serviço e o tratamento de reinicialização. O exemplo desativa a API de administração do Caddy, portanto reinicie-o após atualizações de segredos ou configuração. Mantenha o ambiente e a configuração persistida privados; evite logs de depuração ou de cabeçalhos de requisição.
+
+A configuração fornecida foi verificada com o Caddy 2.11.9. Ela:
+
+- Exige a chave do motor antes de permitir `GET /v1/models` ou `POST /v1/chat/completions`.
+- Remove cabeçalhos recebidos e depois fornece credenciais para um upstream fixo. Clientes não conseguem escolher outro destino nem sobrescrever os cabeçalhos do Access.
+- Rejeita redirecionamentos de upstream com 502 e oculta corpos de erro do upstream.
+- Descarrega SSE automaticamente, sem buffer de resposta nem API de administração. Consulte a [referência de proxy do Caddy](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy).
+
+## 5. Valide a conexão
+{/* anchor: validate-each-authentication-check */}
+
+A partir da produção, verifique cada linha antes de registrar o endpoint. Confira os logs do Access e as evidências do motor local para distinguir as falhas de autenticação.
+
+| Requisição | Resultado esperado |
+|---|---|
+| URL do túnel, sem token do Access ou token inválido | O Access nega; o motor não vê nenhuma requisição |
+| Token do Access válido, chave do motor inválida | O motor retorna 401, se suportar autenticação |
+| Ambas as credenciais corretas | JSON com a lista de modelos contendo `data` e os IDs dos modelos |
+| URL do relay, chave Bearer ausente ou errada | O relay retorna 401 antes de contatar o Access |
+| Chave correta, método errado ou caminho de gerenciamento | O relay retorna 404; caminhos de gerenciamento direto no túnel também retornam 404 após a autenticação do Access |
+
+<details>
+<summary>Comandos de verificação de autenticação</summary>
+
+Faça o repositório de segredos fornecer as variáveis, desative transcrições e execute este exemplo. Ele imprime códigos de status e tipos de conteúdo sem seguir redirecionamentos nem imprimir corpos ou cabeçalhos.
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+Add-Type -AssemblyName System.Net.Http
+$origin = 'https://engine.example.com/v1'
+$relay = 'https://relay.example.net/v1'
+$access = @{
+  'CF-Access-Client-Id' = $env:CF_ACCESS_CLIENT_ID
+  'CF-Access-Client-Secret' = $env:CF_ACCESS_CLIENT_SECRET
+}
+$good = $access.Clone()
+$good.Authorization = "Bearer $env:ENGINE_API_KEY"
+$badToken = $good.Clone()
+$badToken['CF-Access-Client-Secret'] = 'invalid-test-token'
+$badKey = $access.Clone()
+$badKey.Authorization = 'Bearer invalid-test-key'
+$cases = @(
+  @{ Uri = "$origin/models"; Headers = @{} },
+  @{ Uri = "$origin/models"; Headers = $badToken },
+  @{ Uri = "$origin/models"; Headers = $badKey },
+  @{ Uri = "$origin/models"; Headers = $good },
+  @{ Uri = "$relay/models"; Headers = @{} },
+  @{ Uri = "$relay/models"; Headers = @{ Authorization = "Bearer $env:ENGINE_API_KEY" } }
+)
+$handler = [Net.Http.HttpClientHandler]::new()
+$handler.AllowAutoRedirect = $false
+$client = [Net.Http.HttpClient]::new($handler)
+try {
+  foreach ($case in $cases) {
+    $request = [Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::Get, $case.Uri)
+    foreach ($header in $case.Headers.GetEnumerator()) {
+      $request.Headers.Add($header.Key, [string]$header.Value)
+    }
+    $result = $client.SendAsync($request).GetAwaiter().GetResult()
+    try {
+      [pscustomobject]@{ Url = $case.Uri; Status = [int]$result.StatusCode; Type = $result.Content.Headers.ContentType }
+    } finally {
+      $result.Dispose()
+      $request.Dispose()
+    }
+  }
+} finally {
+  $client.Dispose()
+}
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+Desative o rastreamento de shell. A função passa credenciais por meio da configuração stdin do curl, mantendo-as fora dos argumentos do processo.
+
+```bash
+set +x
+origin='https://engine.example.com/v1'
+relay='https://relay.example.net/v1'
+probe() {
+  probe_url=$1
+  access_mode=$2
+  key_mode=$3
+  {
+    if [ "$access_mode" != none ]; then
+      printf 'header = "CF-Access-Client-Id: %s"\n' "$CF_ACCESS_CLIENT_ID"
+      if [ "$access_mode" = bad ]; then
+        printf 'header = "CF-Access-Client-Secret: invalid-test-token"\n'
+      else
+        printf 'header = "CF-Access-Client-Secret: %s"\n' "$CF_ACCESS_CLIENT_SECRET"
+      fi
+    fi
+    if [ "$key_mode" = good ]; then
+      printf 'header = "Authorization: Bearer %s"\n' "$ENGINE_API_KEY"
+    elif [ "$key_mode" = bad ]; then
+      printf 'header = "Authorization: Bearer invalid-test-key"\n'
+    fi
+  } | curl --config - --silent --show-error --output /dev/null \
+    --write-out '%{http_code} %{content_type}\n' "$probe_url"
+}
+probe "$origin/models" none none
+probe "$origin/models" bad good
+probe "$origin/models" good bad
+probe "$origin/models" good good
+probe "$relay/models" none none
+probe "$relay/models" none good
+unset -f probe
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+Desative o rastreamento de shell. A função passa credenciais por meio da configuração stdin do curl, mantendo-as fora dos argumentos do processo.
+
+```bash
+set +x
+origin='https://engine.example.com/v1'
+relay='https://relay.example.net/v1'
+probe() {
+  probe_url=$1
+  access_mode=$2
+  key_mode=$3
+  {
+    if [ "$access_mode" != none ]; then
+      printf 'header = "CF-Access-Client-Id: %s"\n' "$CF_ACCESS_CLIENT_ID"
+      if [ "$access_mode" = bad ]; then
+        printf 'header = "CF-Access-Client-Secret: invalid-test-token"\n'
+      else
+        printf 'header = "CF-Access-Client-Secret: %s"\n' "$CF_ACCESS_CLIENT_SECRET"
+      fi
+    fi
+    if [ "$key_mode" = good ]; then
+      printf 'header = "Authorization: Bearer %s"\n' "$ENGINE_API_KEY"
+    elif [ "$key_mode" = bad ]; then
+      printf 'header = "Authorization: Bearer invalid-test-key"\n'
+    fi
+  } | curl --config - --silent --show-error --output /dev/null \
+    --write-out '%{http_code} %{content_type}\n' "$probe_url"
+}
+probe "$origin/models" none none
+probe "$origin/models" bad good
+probe "$origin/models" good bad
+probe "$origin/models" good good
+probe "$relay/models" none none
+probe "$relay/models" none good
+unset -f probe
+```
+
+</TabItem>
+</Tabs>
+
+</details>
+
+- A negação do Access pode ser 401/403 ou um redirecionamento de login. Uma página HTML com status 200 falha na validação.
+- Verifique se o corpo da resposta bem-sucedida é JSON do motor; apenas um 200 prova pouco.
+- Teste uma conclusão pequena e depois `stream: true`. Verifique quadros SSE `data:` incrementais e término normal com um cliente de streaming. Interrompa-o e confirme que a origem para de gerar.
+- Os testes de repositório não garantem sua política ativa do Access, comportamento de rede nem permissões de upstream.
+
+## 6. Registre e selecione um modelo
+
+1. Em `/providers` ou `/personal providers`, adicione `Compatível com OpenAI` com `https://relay.example.net/v1` e a chave do motor como `auth_token`.
+2. Selecione o endpoint salvo, adicione um Modelo de Texto e insira o ID exato de `/v1/models`. O TomoriBot criptografa a chave salva, mas não importa IDs de modelos automaticamente.
+3. Adicione mais IDs de modelos na mesma conexão para alternar entre eles no painel. O túnel não escolhe um modelo.
+4. Confirme uma conclusão no Discord. Ative ferramentas apenas após testar uma chamada inofensiva, seu resultado e a resposta seguinte. Lotes paralelos de ferramentas não são suportados; mantenha outras capacidades desativadas até testar.
+
+## Outros motores e limites
+
+| Motor | Adaptação necessária |
+|---|---|
+| CLIProxyAPI | Porta 8317; as duas rotas `/v1` permitidas bastam para texto e registro de modelos. Mantenha o gerenciamento desativado. Siga os [termos e configuração de backend](/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/). |
+| KoboldCPP / LM Studio | Substitua pela porta de loopback real e ative a autenticação por chave de inferência quando suportada. Use compatibilidade com OpenAI. Operações de administração ou descarregamento de GPU são excluídas por esta lista de permissão. |
+| Ollama | Use `Compatível com OpenAI` e `/v1`, e não o estilo nativo cuja sondagem chama `/api/tags`. A API local do Ollama não possui autenticação integrada por chave de API; a chave do relay autentica os chamadores, enquanto o Access protege o túnel. A chave não autentica no Ollama em si. Mantenha o Ollama apenas em loopback; adicione um gateway local autenticado se precisar de autenticação independente na origem. |
+| ComfyUI | Este relay de texto é insuficiente. Seu registro consulta `/system_stats`, tarefas usam `/prompt` e consulta de histórico, e arquivos usam rotas de upload e visualização. Projete uma lista explícita de permissões de rotas e métodos para essas operações e autentique o gateway local antes de publicá-lo. Nunca exponha extensões, navegador de arquivos ou rotas de administração em bloco. |
+| Motores de fala | A lista de permissão de texto é insuficiente. O registro de `tts-clone` precisa de `/health`; a transcrição precisa de descoberta de modelos e de sua rota de áudio, geralmente `/v1/audio/transcriptions`; a síntese tem seu próprio protocolo. Use o guia do motor no TomoriBot para listar as rotas exatas e os requisitos de multipart/binário antes de adaptar o relay. |
+
+- Motores sem autenticação devem permanecer apenas em loopback. O Access protege o túnel e o relay exige uma chave de cliente aleatória; adicione um gateway local autenticado se precisar de autenticação independente do motor. Caso contrário, a verificação de 401 no upstream não passa.
+- [Limites de conexão](https://developers.cloudflare.com/fundamentals/reference/connection-limits/): timeout padrão de leitura de 125 segundos e de escrita de 30 segundos. Teste gerações longas e silenciosas. As opções `requests.streaming.keepalive-seconds` e `send-keepalive-before-ft` do CLIProxyAPI podem enviar heartbeats SSE, mas não estendem os limites de tempo do próprio TomoriBot.
+- [Limites de upload](https://developers.cloudflare.com/support/troubleshooting/http-status-codes/4xx-client-error/error-413/): Free/Pro 100 MB, Business 200 MB, Enterprise até 5 GB; limites configurados podem ser menores. Base64 aumenta o tamanho das imagens, e todos os limites de entrada, motor e bot continuam válidos.
+- [WebSockets](https://developers.cloudflare.com/network/websockets/) são suportados pelo Cloudflare, mas excluídos por este relay de texto. Motores que precisam deles exigem roteamento e autenticação de handshake testados separadamente.
+- Caminhos de arquivos locais, `file://` e URLs de saída em loopback são inutilizáveis pela produção. Downloads comuns de mídia também não têm cabeçalhos do Access. Retorne bytes pela operação autenticada ou projete uma rota de download autorizada; nunca exponha diretórios de credenciais nem coloque segredos em URLs.
+
+## Solução de problemas e recuperação
+
+| Sintoma | O que verificar |
+|---|---|
+| Origem recusada / 502 | O processo do motor, a porta de loopback exata e a máquina do conector; um túnel não consegue alcançar o loopback de outro PC. |
+| Túnel desconectado / 1033 | Processo ou serviço do conector, saída na porta 7844, conectividade do provedor de internet, suspensão e reinicialização do Windows. |
+| 403 ou HTML de login | Hostname completo do aplicativo no Access, política `Service Auth`, token exato, expiração e cabeçalhos ausentes. Nunca adicione Bypass para corrigir isso. |
+| 401 no upstream | Chave de cliente da origem versus token do Access; a chave do relay e a chave do motor devem coincidir. |
+| 404 | Exatamente um `/v1`, ID do modelo correto, correspondência na regra do túnel e lista de permissão de métodos/caminhos do relay. |
+| 5xx / 524 / corte de stream | Timeout de leitura, falha do motor, cota, bufferização e suspensão do PC; inspecione os logs locais sem dados sensíveis do motor e do Access. O relay oculta corpos de erro do upstream. |
+| URL rejeitada por SSRF | DNS HTTPS público para o relay, incluindo todas as respostas A/AAAA. Endereços privados, de loopback, metadados, DNS misto privado/público e redirecionamentos inseguros continuam recusados em produção. |
+| Falha de DNS/TLS | Registros propagados, UUID/hostname do túnel, certificado válido do relay e `Host` de upstream exato; nunca ignore a verificação TLS. |
+| Modelo ausente | Backend autorizado do motor e JSON da lista de modelos. Registre o ID exato manualmente outra vez após alterar aliases. |
+| URL local de arquivo de saída | Adapte o protocolo de entrega de arquivos do motor; criar túnel para a interface dele não torna caminhos locais baixáveis. |
+
+- Após suspensão, reinicialização ou queda do provedor de internet, restaure o motor, depois o `cloudflared` e então teste o Access e o relay. Inicie uma nova requisição pequena; streams interrompidos não podem ser retomados, e repetir turnos com ferramentas pode repetir seus efeitos.
+- Rotas WARP/privadas exigem registro de carga de trabalho, roteamento e regras de Gateway. O TomoriBot em produção rejeita destinos privados atualmente. Este guia não oferece exceção de rota privada; mantenha as verificações de SSRF ativadas.
+
+## Revogue o acesso e faça a limpeza
+
+1. Para interromper a inferência, pare o relay. Pare o conector local e remova sua rota DNS ou túnel ao desativá-lo.
+2. Revogue o token do Access e remova políticas, aplicativos, DNS de relay e certificados não utilizados.
+3. Para rotação de rotina do token, atualize a política e o segredo de produção, reinicie e valide o relay e então revogue o token antigo.
+4. Faça a rotação da chave do motor no motor, no repositório de segredos do relay e no endpoint salvo do TomoriBot. Alterar uma entrada no painel não revoga a chave do motor nem atualiza outras conexões salvas.
+5. Durante um incidente, revogue primeiro e aceite a indisponibilidade. Para proxies com OAuth, revogue a autorização no upstream e remova os arquivos locais de token. Proteja backups e logs retidos que contenham credenciais antigas.

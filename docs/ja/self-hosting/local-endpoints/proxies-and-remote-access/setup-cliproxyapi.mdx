@@ -1,0 +1,367 @@
+---
+title: "セットアップ: CLIProxyAPI"
+sidebar:
+  label: "CLIProxyAPI"
+  order: 2
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+ローカルのChat Completionsプロキシである[CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI)を介して、TomoriBotを認可されたアップストリームに接続します。
+
+:::caution[CLIアカウントプロキシの使用は自己責任で行ってください]
+Codex、Claude Code、Antigravity、またはその他のCLIアカウントを介したサードパーティのアクセスは、プロバイダーの利用規約に違反し、アカウントの停止につながる恐れがあります。サブスクリプションの契約は、ボットやAPIとしての利用許可を意味しません。サインインする前に、[プロバイダー固有の制限とAPIの代替手段](/self-hosting/local-endpoints/proxies-and-remote-access/#account-risk)を確認してください。GoogleのAntigravity利用規約では、Antigravity OAuthを介したサードパーティのアクセスが明示的に禁止されています。
+:::
+
+## 1. CLIProxyAPIをインストールする
+
+1. 公式の[最新安定版リリース](https://github.com/router-for-me/CLIProxyAPI/releases/latest)を使用します。以下の例では、アーカイブと対応するチェックサムを同時にダウンロードします。
+2. 自分のアカウントが所有する空のフォルダーでターミナルを開きます：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+PowerShellで実行します。ARM64版Windowsの場合は、`windows_amd64` を `windows_aarch64` に変更してください。
+
+```powershell
+$release = Invoke-RestMethod 'https://api.github.com/repos/router-for-me/CLIProxyAPI/releases/latest'
+$asset = @($release.assets | Where-Object name -Like 'CLIProxyAPI_*_windows_amd64.zip')
+$checksums = @($release.assets | Where-Object name -EQ 'checksums.txt')
+if ($asset.Count -ne 1 -or $checksums.Count -ne 1) { throw 'Check the release assets before continuing' }
+$archive = $asset[0].name
+$release.tag_name
+Invoke-WebRequest $asset[0].browser_download_url -OutFile $archive
+Invoke-WebRequest $checksums[0].browser_download_url -OutFile checksums.txt
+$expected = ((Select-String -Path checksums.txt -Pattern ([regex]::Escape($archive) + '$')).Line -split '\s+')[0]
+if (!$expected -or (Get-FileHash $archive -Algorithm SHA256).Hash -ine $expected) {
+  throw 'Archive checksum mismatch'
+}
+Expand-Archive -LiteralPath $archive -DestinationPath .\app
+Set-Location .\app
+.\cli-proxy-api.exe --help
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+x86-64またはARM64のアーカイブを選択します。リリースのシステム要件を確認してください。muslベースのシステムには `no-plugin` ビルドが必要です。
+
+```bash
+case "$(uname -m)" in
+  x86_64) arch=amd64 ;;
+  aarch64|arm64) arch=aarch64 ;;
+  *) arch=''; printf 'Unsupported architecture\n' >&2 ;;
+esac
+if [ -n "$arch" ] && release_page=$(curl --fail --silent --show-error --head --location \
+    --output /dev/null --write-out '%{url_effective}' \
+    'https://github.com/router-for-me/CLIProxyAPI/releases/latest'); then
+  release_tag=${release_page##*/}
+  release_version=${release_tag#v}
+  archive="CLIProxyAPI_${release_version}_linux_${arch}.tar.gz"
+  release_url="https://github.com/router-for-me/CLIProxyAPI/releases/download/$release_tag"
+  printf 'Selected release: %s\n' "$release_tag"
+  if curl --fail --location "$release_url/$archive" --output "$archive" &&
+     curl --fail --location "$release_url/checksums.txt" --output checksums.txt; then
+    expected=$(awk -v file="$archive" '$2 == file { print $1 }' checksums.txt)
+    actual=$(sha256sum "$archive" | awk '{ print $1 }')
+    if [ -n "$expected" ] && [ "$actual" = "$expected" ]; then
+      mkdir app && tar -xzf "$archive" -C app && cd app && ./cli-proxy-api --help
+    else
+      printf 'Archive checksum mismatch; stop here.\n' >&2
+    fi
+  fi
+fi
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+macOSのターミナルで実行します。Apple SiliconまたはIntelを自動的に選択し、Homebrewのサービス既定値ではなく明示的な設定パスを使用します。
+
+```bash
+case "$(uname -m)" in
+  arm64) arch=aarch64 ;;
+  x86_64) arch=amd64 ;;
+  *) arch=''; printf 'Unsupported architecture\n' >&2 ;;
+esac
+if [ -n "$arch" ] && release_page=$(curl --fail --silent --show-error --head --location \
+    --output /dev/null --write-out '%{url_effective}' \
+    'https://github.com/router-for-me/CLIProxyAPI/releases/latest'); then
+  release_tag=${release_page##*/}
+  release_version=${release_tag#v}
+  archive="CLIProxyAPI_${release_version}_darwin_${arch}.tar.gz"
+  release_url="https://github.com/router-for-me/CLIProxyAPI/releases/download/$release_tag"
+  printf 'Selected release: %s\n' "$release_tag"
+  if curl --fail --location "$release_url/$archive" --output "$archive" &&
+     curl --fail --location "$release_url/checksums.txt" --output checksums.txt; then
+    expected=$(awk -v file="$archive" '$2 == file { print $1 }' checksums.txt)
+    actual=$(shasum -a 256 "$archive" | awk '{ print $1 }')
+    if [ -n "$expected" ] && [ "$actual" = "$expected" ]; then
+      mkdir app && tar -xzf "$archive" -C app && cd app && ./cli-proxy-api --help
+    else
+      printf 'Archive checksum mismatch; stop here.\n' >&2
+    fi
+  fi
+fi
+```
+
+macOSが実行ファイルをブロックする場合は、[Appleのガイダンス](https://support.apple.com/en-us/102445)を確認し、許可する前に発行元を検証してください。
+
+</TabItem>
+</Tabs>
+
+3. ヘルプバナーが選択したリリースと一致し、`--config` が含まれていることを確認します。設定を行う前に、同梱の `config.example.yaml` と以下のv8レイアウトを比較してください。スキーマが異なる場合は、そのリリースの例に従ってください。
+
+- アーカイブとチェックサムは両方とも公式リリースからダウンロードしてください。チェックサムは破損を検出するためのものです。コードを実行する前に発行元を確認してください。
+- その他のインストール方法については、アップストリームの[クイックスタート](https://help.router-for.me/introduction/quick-start)を確認してください。パッケージマネージャーによって設定パスが異なる場合があります。
+
+## 2. ローカルリスナーを設定する
+
+1. プライベートなエディターを使用して、実行ファイルの隣に `config.yaml` を作成します。
+2. クライアントキーのプレースホルダーを、パスワードマネージャーで生成したhexまたはbase64エンコード済みの32バイト以上のランダムな値に置き換えます。
+3. このフォルダーと認証情報ディレクトリのアクセス権を、ご自身のアカウントとプロセス用アカウントのみに制限します。両方をGitや共有フォルダーに入れないでください。
+
+```yaml
+config-version: 8
+server:
+  host: "127.0.0.1"
+  port: 8317
+  discovery:
+    enabled: false
+management:
+  allow-remote: false
+  secret-key: ""
+  disable-control-panel: true
+access:
+  api-keys:
+    - "REPLACE_WITH_RANDOM_CLIENT_KEY"
+oauth:
+  auth-dir: "~/.cli-proxy-api"
+```
+
+- 空の管理シークレットにより、`/v0/management` と `/v8/management` が無効になります。`MANAGEMENT_PASSWORD` は未設定のままにし、`--password` や管理TUIの使用は避けてください。
+- トンネルの背後でも管理機能は無効のままにしてください。コネクタもループバック経由でエンジンに到達します。
+
+4. 認可されたバックエンドを1つ追加します。OpenAI互換APIの場合は、実際のURL、キー、モデルIDを指定してこの独立したトップレベルブロックをマージします：
+
+```yaml
+api-keys:
+  openai-compatibility:
+    - name: "authorized-backend"
+      base-url: "https://api.example.com/v1"
+      keys:
+        - api-key: "REPLACE_WITH_UPSTREAM_KEY"
+      models:
+        - name: "upstream-model-id"
+          alias: "home-chat"
+```
+
+| キーの場所 | 用途 |
+|---|---|
+| `access.api-keys` | TomoriBotがCLIProxyAPIに対して認証する |
+| トップレベルの `api-keys` | CLIProxyAPIがアップストリームに対して認証する |
+
+サンプル値はすべて置き換え、必要なバックエンドのみを有効にしてください。
+
+### アカウントログインの代替手段
+
+- 利用可能なフラグには、Gemini CLIの `--login`、Claudeの `--claude-login`、Codexの `--codex-login` / `--codex-device-login` があります。その他のプロバイダー固有フラグは `--help` に一覧表示されます。
+- アカウントログインは、プロバイダーがブリッジを認可している場合にのみ使用してください。同意画面と要求される権限を確認してください。スコープはプロバイダーによって異なります。
+- ログインコマンドとサーバーコマンドには同じ絶対パスを `--config` として渡してください。リフレッシュ認証情報は `oauth.auth-dir`（ここではプロファイルの `.cli-proxy-api` ディレクトリ）に保存されます。
+- 一時的なOAuthコールバックリスナーはローカルに限定してください。アクセスを取り消すには、アップストリームのアカウント設定で認可を解除し、プロキシを停止してから、ローカルの認証情報ファイルを削除します。ファイル削除だけではトークンは失効しません。
+- `--antigravity-login` は存在しますが、上記のGoogleの制限事項に抵触します。ここではAntigravityのサインイン手順を提供していません。その実装はCloud Platform、プロフィールやメール、AIコード、ログ記録、および実験と設定に関する広範な権限を要求します。
+
+## 3. 起動してローカルでテストする
+
+1. サーバーを起動します：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$configPath = (Resolve-Path .\config.yaml).Path
+.\cli-proxy-api.exe --config $configPath
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+./cli-proxy-api --config "$(pwd)/config.yaml"
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+./cli-proxy-api --config "$(pwd)/config.yaml"
+```
+
+</TabItem>
+</Tabs>
+
+2. 別のターミナルウィンドウで、リスナーを確認します：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+Get-NetTCPConnection -State Listen -LocalPort 8317 |
+  Select-Object LocalAddress, LocalPort, OwningProcess
+```
+
+`wf.msc` で既存のファイアウォール許可ルールを確認します。
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+ss -ltnp 'sport = :8317'
+```
+
+不要なインバウンド公開がないか、ディストリビューションのファイアウォールポリシーを確認します。
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+lsof -nP -iTCP:8317 -sTCP:LISTEN
+```
+
+macOSのシステム設定でファイアウォールオプションを確認します。
+
+</TabItem>
+</Tabs>
+
+   `127.0.0.1` のみが表示されることを確認してください。`0.0.0.0`、`::`、`*`、またはLANアドレスが表示された場合は停止してください。インバウンドのファイアウォールルールやルーターのポートフォワーディング設定を追加しないでください。
+
+3. クライアントキーを非公開で読み取り、モデル一覧を取得します。次のリクエストのためにこのターミナルは開いたままにしてください。シークレットを読み込む前に、シェルのトレースやPowerShellのトランスクリプトを無効にしてください。
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$secret = Read-Host 'CLIProxyAPI client key' -AsSecureString
+$engineKey = [Net.NetworkCredential]::new('', $secret).Password
+$headers = @{ Authorization = "Bearer $engineKey" }
+$base = 'http://127.0.0.1:8317/v1'
+$models = Invoke-RestMethod "$base/models" -Headers $headers
+$models.data | Select-Object id
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+キーはエコーなしで読み取られ、標準入力経由でcurlに渡されるため、プロセス引数には残りません。
+
+```bash
+set +x
+printf 'CLIProxyAPI client key: '
+read -r -s engine_key
+printf '\n'
+base='http://127.0.0.1:8317/v1'
+printf 'header = "Authorization: Bearer %s"\n' "$engine_key" |
+  curl --config - --fail --silent --show-error "$base/models"
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+キーはエコーなしで読み取られ、標準入力経由でcurlに渡されるため、プロセス引数には残りません。
+
+```bash
+set +x
+printf 'CLIProxyAPI client key: '
+read -r -s engine_key
+printf '\n'
+base='http://127.0.0.1:8317/v1'
+printf 'header = "Authorization: Bearer %s"\n' "$engine_key" |
+  curl --config - --fail --silent --show-error "$base/models"
+```
+
+</TabItem>
+</Tabs>
+
+4. 以下の内容を同じフォルダーに `request.json` として保存します。`REPLACE_WITH_MODEL_ID` を一覧にある正確なIDに置き換えてから、同じターミナルでリクエストを実行します：
+
+```json
+{
+  "model": "REPLACE_WITH_MODEL_ID",
+  "messages": [{ "role": "user", "content": "Reply with hello." }],
+  "stream": false
+}
+```
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$reply = Invoke-RestMethod "$base/chat/completions" -Method Post -Headers $headers -ContentType 'application/json' -InFile .\request.json
+$reply.choices.message.content
+Remove-Variable engineKey, secret, headers
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+printf 'header = "Authorization: Bearer %s"\n' "$engine_key" |
+  curl --config - --fail --silent --show-error "$base/chat/completions" \
+    --header 'Content-Type: application/json' --data-binary @request.json
+unset engine_key
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+printf 'header = "Authorization: Bearer %s"\n' "$engine_key" |
+  curl --config - --fail --silent --show-error "$base/chat/completions" \
+    --header 'Content-Type: application/json' --data-binary @request.json
+unset engine_key
+```
+
+</TabItem>
+</Tabs>
+
+- モデル一覧が空の場合は、使用可能なバックエンドやモデルが設定されていません。
+- 一覧に表示されたモデルでも、補完テストの成功が必要です。ツールと画像は別途テストが必要です。
+
+## 4. モデルを登録して選択する
+
+1. `/providers`（サーバー管理者）または `/personal providers`（個人用の接続）を実行します。
+2. `+ 新しいカスタムエンドポイントを追加` を選択して入力します：
+
+| フィールド | 値 |
+|---|---|
+| エンドポイントのラベル | `home-proxy` などのプライベートな接続ラベル |
+| API互換性 | `OpenAI互換` |
+| エンドポイントURL（本番環境外で同じPC上のボット） | `http://127.0.0.1:8317/v1` |
+| エンドポイントURL（別ホストの本番ボット） | [Cloudflareガイド](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/)を完了した後の、認証済みリレーのHTTPSベースURL（`https://relay.example.net/v1` など） |
+| 認証トークン | CLIProxyAPIのクライアントキー（この設定では必須） |
+
+3. 保存したエンドポイントを選択し、`テキストモデル` を追加して、`/v1/models` の正確なIDまたはエイリアスを入力します。
+4. `コンテキストウィンドウ` は空欄のままにし、テストするまで機能トグルはオフのままにします。動画はオフのままにしてください。
+5. 別のモデルを使うには、同じエンドポイント配下にそのIDを追加してから、モデルパネルで選択します。TomoriBotは `/v1/models` を確認しますが、一覧を自動ではインポートしません。
+
+- 同一ホストでの開発環境では、TomoriBotの環境設定に `ALLOW_PRIVATE_NETWORK=127.0.0.1:8317` が必要です。
+- Dockerでは、ループバックがコンテナー自身を指すため、自身の `127.0.0.1` 経由でホストのリスナーに到達できません。
+- 本番環境では公開HTTPSと公開DNS応答が必要です。リモートURLを登録する前に、[Cloudflare Tunnelガイド](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/)を完了し、リレーをデプロイしてください。
+
+## 機能とトラブルシューティング
+
+- ローカルのプロトコルフィクスチャでは、テキスト、ストリーミング、継続を含む1ラウンド1回の関数呼び出し、および非ストリーミングJSONをカバーしています。実際のOAuth、有料アップストリーム、画像の理解品質、およびスキーマ準拠は未テストです。
+- CLIProxyAPIはポート8317でシステムメッセージを受け付けるため、ChatMockの回避策は不要です。
+- バックエンドが1ラウンドにつき1回の呼び出しを生成できる場合を除き、ツールはオフにしてください。並列ツールバッチはサポートされていません。
+- プロバイダー固有の推論シグネチャのリプレイを必要とするモデルは、別途検証が必要です。汎用カスタムチャットは動画を扱わず、Responses APIも使用しません。
+
+| 症状 | 対処 |
+|---|---|
+| `401` | アップストリームのキーとは別に、クライアントキーを確認します。 |
+| `404` | `/chat/completions` を付けずに `/v1` ベースを使用し、モデルIDを確認します。 |
+| パラメーターの拒否 | コンテキストの上書きは空欄、推論は自動のままにしてください。TomoriBotは出力開始前に、対象となるパラメーター拒否を自動的に再試行します。ツールを有効にしたりサンプリング制御に依存したりする前に、ログでフォールバックされたリクエストがないか確認してください。 |
+| `403`、HTMLログインページ、またはトンネルエラー | [Accessおよびリレーの検証](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/#validate-each-authentication-check)を完了してください。直接のAccessホスト名にはDiscordパネルでは送信できない追加ヘッダーが必要です。 |
+| ストリームが停止する | PCのスリープ、アップストリームのクォータ、トンネルの健全性、およびCloudflareガイドのストリーム制限を確認してください。 |
+
+編集済みのローカル再現環境で診断する場合を除き、リクエストやデバッグのログ記録はオフにしてください。クライアントキーが漏洩した場合は、CLIProxyAPI、TomoriBotの保存済みエンドポイント、および本番リレーでローテーションしてください。漏洩したアップストリーム認証情報は別途失効させてください。

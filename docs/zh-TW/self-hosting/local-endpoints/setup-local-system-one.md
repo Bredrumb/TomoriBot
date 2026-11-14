@@ -2,7 +2,7 @@
 title: "設定：本機判斷模型"
 sidebar:
   label: "本機判斷模型"
-  order: 7
+  order: 2
 aiGenerated: true
 ---
 

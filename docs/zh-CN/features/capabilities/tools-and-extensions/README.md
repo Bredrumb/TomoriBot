@@ -135,7 +135,7 @@ Brave → SearXNG → DuckDuckGo
 
 本地MCP服务器只在自部署实例上受支持，因为公开托管的bot
 要求HTTPS并会拦截本地与私有地址。如果你自己跑实例，见
-[设置：本地MCP服务器](/zh-CN/self-hosting/local-endpoints/setup-local-mcp/)。
+[设置：本地MCP服务器](/zh-CN/self-hosting/mcp-servers/setup-local-mcp/)。
 
 :::danger[只添加你信任的MCP服务器]
 一个恶意的MCP服务器可以用隐藏指令提示词注入她、窃取
