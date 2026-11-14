@@ -42,7 +42,8 @@ export function usesChatCompletionsImageGeneration(modelCodename: string): boole
   return isOpenRouterGeminiModelCodename(modelCodename);
 }
 
-function buildOpenRouterImageRequest(
+/** @public Release-only `src/modules/supporter-billing/runtime/spendEstimates.ts` imports this. */
+export function buildOpenRouterImageRequest(
   request: Pick<OpenRouterImageGenerationRequest, "modelCodename" | "prompt" | "aspectRatio" | "referenceImages">,
 ): { url: string; body: Record<string, unknown> } {
   const { modelCodename, prompt, aspectRatio, referenceImages } = request;
