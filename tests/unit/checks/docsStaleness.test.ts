@@ -164,4 +164,31 @@ describe("docs translation staleness", () => {
       "unfollowed pt-BR added.md added",
     ]);
   });
+
+  it("pairs English .mdx files with .md translations across renames and drift checks", () => {
+    const repo = createRepo({
+      "docs/en/guide.md": page("Guide", "Original line"),
+      "docs/ja/guide.md": page("ガイド", "元の行"),
+      "docs/en/same.md": page("Same", "Identical body"),
+      "docs/ja/same.md": page("同じ", "同じ本文"),
+    });
+    const mergeBase = git(repo.root, "rev-parse", "HEAD");
+    repo.remove("docs/en/guide.md");
+    repo.remove("docs/en/same.md");
+    repo.write({
+      "docs/en/guide.mdx": page("Guide", "Original line\nAdded tab line"),
+      "docs/en/same.mdx": page("Same", "Identical body"),
+    });
+    repo.commit("Convert English pages to mdx");
+
+    const source = createGitDocsSource(repo.root);
+    const treeEntries = findDocsTreeStaleness(source, ["ja"]);
+    expect(summarize(treeEntries)).toEqual(["drifted ja guide.mdx"]);
+    expect(treeEntries[0]?.translation).toBe("docs/ja/guide.md");
+    expect(treeEntries[0]?.changedLines).toBe(1);
+
+    const branchEntries = findDocsUnfollowed(source, mergeBase, ["ja"]);
+    expect(summarize(branchEntries)).toEqual(["unfollowed ja guide.mdx changed"]);
+    expect(branchEntries[0]?.translation).toBe("docs/ja/guide.md");
+  });
 });

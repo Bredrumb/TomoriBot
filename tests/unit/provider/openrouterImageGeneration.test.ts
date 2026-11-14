@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it } from "bun:test";
 import {
   generateOpenRouterImage,
   usesChatCompletionsImageGeneration,
-  OPENROUTER_IMAGE_RESPONSE_MAX_BYTES,
 } from "@/providers/openrouter/openrouterImageGeneration";
+import { IMAGE_GENERATION_RESPONSE_MAX_BYTES } from "@/utils/provider/chatImageGeneration";
 import { stubGlobalFetch } from "../../helpers/fetchStub";
 import { ResponseSizeError } from "@/utils/security/boundedResponse";
 
@@ -142,7 +142,7 @@ describe("OpenRouter image generation routing", () => {
     for (const modelCodename of ["test/image-model", "google/gemini-3.1-flash-image"]) {
       for (const status of [200, 401]) {
         let cancelled = false;
-        const limit = status === 200 ? OPENROUTER_IMAGE_RESPONSE_MAX_BYTES : 1024 * 1024;
+        const limit = status === 200 ? IMAGE_GENERATION_RESPONSE_MAX_BYTES : 1024 * 1024;
         let remainingBytes = limit + 3 * 1024 * 1024;
         const chunk = new Uint8Array(1024 * 1024);
         const body = new ReadableStream<Uint8Array>({

@@ -1,0 +1,276 @@
+---
+title: "任意の強化設定：Cloudflare AccessとCaddy"
+sidebar:
+  label: "オプション：AccessとCaddy"
+  order: 4
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Cloudflare AccessとCaddyリレーを使用して、[Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/)に2つ目の認証チェックを追加します。これは任意の追加強化設定であり、TomoriBotはどちらのサービスがなくても公開HTTPSエンジンに直接接続できます。
+
+## この構成で追加される保護
+
+| 保護項目 | 直接トンネル | AccessとCaddy |
+|---|---|---|
+| HTTPSおよびPC上のインバウンドポート不要 | トンネルが提供 | 同じ |
+| エンジンを呼び出せる対象 | エンジン側でキーが設定されていれば検証。未認証のエンジンはURLを知る誰もが呼び出し可能 | Accessがリレーのサービストークンを要求し、Caddyがそのクライアントキーを要求 |
+| 組み込み認証のないエンジン | 別の認証ゲートウェイを追加しない限りURLの秘匿性に依存 | Accessとリレーのクライアントキーで保護 |
+| 許可されるAPIルート | トンネルのパスルールが公開範囲を制限 | CaddyがさらにHTTPメソッドを制限し、アップストリームのリダイレクトを拒否 |
+| TomoriBotの外部にキーが誤って漏洩した場合 | 有効なエンジンキーでトンネルを直接呼び出し可能 | エンジンキーだけでは保護されたトンネルを呼び出せない（ただし公開リレーの呼び出しは可能） |
+| リレーのアクセス削除 | エンジンキーをローテーションして無効化 | エンジンキーとは独立してAccessサービストークンを失効 |
+
+これによりTomoriBotのサーバー・個人権限が変わったり、ボット運用者からエンドポイント設定が隠されたりすることはありません。Caddyキーの所持者は許可されたルートを引き続き直接使用できます。ComfyUIワークフローもインストール済みノードをそのまま実行できるため、ルート制限によってサンドボックス化されたりユーザーごとに分離されたりすることはありません。
+
+`relay.example.net` のような2つ目の公開HTTPSホスト名と、[Caddy](https://caddyserver.com/docs/install)を実行できるホストが必要です。ボットのサーバーと共用することも、ご自身が管理する別のサーバーを使用することもできます。Azure/Hetznerワークフローはこのリレーを自動的にデプロイしません。Caddyによりプロセスとネットワークホップが1つ増えるため、負荷はリレーを使用するリクエストに依存します。
+
+TomoriBotのエンドポイントパネルはBearerキーを送信しますが、Accessサービストークンのヘッダーを追加することはできません。Caddyがそのキーを検証してヘッダーを付加します。Access認証情報はCaddy側に置き、TomoriBotにはクライアントキーのみを保存してください。
+
+## 1. トンネルのホスト名を保護する
+
+Cloudflare Oneダッシュボードで操作します：
+
+1. `Access controls` > `Service credentials` > `Service tokens` で、リレー用の[サービストークンを作成](https://developers.cloudflare.com/cloudflare-one/access-controls/service-credentials/service-tokens/)します。維持可能な有効期限を選び、Client IDとClient Secretをサーバーのシークレットストアに保存してください。シークレットは1回しか表示されません。
+2. `Access controls` > `Applications` で、パス制限なしで `engine.example.com` 全体を対象とした `Self-hosted` アプリケーションを追加します。
+3. アクション `Service Auth` と種類 `Service Token` の `Include` ルールを持つポリシーを追加し、作成したトークンのみを選択します。広範な `Allow` や `Bypass` ポリシーは削除し、保護をバイパスするより具体的なアプリケーションがないか確認してください。
+4. アプリケーションを保存します。以下のYAML用に、Application Audience（AUD）タグとCloudflare Oneチーム名を記録してください。
+
+トンネルDNSを公開する前にAccess保護を有効にしておきます。サービストークンはCaddyに配置し、次に作成するトンネル認証情報JSONはローカルコンピューターに配置します。
+
+## 2. トンネルでAccessを必須にする
+
+[基本ガイド](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/#configure-the-tunnel)を使用して、`cloudflared` をインストールし、名前付きトンネルを作成して、`config.yml` を準備します。DNSを公開する前にAccess保護を完了してください。稼働中の直接トンネルを変換する場合は、保護を変更している間コネクタを停止してください。
+
+チーム名とApplication Audienceタグを置き換えて、各エンジンのホスト名ルールにこの `originRequest` ブロックを追加します：
+
+```yaml title="config.yml hostname rule"
+  - hostname: engine.example.com
+    path: ^/v1/(models|chat/completions)$
+    service: http://127.0.0.1:8317
+    originRequest:
+      access:
+        required: true
+        teamName: YOUR_TEAM_NAME
+        audTag:
+          - YOUR_APPLICATION_AUD
+```
+
+基本ガイドのトップレベルのトンネル・認証情報フィールドと末尾の404ルールはそのまま維持します。ComfyUIまたはTTSの場合は、そのエンジンの `path` と `service` を保持してください。[コネクタのAccessチェック](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/configure-tunnels/origin-parameters/#access)により、エッジ保護が誤って削除された場合でもローカルでアプリケーションのJWTが必須になります。
+
+基本ガイドの手順に従って、イングレスルールを検証し、トンネルDNSを公開し、コネクタを起動します。これにより、Access認証情報のないリクエストは拒否されるようになります。
+
+## 3. Caddyリレーを実行する
+
+リレーサーバー上で操作します：
+
+1. [Caddy](https://caddyserver.com/docs/install)をインストールするか、デプロイメントにサービスとして追加します。
+2. チェックアウトから `docker/cloudflare-relay.Caddyfile` を保護されたファイル `Caddyfile` にコピーします。末尾のサイトブロック内の `relay.example.net` と `engine.example.com` を置き換えます。CLIProxyAPIでは `chat_routes` を維持してください。
+3. シークレットストアからCaddyプロセスに次の変数を供給します：
+
+| 変数 | 値 |
+|---|---|
+| `ENGINE_API_KEY` | TomoriBotにも保存するCLIProxyAPIクライアントキー |
+| `CF_ACCESS_CLIENT_ID` | AccessサービストークンのClient ID |
+| `CF_ACCESS_CLIENT_SECRET` | AccessサービストークンのClient Secret |
+
+空白や `*` を含まず、hexまたはbase64エンコードされた32バイト以上のランダムバイトから生成したクライアントキーを使用してください。生のシークレットをコマンド、Git、ログに含めないでください。
+
+`Caddyfile` が含まれるフォルダーから、3つの変数をすべて読み込んだ後にCaddyを検証して起動します：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+foreach ($name in 'ENGINE_API_KEY', 'CF_ACCESS_CLIENT_ID', 'CF_ACCESS_CLIENT_SECRET') {
+  if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+    throw "Missing relay secret: $name"
+  }
+}
+caddy validate --config .\Caddyfile --adapter caddyfile
+caddy run --config .\Caddyfile --adapter caddyfile
+```
+
+無人起動には、Caddyの[Windowsサービス手順](https://caddyserver.com/docs/running#windows-service)に従ってください。
+
+</TabItem>
+<TabItem label="Linux / macOS">
+
+```bash
+if [ -n "${ENGINE_API_KEY:-}" ] && [ -n "${CF_ACCESS_CLIENT_ID:-}" ] && [ -n "${CF_ACCESS_CLIENT_SECRET:-}" ]; then
+  caddy validate --config ./Caddyfile --adapter caddyfile &&
+    caddy run --config ./Caddyfile --adapter caddyfile
+else
+  printf 'Load all three relay secrets before starting Caddy.\n' >&2
+fi
+```
+
+無人起動には、LinuxではCaddyの[systemdサービス](https://caddyserver.com/docs/running#linux-service)を、macOSではlaunchdまたはコンテナーサービスマネージャーを使用し、同じ設定とシークレットを指定してください。
+
+</TabItem>
+
+</Tabs>
+
+`relay.example.net` をリレーサーバーのHTTPSイングレスに向けます。スタンドアロンCaddyにはインバウンド443と証明書チャレンジの接続（通常はポート80/443）が必要です。2重のCloudflareプロキシタイムアウトを避けるため、リレーのレコードはDNSのみ（プロキシ無効）を使用してください。デプロイメント側でTLSを別途終端する場合は、Caddyのバックエンドリスナーを非公開のままにしてください。
+
+提供されているファイルはクライアントキーを検証し、ルートとメソッドを制限し、アップストリームのエラー本文を隠します。管理APIは無効になっているため、設定やシークレットを変更した後はCaddyを再起動してください。環境変数と永続設定は非公開に保ち、デバッグログやヘッダーログはオフにしてください。
+
+
+## 4. Accessとリレーの認証を検証する
+{/* anchor: validate-each-authentication-check */}
+
+リレーエンドポイントを保存する前に、Caddyホストから以下のチェックを検証してください：
+
+| リクエスト | 期待される結果 |
+|---|---|
+| トンネルURL、Accessトークンの欠落または誤り | Accessが拒否し、エンジンにはリクエストが届かない |
+| トンネルURL、有効なAccessトークンだが誤ったクライアントキー | CLIProxyAPIが401を返す |
+| トンネルURL、両方の認証情報が正しい | モデル一覧などのエンジンJSON |
+| リレーURL、クライアントキーの欠落または誤り | リレーが401を返す |
+| リレーURL、正しいキーだが誤ったメソッドまたは管理パス | リレーが404を返す |
+
+Accessによる拒否は401、403、またはログインへのリダイレクトになります。成功時のレスポンスにエンジンのJSONが含まれていることを確認してください。ステータス200であってもHTMLログインページが返された場合は失敗です。直接のトンネル管理パスも、Access認証後に404を返す必要があります。
+
+<details>
+<summary>認証チェック用コマンド</summary>
+
+3つのシークレットを読み込み、トランスクリプトやトレースを無効にした状態でリレーホストから実行します。これらのコマンドはリダイレクトを追跡したり認証情報を出力したりせずに、ステータスコードとContent-Typeを出力します。
+
+ComfyUIまたはTTSの場合は、そのホスト名とシークレットを使用し、`/v1` を削除して、`/models` を `/system_stats` または `/health` に置き換えてください。そのエンジンに認証がない場合にのみ、オリジンキーのチェックをスキップしてください。
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+Add-Type -AssemblyName System.Net.Http
+$origin = 'https://engine.example.com/v1'
+$relay = 'https://relay.example.net/v1'
+$access = @{
+  'CF-Access-Client-Id' = $env:CF_ACCESS_CLIENT_ID
+  'CF-Access-Client-Secret' = $env:CF_ACCESS_CLIENT_SECRET
+}
+$good = $access.Clone()
+$good.Authorization = "Bearer $env:ENGINE_API_KEY"
+$badToken = $good.Clone()
+$badToken['CF-Access-Client-Secret'] = 'invalid-test-token'
+$badKey = $access.Clone()
+$badKey.Authorization = 'Bearer invalid-test-key'
+$cases = @(
+  @{ Uri = "$origin/models"; Headers = @{} },
+  @{ Uri = "$origin/models"; Headers = $badToken },
+  @{ Uri = "$origin/models"; Headers = $badKey },
+  @{ Uri = "$origin/models"; Headers = $good },
+  @{ Uri = "$relay/models"; Headers = @{} },
+  @{ Uri = "$relay/models"; Headers = @{ Authorization = "Bearer $env:ENGINE_API_KEY" } }
+)
+$handler = [Net.Http.HttpClientHandler]::new()
+$handler.AllowAutoRedirect = $false
+$client = [Net.Http.HttpClient]::new($handler)
+try {
+  foreach ($case in $cases) {
+    $request = [Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::Get, $case.Uri)
+    foreach ($header in $case.Headers.GetEnumerator()) {
+      $request.Headers.Add($header.Key, [string]$header.Value)
+    }
+    $result = $client.SendAsync($request).GetAwaiter().GetResult()
+    try {
+      [pscustomobject]@{ Url = $case.Uri; Status = [int]$result.StatusCode; Type = $result.Content.Headers.ContentType }
+    } finally {
+      $result.Dispose()
+      $request.Dispose()
+    }
+  }
+} finally {
+  $client.Dispose()
+}
+```
+
+</TabItem>
+<TabItem label="Linux / macOS">
+
+認証情報はcurlの標準入力設定経由で渡されるため、プロセス引数には残りません。
+
+```bash
+set +x
+origin='https://engine.example.com/v1'
+relay='https://relay.example.net/v1'
+probe() {
+  probe_url=$1
+  access_mode=$2
+  key_mode=$3
+  {
+    if [ "$access_mode" != none ]; then
+      printf 'header = "CF-Access-Client-Id: %s"\n' "$CF_ACCESS_CLIENT_ID"
+      if [ "$access_mode" = bad ]; then
+        printf 'header = "CF-Access-Client-Secret: invalid-test-token"\n'
+      else
+        printf 'header = "CF-Access-Client-Secret: %s"\n' "$CF_ACCESS_CLIENT_SECRET"
+      fi
+    fi
+    if [ "$key_mode" = good ]; then
+      printf 'header = "Authorization: Bearer %s"\n' "$ENGINE_API_KEY"
+    elif [ "$key_mode" = bad ]; then
+      printf 'header = "Authorization: Bearer invalid-test-key"\n'
+    fi
+  } | curl --config - --silent --show-error --output /dev/null \
+    --write-out '%{http_code} %{content_type}\n' "$probe_url"
+}
+probe "$origin/models" none none
+probe "$origin/models" bad good
+probe "$origin/models" good bad
+probe "$origin/models" good good
+probe "$relay/models" none none
+probe "$relay/models" none good
+unset -f probe
+```
+
+</TabItem>
+
+</Tabs>
+
+</details>
+
+## 5. TomoriBotにリレーURLを保存する
+
+サーバー接続には `/providers`、個人接続には `/personal providers` を使用します。チャットの場合は、`https://relay.example.net/v1` を互換性 `OpenAI互換`、認証トークンに `ENGINE_API_KEY` を指定して保存します。モデルを追加し、ツールを有効にする前に返信とストリーミングをテストしてください。
+
+<details>
+<summary>ComfyUI、TTS、または複数のエンジン</summary>
+
+Caddyfileの `import engine_relay` 行の最後の引数として `comfyui_routes` または `tts_routes` を使用します。その行は、トンネルホスト名、クライアントキー、Access Client ID、Access Client Secret、ルートプロファイルをこの順に受け取ります。
+
+複数のエンジンを同時に実行するには、それぞれに固有のトンネルホスト名、Accessアプリケーション・サービストークン、リレーホスト名、およびクライアントキーを割り当てます。末尾の404ルールの前にトンネルホスト名ルールを繰り返し記述し、それぞれに固有のAccessオーディエンスとループバックポートを設定します。`cloudflared tunnel route dns home-engine HOSTNAME` でDNSを公開する前に各ホスト名を保護してください。1つのコネクタですべてのルールを処理できます。
+
+ホスト名を置き換えて、これらのサイトをCaddyfileに追記します：
+
+```text
+comfy-relay.example.net {
+  import engine_relay comfy-engine.example.com {env.COMFYUI_ENGINE_API_KEY} {env.COMFYUI_CF_ACCESS_CLIENT_ID} {env.COMFYUI_CF_ACCESS_CLIENT_SECRET} comfyui_routes
+}
+
+tts-relay.example.net {
+  import engine_relay tts-engine.example.com {env.TTS_ENGINE_API_KEY} {env.TTS_CF_ACCESS_CLIENT_ID} {env.TTS_CF_ACCESS_CLIENT_SECRET} tts_routes
+}
+```
+
+各サイトの3つの変数をCaddyに供給し、起動チェックに含め、各リレーホスト名のDNS/HTTPSをプロビジョニングします。1つのCaddyサービスですべてのサイトを処理できます。
+
+| エンジン | TomoriBotの接続設定 | 使用前のテスト |
+|---|---|---|
+| ComfyUI | 互換性 `ComfyUI`、ベース `https://comfy-relay.example.net`、そのサイトのクライアントキー | 画像生成、参照画像のアップロード、出力のダウンロード、キャンセル。動画は別途テスト |
+| ローカルTTS | 互換性 `tts-clone`、ベース `https://tts-relay.example.net`、そのサイトのクライアントキー | 再生可能な音声を返す短い合成。対応している場合はボイスデザインもテスト |
+
+モデルとワークフローについては、[ComfyUIセットアップ](/self-hosting/local-endpoints/setup-comfyui/)または[TTSセットアップ](/self-hosting/local-endpoints/text-to-speech/)に従ってください。これらの接続には `/v1` 接尾辞は付きません。ComfyUIには `/system_stats`、TTSには `/health` を使用して、各ホスト名のルーティングと認証をテストしてください。
+
+独自の認証を持たないエンジンはループバックにバインドしたままにしてください。オリジンの不正キーチェックはエンジンがキーを要求する場合にのみ機能しますが、すべてのリレーは引き続きクライアントキーを要求します。ComfyUIワークフローはサンドボックス化されていないため、キー所持者はインストール済みのノードの実行、`/view` で公開されたファイルの読み取り、ジョブのキャンセル、およびモデルのアンロードが可能です。専用インスタンスを使用してください。
+
+提供されているプロファイルはAPIルートのみを公開します。ComfyUIはジョブポーリングを使用するため、WebSocketルートは不要です。TTSは `GET /health` と `POST /synthesize` のみを許可します。その他の音声合成や文字起こしAPIには独自のルートが必要です。KoboldCPPのアンロードルートは除外されているため、チャットプロファイル経由での自動テキスト/ComfyUI VRAMハンドオフは利用できません。
+
+
+</details>
+
+## 認証情報のローテーションと失効
+
+- アクセスを直ちに停止するには、リレーを停止してAccessサービストークンを失効させます。構成を廃止する場合は、コネクタを停止してトンネルおよびDNSエントリーを削除してください。
+- 定期的なAccessトークンのローテーションでは、ポリシーとリレーシークレットを更新し、Caddyを再起動してテストした後に、古いトークンを失効させます。
+- 対応している場合はエンジン側、Caddyのシークレットストア、およびそれを使用しているすべてのTomoriBotの保存済み接続でクライアントキーを変更します。漏洩したアップストリームのOAuth認証情報は別途失効させてください。ローカルファイルを削除するだけでは失効しません。

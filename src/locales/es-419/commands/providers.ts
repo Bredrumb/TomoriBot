@@ -206,6 +206,16 @@ export default {
     model_compat_label: `Compatibilidades de finalización de chat`,
     model_compat_description: `Ajustes de formato y protocolo para backends estrictos. Déjalo desactivado salvo si hace falta.`,
     model_image_supports_label: `Capacidades de imagen`,
+    model_image_request_format_label: `Formato de solicitud de imagen`,
+    model_image_request_format_description: `Elige el formato de API que acepta este modelo de imagen.`,
+    image_request_formats: {
+      images: `API de imágenes`,
+      "chat-completions": `Chat Completions`,
+    },
+    image_request_format_descriptions: {
+      images: `Envía prompts a /images/generations.`,
+      "chat-completions": `Envía solicitudes de imagen como mensajes de chat a /chat/completions.`,
+    },
     model_image_supports_description: `Declara solo las funciones de imagen que este modelo y punto de conexión realmente admiten.`,
     model_image_supports: {
       txt2img: `Texto a imagen`,

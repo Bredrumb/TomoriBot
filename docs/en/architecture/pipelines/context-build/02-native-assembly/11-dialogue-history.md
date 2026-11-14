@@ -9,19 +9,11 @@ The dialogue history contributor formats recent conversation turns, records capa
 
 The contributor `appendDialogueHistoryContext` in `src/utils/text/context/dialogueHistory.ts` appends directly to `contextItems`:
 
-```
-simplifiedMessageHistory
-  │
-  ├─ calculate media window & duplicate image indices
-  ├─ assemble active context notes (persona, channel, global, verbatim, reunion)
-  │
-  └─ loop messages:
-       ├─ emit date spacer if day boundary crossed
-       ├─ emit active note if index matches note target depth
-       ├─ map role (user vs model) and sender metadata
-       ├─ attach capability-neutral mediaDescriptors (within window & image limits)
-       ├─ format text: author label ("resolve") + content ("preserve" macros)
-       └─ push item (tagged DIALOGUE_HISTORY)
+```mermaid
+flowchart TD
+  hist["simplifiedMessageHistory"] --> win["Calculate media window & duplicate image indices"]
+  win --> notes["Assemble active context notes<br/>(persona, channel, global, verbatim, reunion)"]
+  notes --> loop["For each message in history:<br/>1. Emit date spacer if day boundary crossed<br/>2. Emit active note if index matches note target depth<br/>3. Map role (user vs model) and sender metadata<br/>4. Attach capability-neutral mediaDescriptors (within window & image limits)<br/>5. Format text: author label (resolve) + content (preserve macros)<br/>6. Push item (tagged DIALOGUE_HISTORY)"]
 ```
 
 ### Turn mapping and formatting

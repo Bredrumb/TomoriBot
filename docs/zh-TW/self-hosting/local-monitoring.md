@@ -1,7 +1,7 @@
 ---
 title: 本機Grafana監控
 sidebar:
-  order: 7
+  order: 6
 aiGenerated: true
 ---
 

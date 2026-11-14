@@ -16,7 +16,7 @@ aiGenerated: false
 ---
 
 <!-- STUB (Phase 1 structural). Phase 2 writes: requirements + module directory.
-     Source for manual-setup.md: `git show HEAD:README.md` "Self-Hosting" section. -->
+     Source for manual-setup.mdx: `git show HEAD:README.md` "Self-Hosting" section. -->
 
 以下のいずれかのインストール方法を使用して、独自のTomoriBotインスタンスの実行を開始します。
 

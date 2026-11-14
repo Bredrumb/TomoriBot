@@ -1,0 +1,151 @@
+---
+title: "Docker Compose"
+sidebar:
+  order: 3
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Docker Compose chạy TomoriBot và PostgreSQL cùng nhau trong các container. Đây là lựa chọn cài đặt thứ ba bên cạnh [trình hướng dẫn thiết lập](/self-hosting/setup-wizard/) và [thiết lập thủ công](/self-hosting/manual-setup/): hãy chọn cách này khi bạn muốn chạy mọi thứ trong Docker mà không cần cài Bun hay PostgreSQL trên hệ điều hành gốc. Cách này bỏ qua trình hướng dẫn thiết lập tương tác và tự động cấu hình kết nối cơ sở dữ liệu.
+
+## 1. Lấy mã nguồn
+
+```sh
+git clone https://github.com/Bredrumb/TomoriBot.git
+cd TomoriBot
+```
+
+## 2. Các giá trị `.env` bắt buộc
+
+Bắt đầu từ tệp ví dụ:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+Copy-Item .env.example .env
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+cp .env.example .env
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+cp .env.example .env
+```
+
+</TabItem>
+</Tabs>
+
+Đặt các biến bắt buộc sau trong `.env`:
+
+| Biến | Giá trị |
+|---|---|
+| `DISCORD_TOKEN` | Token bot Discord của bạn (hãy bật các privileged intent `GuildMembers`, `MessageContent` và `GuildPresences`). |
+| `CRYPTO_SECRET` | Khóa mã hóa 32 ký tự dùng để mã hóa các khóa API được lưu trữ. |
+| `POSTGRES_PASSWORD` | Mật khẩu cơ sở dữ liệu. Mọi giá trị `POSTGRES_*` khác đều được tự động cấu hình. |
+| `ALLOW_PRIVATE_NETWORK` | `true` cho phép custom endpoint và máy chủ MCP trên máy của bạn hoặc mạng LAN hoạt động, một danh sách `host:port` chỉ cho phép các máy chủ đó, và `false` sẽ chặn chúng. Bot sẽ không khởi động cho đến khi biến này được đặt. Xem [Mạng riêng tư](/self-hosting/setup-wizard/#private-networks) để chọn giá trị. |
+
+Tạo một giá trị ngẫu nhiên 32 ký tự cho `CRYPTO_SECRET` bằng Docker, sau đó sao chép vào `.env`:
+
+```sh
+docker run --rm alpine:3.22 sh -c "head -c 24 /dev/urandom | base64"
+```
+
+Tạo một mật khẩu riêng cho `POSTGRES_PASSWORD`. Bạn có thể sao chép thêm các cài đặt tinh chỉnh tùy chọn từ `.env.optional.example`.
+
+:::note[Kết nối cơ sở dữ liệu là tự động]
+Không đặt `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER` hoặc `POSTGRES_DB` trong `.env`; Compose tự động cấu hình chúng.
+:::
+
+Chuẩn bị các thư mục bind-mount trên máy chủ vật lý trước khi khởi chạy stack:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+New-Item -ItemType Directory -Force -Path backups, logs, data | Out-Null
+```
+
+Docker Desktop ánh xạ thư mục máy chủ Windows mà không cần lệnh `chown` của Unix.
+
+</TabItem>
+<TabItem label="Linux">
+
+Container của bot chạy dưới UID 1001 và cần quyền ghi vào các thư mục `backups/`, `logs/` và `data/` trên máy chủ vật lý. Hãy tạo chúng và gán quyền sở hữu trước lần khởi chạy đầu tiên:
+
+```bash
+mkdir -p backups logs data
+sudo chown 1001:1001 backups logs data
+```
+
+Nếu bạn đã chạy Compose trước đó và Docker đã tạo các thư mục dưới quyền root, hãy chạy các lệnh trên ngay sau đó. Chúng không làm thay đổi quyền sở hữu của các tệp đã có sẵn bên trong thư mục.
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+mkdir -p backups logs data
+```
+
+Docker Desktop trên Mac ánh xạ bind mount mà không cần `chown 1001:1001` của Unix.
+
+</TabItem>
+</Tabs>
+
+## 3. Build và chạy
+
+```sh
+docker compose build   # lần đầu tiên, hoặc sau khi thay đổi mã nguồn/dependency
+docker compose up      # bot + cơ sở dữ liệu
+```
+
+Cho các lần khởi động sau, chỉ cần `docker compose up` là đủ trừ khi bạn thay đổi mã nguồn hoặc dependency. Khi bot kết nối vào Discord, hãy chạy `/setup` trong bất kỳ kênh máy chủ nào để thêm khóa nhà cung cấp AI của bạn. Xem [Bắt đầu nhanh](/introduction/quickstart/) để biết các tùy chọn thiết lập trong Discord.
+
+Compose ghim `RUN_ENV=development` trong định nghĩa dịch vụ của nó để các bí mật trong `.env` và các HTTP endpoint cục bộ có thể hoạt động. Các endpoint cục bộ như `http://host.docker.internal:11434` cần `ALLOW_PRIVATE_NETWORK` để cho phép chúng (`true`, hoặc một danh sách chứa `host.docker.internal:11434`); Docker Desktop cung cấp `host.docker.internal` trên Windows và Mac, và `docker-compose.yaml` cũng ánh xạ tên đó tới host gateway trên Linux. Sau khi thay đổi `.env`, hãy chạy `docker compose up -d` để container đọc lại tệp. Healthcheck của container chỉ báo xem tiến trình bot có đang chạy hay không; nó không kiểm tra khả năng kết nối tới Discord gateway.
+
+## Cấu hình shard tùy chọn trên một máy chủ
+
+Để trống `SHARD_COUNT` và `SHARD_IDS` để dùng cấu hình mặc định: một tiến trình sở hữu toàn bộ các shard được Discord khuyến nghị khi khởi động. Các bản cài đặt nhỏ thường nhận một shard. Chế độ này không dùng shard lease hay trình lắng nghe vô hiệu hóa bộ nhớ đệm. Nhiều shard có thể dùng chung một tiến trình.
+
+Để chạy bốn shard trong dịch vụ hiện có, hãy thêm `SHARD_COUNT=4` vào `.env` và để trống `SHARD_IDS`. Thêm phần ghi đè dịch vụ sau vào `compose.override.yaml` để quá trình tắt có giới hạn thời gian kịp hoàn tất:
+
+```yaml
+services:
+  tomoribot:
+    stop_grace_period: 40s
+```
+
+Tạo lại dịch vụ bằng `docker compose up -d --build tomoribot`. Nếu một kịch bản nào đó gọi `docker stop` hoặc tự truyền thời gian chờ dừng Compose riêng, hãy đặt tối thiểu 40 giây ở đó nữa. Chế độ chọn tự động không thay đổi số shard khi đang chạy; việc thay đổi tổng số shard đòi hỏi khởi động lại đồng bộ.
+
+Chế độ tập con tĩnh (static subsets) tùy chọn yêu cầu một dịch vụ riêng cho từng nhóm với cùng `SHARD_COUNT` tường minh và các `SHARD_IDS` rời nhau, ví dụ `0,1` và `2,3` với tổng là `4`. Đặt cho các dịch vụ tên ổn định, tên container và mọi cổng health được mở khác nhau. Ứng dụng sẽ suy ra nhãn metric ổn định từ từng nhóm. Giữ chung một cơ sở dữ liệu, chạy lệnh `bun run src/db/initializeCli.ts` một lần với thông tin xác thực quản lý schema trước khi khởi động gateway, và đặt `DATABASE_SCHEMA_MANAGEMENT_ENABLED=false` trên mọi tiến trình gateway. Không khởi chạy dịch vụ sở hữu toàn bộ ban đầu song song với các nhóm đó. Dừng các tiến trình sở hữu cũ trước khi thay đổi tổng số hoặc phân vùng.
+
+Chế độ tập con từ chối cầu nối Matrix đã cấu hình đầy đủ. Giới hạn lượt và dung lượng tải lên theo từng người dùng vẫn tính trên từng tiến trình, vì vậy hãy cân nhắc xem mức hạn mức nhân lên tương ứng có chấp nhận được không trước khi bật tiến trình thứ hai. Các bản cài đặt dùng thanh toán supporter chỉ có trên bản release cũng đòi hỏi chia sẻ cơ chế duyệt chi tiêu và điều phối đối soát trước khi phục vụ các yêu cầu có ngân sách từ nhiều tiến trình. Xem [sharding và quyền sở hữu tiến trình](/architecture/subsystems/sharding/) để biết các giới hạn an toàn và sức khỏe hệ thống.
+
+## 4. Máy chủ cục bộ tùy chọn (Compose profiles)
+
+Chạy các máy chủ hỗ trợ cục bộ tùy chọn bằng Compose profile để bạn chỉ khởi động những gì mình cần:
+
+```sh
+# SearXNG (tìm kiếm web riêng tư) + Crawl4AI (truy xuất trang bằng trình duyệt)
+docker compose --profile searxng --profile fetch-crawl4ai up
+```
+
+Khi bật SearXNG, hãy đặt `SEARXNG_BASE_URL=http://searxng:8080/` trong `.env`. Để trống trong trường hợp ngược lại. Đặt `SEARXNG_SECRET` thành một giá trị ngẫu nhiên riêng để ký các yêu cầu cho SearXNG.
+
+Xem [SearXNG](/self-hosting/local-endpoints/setup-searxng/), [Crawl4AI](/self-hosting/local-endpoints/setup-crawl4ai/) và [Giám sát cục bộ](/self-hosting/local-monitoring/) để biết thiết lập riêng cho từng máy chủ.
+
+## Bảo trì, cập nhật và sao lưu
+
+Trước khi cập nhật, hãy dừng bot và sao lưu cơ sở dữ liệu cùng tệp media; xem [Bảo trì & Sao lưu](/self-hosting/maintenance/). Sau đó kéo mã mới về và build lại container:
+
+```sh
+git pull
+docker compose up -d --build
+```

@@ -307,19 +307,34 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("document re-embedding in place", () => {
 
   it("processes remaining documents after a failure and only retries unfinished chunks on the next call", async () => {
     await insertDocument("_rt_bad", ["bad"]);
-    await insertDocument("_rt_good", ["good"]);
-    embed.mockImplementation(async (request) => (request.inputs[0] === "bad" ? [] : [[...NEW_VECTOR]]));
+    await insertDocument("_rt_good", ["good", "good two"]);
+    expect(
+      await serverMemoryRepository.countMismatchedEmbeddingDocuments(refs.serverId, targetModel.model_family),
+    ).toBe(2);
+    embed.mockImplementation(async (request) =>
+      request.inputs[0] === "bad" ? [] : request.inputs.map(() => [...NEW_VECTOR]),
+    );
     await expect(reembed()).rejects.toBeInstanceOf(Error);
     expect((await storedChunks()).map((chunk) => chunk.embedding_model_id)).toEqual([
       oldModel.embedding_model_id,
       targetModel.embedding_model_id,
+      targetModel.embedding_model_id,
     ]);
+    expect(
+      await serverMemoryRepository.countMismatchedEmbeddingDocuments(refs.serverId, targetModel.model_family),
+    ).toBe(1);
     embed.mockClear();
     embed.mockImplementation(async (request) => request.inputs.map(() => [...NEW_VECTOR]));
     await reembed();
     expect(embed.mock.calls.map(([request]) => request.inputs)).toEqual([["bad"]]);
     expect((await storedChunks()).every((chunk) => chunk.embedding_model_id === targetModel.embedding_model_id)).toBe(
       true,
+    );
+    expect(
+      await serverMemoryRepository.countMismatchedEmbeddingDocuments(refs.serverId, targetModel.model_family),
+    ).toBe(0);
+    expect(await serverMemoryRepository.countMismatchedEmbeddingDocuments(refs.serverId, oldModel.model_family)).toBe(
+      2,
     );
   });
 });

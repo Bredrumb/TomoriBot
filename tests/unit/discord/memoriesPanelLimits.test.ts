@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "bun:test";
-import { ComponentType, type StringSelectMenuComponentData } from "discord.js";
+import { ButtonStyle, ComponentType, type StringSelectMenuComponentData } from "discord.js";
 import type { ServerMemoryRow } from "@/types/db/schema";
 import type { PanelReadStatus, PanelReceipt } from "@/types/discord/panel";
 import type { DocumentChunkRow, DocumentListRow } from "@/utils/discord/interactions/memoriesDocumentOperations";
@@ -199,6 +199,26 @@ describe("MemoriesPanel Limits & Boundary Sweeps", () => {
                 receipt,
               }),
               `documents main/${locale}/docSize-${docSize}`,
+            );
+
+            expectSafePanelPayload(
+              buildMemoriesPanelPayload({
+                locale,
+                category: "documents",
+                selectedLineageId: 100,
+                selectedDocumentPersonaId: 1,
+                personas,
+                memories: [],
+                documents: docs,
+                documentCount: docSize,
+                documentChunks: chunks,
+                mismatchedEmbeddingDocuments: 5,
+                canManage: true,
+                readStatus,
+                page: { kind: "documents", selectedDocumentId: firstDoc?.document_id },
+                receipt,
+              }),
+              `documents mismatched/${locale}/docSize-${docSize}`,
             );
 
             if (firstDoc) {
@@ -450,5 +470,91 @@ describe("Legacy channel scope notice", () => {
     const contents = collectTextDisplays(memoryPanel([makeMemory(1), makeMemory(2)])).join("\n");
     expect(contents).not.toMatch(localizedProse("en-US", "commands.memories.channel_scope_legacy_notice"));
     expect(contents).not.toMatch(localizedProse("en-US", "commands.memories.channel_scope_unresolved_line"));
+  });
+});
+
+describe("Mismatched embedding document notice", () => {
+  const personas = [createPersona({ persona_nickname: "Main Persona" })];
+
+  function collectButtons(
+    value: unknown,
+  ): Array<{ customId?: string; label?: string; style?: ButtonStyle; disabled?: boolean }> {
+    if (Array.isArray(value)) return value.flatMap(collectButtons);
+    if (typeof value !== "object" || value === null) return [];
+    const record = value as Record<string, unknown>;
+    const self = record.type === ComponentType.Button ? [record as never] : [];
+    return [...self, ...Object.values(record).flatMap(collectButtons)];
+  }
+
+  function documentPanel(overrides: Partial<Parameters<typeof buildMemoriesPanelPayload>[0]> = {}) {
+    return buildMemoriesPanelPayload({
+      locale: "en-US",
+      category: "documents",
+      selectedLineageId: 100,
+      selectedDocumentPersonaId: 1,
+      personas,
+      memories: [],
+      documents: [makeDocument(1)],
+      documentCount: 1,
+      documentChunks: [makeChunk(1, 0)],
+      canManage: true,
+      readStatus: "fresh",
+      page: { kind: "documents", selectedDocumentId: 1 },
+      ...overrides,
+    });
+  }
+
+  it("shows the warning notice and enabled Secondary re-embed button on main and documents views when mismatched", () => {
+    for (const page of [{ kind: "main" as const }, { kind: "documents" as const, selectedDocumentId: 1 }]) {
+      const payload = documentPanel({ page, mismatchedEmbeddingDocuments: 3 });
+      const text = collectTextDisplays(payload).join("\n");
+      expect(text).toMatch(localizedProse("en-US", "commands.memories.document_reembed_notice", { count: 3 }));
+      const reembedButton = collectButtons(payload).find((button) =>
+        button.customId?.startsWith("memories:v1:document-reembed:"),
+      );
+      expect(reembedButton).toBeDefined();
+      expect(reembedButton?.style).toBe(ButtonStyle.Secondary);
+      expect(reembedButton?.disabled).toBe(false);
+    }
+  });
+
+  it("omits the notice and button when nothing is mismatched or on destructive confirmation pages", () => {
+    for (const payload of [
+      documentPanel({ mismatchedEmbeddingDocuments: 0 }),
+      documentPanel(),
+      documentPanel({
+        mismatchedEmbeddingDocuments: 2,
+        page: { kind: "document-remove", documentId: 1, historyOnly: false },
+      }),
+      documentPanel({
+        mismatchedEmbeddingDocuments: 2,
+        page: { kind: "document-chunk-remove", documentId: 1, chunkIdx: 0 },
+      }),
+    ]) {
+      const text = collectTextDisplays(payload).join("\n");
+      expect(text).not.toMatch(localizedProse("en-US", "commands.memories.document_reembed_notice"));
+      expect(
+        collectButtons(payload).some((button) => button.customId?.startsWith("memories:v1:document-reembed:")),
+      ).toBe(false);
+    }
+  });
+
+  it("disables the re-embed button on stale panels and hides the workspace for non-managers", () => {
+    const stalePayload = documentPanel({ mismatchedEmbeddingDocuments: 2, readStatus: "stale" });
+    expect(collectTextDisplays(stalePayload).join("\n")).toMatch(
+      localizedProse("en-US", "commands.memories.document_reembed_notice", { count: 2 }),
+    );
+    const staleButton = collectButtons(stalePayload).find((button) =>
+      button.customId?.startsWith("memories:v1:document-reembed:"),
+    );
+    expect(staleButton?.disabled).toBe(true);
+
+    const nonManagerPayload = documentPanel({ mismatchedEmbeddingDocuments: 2, canManage: false });
+    expect(collectTextDisplays(nonManagerPayload).join("\n")).not.toMatch(
+      localizedProse("en-US", "commands.memories.document_reembed_notice"),
+    );
+    expect(
+      collectButtons(nonManagerPayload).some((button) => button.customId?.startsWith("memories:v1:document-reembed:")),
+    ).toBe(false);
   });
 });

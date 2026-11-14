@@ -1,0 +1,167 @@
+---
+title: "Qwen3-TTS"
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+在声音克隆与文本描述的VoiceDesign模式下使用[Qwen3-TTS](https://github.com/QwenAudio/Qwen3-TTS)合成高精度的多语言人格语音。
+
+Qwen3-TTS 12Hz 1.7B提供高精度的本地语音合成。在默认的自动模式下运行`servers/tts/qwen3tts/server.py`，会根据每个传入的请求动态选择基础声音克隆模型或VoiceDesign模型。
+
+## 安装
+
+在TomoriBot代码仓库根目录（即你克隆TomoriBot的文件夹）运行以下命令：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+python -m venv servers\tts\qwen3tts\.venv
+servers\tts\qwen3tts\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r servers\tts\qwen3tts\requirements.txt
+python servers\tts\qwen3tts\server.py
+```
+
+在NVIDIA GPU上，默认的`cuda-graphs`后端会自动启用。在纯CPU机器上，请在启动`server.py`前设置`$env:QWEN3TTS_BACKEND = "transformers"`。
+
+</TabItem>
+<TabItem label="Linux">
+
+如果系统尚未安装`sox`，请先安装（Debian/Ubuntu上运行`sudo apt-get install -y sox`），然后创建虚拟环境并启动服务器：
+
+```bash
+python3 -m venv servers/tts/qwen3tts/.venv
+source servers/tts/qwen3tts/.venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r servers/tts/qwen3tts/requirements.txt
+python servers/tts/qwen3tts/server.py
+```
+
+在NVIDIA GPU上，默认的`cuda-graphs`后端会自动启用。在CPU或AMD ROCm GPU上，请设置`QWEN3TTS_BACKEND=transformers`（如果是AMD GPU，还需在`.venv`中安装匹配的ROCm PyTorch构建）。
+
+</TabItem>
+<TabItem label="Mac">
+
+先通过Homebrew安装`sox`，然后创建虚拟环境并使用标准的`transformers`后端启动服务器（`cuda-graphs`需要NVIDIA CUDA GPU，且`pip`在macOS上会回退到标准PyPI PyTorch wheel）：
+
+```bash
+brew install sox
+python3 -m venv servers/tts/qwen3tts/.venv
+source servers/tts/qwen3tts/.venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r servers/tts/qwen3tts/requirements.txt
+QWEN3TTS_BACKEND=transformers python servers/tts/qwen3tts/server.py
+```
+
+在没有CUDA的默认情况下，服务器会以`float32`运行在`cpu`上。在Apple Silicon上你也可以测试搭配使用`QWEN3TTS_DEVICE_MAP=mps`和`QWEN3TTS_DTYPE=float32`，不过标准PyTorch MPS的吞吐量远低于NVIDIA CUDA，且未经过本仓库测试覆盖。
+
+</TabItem>
+</Tabs>
+
+在TomoriBot使用Qwen3-TTS期间保持该终端窗口开启（或者之后通过`bun run launch --qwen3tts`启动）。默认自动模式端点URL为`http://127.0.0.1:8012`；设置`QWEN3TTS_PORT`可使用其他端口。你也可以传入`--mode auto`显式指定自动模式。
+
+自动模式会检查每个`/synthesize`请求：带有`ref_audio`的请求使用克隆模型，带有`instruct`的请求使用VoiceDesign模型。一次仅保持加载一个模型，当请求类型变化时会进行模型互换，因此互换后的首次请求耗时可能会稍长。
+
+## 快速CUDA后端
+
+默认情况下，服务器使用随requirements一同安装的[faster-qwen3-tts](https://github.com/andimarafioti/faster-qwen3-tts)。在NVIDIA GPU上，它的合成速度比标准后端快约6倍，从而实现快于实时的语音生成，而不是慢于实时约两倍。它无需额外配置，但仅能在NVIDIA GPU上运行：在CPU、Mac或AMD GPU上，服务器会在启动时中止并提示你切换后端。
+
+该后端会为每个请求预留固定容量的语音空间，由参考音频片段和生成的音频共享（总计约170秒）。搭配10-20秒的音频片段时，仍可留下两分钟以上的语音生成空间。若请求超出容量，服务器会返回错误而不是截断音频；此时请使用更短的音频片段或文本，或者改用标准后端。
+
+如果要改用标准后端，请在启动服务器前设置`QWEN3TTS_BACKEND=transformers`：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$env:QWEN3TTS_BACKEND = "transformers"
+python servers\tts\qwen3tts\server.py
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+QWEN3TTS_BACKEND=transformers python servers/tts/qwen3tts/server.py
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+QWEN3TTS_BACKEND=transformers python servers/tts/qwen3tts/server.py
+```
+
+</TabItem>
+</Tabs>
+
+## 在TomoriBot中注册
+
+对大多数用户而言，注册自动模式服务器即可让单一端点同时支持声音克隆与VoiceDesign两种人格。
+
+运行`/providers`，选择`+ 添加新自定义端点`，并使用语音合成的API兼容性：
+
+- API兼容性：`TTS 克隆`（`tts-clone`）
+- `端点 URL`：`http://127.0.0.1:8012`
+
+保存连接之后，选中它并使用其模型下拉菜单添加一个语音合成模型。模型表单会询问`声音来源模式`与`脚本标记风格`；对于自动模式服务器，请分别选择`自动`与`纯文本`。
+
+在`/providers`中完成端点注册与模型配置。然后打开`/config` > 模型 > 切换模型，选中并激活已注册的端点。
+
+## 设置人格语音
+
+### 声音克隆
+
+用于需要模仿参考音频的人格：
+
+1. 准备一段干净的10-20秒语音片段，仅包含单人说话且无背景音乐。
+2. 打开`/config`下的模型 > TTS参数与语音并上传音频片段。
+3. 打开`/config`下的人格 > 语音，选择对应人格与该语音样本。
+
+Qwen3-TTS支持短至3秒的参考音频片段。
+
+### VoiceDesign
+
+用于需要使用文本描述而非参考音频的人格：
+
+1. 打开`/config`下的人格 > 语音并选择「语音设计」。
+2. 选择对应人格。
+3. 输入自然语言语音提示词，例如说话人的年龄、语气、口音和表达方式。
+
+## 可选：仅运行VoiceDesign的服务器
+
+当仅提供`Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign`服务时，可以以VoiceDesign模式启动同一服务器（非NVIDIA硬件上请加上`QWEN3TTS_BACKEND=transformers`）：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+servers\tts\qwen3tts\.venv\Scripts\Activate.ps1
+$env:TOMORI_TTS_MODE = "voice-design"
+python servers\tts\qwen3tts\server.py
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+source servers/tts/qwen3tts/.venv/bin/activate
+TOMORI_TTS_MODE=voice-design python servers/tts/qwen3tts/server.py
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+source servers/tts/qwen3tts/.venv/bin/activate
+QWEN3TTS_BACKEND=transformers TOMORI_TTS_MODE=voice-design python servers/tts/qwen3tts/server.py
+```
+
+</TabItem>
+</Tabs>
+
+你也可以传入`--mode voice-design`代替设置`TOMORI_TTS_MODE`。默认的仅VoiceDesign端点URL为`http://127.0.0.1:8014`。
+
+注册流程与自动模式相同，但在配置端点URL时填写`http://127.0.0.1:8014`，并在语音合成模型上将`声音来源模式`选择为`VoiceDesign`。

@@ -11,7 +11,7 @@ import { CardGrid, LinkCard } from "@astrojs/starlight/components";
 
 Esta traducción se proporciona para tu comodidad. La versión en inglés es la autoritativa.
 
-Es muy posible ejecutar una instancia de TomoriBot con todo local, desde la generación de texto hasta las utilidades de MCP. Cada endpoint a continuación es compatible con OpenAI o un pequeño contenedor de referencia, registrado a través de los comandos `/providers` y almacenado cifrado en la base de datos (no se necesita `.env`).
+Ejecuta generación de texto, motores multimedia y utilidades MCP en tus propias máquinas. Registra las conexiones de modelos mediante `/providers` o `/personal providers`; las claves de API guardadas se almacenan cifradas en la base de datos. Los motores en una máquina separada también necesitan la configuración de acceso remoto a continuación.
 Elige una capacidad para configurar:
 
 ## Texto y embeddings
@@ -19,8 +19,6 @@ Elige una capacidad para configurar:
 <CardGrid>
   <LinkCard title="LLM local" href="/es-419/self-hosting/local-endpoints/setup-local-llm/"
     description="Cualquier servidor compatible con OpenAI como Ollama, KoboldCPP, LM Studio, vLLM o LiteLLM para generación de texto y embeddings." />
-  <LinkCard title="Codex CLI vía ChatMock" href="/es-419/self-hosting/local-endpoints/setup-chatmock/"
-    description="Un puente local compatible con OpenAI que permite a TomoriBot usar los modelos de Codex CLI." />
 </CardGrid>
 
 ## Imagen y video
@@ -51,10 +49,23 @@ Elige una capacidad para configurar:
 ## Herramientas personalizadas
 
 <CardGrid>
-  <LinkCard title="slop-guard" href="/es-419/self-hosting/local-endpoints/setup-slop-guard/"
+  <LinkCard title="slop-guard" href="/es-419/self-hosting/mcp-servers/setup-slop-guard/"
     description="Un corrector de prosa basado en reglas que Revisión de respuestas puede usar como verificador de reglas." />
-  <LinkCard title="Servidor MCP local" href="/es-419/self-hosting/local-endpoints/setup-local-mcp/"
+  <LinkCard title="Servidor MCP local" href="/es-419/self-hosting/mcp-servers/setup-local-mcp/"
     description="Ejecuta un servidor MCP local para extender TomoriBot con tus propias herramientas (solo instancias de autoalojamiento)." />
+</CardGrid>
+
+## Proxies y acceso remoto
+
+Revisa los [riesgos de cuenta](/self-hosting/local-endpoints/proxies-and-remote-access/#account-risk) antes de usar cuentas respaldadas por CLI a través de puentes de terceros.
+
+<CardGrid>
+  <LinkCard title="ChatMock" href="/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/"
+    description="Conecta un puente autorizado respaldado por ChatGPT en tu máquina." />
+  <LinkCard title="CLIProxyAPI" href="/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/"
+    description="Instala un proxy local y registra modelos desde un servicio ascendente autorizado." />
+  <LinkCard title="Cloudflare Tunnel" href="/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/"
+    description="Asigna a un motor en casa una URL HTTPS pública para un bot alojado." />
 </CardGrid>
 
 ## Iniciar servidores locales con `bun run launch`

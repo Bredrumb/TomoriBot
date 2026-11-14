@@ -1,0 +1,48 @@
+{
+	admin off
+}
+
+(chat_routes) {
+	@allowed expression `(method('GET') && path('/v1/models')) || (method('POST') && path('/v1/chat/completions'))`
+}
+
+(comfyui_routes) {
+	@allowed expression `(method('GET') && path_regexp('^/(system_stats|view|queue|history/[A-Za-z0-9_-]+)$')) || (method('POST') && path_regexp('^/(prompt|upload/image|queue|interrupt|free|api/jobs/[A-Za-z0-9_-]+/cancel)$'))`
+}
+
+(tts_routes) {
+	@allowed expression `(method('GET') && path('/health')) || (method('POST') && path('/synthesize'))`
+}
+
+(engine_relay) {
+	@unauthorized not header Authorization "Bearer {args[1]}"
+	import {args[4]}
+
+	route {
+		respond @unauthorized 401
+		handle @allowed {
+			reverse_proxy https://{args[0]} {
+				header_up -*
+				header_up Host {args[0]}
+				header_up Authorization "Bearer {args[1]}"
+				header_up CF-Access-Client-Id {args[2]}
+				header_up CF-Access-Client-Secret {args[3]}
+				header_up Content-Type {http.request.header.Content-Type}
+				header_up Accept {http.request.header.Accept}
+				@redirect status 3xx
+				handle_response @redirect {
+					respond 502
+				}
+				@failure status 4xx 5xx
+				handle_response @failure {
+					respond "Upstream request failed" {rp.status_code}
+				}
+			}
+		}
+		respond 404
+	}
+}
+
+relay.example.net {
+	import engine_relay engine.example.com {env.ENGINE_API_KEY} {env.CF_ACCESS_CLIENT_ID} {env.CF_ACCESS_CLIENT_SECRET} chat_routes
+}

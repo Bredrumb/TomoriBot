@@ -2,7 +2,7 @@
 title: "PluralBuddy OAuth Setup"
 description: "Authorize your self-hosted TomoriBot to verify messages from approved PluralBuddy instances."
 sidebar:
-  order: 8
+  order: 7
 ---
 
 A self-hosted TomoriBot needs an authorized PluralBuddy application for the official service and each approved custom instance.
@@ -31,7 +31,7 @@ you do not need to complete this host-side setup. Select PluralBuddy with
 2. From the TomoriBot repository, run the helper with the official instance ID and the same callback:
 
    ```sh
-   bun scripts/db/authorize-pluralbuddy-instance.ts pluralbuddy:official <callback-url>
+   bun scripts/db/authorize-pluralbuddy-instance.ts pluralbuddy:official "<callback-url>"
    ```
 
 3. Enter the client ID and secret at the terminal prompts. Open the printed authorization URL in
@@ -50,7 +50,7 @@ Use a public HTTPS origin without a path, query, or fragment. The instance must 
 1. On a computer with deployment database access, register a disabled instance:
 
    ```sh
-   bun scripts/db/register-message-proxy-instance.ts register pluralbuddy https://<instance-host> "<display-name>" <bot-user-id>
+   bun scripts/db/register-message-proxy-instance.ts register pluralbuddy "https://<instance-host>" "<display-name>" "<bot-user-id>"
    bun scripts/db/register-message-proxy-instance.ts inspect
    ```
 
@@ -59,7 +59,7 @@ Use a public HTTPS origin without a path, query, or fragment. The instance must 
    callback pattern as above. Authorize it using the instance ID returned by registration:
 
    ```sh
-   bun scripts/db/authorize-pluralbuddy-instance.ts <instance-id> <callback-url>
+   bun scripts/db/authorize-pluralbuddy-instance.ts "<instance-id>" "<callback-url>"
    ```
 
    Repeat authorization to replace credentials or recover from a revoked refresh token. PluralKit does not require this step.
@@ -67,7 +67,7 @@ Use a public HTTPS origin without a path, query, or fragment. The instance must 
    account ID. Check that the instance API resolves that repost, then enable it:
 
    ```sh
-   bun scripts/db/register-message-proxy-instance.ts enable <instance-id> <repost-id> <sender-id>
+   bun scripts/db/register-message-proxy-instance.ts enable "<instance-id>" "<repost-id>" "<sender-id>"
    ```
 
    For a new fork, test the bot, OAuth exchange and refresh, and TomoriBot lookup in a disposable deployment before enabling it for users.
@@ -78,14 +78,14 @@ Use a public HTTPS origin without a path, query, or fragment. The instance must 
 If the custom proxy bot is replaced, update its Discord bot user ID before offering the instance again:
 
 ```sh
-bun scripts/db/register-message-proxy-instance.ts set-bot <instance-id> <bot-user-id>
+bun scripts/db/register-message-proxy-instance.ts set-bot "<instance-id>" "<bot-user-id>"
 ```
 
 Disable or remove a custom instance with:
 
 ```sh
-bun scripts/db/register-message-proxy-instance.ts disable <instance-id>
-bun scripts/db/register-message-proxy-instance.ts remove <instance-id>
+bun scripts/db/register-message-proxy-instance.ts disable "<instance-id>"
+bun scripts/db/register-message-proxy-instance.ts remove "<instance-id>"
 ```
 
 Removal deletes the OAuth connection and permanently prevents the origin from being registered again. Use `disable` if you may resume the instance. Existing identities and memories remain available, and changes take effect without a restart.

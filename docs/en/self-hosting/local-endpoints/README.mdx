@@ -9,9 +9,9 @@ sidebar:
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
 
-It is very much possible to run a TomoriBot instance with everything local, from text generation to MCP utilities. Every
-endpoint below is OpenAI-compatible or a small reference wrapper, registered through the
-`/providers` commands and stored encrypted in the database (no `.env` needed).
+Run text generation, media engines, and MCP utilities on your own machines. Register model
+connections through `/providers` or `/personal providers`; saved API keys are encrypted in the
+database. Engines on a separate machine also need the remote access setup below.
 Pick a capability to set up:
 
 ## Text & Embeddings
@@ -19,8 +19,6 @@ Pick a capability to set up:
 <CardGrid>
   <LinkCard title="Local LLM" href="/self-hosting/local-endpoints/setup-local-llm/"
     description="Any OpenAI-compatible server such as Ollama, KoboldCPP, LM Studio, vLLM, or LiteLLM for text generation and embeddings." />
-  <LinkCard title="Codex CLI via ChatMock" href="/self-hosting/local-endpoints/setup-chatmock/"
-    description="A local OpenAI-compatible bridge that lets TomoriBot use Codex CLI models." />
   <LinkCard title="Local Decision Model" href="/self-hosting/local-endpoints/setup-local-system-one/"
     description="Run Kev, a small open Decision model, and register it as a System One endpoint." />
 </CardGrid>
@@ -53,10 +51,23 @@ Pick a capability to set up:
 ## Custom Tools
 
 <CardGrid>
-  <LinkCard title="slop-guard" href="/self-hosting/local-endpoints/setup-slop-guard/"
+  <LinkCard title="slop-guard" href="/self-hosting/mcp-servers/setup-slop-guard/"
     description="A rule-based prose linter that Response Drafting can use as its rule checker." />
-  <LinkCard title="Local MCP Server" href="/self-hosting/local-endpoints/setup-local-mcp/"
+  <LinkCard title="Local MCP Server" href="/self-hosting/mcp-servers/setup-local-mcp/"
     description="Run a local MCP server to extend TomoriBot with your own tools (self-hosted instances only)." />
+</CardGrid>
+
+## Proxies & Remote Access
+
+Review [account risks](/self-hosting/local-endpoints/proxies-and-remote-access/#account-risk) before using CLI-backed accounts through third-party bridges.
+
+<CardGrid>
+  <LinkCard title="ChatMock" href="/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/"
+    description="Connect an authorized ChatGPT-backed bridge on your machine." />
+  <LinkCard title="CLIProxyAPI" href="/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/"
+    description="Install a local proxy and register models from an authorized upstream." />
+  <LinkCard title="Cloudflare Tunnel" href="/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/"
+    description="Give a home engine a public HTTPS URL for a hosted bot." />
 </CardGrid>
 
 ## Starting Local Servers with `bun run launch`

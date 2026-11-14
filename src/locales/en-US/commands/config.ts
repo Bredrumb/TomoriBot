@@ -1471,6 +1471,7 @@ Exaggeration: **{exaggeration}**`,
       choice_low: `Low`,
       choice_medium: `Medium`,
       choice_high: `High`,
+      choice_xhigh: `Extra high`,
     },
     cooldown: {
       type: {

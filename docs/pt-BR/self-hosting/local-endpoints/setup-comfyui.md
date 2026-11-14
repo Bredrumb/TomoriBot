@@ -3,7 +3,7 @@ title: "Configuração: ComfyUI"
 aiGenerated: false
 sidebar:
   label: "ComfyUI"
-  order: 2
+  order: 3
 ---
 
 O TomoriBot pode gerar imagens e vídeos através da sua própria instância do
@@ -48,15 +48,21 @@ UNETs GGUF no ComfyUI requer o nó personalizado [ComfyUI-GGUF](https://github.c
 
 ## 1. Execute o ComfyUI com a API habilitada
 
-Instale o ComfyUI de acordo com o [README dele](https://github.com/comfyanonymous/ComfyUI) e inicie-o para
-que escute na rede:
+Instale o ComfyUI de acordo com o [README dele](https://github.com/comfyanonymous/ComfyUI). Para um bot na mesma
+máquina, ou um conector do Cloudflare Tunnel neste PC, mantenha-o em loopback:
 
 ```sh
-python main.py --listen 0.0.0.0 --port 8188
+python main.py --listen 127.0.0.1 --port 8188
 ```
 
-O parâmetro `--listen 0.0.0.0` é importante se o TomoriBot rodar no Docker ou em uma máquina diferente: o
-padrão se vincula apenas ao loopback. Confirme a acessibilidade a partir da máquina em que o bot é executado:
+Para o bot de produção hospedado separadamente, siga o [perfil do ComfyUI no guia do Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/).
+Ele fornece um endpoint HTTPS público enquanto o ComfyUI permanece em loopback. Use a URL do túnel dele ao
+registrar abaixo; revise os [riscos conhecidos](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/#known-risks) do guia se você compartilhá-lo sem autenticação.
+
+Para um bot no Docker ou em uma LAN confiável, vincular a `0.0.0.0` permite que o bot alcance a porta do host.
+Restrinja o acesso com o firewall do host; qualquer pessoa que possa alcançar um ComfyUI sem autenticação pode enviar fluxos de trabalho.
+Um TomoriBot fora de produção também precisa de `ALLOW_PRIVATE_NETWORK` para admitir o host e a porta do endpoint.
+Confirme se a API local responde:
 
 ```sh
 curl http://127.0.0.1:8188/system_stats
@@ -89,8 +95,8 @@ Execute `/providers` (ou `/personal providers`), escolha `Adicionar Novo Endpoin
 |-------|-------------------|
 | `endpoint_label` | Um nome de sua escolha, por exemplo `home-comfy` |
 | Compatibilidade de API | `ComfyUI` |
-| `endpoint_url` | `http://127.0.0.1:8188` (raiz, sem `/v1`) |
-| `auth_token` | *(deixe em branco a menos que seu ComfyUI esteja protegido por autenticação)* |
+| `endpoint_url` | Bot na mesma máquina: `http://127.0.0.1:8188`; túnel de produção: `https://engine.example.com` (raiz, sem `/v1`) |
+| `auth_token` | Deixe em branco a menos que o gateway do seu endpoint exija uma chave de cliente |
 
 Depois de salvar a conexão, selecione-a e escolha `+ Adicionar novo Modelo de Imagem` ou `+ Adicionar novo Modelo de Vídeo`
 no menu suspenso de modelos. Insira o codinome exato do checkpoint e faça upload do arquivo `.json` do fluxo de trabalho
@@ -102,9 +108,8 @@ e selecione o endpoint do ComfyUI registrado.
 
 ## Solução de problemas
 
-- **Inacessível ao adicionar:** O ComfyUI foi vinculado ao loopback enquanto o bot está no Docker ou em outro
-  host. Inicie-o com `--listen 0.0.0.0` e use `http://host.docker.internal:8188` ou o
-  IP da LAN.
+- **Inacessível ao adicionar:** Para produção, verifique o túnel, a rota `/system_stats` e a chave de cliente se o seu gateway exigir uma.
+  Para Docker ou uma LAN confiável, verifique o listener, o firewall, o endereço do host e a habilitação de rede privada do TomoriBot.
 - **A geração nunca termina:** O TomoriBot consulta `/history` até que a saída apareça. Inicializações
   a frio e modelos grandes na CPU podem exceder a janela de consulta.
 - **Prompt/tamanho ignorado ou tamanho de saída incorreto:** o fluxo de trabalho não possui os marcadores

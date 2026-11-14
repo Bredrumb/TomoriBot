@@ -200,6 +200,16 @@ export default {
     model_compat_label: `聊天补全兼容性`,
     model_compat_description: `针对严格后端的消息结构与协议调整。非必要请保持关闭。`,
     model_image_supports_label: `图像能力`,
+    model_image_request_format_label: `图像请求格式`,
+    model_image_request_format_description: `请与这个图像模型接受的API格式一致。`,
+    image_request_formats: {
+      images: `图像API`,
+      "chat-completions": `聊天补全`,
+    },
+    image_request_format_descriptions: {
+      images: `将提示词发送至/images/generations。`,
+      "chat-completions": `将图像请求作为聊天消息发送至/chat/completions。`,
+    },
     model_image_supports_description: `只勾选这个模型和端点确实支持的图像功能。`,
     model_image_supports: {
       txt2img: `文生图`,

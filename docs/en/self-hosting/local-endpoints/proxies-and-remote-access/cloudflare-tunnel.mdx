@@ -1,0 +1,192 @@
+---
+title: "Cloudflare Tunnel"
+sidebar:
+  label: "Cloudflare Tunnel"
+  order: 3
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Give your local engine a public HTTPS URL that you can save in TomoriBot. Run the engine and `cloudflared` on your PC; the hosted bot connects directly through the tunnel.
+
+Cloudflare Tunnel is [available on the Free plan](https://developers.cloudflare.com/tunnel/). You need a domain active on Cloudflare; domain registration and your engine's upstream service may have separate costs.
+
+## 1. Install cloudflared
+
+Start your engine using its setup guide and keep it bound to `127.0.0.1`. Install `cloudflared` on that same computer:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+winget show --id Cloudflare.cloudflared --exact
+winget install --id Cloudflare.cloudflared --exact
+cloudflared --version
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+For Debian/Ubuntu, configure Cloudflare's signed [APT repository](https://pkg.cloudflare.com/index.html):
+
+```bash
+sudo mkdir -p --mode=0755 /usr/share/keyrings
+curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg |
+  sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+printf '%s\n' 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' |
+  sudo tee /etc/apt/sources.list.d/cloudflared.list >/dev/null
+sudo apt-get update && sudo apt-get install cloudflared
+cloudflared --version
+```
+
+For other distributions, use the matching package or architecture from the official downloads.
+
+</TabItem>
+<TabItem label="Mac">
+
+With [Homebrew](https://brew.sh/) installed:
+
+```bash
+brew install cloudflared
+cloudflared --version
+```
+
+</TabItem>
+</Tabs>
+
+## 2. Create a tunnel
+
+Choose a hostname under your Cloudflare domain, such as `engine.example.com`. Replace it throughout this guide with your own hostname.
+
+```sh
+cloudflared tunnel login
+cloudflared tunnel create home-engine
+```
+
+The first command opens a browser to authorize your domain. The second prints a tunnel UUID and creates its credential JSON. Keep that file and the account certificate private.
+
+## 3. Configure the tunnel
+{/* anchor: configure-the-tunnel */}
+
+Create `config.yml` in your `.cloudflared` folder:
+
+| OS | Folder | Credential-file example |
+|---|---|---|
+| Windows | `%USERPROFILE%\.cloudflared` | `C:\Users\LOCAL_ACCOUNT\.cloudflared\TUNNEL_UUID.json` |
+| Linux | `~/.cloudflared` | `/home/LOCAL_ACCOUNT/.cloudflared/TUNNEL_UUID.json` |
+| macOS | `~/.cloudflared` | `/Users/LOCAL_ACCOUNT/.cloudflared/TUNNEL_UUID.json` |
+
+Paste this example for CLIProxyAPI. Replace the UUID, absolute JSON path, and hostname. Keep single quotes around the credential path so Windows backslashes remain literal.
+
+```yaml title="config.yml"
+tunnel: TUNNEL_UUID
+credentials-file: 'ABSOLUTE_PATH_TO_TUNNEL_JSON'
+ingress:
+  - hostname: engine.example.com
+    path: ^/v1/(models|chat/completions)$
+    service: http://127.0.0.1:8317
+  - service: http_status:404
+```
+
+For another engine, replace only `path` and `service` using the matching tab. The path rule exposes TomoriBot's API routes; unmatched paths return 404.
+
+<Tabs>
+<TabItem label="Text engines">
+
+```yaml
+    path: ^/v1/(models|chat/completions)$
+    service: http://127.0.0.1:8317
+```
+
+Use your actual port: CLIProxyAPI defaults to 8317, ChatMock to 8000, and KoboldCPP to 5001. This profile also supports other OpenAI-compatible text engines. It excludes management APIs and model-unload operations.
+
+</TabItem>
+<TabItem label="ComfyUI">
+
+```yaml
+    path: ^/(system_stats|view|queue|history/[A-Za-z0-9_-]+|prompt|upload/image|interrupt|free|api/jobs/[A-Za-z0-9_-]+/cancel)$
+    service: http://127.0.0.1:8188
+```
+
+TomoriBot polls job history, so it needs no WebSocket route or browser UI.
+
+</TabItem>
+<TabItem label="TTS servers">
+
+```yaml
+    path: ^/(health|synthesize)$
+    service: http://127.0.0.1:8015
+```
+
+Replace 8015 with your [TTS wrapper's port](/self-hosting/local-endpoints/text-to-speech/#network-access). This profile covers voice cloning and Voice Design, rather than OpenAI speech or transcription APIs.
+
+</TabItem>
+</Tabs>
+
+To expose several engines, add a hostname rule for each before the final 404 rule. Give each its own hostname and loopback port. One tunnel can serve them all.
+
+## 4. Start the tunnel
+
+Open a terminal in the folder containing `config.yml` and validate it:
+
+```sh
+cloudflared tunnel --config ./config.yml ingress validate
+```
+
+Then publish DNS and run the tunnel:
+
+```sh
+cloudflared tunnel route dns home-engine engine.example.com
+cloudflared tunnel --config ./config.yml run home-engine
+```
+
+For several hostnames, run `route dns` once per hostname. Leave the engine and connector running; no router port forwarding or inbound firewall exception is needed. After testing, use Cloudflare's [service instructions](https://developers.cloudflare.com/tunnel/features/locally-managed-tunnels/run-as-a-service/) for automatic startup, with explicit config and credential paths for the service account.
+
+## 5. Connect TomoriBot
+{/* anchor: validate-each-authentication-check */}
+
+Open `/providers` to share the connection in that server, or `/personal providers` to use your own connection:
+
+| Engine | API compatibility | Endpoint URL |
+|---|---|---|
+| CLIProxyAPI, ChatMock, KoboldCPP, other text engines | `OpenAI-Compatible` | `https://engine.example.com/v1` |
+| ComfyUI | `ComfyUI` | `https://engine.example.com` |
+| Local TTS wrappers | `tts-clone` | `https://engine.example.com` |
+
+Use your engine's client key as the auth token if it enforces one; otherwise leave the field blank. CLIProxyAPI uses the key under `access.api-keys`. KoboldCPP's text API uses its configured password. An arbitrary token entered only in TomoriBot does not enable authentication on the engine.
+
+Add a model under the saved connection, select it for the matching capability, and test a small request. For ComfyUI, also test reference uploads, output downloads, and cancellation. For TTS, confirm playable audio. Keep management features disabled on the engine.
+
+If the engine enforces authentication, confirm protected requests reject missing or incorrect keys. If it has no authentication, read the remaining exposure under Known risks below. [Access and Caddy](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/) provide optional additional protection.
+
+## Troubleshooting
+
+| Symptom | Check |
+|---|---|
+| 502 | Engine running, correct loopback port, connector on the same PC |
+| 1033 or disconnected tunnel | Connector process, outbound port 7844, network connection, and computer sleep |
+| 401 | Engine's client key or password matches TomoriBot's auth token |
+| 403 or HTML login page | An existing Access application can block direct API calls; see the [optional Access setup](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/) if you use it |
+| 404 | Correct engine profile and URL; use exactly one `/v1` for text |
+| Stream cutoff or 524 | Engine/upstream health, computer sleep, and [Cloudflare timeouts](https://developers.cloudflare.com/fundamentals/reference/connection-limits/) |
+| Large uploads fail | [Cloudflare upload limits](https://developers.cloudflare.com/support/troubleshooting/http-status-codes/4xx-client-error/error-413/) and the bot/engine limits; base64 increases payload size |
+
+Return generated media as bytes through the API. The hosted bot cannot read your PC's local file paths or loopback download URLs. Production endpoints require public HTTPS and public DNS answers; keep TLS verification and SSRF checks enabled.
+
+## Known risks
+{/* anchor: known-risks */}
+
+TomoriBot already mitigates the following risks when you use its provider panels:
+
+| Risk | Existing mitigation |
+|---|---|
+| Ordinary members read a saved endpoint in the panel | Panels are ephemeral. Server provider settings require `Manage Server`; personal settings load the invoking user's own configuration. |
+| A provider error exposes its URL or key in chat | Public errors use localized descriptions. Raw text error details are gated to server managers for server credentials, or the owner for personal credentials. Media tool failures return classified messages. |
+| ComfyUI output links reveal the engine URL | TomoriBot downloads the output and uploads it to Discord. |
+| Opening a port exposes the PC directly | The engine stays on loopback and `cloudflared` connects outbound; no public inbound engine port is needed. |
+
+:::danger[Only share with server managers you trust]
+Only register endpoints through `/providers` in Discord servers whose managers you trust: they can see the exact URL, but the panel hides your saved auth token. Use `/personal providers` to keep the URL private from server managers.
+
+Without engine authentication, anyone with the URL can use its API directly. Use an engine key where supported, or add [optional Access and Caddy hardening](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/).
+:::

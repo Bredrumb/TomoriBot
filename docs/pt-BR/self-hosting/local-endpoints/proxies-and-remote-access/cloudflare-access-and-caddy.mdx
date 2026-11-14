@@ -1,0 +1,276 @@
+---
+title: "Endurecimento opcional: Cloudflare Access e Caddy"
+sidebar:
+  label: "Opcional: Access e Caddy"
+  order: 4
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Adicione uma segunda verificação de autenticação a um [Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/) com o Cloudflare Access e um relay Caddy. Esse endurecimento extra é opcional; o TomoriBot consegue se conectar diretamente a um motor HTTPS público sem nenhum dos dois serviços.
+
+## O que isso adiciona
+
+| Proteção | Túnel direto | Access e Caddy |
+|---|---|---|
+| HTTPS e nenhuma porta de entrada no seu PC | Fornecido pelo Tunnel | Igual |
+| Quem pode chamar o motor | O motor verifica sua chave, se configurada; um motor sem autenticação aceita qualquer pessoa que conheça a URL | O Access exige o token de serviço do relay; o Caddy exige sua chave de cliente |
+| Motor sem autenticação integrada | Depende do sigilo da URL, a menos que você adicione outro gateway de autenticação | Protegido pelo Access e pela chave de cliente do relay |
+| Rotas de API permitidas | Regras de caminho do túnel limitam o que é exposto | O Caddy também restringe métodos HTTP e rejeita redirecionamentos de upstream |
+| Chave divulgada acidentalmente fora do TomoriBot | Uma chave de motor válida pode chamar o túnel diretamente | A chave de motor sozinha não consegue chamar o túnel protegido, mas ainda pode chamar o relay público |
+| Remover o acesso de um relay | Faça a rotação da chave do motor para revogar essa chave | Revogue o token de serviço do Access independentemente da chave do motor |
+
+Isso não altera as permissões de servidor/pessoais do TomoriBot nem oculta configurações de endpoint do operador do bot. Portadores da chave do Caddy ainda podem usar as rotas permitidas diretamente. Os fluxos de trabalho do ComfyUI continuam capazes de executar nós instalados; restrições de rota não os colocam em sandbox nem isolam usuários.
+
+Você precisa de um segundo hostname HTTPS público, como `relay.example.net`, e de um host onde possa executar o [Caddy](https://caddyserver.com/docs/install). Ele pode compartilhar o servidor do bot ou usar outro servidor que você controle. Os fluxos de trabalho Azure/Hetzner não implantam esse relay automaticamente. O Caddy adiciona um processo e um salto extra de rede; a carga depende das requisições que usam o relay.
+
+O painel de endpoints do TomoriBot envia uma chave Bearer e não consegue adicionar os cabeçalhos de token de serviço do Access. O Caddy verifica essa chave e adiciona os cabeçalhos. Mantenha as credenciais do Access no Caddy; salve apenas a chave de cliente no TomoriBot.
+
+## 1. Proteja o hostname do túnel
+
+No painel do Cloudflare One:
+
+1. Em `Access controls` > `Service credentials` > `Service tokens`, [crie um token de serviço](https://developers.cloudflare.com/cloudflare-one/access-controls/service-credentials/service-tokens/) para o relay. Escolha uma validade que você consiga manter e salve o Client ID e o Client Secret no repositório de segredos do seu servidor; o segredo é exibido apenas uma vez.
+2. Em `Access controls` > `Applications`, adicione um aplicativo `Self-hosted` cobrindo todo o hostname `engine.example.com`, sem restrição de caminho.
+3. Adicione uma política com ação `Service Auth` e uma regra `Include` do tipo `Service Token`, selecionando apenas o seu token. Remova políticas amplas de `Allow` ou `Bypass` e verifique se há aplicativos mais específicos que contornem a proteção.
+4. Salve o aplicativo. Anote a tag Application Audience (AUD) e o nome da sua equipe do Cloudflare One para o YAML abaixo.
+
+Mantenha a proteção do Access ativa antes de publicar o DNS do túnel. O token de serviço pertence ao Caddy; o JSON de credenciais do túnel criado a seguir pertence ao seu computador local.
+
+## 2. Exija o Access no túnel
+
+Instale o `cloudflared`, crie seu túnel nomeado e prepare `config.yml` usando o [guia básico](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/#configure-the-tunnel). Conclua a proteção do Access antes de publicar o DNS. Se estiver convertendo um túnel direto em execução, pare o conector dele enquanto altera a proteção.
+
+Adicione este bloco `originRequest` a cada regra de hostname do motor, substituindo o nome da equipe e a tag Application Audience:
+
+```yaml title="Regra de hostname em config.yml"
+  - hostname: engine.example.com
+    path: ^/v1/(models|chat/completions)$
+    service: http://127.0.0.1:8317
+    originRequest:
+      access:
+        required: true
+        teamName: YOUR_TEAM_NAME
+        audTag:
+          - YOUR_APPLICATION_AUD
+```
+
+Mantenha os campos de túnel/credencial de nível superior e a regra 404 final do guia básico. Para ComfyUI ou TTS, preserve o `path` e o `service` daquele motor. A [verificação de Access do conector](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/configure-tunnels/origin-parameters/#access) exige o JWT do aplicativo localmente mesmo que a proteção de borda dele seja removida por acidente.
+
+Valide as regras de ingress, publique o DNS do túnel e inicie o conector conforme mostrado no guia básico. Uma requisição sem credenciais do Access agora deve ser negada.
+
+## 3. Execute o relay Caddy
+
+No servidor de relay:
+
+1. Instale o [Caddy](https://caddyserver.com/docs/install) ou adicione-o como um serviço à sua implantação.
+2. Copie `docker/cloudflare-relay.Caddyfile` do repositório para um arquivo protegido chamado `Caddyfile`. Substitua `relay.example.net` e `engine.example.com` no bloco de site final. Mantenha `chat_routes` para o CLIProxyAPI.
+3. Forneça estas variáveis ao processo do Caddy a partir do seu repositório de segredos:
+
+| Variável | Valor |
+|---|---|
+| `ENGINE_API_KEY` | Sua chave de cliente do CLIProxyAPI, também salva no TomoriBot |
+| `CF_ACCESS_CLIENT_ID` | Client ID do token de serviço do Access |
+| `CF_ACCESS_CLIENT_SECRET` | Client Secret do token de serviço do Access |
+
+Use uma chave de cliente gerada a partir de pelo menos 32 bytes aleatórios, codificada em hex ou base64 sem espaços em branco ou `*`. Mantenha segredos literais fora de comandos, do Git e de logs.
+
+A partir da pasta que contém o `Caddyfile`, valide e inicie o Caddy após carregar todas as três variáveis:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+foreach ($name in 'ENGINE_API_KEY', 'CF_ACCESS_CLIENT_ID', 'CF_ACCESS_CLIENT_SECRET') {
+  if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+    throw "Missing relay secret: $name"
+  }
+}
+caddy validate --config .\Caddyfile --adapter caddyfile
+caddy run --config .\Caddyfile --adapter caddyfile
+```
+
+Para inicialização sem supervisão, siga as [instruções de serviço do Windows](https://caddyserver.com/docs/running#windows-service) do Caddy.
+
+</TabItem>
+<TabItem label="Linux / macOS">
+
+```bash
+if [ -n "${ENGINE_API_KEY:-}" ] && [ -n "${CF_ACCESS_CLIENT_ID:-}" ] && [ -n "${CF_ACCESS_CLIENT_SECRET:-}" ]; then
+  caddy validate --config ./Caddyfile --adapter caddyfile &&
+    caddy run --config ./Caddyfile --adapter caddyfile
+else
+  printf 'Load all three relay secrets before starting Caddy.\n' >&2
+fi
+```
+
+Para inicialização sem supervisão, use o [serviço systemd](https://caddyserver.com/docs/running#linux-service) do Caddy no Linux ou seu gerenciador de serviços launchd/de contêineres no macOS, com a mesma configuração e segredos.
+
+</TabItem>
+
+</Tabs>
+
+Aponte `relay.example.net` para a entrada HTTPS do servidor de relay. O Caddy autônomo precisa da porta 443 de entrada e de conectividade para desafio de certificado, normalmente portas 80/443. Use um registro somente DNS (DNS-only) para o relay para evitar um segundo timeout do proxy do Cloudflare. Se a sua implantação terminar TLS separadamente, mantenha o listener de backend do Caddy privado.
+
+O arquivo fornecido verifica a chave de cliente, limita rotas e métodos e oculta corpos de erro do upstream. A API de administração dele é desativada, portanto reinicie o Caddy após alterar a configuração ou os segredos. Mantenha o ambiente e a configuração persistida privados e deixe o log de depuração/cabeçalhos desativado.
+
+
+## 4. Verifique a autenticação do Access e do relay
+{/* anchor: validate-each-authentication-check */}
+
+A partir do host do Caddy, verifique estas checagens antes de salvar o endpoint do relay:
+
+| Requisição | Resultado esperado |
+|---|---|
+| URL do túnel, token do Access ausente ou errado | O Access nega; o motor não recebe nenhuma requisição |
+| URL do túnel, token do Access válido, mas chave de cliente errada | O CLIProxyAPI retorna 401 |
+| URL do túnel, ambas as credenciais corretas | JSON do motor, como a lista de modelos |
+| URL do relay, chave de cliente ausente ou errada | O relay retorna 401 |
+| URL do relay, chave correta, mas método ou caminho de gerenciamento errado | O relay retorna 404 |
+
+A negação do Access pode ser 401, 403 ou um redirecionamento de login. Verifique se respostas bem-sucedidas contêm JSON do motor; uma página HTML de login é uma falha mesmo com status 200. Caminhos de gerenciamento direto no túnel também devem retornar 404 após a autenticação do Access.
+
+<details>
+<summary>Comandos de verificação de autenticação</summary>
+
+Execute a partir do host do relay com os três segredos carregados e transcrições/rastreamento desativados. Estes comandos imprimem códigos de status e tipos de conteúdo sem seguir redirecionamentos nem imprimir credenciais.
+
+Para ComfyUI ou TTS, use os hostnames e segredos deles, remova `/v1` e substitua `/models` por `/system_stats` ou `/health`. Pule a verificação da chave de origem apenas se aquele motor não tiver autenticação.
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+Add-Type -AssemblyName System.Net.Http
+$origin = 'https://engine.example.com/v1'
+$relay = 'https://relay.example.net/v1'
+$access = @{
+  'CF-Access-Client-Id' = $env:CF_ACCESS_CLIENT_ID
+  'CF-Access-Client-Secret' = $env:CF_ACCESS_CLIENT_SECRET
+}
+$good = $access.Clone()
+$good.Authorization = "Bearer $env:ENGINE_API_KEY"
+$badToken = $good.Clone()
+$badToken['CF-Access-Client-Secret'] = 'invalid-test-token'
+$badKey = $access.Clone()
+$badKey.Authorization = 'Bearer invalid-test-key'
+$cases = @(
+  @{ Uri = "$origin/models"; Headers = @{} },
+  @{ Uri = "$origin/models"; Headers = $badToken },
+  @{ Uri = "$origin/models"; Headers = $badKey },
+  @{ Uri = "$origin/models"; Headers = $good },
+  @{ Uri = "$relay/models"; Headers = @{} },
+  @{ Uri = "$relay/models"; Headers = @{ Authorization = "Bearer $env:ENGINE_API_KEY" } }
+)
+$handler = [Net.Http.HttpClientHandler]::new()
+$handler.AllowAutoRedirect = $false
+$client = [Net.Http.HttpClient]::new($handler)
+try {
+  foreach ($case in $cases) {
+    $request = [Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::Get, $case.Uri)
+    foreach ($header in $case.Headers.GetEnumerator()) {
+      $request.Headers.Add($header.Key, [string]$header.Value)
+    }
+    $result = $client.SendAsync($request).GetAwaiter().GetResult()
+    try {
+      [pscustomobject]@{ Url = $case.Uri; Status = [int]$result.StatusCode; Type = $result.Content.Headers.ContentType }
+    } finally {
+      $result.Dispose()
+      $request.Dispose()
+    }
+  }
+} finally {
+  $client.Dispose()
+}
+```
+
+</TabItem>
+<TabItem label="Linux / macOS">
+
+As credenciais passam pela configuração stdin do curl para mantê-las fora dos argumentos do processo.
+
+```bash
+set +x
+origin='https://engine.example.com/v1'
+relay='https://relay.example.net/v1'
+probe() {
+  probe_url=$1
+  access_mode=$2
+  key_mode=$3
+  {
+    if [ "$access_mode" != none ]; then
+      printf 'header = "CF-Access-Client-Id: %s"\n' "$CF_ACCESS_CLIENT_ID"
+      if [ "$access_mode" = bad ]; then
+        printf 'header = "CF-Access-Client-Secret: invalid-test-token"\n'
+      else
+        printf 'header = "CF-Access-Client-Secret: %s"\n' "$CF_ACCESS_CLIENT_SECRET"
+      fi
+    fi
+    if [ "$key_mode" = good ]; then
+      printf 'header = "Authorization: Bearer %s"\n' "$ENGINE_API_KEY"
+    elif [ "$key_mode" = bad ]; then
+      printf 'header = "Authorization: Bearer invalid-test-key"\n'
+    fi
+  } | curl --config - --silent --show-error --output /dev/null \
+    --write-out '%{http_code} %{content_type}\n' "$probe_url"
+}
+probe "$origin/models" none none
+probe "$origin/models" bad good
+probe "$origin/models" good bad
+probe "$origin/models" good good
+probe "$relay/models" none none
+probe "$relay/models" none good
+unset -f probe
+```
+
+</TabItem>
+
+</Tabs>
+
+</details>
+
+## 5. Salve a URL do relay no TomoriBot
+
+Use `/providers` para uma conexão do servidor ou `/personal providers` para a sua própria conexão. Para chat, salve `https://relay.example.net/v1` com compatibilidade `Compatível com OpenAI` e `ENGINE_API_KEY` como o token de autenticação. Adicione um modelo e teste uma resposta e streaming antes de ativar ferramentas.
+
+<details>
+<summary>ComfyUI, TTS ou vários motores</summary>
+
+Use `comfyui_routes` ou `tts_routes` como argumento final da linha `import engine_relay` no Caddyfile. Essa linha recebe o hostname do túnel, a chave de cliente, o Access Client ID, o Access Client Secret e o perfil de rotas, nessa ordem.
+
+Para executar vários motores juntos, dê a cada um seu próprio hostname de túnel, aplicativo/token de serviço do Access, hostname de relay e chave de cliente. Repita a regra de hostname do túnel antes da regra 404 final, com sua própria audiência do Access e porta de loopback. Proteja cada hostname antes de publicar o DNS com `cloudflared tunnel route dns home-engine HOSTNAME`. Um único conector pode atender a todas as regras.
+
+Anexe estes sites ao Caddyfile, substituindo os hostnames:
+
+```text
+comfy-relay.example.net {
+  import engine_relay comfy-engine.example.com {env.COMFYUI_ENGINE_API_KEY} {env.COMFYUI_CF_ACCESS_CLIENT_ID} {env.COMFYUI_CF_ACCESS_CLIENT_SECRET} comfyui_routes
+}
+
+tts-relay.example.net {
+  import engine_relay tts-engine.example.com {env.TTS_ENGINE_API_KEY} {env.TTS_CF_ACCESS_CLIENT_ID} {env.TTS_CF_ACCESS_CLIENT_SECRET} tts_routes
+}
+```
+
+Forneça as três variáveis de cada site ao Caddy, inclua-as nas verificações de inicialização e provisione DNS/HTTPS para cada hostname de relay. Um único serviço do Caddy pode atender a todos os sites.
+
+| Motor | Conexão no TomoriBot | Testar antes de usar |
+|---|---|---|
+| ComfyUI | Compatibilidade `ComfyUI`, base `https://comfy-relay.example.net`, a chave de cliente desse site | Geração de imagens, envio de referências, download de saídas e cancelamento; teste vídeo separadamente |
+| TTS local | Compatibilidade `tts-clone`, base `https://tts-relay.example.net`, a chave de cliente desse site | Síntese curta retornando áudio reproduzível; teste Design de Voz se houver suporte |
+
+Siga a [configuração do ComfyUI](/self-hosting/local-endpoints/setup-comfyui/) ou a [configuração de TTS](/self-hosting/local-endpoints/text-to-speech/) para modelos e fluxos de trabalho. Essas conexões não usam o sufixo `/v1`. Teste o roteamento e a autenticação de cada hostname, usando `/system_stats` para ComfyUI e `/health` para TTS.
+
+Mantenha motores sem autenticação própria vinculados a loopback. A verificação de chave inválida na origem só se aplica se ela exigir uma chave; todo relay ainda exige sua chave de cliente. Fluxos de trabalho do ComfyUI não ficam em sandbox: portadores da chave podem executar nós instalados, ler arquivos expostos por `/view`, cancelar tarefas e descarregar modelos. Use uma instância dedicada.
+
+Os perfis fornecidos expõem apenas rotas de API. O ComfyUI usa consulta de tarefas, portanto nenhuma rota WebSocket é necessária. O TTS permite apenas `GET /health` e `POST /synthesize`; outras APIs de fala ou transcrição precisam de suas próprias rotas. A rota de descarregamento do KoboldCPP é excluída, portanto a transferência automática de VRAM entre texto e ComfyUI fica indisponível pelo perfil de chat.
+
+
+</details>
+
+## Faça rotação ou revogue credenciais
+
+- Para interromper o acesso imediatamente, pare o relay e revogue seu token de serviço do Access. Pare o conector e remova as entradas de túnel/DNS ao desativar a configuração.
+- Para rotação de rotina do token do Access, atualize a política e o segredo do relay, reinicie e teste o Caddy e então revogue o token antigo.
+- Troque uma chave de cliente no motor onde houver suporte, no repositório de segredos do Caddy e em toda conexão salva do TomoriBot que a utilize. Revogue credenciais OAuth upstream vazadas separadamente; excluir apenas os arquivos locais não as revoga.

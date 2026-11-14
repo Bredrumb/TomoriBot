@@ -30,15 +30,15 @@ When a server adopts an official preset via `/setup` or `/persona default`, the 
 
 Preset media is stored once and shared across servers:
 
-```
-Seeder / Sweep Lock (PostgreSQL Advisory Lock)
-  ├── Seed Pass ──> Uploads immutable assets to presets/{lineage}/...
-  │                 ├── preset_avatar_shared_url (avatars)
-  │                 ├── preset_char_ref_shared_url (character references)
-  │                 └── preset_sprites (expressions)
-  └── Fan-out
-      ├── Alters  ──> Live-resolve shared URL per webhook send (no local copy)
-      └── Main    ──> Reconciler PATCHes guild member avatar on hash delta
+```mermaid
+flowchart TD
+  lock["Seeder / Sweep Lock<br/>(PostgreSQL Advisory Lock)"] --> seed["Seed Pass<br/>Uploads immutable assets to presets/{lineage}/..."]
+  seed --> av["preset_avatar_shared_url (avatars)"]
+  seed --> ref["preset_char_ref_shared_url (character references)"]
+  seed --> spr["preset_sprites (expressions)"]
+  lock --> fan["Fan-out"]
+  fan -->|"Alters"| alters["Live-resolve shared URL per webhook send<br/>(no local copy)"]
+  fan -->|"Main"| main["Reconciler PATCHes guild member avatar<br/>on hash delta"]
 ```
 
 ### Alter avatars
@@ -80,6 +80,9 @@ The first local edit to prompt text, attributes, sprites, or naming forks the po
 ## Cards, imports, and vision generation
 
 - **Export**: Exports materialize pointer state into self-contained cards, tagging `preset_lineage_id` for character provenance. PNG and JSON exports carry the optional voice description (up to 1,000 characters) and Design/Clone priority. They also carry the effective authored idle nudges and the lineage's lorebook entries, including disabled entries. Local nudge availability, server custom nudges, local sample IDs, sample bytes, provider voice IDs, credentials, and Gemini bindings are excluded.
+  Assistant examples without matching user inputs receive the existing model-only dialogue marker
+  in the exported copy; stored examples stay unchanged. Both formats pass import validation before
+  export succeeds. An input without an assistant reply fails validation.
 - **Import**: Re-establishes a live preset pointer only when attributes, public flags, dialogues, triggers, and prompt text exactly match the seeded preset and the card's idle nudge list, when it has one, equals the preset's. Deviations produce independent materialized copies. Importing an authored voice description also
   materializes the persona; older cards without it keep their pointer behavior. Main and alter
   imports restore the description and priority, defaulting missing priority to Design, and need a

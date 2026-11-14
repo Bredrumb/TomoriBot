@@ -36,7 +36,7 @@ subagent its locale code, the English diffs or missing keys to translate, and a 
 skill and `references/glossary-<locale>.md`.
 
 Select the smallest latest model family for the active harness (for example, Luna on Codex, Gemini
-Flash (`flash`) on Antigravity, or Claude Haiku on Claude Code), with `low` or `medium` reasoning
+Hydrogen on Antigravity, or Claude Haiku on Claude Code), with `low` or `medium` reasoning
 effort when the harness supports setting it (`low` for isolated locale keys, `medium` for longer
 docs pages or persona-voiced strings).
 

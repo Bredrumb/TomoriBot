@@ -3,7 +3,7 @@ title: "Texto a voz (motores locales)"
 sidebar:
   label: "Resumen"
   groupLabel: "Texto a voz"
-  order: 7
+  order: 6
 ---
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
@@ -45,11 +45,13 @@ Para proveedores de voz alojados y selecciones personales, consulta [Voz: TTS y 
 ## Acceso a la red
 {/* anchor: network-access */}
 
-Cada servidor local de TTS se vincula a `127.0.0.1` por defecto, por lo que únicamente un bot en la misma máquina puede comunicarse con él. Cuando TomoriBot se ejecuta en Docker o en otra máquina, establece `TOMORI_TTS_HOST=0.0.0.0` para el servidor y registra el punto de conexión con la dirección del host, por ejemplo `http://host.docker.internal:8015`.
+Cada servidor local de TTS se vincula a `127.0.0.1` por defecto. Para el bot de producción alojado por separado, mantén esa vinculación y sigue el [perfil de TTS de la guía de Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/). Registra su URL HTTPS del túnel sin `/v1`, usa `tts-clone` y deja el token de autenticación en blanco a menos que hayas agregado una puerta de enlace de autenticación. El perfil permite comprobaciones de estado y síntesis tanto para clonación de voz como para Diseño de voz. Las conexiones de texto y ComfyUI pueden permanecer activas junto con la voz.
+
+Para un bot que no sea de producción en Docker o en una LAN de confianza, configura `TOMORI_TTS_HOST=0.0.0.0` y registra la dirección del host, por ejemplo `http://host.docker.internal:8015`. Restringe el puerto con el firewall del host y configura `ALLOW_PRIVATE_NETWORK` en TomoriBot para admitir ese host y puerto.
 
 Cada servidor lee su propia variable de puerto (`CHATTERBOX_PORT`, `QWEN3TTS_PORT`, `IRODORI_TTS_PORT`, `FISH_S2_PORT`, `VOXCPM2_PORT`, `COSYVOICE3_PORT`, `MOSS_TTS_PORT`), por lo que varios pueden ejecutarse simultáneamente desde un mismo archivo `.env`. `bun run launch` pasa `.env` a los servidores que inicia; un servidor iniciado manualmente solo lee las variables de su propio shell.
 
-Los servidores no disponen de autenticación: cualquier usuario que alcance el puerto puede ejecutar síntesis en tu GPU. Vincula fuera del bucle invertido solo en una red de confianza, y coloca un proxy inverso con autenticación delante de cualquier servidor que expongas más allá de ella.
+Los servidores no disponen de autenticación: cualquier persona que pueda acceder a ellos directamente o a través del túnel puede ejecutar síntesis en tu GPU. Revisa los [riesgos conocidos](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/#known-risks) de la guía del túnel antes de aceptar compartirlo sin autenticación. [Access y Caddy](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/) son opcionales si quieres una comprobación de autenticación independiente. Vincula fuera del bucle invertido solo en una red de confianza.
 
 ## Voces de persona
 

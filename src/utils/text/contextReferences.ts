@@ -1,4 +1,5 @@
 import type { Client } from "discord.js";
+import { measureChatTurnStage } from "@/utils/chat/turnLatency";
 import type { TomoriState, UserRow } from "@/types/db/schema";
 import { isEligibleContextReferenceUserV1 } from "@/utils/db/repositories/UserRepository";
 import type { PublicPersonaProfile, SimplifiedMessageForContext } from "@/utils/text/context/types";
@@ -170,19 +171,21 @@ export async function resolveContextReferences(params: {
   );
 
   const eligibleMembers = (
-    await Promise.all(
-      uniqueEligibleRows.map(async (userRow) => {
-        const member = await memberDirectory.resolveMember(userRow.user_disc_id);
-        if (!member) {
-          addRejection(rejections, "non_member");
-          return null;
-        }
-        if (member.bot) {
-          addRejection(rejections, "bot");
-          return null;
-        }
-        return { member, userRow };
-      }),
+    await measureChatTurnStage("participant_members_ms", () =>
+      Promise.all(
+        uniqueEligibleRows.map(async (userRow) => {
+          const member = await memberDirectory.resolveMember(userRow.user_disc_id);
+          if (!member) {
+            addRejection(rejections, "non_member");
+            return null;
+          }
+          if (member.bot) {
+            addRejection(rejections, "bot");
+            return null;
+          }
+          return { member, userRow };
+        }),
+      ),
     )
   ).filter((candidate): candidate is NonNullable<typeof candidate> => candidate !== null);
 

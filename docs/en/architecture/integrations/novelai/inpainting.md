@@ -18,25 +18,13 @@ Inpainting executes through three cooperating components:
 3. `src/tools/functionCalls/generateImageNaiTool.ts`: constructs the NovelAI infill payload,
    dispatches the HTTP generation request, and formats the output message.
 
-```
-Discord Message
-  │  (collectImageUrlsFromMessage)
-  ▼
-imageExtractor.ts ───────────────► Source Image (base64, dimensions)
-                                        │
-                                        ▼
-segmentationService.ts ──────────► Gemini Segmentation API (box_2d)
-  │
-  ├─► Elliptical mask with padding (NAI_INPAINT_PADDING = 0.15)
-  ├─► Latent grid quantization (1/8 resolution snap)
-  └─► RGBA PNG encoding (Alpha channel mask signal)
-        │
-        ▼
-generateImageNaiTool.ts ─────────► NovelAI /ai/generate-image
-                                   (action: "infill", strength: 1.0, add_original_image: true)
-                                        │
-                                        ▼
-                              Inpainted Output to Discord
+```mermaid
+flowchart TD
+  msg["Discord Message"] -->|"collectImageUrlsFromMessage"| ext["imageExtractor.ts<br/>Source Image (base64, dimensions)"]
+  ext --> seg["segmentationService.ts<br/>Gemini Segmentation API (box_2d)"]
+  seg --> mask["1. Elliptical mask with padding (NAI_INPAINT_PADDING = 0.15)<br/>2. Latent grid quantization (1/8 resolution snap)<br/>3. RGBA PNG encoding (Alpha channel mask signal)"]
+  mask --> nai["generateImageNaiTool.ts<br/>NovelAI /ai/generate-image<br/>(action: infill, strength: 1.0, add_original_image: true)"]
+  nai --> out["Inpainted Output to Discord"]
 ```
 
 ### 1. Source image extraction

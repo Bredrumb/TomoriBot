@@ -2,7 +2,7 @@
 title: "Configuração do OAuth do PluralBuddy"
 description: "Autorize seu TomoriBot autohospedado a verificar mensagens de instâncias aprovadas do PluralBuddy."
 sidebar:
-  order: 8
+  order: 7
 ---
 
 Um TomoriBot autohospedado precisa de um aplicativo autorizado do PluralBuddy para o serviço oficial e para cada instância personalizada aprovada.
@@ -31,7 +31,7 @@ não precisa concluir esta configuração do lado do host. Selecione o PluralBud
 2. A partir do repositório do TomoriBot, execute o auxiliar com o ID da instância oficial e o mesmo callback:
 
    ```sh
-   bun scripts/db/authorize-pluralbuddy-instance.ts pluralbuddy:official <callback-url>
+   bun scripts/db/authorize-pluralbuddy-instance.ts pluralbuddy:official "<callback-url>"
    ```
 
 3. Digite o client ID e o secret nas solicitações do terminal. Abra a URL de autorização exibida no
@@ -50,7 +50,7 @@ Use uma origem pública HTTPS sem caminho, query ou fragmento. A instância deve
 1. Em um computador com acesso ao banco de dados de implantação, registre uma instância desativada:
 
    ```sh
-   bun scripts/db/register-message-proxy-instance.ts register pluralbuddy https://<instance-host> "<display-name>" <bot-user-id>
+   bun scripts/db/register-message-proxy-instance.ts register pluralbuddy "https://<instance-host>" "<display-name>" "<bot-user-id>"
    bun scripts/db/register-message-proxy-instance.ts inspect
    ```
 
@@ -59,7 +59,7 @@ Use uma origem pública HTTPS sem caminho, query ou fragmento. A instância deve
    de callback em loopback acima. Autorize-o usando o ID da instância retornado pelo registro:
 
    ```sh
-   bun scripts/db/authorize-pluralbuddy-instance.ts <instance-id> <callback-url>
+   bun scripts/db/authorize-pluralbuddy-instance.ts "<instance-id>" "<callback-url>"
    ```
 
    Repita a autorização para substituir credenciais ou se recuperar de um refresh token revogado. O PluralKit não exige essa etapa.
@@ -67,7 +67,7 @@ Use uma origem pública HTTPS sem caminho, query ou fragmento. A instância deve
    da conta remetente. Verifique se a API da instância resolve esse repost e, em seguida, ative-a:
 
    ```sh
-   bun scripts/db/register-message-proxy-instance.ts enable <instance-id> <repost-id> <sender-id>
+   bun scripts/db/register-message-proxy-instance.ts enable "<instance-id>" "<repost-id>" "<sender-id>"
    ```
 
    Para um novo fork, teste o bot, a troca e renovação de OAuth e a consulta no TomoriBot em uma implantação descartável antes de disponibilizá-lo para os usuários.
@@ -78,14 +78,14 @@ Use uma origem pública HTTPS sem caminho, query ou fragmento. A instância deve
 Se o bot proxy personalizado for substituído, atualize o ID de usuário do bot no Discord antes de disponibilizar a instância novamente:
 
 ```sh
-bun scripts/db/register-message-proxy-instance.ts set-bot <instance-id> <bot-user-id>
+bun scripts/db/register-message-proxy-instance.ts set-bot "<instance-id>" "<bot-user-id>"
 ```
 
 Desative ou remova uma instância personalizada com:
 
 ```sh
-bun scripts/db/register-message-proxy-instance.ts disable <instance-id>
-bun scripts/db/register-message-proxy-instance.ts remove <instance-id>
+bun scripts/db/register-message-proxy-instance.ts disable "<instance-id>"
+bun scripts/db/register-message-proxy-instance.ts remove "<instance-id>"
 ```
 
 A remoção exclui a conexão OAuth e impede permanentemente que a origem seja registrada novamente. Use `disable` se pretender retomar a instância no futuro. Identidades e memórias existentes continuam disponíveis, e as alterações entram em vigor sem a necessidade de reiniciar.

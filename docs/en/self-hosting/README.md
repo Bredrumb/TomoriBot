@@ -16,7 +16,7 @@ sidebar:
 ---
 
 <!-- STUB (Phase 1 structural). Phase 2 writes: requirements + module directory.
-     Source for manual-setup.md: `git show HEAD:README.md` "Self-Hosting" section. -->
+     Source for manual-setup.mdx: `git show HEAD:README.md` "Self-Hosting" section. -->
 
 Start running your own TomoriBot instance through any of these install paths:
 

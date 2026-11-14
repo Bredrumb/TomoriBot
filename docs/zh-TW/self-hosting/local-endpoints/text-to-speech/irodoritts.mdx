@@ -1,0 +1,298 @@
+---
+title: "IrodoriTTS"
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+使用[Irodori-TTS v4.1](https://github.com/Aratako/Irodori-TTS)，透過聲音複製、以說明文字為基礎的VoiceDesign與富有表現力的表情符號標記產生自然的日語語音。
+
+Irodori-TTS v4.1是一個專注於日語的文字轉語音模型，支援在單一檢查點內同時進行聲音複製與以文字描述的VoiceDesign。TomoriBot透過`servers/tts/irodoritts/`中的本機FastAPI包裝器連接到Irodori，預設為`Aratako/Irodori-TTS-v4.1-Small`。
+
+可透過`IRODORI_TTS_MODEL_ID`選取相容的Hugging Face檢查點，包含`phasefield-audio/Irodori-TTS-v4.1-Anime`等社群微調版本。
+
+## 設定
+
+Irodori使用[uv](https://docs.astral.sh/uv/)進行相依套件與PyTorch後端管理。伺服器維護自己的`pyproject.toml`，並固定Irodori與`dacvae`相依套件以實現可重現的安裝。請先安裝`uv`，接著從TomoriBot存放庫根目錄執行設定腳本：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+NVIDIA GPU（`cu128`）：
+
+```powershell
+.\servers\tts\irodoritts\install-irodori.ps1 cu128
+.\servers\tts\irodoritts\.venv\Scripts\python.exe servers\tts\irodoritts\server.py
+```
+
+其他支援的Windows後端為`cpu`與`xpu`（Intel Arc）。
+
+</TabItem>
+<TabItem label="Linux">
+
+NVIDIA GPU（`cu128`）：
+
+```bash
+bash servers/tts/irodoritts/install-irodori.sh cu128
+servers/tts/irodoritts/.venv/bin/python servers/tts/irodoritts/server.py
+```
+
+其他支援的Linux後端為`rocm`（AMD ROCm）、`xpu`（Intel Arc）與`cpu`。
+
+</TabItem>
+<TabItem label="Mac">
+
+使用`cpu`額外項目安裝（`uv`會在macOS上解析標準PyPI PyTorch wheel）：
+
+```bash
+bash servers/tts/irodoritts/install-irodori.sh cpu
+servers/tts/irodoritts/.venv/bin/python servers/tts/irodoritts/server.py
+```
+
+設定`IRODORI_MODEL_DEVICE=auto`時，上游執行時期會在可用時選擇Apple Silicon `mps`，否則使用`cpu`，而非CUDA裝置預設會將`IRODORI_MODEL_PRECISION`設為`fp32`。`cu128`、`rocm`、`xpu`與CUDA低延遲編譯模式（`IRODORI_COMPILE_MODE`）在Mac上無法使用。
+
+</TabItem>
+</Tabs>
+
+設定腳本會建立`servers/tts/irodoritts/.venv`，因此安裝後`bun run launch --irodoritts`仍可正常運作。
+
+可用的安裝程式後端：
+
+- `cu128`：Windows與Linux上的NVIDIA CUDA 12.8
+- `cpu`：Windows與Linux上的純CPU，或透過標準PyPI wheel的macOS CPU/MPS
+- `rocm`：Linux與WSL2上的AMD ROCm
+- `xpu`：Windows與Linux上的Intel XPU
+
+預設端點URL為`http://127.0.0.1:8013`。
+
+## 使用不同的檢查點
+
+預設模型為`Aratako/Irodori-TTS-v4.1-Small`。你可透過環境變數選取其他官方檢查點（包含3.29B參數的大型模型及其量化變體）、社群微調版本或本機檢查點檔案。
+
+### 檢查點與變體
+
+| 模型 / `IRODORI_TTS_MODEL_ID` | 參數量 | 檢查點大小 | 建議VRAM | 說明 |
+|---|---|---|---|---|
+| `Aratako/Irodori-TTS-v4.1-Small` | 766M | 1.5GB | 4到6GB | 預設模型：推論快速且記憶體佔用低。 |
+| `Aratako/Irodori-TTS-v4-Large` | 3.29B | 12.25GB | 10到14GB | 完整未量化大型模型，採用T5Gemma 2文字骨幹。 |
+| `Aratako/Irodori-TTS-v4-Large-Quantized/float8-weight-only` | 3.29B | 3.58GB | 6到8GB | FP8權重搭配BF16活化值：推薦用於NVIDIA Ada（RTX 40系列）與更新架構。 |
+| `Aratako/Irodori-TTS-v4-Large-Quantized/int8-weight-only` | 3.29B | 3.58GB | 6到8GB | 通用INT8權重，在NVIDIA CUDA上使用BF16計算。 |
+| `Aratako/Irodori-TTS-v4-Large-Quantized/int4-weight-only` | 3.29B | 2.75GB | 5到6GB | 最小的Large變體：需要NVIDIA Ampere（RTX 30系列）或更新架構。 |
+| `phasefield-audio/Irodori-TTS-v4.1-Anime` | 766M | 1.5GB | 4到6GB | 社群微調版本，適用於動漫風格語音表達。 |
+
+對於聲音複製，Small模型提供相似的品質與更快的推論速度。Large模型則具備更強大的文字編碼器，能更緊密貼合VoiceDesign描述。量化版Large檢查點針對NVIDIA CUDA，而非CPU或Mac MPS。
+
+伺服器會讀取存放庫根目錄的`.env`或本機`servers/tts/irodoritts/.env`。
+
+### 透過`.env`（持久生效）
+
+在TomoriBot根目錄的`.env`中加入：
+
+```dotenv
+IRODORI_TTS_MODEL_ID="phasefield-audio/Irodori-TTS-v4.1-Anime"
+```
+
+### 透過各工作階段環境變數
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$env:IRODORI_TTS_MODEL_ID = "phasefield-audio/Irodori-TTS-v4.1-Anime"
+.\servers\tts\irodoritts\.venv\Scripts\python.exe servers\tts\irodoritts\server.py
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+IRODORI_TTS_MODEL_ID=phasefield-audio/Irodori-TTS-v4.1-Anime \
+  servers/tts/irodoritts/.venv/bin/python servers/tts/irodoritts/server.py
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+IRODORI_TTS_MODEL_ID=phasefield-audio/Irodori-TTS-v4.1-Anime \
+  servers/tts/irodoritts/.venv/bin/python servers/tts/irodoritts/server.py
+```
+
+</TabItem>
+</Tabs>
+
+### 使用本機檢查點檔案
+
+若你已在本機下載了檢查點檔案（`.pt`或`.safetensors`），請將`IRODORI_TTS_CHECKPOINT`設定為其路徑：
+
+```dotenv
+IRODORI_TTS_CHECKPOINT="/path/to/custom_checkpoint.pt"
+```
+
+目前的Irodori會將檢查點與Hugging Face存放庫中隨附的任何tokenizer資產一起下載。當模型存放庫提供Hugging Face子資料夾變體時，`IRODORI_TTS_MODEL_ID`亦支援該類變體。
+
+## 在TomoriBot中註冊
+
+執行`/providers`，選擇`+ 新增自訂端點`，並使用語音API相容性：
+
+- `API 相容性`：`TTS 複製`（`tts-clone`）
+- `端點 URL`：`http://127.0.0.1:8013`
+
+儲存連線後，選取它並使用其模型下拉選單選擇`+ 新增語音模型`。對於v4.1，建議的設定為：
+
+- `語音來源模式`：`自動`
+- `腳本標記風格`：`表情符號`
+
+`自動`讓同一個Irodori端點同時支援兩種TomoriBot語音模式，因此情緒提示能在發送時保留：
+
+- 在`人格` > `語音`底下指派了語音樣本的人格會發送儲存的參考音訊以進行聲音複製。
+- 在`人格` > `語音`底下設定了VoiceDesign提示詞的人格會將儲存的自然語言提示詞作為Irodori說明文字條件發送。
+
+若你只需要參考音訊語音複製，仍可選擇`語音複製`作為`語音來源模式`。
+
+使用`/providers`進行端點註冊與模型設定。接著開啟`/config` > `模型` > `切換模型`以選取並啟用已註冊的端點。
+
+## 設定人格語音
+
+### 聲音複製
+
+1. 準備一段乾淨的日語語音片段，單一講者且無背景音樂。大約30秒即已足夠：超過此長度的額外音訊對於音色保真度的提升微乎其微，反而會增加上傳大小與推論時間。
+2. 在`/config`的`模型` > `TTS 參數與語音`底下上傳該音訊。
+3. 在`/config`的`人格` > `語音`底下選擇人格與語音樣本。
+
+Irodori預設使用120秒參考上限，並會裁切較長的音訊。設定`IRODORI_MAX_REF_SECONDS`可調整此限制。
+
+伺服器只會對每個參考音訊片段編碼一次，並將結果保留在`servers/tts/irodoritts/reference-cache/`中，因此重複的請求會略過該步驟。替換人格的音訊片段會建立新的快取項目，舊項目會一直保留直到你手動刪除該資料夾為止。
+
+### VoiceDesign
+
+1. 開啟`/config`底下的`人格` > `語音`。
+2. 選擇人格。
+3. 輸入所需語音與表達風格的自然語言描述。
+
+TomoriBot會將此提示詞作為`instruct`發送；Irodori包裝器會將其對應至v4.1的`caption`條件。VoiceDesign請求不需要儲存的參考音訊片段。
+
+TomoriBot在將文字發送到TTS之前會先清除Discord自訂表情符號語法。若設定為`script_markup: emoji`，Unicode表情符號會被保留用於Irodori的文字條件引導。
+
+### 表情符號風格控制
+
+IrodoriTTS支援輸入文字中的表情符號註解以影響音效、說話風格與情緒表達。將TomoriBot的`腳本標記風格`設定為`表情符號`後，這些Unicode表情符號會被保留並發送到Irodori。
+
+支援的表情符號及其含意請參閱[上游表情符號註解](https://huggingface.co/Aratako/Irodori-TTS-v4.1-Small/blob/main/EMOJI_ANNOTATIONS.md)。表情符號屬於風格提示，生成結果可能有所不同。
+
+## 長語音訊息
+
+長文字會被分割為多個區塊，並作為單一語音訊息傳回。較長的請求可能會超過預設的240秒逾時時間；如有需要請調整`TTS_SYNTHESIZE_TIMEOUT_MS`。設定`IRODORI_CHUNKING_ENABLED=false`可停用分塊，或設定`IRODORI_CHUNK_MIN_CHARS`調整分割門檻值。
+
+## 使用Sway取樣加快推論
+{/* anchor: faster-inference-with-sway-sampling */}
+
+預設仍為Irodori較高品質的40步線性取樣。若要在任何裝置上降低延遲，可嘗試使用較少步數的Sway取樣：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$env:IRODORI_NUM_STEPS = "6"
+$env:IRODORI_T_SCHEDULE_MODE = "sway"
+$env:IRODORI_SWAY_COEFF = "-1.0"
+.\servers\tts\irodoritts\.venv\Scripts\python.exe servers\tts\irodoritts\server.py
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+export IRODORI_NUM_STEPS=6
+export IRODORI_T_SCHEDULE_MODE=sway
+export IRODORI_SWAY_COEFF=-1.0
+servers/tts/irodoritts/.venv/bin/python servers/tts/irodoritts/server.py
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+export IRODORI_NUM_STEPS=6
+export IRODORI_T_SCHEDULE_MODE=sway
+export IRODORI_SWAY_COEFF=-1.0
+servers/tts/irodoritts/.venv/bin/python servers/tts/irodoritts/server.py
+```
+
+</TabItem>
+</Tabs>
+
+這是在推論品質與速度之間的權衡，因此在將其設為永久設定前，請先使用你所選的檢查點與語音進行測試。
+
+## 低延遲模式（NVIDIA）
+{/* anchor: low-latency-mode-nvidia */}
+
+低延遲模式可在維持相同的40步與語音設定下，讓NVIDIA GPU處理每個句子的速度提升約3到4倍，因此不會像Sway取樣那樣犧牲品質。請在`.env`中啟用：
+
+```dotenv
+IRODORI_COMPILE_MODE="cudagraphs"
+```
+
+`cudagraphs`是速度最快的模式。`compile`比預設快約2倍；若`cudagraphs`在你的GPU上表現異常，可嘗試使用此模式。兩者都需要`cu128`後端，伺服器在其他後端上會拒絕以此二模式啟動。
+
+在NVIDIA `cu128`上的預期行為：
+
+- 伺服器回報就緒前需要先暖機。初次啟動約需2到4分鐘；後續啟動約需1到2分鐘，因為編譯好的核心會快取在磁碟上。`bun run launch --irodoritts`最多等待5分鐘；若GPU較慢，可用`TOMORI_TTS_STARTUP_TIMEOUT_MS`（單位為毫秒）調高該上限。
+- 遇到新句子長度或新語音片段時，首次請求會多花不到一秒的時間進行準備（僅此一次）。
+- VRAM用量會略微下降。
+- 相同隨機種子下，產生的音訊與預設模式並非完全逐位元相同。在測試中聽起來效果相當，但在正式採用前建議先用自己的語音試聽幾句。
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+在Windows上，低延遲模式還需要Microsoft C++編譯器（`cl.exe`）：
+
+1. 安裝[Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)，並勾選**使用C++的桌面開發**工作負載。
+2. 重新執行`.\servers\tts\irodoritts\install-irodori.ps1 cu128`以安裝Windows版Triton套件。
+3. 從**Developer PowerShell for VS**啟動伺服器（或執行`bun run launch --irodoritts`），或是先將編譯器載入一般PowerShell中：
+
+```powershell
+$vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+$vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+cmd /c "`"$vs\VC\Auxiliary\Build\vcvars64.bat`" >nul && set" | ForEach-Object {
+  if ($_ -match "^([^=]+)=(.*)$") { Set-Item -Path "Env:$($Matches[1])" -Value $Matches[2] }
+}
+```
+
+若缺少編譯器或Triton，伺服器會在啟動時停止並指明缺少哪一項。
+
+</TabItem>
+<TabItem label="Linux">
+
+請確認環境已使用`cu128`同步（`bash servers/tts/irodoritts/install-irodori.sh cu128`），且已安裝C編譯器（`gcc` / `build-essential`）供核心編譯使用。
+
+</TabItem>
+<TabItem label="Mac">
+
+Mac上不支援。`compile`與`cudagraphs`需要`cu128` NVIDIA後端與Triton；在Mac上請將`IRODORI_COMPILE_MODE`保留為`off`，並改用[Sway取樣](#faster-inference-with-sway-sampling)來減少步數。
+
+</TabItem>
+</Tabs>
+
+## 環境變數
+
+| 變數 | 預設值 | 用途 |
+|---|---|---|
+| `IRODORI_TTS_MODEL_ID` | `Aratako/Irodori-TTS-v4.1-Small` | Hugging Face模型存放庫或支援的存放庫/子資料夾來源 |
+| `IRODORI_TTS_CHECKPOINT` | 未設定 | 選用的本機`.pt`或`.safetensors`檢查點；覆寫Hugging Face模型 |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | 伺服器繫結位址；請參閱[網路存取](/self-hosting/local-endpoints/text-to-speech/#network-access) |
+| `IRODORI_TTS_PORT` | `8013` | 伺服器連接埠 |
+| `IRODORI_MODEL_DEVICE` | `auto` | 模型裝置（`auto`、`cuda`、`cpu`、`mps`、`xpu`） |
+| `IRODORI_CODEC_DEVICE` | `auto` | 編解碼器裝置 |
+| `IRODORI_MODEL_PRECISION` | CUDA上為`bf16`，否則為`fp32` | 模型精度 |
+| `IRODORI_CODEC_PRECISION` | `fp32` | 編解碼器精度 |
+| `IRODORI_COMPILE_MODE` | `off` | `off`、`compile`或`cudagraphs`；請參閱[低延遲模式](#low-latency-mode-nvidia) |
+| `IRODORI_NUM_STEPS` | `40` | Euler取樣步數 |
+| `IRODORI_T_SCHEDULE_MODE` | `linear` | 取樣排程（`linear`或`sway`） |
+| `IRODORI_SWAY_COEFF` | `-1.0` | 使用`sway`排程時的Sway係數 |
+| `IRODORI_CFG_SCALE_TEXT` | `3.0` | 文字引導縮放比例 |
+| `IRODORI_CFG_SCALE_CAPTION` | `3.0` | 說明文字 / VoiceDesign引導縮放比例 |
+| `IRODORI_CFG_SCALE_SPEAKER` | `5.0` | 參考講者引導縮放比例 |
+| `IRODORI_MAX_REF_SECONDS` | 檢查點預設值 | 參考音訊長度的選用上限 |
+| `IRODORI_CHUNKING_ENABLED` | `true` | 在符合條件的標點符號邊界分割長文字並串接產生的區塊 |
+| `IRODORI_CHUNK_MIN_CHARS` | `80` | 強句子邊界分割前的最小非空白字元數；逗號為後備邊界，約為此值的1.5倍 |

@@ -42,6 +42,10 @@
       "reason": "Names the `clear` option of /model image (model/image.ts:101), not a subcommand."
     },
     {
+      "path": "models",
+      "reason": "HTTP route for OpenAI-compatible text engines in the remote access guide, not a Discord command."
+    },
+    {
       "path": "nothink",
       "reason": "NovelAI thinking-control prompt token, not a Discord command."
     },
@@ -64,6 +68,10 @@
     {
       "path": "synthesize",
       "reason": "HTTP route for Qwen3-TTS, not a Discord command"
+    },
+    {
+      "path": "system_stats",
+      "reason": "ComfyUI HTTP API route in the local setup and remote access guides, not a Discord command."
     },
     {
       "path": "tmp",

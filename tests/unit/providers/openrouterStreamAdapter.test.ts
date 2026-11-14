@@ -7,7 +7,7 @@ import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { sumTurnUsage } from "@/utils/text/tokenEstimate";
 import { log } from "@/utils/misc/logger";
 import { reportStreamProviderFailure } from "@/utils/provider/providerErrorMetrics";
-import { createPersona } from "../../helpers/fixtures";
+import { createLlmRow, createPersona } from "../../helpers/fixtures";
 import { stubGlobalFetch } from "../../helpers/fetchStub";
 
 const originalFetch = globalThis.fetch;
@@ -68,6 +68,26 @@ async function collectRawChunks(adapter: OpenrouterStreamAdapter): Promise<RawSt
   }
   return chunks;
 }
+
+it("sends extra-high effort through OpenRouter's reasoning field", async () => {
+  const bodies: Array<Record<string, unknown>> = [];
+  const fetchStub = stubGlobalFetch((_input, init) => {
+    bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+    return makeSseResponse(["[DONE]"]);
+  });
+  try {
+    const context = makeStreamContext();
+    context.tomoriState = createPersona({
+      llm: createLlmRow({ llm_provider: "openrouter", llm_codename: makeStreamConfig().model }),
+      config: { thinking_level: "xhigh" },
+    });
+    for await (const _chunk of new OpenrouterStreamAdapter().startStream(makeStreamConfig(), context)) {
+    }
+    expect(bodies[0]?.reasoning).toEqual({ effort: "xhigh" });
+  } finally {
+    fetchStub.mockRestore();
+  }
+});
 
 it("serializes each sent body once for OpenRouter and NVIDIA, including failures and retries", async () => {
   const { NvidiaStreamAdapter } = await import("@/providers/nvidia/nvidiaStreamAdapter");

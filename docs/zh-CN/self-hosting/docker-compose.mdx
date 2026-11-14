@@ -1,0 +1,151 @@
+---
+title: "Docker Compose"
+sidebar:
+  order: 3
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Docker Compose会在容器中一起运行TomoriBot和PostgreSQL。它是与[安装向导](/self-hosting/setup-wizard/)和[手动安装](/self-hosting/manual-setup/)并列的第三个安装选项：如果你想直接在Docker中运行全部组件，而不在宿主机上安装Bun或PostgreSQL，就选择它。它会跳过交互式安装向导，并自动配置数据库连接。
+
+## 1. 获取代码
+
+```sh
+git clone https://github.com/Bredrumb/TomoriBot.git
+cd TomoriBot
+```
+
+## 2. 必需的`.env`配置
+
+从示例文件开始复制一份配置：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+Copy-Item .env.example .env
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+cp .env.example .env
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+cp .env.example .env
+```
+
+</TabItem>
+</Tabs>
+
+在`.env`中设置以下必需变量：
+
+| 变量 | 说明 |
+|---|---|
+| `DISCORD_TOKEN` | 你的Discord bot令牌（请启用`GuildMembers`、`MessageContent`和`GuildPresences`特权intent）。 |
+| `CRYPTO_SECRET` | 用于加密存储API密钥的32位加密密钥。 |
+| `POSTGRES_PASSWORD` | 数据库密码。其余所有`POSTGRES_*`参数都会自动配置。 |
+| `ALLOW_PRIVATE_NETWORK` | 设为`true`允许连接本机或局域网中的自定义端点和MCP服务器；设为`host:port`列表则仅允许列出的服务器；设为`false`则禁止访问。在设置此项之前bot不会启动。选择方式请参见[私有网络](/self-hosting/setup-wizard/#private-networks)。 |
+
+使用Docker为`CRYPTO_SECRET`生成一个随机的32字符密钥，然后复制到`.env`中：
+
+```sh
+docker run --rm alpine:3.22 sh -c "head -c 24 /dev/urandom | base64"
+```
+
+为`POSTGRES_PASSWORD`另行生成一个密码。你可以从`.env.optional.example`复制可选的调优参数。
+
+:::note[数据库连接会自动配置]
+不要在`.env`中设置`POSTGRES_HOST`、`POSTGRES_PORT`、`POSTGRES_USER`或`POSTGRES_DB`；Compose会自动配置它们。
+:::
+
+在启动容器栈之前，先准备好宿主机绑定挂载目录：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+New-Item -ItemType Directory -Force -Path backups, logs, data | Out-Null
+```
+
+Docker Desktop在Windows上映射宿主机目录时不需要Unix的`chown`。
+
+</TabItem>
+<TabItem label="Linux">
+
+bot容器以UID 1001运行，需要对宿主机上的`backups/`、`logs/`和`data/`目录拥有写入权限。请在首次启动前创建这些目录并设置所有权：
+
+```bash
+mkdir -p backups logs data
+sudo chown 1001:1001 backups logs data
+```
+
+如果你已经运行过Compose，导致Docker以root身份创建了这些目录，事后再运行上述命令也可以。它们不会更改目录内已有文件的所有权。
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+mkdir -p backups logs data
+```
+
+Mac上的Docker Desktop在映射绑定挂载时不需要Unix的`chown 1001:1001`。
+
+</TabItem>
+</Tabs>
+
+## 3. 构建并运行
+
+```sh
+docker compose build   # first time, or after code/dependency changes
+docker compose up      # bot + database
+```
+
+后续启动时，除非修改了代码或依赖，否则单独运行`docker compose up`即可。当bot连上Discord后，在任意服务器频道运行`/setup`添加你的AI提供方密钥。有关Discord内的设置选项，请参见[快速上手](/introduction/quickstart/)。
+
+Compose在其服务定义中固定了`RUN_ENV=development`，因此`.env`密钥和本地HTTP端点都可以正常使用。像`http://host.docker.internal:11434`这样的本地端点需要在`ALLOW_PRIVATE_NETWORK`中放行（设为`true`，或设为包含`host.docker.internal:11434`的列表）；Windows和Mac上的Docker Desktop已自带`host.docker.internal`，`docker-compose.yaml`在Linux上也会将该域名映射到宿主机网关。修改`.env`后，请运行`docker compose up -d`让容器重新读取配置。容器健康检查只报告bot进程是否仍在运行，不检测Discord网关连通性。
+
+## 单台宿主机上的可选分片配置
+
+保持`SHARD_COUNT`和`SHARD_IDS`不设置即为默认模式：由单个进程接管启动时Discord建议的所有分片。小型实例通常会收到1个分片。此模式不使用分片租约或缓存失效监听器，多个分片可以共用同一进程。
+
+要在现有服务中运行4个分片，请在`.env`中添加`SHARD_COUNT=4`并保持`SHARD_IDS`不设置。在`compose.override.yaml`中添加以下服务覆盖配置，为有界关闭留出充足时间：
+
+```yaml
+services:
+  tomoribot:
+    stop_grace_period: 40s
+```
+
+使用`docker compose up -d --build tomoribot`重建服务。如果其他脚本会调用`docker stop`或自行指定Compose停止超时时间，也请至少预留40秒。自动选择模式不会在运行期间改变分片数量；更改总数需要协调重启。
+
+如需使用可选的静态子集模式，则必须为每组分片配置单独的服务，保持相同的显式`SHARD_COUNT`并设置互不重叠的`SHARD_IDS`（例如总数为`4`时分别设为`0,1`和`2,3`）。请为各服务分配不同的稳定名称、容器名称以及对外发布的健康检查端口，应用会据此为每组生成稳定的指标标签。所有服务共用同一个数据库，请先在网关启动前使用具备架构管理权限的凭据单次运行`bun run src/db/initializeCli.ts`，并在每个网关进程上设置`DATABASE_SCHEMA_MANAGEMENT_ENABLED=false`。切勿将这些子集服务与原先的全分片所有权服务同时启动；在修改分片总数或划分方式前，先停止旧的所有者进程。
+
+子集模式会拒绝完整配置的Matrix桥接。按用户计算的回合限制和上传限制仍按单进程生效，因此在启用第二个进程之前，请评估成倍放大的额度是否可接受。使用`release`分支专属赞助者计费功能的部署实例，在由多个进程共同处理赞助额度请求之前，还必须配置共享的支出准入与对账协调机制。有关安全性与健康检查限制，请参见[分片与进程所有权](/architecture/subsystems/sharding/)。
+
+## 4. 可选的本地服务器（Compose profile）
+
+使用Compose profile按需运行可选的本地辅助服务器，只启动你需要的功能：
+
+```sh
+# SearXNG (private web search) + Crawl4AI (browser-rendered fetch)
+docker compose --profile searxng --profile fetch-crawl4ai up
+```
+
+启用SearXNG时，请在`.env`中设置`SEARXNG_BASE_URL=http://searxng:8080/`；未启用时请保持未设置状态。请将`SEARXNG_SECRET`设为另一个用于SearXNG请求签名的随机值。
+
+各服务器的具体配置请参见[SearXNG](/self-hosting/local-endpoints/setup-searxng/)、[Crawl4AI](/self-hosting/local-endpoints/setup-crawl4ai/)和[本地监控](/self-hosting/local-monitoring/)。
+
+## 维护、更新与备份
+
+更新之前，请先停止bot并备份数据库和媒体文件，具体操作见[维护与备份](/self-hosting/maintenance/)。随后拉取最新代码并重建容器：
+
+```sh
+git pull
+docker compose up -d --build
+```

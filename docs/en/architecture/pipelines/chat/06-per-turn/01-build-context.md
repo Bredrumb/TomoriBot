@@ -18,24 +18,16 @@ The stage is coordinated by `buildChatTurnContext()` across two modules:
 2. **Base builder** (`src/utils/chat/contextPipeline.ts`): coordinates history retrieval, message simplification,
    participant resolution, and prompt synthesis.
 
-```
-ChatTurn
-  │
-  ├─► contextPipelineIntent                    ──► checks autonomous STM maintenance
-  │
-  ▼
-contextPipeline.buildChatTurnContext()
-  │
-  ├─► readChannelHistory()                     ──► fetches or reuses the busy channel's history window
-  ├─► buildSimplifiedHistory()                 ──► builds MessageIdMap, collapses same-author runs,
-  │                                                extracts embed/CV2 notices, filters privacy
-  ├─► prepareParticipantContext()              ──► resolves visible authors, aliases, personas
-  │
-  ▼
-buildContext() (context-build pipeline)        ──► assembles StructuredContextItem prompt items
-  │
-  ├─► appendTailDirectives()                   ──► appends stop, reasoning, and queued directives
-  └─► resolveAssistantPrefill()                ──► stores TurnPrefill on context closure
+```mermaid
+flowchart TD
+  turn["ChatTurn"] --> intent["contextPipelineIntent<br/>checks autonomous STM maintenance"]
+  intent --> build["contextPipeline.buildChatTurnContext()"]
+  build --> hist["readChannelHistory()<br/>fetches or reuses busy channel's history window"]
+  hist --> simp["buildSimplifiedHistory()<br/>builds MessageIdMap, collapses same-author runs,<br/>extracts embed/CV2 notices, filters privacy"]
+  simp --> part["prepareParticipantContext()<br/>resolves visible authors, aliases, personas"]
+  part --> ctx["buildContext() (context-build pipeline)<br/>assembles StructuredContextItem prompt items"]
+  ctx --> tail["appendTailDirectives()<br/>appends stop, reasoning, and queued directives"]
+  tail --> prefill["resolveAssistantPrefill()<br/>stores TurnPrefill on context closure"]
 ```
 
 ### History fetching and simplification
@@ -114,7 +106,10 @@ so older media never keeps a tool exposed. Each tool's own availability gate sti
   share member fetches but resolve mention names independently because personalization can differ.
   Callers outside native assembly can omit the memo and resolve names locally.
 - **Timing**: `context_built.participantMs` and the latency metric's `participant_ms` measure participant
-  preparation; hydration remains inside the native-build duration.
+  preparation; hydration remains inside the native-build duration. The
+  [turn latency metric](/architecture/pipelines/chat/#turn-latency-metric) splits preparation into
+  candidate reads, concurrent member resolution, proxy-identity reads, and discovery-plan composition,
+  with request-cache reuse and lookup counts.
 - **Prompt construction**: delegates to `buildContext()` in `src/utils/text/contextBuilder.ts`.
   The [Context-Build Pipeline](/architecture/pipelines/context-build/) owns persona system prompts,
   retrieved memories, and RAG document assembly.

@@ -2,7 +2,7 @@
 title: "PluralBuddy OAuth設定"
 description: "承認されたPluralBuddyインスタンスからのメッセージを検証するように、セルフホストのTomoriBotを認証します。"
 sidebar:
-  order: 8
+  order: 7
 ---
 
 セルフホストのTomoriBotは、公式サービスおよび承認された各カスタムインスタンスに対して認証済みのPluralBuddyアプリケーションを必要とします。
@@ -21,7 +21,7 @@ sidebar:
 2. TomoriBotリポジトリから、公式インスタンスIDと同じコールバックを指定してヘルパーを実行します：
 
    ```sh
-   bun scripts/db/authorize-pluralbuddy-instance.ts pluralbuddy:official <callback-url>
+   bun scripts/db/authorize-pluralbuddy-instance.ts pluralbuddy:official "<callback-url>"
    ```
 
 3. ターミナルのプロンプトでクライアントIDとシークレットを入力します。出力された認証URLをそのコンピューターのブラウザで開き、PluralBuddyにサインインして同意画面を承認します。ヘルパーは1回のコールバックまたは3分後に終了し、PostgreSQLに接続を保存します。
@@ -36,7 +36,7 @@ sidebar:
 1. デプロイデータベースへのアクセス権を持つコンピューターで、無効化されたインスタンスを登録します：
 
    ```sh
-   bun scripts/db/register-message-proxy-instance.ts register pluralbuddy https://<instance-host> "<display-name>" <bot-user-id>
+   bun scripts/db/register-message-proxy-instance.ts register pluralbuddy "https://<instance-host>" "<display-name>" "<bot-user-id>"
    bun scripts/db/register-message-proxy-instance.ts inspect
    ```
 
@@ -44,14 +44,14 @@ sidebar:
 2. PluralBuddyの場合は、上記と同じループバックコールバックパターンを使用して、そのインスタンスで個別のOAuthアプリケーションを登録します。登録によって返されたインスタンスIDを使用して認証します：
 
    ```sh
-   bun scripts/db/authorize-pluralbuddy-instance.ts <instance-id> <callback-url>
+   bun scripts/db/authorize-pluralbuddy-instance.ts "<instance-id>" "<callback-url>"
    ```
 
    認証情報を置き換える場合や、取り消されたリフレッシュトークンから回復する場合は、認証をやり直してください。PluralKitではこの手順は不要です。
 3. 一致するプロキシボットによって書き込まれたメッセージから、そのDiscord再投稿IDと送信者アカウントIDを記録します。インスタンスAPIがその再投稿を解決することを確認してから、有効化します：
 
    ```sh
-   bun scripts/db/register-message-proxy-instance.ts enable <instance-id> <repost-id> <sender-id>
+   bun scripts/db/register-message-proxy-instance.ts enable "<instance-id>" "<repost-id>" "<sender-id>"
    ```
 
    新しいフォークの場合は、ユーザー向けに有効化する前に、使い捨てのデプロイ環境でボット、OAuthの交換と更新、およびTomoriBotのルックアップをテストしてください。
@@ -60,14 +60,14 @@ sidebar:
 カスタムプロキシボットが置き換えられた場合は、インスタンスを再度提供する前にDiscordボットユーザーIDを更新してください：
 
 ```sh
-bun scripts/db/register-message-proxy-instance.ts set-bot <instance-id> <bot-user-id>
+bun scripts/db/register-message-proxy-instance.ts set-bot "<instance-id>" "<bot-user-id>"
 ```
 
 カスタムインスタンスを無効化または削除するには：
 
 ```sh
-bun scripts/db/register-message-proxy-instance.ts disable <instance-id>
-bun scripts/db/register-message-proxy-instance.ts remove <instance-id>
+bun scripts/db/register-message-proxy-instance.ts disable "<instance-id>"
+bun scripts/db/register-message-proxy-instance.ts remove "<instance-id>"
 ```
 
 削除するとOAuth接続が削除され、そのオリジンが二度と登録できなくなります。インスタンスを再開する可能性がある場合は `disable` を使用してください。既存のアイデンティティと記憶は引き続き利用可能であり、再起動なしで変更が有効になります。

@@ -108,9 +108,10 @@ export class MetricSampleRepository {
     // Called through a local so `this` stays undefined at the call site, matching a bare `sql`.
     const run = this.executor;
     try {
+      const { sanitizeLogPayload } = await import("@/utils/misc/logger");
       await run`
         INSERT INTO metric_samples (metric_name, fields)
-        VALUES (${metricName}, ${fields})
+        VALUES (${metricName}, ${sanitizeLogPayload(fields, 0, false)})
       `;
       this.hasReportedSinceSuccess = false;
       await this.pruneIfDue();

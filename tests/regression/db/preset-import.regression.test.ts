@@ -12,7 +12,7 @@ import { embedMetadataInPNG, extractMetadataFromPNG } from "@/utils/image/pngMet
  * normalization branch moved trigger_words out of server config tables.
  */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import type { PresetExportData } from "@/types/preset/presetExport";
+import { UNPAIRED_SAMPLE_DIALOGUE_SENTINEL, type PresetExportData } from "@/types/preset/presetExport";
 import { presetRepository, personaRepository } from "@/utils/db/repositories";
 import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
 import type { PersonaAuthoredIdleNudge } from "@/modules/natural-nudges/db/types";
@@ -141,6 +141,79 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Preset import - regression", () => {
 
   afterAll(async () => {
     await cleanupFixtures(testSql);
+  });
+
+  it.each<{ name: string; inputs: string[]; outputs: string[]; expectedInputs: string[] }>([
+    { name: "assistant-only", inputs: [], outputs: ["_rt_reply"], expectedInputs: [UNPAIRED_SAMPLE_DIALOGUE_SENTINEL] },
+    {
+      name: "partially paired",
+      inputs: ["_rt_input"],
+      outputs: ["_rt_reply", "_rt_second_reply", "_rt_third_reply"],
+      expectedInputs: ["_rt_input", UNPAIRED_SAMPLE_DIALOGUE_SENTINEL, UNPAIRED_SAMPLE_DIALOGUE_SENTINEL],
+    },
+    { name: "paired", inputs: ["_rt_input"], outputs: ["_rt_reply"], expectedInputs: ["_rt_input"] },
+    {
+      name: "already marked",
+      inputs: [UNPAIRED_SAMPLE_DIALOGUE_SENTINEL],
+      outputs: ["_rt_reply"],
+      expectedInputs: [UNPAIRED_SAMPLE_DIALOGUE_SENTINEL],
+    },
+    { name: "empty", inputs: [], outputs: [], expectedInputs: [] },
+  ])("exports $name dialogues as importable PNG and JSON without changing stored examples", async ({
+    inputs,
+    outputs,
+    expectedInputs,
+  }) => {
+    const persona = await personaRepository.createAlterPersona({
+      serverId: refs.serverId,
+      nickname: "_rt_dialogue_export",
+      attributes: [],
+      sampleDialoguesIn: inputs,
+      sampleDialoguesOut: outputs,
+    });
+    if (!persona?.persona_id) throw new Error("Missing dialogue fixture");
+    try {
+      const exported = await presetRepository.exportPresetData(FIXTURE_IDS.serverDiscId, persona.persona_id);
+      if (!exported.success) throw new Error("Missing dialogue export");
+      expect(exported.data.data.sample_dialogues_in).toEqual(expectedInputs);
+      expect(exported.data.data.sample_dialogues_out).toEqual(outputs);
+      const png = Buffer.from(await Bun.file("src/db/seed/catalog/personas/default/default.png").arrayBuffer());
+      for (const payload of [
+        JSON.parse(JSON.stringify(exported.data)),
+        extractMetadataFromPNG(embedMetadataInPNG(png, exported.data)),
+      ]) {
+        const validated = presetRepository.validatePresetFile(payload);
+        expect(validated.valid).toBe(true);
+        expect(validated.data?.sample_dialogues_in).toEqual(expectedInputs);
+        expect(validated.data?.sample_dialogues_out).toEqual(outputs);
+      }
+      const [stored] = await testSql`
+        SELECT sample_dialogues_in, sample_dialogues_out FROM personas WHERE persona_id = ${persona.persona_id}
+      `;
+      expect(stored.sample_dialogues_in).toEqual(inputs);
+      expect(stored.sample_dialogues_out).toEqual(outputs);
+    } finally {
+      await testSql`DELETE FROM personas WHERE persona_id = ${persona.persona_id}`;
+    }
+  });
+
+  it("rejects exports with sample inputs that have no assistant reply", async () => {
+    const persona = await personaRepository.createAlterPersona({
+      serverId: refs.serverId,
+      nickname: "_rt_input_only_export",
+      attributes: [],
+      sampleDialoguesIn: ["_rt_input"],
+      sampleDialoguesOut: [],
+    });
+    if (!persona?.persona_id) throw new Error("Missing dialogue fixture");
+    try {
+      expect(await presetRepository.exportPresetData(FIXTURE_IDS.serverDiscId, persona.persona_id)).toEqual({
+        success: false,
+        error: "commands.persona.export.error_validation_failed",
+      });
+    } finally {
+      await testSql`DELETE FROM personas WHERE persona_id = ${persona.persona_id}`;
+    }
   });
 
   it("round-trips bounded voice descriptions and priority through PNG and JSON for main and alter imports", async () => {

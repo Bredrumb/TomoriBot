@@ -2,7 +2,7 @@
 title: "Thiết lập PluralBuddy OAuth"
 description: "Ủy quyền cho instance TomoriBot self-hosting của bạn xác minh tin nhắn từ các instance PluralBuddy đã được phê duyệt."
 sidebar:
-  order: 8
+  order: 7
 ---
 
 Một instance TomoriBot self-hosting cần một ứng dụng PluralBuddy đã được ủy quyền cho dịch vụ chính thức và từng instance tùy chỉnh đã được phê duyệt.
@@ -21,7 +21,7 @@ Nếu bạn sử dụng [bot được triển khai công khai](https://discord.c
 2. Từ repository TomoriBot, chạy helper với ID instance chính thức và cùng callback đó:
 
    ```sh
-   bun scripts/db/authorize-pluralbuddy-instance.ts pluralbuddy:official <callback-url>
+   bun scripts/db/authorize-pluralbuddy-instance.ts pluralbuddy:official "<callback-url>"
    ```
 
 3. Nhập client ID và secret tại các lời nhắc trong terminal. Mở URL ủy quyền được in ra trong trình duyệt trên máy tính đó, đăng nhập vào PluralBuddy và chấp thuận màn hình đồng ý. Helper sẽ đóng lại sau một lần callback hoặc ba phút và lưu kết nối vào PostgreSQL.
@@ -36,7 +36,7 @@ Sử dụng một origin HTTPS công khai không có đường dẫn (path), chu
 1. Trên máy tính có quyền truy cập cơ sở dữ liệu triển khai, đăng ký một instance đã bị vô hiệu hóa:
 
    ```sh
-   bun scripts/db/register-message-proxy-instance.ts register pluralbuddy https://<instance-host> "<display-name>" <bot-user-id>
+   bun scripts/db/register-message-proxy-instance.ts register pluralbuddy "https://<instance-host>" "<display-name>" "<bot-user-id>"
    bun scripts/db/register-message-proxy-instance.ts inspect
    ```
 
@@ -44,14 +44,14 @@ Sử dụng một origin HTTPS công khai không có đường dẫn (path), chu
 2. Đối với PluralBuddy, đăng ký một ứng dụng OAuth riêng biệt trên instance đó với cùng mẫu callback loopback như trên. Ủy quyền cho nó bằng cách sử dụng instance ID được trả về từ bước đăng ký:
 
    ```sh
-   bun scripts/db/authorize-pluralbuddy-instance.ts <instance-id> <callback-url>
+   bun scripts/db/authorize-pluralbuddy-instance.ts "<instance-id>" "<callback-url>"
    ```
 
    Lặp lại việc ủy quyền để thay thế thông tin xác thực hoặc khôi phục sau khi refresh token bị thu hồi. PluralKit không yêu cầu bước này.
 3. Từ một tin nhắn được viết bởi proxy bot tương ứng, hãy ghi lại ID tin nhắn repost trên Discord và ID tài khoản người gửi. Kiểm tra xem API của instance có phân giải repost đó hay không, sau đó kích hoạt nó:
 
    ```sh
-   bun scripts/db/register-message-proxy-instance.ts enable <instance-id> <repost-id> <sender-id>
+   bun scripts/db/register-message-proxy-instance.ts enable "<instance-id>" "<repost-id>" "<sender-id>"
    ```
 
    Đối với một bản fork mới, hãy thử nghiệm bot, trao đổi và làm mới OAuth, cùng việc tra cứu TomoriBot trong một môi trường triển khai dùng một lần trước khi kích hoạt cho người dùng.
@@ -60,14 +60,14 @@ Sử dụng một origin HTTPS công khai không có đường dẫn (path), chu
 Nếu proxy bot tùy chỉnh được thay thế, hãy cập nhật ID người dùng bot Discord của nó trước khi cung cấp lại instance:
 
 ```sh
-bun scripts/db/register-message-proxy-instance.ts set-bot <instance-id> <bot-user-id>
+bun scripts/db/register-message-proxy-instance.ts set-bot "<instance-id>" "<bot-user-id>"
 ```
 
 Vô hiệu hóa hoặc xóa một instance tùy chỉnh bằng:
 
 ```sh
-bun scripts/db/register-message-proxy-instance.ts disable <instance-id>
-bun scripts/db/register-message-proxy-instance.ts remove <instance-id>
+bun scripts/db/register-message-proxy-instance.ts disable "<instance-id>"
+bun scripts/db/register-message-proxy-instance.ts remove "<instance-id>"
 ```
 
 Việc xóa sẽ xóa kết nối OAuth và ngăn vĩnh viễn việc đăng ký lại origin đó. Sử dụng `disable` nếu bạn có thể tiếp tục sử dụng instance sau này. Các danh tính và bộ nhớ hiện có vẫn khả dụng, và các thay đổi sẽ có hiệu lực mà không cần khởi động lại.

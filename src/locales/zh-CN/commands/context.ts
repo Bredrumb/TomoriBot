@@ -30,6 +30,8 @@ export default {
     persona_not_found_title: `未找到人格`,
     persona_not_found_description: `该人格已不在这个服务器上。请从列表里重新选择。`,
     build_failed_title: `无法获取上下文`,
+    novelai_unavailable_description:
+      "无法检查适配后的 NovelAI 提示词。请检查已配置的密钥和本地分词器设置，然后发送一条普通消息来加载订阅信息，再重新检查。",
     build_failed_description: `我无法读取此频道的聊天记录以构建提示词。请在允许我查看的文字频道重试。`,
     no_permission_title: `权限不足`,
     no_permission_description: `你需要**管理服务器**权限，或由管理员通过 \`/moderation\` 为成员开启查看完整提示词的权限。`,

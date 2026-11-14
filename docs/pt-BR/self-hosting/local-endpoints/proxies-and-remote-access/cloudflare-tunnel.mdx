@@ -1,0 +1,192 @@
+---
+title: "Cloudflare Tunnel"
+sidebar:
+  label: "Cloudflare Tunnel"
+  order: 3
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Dê ao seu motor local uma URL HTTPS pública que você possa salvar no TomoriBot. Execute o motor e o `cloudflared` no seu PC; o bot hospedado se conecta diretamente através do túnel.
+
+O Cloudflare Tunnel está [disponível no plano gratuito](https://developers.cloudflare.com/tunnel/). Você precisa de um domínio ativo no Cloudflare; o registro de domínio e o serviço upstream do seu motor podem ter custos separados.
+
+## 1. Instale o cloudflared
+
+Inicie seu motor seguindo o guia de configuração dele e mantenha-o vinculado a `127.0.0.1`. Instale o `cloudflared` nesse mesmo computador:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+winget show --id Cloudflare.cloudflared --exact
+winget install --id Cloudflare.cloudflared --exact
+cloudflared --version
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+Para Debian/Ubuntu, configure o [repositório APT](https://pkg.cloudflare.com/index.html) assinado do Cloudflare:
+
+```bash
+sudo mkdir -p --mode=0755 /usr/share/keyrings
+curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg |
+  sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+printf '%s\n' 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' |
+  sudo tee /etc/apt/sources.list.d/cloudflared.list >/dev/null
+sudo apt-get update && sudo apt-get install cloudflared
+cloudflared --version
+```
+
+Para outras distribuições, use o pacote ou a arquitetura correspondente nos downloads oficiais.
+
+</TabItem>
+<TabItem label="Mac">
+
+Com o [Homebrew](https://brew.sh/) instalado:
+
+```bash
+brew install cloudflared
+cloudflared --version
+```
+
+</TabItem>
+</Tabs>
+
+## 2. Crie um túnel
+
+Escolha um hostname sob seu domínio do Cloudflare, como `engine.example.com`. Substitua-o ao longo deste guia pelo seu próprio hostname.
+
+```sh
+cloudflared tunnel login
+cloudflared tunnel create home-engine
+```
+
+O primeiro comando abre um navegador para autorizar seu domínio. O segundo imprime um UUID do túnel e cria o JSON de credenciais dele. Mantenha esse arquivo e o certificado da conta em sigilo.
+
+## 3. Configure o túnel
+{/* anchor: configure-the-tunnel */}
+
+Crie `config.yml` na sua pasta `.cloudflared`:
+
+| SO | Pasta | Exemplo de arquivo de credenciais |
+|---|---|---|
+| Windows | `%USERPROFILE%\.cloudflared` | `C:\Users\LOCAL_ACCOUNT\.cloudflared\TUNNEL_UUID.json` |
+| Linux | `~/.cloudflared` | `/home/LOCAL_ACCOUNT/.cloudflared/TUNNEL_UUID.json` |
+| macOS | `~/.cloudflared` | `/Users/LOCAL_ACCOUNT/.cloudflared/TUNNEL_UUID.json` |
+
+Cole este exemplo para o CLIProxyAPI. Substitua o UUID, o caminho absoluto do JSON e o hostname. Mantenha aspas simples ao redor do caminho das credenciais para que as barras invertidas do Windows permaneçam literais.
+
+```yaml title="config.yml"
+tunnel: TUNNEL_UUID
+credentials-file: 'ABSOLUTE_PATH_TO_TUNNEL_JSON'
+ingress:
+  - hostname: engine.example.com
+    path: ^/v1/(models|chat/completions)$
+    service: http://127.0.0.1:8317
+  - service: http_status:404
+```
+
+Para outro motor, substitua apenas `path` e `service` usando a aba correspondente. A regra de caminho expõe as rotas de API do TomoriBot; caminhos não correspondentes retornam 404.
+
+<Tabs>
+<TabItem label="Motores de texto">
+
+```yaml
+    path: ^/v1/(models|chat/completions)$
+    service: http://127.0.0.1:8317
+```
+
+Use a sua porta real: o CLIProxyAPI usa 8317 por padrão, o ChatMock usa 8000 e o KoboldCPP usa 5001. Este perfil também suporta outros motores de texto compatíveis com OpenAI. Ele exclui APIs de gerenciamento e operações de descarregamento de modelos.
+
+</TabItem>
+<TabItem label="ComfyUI">
+
+```yaml
+    path: ^/(system_stats|view|queue|history/[A-Za-z0-9_-]+|prompt|upload/image|interrupt|free|api/jobs/[A-Za-z0-9_-]+/cancel)$
+    service: http://127.0.0.1:8188
+```
+
+O TomoriBot consulta o histórico de tarefas, portanto não precisa de rota WebSocket nem da interface do navegador.
+
+</TabItem>
+<TabItem label="Servidores de TTS">
+
+```yaml
+    path: ^/(health|synthesize)$
+    service: http://127.0.0.1:8015
+```
+
+Substitua 8015 pela [porta do seu wrapper de TTS](/self-hosting/local-endpoints/text-to-speech/#network-access). Este perfil cobre clonagem de voz e Design de Voz, em vez das APIs de fala ou transcrição da OpenAI.
+
+</TabItem>
+</Tabs>
+
+Para expor vários motores, adicione uma regra de hostname para cada um antes da regra 404 final. Dê a cada um seu próprio hostname e porta de loopback. Um único túnel pode atender a todos eles.
+
+## 4. Inicie o túnel
+
+Abra um terminal na pasta que contém `config.yml` e valide-o:
+
+```sh
+cloudflared tunnel --config ./config.yml ingress validate
+```
+
+Depois publique o DNS e execute o túnel:
+
+```sh
+cloudflared tunnel route dns home-engine engine.example.com
+cloudflared tunnel --config ./config.yml run home-engine
+```
+
+Para vários hostnames, execute `route dns` uma vez por hostname. Deixe o motor e o conector em execução; não é necessário redirecionamento de portas no roteador nem exceção de entrada no firewall. Após testar, use as [instruções de serviço](https://developers.cloudflare.com/tunnel/features/locally-managed-tunnels/run-as-a-service/) do Cloudflare para inicialização automática, com caminhos explícitos de configuração e credenciais para a conta de serviço.
+
+## 5. Conecte o TomoriBot
+{/* anchor: validate-each-authentication-check */}
+
+Abra `/providers` para compartilhar a conexão naquele servidor, ou `/personal providers` para usar sua própria conexão:
+
+| Motor | Compatibilidade de API | URL do Endpoint |
+|---|---|---|
+| CLIProxyAPI, ChatMock, KoboldCPP, outros motores de texto | `Compatível com OpenAI` | `https://engine.example.com/v1` |
+| ComfyUI | `ComfyUI` | `https://engine.example.com` |
+| Wrappers locais de TTS | `tts-clone` | `https://engine.example.com` |
+
+Use a chave de cliente do seu motor como o token de autenticação se ele exigir uma; caso contrário, deixe o campo em branco. O CLIProxyAPI usa a chave sob `access.api-keys`. A API de texto do KoboldCPP usa a senha configurada nele. Um token arbitrário inserido apenas no TomoriBot não ativa a autenticação no motor.
+
+Adicione um modelo na conexão salva, selecione-o para a capacidade correspondente e teste uma pequena requisição. Para o ComfyUI, teste também o envio de referências, o download de saídas e o cancelamento. Para TTS, confirme que o áudio é reproduzível. Mantenha os recursos de gerenciamento desativados no motor.
+
+Se o motor exigir autenticação, confirme que requisições protegidas rejeitam chaves ausentes ou incorretas. Se ele não tiver autenticação, leia a exposição restante em Riscos conhecidos abaixo. [Access e Caddy](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/) fornecem proteção adicional opcional.
+
+## Solução de problemas
+
+| Sintoma | Verificar |
+|---|---|
+| 502 | Motor em execução, porta de loopback correta, conector no mesmo PC |
+| 1033 ou túnel desconectado | Processo do conector, porta de saída 7844, conexão de rede e suspensão do computador |
+| 401 | A chave de cliente ou senha do motor coincide com o token de autenticação no TomoriBot |
+| 403 ou página de login em HTML | Um aplicativo do Access existente pode bloquear chamadas diretas de API; veja a [configuração opcional do Access](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/) se você a usar |
+| 404 | Perfil do motor e URL corretos; use exatamente um `/v1` para texto |
+| Corte de stream ou 524 | Integridade do motor/upstream, suspensão do computador e [limites de tempo do Cloudflare](https://developers.cloudflare.com/fundamentals/reference/connection-limits/) |
+| Falha em envios grandes | [Limites de upload do Cloudflare](https://developers.cloudflare.com/support/troubleshooting/http-status-codes/4xx-client-error/error-413/) e limites do bot/motor; base64 aumenta o tamanho da carga |
+
+Retorne a mídia gerada como bytes pela API. O bot hospedado não consegue ler caminhos de arquivos locais do seu PC nem URLs de download em loopback. Endpoints de produção exigem HTTPS público e respostas de DNS públicas; mantenha a verificação TLS e as verificações de SSRF ativadas.
+
+## Riscos conhecidos
+{/* anchor: known-risks */}
+
+O TomoriBot já mitiga os seguintes riscos quando você usa os painéis de provedores dele:
+
+| Risco | Mitigação existente |
+|---|---|
+| Membros comuns lerem um endpoint salvo no painel | Os painéis são efêmeros. As configurações de provedores do servidor exigem `Gerenciar Servidor`; as configurações pessoais carregam a própria configuração do usuário que invocou o comando. |
+| Um erro de provedor expor a URL ou a chave no chat | Erros públicos usam descrições localizadas. Os detalhes brutos de erro em texto ficam restritos aos gerenciadores do servidor para credenciais do servidor, ou ao proprietário para credenciais pessoais. Falhas em ferramentas de mídia retornam mensagens classificadas. |
+| Links de saída do ComfyUI revelarem a URL do motor | O TomoriBot baixa a saída e a envia ao Discord. |
+| Abrir uma porta expor o PC diretamente | O motor permanece em loopback e o `cloudflared` se conecta apenas na saída; nenhuma porta pública de entrada para o motor é necessária. |
+
+:::danger[Compartilhe apenas com gerenciadores de servidor em quem você confia]
+Registre endpoints por meio de `/providers` apenas em servidores do Discord cujos gerenciadores sejam de sua confiança: eles conseguem ver a URL exata, mas o painel oculta o token de autenticação salvo. Use `/personal providers` para manter a URL privada dos gerenciadores do servidor.
+
+Sem autenticação no motor, qualquer pessoa com a URL pode usar a API dele diretamente. Use uma chave no motor onde houver suporte, ou adicione o [endurecimento opcional com Access e Caddy](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/).
+:::

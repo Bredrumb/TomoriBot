@@ -562,6 +562,72 @@ describe("provider panel mutations", () => {
     for (const spy of spies) spy.mockRestore();
   });
 
+  it("saves the image request format per model and preserves it when an older modal omits the field", async () => {
+    const connection = {
+      connection_id: 73,
+      label: "juno",
+      capability: "image" as const,
+      api_style: "openai-compatible" as const,
+      endpoint_url: "https://engine.example.com/v1",
+      requires_auth: false,
+      server_id: 7,
+      user_id: null,
+    };
+    const storedEndpoint = {
+      ...connection,
+      custom_endpoint_id: 42,
+      model_ref_id: 900,
+      extra_config: { image_request_format: "chat-completions" },
+    };
+    const spies = [
+      spyOn(llmProviderRepo, "loadCustomEndpointConnectionById").mockResolvedValue(connection as never),
+      spyOn(llmProviderRepo, "loadCustomEndpointConnectionsForServerResult").mockResolvedValue({
+        connections: [connection],
+        endpoints: [storedEndpoint],
+      } as never),
+      spyOn(llmProviderRepo, "upsertCustomEndpointConnection").mockResolvedValue(73 as never),
+      spyOn(llmProviderRepo, "loadSavedProviderConfig").mockResolvedValue(null as never),
+      spyOn(llmProviderRepo, "loadCustomEndpointsByConnectionId").mockResolvedValue([storedEndpoint] as never),
+      spyOn(llmProviderRepo, "loadCustomEndpointsByIds").mockResolvedValue([storedEndpoint] as never),
+      spyOn(llmModelRepo, "updateSyntheticCustomCapabilityModelById").mockResolvedValue(undefined),
+      spyOn(llmModelRepo, "upsertSyntheticCustomDiffusionModel").mockResolvedValue(901 as never),
+    ];
+    const upsert = spyOn(llmProviderRepo, "upsertCustomEndpoint").mockResolvedValue(null as never);
+    try {
+      for (const [editingModelId, imageRequestFormat, expected] of [
+        [undefined, undefined, "images"],
+        [undefined, "chat-completions", "chat-completions"],
+        [900, undefined, "chat-completions"],
+        [900, "images", "images"],
+      ] as const) {
+        upsert.mockClear();
+        await saveProviderModel({
+          serverDiscId: "guild",
+          state: state(),
+          entryId: "endpoint:73",
+          capability: "image",
+          codeName: "arbitrary-image-model",
+          editingModelId,
+          imageRequestFormat,
+        });
+        expect(upsert.mock.calls[0]?.[0].extraConfig).toMatchObject({ image_request_format: expected });
+      }
+      upsert.mockClear();
+      const result = await saveProviderModel({
+        serverDiscId: "guild",
+        state: state(),
+        entryId: "endpoint:73",
+        capability: "image",
+        codeName: "arbitrary-image-model",
+        imageRequestFormat: "invalid",
+      });
+      expect(result.status).toBe("invalid-model");
+      expect(upsert).not.toHaveBeenCalled();
+    } finally {
+      for (const spy of [...spies, upsert]) spy.mockRestore();
+    }
+  });
+
   it("persists the verbatim tool-calling opt-in on both the endpoint and its synthetic model", async () => {
     const connection = {
       connection_id: 73,

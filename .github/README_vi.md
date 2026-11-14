@@ -98,11 +98,15 @@ Bạn có thể [mời TomoriBot công khai](https://discord.com/oauth2/authoriz
 
 ## Self-Hosting
 
+Có hai cách đơn giản để chạy TomoriBot trên máy tính của bạn:
+
+### Lựa chọn 1: Trình hướng dẫn thiết lập (khuyên dùng)
+
 1. **Yêu cầu chuẩn bị:**
    - [Bun](https://bun.sh/) v1.3.2+ (khuyến nghị v1.4.0+)
-   - [PostgreSQL](https://www.postgresql.org/) hoặc [Docker](https://www.docker.com/) (trình hướng dẫn cài đặt sẽ dùng bản PostgreSQL sẵn có hoặc khởi chạy trong Docker)
+   - [PostgreSQL](https://www.postgresql.org/) hoặc [Docker](https://www.docker.com/) (trình hướng dẫn thiết lập sẽ dùng bản PostgreSQL sẵn có hoặc khởi chạy một container trong Docker cho cơ sở dữ liệu)
    - Một [token bot Discord](https://discord.com/developers/applications) đã bật `Presence Intent`, `Server Members Intent` và `Message Content Intent`
-2. **Chạy trình hướng dẫn cài đặt:**
+2. **Chạy trình hướng dẫn thiết lập:**
    ```sh
    git clone https://github.com/Bredrumb/TomoriBot.git
    cd TomoriBot
@@ -110,7 +114,22 @@ Bạn có thể [mời TomoriBot công khai](https://discord.com/oauth2/authoriz
    bun run dev # khởi động bot và tự động chạy di chuyển cơ sở dữ liệu
    ```
 
-Để biết thêm chi tiết hoặc nếu bạn gặp sự cố với các bước trên, hãy xem [tài liệu self-hosting](https://docs.tomoribot.app/vi/self-hosting/) đầy đủ.
+### Lựa chọn 2: Docker Compose
+
+1. **Yêu cầu chuẩn bị:**
+   - [Docker](https://www.docker.com/) và Docker Compose v2+
+   - Một [token bot Discord](https://discord.com/developers/applications) đã bật `Presence Intent`, `Server Members Intent` và `Message Content Intent`
+2. **Chạy bằng Docker Compose:**
+   ```sh
+   git clone https://github.com/Bredrumb/TomoriBot.git
+   cd TomoriBot
+   cp .env.example .env   # Windows PowerShell: Copy-Item .env.example .env
+   ```
+   Đặt `DISCORD_TOKEN`, `CRYPTO_SECRET`, `POSTGRES_PASSWORD` và `ALLOW_PRIVATE_NETWORK` trong `.env`, sau đó chạy:
+   ```sh
+   docker compose up
+   ```
+   Xem [hướng dẫn Docker Compose](https://docs.tomoribot.app/vi/self-hosting/docker-compose/) để biết các bước trên Windows, Linux và Mac (bao gồm quyền sở hữu thư mục trên Linux).
 
 <!-- AFTER SETUP -->
 ### Sau khi mời / cài đặt

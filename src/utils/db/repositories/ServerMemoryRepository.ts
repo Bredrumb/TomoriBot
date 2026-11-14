@@ -86,6 +86,22 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     }
   }
 
+  /** Counts documents on this server that still hold chunks from a different embedding family. */
+  async countMismatchedEmbeddingDocuments(serverId: number, embeddingFamily: string): Promise<number> {
+    try {
+      const [row] = await sql<[{ doc_count: string | number }]>`
+        SELECT COUNT(DISTINCT document_id) AS doc_count
+        FROM document_chunks
+        WHERE server_id = ${serverId}
+          AND embedding_family <> ${embeddingFamily}
+      `;
+      return Number(row?.doc_count || 0);
+    } catch (error) {
+      log.error(`Error counting mismatched embedding documents for server ${serverId}:`, error);
+      return 0;
+    }
+  }
+
   /** Returns newest-first scoped rows including decay counters and UTC days for stage derivation. */
   async loadServerMemoriesScoped(
     serverId: number,

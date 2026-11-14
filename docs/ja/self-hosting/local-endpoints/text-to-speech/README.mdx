@@ -3,7 +3,7 @@ title: "Text-to-Speech（ローカルエンジン）"
 sidebar:
   label: "概要"
   groupLabel: "Text-to-Speech"
-  order: 7
+  order: 6
 ---
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
@@ -45,11 +45,13 @@ TomoriBotは音声をカスタムエンドポイント機能として扱いま�
 ## ネットワークアクセス
 {/* anchor: network-access */}
 
-TTSローカルサーバーはすべてデフォルトで `127.0.0.1` にバインドするため、同じマシン上のボットからしか接続できません。TomoriBotをDockerや別のマシンで実行する場合は、サーバー側で `TOMORI_TTS_HOST=0.0.0.0` を設定し、ホストのアドレス（例：`http://host.docker.internal:8015`）でエンドポイントを登録してください。
+TTSローカルサーバーはすべてデフォルトで `127.0.0.1` にバインドします。別ホストで稼働する本番ボットの場合は、そのバインドを維持したまま[Cloudflare TunnelガイドのTTSプロファイル](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/)に従ってください。`/v1` なしのHTTPSトンネルURLを登録し、`tts-clone` を使用して、認証ゲートウェイを追加していない限り認証トークンは空白のままにします。このプロファイルは、ヘルスチェックと音声クローン・ボイスデザインの両方の合成を許可します。テキスト接続やComfyUI接続も音声と並行して有効のまま維持できます。
+
+Docker内または信頼できるLAN上の非本番ボットの場合は、`TOMORI_TTS_HOST=0.0.0.0` を設定し、ホストのアドレス（例：`http://host.docker.internal:8015`）を登録してください。ホストファイアウォールでポートを制限し、TomoriBotの `ALLOW_PRIVATE_NETWORK` でそのホストとポートを許可するよう設定してください。
 
 各サーバーは独自のポート変数（`CHATTERBOX_PORT`、`QWEN3TTS_PORT`、`IRODORI_TTS_PORT`、`FISH_S2_PORT`、`VOXCPM2_PORT`、`COSYVOICE3_PORT`、`MOSS_TTS_PORT`）を読み込むため、1つの `.env` で複数のサーバーを同時に実行できます。`bun run launch` は起動するサーバーに `.env` を渡しますが、手動で起動したサーバーはシェルの環境変数のみを読み込みます。
 
-サーバーには認証がありません。ポートに到達できる人は誰でもGPUで合成を実行できます。ループバック以外へのバインドは信頼できるネットワーク内に限定し、それより外へ公開するサーバーには認証付きリバースプロキシを前段に配置してください。
+サーバーには認証がありません。直接またはトンネル経由で到達できる人は誰でもGPUで合成を実行できます。認証なしの共有を受け入れる前に、トンネルガイドの[既知のリスク](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/#known-risks)を確認してください。個別の認証チェックを追加したい場合は、[AccessとCaddy](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/) がオプションで利用できます。ループバック以外へのバインドは信頼できるネットワーク内に限定してください。
 
 ## ペルソナボイス
 

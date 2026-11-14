@@ -61,19 +61,18 @@ Repository reads retry retired database connections through `withTransientDbRetr
 reads fail the evaluation instead of supplying empty activity data that could be cached for later
 cycles. Reads inside a caller's transaction stay with that transaction and do not retry independently.
 
-```
-reconcile tick
-  └─ NaturalNudgeProcessor.processDueIdleNudges
-       ├─ pending opener?  → resolve its verdict, stop
-       ├─ failure or unanswered stop? → stop
-       ├─ heat → idle nudges per day → due time, level's daily cap, waking hours
-       ├─ lull: effective channels quiet for 1-3 hours (gateway lastMessageId)
-       ├─ planner model: llm_id, else the chat model; no_model abort and backoff unless it resolves
-       ├─ persona raffle → persona scope filter → channel sample → channel/tool eligibility
-       ├─ category raffle → target lottery when required → full prerequisites → weighted nudge shortlist
-       │    └─ Play Scene: one shared partner draw and compatible channels
-       └─ detached: planIdleNudge → recheckBeforeSend → tomoriChat({ naturalNudge, sceneTurn? })
-                                                       └─ fire row + one agenda row per speaker
+```mermaid
+flowchart TD
+  tick["reconcile tick"] --> proc["NaturalNudgeProcessor.processDueIdleNudges"]
+  proc -->|"pending opener?"| opener["resolve its verdict, stop"]
+  proc -->|"failure or unanswered stop?"| stop["stop"]
+  proc --> heat["heat → idle nudges per day → due time, level's daily cap, waking hours"]
+  heat --> lull["lull: effective channels quiet for 1-3 hours (gateway lastMessageId)"]
+  lull --> model["planner model: llm_id, else chat model;<br/>no_model abort and backoff unless it resolves"]
+  model --> persona["persona raffle → persona scope filter →<br/>channel sample → channel/tool eligibility"]
+  persona --> cat["category raffle → target lottery when required →<br/>full prerequisites → weighted nudge shortlist<br/>(Play Scene: one shared partner draw and compatible channels)"]
+  cat --> detached["detached: planIdleNudge → recheckBeforeSend →<br/>tomoriChat({ naturalNudge, sceneTurn? })"]
+  detached --> rows["fire row + one agenda row per speaker"]
 ```
 
 ## State: fire history and derived meters
@@ -353,19 +352,18 @@ An Active Nudge has no planner. A message counter decides when to look, one matc
 the conversation matches a persona's interest, and the winner gets a plain turn. The `messageCreate`
 handler starts the counter check in the background, so its settings read does not delay chat.
 
-```
-messageCreate (activeNudge.ts)
-  └─ observeActiveNudgeMessage
-       ├─ persona message → counter starts over; an open check's watch notes it
-       ├─ human message in an effective channel (a thread counts toward its parent)
-       │    └─ count reaches its roll (activeNudgeTripRange) → claim the server → detached check
-       └─ runActiveNudgeCheck
-            ├─ Phase A, fresh reads: settings, stop, daily cap, 1 per channel per hour, matcher
-            ├─ options: interests of personas with talkativeness above 0 allowed in the channel
-            ├─ matchActiveNudge over the last 5 messages → interest or none
-            ├─ winner: an owner of that interest who did not speak in the window; 10% detour
-            ├─ wait 15-45 s → recheckBeforeSend, one re-match when 5 posted
-            └─ tomoriChat({ naturalNudge, borrowsTriggerMessage }) → fire row (mode active)
+```mermaid
+flowchart TD
+  msg["messageCreate (activeNudge.ts)"] --> obs["observeActiveNudgeMessage"]
+  obs -->|"persona message"| reset["counter starts over;<br/>an open check's watch notes it"]
+  obs -->|"human message in effective channel<br/>(thread counts toward parent)"| roll["count reaches roll (activeNudgeTripRange) →<br/>claim server → detached check"]
+  roll --> check["runActiveNudgeCheck"]
+  check --> phaseA["Phase A, fresh reads: settings, stop,<br/>daily cap, 1 per channel per hour, matcher"]
+  phaseA --> opts["options: interests of personas with<br/>talkativeness above 0 allowed in channel"]
+  opts --> match["matchActiveNudge over last 5 messages →<br/>interest or none"]
+  match --> win["winner: owner of that interest who did not<br/>speak in window; 10% detour"]
+  win --> wait["wait 15-45 s → recheckBeforeSend,<br/>one re-match when 5 posted"]
+  wait --> chat["tomoriChat({ naturalNudge, borrowsTriggerMessage }) →<br/>fire row (mode active)"]
 ```
 
 - **Counter in memory.** `ActiveNudgeCounter` keeps one count per listed channel, shared with its threads,

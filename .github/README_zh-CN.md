@@ -98,10 +98,14 @@ TomoriBot 是一套免费开源的 Discord 个人 AI 助理与角色扮演系统
 
 ## 自部署
 
+在你的电脑上运行TomoriBot有两种简单方法：
+
+### 方式一：安装向导（推荐）
+
 1. **前置要求：**
-   - [Bun](https://bun.sh/) v1.3.2+（推荐 v1.4.0+）
-   - [PostgreSQL](https://www.postgresql.org/) 或 [Docker](https://www.docker.com/)（安装向导会使用已有的 PostgreSQL 或在 Docker 中启动）
-   - 已启用 `Presence Intent`、`Server Members Intent` 和 `Message Content Intent` 的 [Discord Bot Token](https://discord.com/developers/applications)
+   - [Bun](https://bun.sh/) v1.3.2+（推荐v1.4.0+）
+   - [PostgreSQL](https://www.postgresql.org/)或[Docker](https://www.docker.com/)（安装向导会使用已有的PostgreSQL或在Docker中启动）
+   - 已启用`Presence Intent`、`Server Members Intent`和`Message Content Intent`的[Discord Bot Token](https://discord.com/developers/applications)
 2. **运行安装向导：**
    ```sh
    git clone https://github.com/Bredrumb/TomoriBot.git
@@ -110,7 +114,22 @@ TomoriBot 是一套免费开源的 Discord 个人 AI 助理与角色扮演系统
    bun run dev # 启动机器人并自动执行数据库迁移
    ```
 
-有关更多详情或在上述步骤中遇到问题，请参见完整的[自部署文档](https://docs.tomoribot.app/zh-CN/self-hosting/)。
+### 方式二：Docker Compose
+
+1. **前置要求：**
+   - [Docker](https://www.docker.com/)和Docker Compose v2+
+   - 已启用`Presence Intent`、`Server Members Intent`和`Message Content Intent`的[Discord Bot Token](https://discord.com/developers/applications)
+2. **使用Docker Compose运行：**
+   ```sh
+   git clone https://github.com/Bredrumb/TomoriBot.git
+   cd TomoriBot
+   cp .env.example .env   # Windows PowerShell: Copy-Item .env.example .env
+   ```
+   在`.env`中设置`DISCORD_TOKEN`、`CRYPTO_SECRET`、`POSTGRES_PASSWORD`和`ALLOW_PRIVATE_NETWORK`，然后运行：
+   ```sh
+   docker compose up
+   ```
+   有关Windows、Linux和Mac的步骤（包含Linux目录权限），请参阅[Docker Compose指南](https://docs.tomoribot.app/zh-CN/self-hosting/docker-compose/)。
 
 <!-- AFTER SETUP -->
 ### 邀请与设置完成后

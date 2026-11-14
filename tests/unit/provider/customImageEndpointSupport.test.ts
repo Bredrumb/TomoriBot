@@ -3,6 +3,7 @@ import type { CustomEndpointApiStyle, CustomEndpointRow } from "@/types/db/schem
 import {
   imageEndpointSupportsFromSubmittedValues,
   readImageEndpointSupports,
+  readImageRequestFormat,
 } from "@/utils/provider/customImageEndpointSupport";
 
 function endpoint(
@@ -16,6 +17,13 @@ function endpoint(
 }
 
 describe("custom image endpoint support metadata", () => {
+  it("defaults old image registrations to Images API and rejects invalid stored request formats", () => {
+    expect(readImageRequestFormat(endpoint("openai-compatible"))).toBe("images");
+    expect(readImageRequestFormat(endpoint("openai-compatible", { image_request_format: "chat-completions" }))).toBe(
+      "chat-completions",
+    );
+    expect(() => readImageRequestFormat(endpoint("openai-compatible", { image_request_format: "invalid" }))).toThrow();
+  });
   it("defaults ComfyUI image endpoints to negative-prompt support", () => {
     expect(readImageEndpointSupports(endpoint("comfyui"))).toEqual({
       txt2img: true,

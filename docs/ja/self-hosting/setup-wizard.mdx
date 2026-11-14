@@ -1,0 +1,139 @@
+---
+title: "セットアップウィザード"
+aiGenerated: false
+sidebar:
+  label: "セットアップウィザード"
+  order: 1
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+:::note
+Docker Composeを使用したいユーザーはこのウィザードをスキップし、コンテナ化されたインストールパスについては
+[Docker Compose](/self-hosting/docker-compose/) を参照してください。
+:::
+
+`bun run setup` は、ローカルでのBunベースのインストールに推奨されるセルフホストパスです。このコマンドは、新規クローン時も含め、ウィザードを読み込む前に `bun.lock` から依存関係をインストールします。ウィザードは `.env` を作成し、`CRYPTO_SECRET` を生成し、Discordボットのトークンを尋ね、[プライベートネットワークを許可するか](#private-networks)を確認し、PostgreSQLを設定します。再実行しても安全です。既存の `.env` の値は、再設定を選択しない限り保持されます。
+
+## 用意しておくもの
+
+始める前に、次のものが用意されていることを確認してください：
+
+- **Discordボットのトークン**（`GuildMembers`、`MessageContent`、および`GuildPresences`の特権インテントが有効になっているもの）。
+- **Bun**（ボットおよびウィザード自体の実行に必要です）。
+- **インストール済みのPostgreSQL**、またはウィザードにPostgreSQLコンテナーを実行させたい場合は**[Docker](https://www.docker.com/)**。TomoriBotはすべてをPostgreSQLに保存し、初回起動時にスキーマ、シード、移行、`pgcrypto`、およびRAGスキーマを自動的に初期化します。
+- **Node.js v20+（任意）**（`npx`で起動するMCPサーバーを使用する場合）。
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+まだインストールされていない場合は、PowerShellで[Bun](https://bun.sh/)をインストールします：
+
+```powershell
+powershell -c "irm bun.sh/install.ps1 | iex"
+```
+
+PostgreSQLについては、[Windows版PostgreSQL](https://www.postgresql.org/download/windows/)（`psql`および`pg_dump`を`PATH`に含める）または[Docker Desktop](https://www.docker.com/products/docker-desktop/)のいずれかをインストールしてください。Windowsでソースから拡張機能をビルドせずに`pgvector`と`pg_cron`を導入するには、Docker Desktopが最も簡単な方法です。
+
+</TabItem>
+<TabItem label="Linux">
+
+まだインストールされていない場合は、[Bun](https://bun.sh/)をインストールします：
+
+```bash
+curl -fsSL https://bun.sh/install | bash
+```
+
+PostgreSQLとそのクライアントツール（`psql`および`pg_dump`）をインストールするか、Compose v2プラグイン（`docker compose`）付きのDocker Engineをインストールしてください。DebianまたはUbuntuの場合は次のとおりです：
+
+```bash
+sudo apt-get update && sudo apt-get install -y postgresql postgresql-client
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+公式インストーラーまたはHomebrewを使用して[Bun](https://bun.sh/)をインストールします：
+
+```bash
+curl -fsSL https://bun.sh/install | bash
+```
+
+Homebrew（または[Docker Desktop](https://www.docker.com/products/docker-desktop/)）経由でPostgreSQLをインストールします：
+
+```bash
+brew install postgresql@17
+brew services start postgresql@17
+```
+
+</TabItem>
+</Tabs>
+
+## コードを取得する
+
+```sh
+git clone https://github.com/Bredrumb/TomoriBot.git
+cd TomoriBot
+```
+
+## ウィザードの実行
+
+以下のコマンドでセットアップウィザードを実行します：
+
+```bash
+bun run setup
+```
+
+コマンドを実行すると、2つのパスのいずれかを選択することになります：
+
+| パス | 使用する場合 | 実行内容 |
+|---|---|---|
+| フルインストール | 軽量な追加機能を含む推奨のセットアップを行いたい場合。 | 基本インストールを実行後、以下の追加機能を試行します。 |
+| 基本インストール | 最低限動作するボットのみが必要な場合。 | `.env`、Discordトークン、PostgreSQL、および依存関係を作成・設定します。 |
+
+### プライベートネットワーク
+{/* anchor: private-networks */}
+
+ウィザードはTomoriBotが `localhost` やLANにアクセスしてよいかを尋ね、その回答を `.env` に `ALLOW_PRIVATE_NETWORK` として保存します。本番環境以外では、この設定が行われるまでTomoriBotは起動しないため、手動セットアップの場合もこの行が必要です。カスタムエンドポイントやMCPサーバーを追加できるメンバーは、ここで許可したすべての宛先に到達できるため、ボットの利用者に応じて選択してください：
+
+| 値 | 選択する条件 |
+|---|---|
+| `true` | 自分自身、または信頼できるDiscordコミュニティのみがボットを使用する場合。`localhost` やLAN上のローカルモデルおよびMCPサーバーが、平文HTTPを含めて動作します。 |
+| `localhost:5001,localhost:8188` などの `host:port` リスト | KoboldCPPやComfyUIなどのローカルサーバーを、完全には信頼できないメンバーと共有する場合。リストされたサーバーのみが動作し、エンドポイントからネットワーク上の他のリソースには到達できません。 |
+| `false` | 信頼できないメンバーがボットを使用し、ローカルサーバーを一切共有しない場合。 |
+
+ホストされたOpenAI互換APIなどの公開HTTPSエンドポイントは、どの値でも動作します。別のマシン上のモデルには、[認証付きリモート接続](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/)を使用してください。トンネルは接続性を提供するものであり、別途アクセス制御が必要です。本番環境では `ALLOW_PRIVATE_NETWORK` の値にかかわらず、プライベートエンドポイントは拒否されます。
+
+リストはエンドポイント登録時のアドレス表記と完全一致で照合されるため、`localhost:5001` は `127.0.0.1:5001` をカバーしません。使用するすべての表記を列挙してください。リストされたサーバーは任意のパスですべてのメンバーに対して開かれたままになるため、サーバー自身の管理機能はパスワードで保護してください（KoboldCPPの場合は `--adminpassword`）。
+
+Tailscaleアドレスおよび `*.ts.net` 名はプライベートとして扱われるため、`true` またはリスト指定が必要です。`false` の場合はTailscale Funnelのみが動作します。
+
+メンバーが投稿した画像、ファイル、リンクプレビューは、どの値を選択してもプライベートアドレスに到達することはありません。`fetch_url` ツールには独自の設定 `FETCH_URL_ALLOW_PRIVATE_NETWORK` があります（デフォルトではオフです）。
+
+### フルインストールの追加機能
+
+フルインストールでは、まず基本インストールが実行され、その後以下の追加機能のインストールが試行されます。いずれかが失敗した場合、ウィザードは手動で完了させるためのコマンドやガイドを出力し、そのまま処理を続行します：
+
+| 追加機能 | 目的 |
+|---|---|
+| `pgvector` | ドキュメント/RAGの記憶用のベクトル検索。 |
+| `pg_cron` | オプションのスケジュールされたクールダウン/リマインダー行のクリーンアップ。 |
+| トークナイザーアセット | NovelAIのテキスト生成およびモデルに応じたロジットバイアス用のローカルのトークナイザーアセット。 |
+
+これらを手動でインストールする場合は、
+[マニュアルセットアップの追加機能](/self-hosting/manual-setup/#optional-extras-the-manual-full-install) を参照してください。
+
+## セットアップ後
+
+```bash
+bun run dev                          # ボットのみ
+bun run launch --searxng --crawl4ai  # ボットとローカルサーバー（bun run launch --help を参照）
+```
+
+ボットがオンラインになったら、Discordで `/setup` を実行します。AIプロバイダーまたはカスタムエンドポイントへの接続手順が案内されます。
+
+## 更新
+
+バックアップ優先のアップデーターコマンドである `bun run update` を使用してください。
+
+これにより、`bun run backup` が実行され、続いて `git pull --rebase --autostash`、そして `bun install --frozen-lockfile` が実行されます。`dist/` から実行する場合は `--build` を、Composeデプロイメントの場合は `--docker` を追加してください。詳細については [メンテナンスとバックアップ](/self-hosting/maintenance/) ページを参照してください。

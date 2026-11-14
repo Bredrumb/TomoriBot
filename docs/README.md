@@ -62,26 +62,31 @@ Running your own instance: core install plus every optional module. You don't ne
 source open to follow these.
 
 - [`self-hosting/README.md`](./en/self-hosting/README.md): requirements + module directory
-- [`self-hosting/setup-wizard.md`](./en/self-hosting/setup-wizard.md): guided `bun run setup`
-- [`self-hosting/manual-setup.md`](./en/self-hosting/manual-setup.md): manual procedure for technical users
-- [`self-hosting/docker-compose.md`](./en/self-hosting/docker-compose.md): containerized local bot + database
+- [`self-hosting/setup-wizard.mdx`](./en/self-hosting/setup-wizard.mdx): guided `bun run setup`
+- [`self-hosting/manual-setup.mdx`](./en/self-hosting/manual-setup.mdx): manual procedure for technical users
+- [`self-hosting/docker-compose.mdx`](./en/self-hosting/docker-compose.mdx): containerized local bot + database
 - [`self-hosting/local-endpoints/`](./en/self-hosting/local-endpoints/README.mdx): self-hosted endpoints hub
-  - [`local-endpoints/setup-local-llm.md`](./en/self-hosting/local-endpoints/setup-local-llm.md)
+  - [`local-endpoints/setup-local-llm.mdx`](./en/self-hosting/local-endpoints/setup-local-llm.mdx)
+  - [`local-endpoints/setup-local-system-one.mdx`](./en/self-hosting/local-endpoints/setup-local-system-one.mdx)
   - [`local-endpoints/setup-comfyui.md`](./en/self-hosting/local-endpoints/setup-comfyui.md)
-  - [`local-endpoints/setup-searxng.md`](./en/self-hosting/local-endpoints/setup-searxng.md)
-  - [`local-endpoints/setup-crawl4ai.md`](./en/self-hosting/local-endpoints/setup-crawl4ai.md)
-  - [`local-endpoints/setup-slop-guard.md`](./en/self-hosting/local-endpoints/setup-slop-guard.md)
-  - [`local-endpoints/setup-chatmock.md`](./en/self-hosting/local-endpoints/setup-chatmock.md)
-  - [`local-endpoints/setup-local-mcp.md`](./en/self-hosting/local-endpoints/setup-local-mcp.md)
-  - [`local-endpoints/setup-local-system-one.md`](./en/self-hosting/local-endpoints/setup-local-system-one.md)
+  - [`local-endpoints/setup-searxng.mdx`](./en/self-hosting/local-endpoints/setup-searxng.mdx)
+  - [`local-endpoints/setup-crawl4ai.mdx`](./en/self-hosting/local-endpoints/setup-crawl4ai.mdx)
   - [`local-endpoints/text-to-speech/`](./en/self-hosting/local-endpoints/text-to-speech/README.mdx): local TTS engines
     - [`comparison.md`](./en/self-hosting/local-endpoints/text-to-speech/comparison.md): empirical benchmarks, audio sample playback, and speed comparisons
-    - [`MOSS-TTS`](./en/self-hosting/local-endpoints/text-to-speech/moss.md): experimental clone and voice-design auto endpoint
+    - [`MOSS-TTS`](./en/self-hosting/local-endpoints/text-to-speech/moss.mdx): experimental clone and voice-design auto endpoint
   - [`local-endpoints/speech-to-text/`](./en/self-hosting/local-endpoints/speech-to-text/README.mdx): local STT engines
+  - [`local-endpoints/proxies-and-remote-access/`](./en/self-hosting/local-endpoints/proxies-and-remote-access/README.md): proxy setup and authenticated remote connections
+    - [`setup-chatmock.md`](./en/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock.md)
+    - [`setup-cliproxyapi.mdx`](./en/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi.mdx)
+    - [`cloudflare-tunnel.mdx`](./en/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel.mdx)
+    - [`cloudflare-access-and-caddy.mdx`](./en/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy.mdx)
 - [`self-hosting/maintenance.md`](./en/self-hosting/maintenance.md): maintenance scripts, updating, backups/restore
-- [`self-hosting/pluralbuddy-oauth.md`](./en/self-hosting/pluralbuddy-oauth.md): authorize the official PluralBuddy message lookup
-- [`self-hosting/mcp-sign-in.md`](./en/self-hosting/mcp-sign-in.md): set `TOMORI_PUBLIC_BASE_URL` so admins can add MCP servers that need sign-in
 - [`self-hosting/local-monitoring.md`](./en/self-hosting/local-monitoring.md)
+- [`self-hosting/pluralbuddy-oauth.md`](./en/self-hosting/pluralbuddy-oauth.md): authorize the official PluralBuddy message lookup
+- [`self-hosting/mcp-servers/`](./en/self-hosting/mcp-servers/README.md): OAuth sign-in, local MCP endpoints, and MCP prose-linting helpers
+  - [`mcp-sign-in.md`](./en/self-hosting/mcp-servers/mcp-sign-in.md): set `TOMORI_PUBLIC_BASE_URL` so admins can add MCP servers that need sign-in
+  - [`setup-local-mcp.md`](./en/self-hosting/mcp-servers/setup-local-mcp.md)
+  - [`setup-slop-guard.md`](./en/self-hosting/mcp-servers/setup-slop-guard.md)
 
 ## Contributing (order 4)
 

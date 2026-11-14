@@ -1,4 +1,6 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, spyOn } from "bun:test";
+import { createChatLatencyInvocation, measureChatTurnStage, runWithChatTurnLatency } from "@/utils/chat/turnLatency";
+import { log } from "@/utils/misc/logger";
 import type { TomoriState } from "@/types/db/schema";
 import {
   createParticipantRequestScope,
@@ -40,6 +42,195 @@ function prepare(
 }
 
 describe("participant context preparation", () => {
+  it("measures concurrent member lookup wall time and excludes cached discovery work from later turns", async () => {
+    const fixture = createParticipantContextFixture();
+    const metric = spyOn(log, "metric").mockImplementation(() => {});
+    let now = 0;
+    const clock = spyOn(performance, "now").mockImplementation(() => now);
+    const requestScope = createParticipantRequestScope();
+    const started = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    let memberCalls = 0;
+    const candidates = [PARTICIPANT_FIXTURE_IDS.human, PARTICIPANT_FIXTURE_IDS.referencedHuman].map((id) => {
+      const row = fixture.users.get(id);
+      if (!row) throw new Error("Participant user fixture is missing");
+      return row;
+    });
+    const input = {
+      client: fixture.client,
+      guildId: PARTICIPANT_FIXTURE_IDS.guild,
+      simplifiedMessageHistory: fixture.history,
+      personas: fixture.personas,
+      activePersona: fixture.activePersona,
+      visibleUserIds: visibleParticipantIds(),
+      requestScope,
+      candidateSource: {
+        loadCandidates: async () => {
+          now += 10;
+          return candidates.map((userRow) => ({
+            userRow,
+            evidence: { hasServerActivity: true, hasPersonalMemories: false, hasPendingTasks: false },
+          }));
+        },
+      },
+      memberDirectory: {
+        cachedMemberIds: () => [candidates[0].user_disc_id],
+        resolveMember: async (discordId: string) => {
+          if (++memberCalls === candidates.length) started.resolve();
+          await release.promise;
+          const member = fixture.memberCache.get(discordId);
+          if (!member) return null;
+          return {
+            discordId,
+            bot: member.user.bot,
+            displayName: member.displayName,
+            nickname: member.nickname,
+            globalName: member.user.globalName,
+            username: member.user.username,
+          };
+        },
+      },
+      messageProxyIdentitySource: {
+        loadIdentities: async () => {
+          now += 7;
+          return [];
+        },
+      },
+    };
+    const run = () =>
+      runWithChatTurnLatency(createChatLatencyInvocation(Date.now(), "message"), 0, 0, () =>
+        measureChatTurnStage("participant_ms", () => prepareParticipantContext(input)),
+      );
+    try {
+      const first = run();
+      await started.promise;
+      const pendingReuse = run();
+      now += 30;
+      release.resolve();
+      await Promise.all([first, pendingReuse]);
+      await run();
+      const samples = metric.mock.calls.filter(([name]) => name === "chat_turn_latency").map(([, sample]) => sample);
+      expect(samples).toHaveLength(3);
+      expect(samples.find((sample) => sample.participant_discovery === "fresh")).toMatchObject({
+        participant_ms: 47,
+        participant_candidate_ms: 10,
+        participant_members_ms: 30,
+        participant_proxy_ms: 7,
+        participant_composition_ms: 0,
+        participant_discovery: "fresh",
+        participant_candidate_reads: 1,
+        participant_member_cache_hits: 1,
+        participant_member_fetches: 1,
+        participant_proxy_reads: 1,
+      });
+      const reused = samples.filter((sample) => sample.participant_discovery === "reused");
+      expect(reused.map((sample) => sample.participant_ms).sort((a, b) => Number(a) - Number(b))).toEqual([0, 37]);
+      for (const sample of reused)
+        expect(sample).toMatchObject({
+          participant_candidate_ms: -1,
+          participant_members_ms: -1,
+          participant_proxy_ms: -1,
+          participant_composition_ms: 0,
+          participant_discovery: "reused",
+          participant_candidate_reads: 0,
+          participant_member_cache_hits: 0,
+          participant_member_fetches: 0,
+          participant_proxy_reads: 0,
+        });
+    } finally {
+      release.resolve();
+      clock.mockRestore();
+      metric.mockRestore();
+      fixture.restoreRepositories();
+    }
+  });
+
+  it("records failed candidate reads while leaving unreached stages unmeasured", async () => {
+    const fixture = createParticipantContextFixture();
+    const metric = spyOn(log, "metric").mockImplementation(() => {});
+    let now = 0;
+    const clock = spyOn(performance, "now").mockImplementation(() => now);
+    const failure = new Error("candidate lookup failed");
+    try {
+      await expect(
+        runWithChatTurnLatency(createChatLatencyInvocation(Date.now(), "message"), 0, 0, () =>
+          measureChatTurnStage("participant_ms", () =>
+            prepareParticipantContext({
+              client: fixture.client,
+              guildId: PARTICIPANT_FIXTURE_IDS.guild,
+              simplifiedMessageHistory: fixture.history,
+              personas: fixture.personas,
+              activePersona: fixture.activePersona,
+              visibleUserIds: visibleParticipantIds(),
+              candidateSource: {
+                loadCandidates: async () => {
+                  now += 5;
+                  throw failure;
+                },
+              },
+            }),
+          ),
+        ),
+      ).rejects.toBe(failure);
+      const samples = metric.mock.calls.filter(([name]) => name === "chat_turn_latency");
+      expect(samples).toHaveLength(1);
+      expect(samples[0][1]).toMatchObject({
+        participant_ms: 5,
+        participant_candidate_ms: 5,
+        participant_members_ms: -1,
+        participant_proxy_ms: -1,
+        participant_composition_ms: -1,
+        participant_discovery: "fresh",
+        participant_candidate_reads: 1,
+        participant_member_fetches: 0,
+        participant_proxy_reads: 0,
+      });
+    } finally {
+      clock.mockRestore();
+      metric.mockRestore();
+      fixture.restoreRepositories();
+    }
+  });
+
+  it("excludes participant preparation outside the context-build participant stage", async () => {
+    const fixture = createParticipantContextFixture();
+    const metric = spyOn(log, "metric").mockImplementation(() => {});
+    try {
+      const measured = await runWithChatTurnLatency(
+        createChatLatencyInvocation(Date.now(), "message"),
+        0,
+        0,
+        async () => {
+          await prepare(fixture, fixture.activePersona);
+          const result = await measureChatTurnStage("participant_ms", () => prepare(fixture, fixture.activePersona));
+          await prepare(fixture, fixture.activePersona);
+          return result;
+        },
+      );
+      const samples = metric.mock.calls.filter(([name]) => name === "chat_turn_latency");
+      expect(samples).toHaveLength(1);
+      expect(samples[0][1]).toMatchObject({
+        participant_discovery: "fresh",
+        participant_candidate_reads: measured.diagnostics.externalCalls.candidateSourceReads,
+        participant_member_cache_hits: measured.diagnostics.externalCalls.memberCacheHits,
+        participant_member_fetches: measured.diagnostics.externalCalls.memberFetches,
+        participant_proxy_reads: measured.diagnostics.externalCalls.messageProxyIdentityReads,
+      });
+      for (const field of [
+        "participant_ms",
+        "participant_candidate_ms",
+        "participant_members_ms",
+        "participant_proxy_ms",
+        "participant_composition_ms",
+      ]) {
+        expect(samples[0][1][field]).toBeGreaterThanOrEqual(0);
+      }
+    } finally {
+      metric.mockRestore();
+      fixture.restoreRepositories();
+    }
+  });
+
   it("produces the same plan for equivalent live and snapshot inputs", async () => {
     const liveFixture = createParticipantContextFixture();
     const livePlan = await (async (): Promise<PreparedParticipantContext["discoveryPlan"]> => {

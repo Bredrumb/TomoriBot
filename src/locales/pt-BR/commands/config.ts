@@ -1499,6 +1499,7 @@ Exagero: **{exaggeration}**`,
       choice_low: `Baixo`,
       choice_medium: `Médio`,
       choice_high: `Alto`,
+      choice_xhigh: `Extra alto`,
     },
     cooldown: {
       type: {

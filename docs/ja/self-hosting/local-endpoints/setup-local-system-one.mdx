@@ -1,0 +1,154 @@
+---
+title: "セットアップ: ローカル判定モデル"
+sidebar:
+  label: "ローカル判定モデル"
+  order: 2
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+自身のマシンで小規模な判定モデルを実行し、TomoriBotに登録します。判定モデルはテキストに関する質問（はい/いいえ、または複数のトピックのどれが当てはまるかなど）に対して確率を返します。[Kev](https://github.com/jaredpalmer/kev)は、TypeSafeがホストするJevと同じSystem Oneプロトコルを使用するオープンソースモデルです。
+
+:::note[使用先]
+`/config` > モデル、または `/config` > プラグイン > Natural Nudges のアクティブナッジチェッカーで選択されると、判定モデルは複数のトピックから1つを選択するよう求められ、[Natural Nudges](/features/chatting-personality/natural-nudges/#active-nudges)がいつ会話に参加するかを決定します。詳細は[判定モデル](/features/setup-administration/providers-and-models/#decision-models)を参照してください。
+:::
+
+## 1. Kevを実行する
+
+Kevには[Git](https://git-scm.com)、[uv](https://docs.astral.sh/uv/)、およびPython 3.12または3.13が必要です（uvが自動でインストールします）。メモリー容量に合ったサイズを選択してください：
+
+| モデル | Hub ID | 重み（概算） | 備考 |
+|---|---|---|---|
+| Kev-0.8B | `jaredpalmer/kev-0.8b` | 2 GB | 4 GBのGPUで動作します。精度は最も低くなります。 |
+| Kev-4B | `jaredpalmer/kev-4b` | 8-9 GB | メモリーに収まる場合のKevの推奨開始モデルです。 |
+
+TomoriBotフォルダーの外側の場所にKevをクローンし、お使いのOS向けの手順でサーバーを起動します：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+以下の手順は、NVIDIA GPUを搭載したネイティブWindowsで確認済みです。ネイティブ環境でサーバーが起動しない場合は、代わりにWSL2内でLinux向けの手順を実行してください。
+
+```powershell
+git clone https://github.com/jaredpalmer/kev.git
+cd kev
+uv sync --extra serve
+```
+
+NVIDIA GPUを搭載したWindowsでは、`uv sync`はCPU専用のPyTorchビルドをインストールするため動作が非常に遅くなります。CUDAビルドに置き換えて、GPUが認識されていることを確認してください：
+
+```powershell
+uv pip install --reinstall-package torch "torch>=2.6,<2.9" --index-url https://download.pytorch.org/whl/cu128
+uv run --no-sync python -c "import torch; print(torch.cuda.is_available())"
+```
+
+`True`と出力される必要があります。通常の`uv run`を実行するとCPUビルドに同期し直されてしまうため、以降はKevを`uv run --no-sync`で起動してください：
+
+```powershell
+uv run --no-sync python -m kev.serve --run jaredpalmer/kev-4b --port 8009 --device cuda
+```
+
+`--device cuda`を指定すると、CPUで警告なしに低速実行される代わりに、GPUを使用できない場合にエラーで停止します。Kev-4Bでメモリー不足になる場合は`jaredpalmer/kev-0.8b`を使用してください。
+
+サーバーを実行したまま別のPowerShellウィンドウから確認します：
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8009/v1/models
+$body = '{"state":"The fictional door is blue.","model":"kev-latest","questions":{"q":{"type":"noul","instructions":"Is the door blue?"}}}'
+Invoke-RestMethod http://127.0.0.1:8009/v1/systemone -Method Post -ContentType "application/json" -Body $body
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+git clone https://github.com/jaredpalmer/kev.git
+cd kev
+uv sync --extra serve
+```
+
+起動前にPyTorchがGPUを認識しているか確認します（標準のLinux PyPI PyTorchホイールにはCUDAサポートが含まれています）：
+
+```bash
+uv run python -c "import torch; print(torch.cuda.is_available())"
+```
+
+サーバーを起動します。NVIDIA GPUではCPUへフォールバックせず明確に失敗するよう`--device cuda`を追加し、自動デバイス選択にする場合は`--device cuda`を省略してください：
+
+```bash
+uv run --extra serve python -m kev.serve --run jaredpalmer/kev-4b --port 8009 --device cuda
+```
+
+Kev-4BでVRAMが不足する場合は`jaredpalmer/kev-0.8b`を使用してください。AMD ROCm環境では、先に環境へROCm版PyTorchビルドをインストールし、`uv`がそのビルドを保持するよう`uv run --no-sync`で実行してください。
+
+サーバーを実行したまま別のターミナルから確認します：
+
+```bash
+curl -s http://127.0.0.1:8009/v1/models
+curl -s -X POST http://127.0.0.1:8009/v1/systemone \
+  -H "Content-Type: application/json" \
+  -d '{"state":"The fictional door is blue.","model":"kev-latest","questions":{"q":{"type":"noul","instructions":"Is the door blue?"}}}'
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+Apple Silicon Macでは、KevはMPS（および`arm64`で利用可能な場合はMLX）を使用するため、`--device cuda`は指定しないでください。Intel MacはCPUにフォールバックします。
+
+```bash
+git clone https://github.com/jaredpalmer/kev.git
+cd kev
+uv sync --extra serve
+```
+
+サーバーを起動します（4Bが利用可能なユニファイドメモリーを超える場合は`jaredpalmer/kev-0.8b`を使用してください）：
+
+```bash
+uv run --extra serve python -m kev.serve --run jaredpalmer/kev-4b --port 8009
+```
+
+サーバーを実行したまま別のターミナルから確認します：
+
+```bash
+curl -s http://127.0.0.1:8009/v1/models
+curl -s -X POST http://127.0.0.1:8009/v1/systemone \
+  -H "Content-Type: application/json" \
+  -d '{"state":"The fictional door is blue.","model":"kev-latest","questions":{"q":{"type":"noul","instructions":"Is the door blue?"}}}'
+```
+
+</TabItem>
+</Tabs>
+
+初回実行時はモデルをダウンロードするため数分かかります。モデル一覧の確認では`kev-latest`が返され、System Oneの確認では「はい/いいえ」の質問に対して`0`から`1`の間の確率が返されます。
+
+必要なカーネルが利用できない場合、Kevは`flash-linear-attention`が見つからないという警告を出力しますが、同じ回答を返す低速パスに切り替わるため無視して問題ありません。
+
+## 2. Discordに登録する
+
+`/providers`（サーバー全体）または`/personal providers`（個人専用）を実行し、`+ 新しいカスタムエンドポイントを追加`を選択して以下を入力します：
+
+| フィールド | 値 |
+|---|---|
+| `エンドポイントのラベル` | `kev` |
+| `エンドポイントURL` | `http://127.0.0.1:8009/v1` |
+| `API互換性` | `System One互換` |
+| `認証トークン` | `KEV_API_KEY`を設定していない場合は空のままにします |
+
+TomoriBotは保存時に`GET /v1/models`を確認します。サーバーが`404`や`405`を返しても受け入れられます。
+
+保存された`kev`エンドポイントを開き、モデルのドロップダウンから`+ 判定モデルを追加`を選択して以下を入力します：
+
+- `コード名`：`kev-latest`（Kevのサンプルで使用されているモデル名）。
+- `コンテキストウィンドウ`：`8192`（Kev-0.8BおよびKev-4Bが検証されている最大テキスト長）。Kevは65,536トークンを超えるテキストを拒否します。
+
+## 3. モデルを選択する
+
+`/config` > `モデル` > `モデルの切り替え`を開き、`判定`スロットで`kev-latest`を選択します。`- モデルなし`を選択すると、登録を削除せずに選択を解除できます。
+
+## 注意事項と留意点
+
+- **サーバーの停止**は`Ctrl+C`で行います。TomoriBotがKevを起動または停止することはありません。
+- **Docker環境でのTomoriBot**：コンテナー内部の`127.0.0.1`はホストマシンではありません。`http://host.docker.internal:8009/v1`を使用し、Kevを`--host 0.0.0.0`で起動してください。Kevにはデフォルトで認証がないため、あらかじめ`KEV_API_KEY`を設定し、`認証トークン`に同じ値を入力してください。
+- **本番ランタイム**：プロバイダーエンドポイントに対してHTTPSを強制し、プライベートアドレスをブロックします。本番環境以外では、`ALLOW_PRIVATE_NETWORK`が`true`であるか、その`host:port`がリストに含まれている場合にローカルHTTP URLが機能します。[ローカルLLM](/self-hosting/local-endpoints/setup-local-llm/#notes--gotchas)を参照してください。
+- **その他のSystem Oneサーバー**：Layaなどは、独自のエンドポイントURLとモデル名を使用して同じ手順で設定できます。OpenAI Decisions APIを実装しているサーバーの場合は、代わりに`OpenAI Decisions互換`を使用してください。

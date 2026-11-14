@@ -1,0 +1,188 @@
+---
+title: "Thiết lập: LLM cục bộ"
+aiGenerated: false
+sidebar:
+  label: "LLM cục bộ"
+  order: 1
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+TomoriBot có thể sử dụng bất kỳ máy chủ LLM cục bộ tương thích OpenAI nào để tạo văn bản và vector embedding.
+
+:::note[Không cần biến môi trường]
+Các model cục bộ được đăng ký thông qua lệnh slash trên Discord và lưu trữ mã hóa trong cơ sở dữ liệu. Không có cài đặt `.env` nào dành cho chúng.
+:::
+
+## 1. Chạy máy chủ model
+
+Hướng dẫn này dùng Ollama làm ví dụ vì đây là lựa chọn dễ bắt đầu nhất, nhưng bạn có thể dùng bất kỳ phần mềm nào mình muốn, đặc biệt nếu bạn đã quen với các công cụ kỹ thuật nâng cao.
+
+Cài đặt [Ollama](https://ollama.com). Các ví dụ bên dưới dùng Gemma 4 của Google, nhưng mọi model trong [thư viện của Ollama](https://ollama.com/library) đều hoạt động.
+
+### Nên tải kích thước nào?
+{/* anchor: which-size-should-i-pull */}
+
+Model cục bộ chạy trên VRAM của GPU (hoặc bộ nhớ hợp nhất Apple Silicon trên Mac). Quy tắc ước lượng nhanh: một model cần lượng bộ nhớ trống tối thiểu bằng dung lượng tải xuống, cộng thêm khoảng 1-2 GB dự phòng cho ngữ cảnh hội thoại. Hãy chọn bản Gemma 4 lớn nhất vừa với máy bạn:
+
+| VRAM / bộ nhớ GPU khả dụng | Lựa chọn phù hợp nhất | Dung lượng tải (xấp xỉ) |
+|---|---|---|
+| ~8 GB | `gemma4:e2b` | 7.2 GB |
+| ~12 GB | `gemma4:12b` | 7.6 GB |
+| ~16 GB | `gemma4:12b` (vừa trọn), hoặc `gemma4:26b` | 7.6 / 18 GB |
+| 24 GB+ | `gemma4:26b` hoặc `gemma4:31b` | 18 / 20 GB |
+
+Dung lượng tải xuống tính theo mức lượng hóa mặc định của Ollama; xem [trang model](https://ollama.com/library/gemma4) để biết số liệu chính xác.
+
+Cách kiểm tra bộ nhớ GPU, khởi động Ollama nếu nó chưa chạy dưới dạng dịch vụ nền và xác nhận nó phản hồi:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+Mở `Task Manager` > `Performance` > `GPU` và xem **Dedicated GPU memory** (hoặc chạy `nvidia-smi` cho card NVIDIA). Trình cài đặt desktop của Ollama tự chạy máy chủ trên cổng `11434`; chỉ chạy `ollama serve` nếu dịch vụ đang dừng.
+
+```powershell
+ollama pull gemma4:12b     # đổi sang thẻ phù hợp với VRAM của bạn
+Invoke-RestMethod http://127.0.0.1:11434/v1/models
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+Chạy `nvidia-smi` (hoặc công cụ từ hãng GPU của bạn) để kiểm tra VRAM. Nếu dịch vụ systemd của Ollama chưa chạy, hãy chạy `ollama serve` trong một terminal khác:
+
+```bash
+ollama pull gemma4:12b     # đổi sang thẻ phù hợp với VRAM của bạn
+curl -fsS http://127.0.0.1:11434/v1/models
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+Mở menu Apple > **Giới thiệu về máy Mac này (About This Mac)** để kiểm tra tổng bộ nhớ hợp nhất (macOS phân bổ một phần bộ nhớ hợp nhất cho GPU). Ứng dụng desktop Ollama tự chạy máy chủ nền trên cổng `11434`; chỉ chạy `ollama serve` nếu chạy chế độ dòng lệnh không mở app.
+
+```bash
+ollama pull gemma4:12b     # đổi sang thẻ phù hợp với bộ nhớ của bạn
+curl -fsS http://127.0.0.1:11434/v1/models
+```
+
+</TabItem>
+</Tabs>
+
+Ghi lại chính xác thẻ đã cài đặt, vì đó chính là `Mã tên model` bạn sẽ đăng ký:
+
+```sh
+ollama list
+# NAME              ID            SIZE
+# gemma4:12b        a1b2c3d4...   7.6 GB
+```
+
+## 2. Đăng ký trong Discord
+
+Chạy `/providers` (cho toàn máy chủ) hoặc `/personal providers` (cho riêng bạn), chọn `Thêm endpoint tùy chỉnh mới`, và nhập:
+
+| Trường | Giá trị cho Ollama |
+|-------|------------------|
+| `endpoint_label` | Tên bạn chọn, ví dụ `home-ollama` |
+| `Độ tương thích API` | `Tương thích OpenAI` (khuyên dùng) hoặc `Ollama` |
+| `endpoint_url` | `http://127.0.0.1:11434/v1` cho Tương thích OpenAI · `http://127.0.0.1:11434` cho Ollama |
+| `auth_token` | *(để trống)* |
+
+:::tip[Chọn URL khớp với độ tương thích API]
+Cả `Tương thích OpenAI` và `Ollama` đều chấp nhận địa chỉ gốc trần và tự chuẩn hóa về đường dẫn cơ sở `/v1`. `/chat/completions` được tự động gắn thêm vào sau, nên không tự thêm vào URL. Các URL đã có sẵn đường dẫn, chẳng hạn `https://openrouter.ai/api/v1` hoặc tiền tố gateway, sẽ được lưu nguyên văn.
+:::
+
+Sau khi lưu kết nối, chọn nó và chọn `+ Thêm model Văn bản mới` từ dropdown model. Điền các thông tin:
+
+- **Mã tên model (ID API chính xác):** `gemma4:12b`, đúng thẻ từ lệnh `ollama list`.
+- **Cửa sổ ngữ cảnh**: tùy chọn, chỉ dành cho Ollama và KoboldCPP. Đặt giá trị này (ví dụ `8192`, `16384`) để nâng mức `num_ctx` mặc định của Ollama, vốn khá nhỏ và dễ làm cắt bớt ngữ cảnh dài của TomoriBot. Để trống để dùng mặc định của máy chủ.
+- **Các nút bật/tắt:** bật `Gọi công cụ` nếu model hỗ trợ gọi hàm; chỉ bật `Đầu vào hình ảnh` cho model thị giác; bật `Đầu ra có cấu trúc` nếu model xử lý tốt JSON schema. Trong ví dụ này, Gemma 4 hỗ trợ tất cả nên hãy tích chọn hết.
+
+TomoriBot kiểm tra kết nối ngay khi bạn lưu. Nếu bot báo không thể kết nối tới endpoint, nguyên nhân thường gặp là nhầm lẫn giữa `localhost` và Docker hoặc thiếu/thừa `/v1` (xem [lỗi thường gặp](#notes--gotchas)).
+
+Khi thêm xong, model tự động trở thành model `text` đang hoạt động. Hãy bắt đầu nhắn tin để dùng thử. Nếu vì lý do nào đó model chưa kích hoạt, hãy chạy `/config` > `Model` > `Chuyển đổi model` và chọn model bạn vừa đăng ký.
+
+## 3. (Tùy chọn) Embedding cục bộ cho RAG
+
+Chọn endpoint đã lưu và dùng dropdown model của nó để thêm một model `Embedding` (ví dụ `ollama pull nomic-embed-text`, tên model `nomic-embed-text:latest`). Các tính năng RAG cũng cần cài đặt pgvector trong Postgres. Bạn có thể xem hướng dẫn [thiết lập thủ công](/self-hosting/manual-setup/) tại đây.
+
+## 4. (Tùy chọn) Dùng chung một GPU với ComfyUI
+{/* anchor: 4-optional-share-one-gpu-with-comfyui */}
+
+Nếu model văn bản và ComfyUI chạy trên cùng một GPU, TomoriBot có thể gỡ model văn bản xuống trong lúc một tác vụ hình ảnh hoặc video của ComfyUI đang chạy. Các phản hồi văn bản đến trong lúc đó sẽ chờ cho đến khi GPU trống trở lại.
+
+Mở endpoint đã lưu, nhấn `Sửa endpoint`, rồi tích chọn `Gỡ mô hình khi ComfyUI đang chạy tác vụ` dưới mục `Hành vi endpoint`. TomoriBot sẽ kiểm tra loại máy chủ đang chạy tại URL khi bạn lưu:
+
+- **Ollama:** hoạt động ngay với cấu hình mặc định. TomoriBot yêu cầu Ollama gỡ model trước khi chạy tác vụ, và Ollama tự nạp lại model ở yêu cầu văn bản kế tiếp.
+- **KoboldCpp:** hãy khởi động KoboldCpp với `--admin` và `--admindir`, rồi đặt auth token của endpoint thành mật khẩu quản trị. TomoriBot dùng API nạp lại quản trị của KoboldCpp để gỡ model và nạp lại sau khi xong.
+
+Mọi máy chủ khác đều bị từ chối khi bạn lưu, vì các máy chủ tương thích OpenAI thông thường không có cơ chế chung để gỡ model.
+
+## Các máy chủ khác
+{/* anchor: other-servers */}
+
+TomoriBot hỗ trợ mọi endpoint tương thích OpenAI, nhưng các máy chủ dưới đây được khuyến nghị. Tất cả đều theo cùng một quy trình thiết lập: chỉ có URL và một vài lưu ý thay đổi.
+
+### KoboldCPP
+
+- Khởi động với chế độ tương thích OpenAI (có sẵn mặc định). Mặc định: `http://127.0.0.1:5001/v1`.
+- Độ tương thích API: `Tương thích OpenAI`. `endpoint_url`: `http://127.0.0.1:5001/v1`.
+- Tuân theo `Cửa sổ ngữ cảnh` giống Ollama.
+- Để gỡ model trong lúc ComfyUI chạy tác vụ, hãy khởi chạy thêm cờ `--admin` và `--admindir` (xem [Dùng chung một GPU với ComfyUI](#4-optional-share-one-gpu-with-comfyui)).
+- Nạp các model GGUF; tên model là giá trị mà model đang nạp báo về (thường là tên tệp không kèm phần mở rộng), hãy kiểm tra phản hồi `/v1/models` của KoboldCPP.
+
+### llama.cpp (`llama-server`)
+
+- Build hoặc cài đặt [llama.cpp](https://github.com/ggml-org/llama.cpp), sau đó phục vụ một tệp GGUF bằng máy chủ tương thích OpenAI đi kèm:
+  ```sh
+  llama-server -m model.gguf -c 16384 --host 0.0.0.0 --port 8080
+  ```
+- Độ tương thích API: `Tương thích OpenAI`. `endpoint_url`: `http://127.0.0.1:8080/v1`.
+- Đặt kích thước cửa sổ ngữ cảnh lúc khởi chạy bằng `-c` vì trường `Cửa sổ ngữ cảnh` trong modal chỉ áp dụng cho Ollama và KoboldCPP nên không có tác dụng ở đây.
+- Tên model là giá trị `/v1/models` báo về; đặt tên gọn gàng cho nó bằng `--alias my-model`.
+- Nếu bạn khởi động kèm `--api-key`, hãy điền khóa đó vào `auth_token`.
+
+### LM Studio
+
+- Trong LM Studio, khởi động `Local Server` (tab `Developer`). Mặc định: `http://127.0.0.1:1234/v1`.
+- Độ tương thích API: `Tương thích OpenAI`. `endpoint_url`: `http://127.0.0.1:1234/v1`.
+- Tên model là mã định danh mà LM Studio hiển thị cho model đang nạp.
+
+### vLLM
+
+- Phục vụ bằng máy chủ tương thích OpenAI: `vllm serve "<model>"` cung cấp địa chỉ `http://127.0.0.1:8000/v1`.
+- Độ tương thích API: `Tương thích OpenAI`. `endpoint_url`: `http://127.0.0.1:8000/v1`.
+- Nếu bạn khởi chạy vLLM kèm `--api-key`, hãy điền khóa đó vào `auth_token`.
+- Tên model là đường dẫn/tên model được phục vụ (khớp với `/v1/models`).
+
+### LiteLLM (proxy đứng trước nhiều backend)
+
+- Chạy proxy LiteLLM; mặc định: `http://127.0.0.1:4000/v1`.
+- Độ tương thích API: `Tương thích OpenAI`. `endpoint_url`: `http://127.0.0.1:4000/v1`.
+- Tên model là alias model bạn đã định nghĩa trong cấu hình LiteLLM.
+- Nếu proxy bắt buộc master key, hãy đặt khóa đó vào `auth_token`.
+
+### ChatMock (tài khoản ChatGPT / Codex CLI)
+
+Có hướng dẫn riêng do cần xử lý đặc thù cho system prompt: [Thiết lập: ChatMock](/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/).
+
+## Chọn model từ Hugging Face
+
+Ngoài thư viện chọn lọc của Ollama, [Hugging Face](https://huggingface.co) lưu trữ hàng nghìn model cộng đồng. KoboldCPP, llama.cpp và LM Studio đều có thể nạp định dạng GGUF, là gói tệp đơn lẻ bạn tải về rồi trỏ máy chủ tới đó.
+
+1. **Tìm một tệp GGUF.** Tìm trên Hugging Face tên model kèm từ khóa "GGUF"; những người đóng gói lượng hóa cộng đồng như [bartowski](https://huggingface.co/bartowski) thường đăng bản dựng GGUF cho hầu hết các model phổ biến ngay sau khi ra mắt. Ưu tiên biến thể instruct hoặc chat (tên kết thúc bằng `-Instruct` hoặc `-Chat`); các model base không biết đối thoại theo lượt.
+2. **Chọn mức quant vừa với VRAM.** Một kho lưu trữ liệt kê cùng một model ở nhiều mức lượng hóa, và dung lượng tệp gần tương đương với lượng VRAM cần thiết (cộng thêm khoảng 1-2 GB cho ngữ cảnh, cùng quy tắc với [bảng chọn kích thước](#which-size-should-i-pull) ở trên). Tải tệp `.gguf` đơn lẻ cho lựa chọn của bạn.
+3. **Nạp model.** Khởi động KoboldCPP hoặc `llama-server` với tệp đó (xem [Các máy chủ khác](#other-servers)), rồi đăng ký endpoint trong Discord như bình thường.
+
+:::tip[Chọn mức quant nào? Q4 hoặc Q5 là điểm cân bằng tốt nhất]
+Lượng hóa lưu mỗi trọng số bằng ít bit hơn để thu nhỏ model, đánh đổi một phần nhỏ chất lượng. Mã trong các tên như `Q4_K_M` / `Q5_K_M` biểu thị số bit trên mỗi trọng số: **4-bit (Q4) hoặc 5-bit (Q5) là điểm cân bằng thông thường**, giữ lại phần lớn chất lượng với kích thước chỉ bằng khoảng một nửa bản 8-bit. Dưới 4-bit chất lượng giảm nhanh. Và với cùng một ngân sách VRAM cố định, một **model lớn hơn ở mức Q4 thường cho kết quả tốt hơn model nhỏ ở mức Q8**.
+:::
+
+## Lưu ý và lỗi thường gặp
+{/* anchor: notes--gotchas */}
+
+- **Bot được lưu trữ riêng?** Hãy làm theo [Truy cập từ xa an toàn qua Cloudflare](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/). Bot production không thể kết nối tới PC của bạn qua `127.0.0.1`; hướng dẫn đó cấp cho engine một URL HTTPS công khai. Hãy dùng API key của engine nếu có hỗ trợ; Access và Caddy là lớp tăng cường bảo mật tùy chọn.
+- **Mỗi nhãn là một mục endpoint.** Để đăng ký nhiều model dùng chung một máy chủ, hãy chọn endpoint đã lưu và dùng lại dropdown model của nó. Chỉ dùng các nhãn khác nhau cho những máy chủ hoặc giao thức API thực sự tách biệt.
+- **Tên model là mã định danh API.** Đó là chuỗi chính xác được gửi tới máy chủ. Nhập sai tên là nguyên nhân phổ biến nhất dẫn đến tình trạng "đã kết nối được nhưng trả lời thất bại".
+- **Chạy TomoriBot trong Docker?** `localhost` bên trong container không phải máy chủ vật lý của bạn. Hãy dùng `http://host.docker.internal:<port>` hoặc IP mạng LAN của máy chủ vật lý, và cho máy chủ model lắng nghe trên `0.0.0.0`. Tệp Compose đi kèm đã ánh xạ tên đó trên cả Linux. Với tệp Compose riêng hoặc `docker run` trên Linux, hãy thêm `extra_hosts: ["host.docker.internal:host-gateway"]` (`--add-host=host.docker.internal:host-gateway` đối với `docker run`).
+- **Địa chỉ riêng tư cần `ALLOW_PRIVATE_NETWORK` cho phép.** Khi đặt `true`, các endpoint trên `localhost`, máy chủ LAN và `host.docker.internal` hoạt động qua HTTP thường. Một danh sách `host:port` như `localhost:5001` chỉ cho phép các máy chủ đó, phù hợp khi chia sẻ model của bạn cho cả một máy chủ Discord. `FETCH_URL_ALLOW_PRIVATE_NETWORK` là cài đặt riêng cho công cụ `fetch_url` và không làm thay đổi quy tắc endpoint.

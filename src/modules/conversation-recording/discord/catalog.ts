@@ -1,7 +1,7 @@
 import type { RecordingSettings } from "@/modules/conversation-recording/db/types";
 import { buildInteractionRouteId, type ParsedInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
 
-export const RECORDING_ACTIONS = [
+const RECORDING_ACTIONS = [
   "start",
   "cancel",
   "refresh",

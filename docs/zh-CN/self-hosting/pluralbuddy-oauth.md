@@ -2,7 +2,7 @@
 title: "PluralBuddy OAuth 配置"
 description: "授权你的自部署 TomoriBot 验证来自已批准 PluralBuddy 实例的消息。"
 sidebar:
-  order: 8
+  order: 7
 ---
 
 自部署的 TomoriBot 需要为官方服务以及每个已批准的自定义实例分别授权 PluralBuddy 应用程序。
@@ -24,7 +24,7 @@ sidebar:
 2. 在 TomoriBot 代码仓库中，使用官方实例 ID 与相同的回调 URL 运行辅助脚本：
 
    ```sh
-   bun scripts/db/authorize-pluralbuddy-instance.ts pluralbuddy:official <callback-url>
+   bun scripts/db/authorize-pluralbuddy-instance.ts pluralbuddy:official "<callback-url>"
    ```
 
 3. 在终端提示符处输入客户端 ID 与密钥。在该计算机的浏览器中打开输出的授权 URL，登录 PluralBuddy 并同意授权页面。辅助脚本在收到一次回调或三分钟超时后关闭，并将连接信息存入 PostgreSQL。
@@ -39,7 +39,7 @@ sidebar:
 1. 在可访问部署数据库的计算机上注册一个已禁用的实例：
 
    ```sh
-   bun scripts/db/register-message-proxy-instance.ts register pluralbuddy https://<instance-host> "<display-name>" <bot-user-id>
+   bun scripts/db/register-message-proxy-instance.ts register pluralbuddy "https://<instance-host>" "<display-name>" "<bot-user-id>"
    bun scripts/db/register-message-proxy-instance.ts inspect
    ```
 
@@ -47,14 +47,14 @@ sidebar:
 2. 对于 PluralBuddy，在该实例上注册一个独立的 OAuth 应用程序，使用与上方相同的本地环回回调规则。使用注册返回的实例 ID 进行授权：
 
    ```sh
-   bun scripts/db/authorize-pluralbuddy-instance.ts <instance-id> <callback-url>
+   bun scripts/db/authorize-pluralbuddy-instance.ts "<instance-id>" "<callback-url>"
    ```
 
    若要更换凭据或从已撤销的刷新令牌中恢复，请重复授权步骤。PluralKit 不需要此步骤。
 3. 从对应代理 bot 发送的消息中，记录其 Discord 转发消息 ID 与发送者账户 ID。检查该实例的 API 能否解析该转发消息，然后启用它：
 
    ```sh
-   bun scripts/db/register-message-proxy-instance.ts enable <instance-id> <repost-id> <sender-id>
+   bun scripts/db/register-message-proxy-instance.ts enable "<instance-id>" "<repost-id>" "<sender-id>"
    ```
 
    对于新的分支版本（fork），在向用户开放前，请先在一次性部署中测试 bot、OAuth 交换与刷新以及 TomoriBot 查询。
@@ -63,14 +63,14 @@ sidebar:
 如果更换了自定义代理 bot，请在重新开放该实例前更新其 Discord bot 用户 ID：
 
 ```sh
-bun scripts/db/register-message-proxy-instance.ts set-bot <instance-id> <bot-user-id>
+bun scripts/db/register-message-proxy-instance.ts set-bot "<instance-id>" "<bot-user-id>"
 ```
 
 禁用或移除自定义实例：
 
 ```sh
-bun scripts/db/register-message-proxy-instance.ts disable <instance-id>
-bun scripts/db/register-message-proxy-instance.ts remove <instance-id>
+bun scripts/db/register-message-proxy-instance.ts disable "<instance-id>"
+bun scripts/db/register-message-proxy-instance.ts remove "<instance-id>"
 ```
 
 移除操作会删除 OAuth 连接并永久阻止该源地址被再次注册。如果你未来可能恢复该实例，请改用 `disable`。既有身份与记忆仍可继续使用，且变更无需重启即可生效。

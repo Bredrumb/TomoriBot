@@ -64,20 +64,15 @@ does not add speech delivery instructions.
 
 Tool execution coordinates through a single entry point: `ToolRegistry.executeTool()`.
 
-```
-Model tool call
-       ↓
-ToolRegistry.executeTool()
-       ↓
-Resolve opaque IDs (media_id, message_id) & aliases
-       ↓
-Dispatch:
-├─ Guild MCP Manager ──→ guildMcpManager.executeGuildMCPFunction()
-└─ Built-in Tool     ──→ tool.execute() (availability & context checked)
-       ↓
-Redact parameters & record ToolExecutionEvent
-       ↓
-Return ToolResult (success / error)
+```mermaid
+flowchart TD
+  call["Model tool call"] --> exec["ToolRegistry.executeTool()"]
+  exec --> resolve["Resolve opaque IDs (media_id, message_id) & aliases"]
+  resolve -->|"Guild MCP Manager"| mcp["guildMcpManager.executeGuildMCPFunction()"]
+  resolve -->|"Built-in Tool"| builtin["tool.execute()<br/>(availability & context checked)"]
+  mcp --> redact["Redact parameters & record ToolExecutionEvent"]
+  builtin --> redact
+  redact --> ret["Return ToolResult (success / error)"]
 ```
 
 Capability credential resolution captures the active model ID with its provider from one server

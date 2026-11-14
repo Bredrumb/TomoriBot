@@ -12,17 +12,14 @@ and manages delivery lifecycle callbacks.
 `createChatResponseSink()` in `src/utils/chat/responseEmitter.ts` constructs a `ChatResponseSink`
 for the current `ChatTurnContext`:
 
-```
-ChatTurnContext
-  │
-  ▼
-createChatResponseSink() ─────────────────► returns ChatResponseSink
-  │
-  ├─► prepare()                           ──► resolves ChatResponseTarget, arms channel lock
-  ├─► emitStreamResult()                  ──► filters duplicate errors, sends generic error embeds
-  ├─► emitError()                         ──► surfaces exceptions (rethrows on impersonation)
-  ├─► finalize()                          ──► deletes temporary webhooks, logs turn metrics
-  └─► cleanup()                           ──► webhook deletion attempt in finally block
+```mermaid
+flowchart TD
+  ctx["ChatTurnContext"] --> create["createChatResponseSink()<br/>returns ChatResponseSink"]
+  create --> prep["prepare()<br/>resolves ChatResponseTarget, arms channel lock"]
+  create --> emitRes["emitStreamResult()<br/>filters duplicate errors, sends generic error embeds"]
+  create --> emitErr["emitError()<br/>surfaces exceptions (rethrows on impersonation)"]
+  create --> fin["finalize()<br/>deletes temporary webhooks, logs turn metrics"]
+  create --> clean["cleanup()<br/>webhook deletion attempt in finally block"]
 ```
 
 ### Delivery target resolution

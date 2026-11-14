@@ -1,6 +1,11 @@
 import type { Client, Guild, GuildMember } from "discord.js";
 import type { TomoriState, UserRow } from "@/types/db/schema";
 import type { ContributionExecutionDiagnostic } from "@/utils/contributions/registry";
+import {
+  measureChatTurnStage,
+  recordChatTurnParticipantDiscovery,
+  recordChatTurnParticipantLookup,
+} from "@/utils/chat/turnLatency";
 import type {
   MessageProxyConversationUser,
   PublicPersonaProfile,
@@ -119,6 +124,7 @@ export async function prepareParticipantContext(
   const requestScope = input.requestScope ?? createParticipantRequestScope();
   const cached = requestScope.discoveries.get(cacheKey);
   const discoveryCacheHit = Boolean(cached);
+  recordChatTurnParticipantDiscovery(discoveryCacheHit);
   const discoveryPromise =
     cached ??
     discoverParticipants(frozen, input.candidateSource, input.memberDirectory, input.messageProxyIdentitySource);
@@ -141,20 +147,22 @@ export async function prepareParticipantContext(
     publicPersonaProfiles,
     syntheticUsers: frozen.syntheticUsers,
   });
-  const composition = await composeParticipantDiscoveryPlan(
-    {
-      visibleInput: {
-        participantIds: frozen.visibleUserIds,
-        clientUserId: frozen.client.user?.id,
-        activePersonaId,
-        activePersonaIsAlter: frozen.activePersona?.is_alter,
-        syntheticUsers: frozen.syntheticUsers,
-        matrixUsers: frozen.matrixUsers,
+  const composition = await measureChatTurnStage("participant_composition_ms", () =>
+    composeParticipantDiscoveryPlan(
+      {
+        visibleInput: {
+          participantIds: frozen.visibleUserIds,
+          clientUserId: frozen.client.user?.id,
+          activePersonaId,
+          activePersonaIsAlter: frozen.activePersona?.is_alter,
+          syntheticUsers: frozen.syntheticUsers,
+          matrixUsers: frozen.matrixUsers,
+        },
+        personas: frozen.personas,
+        referencePlan,
       },
-      personas: frozen.personas,
-      referencePlan,
-    },
-    input.sourceRegistry,
+      input.sourceRegistry,
+    ),
   );
   const discoveryPlan = composition.plan;
   const rejectionCounts = { ...EMPTY_REJECTION_COUNTS };
@@ -265,7 +273,8 @@ async function discoverParticipants(
   const countedCandidateSource: UserReferenceCandidateSource = {
     loadCandidates: async (query) => {
       externalCalls.candidateSourceReads += 1;
-      return candidateSource.loadCandidates(query);
+      recordChatTurnParticipantLookup("candidate");
+      return measureChatTurnStage("participant_candidate_ms", () => candidateSource.loadCandidates(query));
     },
   };
   const messageProxyIdentitySource =
@@ -273,7 +282,8 @@ async function discoverParticipants(
   const countedMessageProxyIdentitySource: MessageProxyIdentityReferenceSource = {
     loadIdentities: async (query) => {
       externalCalls.messageProxyIdentityReads += 1;
-      return messageProxyIdentitySource.loadIdentities(query);
+      recordChatTurnParticipantLookup("proxy");
+      return measureChatTurnStage("participant_proxy_ms", () => messageProxyIdentitySource.loadIdentities(query));
     },
   };
   const memberDirectory =
@@ -285,8 +295,13 @@ async function discoverParticipants(
     ? {
         cachedMemberIds: () => [...cachedMemberIds],
         resolveMember: async (discordId) => {
-          if (cachedMemberIds.has(discordId)) externalCalls.memberCacheHits += 1;
-          else externalCalls.memberFetches += 1;
+          if (cachedMemberIds.has(discordId)) {
+            externalCalls.memberCacheHits += 1;
+            recordChatTurnParticipantLookup("member_cache");
+          } else {
+            externalCalls.memberFetches += 1;
+            recordChatTurnParticipantLookup("member_fetch");
+          }
           return memberDirectory.resolveMember(discordId);
         },
       }

@@ -17,35 +17,22 @@ and memory persistence are all reached through this pipeline.
 
 ## Stage flow
 
-```
-tomoriChat(TomoriChatInput)
-  │
-  ▼
-[01] normalizeChatInvocation                  → ChatIncoming
-  │
-  ▼
-[02] evaluateChatAdmission                    → ChatAdmission
-  │                                              (run | ignore | queued | blocked | error)
-  │   disposition === "run"?
-  │       no  ─────────────────────────────→ [03] handleChatDisposition → end
-  │       yes
-  ▼
-[04] runWithChannelLock {                     ← concurrency wrapper
-  │
-  ▼
-[05] planChatTurns                            → ChatTurnPlan { turns: ChatTurn[] }
-  │
-  │   turns.length === 0? ────────────────→ release lock, replay queue, end
-  │   else: for each turn:
-  │     │
-  │     ▼
-  │   [06-per-turn]
-  │     ├─ [01] buildChatTurnContext         → ChatTurnContext
-  │     ├─ [02] createChatResponseSink       → ChatResponseSink
-  │     ├─ [03] runGenerationTurn            → GenerationTurnResult
-  │     └─ [04] runPostTurnEffects
-  │
-} ← lock released, queued messages replayed
+```mermaid
+flowchart TD
+  entry["tomoriChat(TomoriChatInput)"] --> s01["[01] normalizeChatInvocation<br/>→ ChatIncoming"]
+  s01 --> s02["[02] evaluateChatAdmission<br/>→ ChatAdmission (run | ignore | queued | blocked | error)"]
+  s02 -->|"disposition !== run"| s03["[03] handleChatDisposition"]
+  s03 --> endRejected["End"]
+  s02 -->|"disposition === run"| s04
+
+  subgraph s04["[04] runWithChannelLock (concurrency wrapper)"]
+    s05["[05] planChatTurns<br/>→ ChatTurnPlan { turns: ChatTurn[] }"]
+    s05 -->|"turns.length === 0"| skip["Release lock, replay queue, end"]
+    s05 -->|"for each turn"| s0601["[06.01] buildChatTurnContext<br/>→ ChatTurnContext"]
+    s0601 --> s0602["[06.02] createChatResponseSink<br/>→ ChatResponseSink"]
+    s0602 --> s0603["[06.03] runGenerationTurn<br/>→ GenerationTurnResult"]
+    s0603 --> s0604["[06.04] runPostTurnEffects"]
+  end
 ```
 
 ## Stage index
@@ -119,6 +106,14 @@ overlap and must not be added to reconstruct total latency.
 | `assets_ms` | Persona emoji, sticker, and custom expression loading. |
 | `history_build_ms` | The whole `buildSimplifiedHistory` call, including `history_fetch_ms` and reply fetches. |
 | `participant_ms` | The `prepareParticipantContext` call; hydration inside `buildContext` belongs to `native_ms`. |
+| `participant_candidate_ms` | Candidate-source reads during fresh participant discovery, including repository work and retries. |
+| `participant_members_ms` | Wall time for the concurrent member-resolution batch, including cache hits and failed lookups. |
+| `participant_proxy_ms` | Proxy-identity source reads during fresh participant discovery. |
+| `participant_composition_ms` | Discovery-plan composition for the current persona, including request-cache reuse. |
+| `participant_candidate_reads` | Candidate-source read attempts. |
+| `participant_member_cache_hits` | Member lookups present in the discovery's initial member-cache snapshot. |
+| `participant_member_fetches` | Member lookups absent from that snapshot; a concurrent cache fill can still avoid REST. |
+| `participant_proxy_reads` | Proxy-identity source read attempts. |
 | `naming_ms` | The history naming projection. |
 | `reunion_ms` | Reunion note resolution; `-1` when a borrowed trigger skips it. |
 | `native_ms` | Sum of `buildContext` durations, including native assembly, participant hydration, RAG, and any preset reassembly. |
@@ -141,12 +136,21 @@ identifiers enter this metric.
 | `source` | `message`, `queue`, `persona_job`, `retry`, `manual`, or `stop`, using the diagnostic timeline's source precedence. |
 | `rag` | `yes` when built context contains server document retrieval content, otherwise `no`; it does not claim every retrieval attempt injected content. |
 | `history` | `reused` for a busy-stretch window, otherwise `rest`. |
+| `participant_discovery` | `fresh` when this turn starts discovery, `reused` when it awaits a request-cached discovery, or `unmeasured` before preparation reaches the cache lookup. |
 | `drafting` | `yes` when response review enabled holding response text during this turn, otherwise `no`. |
 
 For example, compare `dispatch_ms` for the same provider and source before inspecting the stage and
 download fields for the source of a change. `context_ms` minus the context stage fields
 (`assets_ms`, `history_build_ms`, `participant_ms`, `naming_ms`, `reunion_ms`, `native_ms`) leaves
 intent preflight, forced mentions, channel prompt lookups, sprite checks, and prefill.
+
+The four participant substages and their lookup counters record only while `participant_ms` is
+active, so later image-generation preparation cannot change them. Subtract these substages only
+from that parent when attributing participant work. Member timing covers the whole concurrent batch,
+so it does not sum overlapping lookup durations. Reused discovery leaves candidate, member, and proxy
+timings at `-1` and their counts at zero. Its wait for an in-flight discovery remains inside
+`participant_ms`, and composition is measured again for the current persona. Failed stages record
+elapsed time; unreached stages remain `-1`. Exclude those sentinels when calculating a remainder.
 
 ## Source pointers
 

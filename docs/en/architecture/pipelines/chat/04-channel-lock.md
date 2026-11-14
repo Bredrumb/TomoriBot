@@ -12,23 +12,15 @@ when the lock releases.
 `runWithChannelLock()` in `src/utils/chat/channelQueue.ts` wraps turn planning and execution inside a
 per-channel mutex backed by the in-memory `channelLocks` map.
 
-```
-runWithChannelLock(admission, callback)
-  │
-  ├─► skipLock === true? ─────────────────► invoke callback(reuseOuterLock)
-  │
-  ├─► releaseStaleChannelLockIfExpired()
-  ├─► acquireChannelLockForTurn()         ──► sets isLocked, initializes AbortController
-  │
-  ▼
-try {
-  callback(lockedTurn, startTyping)       ──► startDiscordTypingKeepalive() (8s cadence)
-} finally {
-  releaseChannelLockAndReplayQueue()      ──► stops typing, aborts turn controller
-    │
-    ├─► stopContext present?              ──► setImmediate(handleStopResponse)
-    └─► messageQueue has items?           ──► setImmediate(processQueuedMessage)
-}
+```mermaid
+flowchart TD
+  entry["runWithChannelLock(admission, callback)"] -->|"skipLock === true"| reuse["invoke callback(reuseOuterLock)"]
+  entry -->|"skipLock !== true"| stale["releaseStaleChannelLockIfExpired()"]
+  stale --> acquire["acquireChannelLockForTurn()<br/>sets isLocked, initializes AbortController"]
+  acquire --> cb["callback(lockedTurn, startTyping)<br/>startDiscordTypingKeepalive() (8s cadence)"]
+  cb --> release["finally: releaseChannelLockAndReplayQueue()<br/>stops typing, aborts turn controller"]
+  release -->|"stopContext present"| stop["setImmediate(handleStopResponse)"]
+  release -->|"messageQueue has items"| replay["setImmediate(processQueuedMessage)"]
 ```
 
 The first turn starts typing alongside context building and waits for both before generation, so

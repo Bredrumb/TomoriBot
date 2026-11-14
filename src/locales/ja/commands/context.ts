@@ -30,6 +30,8 @@ export default {
     persona_not_found_title: `ペルソナが見つかりません`,
     persona_not_found_description: `指定されたペルソナはこのサーバーに存在しません。リストから選択してください。`,
     build_failed_title: `コンテキストを取得できません`,
+    novelai_unavailable_description:
+      "NovelAIの適合状況を確認できません。設定されたキーとローカルトークナイザーを確認し、通常のメッセージを送信してサブスクリプション情報を読み込んでから、もう一度確認してください。",
     build_failed_description: `プロンプトを構築するためのこのチャンネルの履歴を読み取れませんでした。Botが閲覧可能なテキストチャンネルでもう一度お試しください。`,
     no_permission_title: `権限が不足しています`,
     no_permission_description: `**サーバー管理**権限が必要です。または、管理者が \`/moderation\` で一般メンバーにプロンプト全文の閲覧を許可することもできます。`,

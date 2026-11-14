@@ -1,0 +1,121 @@
+---
+title: "WhisperX 轉錄"
+sidebar:
+  order: 1
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+使用隨附的[WhisperX](https://github.com/m-bain/whisperX)伺服器為TomoriBot設定準確的本機語音轉文字功能。WhisperX提供具備字詞層級對齊的高速音訊轉錄。
+
+## 設定
+
+從TomoriBot存放庫根目錄執行以下指令：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+cd servers/stt
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+python whisperx_server.py
+```
+
+請確認`PATH`中已有`ffmpeg`。若要使用NVIDIA GPU加速，`PATH`中也必須包含CUDA 12的cuBLAS與cuDNN DLL。
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+cd servers/stt
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python whisperx_server.py
+```
+
+請確認已安裝`ffmpeg`（Debian/Ubuntu上為`sudo apt-get install ffmpeg`）。在搭載NVIDIA GPU的系統上，CUDA 12執行階段函式庫會啟用GPU轉錄。
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+cd servers/stt
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python whisperx_server.py
+```
+
+請確認已安裝`ffmpeg`（`brew install ffmpeg`）。由於`servers/stt/requirements.txt`參照了`--extra-index-url https://download.pytorch.org/whl/cu124`（僅限Linux/Windows CUDA），`pip`在Mac上會改用標準PyPI wheel。CTranslate2不使用Apple MPS，因此轉錄會在CPU上執行（預設為`int8`，必要時可設定`WHISPERX_COMPUTE_TYPE=float32`）。
+
+</TabItem>
+</Tabs>
+
+當TomoriBot使用WhisperX時，請保持該終端機視窗開啟。預設端點URL為`http://127.0.0.1:8021`。在Windows上，請使用`127.0.0.1`代替`localhost`。
+
+## 選擇模型
+
+在啟動伺服器前設定`WHISPERX_MODEL`：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$env:WHISPERX_MODEL = "large-v3-turbo"
+python servers\stt\whisperx_server.py
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+WHISPERX_MODEL=large-v3-turbo python servers/stt/whisperx_server.py
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+WHISPERX_MODEL=large-v3-turbo python servers/stt/whisperx_server.py
+```
+
+</TabItem>
+</Tabs>
+
+| `WHISPERX_MODEL` | 大小 | 用途 |
+|---|---|---|
+| `large-v3` | 1.55B | 多語言準確度最佳；比turbo多約0.6GiB VRAM |
+| `large-v3-turbo` | 809M | 多語言，解碼器更快；日語準確度略遜 |
+| `kotoba-tech/kotoba-whisper-v2.0-faster` | 756M | 僅支援日語；在日語測試片段上的準確度高於turbo，速度相同 |
+
+在簡短片段上以編碼器運算為主，因此這三者的執行速度差不多。請依語言與記憶體需求挑選。不建議使用`small`與`base`，因為其日語準確度下降過多。在極短或接近無聲的片段上，Whisper模型仍可能憑空捏造文字。
+
+## GPU與裝置行為
+
+當CUDA與CTranslate2可用時，伺服器會自動使用NVIDIA GPU。請檢查`http://127.0.0.1:8021/health`：在GPU環境中`device`會顯示`cuda`，在CPU與Mac環境中則顯示`cpu`。
+
+在Windows上，語音辨識需要將CUDA 12的cuBLAS與cuDNN DLL放在`PATH`中。如果缺少這些檔案，伺服器在啟動時會輸出`GPU found but unusable`並改在CPU上執行，速度會慢很多：請安裝這些檔案並重新啟動伺服器。若設定了`WHISPERX_DEVICE=cuda`，伺服器則會在啟動時停止而非改用CPU。
+
+在Mac上，CTranslate2會在CPU上進行轉錄；設定`WHISPERX_DEVICE=cuda`會失敗。
+
+## 在TomoriBot中註冊
+
+執行`/providers`，選擇`+ 新增自訂端點`，並使用轉錄API相容性：
+
+- `API 相容性`：`OpenAI 相容轉錄`（`openai-compatible-transcription`）
+- `端點 URL`：`http://127.0.0.1:8021`
+
+儲存連線後，選取它並使用其模型下拉選單選擇`+ 新增轉錄模型`，將`WHISPERX_MODEL`的確切值（預設為`large-v3`，或是完整的存放庫ID，如`kotoba-tech/kotoba-whisper-v2.0-faster`）新增為轉錄模型。
+
+端點註冊與模型設定請使用`/providers`。接著開啟`/config` > `模型` > `切換模型`，選取並啟用已註冊的端點。
+
+## 使用逐字稿
+
+註冊後，TomoriBot會在背景轉錄音訊附件並將文字加入聊天脈絡。只有當你也希望在聊天室中公開張貼逐字稿時，才使用`/config` > `行為` > `通知行為`。

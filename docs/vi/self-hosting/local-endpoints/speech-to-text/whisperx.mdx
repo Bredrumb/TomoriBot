@@ -1,0 +1,121 @@
+---
+title: "Phiên âm WhisperX"
+sidebar:
+  order: 1
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Thiết lập khả năng chuyển giọng nói thành văn bản chính xác tại máy cục bộ cho TomoriBot bằng máy chủ [WhisperX](https://github.com/m-bain/whisperX) đi kèm. WhisperX cung cấp tốc độ phiên âm âm thanh nhanh với khả năng căn chỉnh chính xác từng từ.
+
+## Thiết lập
+
+Chạy các lệnh sau từ thư mục gốc kho lưu trữ TomoriBot:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+cd servers/stt
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+python whisperx_server.py
+```
+
+Đảm bảo `ffmpeg` có sẵn trong `PATH` của bạn. Để tăng tốc bằng GPU NVIDIA, các tệp DLL CUDA 12 cuBLAS và cuDNN cũng phải nằm trong `PATH`.
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+cd servers/stt
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python whisperx_server.py
+```
+
+Đảm bảo đã cài đặt `ffmpeg` (`sudo apt-get install ffmpeg` trên Debian/Ubuntu). Trên hệ thống có GPU NVIDIA, thư viện runtime CUDA 12 sẽ bật tính năng phiên âm bằng GPU.
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+cd servers/stt
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python whisperx_server.py
+```
+
+Đảm bảo đã cài đặt `ffmpeg` (`brew install ffmpeg`). Do `servers/stt/requirements.txt` có tham chiếu `--extra-index-url https://download.pytorch.org/whl/cu124` (chỉ dành cho CUDA trên Linux/Windows), `pip` sẽ tự động dùng các wheel PyPI tiêu chuẩn trên Mac. CTranslate2 không dùng Apple MPS, nên quá trình phiên âm chạy trên CPU (mặc định là `int8`, hoặc đặt `WHISPERX_COMPUTE_TYPE=float32` nếu cần).
+
+</TabItem>
+</Tabs>
+
+Giữ cửa sổ terminal đó mở trong khi TomoriBot đang sử dụng WhisperX. URL endpoint mặc định là `http://127.0.0.1:8021`. Trên Windows, hãy dùng `127.0.0.1` thay cho `localhost`.
+
+## Chọn model
+
+Đặt `WHISPERX_MODEL` trước khi khởi động máy chủ:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$env:WHISPERX_MODEL = "large-v3-turbo"
+python servers\stt\whisperx_server.py
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+WHISPERX_MODEL=large-v3-turbo python servers/stt/whisperx_server.py
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+WHISPERX_MODEL=large-v3-turbo python servers/stt/whisperx_server.py
+```
+
+</TabItem>
+</Tabs>
+
+| `WHISPERX_MODEL` | Kích thước | Công dụng |
+|---|---|---|
+| `large-v3` | 1.55B | Độ chính xác đa ngôn ngữ cao nhất; tốn nhiều hơn khoảng 0.6 GiB VRAM so với turbo |
+| `large-v3-turbo` | 809M | Đa ngôn ngữ, bộ giải mã nhanh hơn; tiếng Nhật hơi kém hơn một chút |
+| `kotoba-tech/kotoba-whisper-v2.0-faster` | 756M | Chỉ dành cho tiếng Nhật; chính xác hơn turbo trên các đoạn kiểm thử tiếng Nhật ở cùng tốc độ |
+
+Với các đoạn âm thanh ngắn, bộ mã hóa chiếm phần lớn thời gian nên cả ba đều chạy với tốc độ tương đương. Hãy chọn theo ngôn ngữ và dung lượng bộ nhớ. `small` và `base` mất quá nhiều độ chính xác ở tiếng Nhật nên không được khuyến nghị. Các model Whisper vẫn có thể bịa ra văn bản trên những đoạn âm thanh rất ngắn hoặc gần như im lặng.
+
+## Hành vi GPU và thiết bị
+
+Máy chủ tự động dùng GPU NVIDIA khi CUDA và CTranslate2 khả dụng. Kiểm tra `http://127.0.0.1:8021/health`: trường `device` sẽ báo `cuda` trên máy dùng GPU hoặc `cpu` trên máy chỉ dùng CPU và Mac.
+
+Trên Windows, nhận diện giọng nói cần các tệp DLL CUDA 12 cuBLAS và cuDNN có sẵn trong `PATH`. Nếu thiếu, máy chủ sẽ in ra `GPU found but unusable` khi khởi động và lùi về CPU vốn chậm hơn rất nhiều: hãy cài đặt chúng và khởi động lại máy chủ. Nếu bạn đặt `WHISPERX_DEVICE=cuda`, máy chủ sẽ dừng ngay khi khởi động thay vì lùi về CPU.
+
+Trên Mac, CTranslate2 phiên âm trên CPU; `WHISPERX_DEVICE=cuda` sẽ báo lỗi tại đó.
+
+## Đăng ký trong TomoriBot
+
+Chạy `/providers`, chọn `Thêm endpoint tùy chỉnh mới`, và dùng độ tương thích API phiên âm:
+
+- Độ tương thích API: `openai-compatible-transcription`
+- `endpoint_url`: `http://127.0.0.1:8021`
+
+Sau khi lưu kết nối, chọn nó và dùng dropdown model để thêm chính xác giá trị của `WHISPERX_MODEL` (mặc định là `large-v3`, hoặc ID kho lưu trữ đầy đủ như `kotoba-tech/kotoba-whisper-v2.0-faster`) làm model `Chép lời`.
+
+Dùng `/providers` để đăng ký endpoint và thiết lập model. Sau đó mở `/config` > `Model` > `Chuyển đổi model` để chọn và kích hoạt endpoint đã đăng ký.
+
+## Sử dụng bản chép lời
+
+Sau khi đăng ký, TomoriBot sẽ tự động phiên âm các tệp âm thanh đính kèm ở chế độ nền và đưa văn bản vào ngữ cảnh trò chuyện. Chỉ mở `/config` > `Hành vi` > `Hành vi thông báo` nếu bạn muốn các bản chép lời cũng được đăng hiển thị công khai trong cuộc trò chuyện.

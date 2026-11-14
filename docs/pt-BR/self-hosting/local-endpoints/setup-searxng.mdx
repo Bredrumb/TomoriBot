@@ -1,0 +1,105 @@
+---
+title: "Configuração: SearXNG"
+sidebar:
+  label: "SearXNG"
+  order: 4
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Adicione busca privada e de hospedagem própria ao TomoriBot usando o [SearXNG](https://docs.searxng.org/).
+
+A ferramenta `web_search` consulta Brave, SearXNG, OpenRouter Search e DuckDuckGo nessa ordem. Em turnos do OpenRouter com uma chave salva, o OpenRouter Search atende buscas de texto e cobre buscas de notícias, artigos e código se um motor anterior falhar. Executar uma instância local do SearXNG oferece uma fonte de busca de hospedagem própria quando um provedor externo atinge limites de taxa ou falha, além de habilitar categorias especializadas: `science`, `it`, `files` e `music`.
+
+Escolha um caminho de configuração:
+
+### Opção A: Docker Compose (quando o TomoriBot roda no Docker)
+
+Use este caminho se você executa o TomoriBot com a pilha Docker Compose do repositório. Execute com o perfil `searxng`:
+
+```sh
+docker compose --profile searxng up -d
+```
+
+Defina `SEARXNG_BASE_URL=http://searxng:8080/` no `.env` antes de iniciar esse perfil. O bot usa esse endereço para alcançar o serviço `searxng`. Deixe a variável sem definição quando o perfil estiver desativado.
+
+Se você executa o TomoriBot diretamente com `bun run dev`, use o caminho autônomo abaixo.
+
+Defina `SEARXNG_SECRET` no `.env` com um valor aleatório separado para a chave de assinatura do contêiner.
+
+---
+
+### Opção B: Docker autônomo (ao executar `bun run dev`)
+
+Primeiro, defina `SEARXNG_BASE_URL=http://localhost:8080/` no `.env` para que o bot saiba onde conectar.
+
+Depois, em vez de executar o TomoriBot diretamente com `bun run dev`, use `bun run launch --searxng`. Isso gerencia o ciclo de vida do contêiner automaticamente e aguarda o contêiner ficar saudável antes de iniciar o bot:
+
+```sh
+bun run launch --searxng
+```
+
+Se você preferir gerenciar o contêiner manualmente, mantenha `SEARXNG_BASE_URL=http://localhost:8080/` no `.env`. Primeiro compile a imagem do repositório para carregar as configurações de busca em JSON e substituir a chave de assinatura:
+
+```sh
+docker build -t tomoribot-searxng:latest -f servers/searxng/Dockerfile servers/searxng
+```
+
+Em seguida, inicie o contêiner:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+docker run -d --name searxng -p 8080:8080 `
+  --tmpfs /etc/searxng `
+  tomoribot-searxng:latest
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+docker run -d --name searxng -p 8080:8080 \
+  --tmpfs /etc/searxng \
+  tomoribot-searxng:latest
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+docker run -d --name searxng -p 8080:8080 \
+  --tmpfs /etc/searxng \
+  tomoribot-searxng:latest
+```
+
+</TabItem>
+</Tabs>
+
+Depois execute `bun run dev` assim que o contêiner estiver saudável (`docker ps` mostra `(healthy)`). Sem `SEARXNG_SECRET` no ambiente do contêiner, a imagem gera uma chave de assinatura efêmera.
+
+---
+
+### Opção C: Sem SearXNG
+
+Deixe `SEARXNG_BASE_URL` sem definição. A cadeia tenta Brave, depois OpenRouter Search em turnos do OpenRouter e então DuckDuckGo para buscas de texto. O OpenRouter Search usa o modelo ativo e créditos do OpenRouter, inclusive com modelos de chat gratuitos. Buscas de texto com falha, incluindo erros de créditos insuficientes, caem para o DuckDuckGo.
+
+Quando nenhum servidor SearXNG está configurado, o esquema montado do `web_search` deixa de anunciar categorias exclusivas do SearXNG. As categorias comuns (`text`, `image`, `video`, `news`) continuam aparecendo quando o Brave está configurado. O OpenRouter Search e o DuckDuckGo expõem apenas busca de texto.
+
+Se Brave ou SearXNG falharem durante um turno, o OpenRouter Search consegue atender chamadas de `news`, `papers` e `code` com citações em texto. Ele não consegue fornecer resultados de `image`, `video`, `file` ou `music`. Quando todos os motores de uma dessas categorias falham, o modelo recebe um resultado de categoria indisponível e pode pedir uma busca de texto em vez disso.
+
+---
+
+## Ajuste de resultados de imagem
+
+Os resultados de imagem do SearXNG são validados via HEAD, opcionalmente comprimidos e enviados como anexos no Discord: experiência idêntica às imagens do Brave. Se todas as URLs candidatas falharem na validação, o SearXNG retorna uma lista em texto com os links das imagens em vez de uma falha rígida.
+
+| Variável | Padrão | Descrição |
+|---|---|---|
+| `SEARXNG_IMAGE_COUNT` | `3` (máx. 10) | Quantas imagens válidas são enviadas ao Discord. Sobrescrito pelo argumento `count` do LLM. |
+| `SEARXNG_IMAGE_POOL` | `10` | Pool de URLs candidatas quando o LLM não especifica `count`. Quando `count` é especificado, o pool é `count × 3` (limitado a 30) para absorver falhas de proteção contra hotlink. |
+| `WEB_SEARCH_TIMEOUT_MS` | não definido | Tempo limite de solicitação por motor. |
+
+*(Consulte `.env.optional.example` para ver todas as opções ajustáveis.)*

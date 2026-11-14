@@ -14,7 +14,7 @@ sidebar:
   order: 1
 ---
 
-import { LinkButton, Aside } from "@astrojs/starlight/components";
+import { LinkButton, Aside, Tabs, TabItem } from "@astrojs/starlight/components";
 
 This guide takes you from scratch to your first message with TomoriBot. You can either invite the ready public instance or self-host your own, then complete setup inside Discord.
 
@@ -43,13 +43,43 @@ If you prefer full control over your privacy and data, you can run your own Tomo
   bun run setup # installs dependencies, configures .env, and sets up PostgreSQL
   bun run dev # starts the bot and runs DB migrations automatically
   ```
-- **Option 2: Docker Compose**: requires [Docker](https://www.docker.com/) and Docker Compose v2+, and a [Discord bot token](https://discord.com/developers/applications) with the same three intents enabled:
-  ```sh
-  git clone https://github.com/Bredrumb/TomoriBot.git
-  cd TomoriBot
-  cp .env.example .env # set DISCORD_TOKEN, CRYPTO_SECRET, POSTGRES_PASSWORD, and ALLOW_PRIVATE_NETWORK
-  docker compose up
-  ```
+- **Option 2: Docker Compose**: requires [Docker](https://www.docker.com/) and Docker Compose v2+, and a [Discord bot token](https://discord.com/developers/applications) with the same three intents enabled (see the [Docker Compose guide](/self-hosting/docker-compose/) for required `.env` variables and Linux directory permissions):
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+git clone https://github.com/Bredrumb/TomoriBot.git
+cd TomoriBot
+Copy-Item .env.example .env
+# Set DISCORD_TOKEN, CRYPTO_SECRET, POSTGRES_PASSWORD, and ALLOW_PRIVATE_NETWORK in .env
+docker compose up
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+git clone https://github.com/Bredrumb/TomoriBot.git
+cd TomoriBot
+cp .env.example .env
+# Set DISCORD_TOKEN, CRYPTO_SECRET, POSTGRES_PASSWORD, and ALLOW_PRIVATE_NETWORK in .env
+docker compose up
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+git clone https://github.com/Bredrumb/TomoriBot.git
+cd TomoriBot
+cp .env.example .env
+# Set DISCORD_TOKEN, CRYPTO_SECRET, POSTGRES_PASSWORD, and ALLOW_PRIVATE_NETWORK in .env
+docker compose up
+```
+
+</TabItem>
+</Tabs>
 
 After, invite her to any server you have `Manage Server` permissions in, or talk to her in DMs.
 

@@ -9,7 +9,7 @@ aiGenerated: false
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
 
-テキスト生成からMCPユーティリティまで、すべてをローカルに配置してTomoriBotインスタンスを実行することは十分に可能です。以下のすべてのエンドポイントはOpenAI互換、または小さなリファレンスラッパーであり、`/providers`コマンドを通じて登録され、データベースに暗号化されて保存されます（`.env`は必要ありません）。
+テキスト生成、メディアエンジン、MCPユーティリティをご自身のマシン上で実行します。モデル接続は `/providers` または `/personal providers` から登録してください。保存されたAPIキーはデータベース内で暗号化されます。別のマシン上のエンジンには、以下のリモートアクセス設定も必要です。
 セットアップする機能を選択してください。
 
 ## テキストと埋め込み
@@ -17,8 +17,6 @@ import { CardGrid, LinkCard } from "@astrojs/starlight/components";
 <CardGrid>
   <LinkCard title="ローカルLLM" href="/ja/self-hosting/local-endpoints/setup-local-llm/"
     description="テキスト生成や埋め込み用のOllama、KoboldCPP、LM Studio、vLLM、LiteLLMなどのOpenAI互換サーバー。" />
-  <LinkCard title="ChatMock経由のCodex CLI" href="/ja/self-hosting/local-endpoints/setup-chatmock/"
-    description="TomoriBotでCodex CLIモデルを使用できるようにするローカルのOpenAI互換ブリッジ。" />
 </CardGrid>
 
 ## 画像と動画
@@ -49,10 +47,23 @@ import { CardGrid, LinkCard } from "@astrojs/starlight/components";
 ## カスタムツール
 
 <CardGrid>
-  <LinkCard title="slop-guard" href="/ja/self-hosting/local-endpoints/setup-slop-guard/"
+  <LinkCard title="slop-guard" href="/ja/self-hosting/mcp-servers/setup-slop-guard/"
     description="下書きレビューのルールチェッカーとして使用できる、ルールベースの文章校正ツール。" />
-  <LinkCard title="ローカルMCPサーバー" href="/ja/self-hosting/local-endpoints/setup-local-mcp/"
+  <LinkCard title="ローカルMCPサーバー" href="/ja/self-hosting/mcp-servers/setup-local-mcp/"
     description="ローカルのMCPサーバーを実行し、独自のツールでTomoriBotを拡張します（セルフホストインスタンスのみ）。" />
+</CardGrid>
+
+## プロキシとリモートアクセス
+
+サードパーティ製ブリッジ経由でCLIベースのアカウントを使用する前に、[アカウントのリスク](/self-hosting/local-endpoints/proxies-and-remote-access/#account-risk)を確認してください。
+
+<CardGrid>
+  <LinkCard title="ChatMock" href="/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/"
+    description="お使いのマシン上で認可されたChatGPT利用ブリッジを接続します。" />
+  <LinkCard title="CLIProxyAPI" href="/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/"
+    description="ローカルプロキシをインストールし、認可されたアップストリームからモデルを登録します。" />
+  <LinkCard title="Cloudflare Tunnel" href="/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/"
+    description="ホストされたボット向けに、自宅のエンジンへ公開HTTPS URLを付与します。" />
 </CardGrid>
 
 ## `bun run launch`でのローカルサーバーの起動

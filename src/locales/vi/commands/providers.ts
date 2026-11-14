@@ -201,6 +201,16 @@ export default {
     },
     model_compat_label: `Tương thích Chat Completion`,
     model_compat_description: `Điều chỉnh định dạng và giao thức cho backend nghiêm ngặt. Để tắt trừ khi thật sự cần.`,
+    model_image_request_format_label: `Định dạng yêu cầu hình ảnh`,
+    model_image_request_format_description: `Khớp với định dạng API mà model hình ảnh này chấp nhận.`,
+    image_request_formats: {
+      images: `Images API`,
+      "chat-completions": `Chat Completions`,
+    },
+    image_request_format_descriptions: {
+      images: `Gửi prompt tới /images/generations.`,
+      "chat-completions": `Gửi yêu cầu tạo ảnh dưới dạng tin nhắn chat tới /chat/completions.`,
+    },
     model_image_supports_label: `Tính năng hình ảnh`,
     model_image_supports_description: `Chỉ khai báo các tính năng hình ảnh mà model và endpoint này thực sự hỗ trợ.`,
     model_image_supports: {

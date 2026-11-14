@@ -1,0 +1,281 @@
+---
+title: "Manual Setup"
+aiGenerated: false
+sidebar:
+  order: 2
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+:::note
+Users who want to use Docker Compose should skip this wizard, see
+[Docker Compose](/self-hosting/docker-compose/) for the containerized install path.
+:::
+
+This is the manual install procedure for technical users who'd rather not use the guided wizard. If you want the hand-held path, use the [setup wizard](/self-hosting/setup-wizard/) instead as it creates `.env`, generates a safe `CRYPTO_SECRET`, configures PostgreSQL, and runs the install for you.
+
+## Prerequisites
+
+- [Bun](https://bun.sh/)
+- PostgreSQL installed natively, or run in a Docker container (see step 2)
+
+PostgreSQL schema, `pgcrypto`, seeds, and migrations initialize automatically on bot startup.
+
+## 1. Install
+
+```sh
+git clone https://github.com/Bredrumb/TomoriBot.git
+cd TomoriBot
+bun install --frozen-lockfile
+```
+
+## 2. Configure
+
+Create your environment file from the example and fill in the required values:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+Copy-Item .env.example .env
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+cp .env.example .env
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+cp .env.example .env
+```
+
+</TabItem>
+</Tabs>
+
+Required:
+
+- `DISCORD_TOKEN`: your Discord bot token (enable the `GuildMembers`, `MessageContent`, and `GuildPresences` privileged intents).
+- `CRYPTO_SECRET`: a 32-character encryption key (used to encrypt stored API keys).
+- PostgreSQL connection: `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`.
+- `ALLOW_PRIVATE_NETWORK`: `true`, `false`, or a `host:port` list. See [Private networks](/self-hosting/setup-wizard/#private-networks) to choose.
+
+Keep a protected copy of your encryption secret separately from database backups. New backups contain no `.env`. For rotation, use `CRYPTO_SECRET_V1`, `CRYPTO_SECRET_V2`, or any later positive integer version, with optional `CRYPTO_SECRET_CURRENT` selection.
+
+:::note[No native PostgreSQL?]
+Run just the database in a container, then point the `POSTGRES_*` values at it:
+
+```sh
+docker run -d --name tomori-db \
+  -e POSTGRES_USER=tomori -e POSTGRES_PASSWORD=yourpassword -e POSTGRES_DB=tomori \
+  -p 5432:5432 pgvector/pgvector:pg16
+```
+
+Then set `POSTGRES_HOST=localhost`, `POSTGRES_PORT=5432`, and the user/password/db above. The `pgvector/pgvector` image ships the RAG extension pre-installed; swap it for `postgres:16` if you don't need document/RAG memory. This runs only the database in Docker and the bot still runs on host Bun. For a fully containerized bot and database, use [Docker Compose](/self-hosting/docker-compose/) instead.
+:::
+
+Optional tuning lives in `.env.optional.example`. Copy over any values you want to customize (limits, timeouts, feature toggles, local server URLs, etc.).
+
+Keep the `data/` directory on persistent storage. Local files can include persona avatars and sprites in `data/avatars/`, voice samples in `data/voice-samples/`, and custom expressions in `data/custom-expressions/`. The database is stored separately, so back it up alongside these files.
+
+## 3. Run
+
+```sh
+bun run dev
+```
+
+When you see `TomoriBot up and running!`, go to Discord and run `/setup` in your server to connect an AI provider and initialize the bot. The command opens a guided checklist panel, and nothing is written until you press `Finish Setup`.
+
+Use `bun run launch` instead of `bun run dev` if you want optional local servers (SearXNG, Crawl4AI, local TTS/STT) launched alongside the bot:
+
+```sh
+bun run launch --searxng --crawl4ai
+bun run launch --help        # see all flags
+```
+
+## Optional extras (the manual "Full Install")
+{/* anchor: optional-extras-the-manual-full-install */}
+
+The [setup wizard](/self-hosting/setup-wizard/)'s `Full Install` path layers lightweight extras on top of the base install. None are required to run the bot, but each unlocks a feature. If you're installing by hand, add whichever you want:
+
+### `pgvector`: document/RAG memory
+
+RAG (document uploads and cross-channel recall) stores embeddings in a `vector` column, which needs the [pgvector](https://github.com/pgvector/pgvector) extension.
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+There is no prebuilt `pgvector` package for native Windows PostgreSQL. Installing it natively requires building from source against your exact PostgreSQL version with Visual Studio C++ and `nmake` (see pgvector's [Windows instructions](https://github.com/pgvector/pgvector#windows)). The simpler path on Windows is to run PostgreSQL in the `pgvector/pgvector` container shown under [Configure](#2-configure), then open `psql` inside it:
+
+```powershell
+docker exec -it tomori-db psql -U tomori -d tomori
+```
+
+If you built `pgvector` for native Windows PostgreSQL, connect with `psql` instead:
+
+```powershell
+psql -h localhost -p 5432 -U tomori -d tomodb
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+Install the `pgvector` package for your PostgreSQL major version (Debian/Ubuntu example for PostgreSQL 16):
+
+```bash
+sudo apt-get install -y postgresql-16-pgvector
+```
+
+Connect to your database with `psql` (or `docker exec -it tomori-db psql -U tomori -d tomori` if running in Docker):
+
+```bash
+psql -h localhost -p 5432 -U tomori -d tomodb
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+Install `pgvector` via Homebrew against Homebrew's matching PostgreSQL formula (if you pin an older PostgreSQL formula whose bottle does not match, build `pgvector` from source with `make && make install` against that formula's `pg_config`):
+
+```bash
+brew install pgvector
+```
+
+Connect to your database with `psql` (or `docker exec -it tomori-db psql -U tomori -d tomori` if running in Docker):
+
+```bash
+psql -h localhost -p 5432 -U tomori -d tomodb
+```
+
+</TabItem>
+</Tabs>
+
+Once connected (`psql` prompts for `POSTGRES_PASSWORD`), enable the extension:
+
+```sql
+CREATE EXTENSION vector;
+```
+
+Without pgvector the bot still runs but RAG features become completely unavailable. This extension is also required on the target database before restoring a backup; see [Maintenance & Backups](/self-hosting/maintenance/) for details.
+
+### `pg_cron`: scheduled cleanup jobs
+
+`pg_cron` powers optional periodic database maintenance (cooldown/reminder-row cleanup). Docker Compose from this repo already configures it.
+
+:::caution[Not required for reminders or triggers]
+`pg_cron` performs purely housekeeping as it only cleans up stale rows. Reminder delivery and random triggers run in the app itself, so those features work with or without `pg_cron`.
+:::
+
+For a self-managed PostgreSQL, install the extension package if needed before loading it in `postgresql.conf`:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+There are no standard prebuilt binaries for `pg_cron` on native Windows PostgreSQL; compiling it requires a Visual Studio C++ build (`nmake`) against your PostgreSQL server headers, or running PostgreSQL via [Docker Compose](/self-hosting/docker-compose/) or WSL2 Linux instead. Because `pg_cron` only cleans expired rows, skipping it leaves all bot features working.
+
+</TabItem>
+<TabItem label="Linux">
+
+Install the `pg_cron` package for your PostgreSQL major version (Debian/Ubuntu example for PostgreSQL 16):
+
+```bash
+sudo apt-get install -y postgresql-16-cron
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+Install `pg_cron` via Homebrew against Homebrew's matching PostgreSQL formula:
+
+```bash
+brew install pg_cron
+```
+
+</TabItem>
+</Tabs>
+
+Find your active config file in `psql`:
+
+```sql
+SHOW config_file;
+```
+
+Enable the extension in `postgresql.conf`: append to `shared_preload_libraries` if it already lists other libraries:
+
+```ini
+shared_preload_libraries = 'pg_cron'   # e.g. 'pg_stat_statements,pg_cron'
+cron.database_name = 'your_dbname'
+```
+
+Restart PostgreSQL, then:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+```
+
+### Tokenizer assets
+
+NovelAI text generation and model-aware logit bias need local tokenizer assets:
+
+```sh
+bun run setup:tokenizers
+```
+
+Some families (e.g. Gemma) are gated and require a [HuggingFace token](https://huggingface.co/settings/tokens) after you accept their license:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$secureToken = Read-Host -Prompt "Hugging Face token" -AsSecureString
+$env:HF_TOKEN = [System.Net.NetworkCredential]::new("", $secureToken).Password
+try {
+  bun run setup:tokenizers
+} finally {
+  Remove-Item Env:\HF_TOKEN -ErrorAction SilentlyContinue
+}
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+read -r -s -p "Hugging Face token: " HF_TOKEN
+echo
+HF_TOKEN="$HF_TOKEN" bun run setup:tokenizers
+unset HF_TOKEN
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+printf 'Hugging Face token: '
+read -r -s HF_TOKEN
+echo
+HF_TOKEN="$HF_TOKEN" bun run setup:tokenizers
+unset HF_TOKEN
+```
+
+</TabItem>
+</Tabs>
+
+Missing assets disable optional logit bias. NovelAI text generation requires its three tokenizer families and returns a setup error if they are missing or invalid. These families use pinned public MIT definitions and need no Hugging Face token. To install only those families:
+
+```sh
+bun run setup:tokenizers --family novelai_nerdstash_v2
+bun run setup:tokenizers --family novelai_llama3
+bun run setup:tokenizers --family novelai_glm
+```
+
+The downloader writes to the repository's `tokenizers/` directory. If `TOKENIZER_ASSET_DIR` points elsewhere, copy the downloaded family directories there. Restart TomoriBot after installing or repairing assets, because the runtime caches load failures.
+
+The secure `fetch_url` fallback and the DuckDuckGo `web_search` fallback both run in process, so neither needs an extra installation.
+
+## Maintenance, updating, and backups
+
+Once you're installed, the host-side scripts (`bun run update`, `bun run backup`, `bun run restore-backup`, `bun run nuke-db`, `bun run rotate-keys`, ...) and the update and backup procedures all live on the [Maintenance & Backups](/self-hosting/maintenance/) page. If you're about to pull a new version, start with [Maintenance & Backups](/self-hosting/maintenance/).

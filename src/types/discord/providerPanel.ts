@@ -1,6 +1,6 @@
 import type { CustomEndpointApiStyle, CustomEndpointCapability, VramHandoffBackend } from "@/types/db/schema";
 import type { PanelReadStatus } from "@/types/discord/panel";
-import type { ImageEndpointSupports } from "@/utils/provider/customImageEndpointSupport";
+import type { ImageEndpointSupports, ImageRequestFormat } from "@/utils/provider/customImageEndpointSupport";
 import type { SpeechEndpointSettings } from "@/utils/provider/customSpeechEndpointSettings";
 
 export type ProviderPanelCapability = CustomEndpointCapability;
@@ -24,6 +24,7 @@ export interface ProviderPanelModel {
   };
   decisionSettings?: { inputTokenLimit: number };
   imageSettings?: ImageEndpointSupports;
+  imageRequestFormat?: ImageRequestFormat;
   speechSettings?: SpeechEndpointSettings;
   speechActiveModes?: ("design" | "clone")[];
 }

@@ -15,7 +15,7 @@ aiGenerated: false
 ---
 
 <!-- STUB（第一階段結構）。第二階段會寫入：需求 + 模組目錄。
-     manual-setup.md 的來源：`git show HEAD:README.md` 的「Self-Hosting」段落。 -->
+     manual-setup.mdx 的來源：`git show HEAD:README.md` 的「Self-Hosting」段落。 -->
 
 用下列任一種安裝路徑，開始運行你自己的 TomoriBot 執行個體：
 

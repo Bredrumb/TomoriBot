@@ -16,6 +16,29 @@ const SAMPLING_LOCKED_MODELS = [
 ];
 
 describe("buildAnthropicThinkingRequest", () => {
+  it("uses each model's accepted effort above high", () => {
+    for (const [model, effort] of [
+      ["claude-opus-5-5", "xhigh"],
+      ["claude-sonnet-5-5", "xhigh"],
+      ["claude-haiku-5-5", "xhigh"],
+      ["claude-fable-5-2", "xhigh"],
+      ["claude-opus-5", "xhigh"],
+      ["claude-sonnet-5", "xhigh"],
+      ["claude-opus-4-8", "xhigh"],
+      ["claude-opus-4-7", "xhigh"],
+      ["claude-opus-4-6", "max"],
+      ["claude-sonnet-4-6", "max"],
+      ["claude-mythos-preview", "max"],
+    ] as const) {
+      expect(buildAnthropicThinkingRequest(model, "xhigh")).toEqual({
+        thinking: { type: "adaptive" },
+        output_config: { effort },
+        omitSampling: true,
+      });
+    }
+    expect(buildAnthropicThinkingRequest("claude-haiku-4-5", "xhigh")).toEqual({ omitSampling: false });
+  });
+
   it("never sends sampling parameters to a model that rejects them", () => {
     for (const model of SAMPLING_LOCKED_MODELS)
       for (const level of THINKING_LEVEL_VALUES)

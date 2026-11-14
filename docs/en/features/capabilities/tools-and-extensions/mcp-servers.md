@@ -39,13 +39,13 @@ When a sign-in expires or the service asks for more access, that MCP's tools pau
 shows `Reconnect`. Choose it and sign in again; the MCP keeps its name, type, and slot.
 
 Sign-in works only when adding an MCP in a server, not in a DM. On a self-hosted bot, the host sets
-it up first; see [MCP Sign-In Setup](/self-hosting/mcp-sign-in/).
+it up first; see [MCP Sign-In Setup](/self-hosting/mcp-servers/mcp-sign-in/).
 
 ### Local MCP Servers
 
 Local MCP servers are supported on self-hosted instances only, because the public hosted bot
 requires HTTPS and blocks local/private addresses. If you run your own instance, see
-[Setup: Local MCP Server](/self-hosting/local-endpoints/setup-local-mcp/).
+[Setup: Local MCP Server](/self-hosting/mcp-servers/setup-local-mcp/).
 
 :::danger[Only add MCP servers you trust]
 A malicious MCP server can prompt-inject her with hidden instructions, exfiltrate

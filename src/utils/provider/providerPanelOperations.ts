@@ -56,6 +56,8 @@ import {
   type ImageEndpointSupports,
   imageEndpointSupportsFromSubmittedValues,
   readImageEndpointSupports,
+  imageRequestFormatSchema,
+  readImageRequestFormat,
 } from "@/utils/provider/customImageEndpointSupport";
 import {
   readSpeechEndpointSettings,
@@ -243,6 +245,7 @@ export type SaveProviderModelInput = ProviderPanelOwner & {
   // Raw checkbox values, because only the resolved connection knows the api style that decides
   // whether inpainting was offerable in the modal at all.
   imageSupportValues?: string[];
+  imageRequestFormat?: string;
   // Raw modal values for the same reason: the resolved connection's api style decides whether the
   // clone/VoiceDesign/Auto split applies at all.
   speechVoiceMode?: string;
@@ -705,6 +708,9 @@ function buildEndpointCapabilities(
           capability === "image" ? readImageEndpointSupports(endpoint) : undefined,
         );
         if (!model) return [];
+        if (capability === "image" && endpoint.api_style === "openai-compatible") {
+          model.imageRequestFormat = readImageRequestFormat(endpoint);
+        }
         if (capability === "transcription") model.isWorkspaceActive = endpoint.is_default;
         if (capability === "speech") {
           model.speechActiveModes = [
@@ -1747,6 +1753,13 @@ async function registerEndpointModel(input: SaveProviderModelInput): Promise<Sav
   const workflowConfig = input.workflow
     ? { ...(editingEndpoint?.extra_config ?? {}), workflow: input.workflow }
     : editingEndpoint?.extra_config;
+  const imageRequestFormat =
+    input.capability === "image" && connection.api_style === "openai-compatible"
+      ? imageRequestFormatSchema.safeParse(
+          input.imageRequestFormat ?? editingEndpoint?.extra_config.image_request_format ?? "images",
+        )
+      : null;
+  if (imageRequestFormat && !imageRequestFormat.success) return { status: "invalid-model" };
   const speechSettings =
     input.capability === "speech"
       ? speechEndpointSettingsFromSubmittedValues(
@@ -1761,6 +1774,7 @@ async function registerEndpointModel(input: SaveProviderModelInput): Promise<Sav
       ? {
           ...(workflowConfig ?? {}),
           workflow_supports: imageEndpointSupportsFromSubmittedValues(input.imageSupportValues, connection.api_style),
+          ...(imageRequestFormat?.success ? { image_request_format: imageRequestFormat.data } : {}),
         }
       : speechSettings
         ? {

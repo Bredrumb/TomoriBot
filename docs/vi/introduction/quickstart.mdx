@@ -9,7 +9,7 @@ sidebar:
 aiGenerated: false
 ---
 
-import { LinkButton, Aside } from "@astrojs/starlight/components";
+import { LinkButton, Aside, Tabs, TabItem } from "@astrojs/starlight/components";
 
 Hướng dẫn này sẽ dẫn dắt bạn từ bước đầu tiên đến tin nhắn đầu tiên cùng TomoriBot. Cách đơn giản nhất là mời phiên bản công khai có sẵn (xem [Chính sách quyền riêng tư](/vi/legal/privacy-policy/)). Nếu muốn tự chạy instance của riêng mình, bạn hãy chuyển đến phần [Self-hosting](#self-hosting) ở phía dưới.
 
@@ -18,7 +18,7 @@ Hướng dẫn này sẽ dẫn dắt bạn từ bước đầu tiên đến tin 
 ### Bước 1: Mời bot
 
 Mời phiên bản công khai bằng nút bên dưới, sau đó chọn máy chủ bạn muốn thêm bot vào.
-Bạn cần có quyền Quản lý máy chủ (Quản lý máy chủ) để thêm bot.
+Bạn cần có quyền `Quản lý máy chủ` để thêm bot.
 
 <div class="button-row">
   <LinkButton href="https://discord.com/oauth2/authorize?client_id=841644102059556915" variant="primary">
@@ -89,11 +89,57 @@ Một instance self-hosted sẽ đăng ký `/legal license` trong mọi môi tr�
 
 ## Self-hosting
 
-Bạn muốn toàn quyền kiểm soát dữ liệu, model và khóa API của mình? Bạn có thể tự chạy
-instance TomoriBot trên phần cứng của riêng bạn. Lựa chọn khuyên dùng là sử dụng trình hướng dẫn thiết lập (setup wizard).
+Nếu bạn muốn toàn quyền kiểm soát quyền riêng tư và dữ liệu, bạn có thể tự chạy instance TomoriBot trên phần cứng của riêng mình:
+
+- **Lựa chọn 1: Trình hướng dẫn thiết lập (khuyên dùng)**: yêu cầu [Bun](https://bun.sh/) v1.3.2+, [PostgreSQL](https://www.postgresql.org/) hoặc [Docker](https://www.docker.com/), và một [token bot Discord](https://discord.com/developers/applications) đã bật `Presence Intent`, `Server Members Intent` và `Message Content Intent`:
+  ```sh
+  git clone https://github.com/Bredrumb/TomoriBot.git
+  cd TomoriBot
+  bun run setup # cài đặt dependencies, cấu hình .env và thiết lập PostgreSQL
+  bun run dev # khởi động bot và tự động chạy di chuyển cơ sở dữ liệu
+  ```
+- **Lựa chọn 2: Docker Compose**: yêu cầu [Docker](https://www.docker.com/) và Docker Compose v2+, cùng một [token bot Discord](https://discord.com/developers/applications) đã bật ba intent tương tự (xem [hướng dẫn Docker Compose](/self-hosting/docker-compose/) để biết các biến `.env` bắt buộc và quyền thư mục trên Linux):
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+git clone https://github.com/Bredrumb/TomoriBot.git
+cd TomoriBot
+Copy-Item .env.example .env
+# Đặt DISCORD_TOKEN, CRYPTO_SECRET, POSTGRES_PASSWORD và ALLOW_PRIVATE_NETWORK trong .env
+docker compose up
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+git clone https://github.com/Bredrumb/TomoriBot.git
+cd TomoriBot
+cp .env.example .env
+# Đặt DISCORD_TOKEN, CRYPTO_SECRET, POSTGRES_PASSWORD và ALLOW_PRIVATE_NETWORK trong .env
+docker compose up
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+git clone https://github.com/Bredrumb/TomoriBot.git
+cd TomoriBot
+cp .env.example .env
+# Đặt DISCORD_TOKEN, CRYPTO_SECRET, POSTGRES_PASSWORD và ALLOW_PRIVATE_NETWORK trong .env
+docker compose up
+```
+
+</TabItem>
+</Tabs>
+
+Sau đó, mời bot vào bất kỳ máy chủ nào mà bạn có quyền `Quản lý máy chủ`, hoặc nhắn tin trực tiếp (DM) cho bot.
 
 <div class="button-row">
-  <LinkButton href="/vi/self-hosting/" variant="secondary">
-    Self-host TomoriBot
+  <LinkButton href="/self-hosting/" variant="secondary">
+    Hướng dẫn self-hosting đầy đủ
   </LinkButton>
 </div>

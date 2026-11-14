@@ -26,38 +26,21 @@ Hosted transcription adapters support OpenRouter `/audio/transcriptions`, the Ge
 API, and Vertex `generateContent` with a `global` location. Vertex Express has no admitted voice
 lifecycle transport.
 
-```
-INBOUND (STT)
-Discord User Audio Attachment
-  │
-  ▼
-admission.ts (transcribeMessageAudioAttachment)
-  │  resolveTranscriptionTargets: personal model, then server model or endpoint
-  ▼
-Transcription Adapter (hosted OpenRouter / Gemini / Vertex, OpenAI-compatible, ElevenLabs)
-  │  Caches transcript or posts transcript webhook
-  ▼
-Context Assembly ("\n[System: This was sent as a voice message.]\n<transcript>")
+```mermaid
+flowchart TD
+  subgraph stt["INBOUND (STT)"]
+    audio["Discord User Audio Attachment"] --> adm["admission.ts<br/>transcribeMessageAudioAttachment<br/>resolveTranscriptionTargets: personal model, then server model or endpoint"]
+    adm --> adapter["Transcription Adapter<br/>(hosted OpenRouter / Gemini / Vertex, OpenAI-compatible, ElevenLabs)<br/>Caches transcript or posts transcript webhook"]
+    adapter --> ctx["Context Assembly<br/>([System: This was sent as a voice message.] + transcript)"]
+  end
 
-─────────────────────────────────────────────────────────────────────────────
-
-OUTBOUND (TTS)
-/generate voice-message OR generate_voice_message Tool
-  │
-  ▼
-voiceSourceCapabilities.ts (resolveVoiceSourceCapabilities)
-  │  Determines accepted body shapes (clone vs design vs ElevenLabs)
-  ▼
-voiceSourceResolution.ts (resolveCandidateVoiceSources)
-  │  Selects active voice source with deterministic priority
-  ▼
-voiceMessageSynthesis.ts (synthesizeVoiceMessage)
-  │  Dispatches to backend adapter, returns generated audio and backend
-  ▼
-voiceMessageDelivery.ts (deliverVoiceMessage)
-  │  Multipart payload, waveform, duration, bare MIME type, flags: 8192
-  ▼
-Discord Channel (resolved persona author, native bot or webhook transport)
+  subgraph tts["OUTBOUND (TTS)"]
+    cmd["/generate voice-message OR generate_voice_message Tool"] --> caps["voiceSourceCapabilities.ts<br/>resolveVoiceSourceCapabilities<br/>Determines accepted body shapes (clone vs design vs ElevenLabs)"]
+    caps --> res["voiceSourceResolution.ts<br/>resolveCandidateVoiceSources<br/>Selects active voice source with deterministic priority"]
+    res --> synth["voiceMessageSynthesis.ts<br/>synthesizeVoiceMessage<br/>Dispatches to backend adapter, returns generated audio and backend"]
+    synth --> deliv["voiceMessageDelivery.ts<br/>deliverVoiceMessage<br/>Multipart payload, waveform, duration, bare MIME type, flags: 8192"]
+    deliv --> chan["Discord Channel<br/>(resolved persona author, native bot or webhook transport)"]
+  end
 ```
 
 ## Inbound transcription (STT)

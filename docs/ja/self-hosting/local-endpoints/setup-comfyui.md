@@ -3,7 +3,7 @@ title: "セットアップ: ComfyUI"
 aiGenerated: false
 sidebar:
   label: "ComfyUI"
-  order: 2
+  order: 3
 ---
 
 TomoriBotは、自身の [ComfyUI](https://github.com/comfyanonymous/ComfyUI) インスタンスを通じて画像や動画を生成できます。プロンプトやサイズを置換したAPIフォーマットのワークフローを送信することでComfyUIを操作し、出力の準備ができるまでComfyUIの `/history` エンドポイントをポーリングします。
@@ -32,13 +32,15 @@ ComfyUIはDiscordのスラッシュコマンドを通じて登録され、デー
 
 ## 1. APIを有効にしてComfyUIを実行する
 
-[README](https://github.com/comfyanonymous/ComfyUI) に従ってComfyUIをインストールし、ネットワークでリッスンするように起動します：
+[README](https://github.com/comfyanonymous/ComfyUI) に従ってComfyUIをインストールします。同じマシン上のボット、またはこのPC上のCloudflare Tunnelコネクタの場合は、ループバックのまま維持してください：
 
 ```sh
-python main.py --listen 0.0.0.0 --port 8188
+python main.py --listen 127.0.0.1 --port 8188
 ```
 
-TomoriBotがDockerまたは別のマシンで実行されている場合、`--listen 0.0.0.0` が重要になります。デフォルトではループバックのみにバインドされるためです。ボットが実行されているマシンから到達可能であることを確認してください：
+別ホストで稼働する本番ボットの場合は、[Cloudflare TunnelガイドのComfyUIプロファイル](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/)に従ってください。これにより、ComfyUIをループバックに保ったまま公開HTTPSエンドポイントを提供できます。以下で登録する際はそのトンネルURLを使用してください。認証なしで共有する場合は、ガイドの[既知のリスク](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/#known-risks)を確認してください。
+
+Docker内のボットや信頼できるLAN上のボットの場合は、`0.0.0.0` にバインドすることでボットからホストのポートに到達できるようになります。ホストファイアウォールでアクセスを制限してください。未認証のComfyUIに到達できる人は誰でもワークフローを送信できます。非本番環境のTomoriBotでも、エンドポイントのホストとポートを許可するには `ALLOW_PRIVATE_NETWORK` が必要です。ローカルAPIが応答することを確認します：
 
 ```sh
 curl http://127.0.0.1:8188/system_stats
@@ -65,8 +67,8 @@ curl http://127.0.0.1:8188/system_stats
 |-------|-------------------|
 | `endpoint_label` | 選択した名前（例：`home-comfy`） |
 | API互換性 | `ComfyUI` |
-| `endpoint_url` | `http://127.0.0.1:8188`（ルート、`/v1` なし） |
-| `auth_token` | *（ComfyUIが認証の背後にない限り空白のままにします）* |
+| `endpoint_url` | 同じマシン上のボット：`http://127.0.0.1:8188`。本番トンネル：`https://engine.example.com`（ルート、`/v1` なし） |
+| `auth_token` | エンドポイントのゲートウェイがクライアントキーを要求しない限り空白のままにします |
 
 接続を保存したら、それを選択し、モデルのドロップダウンから `+ 新しい画像モデルを追加` または `+ 新しい動画モデルを追加` を選びます。チェックポイントの正確なコード名を入力し、ステップ2でダウンロードしたワークフローの `.json` を `ComfyUI ワークフロー` にアップロードしてください。モデルの機能はワークフローと一致している必要があります（画像ワークフロー → `image`、動画ワークフロー → `video`）。
 
@@ -74,7 +76,7 @@ curl http://127.0.0.1:8188/system_stats
 
 ## トラブルシューティング
 
-- **追加時に到達不能になる：** ボットがDocker内または別のホストにある間に、ComfyUIがループバックにバインドされました。`--listen 0.0.0.0` で起動し、`http://host.docker.internal:8188` またはLAN IPを使用してください。
+- **追加時に到達不能になる：** 本番環境の場合は、トンネル、`/system_stats` ルート、およびゲートウェイがクライアントキーを要求する場合はそのキーを確認してください。Dockerまたは信頼できるLANの場合は、リスナー、ファイアウォール、ホストアドレス、およびTomoriBotのプライベートネットワーク許可設定を確認してください。
 - **生成が完了しない：** TomoriBotは出力が表示されるまで `/history` をポーリングします。コールドスタートやCPU上の大規模モデルは、ポーリングウィンドウを超える可能性があります。
 - **プロンプト/サイズが無視される、または出力サイズが間違っている：** ワークフローに必須の `{TOMORI_*}` プレースホルダーが欠落しているか、APIフォーマットではなくUIフォーマットのエクスポートをアップロードしました。
 - **機能が間違っている：** `video` で登録された `image` ワークフロー（またはその逆）は実行されません。一致する機能で再追加してください。

@@ -12,7 +12,7 @@ aiGenerated: false
 ---
 
 <!-- STUB (Phase 1 structural). Phase 2 writes: requirements + module directory.
-     Source for manual-setup.md: `git show HEAD:README.md` "Self-Hosting" section. -->
+     Source for manual-setup.mdx: `git show HEAD:README.md` "Self-Hosting" section. -->
 
 Bắt đầu chạy phiên bản TomoriBot của riêng bạn thông qua bất kỳ phương thức cài đặt nào dưới đây:
 

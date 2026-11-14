@@ -1,0 +1,274 @@
+---
+title: "可选加固：Cloudflare Access与Caddy"
+sidebar:
+  label: "可选：Access与Caddy"
+  order: 4
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+使用Cloudflare Access与Caddy中继为[Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/)增加第二道身份验证检查。这是可选的额外加固措施；TomoriBot无需这两项服务即可直接连接到公网HTTPS引擎。
+
+## 这项方案增加了什么
+
+| 保护项 | 直接隧道 | Access与Caddy |
+|---|---|---|
+| HTTPS且电脑无需开放入站端口 | 由Tunnel提供 | 相同 |
+| 谁可以调用引擎 | 如果引擎配置了密钥则由引擎检查；未认证的引擎会接受任何知道URL的请求 | Access要求中继的服务令牌；Caddy要求其客户端密钥 |
+| 没有内置身份验证的引擎 | 除非另行添加认证网关，否则仅依赖URL保密 | 由Access与中继客户端密钥双重保护 |
+| 允许的API路由 | 隧道路径规则限制暴露面 | Caddy还会进一步限制HTTP方法并拒绝上游重定向 |
+| 密钥意外在TomoriBot之外泄露 | 有效的引擎密钥可直接调用隧道 | 仅靠引擎密钥无法调用受保护隧道，但仍可调用公网中继 |
+| 撤销某个中继的访问权限 | 需要轮换引擎密钥以撤销 | 可独立于引擎密钥单独吊销其Access服务令牌 |
+
+此方案不会改变TomoriBot的服务器或个人权限，也不会向bot运维人员隐藏端点设置。持有Caddy密钥的人仍然可以直接使用其允许的路由。ComfyUI工作流依然可以运行已安装的节点；路由限制不会对其沙盒化，也不会隔离用户。
+
+你需要第二个公网HTTPS主机名（例如`relay.example.net`）以及一台可运行[Caddy](https://caddyserver.com/docs/install)的主机。它可以与bot共用同一台服务器，或部署在你控制的另一台服务器上。Azure和Hetzner部署工作流不会自动部署此中继。Caddy会增加一个进程和额外一次网络跳转；负载取决于经过中继的请求量。
+
+TomoriBot的端点面板仅发送Bearer密钥，无法附加Access服务令牌请求头。Caddy会检查该密钥并添加这些请求头。请将Access凭据保存在Caddy上；在TomoriBot中只保存客户端密钥。
+
+## 1. 保护隧道主机名
+
+在Cloudflare One控制台中：
+
+1. 在`Access controls` > `Service credentials` > `Service tokens`下，为中继[创建一个服务令牌](https://developers.cloudflare.com/cloudflare-one/access-controls/service-credentials/service-tokens/)。选择一个便于维护的有效期，并将其Client ID与Client Secret保存在你服务器的密钥库中；Secret仅在创建时显示一次。
+2. 在`Access controls` > `Applications`下，添加一个覆盖整个`engine.example.com`的`Self-hosted`应用程序，不要限制路径。
+3. 添加一条策略，操作选`Service Auth`，并添加一条类型为`Service Token`的`Include`规则，仅选中你刚创建的令牌。移除宽泛的`Allow`或`Bypass`策略，并检查是否存在绕过保护的更具体应用规则。
+4. 保存该应用程序。记下它的Application Audience（AUD）标签与你的Cloudflare One团队名称，用于下方的YAML配置。
+
+在发布隧道DNS之前务必先让Access保护就位。服务令牌放在Caddy上；下一步创建的隧道凭据JSON放在你的本地电脑上。
+
+## 2. 在隧道中强制要求Access
+
+使用[基础指南](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/#configure-the-tunnel)安装`cloudflared`、创建命名隧道并准备`config.yml`。发布DNS前先完成Access保护配置。如果是在改造正在运行的直接隧道，请在更改保护配置时停止其连接器。
+
+将以下`originRequest`块添加到每个引擎的主机名规则中，替换其中的团队名称与Application Audience标签：
+
+```yaml title="config.yml hostname rule"
+  - hostname: engine.example.com
+    path: ^/v1/(models|chat/completions)$
+    service: http://127.0.0.1:8317
+    originRequest:
+      access:
+        required: true
+        teamName: YOUR_TEAM_NAME
+        audTag:
+          - YOUR_APPLICATION_AUD
+```
+
+保留基础指南中的顶层隧道与凭据字段以及末尾的404规则。对于ComfyUI或TTS，保留对应引擎的`path`与`service`。即使边缘保护被意外移除，[连接器Access检查](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/configure-tunnels/origin-parameters/#access)仍会在本地强制要求验证该应用的JWT。
+
+按基础指南中的步骤校验入站规则、发布隧道DNS并启动连接器。此时不携带Access凭据的请求必须被拒绝。
+
+## 3. 运行Caddy中继
+
+在中继服务器上：
+
+1. 安装[Caddy](https://caddyserver.com/docs/install)或将其作为服务添加到你的部署中。
+2. 将代码仓库中的`docker/cloudflare-relay.Caddyfile`复制到受保护的文件`Caddyfile`中。替换其最后一个站点块中的`relay.example.net`与`engine.example.com`。CLIProxyAPI保持使用`chat_routes`。
+3. 从你的密钥库向Caddy进程提供以下变量：
+
+| 变量 | 值 |
+|---|---|
+| `ENGINE_API_KEY` | 你的CLIProxyAPI客户端密钥，同时保存在TomoriBot中 |
+| `CF_ACCESS_CLIENT_ID` | Access服务令牌的Client ID |
+| `CF_ACCESS_CLIENT_SECRET` | Access服务令牌的Client Secret |
+
+请使用至少32字节随机数据生成的客户端密钥，编码为不含空白字符或`*`的hex或base64字符串。不要把明文密钥写进命令、Git或日志里。
+
+加载全部三个变量后，在包含`Caddyfile`的文件夹中校验并启动Caddy：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+foreach ($name in 'ENGINE_API_KEY', 'CF_ACCESS_CLIENT_ID', 'CF_ACCESS_CLIENT_SECRET') {
+  if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+    throw "Missing relay secret: $name"
+  }
+}
+caddy validate --config .\Caddyfile --adapter caddyfile
+caddy run --config .\Caddyfile --adapter caddyfile
+```
+
+如需无人值守启动，请遵循Caddy的[Windows服务指南](https://caddyserver.com/docs/running#windows-service)。
+
+</TabItem>
+<TabItem label="Linux / macOS">
+
+```bash
+if [ -n "${ENGINE_API_KEY:-}" ] && [ -n "${CF_ACCESS_CLIENT_ID:-}" ] && [ -n "${CF_ACCESS_CLIENT_SECRET:-}" ]; then
+  caddy validate --config ./Caddyfile --adapter caddyfile &&
+    caddy run --config ./Caddyfile --adapter caddyfile
+else
+  printf 'Load all three relay secrets before starting Caddy.\n' >&2
+fi
+```
+
+如需无人值守启动，请在Linux上使用Caddy的[systemd服务](https://caddyserver.com/docs/running#linux-service)，或在macOS上使用你的launchd或容器服务管理器，并配合相同的配置与密钥。
+
+</TabItem>
+
+</Tabs>
+
+将`relay.example.net`指向中继服务器的HTTPS入口。独立运行的Caddy需要入站443端口以及证书签发验证连通性（通常为80/443端口）。请为中继记录使用仅DNS（DNS-only）模式，避免产生第二层Cloudflare代理超时。如果你的部署单独终止TLS，请保持Caddy的后端监听私有。
+
+仓库提供的配置会校验客户端密钥、限制路由与方法，并隐藏上游错误响应体。其管理API处于禁用状态，因此修改配置或密钥后需要重启Caddy。请保持其环境变量与持久化配置私有，并保持调试和请求头日志关闭。
+
+## 4. 验证Access与中继身份验证
+{/* anchor: validate-each-authentication-check */}
+
+在中继主机上保存端点前，先逐项验证以下检查：
+
+| 请求 | 预期结果 |
+|---|---|
+| 隧道URL，缺失或错误的Access令牌 | Access拒绝请求；引擎收不到任何请求 |
+| 隧道URL，有效Access令牌但客户端密钥错误 | CLIProxyAPI返回401 |
+| 隧道URL，两项凭据均正确 | 返回引擎JSON，例如模型列表 |
+| 中继URL，缺失或错误的客户端密钥 | 中继返回401 |
+| 中继URL，密钥正确但请求方法或管理路径错误 | 中继返回404 |
+
+Access拒绝请求可能返回401、403或登录重定向。请确认成功响应包含的是引擎JSON；即使状态码为200，HTML登录页也算验证失败。通过Access身份验证后，直接请求隧道的管理路径也必须返回404。
+
+<details>
+<summary>身份验证检查命令</summary>
+
+在中继主机上加载三个密钥，并关闭脚本记录与命令追踪后运行以下命令。这些命令只打印状态码与内容类型，不跟随重定向，也不输出凭据。
+
+对于ComfyUI或TTS，请使用其主机名与密钥，去掉`/v1`，并将`/models`替换为`/system_stats`或`/health`。仅当该引擎本身没有身份验证时，跳过源站密钥检查。
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+Add-Type -AssemblyName System.Net.Http
+$origin = 'https://engine.example.com/v1'
+$relay = 'https://relay.example.net/v1'
+$access = @{
+  'CF-Access-Client-Id' = $env:CF_ACCESS_CLIENT_ID
+  'CF-Access-Client-Secret' = $env:CF_ACCESS_CLIENT_SECRET
+}
+$good = $access.Clone()
+$good.Authorization = "Bearer $env:ENGINE_API_KEY"
+$badToken = $good.Clone()
+$badToken['CF-Access-Client-Secret'] = 'invalid-test-token'
+$badKey = $access.Clone()
+$badKey.Authorization = 'Bearer invalid-test-key'
+$cases = @(
+  @{ Uri = "$origin/models"; Headers = @{} },
+  @{ Uri = "$origin/models"; Headers = $badToken },
+  @{ Uri = "$origin/models"; Headers = $badKey },
+  @{ Uri = "$origin/models"; Headers = $good },
+  @{ Uri = "$relay/models"; Headers = @{} },
+  @{ Uri = "$relay/models"; Headers = @{ Authorization = "Bearer $env:ENGINE_API_KEY" } }
+)
+$handler = [Net.Http.HttpClientHandler]::new()
+$handler.AllowAutoRedirect = $false
+$client = [Net.Http.HttpClient]::new($handler)
+try {
+  foreach ($case in $cases) {
+    $request = [Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::Get, $case.Uri)
+    foreach ($header in $case.Headers.GetEnumerator()) {
+      $request.Headers.Add($header.Key, [string]$header.Value)
+    }
+    $result = $client.SendAsync($request).GetAwaiter().GetResult()
+    try {
+      [pscustomobject]@{ Url = $case.Uri; Status = [int]$result.StatusCode; Type = $result.Content.Headers.ContentType }
+    } finally {
+      $result.Dispose()
+      $request.Dispose()
+    }
+  }
+} finally {
+  $client.Dispose()
+}
+```
+
+</TabItem>
+<TabItem label="Linux / macOS">
+
+凭据通过curl的标准输入配置传入，避免暴露在进程参数中。
+
+```bash
+set +x
+origin='https://engine.example.com/v1'
+relay='https://relay.example.net/v1'
+probe() {
+  probe_url=$1
+  access_mode=$2
+  key_mode=$3
+  {
+    if [ "$access_mode" != none ]; then
+      printf 'header = "CF-Access-Client-Id: %s"\n' "$CF_ACCESS_CLIENT_ID"
+      if [ "$access_mode" = bad ]; then
+        printf 'header = "CF-Access-Client-Secret: invalid-test-token"\n'
+      else
+        printf 'header = "CF-Access-Client-Secret: %s"\n' "$CF_ACCESS_CLIENT_SECRET"
+      fi
+    fi
+    if [ "$key_mode" = good ]; then
+      printf 'header = "Authorization: Bearer %s"\n' "$ENGINE_API_KEY"
+    elif [ "$key_mode" = bad ]; then
+      printf 'header = "Authorization: Bearer invalid-test-key"\n'
+    fi
+  } | curl --config - --silent --show-error --output /dev/null \
+    --write-out '%{http_code} %{content_type}\n' "$probe_url"
+}
+probe "$origin/models" none none
+probe "$origin/models" bad good
+probe "$origin/models" good bad
+probe "$origin/models" good good
+probe "$relay/models" none none
+probe "$relay/models" none good
+unset -f probe
+```
+
+</TabItem>
+
+</Tabs>
+
+</details>
+
+## 5. 在TomoriBot中保存中继URL
+
+在服务器中共享连接请使用`/providers`，个人使用请用`/personal providers`。文本聊天请保存`https://relay.example.net/v1`，API兼容性选择`OpenAI 兼容`，认证令牌填入`ENGINE_API_KEY`。添加模型后，先测试单次回复和流式输出，确认正常后再启用工具调用。
+
+<details>
+<summary>ComfyUI、TTS或多引擎共存</summary>
+
+将Caddyfile中`import engine_relay`行的最后一个参数替换为`comfyui_routes`或`tts_routes`。该指令按顺序接收五个参数：隧道主机名、客户端密钥、Access Client ID、Access Client Secret以及路由配置档。
+
+如果要同时运行多个引擎，请为每个引擎分配各自的隧道主机名、Access应用程序与服务令牌、中继主机名和客户端密钥。在末尾的404规则之前重复添加隧道主机名规则，各自填写对应的Access Audience与回环端口。在通过`cloudflared tunnel route dns home-engine HOSTNAME`发布DNS之前，务必先为每个主机名开启Access保护。同一个连接器即可服务所有规则。
+
+将以下站点块追加到Caddyfile中，并替换其中的主机名：
+
+```text
+comfy-relay.example.net {
+  import engine_relay comfy-engine.example.com {env.COMFYUI_ENGINE_API_KEY} {env.COMFYUI_CF_ACCESS_CLIENT_ID} {env.COMFYUI_CF_ACCESS_CLIENT_SECRET} comfyui_routes
+}
+
+tts-relay.example.net {
+  import engine_relay tts-engine.example.com {env.TTS_ENGINE_API_KEY} {env.TTS_CF_ACCESS_CLIENT_ID} {env.TTS_CF_ACCESS_CLIENT_SECRET} tts_routes
+}
+```
+
+向Caddy提供每个站点的三个环境变量，将它们加入启动检查，并为每个中继主机名配置DNS与HTTPS。单个Caddy服务即可服务所有站点。
+
+| 引擎 | TomoriBot连接配置 | 使用前测试项 |
+|---|---|---|
+| ComfyUI | API兼容性选`ComfyUI`，基础URL填`https://comfy-relay.example.net`，填写该站点的客户端密钥 | 图像生成、参考图上传、输出下载与取消任务；视频生成需单独测试 |
+| 本地TTS | API兼容性选`TTS 克隆`，基础URL填`https://tts-relay.example.net`，填写该站点的客户端密钥 | 短文本语音合成并返回可播放音频；如果支持，再测试VoiceDesign |
+
+模型与工作流请遵循[ComfyUI配置](/self-hosting/local-endpoints/setup-comfyui/)或[TTS配置](/self-hosting/local-endpoints/text-to-speech/)。这些连接均不加`/v1`后缀。请测试每个主机名的路由与身份验证，ComfyUI使用`/system_stats`，TTS使用`/health`。
+
+没有自带身份验证的引擎务必保持仅绑定到回环地址。源站错误密钥检查仅在引擎强制校验密钥时适用；但每个中继始终强制要求其客户端密钥。ComfyUI工作流并未运行在沙盒中：持有密钥的人可以运行已安装的节点、读取通过`/view`暴露的文件、取消任务以及卸载模型，因此请使用专用实例。
+
+仓库提供的配置档仅暴露API路由。ComfyUI采用任务轮询，不需要WebSocket路由。TTS仅允许`GET /health`和`POST /synthesize`；其他语音合成或语音识别API需要自行编写路由。文本聊天配置档已排除KoboldCPP的卸载路由，因此通过该中继无法使用文本与ComfyUI之间的自动显存切换卸载功能。
+
+</details>
+
+## 轮换或吊销凭据
+
+- 若要立即切断访问，请停止中继并吊销其Access服务令牌。整套方案退役时，请停止连接器并移除隧道与DNS记录。
+- 日常轮换Access令牌时，先更新策略与中继密钥，重启并测试Caddy，然后再吊销旧令牌。
+- 若引擎支持客户端密钥，需在引擎端、Caddy密钥库以及所有使用它的TomoriBot已保存连接中同步更换。如果上游OAuth凭据泄露，请另行吊销授权；仅删除本地文件并不会使其失效。

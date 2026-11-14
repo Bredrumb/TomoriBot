@@ -5,6 +5,7 @@ import { useEnvSandbox } from "../../helpers/env";
 import { stubLogMembers } from "../../helpers/mockSurface";
 
 const queries: string[] = [];
+const insertValues: unknown[][] = [];
 let insertRejection: Error | null = null;
 
 /**
@@ -13,9 +14,10 @@ let insertRejection: Error | null = null;
  * process-wide for the whole run and never undoes them, so a mocked `sql` would answer queries
  * in every later test file too.
  */
-function fakeSql(strings: TemplateStringsArray, ..._values: unknown[]): Promise<unknown[]> {
+function fakeSql(strings: TemplateStringsArray, ...values: unknown[]): Promise<unknown[]> {
   const text = strings.join(" ? ").replace(/\s+/g, " ").trim();
   queries.push(text);
+  if (text.startsWith("INSERT")) insertValues.push(values);
   if (insertRejection && text.startsWith("INSERT")) {
     return Promise.reject(insertRejection);
   }
@@ -39,6 +41,7 @@ let primarySpy: ReturnType<typeof spyOn<typeof leases, "isPrimaryProcess">>;
 beforeEach(() => {
   primarySpy = spyOn(leases, "isPrimaryProcess").mockReturnValue(true);
   queries.length = 0;
+  insertValues.length = 0;
   insertRejection = null;
 });
 
@@ -50,6 +53,43 @@ const inserts = () => queries.filter((q) => q.startsWith("INSERT"));
 const deletes = () => queries.filter((q) => q.startsWith("DELETE"));
 
 describe("MetricSampleRepository", () => {
+  it("redacts stored metric credentials without changing numeric fields or the caller payload", async () => {
+    const repository = new MetricSampleRepository(injectedSql);
+    const key = `sk-proj-${"synthetic".repeat(5)}`;
+    const password = "synthetic-database-password";
+    for (const model of [
+      key,
+      JSON.stringify({ apiKey: password }),
+      `https://example.com/metrics?api_key=${password}`,
+    ]) {
+      const fields = {
+        model,
+        provider: "google",
+        source: "estimated",
+        input_tokens: 1250,
+        output_tokens: 0,
+        cache_read_tokens: "unknown",
+        cache_write_tokens: "unknown",
+      };
+      await repository.recordSample("turn_usage", fields);
+
+      const stored = insertValues.at(-1);
+      const serialized = JSON.stringify(stored);
+      expect(serialized).not.toContain(key);
+      expect(serialized).not.toContain(password);
+      expect(stored?.[1]).toMatchObject({
+        provider: fields.provider,
+        source: fields.source,
+        input_tokens: fields.input_tokens,
+        output_tokens: fields.output_tokens,
+        cache_read_tokens: fields.cache_read_tokens,
+        cache_write_tokens: fields.cache_write_tokens,
+      });
+      expect(typeof stored?.[1]).toBe("object");
+      expect(fields.model).toBe(model);
+    }
+  });
+
   it("records a sample and prunes on the first write", async () => {
     const repository = new MetricSampleRepository(injectedSql);
     await repository.recordSample("cache_sizes", { heap_used_mb: 312 });

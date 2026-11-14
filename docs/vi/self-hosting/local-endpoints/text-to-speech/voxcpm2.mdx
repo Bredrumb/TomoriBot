@@ -1,0 +1,182 @@
+---
+title: "VoxCPM2"
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Tổng hợp giọng nói 48 kHz giàu biểu cảm trên 30 ngôn ngữ bằng model text-to-speech [VoxCPM2](https://github.com/OpenBMB/VoxCPM) của OpenBMB.
+
+VoxCPM2 là model giọng nói đa ngôn ngữ 2B tham số hỗ trợ nhân bản giọng nói, Ultimate Cloning có hỗ trợ bản chép lời và Voice Design bằng ngôn ngữ tự nhiên. TomoriBot kết nối tới thư viện Python `voxcpm` chính thức thông qua máy chủ trong `servers/tts/voxcpm2/`, chạy checkpoint BF16 `openbmb/VoxCPM2` chưa lượng hóa một cách thoải mái trong 16 GB VRAM.
+
+## Giấy phép
+
+Mã nguồn và trọng số model VoxCPM2 được phát hành theo giấy phép Apache-2.0, bao gồm sử dụng thương mại tuân theo các điều khoản của giấy phép. TomoriBot không tái phân phối trọng số; trình cài đặt tải chúng từ kho lưu trữ Hugging Face chính thức.
+
+Tài nguyên gốc chính thức:
+
+- [OpenBMB/VoxCPM](https://github.com/OpenBMB/VoxCPM)
+- [openbmb/VoxCPM2 trên Hugging Face](https://huggingface.co/openbmb/VoxCPM2)
+- [Tài liệu VoxCPM](https://voxcpm.readthedocs.io/)
+
+## Ngôn ngữ hỗ trợ
+
+VoxCPM2 hỗ trợ chính thức 30 ngôn ngữ mà không cần thẻ ngôn ngữ:
+
+tiếng Ả Rập, tiếng Miến Điện, tiếng Trung, tiếng Đan Mạch, tiếng Hà Lan, tiếng Anh, tiếng Phần Lan, tiếng Pháp, tiếng Đức, tiếng Hy Lạp, tiếng Do Thái, tiếng Hindi, tiếng Indonesia, tiếng Ý, tiếng Nhật, tiếng Khmer, tiếng Hàn, tiếng Lào, tiếng Mã Lai, tiếng Na Uy, tiếng Ba Lan, tiếng Bồ Đào Nha, tiếng Nga, tiếng Tây Ban Nha, tiếng Swahili, tiếng Thụy Điển, tiếng Tagalog, tiếng Thái, tiếng Thổ Nhĩ Kỳ và tiếng Việt.
+
+OpenBMB cũng ghi nhận hỗ trợ một số phương ngữ tiếng Trung. TomoriBot vẫn có thể gửi trường `language` để tương thích với giao diện TTS chung, nhưng VoxCPM2 tự nhận diện ngôn ngữ từ văn bản cần tổng hợp và wrapper không ép buộc thẻ ngôn ngữ.
+
+## Chế độ giọng nói
+
+Hãy dùng `Tự động` và kiểu định dạng `Thuần văn bản` cho cả nhân bản giọng nói lẫn thiết kế giọng nói. Có bản chép lời tham chiếu sẽ kích hoạt Ultimate Cloning; chỉ dẫn cách đọc được ưu tiên áp dụng và bỏ qua bản chép lời cho yêu cầu đó.
+
+## Phần cứng và runtime
+
+Mức cấu hình khởi điểm khuyến nghị:
+
+- Python 3.10-3.12 (yêu cầu bởi cả hai trình cài đặt)
+- GPU NVIDIA có 8 GB VRAM trở lên cho runtime BF16 chính thức (12-16 GB giúp dư dả thoải mái), hoặc Apple Silicon đủ bộ nhớ hợp nhất cho model 2B
+- CPU được hỗ trợ làm phương án dự phòng nhưng chậm hơn đáng kể
+
+Khi chạy trên CUDA, `VOXCPM2_OPTIMIZE=1` (mặc định) biên dịch model bằng `torch.compile` và Triton: lần khởi động đầu mất khoảng 2-3 phút trong khi PyTorch biên dịch model, các lần sau mất dưới một phút nhờ kernel đã lưu đệm, và quá trình tổng hợp chạy nhanh hơn khoảng 2.5-3x so với không biên dịch trong khi dùng thêm khoảng 2 GB RAM hệ thống. Nếu thiếu Triton trên máy CUDA, hãy chạy lại trình cài đặt hoặc đặt `VOXCPM2_OPTIMIZE=0`.
+
+Trên các thiết bị không dùng CUDA (CPU và Apple Silicon `mps`), wrapper tắt bộ bảo vệ Triton của `VOXCPM2_OPTIMIZE` để lúc khởi động không đòi hỏi Triton, và `VOXCPM2_LOAD_DENOISER=0` mặc định giữ tắt bộ khử nhiễu chạy trên CPU.
+
+## Cài đặt
+
+Máy chủ ghim gói `voxcpm` 2.0.3 ổn định hiện tại và tải `openbmb/VoxCPM2` vào bộ nhớ đệm Hugging Face thông thường. Chạy trình cài đặt cho hệ điều hành của bạn từ thư mục gốc kho lưu trữ TomoriBot:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+Trình cài đặt PowerShell chạy trực tiếp trên Windows (không cần WSL) và cài đặt PyTorch 2.10 hỗ trợ CUDA (`cu128`) kèm `triton-windows` cho `VOXCPM2_OPTIMIZE=1`:
+
+```powershell
+.\servers\tts\voxcpm2\install-voxcpm2.ps1
+.\servers\tts\voxcpm2\.venv\Scripts\python.exe servers\tts\voxcpm2\server.py
+```
+
+Trên máy chỉ có CPU không có GPU NVIDIA, hãy truyền `-Cpu`:
+
+```powershell
+.\servers\tts\voxcpm2\install-voxcpm2.ps1 -Cpu
+```
+
+Nếu PyTorch trên Windows gốc cần cài lại CUDA thủ công hoặc đồng bộ driver:
+
+```powershell
+.\servers\tts\voxcpm2\.venv\Scripts\pip.exe install --force-reinstall torch==2.10.0 torchaudio==2.10.0 --index-url https://download.pytorch.org/whl/cu128
+.\servers\tts\voxcpm2\.venv\Scripts\pip.exe install "triton-windows>=3.6,<3.7"
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+bash servers/tts/voxcpm2/install-voxcpm2.sh
+servers/tts/voxcpm2/.venv/bin/python servers/tts/voxcpm2/server.py
+```
+
+Các wheel `torch` PyPI tiêu chuẩn trên Linux đã bao gồm hỗ trợ CUDA và Triton cho `VOXCPM2_OPTIMIZE=1`. Đặt `VOXCPM2_OPTIMIZE=0` trước khi khởi động `server.py` nếu bạn chạy không biên dịch hoặc chạy trên CPU.
+
+</TabItem>
+<TabItem label="Mac">
+
+Đảm bảo Python 3.10-3.12 đang được kích hoạt (ví dụ `PYTHON_BIN=python3.12`), sau đó chạy trình cài đặt shell:
+
+```bash
+bash servers/tts/voxcpm2/install-voxcpm2.sh
+servers/tts/voxcpm2/.venv/bin/python servers/tts/voxcpm2/server.py
+```
+
+Với `VOXCPM2_DEVICE=auto`, thư viện `voxcpm` gốc dùng Apple Silicon `mps` khi khả dụng hoặc `cpu` trong trường hợp ngược lại. Nếu gặp toán tử MPS không được hỗ trợ trên phiên bản macOS/PyTorch của bạn, hãy khởi động với `VOXCPM2_DEVICE=cpu` (chậm hơn) hoặc `VOXCPM2_OPTIMIZE=0`. Bạn có thể cần `brew install ffmpeg` nếu công cụ xử lý âm thanh trong môi trường yêu cầu.
+
+</TabItem>
+</Tabs>
+
+Lần thiết lập đầu tiên sẽ tải xuống vài gigabyte trọng số model. Để cài môi trường Python mà chưa tải trước model (để `voxcpm` tải checkpoint trong lần khởi động máy chủ đầu tiên), hãy đặt `VOXCPM2_PREFETCH=0`:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$env:VOXCPM2_PREFETCH = "0"
+.\servers\tts\voxcpm2\install-voxcpm2.ps1
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+VOXCPM2_PREFETCH=0 bash servers/tts/voxcpm2/install-voxcpm2.sh
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+VOXCPM2_PREFETCH=0 bash servers/tts/voxcpm2/install-voxcpm2.sh
+```
+
+</TabItem>
+</Tabs>
+
+Sau khi thiết lập xong, `bun run launch --voxcpm2` sẽ khởi động máy chủ cùng với TomoriBot. Endpoint mặc định là `http://127.0.0.1:8016`.
+
+## Đăng ký trong TomoriBot
+
+Chạy `/providers`, chọn `Thêm endpoint tùy chỉnh mới`, và cấu hình endpoint `Giọng nói`:
+
+- Tính năng: `Giọng nói`
+- Độ tương thích API: `tts-clone`
+- URL endpoint: `http://127.0.0.1:8016`
+- Chế độ nguồn giọng đọc: `Tự động`
+- Kiểu định dạng kịch bản: `Thuần văn bản`
+- Hỗ trợ chỉ dẫn: `Có`
+
+Sau khi lưu kết nối, chọn nó và dùng dropdown model để thêm một model `Giọng nói`. Sau đó mở `/config` > `Model` > `Chuyển đổi model` và chọn model giọng nói VoxCPM2.
+
+`Tự động` được khuyên dùng vì cùng một máy chủ hỗ trợ cả nhân bản từ âm thanh tham chiếu lẫn Voice Design. Bạn không cần chạy hai tiến trình VoxCPM2 riêng cho hai chế độ.
+
+## Nhân bản giọng nói cho persona
+
+Đối với persona cần nhân bản một người nói có sẵn:
+
+1. Chuẩn bị một đoạn âm thanh tham chiếu sạch chỉ có một người nói và ít hoặc không có nhạc nền. Dự án gốc xem 5 đến 30 giây là khoảng thời lượng thực tế phù hợp.
+2. Mở `/config`, vào `Model` > `Tham số & Giọng đọc TTS` và tải clip lên.
+3. Thêm chính xác bản chép lời của đoạn tham chiếu khi có. VoxCPM2 dùng nội dung này cho Ultimate Cloning và có thể tái tạo tốt hơn nhịp điệu, cảm xúc và phong cách của mẫu tham chiếu.
+4. Mở `/config`, vào `Persona` > `Giọng nói`, chọn persona và gán mẫu đã lưu.
+
+Nếu không lưu bản chép lời, VoxCPM2 vẫn thực hiện nhân bản giọng nói từ âm thanh tham chiếu như bình thường.
+
+## Thiết kế giọng nói cho persona
+
+Đối với persona được tạo từ mô tả giọng nói bằng văn bản thay vì mẫu âm thanh:
+
+1. Mở `/config`, vào `Persona` > `Giọng nói` và chọn `VoiceDesign`.
+2. Chọn persona.
+3. Nhập mô tả bằng ngôn ngữ tự nhiên, ví dụ `Young adult woman, soft warm voice, relaxed pace, slightly playful delivery`.
+
+Với giọng nhân bản, chỉ dẫn cách đọc riêng cho từng lần tạo sẽ được ưu tiên hơn bản chép lời tham chiếu.
+
+## Biến môi trường
+
+| Biến | Mặc định | Mục đích |
+|---|---|---|
+| `VOXCPM2_MODEL_ID` | `openbmb/VoxCPM2` | ID model trên Hugging Face hoặc thư mục model cục bộ |
+| `VOXCPM2_DEVICE` | `auto` | Thiết bị runtime: `auto`, `cuda`, `cuda:N`, `cpu` hoặc `mps` |
+| `VOXCPM2_OPTIMIZE` | `1` | Biên dịch model bằng `torch.compile` trên CUDA; cần Triton và máy chủ sẽ dừng khi khởi động nếu thiếu |
+| `VOXCPM2_LOAD_DENOISER` | `0` | Nạp bộ khử nhiễu tùy chọn của dự án gốc; mặc định tắt để tiết kiệm bộ nhớ |
+| `VOXCPM2_CFG_VALUE` | `2.0` | Độ mạnh hướng dẫn |
+| `VOXCPM2_INFERENCE_TIMESTEPS` | `10` | Số bước suy luận flow-matching; nhiều bước hơn có thể cải thiện chất lượng nhưng chậm hơn |
+| `VOXCPM2_MAX_LEN` | `4096` | Độ dài tạo tối đa |
+| `VOXCPM2_NORMALIZE` | `0` | Bật chuẩn hóa văn bản của dự án gốc |
+| `VOXCPM2_RETRY_BADCASE` | `1` | Bật cơ chế thử lại của dự án gốc khi đầu ra bất thường |
+| `VOXCPM2_RETRY_BADCASE_MAX_TIMES` | `3` | Số lần tự động thử lại tối đa |
+| `VOXCPM2_RETRY_BADCASE_RATIO_THRESHOLD` | `6.0` | Ngưỡng tỷ lệ độ dài bất thường phía upstream |
+| `VOXCPM2_PREFETCH` | `1` | Chỉ dùng cho trình cài đặt: tải model trong lúc thiết lập |
+| `VOXCPM2_PORT` | `8016` | Cổng máy chủ cục bộ VoxCPM2 |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | Địa chỉ liên kết máy chủ cục bộ; xem [Truy cập mạng](/self-hosting/local-endpoints/text-to-speech/#network-access) |
+
+Âm thanh tham chiếu phải là tệp WAV không rỗng có dung lượng giải mã tối đa 10 MB; wrapper sẽ kiểm tra điều kiện này trước khi ghi tệp tạm.

@@ -202,10 +202,13 @@ function buildSidebarTranslations(dirPath, slugPrefix) {
 /** Same rule as a group label, applied to a single page's sidebar entry. */
 function buildPageTranslations(filePath) {
   const translations = {};
+  const relativeStem = stripMarkdownExtension(relative(defaultLocaleTarget, filePath));
 
   for (const locale of translatedLocales) {
-    const localizedPath = join(docsTarget, locale.id, relative(defaultLocaleTarget, filePath));
-    if (!existsSync(localizedPath)) continue;
+    const localizedPath = [".md", ".mdx"]
+      .map((extension) => join(docsTarget, locale.id, `${relativeStem}${extension}`))
+      .find((candidate) => existsSync(candidate));
+    if (!localizedPath) continue;
 
     const data = readFrontmatter(localizedPath);
     const label = data.sidebar?.label ?? data.title;
@@ -520,11 +523,17 @@ export default defineConfig({
     "/": "/en/introduction/",
     ...localeRootRedirects,
     ...bareRouteRedirects,
-    // Bot messages in every locale linked these paths before Memory became a folder with no index page.
+    // Previously published paths stay reachable in every locale after their pages move.
     ...Object.fromEntries(
       [
         ["features/knowledge/lorebooks/", "features/knowledge/memory/lorebooks/"],
         ["features/knowledge/memory/", "features/knowledge/memory/long-term-memory/"],
+        ["self-hosting/local-endpoints/setup-chatmock/", "self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/"],
+        ["self-hosting/local-endpoints/setup-cliproxyapi/", "self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/"],
+        ["self-hosting/local-endpoints/remote-access-cloudflare/", "self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/"],
+        ["self-hosting/mcp-sign-in/", "self-hosting/mcp-servers/mcp-sign-in/"],
+        ["self-hosting/local-endpoints/setup-slop-guard/", "self-hosting/mcp-servers/setup-slop-guard/"],
+        ["self-hosting/local-endpoints/setup-local-mcp/", "self-hosting/mcp-servers/setup-local-mcp/"],
       ].flatMap(([from, to]) => sidebarLocales.map((locale) => [`/${locale.id}/${from}`, `/${locale.id}/${to}`])),
     ),
     "/features/knowledge/lorebooks/": "/en/features/knowledge/memory/lorebooks/",
@@ -678,15 +687,19 @@ export default defineConfig({
     "/self-hosting/docker-compose/": "/en/self-hosting/docker-compose/",
     "/self-hosting/local-monitoring/": "/en/self-hosting/local-monitoring/",
     "/self-hosting/maintenance/": "/en/self-hosting/maintenance/",
+    "/self-hosting/mcp-sign-in/": "/en/self-hosting/mcp-servers/mcp-sign-in/",
     "/self-hosting/manual-setup/": "/en/self-hosting/manual-setup/",
     "/self-hosting/safe-migration/": "/en/self-hosting/safe-migration/",
     "/self-hosting/setup-wizard/": "/en/self-hosting/setup-wizard/",
-    "/self-hosting/local-endpoints/setup-chatmock/": "/en/self-hosting/local-endpoints/setup-chatmock/",
+    "/self-hosting/local-endpoints/setup-chatmock/": "/en/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/",
+    "/self-hosting/local-endpoints/setup-cliproxyapi/": "/en/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/",
+    "/self-hosting/local-endpoints/remote-access-cloudflare/": "/en/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/",
     "/self-hosting/local-endpoints/setup-comfyui/": "/en/self-hosting/local-endpoints/setup-comfyui/",
     "/self-hosting/local-endpoints/setup-crawl4ai/": "/en/self-hosting/local-endpoints/setup-crawl4ai/",
     "/self-hosting/local-endpoints/setup-local-llm/": "/en/self-hosting/local-endpoints/setup-local-llm/",
-    "/self-hosting/local-endpoints/setup-local-mcp/": "/en/self-hosting/local-endpoints/setup-local-mcp/",
+    "/self-hosting/local-endpoints/setup-local-mcp/": "/en/self-hosting/mcp-servers/setup-local-mcp/",
     "/self-hosting/local-endpoints/setup-searxng/": "/en/self-hosting/local-endpoints/setup-searxng/",
+    "/self-hosting/local-endpoints/setup-slop-guard/": "/en/self-hosting/mcp-servers/setup-slop-guard/",
     "/self-hosting/local-endpoints/speech-to-text/koboldcpp/": "/en/self-hosting/local-endpoints/speech-to-text/koboldcpp/",
     "/self-hosting/local-endpoints/speech-to-text/whispercpp/": "/en/self-hosting/local-endpoints/speech-to-text/whispercpp/",
     "/self-hosting/local-endpoints/speech-to-text/whisperx/": "/en/self-hosting/local-endpoints/speech-to-text/whisperx/",
@@ -771,6 +784,9 @@ export default defineConfig({
     }),
     starlight({
       title: "TomoriBot",
+      markdown: {
+        processedDirs: ["../../docs"],
+      },
       // Every locale is registered here, including the default one, because Starlight derives both
       // the route set and the hreflang locale list from this map. `routeData.ts` then removes the
       // alternates for routes that serve another locale's content.

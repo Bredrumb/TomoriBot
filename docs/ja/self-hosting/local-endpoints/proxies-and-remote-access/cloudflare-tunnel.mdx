@@ -1,0 +1,192 @@
+---
+title: "Cloudflare Tunnel"
+sidebar:
+  label: "Cloudflare Tunnel"
+  order: 3
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+ローカルエンジンに公開HTTPS URLを付与し、TomoriBotに保存できるようにします。PC上でエンジンと `cloudflared` を実行すると、ホストされたボットがそのトンネルを通じて直接接続します。
+
+Cloudflare Tunnelは[Freeプランで利用可能](https://developers.cloudflare.com/tunnel/)です。Cloudflare上で有効なドメインが必要であり、ドメイン登録やエンジンのアップストリームサービスには別途費用がかかる場合があります。
+
+## 1. cloudflaredをインストールする
+
+セットアップガイドに従ってエンジンを起動し、`127.0.0.1` にバインドした状態を維持します。同じコンピューターに `cloudflared` をインストールします：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+winget show --id Cloudflare.cloudflared --exact
+winget install --id Cloudflare.cloudflared --exact
+cloudflared --version
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+Debian/Ubuntuの場合は、Cloudflareの署名付き[APTリポジトリ](https://pkg.cloudflare.com/index.html)を設定します：
+
+```bash
+sudo mkdir -p --mode=0755 /usr/share/keyrings
+curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg |
+  sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+printf '%s\n' 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' |
+  sudo tee /etc/apt/sources.list.d/cloudflared.list >/dev/null
+sudo apt-get update && sudo apt-get install cloudflared
+cloudflared --version
+```
+
+その他のディストリビューションでは、公式ダウンロードから該当するパッケージまたはアーキテクチャを使用してください。
+
+</TabItem>
+<TabItem label="Mac">
+
+[Homebrew](https://brew.sh/)がインストールされている場合：
+
+```bash
+brew install cloudflared
+cloudflared --version
+```
+
+</TabItem>
+</Tabs>
+
+## 2. トンネルを作成する
+
+`engine.example.com` など、ご自身のCloudflareドメイン配下のホスト名を1つ決めます。このガイド全体を通じて、ご自身のホスト名に置き換えてください。
+
+```sh
+cloudflared tunnel login
+cloudflared tunnel create home-engine
+```
+
+最初のコマンドはドメインを認可するためにブラウザーを開きます。2番目のコマンドはトンネルUUIDを表示し、認証情報JSONを作成します。そのファイルとアカウント証明書は非公開で保管してください。
+
+## 3. トンネルを設定する
+{/* anchor: configure-the-tunnel */}
+
+`.cloudflared` フォルダー内に `config.yml` を作成します：
+
+| OS | フォルダー | 認証情報ファイルの例 |
+|---|---|---|
+| Windows | `%USERPROFILE%\.cloudflared` | `C:\Users\LOCAL_ACCOUNT\.cloudflared\TUNNEL_UUID.json` |
+| Linux | `~/.cloudflared` | `/home/LOCAL_ACCOUNT/.cloudflared/TUNNEL_UUID.json` |
+| macOS | `~/.cloudflared` | `/Users/LOCAL_ACCOUNT/.cloudflared/TUNNEL_UUID.json` |
+
+CLIProxyAPI用のこの例を貼り付けます。UUID、絶対JSONパス、およびホスト名を置き換えてください。Windowsのバックスラッシュがそのまま解釈されるよう、認証情報パスはシングルクォートで囲んでください。
+
+```yaml title="config.yml"
+tunnel: TUNNEL_UUID
+credentials-file: 'ABSOLUTE_PATH_TO_TUNNEL_JSON'
+ingress:
+  - hostname: engine.example.com
+    path: ^/v1/(models|chat/completions)$
+    service: http://127.0.0.1:8317
+  - service: http_status:404
+```
+
+別のエンジンの場合は、対応するタブを使用して `path` と `service` のみを置き換えます。パスルールによりTomoriBotのAPIルートが公開され、一致しないパスは404を返します。
+
+<Tabs>
+<TabItem label="テキストエンジン">
+
+```yaml
+    path: ^/v1/(models|chat/completions)$
+    service: http://127.0.0.1:8317
+```
+
+実際のポートを使用してください。デフォルトはCLIProxyAPIが8317、ChatMockが8000、KoboldCPPが5001です。このプロファイルは他のOpenAI互換テキストエンジンもサポートしています。管理APIやモデルのアンロード操作は除外されます。
+
+</TabItem>
+<TabItem label="ComfyUI">
+
+```yaml
+    path: ^/(system_stats|view|queue|history/[A-Za-z0-9_-]+|prompt|upload/image|interrupt|free|api/jobs/[A-Za-z0-9_-]+/cancel)$
+    service: http://127.0.0.1:8188
+```
+
+TomoriBotはジョブ履歴をポーリングするため、WebSocketルートやブラウザーUIは不要です。
+
+</TabItem>
+<TabItem label="TTSサーバー">
+
+```yaml
+    path: ^/(health|synthesize)$
+    service: http://127.0.0.1:8015
+```
+
+8015をご自身の[TTSラッパーのポート](/self-hosting/local-endpoints/text-to-speech/#network-access)に置き換えてください。このプロファイルはOpenAIの音声合成や文字起こしAPIではなく、音声クローンとボイスデザインを対象としています。
+
+</TabItem>
+</Tabs>
+
+複数のエンジンを公開するには、末尾の404ルールの前にそれぞれのホスト名ルールを追加します。それぞれに固有のホスト名とループバックポートを割り当ててください。1つのトンネルですべてを処理できます。
+
+## 4. トンネルを起動する
+
+`config.yml` が含まれるフォルダーでターミナルを開き、設定を検証します：
+
+```sh
+cloudflared tunnel --config ./config.yml ingress validate
+```
+
+次に、DNSを公開してトンネルを実行します：
+
+```sh
+cloudflared tunnel route dns home-engine engine.example.com
+cloudflared tunnel --config ./config.yml run home-engine
+```
+
+複数のホスト名がある場合は、ホスト名ごとに `route dns` を1回ずつ実行してください。エンジンとコネクタを実行したままにしておきます。ルーターのポートフォワーディングやインバウンドのファイアウォール例外は不要です。テスト後は、自動起動のためにCloudflareの[サービス手順](https://developers.cloudflare.com/tunnel/features/locally-managed-tunnels/run-as-a-service/)を使用し、サービスアカウント用に設定ファイルと認証情報の明示的なパスを指定してください。
+
+## 5. TomoriBotを接続する
+{/* anchor: validate-each-authentication-check */}
+
+サーバー内で接続を共有する場合は `/providers` を、自分専用の接続を使う場合は `/personal providers` を開きます：
+
+| エンジン | API互換性 | エンドポイントURL |
+|---|---|---|
+| CLIProxyAPI、ChatMock、KoboldCPP、その他のテキストエンジン | `OpenAI互換` | `https://engine.example.com/v1` |
+| ComfyUI | `ComfyUI` | `https://engine.example.com` |
+| ローカルTTSラッパー | `tts-clone` | `https://engine.example.com` |
+
+エンジンがクライアントキーを要求する場合は、そのキーを認証トークンとして使用してください。そうでない場合は空欄のままにします。CLIProxyAPIは `access.api-keys` 配下のキーを使用します。KoboldCPPのテキストAPIは設定されたパスワードを使用します。TomoriBot側だけに任意のトークンを入力しても、エンジン側の認証は有効になりません。
+
+保存した接続の下にモデルを追加し、対応する機能で選択して、小規模なリクエストをテストします。ComfyUIでは、参照画像のアップロード、出力のダウンロード、およびキャンセルもテストしてください。TTSでは、再生可能な音声になることを確認してください。エンジン側の管理機能は無効のままにしてください。
+
+エンジンが認証を強制している場合は、保護されたリクエストがキーの欠落や誤りを拒否することを確認してください。認証がない場合は、以下の「既知のリスク」で残存する公開範囲を確認してください。[AccessとCaddy](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/)による任意の追加保護も利用できます。
+
+## トラブルシューティング
+
+| 症状 | 確認事項 |
+|---|---|
+| 502 | エンジンが起動しているか、ループバックポートが正しいか、コネクタが同じPC上にあるか |
+| 1033またはトンネル切断 | コネクタプロセス、アウトバウンドのポート7844、ネットワーク接続、およびPCのスリープ |
+| 401 | エンジンのクライアントキーまたはパスワードがTomoriBotの認証トークンと一致しているか |
+| 403またはHTMLログインページ | 既存のAccessアプリケーションが直接のAPI呼び出しをブロックしている可能性があります。使用している場合は[任意のAccessセットアップ](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/)を参照してください |
+| 404 | 正しいエンジンプロファイルとURLか。テキストでは `/v1` を1つだけ使用してください |
+| ストリーム切断または524 | エンジンやアップストリームの状態、PCのスリープ、および[Cloudflareタイムアウト](https://developers.cloudflare.com/fundamentals/reference/connection-limits/) |
+| 大きなアップロードの失敗 | [Cloudflareアップロード制限](https://developers.cloudflare.com/support/troubleshooting/http-status-codes/4xx-client-error/error-413/)とボット・エンジン側の制限（base64によりペイロードサイズが増加します） |
+
+生成されたメディアはAPI経由でバイト列として返してください。ホストされたボットは、お使いのPCのローカルファイルパスやループバックダウンロードURLを読み取れません。本番エンドポイントには公開HTTPSと公開DNS応答が必要です。TLS検証とSSRFチェックは有効のままにしてください。
+
+## 既知のリスク
+{/* anchor: known-risks */}
+
+TomoriBotは、プロバイダーパネルを使用する際に以下のリスクをすでに軽減しています：
+
+| リスク | 既存の軽減策 |
+|---|---|
+| 一般メンバーがパネルに保存されたエンドポイントを読み取る | パネルはエフェメラル表示です。サーバープロバイダー設定には `サーバー管理` 権限が必要であり、個人設定は実行したユーザー自身の構成のみを読み込みます。 |
+| プロバイダーエラーでチャットにURLやキーが露出する | 公開エラーにはローカライズされた説明が使用されます。生のテキストエラー詳細は、サーバー認証情報の場合はサーバー管理者に、個人認証情報の場合は所有者にのみ表示が制限されます。メディアツールの失敗は分類されたメッセージを返します。 |
+| ComfyUIの出力リンクからエンジンURLが判明する | TomoriBotが出力をダウンロードしてDiscordにアップロードします。 |
+| ポートを開放するとPCが直接公開される | エンジンはループバック上にとどまり、`cloudflared` がアウトバウンド接続を行うため、公開インバウンドエンジンポートは不要です。 |
+
+:::danger[信頼できるサーバー管理者とのみ共有してください]
+`/providers` でエンドポイントを登録するのは、管理者を信頼できるDiscordサーバーのみにしてください。管理者は正確なURLを見ることができますが、パネルでは保存された認証トークンは非表示になります。サーバー管理者からもURLを非公開にするには `/personal providers` を使用してください。
+
+エンジン認証がない場合、URLを知っている人は誰でもそのAPIを直接使用できます。対応している場合はエンジンキーを使用するか、[任意のAccessとCaddyによる強化](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/)を追加してください。
+:::

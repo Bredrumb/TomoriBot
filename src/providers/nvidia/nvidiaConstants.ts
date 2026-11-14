@@ -8,7 +8,7 @@ export const NVIDIA_MODELS_URL = "https://integrate.api.nvidia.com/v1/models";
  */
 export const NVIDIA_IMAGE_GENERATION_BASE_URL = "https://ai.api.nvidia.com/v1/genai";
 
-export const NVIDIA_DEFAULT_TEXT_MODEL = "deepseek-ai/deepseek-v4.1-flash";
+export const NVIDIA_DEFAULT_TEXT_MODEL = "nvidia/nemotron-3.5-lightning-30b-a3b";
 /** NIM refuses a bad key within a second, so a key-validation probe still waiting here has passed auth. */
 export const NVIDIA_KEY_VALIDATION_TIMEOUT_MS = 15000;
 export const NVIDIA_DEFAULT_EMBEDDING_MODEL = "nvidia/nemotron-3.5-embed-1b";

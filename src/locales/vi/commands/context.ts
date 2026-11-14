@@ -30,6 +30,8 @@ export default {
     persona_not_found_title: `Không tìm thấy persona`,
     persona_not_found_description: `Persona đó không còn tồn tại trên máy chủ này. Hãy chọn một persona từ danh sách.`,
     build_failed_title: `Ngữ cảnh không khả dụng`,
+    novelai_unavailable_description:
+      "Không thể kiểm tra prompt NovelAI đã được điều chỉnh. Hãy kiểm tra key đã cấu hình và tokenizer cục bộ, sau đó gửi tin nhắn bình thường để tải thông tin gói đăng ký rồi kiểm tra lại.",
     build_failed_description: `Mình không thể đọc lịch sử kênh này để tạo prompt. Hãy thử lại trong một kênh văn bản mà mình có thể xem.`,
     no_permission_title: `Không có quyền`,
     no_permission_description: `Bạn cần quyền **Quản lý máy chủ**, hoặc người quản lý có thể cho phép thành viên xem toàn bộ prompt trong \`/moderation\`.`,

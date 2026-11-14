@@ -1,0 +1,131 @@
+---
+title: "Chatterbox TTS"
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+使用本地[Chatterbox](https://github.com/resemble-ai/chatterbox)语音合成服务器克隆带有情感标签的英语语音。
+
+Chatterbox通过`servers/tts/chatterbox/server.py`在本地运行。它默认为快速的Chatterbox-Turbo模型（350M参数），支持内联情感事件标签，例如`[laugh]`和`[sigh]`。你也可以针对CPU部署环境配置轻量级的Chatterbox-Nano模型（110M参数），或配置标准0.5B模型以使用无分类器引导（`cfg_weight`）和情感夸张程度（`exaggeration`）调节。此包装脚本不加载Chatterbox Multilingual V3。
+
+## 安装
+
+在TomoriBot代码仓库根目录（即你克隆TomoriBot的文件夹）运行以下命令（`numpy`必须在`requirements.txt`之前安装，因为`pkuseg`在构建过程中会导入它）：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+python -m venv servers\tts\chatterbox\.venv
+servers\tts\chatterbox\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install numpy
+pip install -r servers\tts\chatterbox\requirements.txt
+python servers\tts\chatterbox\server.py
+```
+
+当检测到可用的NVIDIA驱动与PyTorch CUDA时会自动使用CUDA，否则使用CPU。
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+python3 -m venv servers/tts/chatterbox/.venv
+source servers/tts/chatterbox/.venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install numpy
+python -m pip install -r servers/tts/chatterbox/requirements.txt
+python servers/tts/chatterbox/server.py
+```
+
+当检测到可用的NVIDIA驱动与PyTorch CUDA时会自动使用CUDA，否则使用CPU。
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+python3 -m venv servers/tts/chatterbox/.venv
+source servers/tts/chatterbox/.venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install numpy
+python -m pip install -r servers/tts/chatterbox/requirements.txt
+python servers/tts/chatterbox/server.py
+```
+
+在Mac上使用Python 3.11（并安装Xcode命令行工具，以便在缺少匹配的二进制wheel时从源码编译`pkuseg`）最为稳定。由于`requirements.txt`中的`--extra-index-url https://download.pytorch.org/whl/cu124`不提供macOS构建，`pip`会改为拉取标准PyPI wheel。随附包装脚本在CUDA不可用时会选择`cpu`（上游`torch.load`路径在MPS下存在已知的CUDA反序列化假设，因此使用CPU更稳妥，且下方的Chatterbox-Nano可提升CPU推理速度）。
+
+</TabItem>
+</Tabs>
+
+在TomoriBot使用Chatterbox期间，请保持该终端窗口开启。默认端点URL为`http://127.0.0.1:8011`；设置`CHATTERBOX_PORT`可使用其他端口。
+
+### 可选：使用Chatterbox-Nano
+
+Nano需要带有`nano=True`加载选项的Chatterbox构建版本。完成上方的常规配置后，在同一个虚拟环境中安装指定的上游版本。提交哈希固定了兼容的源码版本；这并非安全保证。该命令需要`git`并保留已安装的运行时依赖：
+
+```sh
+python -m pip install --no-deps --force-reinstall "git+https://github.com/resemble-ai/chatterbox.git@5de7a54aa4e5e2baadb0182dde554908b48b85c2"
+```
+
+然后在启动服务器前设置`CHATTERBOX_FAST_MODEL=nano`（使用Turbo时保持未设置即可）：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$env:CHATTERBOX_FAST_MODEL = "nano"
+python servers\tts\chatterbox\server.py
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+CHATTERBOX_FAST_MODEL=nano python servers/tts/chatterbox/server.py
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+CHATTERBOX_FAST_MODEL=nano python servers/tts/chatterbox/server.py
+```
+
+</TabItem>
+</Tabs>
+
+`/health`响应会返回`fast_model`，便于你核实已加载的模型选择。Nano和Turbo使用相同的克隆请求和支持的事件标签，且两者均仅支持英语。
+
+若要使用Nano或Turbo，必须在`/config`中保持启用快速模型切换项。将其关闭将选择标准Chatterbox 0.5B模型，以进行CFG权重和夸张程度调节。
+
+### 标准Chatterbox
+
+若要使用标准模型，请在`/config` > 模型 > TTS参数与语音下关闭`Chatterbox 快速模型`。标准模型支持调节`cfg_weight`与`exaggeration`，但不支持方括号事件标签。
+
+## 在TomoriBot中注册
+
+请在端点标签或模型名称中包含`Chatterbox`。TomoriBot仅通过该名称（或包含该名称的端点URL）识别Chatterbox端点，因此Turbo的标签白名单、标准模型的标签剥离以及`/generate voice-message`中的Chatterbox选项仅在该名称存在时才会生效。
+
+运行`/providers`，选择`+ 添加新自定义端点`，并使用语音合成的API兼容性：
+
+- API兼容性：`TTS 克隆`（`tts-clone`）
+- `端点 URL`：`http://127.0.0.1:8011`
+
+保存连接之后，选中它，并在模型下拉菜单中选择`+ 添加新的语音合成模型`。将`声音来源模式`设为`声音克隆`，将`脚本标记风格`设为`方括号标签`，以便发送时保留表达标签。
+
+在`/providers`中完成端点注册和模型配置。然后打开`/config` > 模型 > 切换模型，选中并激活已注册的端点。
+
+## 设置人格语音
+
+1. 准备一段干净的10秒语音片段，仅包含单人说话且无背景音乐。
+2. 打开`/config`下的模型 > TTS参数与语音并上传该音频。
+3. 打开`/config`下的人格 > 语音，选择对应人格与该语音样本。
+
+Chatterbox需要超过5秒的音频。建议时长为10秒；对于更长的音频，模型仅截取其中有限的部分用于条件控制。
+
+## 可选参数调节
+
+在`/config` > 模型 > TTS参数与语音下，可针对标准模型调整`cfg_weight`和`exaggeration`。两者的默认值均为`0.5`；调高数值分别可使生成音频更贴近参考音频，以及增强表达的情感表现力。
+
+Turbo/Nano支持的事件标签包括`[clear throat]`、`[sigh]`、`[shush]`、`[cough]`、`[groan]`、`[sniff]`、`[gasp]`、`[chuckle]`和`[laugh]`。不支持的描述符（例如`[excited]`、`[whisper]`或`[smiles]`）会被自动剥离，而不会发送给TTS。

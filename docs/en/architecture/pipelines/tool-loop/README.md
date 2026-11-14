@@ -39,13 +39,15 @@ loop carries no NovelAI continuation state.
 ## Stage flow
 <!-- anchor: stage-flow -->
 
-```text
-Provider stream
-  ├─ Final response or stop → result assembly
-  └─ Tool call → allowlist and execution checks → tool dispatch
-                  ├─ Tool history → next provider stream
-                  ├─ Context enrichment → restart with enriched context
-                  └─ Tool completion or failure limit → result assembly
+```mermaid
+flowchart TD
+  stream["Provider stream"] -->|"Final response or stop"| res["Result assembly"]
+  stream -->|"Tool call"| check["Allowlist and execution checks"]
+  check --> dispatch["Tool dispatch"]
+  dispatch -->|"Tool history"| stream
+  dispatch -->|"Context enrichment"| restart["Restart with enriched context"]
+  restart --> stream
+  dispatch -->|"Tool completion or failure limit"| res
 ```
 
 ## Stage index

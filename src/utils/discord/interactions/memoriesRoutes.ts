@@ -20,7 +20,14 @@ import {
 } from "@/utils/cache/shortTermMemoryCache";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { getCachedUserRow } from "@/utils/cache/userCache";
-import { personaRepository, serverMemoryRepository, serverRepository, userRepository } from "@/utils/db/repositories";
+import { isRagAvailable } from "@/utils/db/ragAvailability";
+import {
+  llmModelRepo,
+  personaRepository,
+  serverMemoryRepository,
+  serverRepository,
+  userRepository,
+} from "@/utils/db/repositories";
 import { LOREBOOK_ENTRIES_PER_SCOPE_MAX, type LorebookEntryRow } from "@/modules/lorebooks/db/types";
 import { lorebookRepository, type LorebookScopeReadResult } from "@/modules/lorebooks/db/repositories";
 import {
@@ -466,6 +473,7 @@ export interface MemoriesRouteDependencies {
   getDocumentCounts(serverId: number, personaId: number | null): Promise<{ documents: number; chunks: number }>;
   getDocumentCountsByPersona(serverId: number): Promise<{ byPersona: Map<number, number>; serverwide: number }>;
   getEligibleHistoryPersonaIds(serverId: number): Promise<Set<number>>;
+  getMismatchedEmbeddingDocumentCount(serverId: number, configuredEmbeddingModelId: number | null): Promise<number>;
   loadLorebooks(serverId: number, lineageId: number | null): Promise<LorebookScopeReadResult>;
   getLorebookCollections(serverId: number): Promise<import("@/modules/lorebooks/db/types").ServerLorebook[] | null>;
   getLorebookCounts(serverId: number): Promise<Map<number | null, number> | null>;
@@ -634,6 +642,18 @@ const RECEIPT_LOCALE_KEYS = {
   document_removed: {
     heading: "commands.memories.document_removed_heading",
     detail: "commands.memories.document_removed_detail",
+  },
+  document_reembedded: {
+    heading: "commands.memories.document_reembedded_heading",
+    detail: "commands.memories.document_reembedded_detail",
+  },
+  document_reembed_up_to_date: {
+    heading: "commands.memories.document_reembed_up_to_date_heading",
+    detail: "commands.memories.document_reembed_up_to_date_detail",
+  },
+  document_reembed_failed: {
+    heading: "commands.memories.document_reembed_failed_heading",
+    detail: "commands.memories.document_reembed_failed_detail",
   },
   document_chunk_edited: {
     heading: "commands.memories.document_chunk_edited_heading",
@@ -872,6 +892,7 @@ const ERROR_RECEIPT_KEYS = new Set<string>([
   "document_quota",
   "embedding_credentials_missing",
   "embedding_model_missing",
+  "document_reembed_failed",
   "vectorize_partial_failure",
   "stm_changed_state",
   "lorebook_read_failed",
@@ -893,25 +914,31 @@ const ERROR_RECEIPT_KEYS = new Set<string>([
   "lorebook_import_failed",
 ]);
 
+const INFO_RECEIPT_KEYS = new Set<string>(["document_reembed_up_to_date"]);
+
 function receipt(locale: string, key: MemoryReceiptKey, variables?: Record<string, string | number>): PanelReceipt {
   return {
-    tone: ERROR_RECEIPT_KEYS.has(key) ? "error" : "success",
+    tone: ERROR_RECEIPT_KEYS.has(key) ? "error" : INFO_RECEIPT_KEYS.has(key) ? "info" : "success",
     heading: localizer(locale, RECEIPT_LOCALE_KEYS[key].heading),
     detail: localizer(locale, RECEIPT_LOCALE_KEYS[key].detail, variables),
   };
 }
 
 /**
- * Yellow interim receipt painted before an embedding call.
- *
- * Document upload and vectorize both wait on the embedding provider, and the panel is already
- * deferred by then, so without this the message sits unchanged for several seconds with nothing to
- * say the work started. This paint is overwritten by the real receipt when the operation returns.
+ * Yellow interim receipt painted before an embedding call, because the deferred panel would
+ * otherwise sit unchanged until the final receipt overwrites it.
  */
-const WORKING_RECEIPT_KEYS: Record<"document_working" | "vectorize_working", { heading: string; detail: string }> = {
+const WORKING_RECEIPT_KEYS: Record<
+  "document_working" | "document_reembed_working" | "vectorize_working",
+  { heading: string; detail: string }
+> = {
   document_working: {
     heading: "commands.memories.document_working_heading",
     detail: "commands.memories.document_working_detail",
+  },
+  document_reembed_working: {
+    heading: "commands.memories.document_reembed_working_heading",
+    detail: "commands.memories.document_reembed_working_detail",
   },
   vectorize_working: {
     heading: "commands.memories.vectorize_working_heading",
@@ -1053,6 +1080,8 @@ export const DOCUMENT_RESULT_RECEIPT_KEYS: Record<string, MemoryReceiptKey> = {
   "quota-exceeded": "document_quota",
   "credentials-missing": "embedding_credentials_missing",
   "model-missing": "embedding_model_missing",
+  "nothing-to-reembed": "document_reembed_up_to_date",
+  "reembed-failed": "document_reembed_failed",
   "write-failed": "write_failed",
   forbidden: "manager_only",
 };
@@ -1263,16 +1292,18 @@ async function repaint(
   let documents: DocumentListRow[] | undefined;
   let documentCount: number | undefined;
   let documentChunkCount: number | undefined;
+  let mismatchedEmbeddingDocuments: number | undefined;
   let documentChunks: DocumentChunkRow[] | undefined;
   let documentCountsByPersona: Map<number, number> | undefined;
   let eligibleHistoryPersonaIds: Set<number> | undefined;
   if (category === "documents" && scope.canManage) {
     const personaId = selectedLineageId === 0 ? null : selectedLineageId;
     let scopedCounts: { byPersona: Map<number, number>; serverwide: number };
-    [documents, scopedCounts, eligibleHistoryPersonaIds] = await Promise.all([
+    [documents, scopedCounts, eligibleHistoryPersonaIds, mismatchedEmbeddingDocuments] = await Promise.all([
       dependencies.loadDocuments(scope.serverId, personaId),
       dependencies.getDocumentCountsByPersona(scope.serverId),
       dependencies.getEligibleHistoryPersonaIds(scope.serverId),
+      dependencies.getMismatchedEmbeddingDocumentCount(scope.serverId, scope.configuredEmbeddingModelId),
     ]);
     documentCountsByPersona = scopedCounts.byPersona;
     const counts = await dependencies.getDocumentCounts(scope.serverId, personaId);
@@ -1343,6 +1374,7 @@ async function repaint(
         documents,
         documentCount,
         documentChunkCount,
+        mismatchedEmbeddingDocuments,
         documentChunks,
         documentCountsByPersona,
         eligibleHistoryPersonaIds,
@@ -1399,6 +1431,12 @@ const defaultDependencies: MemoriesRouteDependencies = {
   getDocumentCounts,
   getDocumentCountsByPersona: (serverId) => serverMemoryRepository.documentCountsByPersona(serverId),
   getEligibleHistoryPersonaIds: (serverId) => serverMemoryRepository.personaIdsWithHistoryDocuments(serverId),
+  getMismatchedEmbeddingDocumentCount: async (serverId, configuredEmbeddingModelId) => {
+    if (!configuredEmbeddingModelId || !isRagAvailable()) return 0;
+    const model = await llmModelRepo.loadEmbeddingModelById(configuredEmbeddingModelId);
+    if (!model?.model_family) return 0;
+    return serverMemoryRepository.countMismatchedEmbeddingDocuments(serverId, model.model_family);
+  },
   loadLorebooks: (serverId, lineageId) => lorebookRepository.listScope(serverId, lineageId),
   getLorebookCollections: (serverId) => lorebookRepository.listBooks(serverId),
   getLorebookCounts: (serverId) => lorebookRepository.countsByLineage(serverId),
@@ -2643,6 +2681,78 @@ export function createMemoriesInteractionRoute(
           [],
           { kind: "documents", rangeIndex: route.rangeIndex },
           undefined,
+          dependencies,
+        );
+        return;
+      }
+
+      if (route.action === "document-reembed") {
+        if (!interaction.isButton()) {
+          throw new Error("Document re-embed route requires Button interaction");
+        }
+        const initialPersonaId =
+          route.personaId === 0 || scope.personas.some((persona) => persona.persona_id === route.personaId)
+            ? route.personaId
+            : 0;
+        if (!scope.canManage) {
+          await repaint(
+            interaction,
+            route.locale,
+            scope,
+            "documents",
+            initialPersonaId,
+            [],
+            { kind: "documents" },
+            receipt(route.locale, "manager_only"),
+            dependencies,
+          );
+          return;
+        }
+        await repaint(
+          interaction,
+          route.locale,
+          scope,
+          "documents",
+          initialPersonaId,
+          [],
+          { kind: "documents" },
+          workingReceipt(route.locale, "document_reembed_working"),
+          dependencies,
+        );
+        const action = await performPanelAction(
+          () =>
+            dependencies.documentOperations.reembed({
+              serverId: scope.serverId,
+              workspaceId: scope.workspaceId,
+              configuredEmbeddingModelId: scope.configuredEmbeddingModelId,
+              canManage: scope.canManage,
+            }),
+          () => dependencies.resolveScope(interaction, true),
+        );
+        scope = action.state ?? scope;
+        const result = action.result;
+        if (result.status === "success") {
+          dependencies.recordAction({
+            action: "memories.workspace.document.reembed",
+            serverId: scope.serverId,
+            userDiscId: scope.userDiscId,
+          });
+        }
+        const finalPersonaId =
+          initialPersonaId === 0 || scope.personas.some((persona) => persona.persona_id === initialPersonaId)
+            ? initialPersonaId
+            : 0;
+        await repaint(
+          interaction,
+          route.locale,
+          scope,
+          "documents",
+          finalPersonaId,
+          [],
+          { kind: "documents" },
+          result.status === "success"
+            ? receipt(route.locale, "document_reembedded", { count: result.documentCount })
+            : documentResultReceipt(route.locale, result),
           dependencies,
         );
         return;

@@ -1,0 +1,192 @@
+---
+title: "Cloudflare Tunnel"
+sidebar:
+  label: "Cloudflare Tunnel"
+  order: 3
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+为你的本地引擎提供一个可保存至TomoriBot的公网HTTPS URL。在你的电脑上运行引擎与`cloudflared`；托管的bot会通过隧道直接连接。
+
+Cloudflare Tunnel[在免费套餐中即可使用](https://developers.cloudflare.com/tunnel/)。你需要一个已在Cloudflare上激活的域名；域名注册以及你引擎的上游服务可能会产生额外费用。
+
+## 1. 安装cloudflared
+
+按照你引擎的设置指南启动它，并保持将其绑定到`127.0.0.1`。在同一台电脑上安装`cloudflared`：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+winget show --id Cloudflare.cloudflared --exact
+winget install --id Cloudflare.cloudflared --exact
+cloudflared --version
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+对于Debian/Ubuntu，配置Cloudflare已签名的[APT仓库](https://pkg.cloudflare.com/index.html)：
+
+```bash
+sudo mkdir -p --mode=0755 /usr/share/keyrings
+curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg |
+  sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+printf '%s\n' 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' |
+  sudo tee /etc/apt/sources.list.d/cloudflared.list >/dev/null
+sudo apt-get update && sudo apt-get install cloudflared
+cloudflared --version
+```
+
+其他发行版请从官方下载页选择对应的软件包或架构版本。
+
+</TabItem>
+<TabItem label="Mac">
+
+在已安装[Homebrew](https://brew.sh/)的情况下：
+
+```bash
+brew install cloudflared
+cloudflared --version
+```
+
+</TabItem>
+</Tabs>
+
+## 2. 创建隧道
+
+在你的Cloudflare域名下选择一个主机名，例如`engine.example.com`。在后续步骤中请将其替换为你自己的主机名。
+
+```sh
+cloudflared tunnel login
+cloudflared tunnel create home-engine
+```
+
+第一条命令会打开浏览器以授权你的域名。第二条命令会输出一个隧道UUID并创建对应的凭据JSON。请妥善私密保管该文件与账号证书。
+
+## 3. 配置隧道
+{/* anchor: configure-the-tunnel */}
+
+在你的`.cloudflared`文件夹中创建`config.yml`：
+
+| 操作系统 | 文件夹 | 凭据文件示例 |
+|---|---|---|
+| Windows | `%USERPROFILE%\.cloudflared` | `C:\Users\LOCAL_ACCOUNT\.cloudflared\TUNNEL_UUID.json` |
+| Linux | `~/.cloudflared` | `/home/LOCAL_ACCOUNT/.cloudflared/TUNNEL_UUID.json` |
+| macOS | `~/.cloudflared` | `/Users/LOCAL_ACCOUNT/.cloudflared/TUNNEL_UUID.json` |
+
+以下为CLIProxyAPI的示例配置，请将其中的UUID、绝对JSON路径和主机名替换为你的实际值。请保留凭据路径外层的单引号，以确保Windows反斜杠按字面值保留。
+
+```yaml title="config.yml"
+tunnel: TUNNEL_UUID
+credentials-file: 'ABSOLUTE_PATH_TO_TUNNEL_JSON'
+ingress:
+  - hostname: engine.example.com
+    path: ^/v1/(models|chat/completions)$
+    service: http://127.0.0.1:8317
+  - service: http_status:404
+```
+
+如果使用其他引擎，请按下方对应的标签页仅替换`path`和`service`。路径规则只暴露TomoriBot用到的API路由；未匹配的路径会返回404。
+
+<Tabs>
+<TabItem label="文本引擎">
+
+```yaml
+    path: ^/v1/(models|chat/completions)$
+    service: http://127.0.0.1:8317
+```
+
+请替换为你的实际端口：CLIProxyAPI默认为8317，ChatMock默认为8000，KoboldCPP默认为5001。此配置也支持其他与OpenAI兼容的文本引擎，同时排除了管理API和模型卸载操作。
+
+</TabItem>
+<TabItem label="ComfyUI">
+
+```yaml
+    path: ^/(system_stats|view|queue|history/[A-Za-z0-9_-]+|prompt|upload/image|interrupt|free|api/jobs/[A-Za-z0-9_-]+/cancel)$
+    service: http://127.0.0.1:8188
+```
+
+TomoriBot通过轮询任务历史获取结果，因此不需要WebSocket路由或浏览器界面。
+
+</TabItem>
+<TabItem label="TTS服务器">
+
+```yaml
+    path: ^/(health|synthesize)$
+    service: http://127.0.0.1:8015
+```
+
+将8015替换为你的[TTS包装脚本端口](/self-hosting/local-endpoints/text-to-speech/#network-access)。此配置涵盖语音克隆与VoiceDesign，而非OpenAI语音合成或转写API。
+
+</TabItem>
+</Tabs>
+
+如果要暴露多个引擎，请在末尾的404规则之前为每个引擎添加一条主机名规则，并为每个引擎指定各自的主机名与回环端口。同一个隧道可以同时服务所有引擎。
+
+## 4. 启动隧道
+
+在包含`config.yml`的文件夹中打开终端并校验配置：
+
+```sh
+cloudflared tunnel --config ./config.yml ingress validate
+```
+
+然后发布DNS并运行隧道：
+
+```sh
+cloudflared tunnel route dns home-engine engine.example.com
+cloudflared tunnel --config ./config.yml run home-engine
+```
+
+如果配置了多个主机名，请为每个主机名分别运行一次`route dns`。保持引擎与连接器处于运行状态；不需要路由器端口转发或入站防火墙例外规则。测试通过后，按照Cloudflare的[服务运行指南](https://developers.cloudflare.com/tunnel/features/locally-managed-tunnels/run-as-a-service/)配置开机自启，并为服务账号显式指定配置与凭据路径。
+
+## 5. 连接TomoriBot
+{/* anchor: validate-each-authentication-check */}
+
+打开`/providers`在当前服务器共享连接，或打开`/personal providers`添加你自己的连接：
+
+| 引擎 | API兼容性 | 端点URL |
+|---|---|---|
+| CLIProxyAPI、ChatMock、KoboldCPP或其他文本引擎 | `OpenAI 兼容` | `https://engine.example.com/v1` |
+| ComfyUI | `ComfyUI` | `https://engine.example.com` |
+| 本地TTS包装服务器 | `TTS 克隆` | `https://engine.example.com` |
+
+如果引擎强制要求身份验证，请将引擎的客户端密钥填入`认证令牌`；否则留空。CLIProxyAPI使用的是`access.api-keys`下的密钥；KoboldCPP文本API使用的是其配置的密码。仅在TomoriBot中填写任意令牌并不会在引擎端开启身份验证。
+
+在已保存的连接下添加模型，为对应能力选中它，然后测试一个小请求。对于ComfyUI，还应测试参考图上传、输出下载与取消任务；对于TTS，请确认生成的音频可以正常播放。请保持引擎端的管理功能处于禁用状态。
+
+如果引擎开启了身份验证，请确认受保护请求会拒绝缺失或错误的密钥。如果引擎没有身份验证，请先阅读下方「已知风险」中的残留暴露面说明。如果需要额外增加一道独立身份验证检查，[Access与Caddy](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/)提供了可选加固方案。
+
+## 故障排查
+
+| 症状 | 检查项 |
+|---|---|
+| 502 | 引擎是否正在运行、回环端口是否正确、连接器是否在同一台电脑上 |
+| 1033或隧道断开 | 连接器进程、出站端口7844、网络连接以及电脑是否休眠 |
+| 401 | 引擎的客户端密钥或密码是否与TomoriBot中的认证令牌一致 |
+| 403或HTML登录页 | 既有的Access应用可能会拦截直接API调用；如果启用了Access，请参阅[可选Access配置](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/) |
+| 404 | 确认引擎配置档与URL正确；文本端点必须恰好包含一个`/v1` |
+| 流式输出中断或524 | 引擎与上游健康状况、电脑休眠以及[Cloudflare连接限制](https://developers.cloudflare.com/fundamentals/reference/connection-limits/) |
+| 大文件上传失败 | [Cloudflare上传限制](https://developers.cloudflare.com/support/troubleshooting/http-status-codes/4xx-client-error/error-413/)以及bot/引擎限制；base64编码会增大请求体积 |
+
+请通过API直接以字节流返回生成的媒体内容。托管bot无法读取你电脑上的本地文件路径或回环下载地址。生产环境端点需要公网HTTPS与公网DNS解析；请保持TLS验证与SSRF检查开启。
+
+## 已知风险
+{/* anchor: known-risks */}
+
+当你使用TomoriBot的提供方面板时，系统已经缓解了以下风险：
+
+| 风险 | 现有缓解措施 |
+|---|---|
+| 普通成员在面板中读取已保存的端点 | 面板消息仅调用者可见。服务器提供方设置需要`管理服务器`权限；个人设置仅加载调用者自己的配置。 |
+| 提供方报错在聊天中暴露URL或密钥 | 公开错误只显示本地化描述。原始文本错误详情仅向服务器管理员（针对服务器凭据）或凭据所有者（针对个人凭据）开放。媒体工具失败返回分类后的消息。 |
+| ComfyUI输出链接暴露引擎URL | TomoriBot会先下载输出文件再上传到Discord。 |
+| 开放端口导致电脑直接暴露在公网 | 引擎保持在回环地址上，`cloudflared`仅向外发起出站连接；不需要开放公网入站端口。 |
+
+:::danger[仅与你信任的服务器管理员共享]
+只在你信任管理员的Discord服务器中通过`/providers`注册端点：管理员可以看到确切的URL，但面板会隐藏你保存的认证令牌。若不想让服务器管理员看到URL，请改用`/personal providers`。
+
+如果引擎本身没有身份验证，任何知道URL的人都可以直接调用其API。在引擎支持时请务必设置引擎密钥，或添加[可选的Access与Caddy加固方案](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/)。
+:::

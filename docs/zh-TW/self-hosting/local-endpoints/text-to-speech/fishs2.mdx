@@ -1,0 +1,191 @@
+---
+title: "Fish Audio S2 Pro"
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+使用[Fish Audio S2 Pro](https://github.com/fishaudio/fish-speech)，透過精細的情緒標籤合成極具表現力的多語言角色語音。
+
+Fish Audio S2 Pro是一個多語言4B參數文字轉語音模型，專為高傳真聲音複製而打造。TomoriBot透過`servers/tts/fishs2/`中的本機包裝器連接至該模型。它預設使用官方BF16權重（`fishaudio/s2-pro`），並為配備8到12GB VRAM的GPU提供選用的INT8量化檢查點（`Imagilux/fishaudio-s2-pro`）。
+
+Fish S2 Pro支援括號表情標籤，例如`[whisper]`、`[excited]`與`[angry]`。將端點設定為`方括號標籤`標記，TomoriBot便會在產生的語音腳本中保留這些控制標籤。
+
+## 授權條款
+
+Fish Speech程式碼與S2 Pro模型權重依據Fish Audio Research License發布。依其條款允許研究與非商業用途；商業使用需要取得獨立的Fish Audio授權。
+
+TomoriBot不重新散布模型權重。每位自架使用者均直接從Hugging Face下載Fish S2 Pro，並有責任遵守Fish Audio Research License。要求的標示為：Built with Fish Audio。
+
+## 硬體與作業系統
+
+:::caution[請使用Linux或WSL2以達到實用的推論速度]
+包裝器預設停用編譯；在Linux或WSL2上設定`FISH_S2_COMPILE=1`可啟用Triton編譯。原生Windows以未編譯模式執行，每個音訊片段可能需耗時8到10分鐘。
+:::
+
+建議硬體規格：
+
+- **Linux或WSL2（強烈建議）**
+- 配備16GB至24GB VRAM的NVIDIA GPU（BF16搭配KV快取與卸載可舒適容納於約16到18GB VRAM內）
+- 建議使用Python 3.12
+- `git`、`ffmpeg`以及Fish Speech所需的標準音訊函式庫
+
+## 設定
+
+從TomoriBot存放庫根目錄執行：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+原生Windows僅提供作為評估用途。由於未編譯eager模式下的驅動程式調度延遲很高，在Windows上生成每個片段大約需要8到10分鐘：
+
+```powershell
+.\servers\tts\fishs2\install-fishs2.ps1
+.\servers\tts\fishs2\.venv\Scripts\python.exe servers\tts\fishs2\server.py
+```
+
+PowerShell安裝程式預設以CUDA（`cu124`）為目標。若要在沒有NVIDIA GPU的純CPU機器上安裝，請傳入`-Cpu`：
+
+```powershell
+.\servers\tts\fishs2\install-fishs2.ps1 -Cpu
+```
+
+若Windows上的PyTorch需要以CUDA支援重新安裝：
+
+```powershell
+.\servers\tts\fishs2\.venv\Scripts\pip.exe install --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+```
+
+TomoriBot在`TTS_SYNTHESIZE_TIMEOUT_MS`（預設240000ms）後會停止等待語音訊息，這比原生Windows處理一個片段所需的時間更短。在原生Windows上評估時，請在TomoriBot的`.env`中調高此數值（例如`TTS_SYNTHESIZE_TIMEOUT_MS=900000`）。
+
+</TabItem>
+<TabItem label="Linux">
+
+建議路徑（原生Linux或WSL2）：
+
+```bash
+bash servers/tts/fishs2/install-fishs2.sh
+servers/tts/fishs2/.venv/bin/python servers/tts/fishs2/server.py
+```
+
+若Hugging Face下載要求身分驗證，請先在Hugging Face上同意模型授權、登入一次，接著重新執行安裝程式：
+
+```bash
+servers/tts/fishs2/.venv/bin/hf auth login
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+**在Mac上未經測試。**`install-fishs2.sh`針對專為Linux與CUDA主機設計的固定`Imagilux/fish-speech`分支（`FISH_S2_COMPILE=1`在macOS上無法使用，且4B BF16檢查點約需要16到18GB記憶體）。請將Fish S2 Pro執行於[經授權的遠端通道](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/)後方的Linux或Windows NVIDIA主機上，或在Mac本機使用[VoxCPM2](/self-hosting/local-endpoints/text-to-speech/voxcpm2/)或[IrodoriTTS](/self-hosting/local-endpoints/text-to-speech/irodoritts/)。
+
+</TabItem>
+</Tabs>
+
+安裝程式會下載固定的Fish Speech執行時期與官方BF16檢查點。將`FISH_S2_MODEL_REVISION`設定為不可變的修訂版本以實現可重現的模型下載。在Windows上，若Hugging Face要求身分驗證，請在同意授權後執行`.\servers\tts\fishs2\.venv\Scripts\hf.exe auth login`，接著重新執行安裝程式。
+
+## 必要參考逐字稿
+
+:::caution[必須提供參考逐字稿]
+Fish S2 Pro需要參考音訊的確切逐字稿。請在`/config` > `模型` > `TTS 參數與語音`底下的`參考逐字稿`欄位中輸入；若缺少此資訊，包裝器會拒絕請求。
+:::
+
+## 在TomoriBot中註冊
+
+在`/providers`中，選擇`+ 新增自訂端點`並設定：
+
+- 功能：`語音`
+- `API 相容性`：`TTS 複製`（`tts-clone`）
+- `端點 URL`：`http://127.0.0.1:8015`
+- `語音來源模式`：`語音複製`
+- `腳本標記風格`：`方括號標籤`
+- `驗證權杖`（API金鑰）：留空。包裝器沒有身分驗證機制；請參閱[網路存取](/self-hosting/local-endpoints/text-to-speech/#network-access)。
+
+接著選擇`+ 新增語音模型`新增該端點的模型項目，並透過`/config`底下的`模型` > `切換模型`啟用它。
+
+## 新增人格語音
+
+1. 準備一段乾淨的10到20秒參考音訊，單一講者且背景雜音極少或無雜音。
+2. 在`/config`中開啟`模型` > `TTS 參數與語音`，並上傳語音樣本。
+3. **輸入確切的逐字稿：**將參考音訊中朗讀的確切文字輸入到`參考逐字稿`欄位中。
+4. 在`/config`中開啟`人格` > `語音`，並將該樣本指派給人格。
+5. 使用`/generate voice-message`生成語音訊息，或讓TomoriBot透過其語音訊息工具生成。
+
+上游建議使用10到30秒的參考樣本。
+
+## 表情控制
+
+Fish S2 Pro可以使用括號標籤在單一發話中改變語氣。例如：
+
+```text
+[whisper] Keep your voice down. [excited] Wait, you actually found it?
+```
+
+由於端點使用`方括號標籤`標記，TomoriBot會保留這些標籤，而不是在合成前將其移除。
+
+## 設定
+
+| 變數 | 預設值 | 用途 |
+|---|---|---|
+| `FISH_S2_MODEL_DIR` | `fish-speech/checkpoints/fish-speech-s2-pro` | S2 Pro檢查點目錄 |
+| `FISH_S2_MODEL_ID` | `fishaudio/s2-pro` | 已設定檢查點的模型存放庫與健康中繼資料標籤 |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | 包裝器繫結位址；請參閱[網路存取](/self-hosting/local-endpoints/text-to-speech/#network-access) |
+| `FISH_S2_PORT` | `8015` | Fish包裝器連接埠 |
+| `FISH_S2_UPSTREAM_PORT` | `8025` | 內部Fish API連接埠 |
+| `FISH_S2_COMPILE` | `0` | 啟用Fish Speech的`torch.compile`（需要具備Triton的Linux/WSL2） |
+| `FISH_S2_HALF` | `0` | 請求FP16執行時期模式 |
+| `FISH_S2_CHUNK_LENGTH` | `200` | Fish疊代提示詞區塊長度 |
+| `FISH_S2_TOP_P` | `0.8` | 取樣top-p |
+| `FISH_S2_TEMPERATURE` | `0.8` | 取樣溫度 |
+| `FISH_S2_REPETITION_PENALTY` | `1.1` | 重複懲罰 |
+| `FISH_S2_MAX_NEW_TOKENS` | `1024` | 每個請求生成的語意token上限 |
+| `FISH_S2_USE_MEMORY_CACHE` | `on` | 在Fish執行時期中快取編碼後的參考語音 |
+
+### 安裝程式變數
+
+由`install-fishs2.sh`與`install-fishs2.ps1`讀取。請記錄你覆寫的任何值，以確保部署可以重現。
+
+| 變數 | 預設值 | 用途 |
+|---|---|---|
+| `FISH_S2_MODEL_ID` | `fishaudio/s2-pro` | 要下載的Hugging Face存放庫 |
+| `FISH_S2_MODEL_REVISION` | `main` | 要下載的Hugging Face修訂版本 |
+
+參考音訊必須為非空、未壓縮的PCM RIFF/WAVE檔案，解碼後不超過10MB。此限制會在推論前檢查，以防止過大的base64請求消耗無限記憶體；以TomoriBot發送的22.05kHz單聲道WAV而言，約可容納237秒。
+
+## 低VRAM選項（INT8量化）
+
+在VRAM受限（例如8到12GB）且無法容納官方BF16檢查點的GPU上執行的使用者，可以選用INT8量化模型（`Imagilux/fishaudio-s2-pro`）：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$env:FISH_S2_MODEL_ID = "Imagilux/fishaudio-s2-pro"
+$env:FISH_S2_MODEL_DIR = "servers/tts/fishs2/fish-speech/checkpoints/fish-speech-s2-pro-int8"
+$env:FISH_S2_MODEL_REVISION = "9706ff036580881d87cc09465dd10014527bc481"
+.\servers\tts\fishs2\install-fishs2.ps1
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+在Linux或WSL2中：
+
+```bash
+export FISH_S2_MODEL_ID="Imagilux/fishaudio-s2-pro"
+export FISH_S2_MODEL_DIR="servers/tts/fishs2/fish-speech/checkpoints/fish-speech-s2-pro-int8"
+export FISH_S2_MODEL_REVISION="9706ff036580881d87cc09465dd10014527bc481"
+bash servers/tts/fishs2/install-fishs2.sh
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+INT8 CUDA量化針對Linux與Windows上的NVIDIA GPU，在Mac上未經測試。
+
+</TabItem>
+</Tabs>
+
+從相同的shell啟動`server.py`，或在啟動前設定相同的三個變數，讓包裝器載入INT8目錄而非預設的BF16。
+
+INT8檢查點將Transformer權重從約10.3GB縮減至約5.1GB，同時將音訊嵌入與編解碼器層保持在BF16，可容納於約10GB的總VRAM內。

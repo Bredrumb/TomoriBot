@@ -2,12 +2,14 @@ import { describe, expect, it } from "bun:test";
 import { ComponentType, type ComponentInContainerData } from "discord.js";
 import type { UserSavedProviderConfigRow } from "@/types/db/schema";
 import { buildParameters1Modal, buildParameters2Modal } from "@/utils/discord/ui/personalConfigModals";
+import { buildConfigGenerationModal } from "@/utils/discord/ui/configModelModals";
+import { expectForEveryLocale, localizedCopy } from "../../helpers/localeCases";
 import {
   buildProviderParameterBlock,
   type ProviderParameterBlockCopy,
   type ProviderParameterBlockInput,
 } from "@/utils/discord/ui/personalConfigParameterControls";
-import { initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { hasLocaleKey, initializeLocalizer, localizer } from "@/utils/text/localizer";
 
 await initializeLocalizer();
 
@@ -185,5 +187,21 @@ describe("personal provider parameter controls", () => {
       "max_output_tokens_nonce123456",
       "thinking_level_nonce123456",
     ]);
+    currentConfig.thinking_level = "xhigh";
+    expectForEveryLocale((locale) => {
+      const choiceKey = "commands.config.thinking-level.choice_xhigh";
+      const personal = buildParameters2Modal(locale, "nonce123456", "openrouter", currentConfig);
+      const server = buildConfigGenerationModal(locale, "openrouter", "nonce123456", null);
+      for (const modal of [personal, server]) {
+        const options = modal.components.flatMap((field) => field.component?.options ?? []);
+        expect(options.find((option) => option.value === "xhigh")).toMatchObject({
+          label: localizedCopy(hasLocaleKey(locale, choiceKey) ? locale : "en-US", choiceKey),
+          value: "xhigh",
+        });
+      }
+      expect(
+        personal.components.flatMap((field) => field.component?.options ?? []).find((option) => option.default),
+      ).toMatchObject({ value: "xhigh" });
+    });
   });
 });

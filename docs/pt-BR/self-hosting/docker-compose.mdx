@@ -1,0 +1,151 @@
+---
+title: "Docker Compose"
+sidebar:
+  order: 3
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+O Docker Compose executa o TomoriBot e o PostgreSQL juntos em contêineres. Ele é a terceira opção de instalação ao lado do [assistente de configuração](/self-hosting/setup-wizard/) e da [configuração manual](/self-hosting/manual-setup/): escolha esta opção quando quiser executar tudo no Docker sem instalar o Bun nem o PostgreSQL no sistema host. Ele ignora o assistente de configuração interativo e configura a conexão com o banco de dados automaticamente.
+
+## 1. Obtenha o código
+
+```sh
+git clone https://github.com/Bredrumb/TomoriBot.git
+cd TomoriBot
+```
+
+## 2. Valores obrigatórios do `.env`
+
+Comece pelo arquivo de exemplo:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+Copy-Item .env.example .env
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+cp .env.example .env
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+cp .env.example .env
+```
+
+</TabItem>
+</Tabs>
+
+Defina estas variáveis obrigatórias no `.env`:
+
+| Variável | Valor |
+|---|---|
+| `DISCORD_TOKEN` | Seu token de bot do Discord (ative as intents privilegiadas `GuildMembers`, `MessageContent` e `GuildPresences`). |
+| `CRYPTO_SECRET` | Uma chave de criptografia de 32 caracteres usada para criptografar chaves de API armazenadas. |
+| `POSTGRES_PASSWORD` | A senha do banco de dados. Todos os outros valores `POSTGRES_*` são configurados automaticamente. |
+| `ALLOW_PRIVATE_NETWORK` | `true` permite que endpoints personalizados e servidores MCP na sua máquina ou LAN funcionem, uma lista `host:port` permite apenas esses servidores e `false` os bloqueia. O bot não iniciará até que isso esteja definido. Consulte [Redes privadas](/self-hosting/setup-wizard/#private-networks) para escolher. |
+
+Gere um valor aleatório de 32 caracteres para `CRYPTO_SECRET` usando o Docker e copie-o para o `.env`:
+
+```sh
+docker run --rm alpine:3.22 sh -c "head -c 24 /dev/urandom | base64"
+```
+
+Gere uma senha separada para `POSTGRES_PASSWORD`. Você pode copiar configurações de ajuste opcionais de `.env.optional.example`.
+
+:::note[A conexão com o banco de dados é automática]
+Não defina `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER` ou `POSTGRES_DB` no `.env`; o Compose configura esses valores automaticamente.
+:::
+
+Prepare as pastas de montagem de vínculo (bind-mount) do host antes de iniciar a pilha:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+New-Item -ItemType Directory -Force -Path backups, logs, data | Out-Null
+```
+
+O Docker Desktop mapeia diretórios do host Windows sem `chown` do Unix.
+
+</TabItem>
+<TabItem label="Linux">
+
+O contêiner do bot é executado como UID 1001 e precisa de acesso de escrita aos diretórios `backups/`, `logs/` e `data/` do host. Crie-os e atribua a propriedade antes da primeira inicialização:
+
+```bash
+mkdir -p backups logs data
+sudo chown 1001:1001 backups logs data
+```
+
+Se você já executou o Compose e o Docker criou os diretórios como root, execute esses comandos depois. Eles não alteram a propriedade de arquivos que já estejam dentro dos diretórios.
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+mkdir -p backups logs data
+```
+
+O Docker Desktop no Mac mapeia montagens de vínculo sem `chown 1001:1001` do Unix.
+
+</TabItem>
+</Tabs>
+
+## 3. Compilar e executar
+
+```sh
+docker compose build   # primeira vez, ou após alterações de código ou dependências
+docker compose up      # bot + banco de dados
+```
+
+Para inicializações seguintes, apenas `docker compose up` é suficiente, a menos que você altere código ou dependências. Assim que o bot se conectar ao Discord, execute `/setup` em qualquer canal do servidor para adicionar sua chave de provedor de IA. Consulte o [Início Rápido](/introduction/quickstart/) para ver as opções de configuração no Discord.
+
+O Compose fixa `RUN_ENV=development` na definição de serviço para que os segredos do `.env` e endpoints HTTP locais funcionem. Endpoints locais como `http://host.docker.internal:11434` precisam de `ALLOW_PRIVATE_NETWORK` para permiti-los (`true`, ou uma lista contendo `host.docker.internal:11434`); o Docker Desktop fornece `host.docker.internal` no Windows e no Mac, e o `docker-compose.yaml` também o mapeia para o gateway do host no Linux. Após alterar o `.env`, execute `docker compose up -d` para que o contêiner o releia. A verificação de integridade do contêiner informa se o processo do bot está em execução; ela não testa a conectividade com o gateway do Discord.
+
+## Configuração opcional de shards em um único host
+
+Deixe `SHARD_COUNT` e `SHARD_IDS` sem definição para o padrão: um processo controla todos os shards recomendados pelo Discord na inicialização. Instalações pequenas normalmente recebem um shard. Esse modo não usa concessões de shard nem ouvinte de invalidação de cache. Vários shards podem compartilhar o mesmo processo.
+
+Para executar quatro shards no serviço existente, adicione `SHARD_COUNT=4` ao `.env` e deixe `SHARD_IDS` sem definição. Adicione esta substituição de serviço em `compose.override.yaml` para permitir que o encerramento controlado conclua:
+
+```yaml
+services:
+  tomoribot:
+    stop_grace_period: 40s
+```
+
+Recrie o serviço com `docker compose up -d --build tomoribot`. Se um script chamar `docker stop` ou fornecer seu próprio tempo limite de parada do Compose, permita pelo menos 40 segundos lá também. A seleção automática não altera a contagem de shards em execução; alterar o total exige uma reinicialização coordenada.
+
+Subconjuntos estáticos opcionais exigem um serviço separado por grupo com o mesmo `SHARD_COUNT` explícito e `SHARD_IDS` disjuntos, por exemplo `0,1` e `2,3` com total `4`. Dê aos serviços nomes estáveis distintos, nomes de contêiner distintos e quaisquer portas de integridade publicadas distintas. A aplicação deriva rótulos de métricas estáveis de cada grupo. Mantenha um único banco de dados, execute o comando único `bun run src/db/initializeCli.ts` com credenciais de gerenciamento de esquema antes da inicialização do gateway e defina `DATABASE_SCHEMA_MANAGEMENT_ENABLED=false` em todos os processos de gateway. Não inicie o serviço original proprietário de tudo junto com esses grupos. Pare os proprietários antigos antes de alterar o total ou a partição.
+
+O modo de subconjuntos recusa uma ponte Matrix totalmente configurada. Limites de turno e upload por usuário continuam por processo, portanto decida se a cota multiplicada é aceitável antes de ativar um segundo processo. Instalações que usam faturamento de apoiadores exclusivo da versão `release` também exigem admissão de gastos compartilhada e coordenação de reconciliação antes de atender solicitações financiadas a partir de vários processos. Consulte [sharding e propriedade de processos](/architecture/subsystems/sharding/) para conhecer limites de segurança e integridade.
+
+## 4. Servidores locais opcionais (perfis do Compose)
+
+Execute servidores auxiliares locais opcionais com perfis do Compose para iniciar apenas o que precisar:
+
+```sh
+# SearXNG (busca na web privada) + Crawl4AI (busca com renderização por navegador)
+docker compose --profile searxng --profile fetch-crawl4ai up
+```
+
+Ao ativar o SearXNG, defina `SEARXNG_BASE_URL=http://searxng:8080/` no `.env`. Caso contrário, deixe sem definição. Defina `SEARXNG_SECRET` com um valor aleatório separado para assinatura de solicitações do SearXNG.
+
+Consulte [SearXNG](/self-hosting/local-endpoints/setup-searxng/), [Crawl4AI](/self-hosting/local-endpoints/setup-crawl4ai/) e [Monitoramento Local](/self-hosting/local-monitoring/) para ver a configuração específica de cada servidor.
+
+## Manutenção, atualização e backups
+
+Antes de atualizar, pare o bot e faça backup do banco de dados e das mídias; consulte [Manutenção e Backups](/self-hosting/maintenance/). Depois, baixe o novo código e recompile o contêiner:
+
+```sh
+git pull
+docker compose up -d --build
+```

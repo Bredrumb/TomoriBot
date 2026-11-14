@@ -130,7 +130,7 @@ OpenCode Go (`https://opencode.ai/zen/go/v1`) 和OpenCode Zen (`https://opencode
 
 - [設定：本機LLM](/zh-TW/self-hosting/local-endpoints/setup-local-llm/)：Ollama、KoboldCPP、LM Studio、vLLM、LiteLLM。
 - [Setup: ComfyUI](/zh-TW/self-hosting/local-endpoints/setup-comfyui/)：本機影像與影片產生。
-- [設定：ChatMock](/zh-TW/self-hosting/local-endpoints/setup-chatmock/)：ChatGPT帳戶或Codex CLI。
+- [設定：ChatMock](/zh-TW/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/)：ChatGPT帳戶或Codex CLI。
 
 ## 支援的供應商
 <!-- anchor: supported-providers -->
@@ -150,7 +150,7 @@ OpenCode Go (`https://opencode.ai/zen/go/v1`) 和OpenCode Zen (`https://opencode
 | Z.ai | ✅ | ✅ | ✅ | - | 免費模型； 🟡 ToS = 僅限編碼和代理使用 |
 | Z.ai編碼 | ✅ | ✅ | - | - | 認購計劃 |
 | Google Vertex AI | ✅ | ✅ | ✅ | ✅ | 包括「免費」Express版本 |
-| Codex CLI（透過ChatMock） | ✅ | ✅ | ✅ | - | [設定](/zh-TW/self-hosting/local-endpoints/setup-chatmock/) |
+| Codex CLI（透過ChatMock） | ✅ | ✅ | ✅ | - | [設定](/zh-TW/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/) |
 
 ### 圖片生成
 

@@ -172,23 +172,12 @@ deleting those messages restore that exact webhook independently of the primary 
 
 ### Multi-persona and server configuration
 
-```
-           ┌──────────────────────┐
-           │       servers        │
-           └──────────┬───────────┘
-                      │ 1:N
-                      ▼
-           ┌──────────────────────┐
-           │       personas       │
-           └──────────┬───────────┘
-                      │
-     ┌────────────────┼────────────────┐
-     │ 1:N            │ 1:N            │ 1:N
-     ▼                ▼                ▼
-┌──────────────┐ ┌──────────────┐ ┌──────────────┐
-│persona_      │ │persona_      │ │persona_      │
-│attributes    │ │sprites       │ │configs       │
-└──────────────┘ └──────────────┘ └──────────────┘
+```mermaid
+flowchart TD
+  servers["servers"] -->|"1:N"| personas["personas"]
+  personas -->|"1:N"| attrs["persona_attributes"]
+  personas -->|"1:N"| sprites["persona_sprites"]
+  personas -->|"1:N"| configs["persona_configs"]
 ```
 
 - **`servers`**: represents a registered Discord guild or DM pseudo-server. Stores the guild snowflake (`server_disc_id`) and creation timestamps.
@@ -289,8 +278,18 @@ including link expressions. Existing rows remain editable when the limit is reac
 - **Decision primitives**: `decision_models.supported_primitives` lists the question types a model answers. Every Decision API style the bot calls accepts `predicate` and `choice`, so new rows default to both; the Active Nudge matcher needs `choice`.
 - **Token limits**: `context_window` and `max_output_tokens` record model ceilings. Runtime code queries them through `resolveModelLimits()`, where live provider responses take precedence.
 - **`custom_endpoint_connections`**: logical connection metadata scoped to either `server_id` or `user_id`, grouped by `(owner, label, capability)`.
-- **`custom_endpoints`**: model registrations under a connection, linking to synthetic catalog rows through `model_ref_id`.
+- **`custom_endpoints`**: model registrations under a connection, linking to synthetic catalog rows through `model_ref_id`. OpenAI-compatible image models store their request format in `extra_config.image_request_format`; rows without it use the Images API.
 - **`scoped_model_registrations`**: exclusive arc table mapping extra catalog rows under shared provider names to a specific `server_id` or `user_id`.
+
+Migration 140 moves active server selections and saved server/personal selections from NVIDIA's
+`nv-embed-v1` to `nvidia/nemotron-3.5-embed-1b`, which is already the seeded default. Apply it with
+the bot stopped and restart every worker afterward so configuration caches reload. The migration
+preserves stored vectors and their original family labels. Memory recall can fill vectors in the
+new family; existing documents remain unavailable to the new family's search until explicitly
+re-embedded through `RagRepository.reembedServerDocuments` (by re-picking the active embedding model
+in `/config` or choosing `Re-embed Documents` in `/memories`). SQL migration does not call providers.
+Rollback preserves the supported selections because it cannot distinguish migrated rows from
+later choices.
 
 ### Decision registration lifecycle
 

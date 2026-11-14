@@ -1,7 +1,7 @@
 ---
 title: Monitoramento Local com Grafana
 sidebar:
-  order: 7
+  order: 6
 aiGenerated: true
 ---
 

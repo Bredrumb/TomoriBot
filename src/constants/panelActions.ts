@@ -108,6 +108,7 @@ export const PANEL_ACTIONS = [
   "memories.workspace.memory.remove",
   "memories.workspace.memory.vectorize",
   "memories.workspace.document.add",
+  "memories.workspace.document.reembed",
   "memories.workspace.document.remove",
   "memories.workspace.history-document.remove",
   "memories.workspace.document-chunk.edit",

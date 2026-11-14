@@ -177,7 +177,6 @@ export function collectCacheMetricsSnapshot(client: Client): MetricFields {
     // Webhook manager (no TTL, watch for unbounded growth)
     webhookChannel: webhook.webhookChannel,
     webhookManagedSlots: webhook.webhookManagedSlots,
-    webhookPersona: webhook.webhookPersona,
     webhookMutationLocks: webhook.webhookMutationLocks,
     webhookAvatarState: webhook.webhookAvatarState,
     persistedManagedWebhookIds: webhook.persistedManagedWebhookIds,

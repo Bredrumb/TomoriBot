@@ -98,9 +98,13 @@ Puedes [invitar a la TomoriBot pública](https://discord.com/oauth2/authorize?cl
 
 ## Autoalojamiento
 
+Hay dos formas sencillas de ejecutar TomoriBot en tu PC:
+
+### Opción 1: Asistente de instalación (Recomendado)
+
 1. **Requisitos previos:**
    - [Bun](https://bun.sh/) v1.3.2+ (se recomienda v1.4.0+)
-   - [PostgreSQL](https://www.postgresql.org/) o [Docker](https://www.docker.com/) (el asistente de instalación usa una instalación existente de PostgreSQL o inicia una en Docker)
+   - [PostgreSQL](https://www.postgresql.org/) o [Docker](https://www.docker.com/) (el asistente de instalación usa una instalación existente de PostgreSQL o inicia una en Docker para la base de datos)
    - Un [token de bot de Discord](https://discord.com/developers/applications) con `Presence Intent`, `Server Members Intent` y `Message Content Intent` habilitados
 2. **Ejecuta el asistente de instalación:**
    ```sh
@@ -110,7 +114,22 @@ Puedes [invitar a la TomoriBot pública](https://discord.com/oauth2/authorize?cl
    bun run dev # inicia el bot y ejecuta las migraciones de la base de datos automáticamente
    ```
 
-Para más detalles o si tienes problemas con los pasos anteriores, consulta la [documentación de autoalojamiento](https://docs.tomoribot.app/es-419/self-hosting/) completa.
+### Opción 2: Docker Compose
+
+1. **Requisitos previos:**
+   - [Docker](https://www.docker.com/) y Docker Compose v2+
+   - Un [token de bot de Discord](https://discord.com/developers/applications) con `Presence Intent`, `Server Members Intent` y `Message Content Intent` habilitados
+2. **Ejecuta con Docker Compose:**
+   ```sh
+   git clone https://github.com/Bredrumb/TomoriBot.git
+   cd TomoriBot
+   cp .env.example .env   # Windows PowerShell: Copy-Item .env.example .env
+   ```
+   Configura `DISCORD_TOKEN`, `CRYPTO_SECRET`, `POSTGRES_PASSWORD` y `ALLOW_PRIVATE_NETWORK` en `.env`, y luego ejecuta:
+   ```sh
+   docker compose up
+   ```
+   Consulta la [guía de Docker Compose](https://docs.tomoribot.app/es-419/self-hosting/docker-compose/) para ver los pasos en Windows, Linux y Mac (incluida la propiedad de carpetas en Linux).
 
 <!-- AFTER SETUP -->
 ### Después de invitar / Configuración

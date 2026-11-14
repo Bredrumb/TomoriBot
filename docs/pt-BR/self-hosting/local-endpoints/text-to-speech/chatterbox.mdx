@@ -1,0 +1,131 @@
+---
+title: "Chatterbox TTS"
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Clone vozes em inglês com tags de emoção usando o servidor local de conversão de texto em fala [Chatterbox](https://github.com/resemble-ai/chatterbox).
+
+O Chatterbox roda localmente via `servers/tts/chatterbox/server.py`. Ele usa por padrão o modelo rápido Chatterbox-Turbo (350M parâmetros) com tags de eventos de emoção no texto, como `[laugh]` e `[sigh]`. Você também pode configurar o modelo leve Chatterbox-Nano (110M parâmetros) para configurações baseadas em CPU ou o modelo padrão de 0,5B para orientação sem classificador (`cfg_weight`) e ajuste de `exaggeration` emocional. Este wrapper não carrega o Chatterbox Multilingual V3.
+
+## Configuração
+
+Execute estes comandos na raiz do repositório do TomoriBot, a pasta onde você clonou o TomoriBot (`numpy` precisa ser instalado antes de `requirements.txt` porque o `pkuseg` o importa durante a compilação):
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+python -m venv servers\tts\chatterbox\.venv
+servers\tts\chatterbox\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install numpy
+pip install -r servers\tts\chatterbox\requirements.txt
+python servers\tts\chatterbox\server.py
+```
+
+Usa CUDA automaticamente quando drivers NVIDIA e PyTorch com CUDA estão disponíveis; caso contrário, usa CPU.
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+python3 -m venv servers/tts/chatterbox/.venv
+source servers/tts/chatterbox/.venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install numpy
+python -m pip install -r servers/tts/chatterbox/requirements.txt
+python servers/tts/chatterbox/server.py
+```
+
+Usa CUDA automaticamente quando drivers NVIDIA e PyTorch com CUDA estão disponíveis; caso contrário, usa CPU.
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+python3 -m venv servers/tts/chatterbox/.venv
+source servers/tts/chatterbox/.venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install numpy
+python -m pip install -r servers/tts/chatterbox/requirements.txt
+python servers/tts/chatterbox/server.py
+```
+
+Python 3.11 (com Xcode Command Line Tools instalado para compilar o `pkuseg` caso nenhum pacote binário corresponda) funciona com mais confiabilidade no Mac. Como `--extra-index-url https://download.pytorch.org/whl/cu124` em `requirements.txt` não tem compilações para macOS, o `pip` usa pacotes padrão do PyPI. O wrapper incluído seleciona `cpu` quando CUDA não está disponível (caminhos `torch.load` do upstream têm suposições conhecidas de desserialização CUDA sob MPS, então CPU é mais seguro e o Chatterbox-Nano abaixo ajuda na velocidade da CPU).
+
+</TabItem>
+</Tabs>
+
+Mantenha esse terminal aberto enquanto o TomoriBot estiver usando o Chatterbox. A URL padrão do endpoint é `http://127.0.0.1:8011`; defina `CHATTERBOX_PORT` para usar outra porta.
+
+### Opcional: usar Chatterbox-Nano
+
+O Nano requer uma compilação do Chatterbox com a opção de carregamento `nano=True`. Após a configuração normal acima, instale a revisão upstream fixada no mesmo ambiente virtual. O hash de commit fixa a versão compatível do código-fonte; ele não é uma garantia de segurança. Este comando exige `git` e mantém as dependências de execução já instaladas:
+
+```sh
+python -m pip install --no-deps --force-reinstall "git+https://github.com/resemble-ai/chatterbox.git@5de7a54aa4e5e2baadb0182dde554908b48b85c2"
+```
+
+Em seguida, defina `CHATTERBOX_FAST_MODEL=nano` antes de iniciar o servidor (deixe sem definição para o Turbo):
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$env:CHATTERBOX_FAST_MODEL = "nano"
+python servers\tts\chatterbox\server.py
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+CHATTERBOX_FAST_MODEL=nano python servers/tts/chatterbox/server.py
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+CHATTERBOX_FAST_MODEL=nano python servers/tts/chatterbox/server.py
+```
+
+</TabItem>
+</Tabs>
+
+A resposta de `/health` informa `fast_model` para que você possa verificar a escolha carregada. Nano e Turbo usam a mesma solicitação de clonagem e tags de eventos suportadas. Ambos são exclusivos para inglês.
+
+O alternador de modelo rápido em `/config` deve permanecer ativado para usar o Nano ou o Turbo. Desativá-lo seleciona o modelo padrão Chatterbox de 0,5B para ajuste de peso CFG e exagero.
+
+### Chatterbox Padrão
+
+Para usar o modelo Padrão, desative `Modelo fast do Chatterbox` em `/config` > Modelos > Parâmetros TTS e Vozes. O modelo Padrão suporta o ajuste de `cfg_weight` e `exaggeration`, mas não tags de evento entre colchetes.
+
+## Registrar no TomoriBot
+
+Inclua `Chatterbox` no rótulo do endpoint ou no nome do modelo. O TomoriBot reconhece um endpoint do Chatterbox apenas por esse nome (ou por uma URL de endpoint que o contenha), então a lista de permissões de tags do Turbo, a remoção de tags do modelo padrão e as opções do Chatterbox em `/generate voice-message` só se aplicam quando ele está presente.
+
+Execute `/providers`, escolha `+ Adicionar Novo Endpoint Personalizado` e use a compatibilidade de API de fala:
+
+- Compatibilidade de API: `Clone de TTS` (`tts-clone`)
+- `endpoint_url`: `http://127.0.0.1:8011`
+
+Depois de salvar a conexão, selecione-a e escolha `+ Adicionar Novo Modelo de Fala` no menu suspenso de modelos. Escolha `Clone de Voz` como `Modo de Fonte de Voz` e `Tags em Colchetes` como `Estilo de Marcação de Script` para que as tags de entonação sobrevivam ao envio.
+
+Use `/providers` para registro do endpoint e configuração do modelo. Em seguida, abra `/config` > Modelos > Trocar Modelos para selecionar e ativar o endpoint registrado.
+
+## Configurar a voz de uma persona
+
+1. Prepare um clipe de voz limpo de 10 segundos com apenas um locutor e sem música de fundo.
+2. Abra `/config` em Modelos > Parâmetros TTS e Vozes e envie o clipe.
+3. Abra `/config` em Persona > Voz, depois escolha a persona e a amostra de voz.
+
+O Chatterbox requer mais de 5 segundos de áudio. Procure usar 10 segundos; o modelo usa uma porção limitada de clipes mais longos para condicionamento.
+
+## Ajustes opcionais
+
+Em `/config` > Modelos > Parâmetros TTS e Vozes, ajuste `cfg_weight` e `exaggeration` para o modelo Padrão. Ambos têm padrão `0.5`; valores mais altos seguem a referência mais de perto e aumentam a expressividade, respectivamente.
+
+As tags de evento suportadas no Turbo/Nano são `[clear throat]`, `[sigh]`, `[shush]`, `[cough]`, `[groan]`, `[sniff]`, `[gasp]`, `[chuckle]` e `[laugh]`. Descritores não suportados como `[excited]`, `[whisper]` ou `[smiles]` são removidos em vez de enviados ao TTS.
