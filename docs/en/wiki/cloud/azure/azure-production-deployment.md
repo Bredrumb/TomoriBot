@@ -15,8 +15,8 @@ a low-cost outbound SNAT path.
 
 The protected `production` GitHub environment accepts only the `release` branch. The Azure
 workflow has `contents: read` by default, grants `id-token: write` only to
-`migration-preflight` and `deploy-with-terraform`, and grants `contents: write` only to the
-release-creation job. The Azure federated credential subject must be exactly:
+`migration-preflight`, `deploy-with-terraform`, and `database-maintenance`. Only the release-creation
+job receives `contents: write`. The Azure federated credential subject must be exactly:
 
 ```text
 repo:<github-owner>/<repository>:environment:production
@@ -254,6 +254,53 @@ For an existing PostgreSQL server, bootstrap skips all schema and seed operation
 the runtime role and its privileges: schema and migrations are instead applied on every deploy by the
 separate always-on step below. Schema-container failures are retained in the access-controlled
 Azure Run Command record without exposing that output in the public Actions log.
+
+### Manual SQL maintenance
+
+Use the existing Azure workflow's `maintenance_sql` input for an operator-reviewed SQL file under
+`deploy/azure/maintenance/`. This selects maintenance instead of deploying the application. The
+workflow and SQL file come from the selected `release` commit. Files are public: include no personal
+records or credentials, and remove completed one-off operations when they are no longer needed.
+
+Preview validates the path, regular-file status, size, and statements without accessing Azure or
+production credentials. It reports the file's SHA-256 and statement count:
+
+```sh
+gh workflow run deploy-azure.yml --ref release \
+  -f maintenance_sql=deploy/azure/maintenance/example.sql -f sql_mode=preview
+```
+
+Review the SQL at that commit and the preview hash, then execute with the expected running
+TomoriBot image digest and a recovery-point request:
+
+```sh
+gh workflow run deploy-azure.yml --ref release \
+  -f maintenance_sql=deploy/azure/maintenance/example.sql -f sql_mode=execute \
+  -f sql_sha256=<reviewed-file-sha256> \
+  -f maintenance_commit=<reviewed-release-commit> \
+  -f expected_image_digest=sha256:<running-image-digest> -f create_db_backup=true
+```
+
+Execution uses the protected `production` environment and shares deployment's concurrency lock.
+Configured environment approval rules apply; add required reviewers if execution needs separate
+approval. Anyone who can modify a privileged workflow on `release` remains trusted with its
+credentials. Secrets authenticate the operation; SQL still needs review.
+
+The host checks the provider fence, running image digest and health, SQL hash, and database target.
+The database-only owner credential is staged for a separate container and removed on exit. The
+container uses the already-running image, limited CPU and memory, a read-only filesystem, and no
+host mounts beyond its three read-only input files. SQL results and database error bodies are kept
+out of the public Actions log; the run records the commit, file hash, and recovery target.
+
+Omit `BEGIN`, `COMMIT`, and other transaction control. The executor wraps the file in one transaction
+with a five-second lock timeout and 30-second statement timeout. A statement failure rolls back
+earlier statements, including transactional DDL. The separate maintenance container has a two-minute
+execution limit; the live bot is not stopped. Review compatibility with the expected running image;
+use the migration deployment path for schema changes that require downtime.
+
+If the connection fails after commit, the result can be uncertain. Check database state before
+retrying; the workflow does not promise exactly-once execution. Preview checks the request and
+file structure. SQL syntax and effects require separate review.
 
 ### Schema and migration application
 

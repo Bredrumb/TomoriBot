@@ -9,6 +9,27 @@ on:
       - release
   workflow_dispatch:
     inputs:
+      maintenance_sql:
+        description: Optional committed SQL path under deploy/azure/maintenance; selects maintenance instead of deployment
+        type: string
+        default: ""
+      sql_mode:
+        description: Preview validates the file without database access; execute commits one transaction
+        type: choice
+        options: [preview, execute]
+        default: preview
+      sql_sha256:
+        description: SHA-256 from preview; required for execution
+        type: string
+        default: ""
+      maintenance_commit:
+        description: Release commit reviewed in preview; required for SQL execution
+        type: string
+        default: ""
+      expected_image_digest:
+        description: Expected running TomoriBot image digest (sha256 plus 64 hex characters)
+        type: string
+        default: ""
       create_db_backup:
         description: "Request a recovery point: on-demand backup where supported, checked restore target on Burstable"
         required: false
@@ -47,8 +68,99 @@ concurrency:
 jobs:
   # ─── VALIDATION (lint, types, schema, locales, lifecycle) ─────────────────
 
+  maintenance-plan:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/release' && vars.ACTIVE_PROVIDER == 'azure' && inputs.maintenance_sql != ''
+    runs-on: ubuntu-24.04
+    outputs:
+      sql_b64: ${{ steps.prepare.outputs.sql_b64 }}
+      sql_sha256: ${{ steps.prepare.outputs.sql_sha256 }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.0
+      - name: Validate reviewed SQL
+        id: prepare
+        env:
+          SQL_PATH: ${{ inputs.maintenance_sql }}
+          SQL_MODE: ${{ inputs.sql_mode }}
+          SQL_SHA256: ${{ inputs.sql_sha256 }}
+          MAINTENANCE_COMMIT: ${{ inputs.maintenance_commit }}
+          EXPECTED_IMAGE_DIGEST: ${{ inputs.expected_image_digest }}
+          CREATE_DB_BACKUP: ${{ inputs.create_db_backup }}
+        run: bun run deploy/azure/sql-maintenance.ts prepare
+
+  database-maintenance:
+    needs: maintenance-plan
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/release' && vars.ACTIVE_PROVIDER == 'azure' && inputs.maintenance_sql != '' && inputs.sql_mode == 'execute'
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 10
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+      - name: Authenticate to Azure (OIDC)
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Validate recovery point or create PostgreSQL backup
+        run: bash deploy/azure/prepare-recovery-point.sh
+      - name: Execute maintenance transaction
+        env:
+          TOMORI_SECRETS_JSON: ${{ secrets.TOMORI_SECRETS_JSON }}
+          POSTGRES_ADMIN_PASSWORD: ${{ secrets.AZURE_POSTGRES_ADMIN_PASSWORD }}
+          SQL_B64: ${{ needs.maintenance-plan.outputs.sql_b64 }}
+          SQL_SHA256: ${{ needs.maintenance-plan.outputs.sql_sha256 }}
+          EXPECTED_IMAGE_DIGEST: ${{ inputs.expected_image_digest }}
+        run: |
+          set -euo pipefail
+          admin_login=$(az postgres flexible-server show --resource-group tomoribot-rg --name tomoribot-postgres --query administratorLogin -o tsv)
+          migration_json=$(jq -cn \
+            --arg user "$admin_login" \
+            --arg password "$POSTGRES_ADMIN_PASSWORD" \
+            --arg host "$(jq -er '.POSTGRES_HOST' <<<"$TOMORI_SECRETS_JSON")" \
+            --arg port "$(jq -er '.POSTGRES_PORT | tostring' <<<"$TOMORI_SECRETS_JSON")" \
+            --arg database "$(jq -er '.POSTGRES_DB' <<<"$TOMORI_SECRETS_JSON")" \
+            '{POSTGRES_USER:$user,POSTGRES_PASSWORD:$password,POSTGRES_HOST:$host,POSTGRES_PORT:$port,POSTGRES_DB:$database}')
+          migration_b64=$(printf '%s' "$migration_json" | base64 -w 0)
+          echo "::add-mask::$migration_b64"
+          script_b64=$(base64 -w 0 deploy/azure/run-sql-maintenance.sh)
+          executor_b64=$(base64 -w 0 deploy/azure/sql-maintenance.ts)
+          response_message=$(az vm run-command invoke \
+            --resource-group tomoribot-rg --name tomoribot-vm --command-id RunShellScript \
+            --scripts \
+              'set -eu' \
+              'script=$(mktemp /var/lib/waagent/tomoribot-sql-entry.XXXXXX)' \
+              'trap '\''rm -f "$script"'\'' EXIT' \
+              'printf '\''%s'\'' "$scriptB64" | base64 --decode >"$script"' \
+              'bash "$script"' \
+            --parameters \
+              "scriptB64=$script_b64" \
+              "executorB64=$executor_b64" \
+              "migrationSecretsB64=$migration_b64" \
+              "sqlB64=$SQL_B64" \
+              "sqlSha256=$SQL_SHA256" \
+              "expectedImageDigest=$EXPECTED_IMAGE_DIGEST" \
+            --query 'value[0].message' --output tsv --only-show-errors)
+          if [[ "$response_message" != *TOMORIBOT_SQL_MAINTENANCE_SUCCEEDED* ]]; then
+            echo 'SQL maintenance failed; no success acknowledgement was received.' >&2
+            exit 1
+          fi
+          printf 'SQL maintenance committed: %s\n' "$SQL_SHA256"
+
   migration-preflight:
-    if: github.ref == 'refs/heads/release' && vars.ACTIVE_PROVIDER == 'azure'
+    if: github.ref == 'refs/heads/release' && vars.ACTIVE_PROVIDER == 'azure' && inputs.maintenance_sql == ''
     runs-on: ubuntu-24.04
     environment: production
     permissions:
@@ -411,50 +523,7 @@ jobs:
             (github.event_name == 'workflow_dispatch' && inputs.create_db_backup == true) ||
             (github.event_name == 'push' && contains(github.event.head_commit.message, '(Checkpoint)'))
           )
-        run: |
-          set -euo pipefail
-          server_info=$(az postgres flexible-server show \
-            --resource-group tomoribot-rg \
-            --name tomoribot-postgres \
-            --output json)
-          tier=$(jq -er '.sku.tier' <<<"$server_info")
-          if [ "$tier" = "Burstable" ]; then
-            if ! jq -e '
-              .state == "Ready" and
-              (.backup.backupRetentionDays | type == "number" and . > 0) and
-              (.backup.earliestRestoreDate | type == "string" and length > 0)
-            ' <<<"$server_info" >/dev/null; then
-              echo "Point-in-time restore target unavailable: server state, backup retention, or earliest restore date is invalid." >&2
-              exit 1
-            fi
-            restore_target=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-            earliest_restore=$(jq -r '.backup.earliestRestoreDate' <<<"$server_info")
-            restore_server="tomoribot-pitr-${{ github.run_id }}-${{ github.run_attempt }}"
-            if ! earliest_epoch=$(date -u -d "$earliest_restore" +%s) ||
-               [ "$earliest_epoch" -gt "$(date -u -d "$restore_target" +%s)" ]; then
-              echo "Point-in-time restore target unavailable: earliest restore point is later than the target." >&2
-              exit 1
-            fi
-            echo "::notice title=Point-in-time restore target::${restore_target} (restore window checked)"
-            {
-              echo "### PostgreSQL point-in-time restore target"
-              echo "Target (UTC): \`$restore_target\`"
-              echo "Earliest available (UTC): \`$earliest_restore\`"
-              echo "Retention: \`$(jq -r '.backup.backupRetentionDays' <<<"$server_info") days\`"
-              echo 'Restore creates a new server:'
-              echo '```bash'
-              echo "az postgres flexible-server restore --resource-group tomoribot-rg --name $restore_server --source-server tomoribot-postgres --restore-time '$restore_target'"
-              echo '```'
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-
-          BACKUP_NAME="pre-deploy-${{ github.run_id }}-${{ github.run_attempt }}"
-          echo "Creating pre-deploy Azure PostgreSQL backup: ${BACKUP_NAME}"
-          az postgres flexible-server backup create \
-            --resource-group tomoribot-rg \
-            --server-name tomoribot-postgres \
-            --name "${BACKUP_NAME}"
+        run: bash deploy/azure/prepare-recovery-point.sh
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1

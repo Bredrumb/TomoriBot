@@ -4,7 +4,6 @@ import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promi
 import os from "node:os";
 import path from "node:path";
 
-const workflowPath = path.join(import.meta.dir, "..", "..", "..", ".github", "workflows", "deploy-azure.yml");
 const deployScriptPath = path.join(import.meta.dir, "..", "..", "..", "deploy", "azure", "run-command-deploy.sh");
 const migrationScriptPath = path.join(
   import.meta.dir,
@@ -15,21 +14,6 @@ const migrationScriptPath = path.join(
   "azure",
   "check-pending-migrations.sh",
 );
-
-function recoveryPointStep(workflow: string): string {
-  workflow = workflow.replaceAll("\r\n", "\n");
-  const start = workflow.indexOf("      - name: Validate recovery point or create PostgreSQL backup");
-  const runStart = workflow.indexOf("        run: |\n", start);
-  const end = workflow.indexOf("      - name: Setup Terraform", runStart);
-  if (start < 0 || runStart < 0 || end < 0) throw new Error("Recovery point step was not found");
-  return workflow
-    .slice(runStart + "        run: |\n".length, end)
-    .split("\n")
-    .map((line) => line.replace(/^ {10}/, ""))
-    .join("\n")
-    .replaceAll(/\$\{\{ github\.run_id \}\}/g, "123")
-    .replaceAll(/\$\{\{ github\.run_attempt \}\}/g, "1");
-}
 
 const gitPath = Bun.which("git");
 // Git for Windows puts git.exe in cmd\ or mingw64\bin\; a PATH lookup could find WSL's bash, which rejects /c/ paths.
@@ -207,11 +191,11 @@ test.skipIf(process.platform === "win32" && !existsSync(bash))(
   async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), "tomoribot-recovery-point-"));
     try {
-      const workflow = await readFile(workflowPath, "utf8");
+      const script = await readFile(path.join(path.dirname(deployScriptPath), "prepare-recovery-point.sh"), "utf8");
       const scriptPath = path.join(directory, "checkpoint.sh");
       const fixturePath = path.join(directory, "server.json");
       const summaryPath = path.join(directory, "summary.md");
-      await writeFile(scriptPath, recoveryPointStep(workflow));
+      await writeFile(scriptPath, script);
 
       const run = async (server: {
         state: string;
@@ -225,6 +209,8 @@ test.skipIf(process.platform === "win32" && !existsSync(bash))(
             CHECKPOINT_FIXTURE: bashFile(fixturePath),
             CHECKPOINT_SCRIPT: bashFile(scriptPath),
             GITHUB_STEP_SUMMARY: bashFile(summaryPath),
+            GITHUB_RUN_ID: "123",
+            GITHUB_RUN_ATTEMPT: "1",
           },
           stdout: "pipe",
           stderr: "pipe",
