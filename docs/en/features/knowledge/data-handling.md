@@ -62,8 +62,27 @@ the reply disappears.
 - **Export Lorebook** in the `/memories` lorebook panel: one book as SillyTavern world info. Channel
   limits and collection settings are left out.
 
-`/persona export` is meant for sharing, so it posts the full persona definition, including the
-persona's lorebook, in the channel instead of your DMs.
+`/persona export` is meant for sharing, so it posts the persona definition, including the
+persona's lorebook, in the channel instead of your DMs. Choose `TomoriBot Card` or `Raw JSON` to
+retain all persona settings. `SillyTavern-compatible PNG` includes the avatar and supported character
+fields, excluding TomoriBot-specific settings and lorebook channel limits.
+
+In servers, `/persona export` requires `Manage Server` unless a manager enables `Persona Exports`
+in `/moderation` > `Member Access` > `Edit Permissions`. This applies to every format. Denials are
+private; successful exports are always posted publicly. `Export Sprites` is available to server
+managers through `/config`.
+The server setting does not affect exports in DMs.
+
+Choose `TomoriBot Bundle` for a ZIP with the avatar, sprites, character reference, and persona settings.
+Set `include_voice:true` to include the assigned voice reference audio and transcript too; these
+are shared publicly with the ZIP. Provider voice IDs and credentials are excluded. Import the ZIP
+with `/persona import` to restore the persona and its bundled media in one upload.
+
+Bundle exports optimize image copies and may reduce their resolution to fit the per-image budget;
+stored originals stay unchanged. A bundle that exceeds the upload or import size limit is refused
+without dropping assets. If that happens, exclude voice audio or use a PNG card and `Export Sprites`
+separately. Keep the ZIP if import reports a media restoration failure: the persona settings may
+already be saved, and an imported alter must be removed before retrying.
 
 Uploaded expression media is stored on the server host and is outside these JSON exports.
 Self-hosters must back up database storage and media assets together; see

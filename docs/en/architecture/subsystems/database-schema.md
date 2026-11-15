@@ -148,7 +148,7 @@ flowchart TD
 - **Server configuration split**: server settings are partitioned into command-aligned tables:
   - `server_chat_configs`: message context fetch limits, model parameters, cascade limits, stop strings, logit biases, and context notes.
   - `server_model_configs`: active model foreign keys (`llm_id`, `embedding_model_id`, `diffusion_model_id`, `video_model_id`, `vision_llm_id`).
-  - `server_member_permissions_configs`: member feature toggles, self-teaching, and memory permissions.
+  - `server_member_permissions_configs`: member feature toggles, self-teaching, server memory permissions, prompt snapshot access, and persona export access (disabled for ordinary members by default).
   - `server_channel_scope_configs`: channel roleplay rules, blocklists, and thought-log routing.
   - `server_trigger_behavior_configs`: cooldown modes, durations, and trigger styles.
   - `server_auto_trigger_configs` and `server_auto_trigger_persona_overrides`: auto-trigger thresholds and per-channel persona routing.

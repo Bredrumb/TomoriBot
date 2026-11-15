@@ -311,15 +311,12 @@ export function buildModerationPanelPayload(input: ModerationPanelRenderInput): 
     const memteaching = data.memberAccess.serverMemteachingEnabled
       ? localizer(locale, "commands.moderation.member_access_servermemories_enabled")
       : localizer(locale, "commands.moderation.member_access_servermemories_disabled");
-    const attributes = data.memberAccess.attributeMemteachingEnabled
-      ? localizer(locale, "commands.moderation.member_access_attributelist_enabled")
-      : localizer(locale, "commands.moderation.member_access_attributelist_disabled");
-    const dialogues = data.memberAccess.sampledialogueMemteachingEnabled
-      ? localizer(locale, "commands.moderation.member_access_sampledialogues_enabled")
-      : localizer(locale, "commands.moderation.member_access_sampledialogues_disabled");
     const snapshots = data.memberAccess.promptSnapshotEnabled
       ? localizer(locale, "commands.moderation.member_access_promptsnapshot_enabled")
       : localizer(locale, "commands.moderation.member_access_promptsnapshot_disabled");
+    const exports = data.memberAccess.personaExportEnabled
+      ? localizer(locale, "commands.moderation.member_access_personaexport_enabled")
+      : localizer(locale, "commands.moderation.member_access_personaexport_disabled");
 
     components.push(
       {
@@ -328,7 +325,7 @@ export function buildModerationPanelPayload(input: ModerationPanelRenderInput): 
       },
       {
         type: ComponentType.TextDisplay,
-        content: [memteaching, attributes, dialogues, snapshots].map((line) => `> ${line}`).join("\n"),
+        content: [memteaching, snapshots, exports].map((line) => `> ${line}`).join("\n"),
       },
       {
         type: ComponentType.ActionRow,
@@ -996,9 +993,8 @@ export function buildMemberAccessModal(
       ? state
       : {
           server_memteaching_enabled: state.serverMemteachingEnabled,
-          attribute_memteaching_enabled: state.attributeMemteachingEnabled,
-          sampledialogue_memteaching_enabled: state.sampledialogueMemteachingEnabled,
           prompt_snapshot_enabled: state.promptSnapshotEnabled,
+          persona_export_enabled: state.personaExportEnabled,
         };
 
   const fieldId = buildMemberAccessModalFieldId(nonce);
@@ -1021,7 +1017,7 @@ export function buildMemberAccessModal(
           type: 22,
           custom_id: fieldId,
           min_values: 0,
-          max_values: 4,
+          max_values: options.length,
           required: false,
           options,
         },

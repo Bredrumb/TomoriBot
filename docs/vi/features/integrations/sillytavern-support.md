@@ -29,6 +29,17 @@ Quá trình nhập được xác thực trước khi lưu (giới hạn mặc đ
 Character Book của thẻ sẽ trở thành [lorebook](/features/knowledge/memory/lorebooks/) của persona đó. Các mục đã tắt vẫn sẽ ở trạng thái tắt. Việc nhập lại thẻ sẽ thay thế toàn bộ lorebook của persona, bao gồm cả các mục bạn tự thêm.
 :::
 
+## Xuất thẻ nhân vật
+
+Dùng `/persona export` với `output_format` đặt thành `PNG tương thích SillyTavern` để đưa một persona
+vào SillyTavern. Thẻ bao gồm avatar, tính cách, hội thoại mẫu, prompt của persona
+và lorebook của persona. Thẻ không có lời chào mở đầu; hãy thêm một lời chào trong SillyTavern trước khi bắt đầu trò chuyện.
+
+Các cài đặt riêng của TomoriBot, như từ kích hoạt, gợi ý, cài đặt giọng nói và giới hạn kênh của lorebook,
+bị loại trừ. Hãy chọn `Thẻ TomoriBot` hoặc `JSON thuần` để giữ lại cài đặt persona của TomoriBot.
+`Gói TomoriBot` còn mang theo sprite và ảnh tham chiếu nhân vật, cộng thêm âm thanh giọng tham chiếu khi
+được yêu cầu. Tệp ZIP này là định dạng của TomoriBot; hãy dùng `PNG tương thích SillyTavern` cho SillyTavern.
+
 ## Preset prompt
 <!-- anchor: prompt-presets -->
 

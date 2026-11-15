@@ -12,6 +12,7 @@ import { isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
 import { sendCooldownDM } from "@/utils/discord/cooldownDM";
 import { createStandardEmbed, sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { ColorCode, log } from "@/utils/misc/logger";
+import { withProviderOptionCopy } from "@/utils/provider/providerOptionRegistry";
 import { QuotaUnavailableError } from "@/utils/quota/quotaErrors";
 import { reserveTextQuota, type TextQuotaClaim } from "@/utils/quota/textQuotaManager";
 import { checkServerRateLimit, checkUserRateLimit } from "@/utils/security/rateLimiter";
@@ -309,6 +310,13 @@ export async function checkTextQuotaForAdmission(params: {
     }
 
     if (params.notifyUser !== false) {
+      const tipKeys = await withProviderOptionCopy(["genai.tips.use_personal_providers"], {
+        surface: "recovery",
+        managedProvider: null,
+        userDiscId: params.userDiscId,
+        serverId: params.serverId,
+        credentialScope: "server",
+      });
       await sendStandardEmbed(params.channel, params.locale, {
         color: ColorCode.ERROR,
         titleKey: "genai.text_quota_exceeded_title",
@@ -317,6 +325,7 @@ export async function checkTextQuotaForAdmission(params: {
           reset_info: resetInfo,
         },
         footerKey: "genai.text_quota_exceeded_footer",
+        tipKeys,
       });
     }
     return { allowed: false, state: null };

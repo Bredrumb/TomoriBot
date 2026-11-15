@@ -150,6 +150,29 @@ describe("config scope failure copy", () => {
     expect(seen).toEqual([USER_ID]);
   });
 
+  it("denies non-managers before reading workspace data", async () => {
+    for (const isManager of [false, null]) {
+      const interaction = createRouteInteraction({ customId: "config", guildId: GUILD_ID, isManager: false });
+      if (isManager === null) Object.defineProperty(interaction, "memberPermissions", { value: null });
+      let scopeReads = 0;
+      await executeConfigCommand(
+        interaction as unknown as ChatInputCommandInteraction,
+        "en-US",
+        { page: "persona:general", persona: "55" },
+        {
+          resolveScope: async () => {
+            scopeReads++;
+            return makeScope();
+          },
+        },
+      );
+      expect(scopeReads).toBe(0);
+      expect(JSON.stringify(interaction.replies)).toContain(
+        localizedCopy("en-US", "commands.config.panel.denied_detail"),
+      );
+    }
+  });
+
   it("tells an admin to run /setup from the bare command when nothing was recorded", async () => {
     const harness = makeHarness({ customId: "config" });
 

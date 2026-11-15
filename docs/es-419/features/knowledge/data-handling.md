@@ -56,7 +56,27 @@ Las exportaciones de ajustes y memorias se envían a tus mensajes directos como 
 - `/export personal config`: configuración de perfil personal (privacidad, etiquetas de apariencia, nombres).
 - `/export memories`: memorias del servidor, con alcance para la persona principal, una persona o todas las personas. Los límites de canales no se exportan, por lo que las memorias importadas se aplican en todos los canales hasta que vuelvas a elegir canales.
 - `/export personal memories`: recuerdos personales, de alcance global o por persona.
-- `/persona export`: definiciones completas de personas.
+
+`/persona export` está pensado para compartir, por lo que publica la definición de la persona, incluido
+su lorebook, en el canal en lugar de tus mensajes directos. Elige `Tarjeta de TomoriBot` o `JSON sin procesar`
+para conservar todos los ajustes de la persona. `PNG compatible con SillyTavern` incluye el avatar y los campos
+de personaje compatibles, excluyendo los ajustes específicos de TomoriBot y los límites de canal del lorebook.
+
+En servidores, `/persona export` requiere `Administrar servidor` a menos que un administrador habilite `Exportaciones de persona`
+en `/moderation` > `Acceso de miembros` > `Editar permisos`. Esto aplica a todos los formatos. Las denegaciones son
+privadas; las exportaciones exitosas siempre se publican públicamente. `Exportar Sprites` está disponible para los
+administradores del servidor desde `/config`. El ajuste del servidor no afecta a las exportaciones en mensajes directos.
+
+Elige `Paquete de TomoriBot` para obtener un ZIP con el avatar, sprites, referencia de personaje y ajustes de persona.
+Establece `include_voice:true` para incluir también el audio de referencia de voz asignado y su transcripción; estos
+se comparten públicamente con el ZIP. Se excluyen los ID de voz del proveedor y las credenciales. Importa el ZIP
+con `/persona import` para restaurar la persona y su multimedia empaquetada en una sola carga.
+
+Las exportaciones de paquetes optimizan las copias de las imágenes y pueden reducir su resolución para ajustarse al límite por imagen;
+los originales guardados permanecen sin cambios. Si un paquete supera el límite de tamaño de carga o importación, se rechaza
+sin omitir recursos. Si eso ocurre, excluye el audio de voz o usa una tarjeta PNG y `Exportar Sprites` por
+separado. Conserva el ZIP si la importación informa un fallo al restaurar la multimedia: es posible que los ajustes de la
+persona ya se hayan guardado, y si se importó un alter debes eliminarlo antes de reintentar.
 
 Los medios de expresión cargados se almacenan en el host del servidor y están fuera de estas exportaciones JSON. Los autohospedadores deben realizar copias de seguridad del almacenamiento de la base de datos y de los activos multimedia juntos; consulte [copias de seguridad de medios personalizados](/self-hosting/maintenance/#database-backups-and-recovery-keys).
 

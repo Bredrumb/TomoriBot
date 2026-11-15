@@ -110,9 +110,8 @@ interface ModerationQuotasData {
 
 export interface ModerationMemberAccessData {
   serverMemteachingEnabled: boolean;
-  attributeMemteachingEnabled: boolean;
-  sampledialogueMemteachingEnabled: boolean;
   promptSnapshotEnabled: boolean;
+  personaExportEnabled: boolean;
 }
 
 interface ModerationUserBlacklistData {
@@ -128,7 +127,7 @@ interface ModerationWhitelistData {
 }
 
 /**
- * Deliberately a sibling of `memberAccess` rather than a field inside it. The four member-access
+ * Deliberately a sibling of `memberAccess` rather than a field inside it. The member-access
  * checkboxes write `server_member_permissions_configs` in one submit; this writes
  * `server_byok_configs`. Folding it in would invite a single interaction that writes two tables with
  * no transaction around them.
@@ -182,9 +181,8 @@ export async function loadModerationMemberAccessData(
         readStatus: "unavailable",
         memberAccess: {
           serverMemteachingEnabled: false,
-          attributeMemteachingEnabled: false,
-          sampledialogueMemteachingEnabled: false,
           promptSnapshotEnabled: false,
+          personaExportEnabled: false,
         },
       };
     }
@@ -198,9 +196,8 @@ export async function loadModerationMemberAccessData(
     readStatus: dbError ? "stale" : "fresh",
     memberAccess: {
       serverMemteachingEnabled: Boolean(tomoriState.config.server_memteaching_enabled),
-      attributeMemteachingEnabled: Boolean(tomoriState.config.attribute_memteaching_enabled),
-      sampledialogueMemteachingEnabled: Boolean(tomoriState.config.sampledialogue_memteaching_enabled),
       promptSnapshotEnabled: Boolean(tomoriState.config.prompt_snapshot_enabled),
+      personaExportEnabled: tomoriState.config.persona_export_enabled,
     },
   };
 }
@@ -357,9 +354,8 @@ export async function loadModerationScopeData(
         readStatus: "unavailable",
         memberAccess: {
           serverMemteachingEnabled: false,
-          attributeMemteachingEnabled: false,
-          sampledialogueMemteachingEnabled: false,
           promptSnapshotEnabled: false,
+          personaExportEnabled: false,
         },
         serverModelAccess: { allowServerModels: true },
         userBlacklist: {
@@ -462,9 +458,8 @@ export async function loadModerationScopeData(
     readStatus,
     memberAccess: {
       serverMemteachingEnabled: Boolean(tomoriState.config.server_memteaching_enabled),
-      attributeMemteachingEnabled: Boolean(tomoriState.config.attribute_memteaching_enabled),
-      sampledialogueMemteachingEnabled: Boolean(tomoriState.config.sampledialogue_memteaching_enabled),
       promptSnapshotEnabled: Boolean(tomoriState.config.prompt_snapshot_enabled),
+      personaExportEnabled: tomoriState.config.persona_export_enabled,
     },
     // The column is negative (`user_byok_mode` true means members must bring their own provider);
     // the panel states the permissive side, so it is inverted exactly here and nowhere else.
@@ -529,9 +524,8 @@ function normalizeMemberAccessState(
   }
   return {
     server_memteaching_enabled: state.serverMemteachingEnabled,
-    attribute_memteaching_enabled: state.attributeMemteachingEnabled,
-    sampledialogue_memteaching_enabled: state.sampledialogueMemteachingEnabled,
     prompt_snapshot_enabled: state.promptSnapshotEnabled,
+    persona_export_enabled: state.personaExportEnabled,
   };
 }
 

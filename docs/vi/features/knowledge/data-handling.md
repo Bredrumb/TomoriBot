@@ -60,7 +60,27 @@ câu trả lời biến mất:
 - `/export personal config`: cài đặt hồ sơ cá nhân (quyền riêng tư, thẻ xuất hiện, đặt tên).
 - `/export memories`: bộ nhớ máy chủ, trong phạm vi persona chính, một persona hoặc tất cả các persona. Giới hạn kênh không được xuất, do đó bộ nhớ đã nhập sẽ áp dụng trong mọi kênh cho đến khi bạn chọn lại kênh.
 - `/export personal memories`: ký ức cá nhân, có phạm vi toàn cầu hoặc từng cá nhân.
-- `/persona export`: định nghĩa đầy đủ về tính cách.
+
+`/persona export` dùng để chia sẻ, nên lệnh sẽ đăng định nghĩa persona, bao gồm cả
+lorebook của persona, ngay trong kênh thay vì gửi vào DM của bạn. Chọn `Thẻ TomoriBot` hoặc `JSON thuần` để
+giữ lại toàn bộ cài đặt persona. `PNG tương thích SillyTavern` bao gồm avatar và các trường nhân vật
+được hỗ trợ, loại trừ các cài đặt riêng của TomoriBot và giới hạn kênh của lorebook.
+
+Trong máy chủ, `/persona export` yêu cầu `Quản lý máy chủ` trừ khi người quản lý bật `Xuất persona`
+trong `/moderation` > `Quyền thành viên` > `Sửa quyền hạn`. Quy tắc này áp dụng cho mọi định dạng. Lời từ chối được gửi
+riêng tư; bản xuất thành công luôn được đăng công khai. `Xuất sprite` khả dụng cho người quản lý máy chủ
+thông qua `/config`. Cài đặt máy chủ không ảnh hưởng đến việc xuất trong DM.
+
+Hãy chọn `Gói TomoriBot` để nhận tệp ZIP gồm avatar, sprite, ảnh tham chiếu nhân vật và cài đặt persona.
+Đặt `include_voice:true` để kèm theo cả âm thanh giọng tham chiếu được gán và bản chép lời; các tệp này
+được chia sẻ công khai trong tệp ZIP. ID giọng của nhà cung cấp và thông tin xác thực được loại trừ. Nhập tệp ZIP
+bằng `/persona import` để khôi phục persona và phương tiện đi kèm trong một lần tải lên.
+
+Bản xuất dạng gói tối ưu hóa bản sao hình ảnh và có thể giảm độ phân giải để vừa với giới hạn từng ảnh;
+ảnh gốc được lưu trữ vẫn giữ nguyên. Gói vượt quá giới hạn dung lượng tải lên hoặc nhập sẽ bị từ chối
+mà không bỏ bớt tài nguyên. Nếu điều đó xảy ra, hãy bỏ âm thanh giọng nói hoặc dùng thẻ PNG và `Xuất sprite`
+riêng. Hãy giữ lại tệp ZIP nếu quá trình nhập báo lỗi khôi phục phương tiện: cài đặt persona có thể
+đã được lưu, và alter vừa nhập phải được xóa trước khi thử lại.
 
 Phương tiện biểu thức đã tải lên được lưu trữ trên máy chủ lưu trữ và nằm ngoài các bản xuất JSON này. Người self-hosting phải sao lưu cơ sở dữ liệu lưu trữ và nội dung đa phương tiện cùng nhau; xem [sao lưu phương tiện tùy chỉnh](/self-hosting/maintenance/#database-backups-and-recovery-keys).
 

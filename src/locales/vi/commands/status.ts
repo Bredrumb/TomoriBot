@@ -105,8 +105,6 @@ export default {
     field_image_generation: `Tạo ảnh`,
     field_videogen: `Tạo video`,
     field_server_memteaching: `Dạy bộ nhớ máy chủ`,
-    field_attribute_memteaching: `Dạy thuộc tính`,
-    field_sampledialogue_memteaching: `Dạy hội thoại mẫu`,
     field_hide_impersonation: `Ẩn embed mạo danh`,
     field_uncensor_injection: `Prompt chống chèn lệnh`,
     field_uncensor_unicode: `Thay thế khoảng trắng Unicode`,

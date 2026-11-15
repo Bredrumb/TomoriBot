@@ -49,8 +49,6 @@ function fullWorkspaceConfig(): Record<string, unknown> {
     self_debug_enabled: true,
     model_randomizer_enabled: false,
     server_memteaching_enabled: true,
-    attribute_memteaching_enabled: false,
-    sampledialogue_memteaching_enabled: true,
     self_teaching_enabled: true,
     personal_memories_enabled: false,
     prompt_snapshot_enabled: true,

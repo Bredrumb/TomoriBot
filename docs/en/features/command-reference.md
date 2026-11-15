@@ -240,9 +240,9 @@ Manage personality presets
 |---|---|
 | `/persona create` | Create a simple personality preset manually |
 | `/persona default` | Apply a preset personality configuration |
-| `/persona export` | Export current personality as a shareable PNG file |
+| `/persona export` | Export a persona as a PNG card, raw JSON, or ZIP bundle with media |
 | `/persona generate` | AI-powered personality generation (requires a compatible provider) |
-| `/persona import` | Import a persona from a PNG, JSON, or CHARX file |
+| `/persona import` | Import a persona from a PNG, JSON, CHARX, or TomoriBot ZIP bundle |
 | `/persona remove` | Remove an alter persona from the server |
 
 ## `/personal`

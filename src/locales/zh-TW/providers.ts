@@ -164,6 +164,7 @@ export default {
       review_messages: `檢查最近的訊息，或用 \`/refresh\` 清除。`,
       review_memories: `檢查你的記憶與設定（\`/export personal memories\`、\`/export memories\`、\`/export config\`）。`,
       blacklist_member: `用 \`/moderation\` 把有問題的成員加入黑名單。`,
+      use_personal_providers: `透過 \`/personal providers\` 使用你自己的[個人供應商](https://docs.tomoribot.app/zh-TW/features/knowledge/personalization/#your-own-providers)，這樣你的請求就不會計入這個伺服器的配額。`,
     },
     google: {
       "400_default_message": `你的要求格式有誤`,

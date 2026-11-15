@@ -28,6 +28,7 @@ import {
   type ImportResult,
   type ValidationResult,
   type PresetExportData,
+  type PresetImportMode,
 } from "@/types/preset/presetExport";
 import { PERSONA_NICKNAME_MAX_LENGTH } from "@/types/personaNaming";
 import { getDiscordTextLength } from "@/utils/text/discordTextLimits";
@@ -1073,6 +1074,7 @@ class PresetRepository {
     serverDiscId: string,
     importData: PresetExportData,
     identityMode: "preserve" | "fork" = "preserve",
+    importMode: PresetImportMode = "card",
   ): Promise<ImportResult> {
     try {
       const importValidation = this.validatePresetData(importData);
@@ -1083,7 +1085,8 @@ class PresetRepository {
         };
       }
       const validatedImportData = importValidation.data;
-      const matchingOfficialPreset = await this.findMatchingOfficialPresetForImport(validatedImportData);
+      const matchingOfficialPreset =
+        importMode === "bundle" ? null : await this.findMatchingOfficialPresetForImport(validatedImportData);
 
       try {
         validatePersonaConfigFields(["trigger_words", "persona_prompt"]);
@@ -1443,6 +1446,68 @@ class PresetRepository {
    */
   convertSillyTavernMetadataToPresetData(metadata: SillyTavernCardMetadata): SillyTavernConversionResult {
     return this.convertSillyTavernJsonToPresetData(metadata.parsedJson);
+  }
+
+  convertPresetDataToSillyTavernCard(preset: PresetExportData) {
+    const convertMacros = (text: string): string =>
+      text.replace(/\{\{(user|bot|char)\}\}|(?<!\{)\{(user|bot|char)\}(?!\})/g, (_match, double, single) =>
+        (double ?? single) === "user" ? "{{user}}" : "{{char}}",
+      );
+
+    return {
+      spec: "chara_card_v2",
+      spec_version: "2.0",
+      data: {
+        name: preset.tomori_nickname,
+        description: preset.attribute_list.map(convertMacros).join("\n\n"),
+        personality: "",
+        scenario: "",
+        first_mes: "",
+        mes_example: preset.sample_dialogues_out
+          .map((output, index) => {
+            const input = preset.sample_dialogues_in[index];
+            const userTurn =
+              input && input !== UNPAIRED_SAMPLE_DIALOGUE_SENTINEL ? `{{user}}: ${convertMacros(input)}\n` : "";
+            return `<START>\n${userTurn}{{char}}: ${convertMacros(output)}`;
+          })
+          .join("\n\n"),
+        creator_notes: "",
+        system_prompt: convertMacros(preset.persona_prompt ?? ""),
+        post_history_instructions: "",
+        alternate_greetings: [],
+        tags: [],
+        creator: "",
+        character_version: "",
+        extensions: {},
+        ...(preset.lorebook_entries !== undefined
+          ? {
+              character_book: {
+                name: preset.tomori_nickname,
+                extensions: {},
+                entries: preset.lorebook_entries.map((entry, index) => ({
+                  id: index,
+                  keys: entry.keys,
+                  secondary_keys: entry.secondary_keys,
+                  content: convertMacros(entry.content),
+                  comment: entry.title,
+                  enabled: entry.enabled,
+                  insertion_order: entry.insertion_order,
+                  constant: entry.constant,
+                  selective: entry.secondary_keys.length > 0,
+                  position: entry.placement === 1 ? "after_char" : "before_char",
+                  extensions: {
+                    selectiveLogic: entry.selective_logic,
+                    probability: entry.trigger_chance,
+                    useProbability: true,
+                    scan_depth: entry.scan_depth,
+                    position: entry.placement,
+                  },
+                })),
+              },
+            }
+          : {}),
+      },
+    };
   }
 
   /**

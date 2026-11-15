@@ -36,6 +36,7 @@ import { filterPersonasForTrigger, isPersonaAllowedForTrigger } from "@/utils/pe
 import {
   findProviderOption,
   findProviderOptionByActiveProvider,
+  getProviderOptions,
   withProviderOptionCopy,
 } from "@/utils/provider/providerOptionRegistry";
 
@@ -184,13 +185,16 @@ async function resolveSceneImageBackendAvailability(params: {
   provider: string;
   tomoriState: TomoriState;
   serverId: string;
+  hasPersonalNovelAi?: boolean;
 }): Promise<SceneImageBackendAvailability> {
   const serverIdNumber = Number.parseInt(params.serverId, 10);
   const hasNovelAiOptKey = Number.isNaN(serverIdNumber) ? false : await hasOptApiKey(serverIdNumber, "novelai");
   const hasNaiImageSlot = Boolean(params.tomoriState.config.nai_diffusion_model_id);
   const novelAiAvailable =
     hasNaiImageSlot &&
-    (hasNovelAiOptKey || (params.provider === "novelai" && Boolean(params.tomoriState.config.api_key)));
+    (hasNovelAiOptKey ||
+      Boolean(params.hasPersonalNovelAi) ||
+      (params.provider === "novelai" && Boolean(params.tomoriState.config.api_key)));
   const currentProviderAvailable =
     params.provider !== "novelai" && Boolean(params.tomoriState.config.diffusion_model_id);
   const defaultBackend = currentProviderAvailable ? "current_provider" : novelAiAvailable ? "novelai" : null;
@@ -345,19 +349,24 @@ export async function executeAutoImageCommand(
       }
     : overlay.tomoriState;
   activeConfigs = overlay.activeConfigs;
-  const recoveryTips = async (tipKeys: string[]) => {
+  const recoveryTips = async (
+    tipKeys: string[],
+    scopeOverride?: { credentialScope: "server" | "personal"; managedProvider: string | null },
+  ) => {
     return withProviderOptionCopy(tipKeys, {
       surface: "recovery",
-      managedProvider: activeConfigs?.text
-        ? (findProviderOption(activeConfigs.text.provider)?.value ?? null)
-        : (findProviderOptionByActiveProvider(
-            tomoriState.llm.llm_provider,
-            { kind: "server", ownerId: tomoriState.server_id, state: tomoriState },
-            "text",
-          )?.value ?? null),
+      managedProvider: scopeOverride
+        ? scopeOverride.managedProvider
+        : activeConfigs?.text
+          ? (findProviderOption(activeConfigs.text.provider)?.value ?? null)
+          : (findProviderOptionByActiveProvider(
+              tomoriState.llm.llm_provider,
+              { kind: "server", ownerId: tomoriState.server_id, state: tomoriState },
+              "text",
+            )?.value ?? null),
       userDiscId: interaction.user.id,
       serverId: tomoriState.server_id,
-      credentialScope: activeConfigs?.text ? "personal" : "server",
+      credentialScope: scopeOverride ? scopeOverride.credentialScope : activeConfigs?.text ? "personal" : "server",
     });
   };
 
@@ -476,6 +485,7 @@ export async function executeAutoImageCommand(
         provider,
         tomoriState,
         serverId: serverDiscId,
+        hasPersonalNovelAi: Boolean(activeConfigs?.image_nai),
       });
   if (!backendAvailability.defaultBackend) {
     if (!interaction.replied && !interaction.deferred) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -493,8 +503,24 @@ export async function executeAutoImageCommand(
   }
 
   // Quota check before showing the modal (avoids wasting user interaction).
+  const isPersonalImageBackend = modelSelection
+    ? modelSelection.source === "personal"
+    : (backendAvailability.currentProvider && Boolean(activeConfigs?.image)) ||
+      (backendAvailability.novelAi && Boolean(activeConfigs?.image_nai));
+  const serverImageManagedProvider = modelSelection
+    ? (findProviderOption(modelSelection.provider)?.value ?? null)
+    : backendAvailability.currentProvider
+      ? (getProviderOptions().find((option) =>
+          option.selection.owns?.({ kind: "server", ownerId: tomoriState.server_id, state: tomoriState }, "image"),
+        )?.value ?? null)
+      : null;
+  const imageQuotaScope = {
+    credentialScope: "server" as const,
+    managedProvider: serverImageManagedProvider,
+  };
+
   let quotaCheck: ImageQuotaCheckResult;
-  if (modelSelection?.source === "personal") {
+  if (isPersonalImageBackend) {
     quotaCheck = { allowed: true };
   } else {
     try {
@@ -508,7 +534,7 @@ export async function executeAutoImageCommand(
           descriptionKey: "commands.generate.image.quota_unavailable_description",
           color: ColorCode.ERROR,
           flags: MessageFlags.Ephemeral,
-          tipKeys: await recoveryTips([]),
+          tipKeys: await recoveryTips([], imageQuotaScope),
         });
         return;
       }
@@ -517,7 +543,12 @@ export async function executeAutoImageCommand(
   }
   if (!quotaCheck.allowed) {
     if (!interaction.replied && !interaction.deferred) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    await replyQuotaExceeded(interaction, locale, quotaCheck, await recoveryTips([]));
+    await replyQuotaExceeded(
+      interaction,
+      locale,
+      quotaCheck,
+      await recoveryTips(["genai.tips.use_personal_providers"], imageQuotaScope),
+    );
     return;
   }
 

@@ -35,6 +35,12 @@ TomoriBotは、[SillyTavern](https://github.com/SillyTavern/SillyTavern)から�
 カードのキャラクターブックはそのペルソナの[ロアブック](/features/knowledge/memory/lorebooks/)になります。無効化されていたエントリは無効のまま保持されます。カードを再インポートすると、自分で追加したエントリを含め、そのペルソナのロアブック全体が置き換えられます。
 :::
 
+## キャラクターカードのエクスポート
+
+ペルソナをSillyTavernに持ち込むには、`output_format` を `SillyTavern互換PNG` に設定して `/persona export` を使用します。カードにはアバター、性格、サンプル対話、ペルソナプロンプト、ペルソナのロアブックが含まれます。冒頭の挨拶は含まれないため、チャットを始める前にSillyTavern側で追加してください。
+
+トリガー、ナッジ、音声設定、ロアブックのチャンネル制限など、TomoriBot固有の設定は除外されます。TomoriBotのペルソナ設定を保持するには、`TomoriBotカード` または `生のJSON` を選択してください。`TomoriBotバンドル` にはスプライトやキャラクターリファレンスのメディアに加え、指定した場合は音声リファレンス音声も含まれます。このZIPはTomoriBot独自の形式であるため、SillyTavernにはSillyTavern互換PNGをご利用ください。
+
 ## プロンプトプリセット
 <!-- anchor: prompt-presets -->
 

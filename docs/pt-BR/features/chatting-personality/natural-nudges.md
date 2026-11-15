@@ -144,7 +144,7 @@ Cada persona tem sua própria página de **Toques** em `/config` > Persona:
 - **Interesses**: até 8 tópicos que a persona gosta de trazer e participar, cada um com uma breve descrição e exemplos (por exemplo, **anime de mecha**: ficção sobre robôs gigantes pilotados, como Gundam).
 - **Toques Ociosos**: até 20 toques que apenas esta persona usa, descritos em [Toques ociosos de persona](#persona-idle-nudges).
 
-Predefinições oficiais incluem essas configurações. O comando `/persona generate` sugere interesses para novas personas; `Gerar Interesses` adiciona novos por meio de seu modelo de texto atual. Exportações de personas incluem os três.
+Predefinições oficiais incluem essas configurações. O comando `/persona generate` sugere interesses para novas personas; `Gerar Interesses` adiciona novos por meio de seu modelo de texto atual. Exportações de personas no formato `Cartão TomoriBot` ou `JSON Bruto`, e pacotes ZIP, incluem os três; `PNG compatível com SillyTavern` exclui as configurações de toques.
 
 ## Quando os toques disparam
 

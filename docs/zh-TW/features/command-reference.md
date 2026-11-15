@@ -240,9 +240,9 @@ TomoriBot 目前註冊的每一個斜線指令，都是從 Discord 註冊時使�
 |---|---|
 | `/persona create` | 手動建立簡單的人格預設集 |
 | `/persona default` | 套用預設的人格設定 |
-| `/persona export` | 將目前的人格匯出成可分享的 PNG 檔 |
+| `/persona export` | 將人格匯出為 PNG 卡片、原始 JSON 或含媒體的 ZIP 組合包 |
 | `/persona generate` | AI 生成人格（需要相容的供應商） |
-| `/persona import` | 從 PNG、JSON 或 CHARX 檔匯入人格 |
+| `/persona import` | 從 PNG、JSON、CHARX 或 TomoriBot ZIP 組合包匯入人格 |
 | `/persona remove` | 從伺服器移除 alter 人格 |
 
 ## `/personal`

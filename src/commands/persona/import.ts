@@ -31,6 +31,8 @@ import {
   cleanupMainPersonaSpritesAfterImport,
   snapshotMainPersonaSprites,
 } from "@/utils/persona/mainImportSpriteCleanup";
+import { readPersonaBundle, type PersonaBundle } from "@/utils/persona/personaBundleArchive";
+import { restorePersonaBundleAssets } from "@/utils/persona/personaBundleOperations";
 
 /** Maximum file size for imports (uses centralized constant). */
 const MAX_FILE_SIZE = IMPORT_LIMITS.MAX_PERSONA_IMPORT_SIZE_MB * 1024 * 1024;
@@ -54,12 +56,13 @@ export async function missingPublicImportPermission(
 }
 const MAX_SILLY_TAVERN_DEBUG_BYTES = 1_000_000;
 
-type PersonaImportSource = "tomori-png" | "tomori-json" | "sillytavern-png" | "sillytavern-json" | "charx";
+type PersonaImportSource = "tomori-png" | "tomori-json" | "sillytavern-png" | "sillytavern-json" | "charx" | "bundle";
 
 type ResolvedImportFile = {
   avatarImageBuffer: Buffer | null;
   presetData: PresetExportData;
   source: PersonaImportSource;
+  bundle?: PersonaBundle;
   /**
    * Embedded assets the archive carried but the import does not read. Reported
    * in the success embed so the omission is stated rather than discovered.
@@ -522,8 +525,9 @@ export async function importPersona(
     const isPngImport = normalizedAttachmentName.endsWith(".png");
     const isJsonImport = normalizedAttachmentName.endsWith(".json");
     const isCharxImport = normalizedAttachmentName.endsWith(".charx");
+    const isBundleImport = normalizedAttachmentName.endsWith(".zip");
 
-    if (!isPngImport && !isJsonImport && !isCharxImport) {
+    if (!isPngImport && !isJsonImport && !isCharxImport && !isBundleImport) {
       await replyInfoEmbed(
         interaction,
         locale,
@@ -619,7 +623,21 @@ export async function importPersona(
 
     let resolvedImport: ResolvedImportFile | null = null;
 
-    if (isCharxImport) {
+    if (isBundleImport) {
+      try {
+        const bundle = await readPersonaBundle(importFileBuffer);
+        const validation = presetRepository.validatePresetFile(bundle.preset);
+        if (!validation.valid || !validation.data) {
+          await replyInvalidFile(interaction, locale, validation.error);
+          return;
+        }
+        resolvedImport = { avatarImageBuffer: bundle.avatar, presetData: validation.data, source: "bundle", bundle };
+      } catch (error) {
+        log.warn("Persona bundle validation failed", error);
+        await replyInvalidFile(interaction, locale, "commands.persona.import.invalid_bundle_description");
+        return;
+      }
+    } else if (isCharxImport) {
       // A `.charx` is a zip around a card that is already V2-shaped in every
       // field this converter reads, so unwrapping the container is the whole
       // job and the existing converter stays untouched.
@@ -836,7 +854,16 @@ export async function importPersona(
         }
       }
 
-      const importResult = await presetRepository.importPresetData(serverDiscId, presetData, identityMode);
+      // Keep the previous reference attached until the bundle media transaction succeeds, so a retry can still clean it up.
+      const importData = resolvedImport.bundle
+        ? { ...presetData, char_ref_url: currentMainPersona?.char_ref_url ?? null }
+        : presetData;
+      const importResult = await presetRepository.importPresetData(
+        serverDiscId,
+        importData,
+        identityMode,
+        resolvedImport.bundle ? "bundle" : "card",
+      );
 
       if (!importResult.success) {
         await replyInfoEmbed(interaction, locale, {
@@ -851,7 +878,7 @@ export async function importPersona(
       invalidateTomoriStateCache(serverDiscId);
 
       let failedSpriteStorageDeletes = 0;
-      if (mainPersonaId) {
+      if (mainPersonaId && !resolvedImport.bundle) {
         try {
           failedSpriteStorageDeletes = await cleanupMainPersonaSpritesAfterImport({
             personaId: mainPersonaId,
@@ -867,6 +894,27 @@ export async function importPersona(
           await replyInfoEmbed(interaction, locale, {
             titleKey: "commands.persona.import.failed_title",
             descriptionKey: "commands.persona.import.sprite_cleanup_failed_description",
+            color: ColorCode.ERROR,
+          });
+          return;
+        }
+      }
+
+      if (resolvedImport.bundle) {
+        const target = (await personaRepository.loadAllForServer(serverDiscId)).find((persona) => !persona.is_alter);
+        if (
+          !target ||
+          !(await restorePersonaBundleAssets({
+            persona: target,
+            serverDiscId,
+            bundle: resolvedImport.bundle,
+            previousSprites: spritesBeforeImport,
+            previousCharRef: currentMainPersona?.char_ref_url ?? null,
+          }))
+        ) {
+          await replyInfoEmbed(interaction, locale, {
+            titleKey: "commands.persona.import.failed_title",
+            descriptionKey: "commands.persona.import.bundle_assets_failed_description",
             color: ColorCode.ERROR,
           });
           return;
@@ -943,6 +991,8 @@ export async function importPersona(
           trigger_word_count: itemsImported.triggerWordCount,
         }),
       ];
+      if (resolvedImport.bundle)
+        descriptionLines.push(localizer(locale, "commands.persona.import.bundle_assets_restored_description"));
 
       if (presetData.lorebook_entries !== undefined) {
         descriptionLines.push(
@@ -1066,6 +1116,7 @@ export async function importPersona(
         presetData,
         identityMode,
         avatarImageBuffer,
+        importMode: resolvedImport.bundle ? "bundle" : "card",
       });
 
       if (!alterResult.ok) {
@@ -1108,6 +1159,23 @@ export async function importPersona(
         return;
       }
 
+      if (resolvedImport.bundle) {
+        const target = (await personaRepository.loadAllForServer(serverDiscId)).find(
+          (persona) => persona.persona_id === alterResult.personaId,
+        );
+        if (
+          !target ||
+          !(await restorePersonaBundleAssets({ persona: target, serverDiscId, bundle: resolvedImport.bundle }))
+        ) {
+          await replyInfoEmbed(interaction, locale, {
+            titleKey: "commands.persona.import.failed_title",
+            descriptionKey: "commands.persona.import.bundle_assets_failed_description",
+            color: ColorCode.ERROR,
+          });
+          return;
+        }
+      }
+
       const alterEmbedColor =
         alterResult.hasNoTriggers || alterResult.usedMainAvatarFallback ? ColorCode.WARN : ColorCode.SUCCESS;
       const alterDescriptionParts = [
@@ -1117,6 +1185,10 @@ export async function importPersona(
           triggers: alterResult.displayedTriggers.length > 0 ? alterResult.displayedTriggers.join(", ") : "N/A",
         }),
       ];
+      if (resolvedImport.bundle)
+        alterDescriptionParts.push(
+          `\n\n${localizer(locale, "commands.persona.import.bundle_assets_restored_description")}`,
+        );
       if (presetData.lorebook_entries !== undefined) {
         alterDescriptionParts.push(
           `\n\n${localizer(locale, "commands.persona.import.lorebook_count", { count: presetData.lorebook_entries.length })}`,

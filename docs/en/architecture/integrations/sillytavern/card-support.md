@@ -1,11 +1,27 @@
 ---
-title: "SillyTavern Card Import Support"
+title: "SillyTavern Card Support"
 aiGenerated: true
 ---
 
 TomoriBot's `/persona import` command ingests and converts SillyTavern character cards into native
 persona records. It supports PNG images with embedded metadata, legacy V2 root JSON files,
 `chara_card_v3` JSON files, and Character Card V3 `.charx` archives.
+
+## Card export
+
+`/persona export` requires `output_format`: TomoriBot Card (PNG), Raw JSON,
+SillyTavern-compatible PNG, or TomoriBot Bundle (ZIP). The native PNG and JSON retain the complete preset payload.
+The ZIP adds portable media; its flow is documented under
+[persona presets](/architecture/subsystems/persona-presets/#cards-imports-and-vision-generation).
+The SillyTavern export uses Character Card V2 JSON encoded as UTF-8 base64 in a PNG `tEXt`
+chunk named `chara`, sharing the native export's avatar resolution and PNG chunk writer.
+
+`convertPresetDataToSillyTavernCard` in `PresetRepository.ts` joins attributes into `description`,
+maps the persona prompt to `system_prompt`, and formats sample dialogues as `mes_example` blocks.
+Unpaired examples omit the user turn. The export normalizes user and character placeholders to
+`{{user}}` and `{{char}}`. Greeting fields stay empty because TomoriBot stores no separate greeting.
+Persona lore becomes a `character_book`, retaining supported activation settings and disabled entries.
+Channel restrictions and TomoriBot-specific settings have no SillyTavern mapping and are omitted.
 
 ## Container dispatch and archive safety
 

@@ -3072,17 +3072,17 @@ CREATE TRIGGER update_server_notice_embeds_configs_timestamp
 CREATE TABLE IF NOT EXISTS server_member_permissions_configs (
   server_id                          INT     PRIMARY KEY REFERENCES servers(server_id) ON DELETE CASCADE,
   server_memteaching_enabled         BOOLEAN NOT NULL DEFAULT false,
-  attribute_memteaching_enabled      BOOLEAN NOT NULL DEFAULT false,
-  sampledialogue_memteaching_enabled BOOLEAN NOT NULL DEFAULT false,
   self_teaching_enabled              BOOLEAN NOT NULL DEFAULT true,
   personal_memories_enabled          BOOLEAN NOT NULL DEFAULT true,
   hide_impersonation_embeds          BOOLEAN NOT NULL DEFAULT false,
   prompt_snapshot_enabled            BOOLEAN NOT NULL DEFAULT false,
+  persona_export_enabled             BOOLEAN NOT NULL DEFAULT false,
   created_at                         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at                         TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 DROP TRIGGER IF EXISTS update_server_member_permissions_configs_timestamp ON server_member_permissions_configs;
+SELECT add_column_if_not_exists('server_member_permissions_configs', 'persona_export_enabled', 'BOOLEAN NOT NULL', 'false');
 CREATE TRIGGER update_server_member_permissions_configs_timestamp
   BEFORE UPDATE ON server_member_permissions_configs
   FOR EACH ROW EXECUTE FUNCTION update_timestamp();

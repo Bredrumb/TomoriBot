@@ -351,7 +351,12 @@ export async function execute(
     if (imageCreds.source === "server") {
       const quotaCheck = await checkImageQuota(tomoriState.server_id, interaction.user.id);
       if (!quotaCheck.allowed) {
-        await replyNaiQuotaExceeded(interaction, locale, quotaCheck, await recoveryTips([], "server"));
+        await replyNaiQuotaExceeded(
+          interaction,
+          locale,
+          quotaCheck,
+          await recoveryTips(["genai.tips.use_personal_providers"], "server"),
+        );
         return;
       }
     }
@@ -493,7 +498,12 @@ export async function execute(
     if (imageCreds.source === "server") {
       const claim = await reserveImageQuota(tomoriState.server_id, interaction.user.id);
       if (!claim.allowed) {
-        await replyNaiQuotaExceeded(modalSubmitInteraction, locale, claim, await recoveryTips([], "server"));
+        await replyNaiQuotaExceeded(
+          modalSubmitInteraction,
+          locale,
+          claim,
+          await recoveryTips(["genai.tips.use_personal_providers"], "server"),
+        );
         return;
       }
       quotaReservation = claim.reservation;

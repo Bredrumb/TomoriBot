@@ -164,6 +164,7 @@ export default {
       review_messages: `Revise as mensagens recentes ou limpe-as com \`/refresh\`.`,
       review_memories: `Verifique suas memórias e configurações (\`/export personal memories\`, \`/export memories\`, \`/export config\`).`,
       blacklist_member: `Coloque um membro problemático na lista negra com \`/moderation\`.`,
+      use_personal_providers: `Use seu próprio [provedor pessoal](https://docs.tomoribot.app/pt-BR/features/knowledge/personalization/#your-own-providers) com \`/personal providers\` para que suas solicitações não contem para a cota deste servidor.`,
     },
     google: {
       "400_default_message": `Houve um erro no formato da sua solicitação`,

@@ -240,9 +240,9 @@ Administra los preajustes de personalidad
 |---|---|
 | `/persona create` | Crea un preajuste de personalidad sencillo manualmente |
 | `/persona default` | Aplica una configuración de personalidad preajustada |
-| `/persona export` | Exporta la personalidad actual como un archivo PNG para compartir |
+| `/persona export` | Exporta una persona como tarjeta PNG, JSON sin procesar o paquete ZIP con multimedia |
 | `/persona generate` | Generación de personalidad con IA (requiere un proveedor compatible) |
-| `/persona import` | Importa una persona desde un archivo PNG, JSON o CHARX |
+| `/persona import` | Importa una persona desde un PNG, JSON, CHARX o paquete ZIP de TomoriBot |
 | `/persona remove` | Elimina un alter del servidor |
 
 ## `/personal`

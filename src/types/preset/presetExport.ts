@@ -29,6 +29,8 @@ import {
  */
 export const PRESET_EXPORT_VERSION = "1.0.0";
 
+export type PresetImportMode = "card" | "bundle";
+
 /**
  * Internal marker used for model-only sample dialogues (no paired user turn).
  * Context builder detects this value and skips injecting a user example turn.

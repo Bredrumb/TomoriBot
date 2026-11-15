@@ -30,6 +30,15 @@ Las importaciones se validan antes de guardar (límites predeterminados: 5000 ca
 El Character Book de una tarjeta se convierte en el [lorebook](/features/knowledge/memory/lorebooks/) de esa persona. Las entradas desactivadas permanecen desactivadas. Reimportar la tarjeta reemplaza todo el lorebook de la persona, incluidas las entradas que hayas agregado tú.
 :::
 
+## Exportación de tarjetas de personaje
+
+Usa `/persona export` con `output_format` establecido en `PNG compatible con SillyTavern` para llevar una persona
+a SillyTavern. La tarjeta incluye el avatar, la personalidad, los diálogos de ejemplo, el prompt de la persona
+y el lorebook de la persona. No tiene saludo inicial; agrega uno en SillyTavern antes de iniciar un chat.
+
+Se excluyen los ajustes específicos de TomoriBot, como activaciones, intervenciones, ajustes de voz y límites de canal del lorebook.
+Elige `Tarjeta de TomoriBot` o `JSON sin procesar` para conservar los ajustes de persona de TomoriBot. `Paquete de TomoriBot` también incluye sprites y multimedia de referencia de personaje, además del audio de referencia de voz cuando se solicita. Este ZIP es un formato de TomoriBot; usa el `PNG compatible con SillyTavern` para SillyTavern.
+
 ## Preajustes de prompt
 <!-- anchor: prompt-presets -->
 

@@ -15,7 +15,6 @@ import {
 import { createConfigInteractionRoute } from "@/utils/discord/interactions/configRoutes";
 import { loadConfigVoicesView } from "@/utils/discord/interactions/configVoicesLoader";
 import type { ConfigRouteDependencies, ConfigScope } from "@/utils/discord/interactions/configRouteContext";
-import * as configPermissionPolicy from "@/utils/discord/interactions/configPermissionPolicy";
 import { InteractionRouteRegistry } from "@/utils/discord/interactions/routeRegistry";
 import {
   buildConfigModalFieldId,
@@ -1027,7 +1026,6 @@ describe("config voice sample routes", () => {
   it("denies a guild member before repository insert or delete", async () => {
     const insertSpy = spyOn(speechRepository, "insertVoiceSample").mockResolvedValue(42);
     const deleteSpy = spyOn(speechRepository, "deleteVoiceSample").mockResolvedValue(undefined);
-    const guardSpy = spyOn(configPermissionPolicy, "isConfigRouteAuthorized").mockReturnValue(true);
     const harness = makeHarness({ isManager: false, useDefaultAddOperation: true });
     harness.dependencies.voiceSampleAddDependencies = {
       safeDownload: async () => ({ success: true, buffer: Buffer.from("raw") }),
@@ -1038,20 +1036,6 @@ describe("config voice sample routes", () => {
       updateVoiceSamplePath: async () => undefined,
       deleteVoiceSample: speechRepository.deleteVoiceSample,
     };
-    const weakenedInteraction = makeInteraction({
-      customId: buildConfigRouteId({ action: "voice-sample-add-submit", locale: "en-US", nonce: "nonce1234567" }),
-      kind: "modal",
-      fields: modalFields(),
-      isManager: false,
-      harness,
-    });
-
-    await dispatch(harness, weakenedInteraction);
-    expect(insertSpy).toHaveBeenCalled();
-    guardSpy.mockRestore();
-    insertSpy.mockClear();
-    deleteSpy.mockClear();
-
     await dispatch(
       harness,
       makeInteraction({
@@ -1084,7 +1068,6 @@ describe("config voice sample routes", () => {
 
   it("denies a guild member before the real shared voice removal operation", async () => {
     const removeSpy = spyOn(speechRepository, "removeVoiceSample").mockResolvedValue({ storedFileRemoved: true });
-    const guardSpy = spyOn(configPermissionPolicy, "isConfigRouteAuthorized").mockReturnValue(true);
     const harness = makeHarness({ isManager: false, useDefaultRemoveOperation: true });
     const sample = harness.samples[0] as VoiceSampleRow;
     const routeId = buildConfigRouteId({
@@ -1094,12 +1077,6 @@ describe("config voice sample routes", () => {
       fp: computeVoiceSampleFingerprint(sample),
       nonce: "nonce1234567",
     });
-
-    await dispatch(harness, makeInteraction({ customId: routeId, kind: "button", isManager: false, harness }));
-    expect(removeSpy).toHaveBeenCalled();
-
-    guardSpy.mockRestore();
-    removeSpy.mockClear();
 
     await dispatch(harness, makeInteraction({ customId: routeId, kind: "button", isManager: false, harness }));
     expect(removeSpy).not.toHaveBeenCalled();

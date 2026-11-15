@@ -1,12 +1,3 @@
-/**
- * Permanent permission coverage for the `/config` panel.
- *
- * The bare root registers without a blanket Manage Guild default, so filtering and reauthorization
- * are the only thing standing between an ordinary member and a manager-owned write. This suite
- * drives the real exported policy rather than a mock that would restate the expected answer, and it
- * survives the registration cutover untouched: the loader-topology test cannot prove a permission
- * change it rewrites itself.
- */
 import { describe, expect, it } from "bun:test";
 import { PermissionsBitField } from "discord.js";
 import {
@@ -98,12 +89,12 @@ describe("config category filtering", () => {
     expect(visibleConfigCategories(GUILD_MANAGER).every((entry) => !entry.disabled)).toBe(true);
   });
 
-  it("leaves Persona visible but manager-owned categories inert for a guild member", () => {
-    expect(resolveConfigCategoryState("persona", GUILD_MEMBER)).toBe("enabled");
-    expect(resolveConfigCategoryState("behavior", GUILD_MEMBER)).toBe("disabled");
-    expect(resolveConfigCategoryState("channels", GUILD_MEMBER)).toBe("disabled");
-    expect(resolveConfigCategoryState("plugins", GUILD_MEMBER)).toBe("disabled");
-    expect(resolveConfigCategoryState("models", GUILD_MEMBER)).toBe("disabled");
+  it("omits every config category for a guild member", () => {
+    for (const category of CONFIG_CATEGORY_ORDER) {
+      expect(resolveConfigCategoryState(category, GUILD_MEMBER)).toBe("omitted");
+      expect(visibleConfigPages(category, GUILD_MEMBER)).toEqual([]);
+    }
+    expect(visibleConfigCategories(GUILD_MEMBER)).toEqual([]);
   });
 
   it("omits Channels entirely in a DM workspace", () => {
@@ -142,26 +133,12 @@ describe("config page filtering", () => {
     expect(visibleConfigPages("models", DM_OWNER)).toEqual(["switch", "parameters", "fallbacks", "voices"]);
   });
 
-  it("omits Persona Appearance, Advanced, Overrides, and Voice from a guild member and leaves its siblings readable", () => {
-    expect(resolveConfigPageState("persona", "appearance", GUILD_MEMBER)).toBe("omitted");
-    expect(resolveConfigPageState("persona", "advanced", GUILD_MEMBER)).toBe("omitted");
-    expect(resolveConfigPageState("persona", "overrides", GUILD_MEMBER)).toBe("omitted");
-    expect(resolveConfigPageState("persona", "voice", GUILD_MEMBER)).toBe("omitted");
-    expect(resolveConfigPageState("persona", "voice", GUILD_MANAGER)).toBe("enabled");
-    expect(resolveConfigPageState("persona", "general", GUILD_MEMBER)).toBe("enabled");
-    expect(resolveConfigPageState("persona", "memories", GUILD_MEMBER)).toBe("read-only");
-    expect(resolveConfigPageState("persona", "sprites", GUILD_MEMBER)).toBe("read-only");
-    expect(resolveConfigPageState("persona", "naming", GUILD_MEMBER)).toBe("read-only");
-    expect(visibleConfigPages("persona", GUILD_MEMBER)).toEqual([
-      "general",
-      "triggers",
-      "memories",
-      "naming",
-      "sprites",
-      "nudges",
-    ]);
-    expect(visibleConfigPages("persona", GUILD_MANAGER)).toContain("voice");
-    expect(visibleConfigPages("persona", GUILD_MANAGER).at(-1)).toBe("advanced");
+  it("omits every config page for a guild member", () => {
+    for (const category of CONFIG_CATEGORY_ORDER) {
+      for (const page of CONFIG_PAGES_BY_CATEGORY[category]) {
+        expect(resolveConfigPageState(category, page, GUILD_MEMBER)).toBe("omitted");
+      }
+    }
   });
 
   it("omits the manager-owned Behavior category for a guild member", () => {
@@ -226,9 +203,9 @@ describe("Persona General action policy", () => {
 });
 
 describe("Persona Memories action policy", () => {
-  it("allows memory reads for members and memory edits for managers or DM owners", () => {
+  it("allows memory navigation for DM owners and guild managers", () => {
     for (const action of ["server-memory-open", "personal-memory-open"] as const) {
-      expect(resolvePersonaMemoriesActionState(action, GUILD_MEMBER)).toBe("enabled");
+      expect(resolvePersonaMemoriesActionState(action, GUILD_MEMBER)).toBe("omitted");
       expect(resolvePersonaMemoriesActionState(action, DM_OWNER)).toBe("enabled");
     }
     expect(resolvePersonaMemoriesActionState("stm-edit", GUILD_MANAGER)).toBe("enabled");
@@ -294,14 +271,9 @@ describe("Persona Sprites action policy", () => {
     }
   });
 
-  it("keeps inspection and Export available to a guild member while disabling every mutation", () => {
-    // `/persona sprites export` carries neither a guild nor a Manage Guild gate, so it survives on
-    // a page whose own state is read-only.
-    expect(resolveConfigPageState("persona", "sprites", GUILD_MEMBER)).toBe("read-only");
-    expect(resolvePersonaSpritesActionState("inspect", GUILD_MEMBER)).toBe("enabled");
-    expect(resolvePersonaSpritesActionState("export", GUILD_MEMBER)).toBe("enabled");
-    for (const action of mutations) {
-      expect(resolvePersonaSpritesActionState(action, GUILD_MEMBER)).toBe("disabled");
+  it("omits every sprite action for guild members", () => {
+    for (const action of [...mutations, "inspect", "export"] as const) {
+      expect(resolvePersonaSpritesActionState(action, GUILD_MEMBER)).toBe("omitted");
     }
   });
 
@@ -679,9 +651,8 @@ describe("isConfigRouteAuthorized", () => {
       expect(isConfigRouteAuthorized(route, GUILD_MEMBER)).toBe(false);
       expect(isConfigRouteAuthorized(route, DM_OWNER)).toBe(false);
     }
-    // The read-only page must not take Export down with the mutations it disables.
     for (const route of spriteReadRoutes) {
-      expect(isConfigRouteAuthorized(route, GUILD_MEMBER)).toBe(true);
+      expect(isConfigRouteAuthorized(route, GUILD_MEMBER)).toBe(false);
       expect(isConfigRouteAuthorized(route, DM_OWNER)).toBe(true);
     }
   });
@@ -779,7 +750,7 @@ describe("isConfigRouteAuthorized", () => {
     expect(isConfigRouteAuthorized(navigate("models", "switch"), GUILD_MEMBER)).toBe(false);
     expect(isConfigRouteAuthorized(navigate("plugins", "available-tools"), GUILD_MEMBER)).toBe(false);
     expect(isConfigRouteAuthorized(navigate("persona", "advanced"), GUILD_MEMBER)).toBe(false);
-    expect(isConfigRouteAuthorized(navigate("persona", "memories"), GUILD_MEMBER)).toBe(true);
+    expect(isConfigRouteAuthorized(navigate("persona", "memories"), GUILD_MEMBER)).toBe(false);
 
     expect(isConfigRouteAuthorized(navigate("channels", "destinations"), DM_OWNER)).toBe(false);
     expect(isConfigRouteAuthorized(navigate("behavior", "trigger"), DM_OWNER)).toBe(false);
@@ -787,31 +758,11 @@ describe("isConfigRouteAuthorized", () => {
     expect(isConfigRouteAuthorized(navigate("models", "switch"), DM_OWNER)).toBe(true);
   });
 
-  it("allows a member to reach the persona selector that scopes their readable pages", () => {
-    expect(isConfigRouteAuthorized({ action: "persona-select", locale: "en-US", personaId: 5 }, GUILD_MEMBER)).toBe(
-      true,
-    );
-    expect(
-      isConfigRouteAuthorized({ action: "persona-page", locale: "en-US", personaId: 5, start: 25 }, GUILD_MEMBER),
-    ).toBe(true);
-    expect(
-      isConfigRouteAuthorized(
-        { action: "persona-page-select", locale: "en-US", category: "persona", page: "memories", personaId: 5 },
-        GUILD_MEMBER,
-      ),
-    ).toBe(true);
-    expect(
-      isConfigRouteAuthorized(
-        { action: "persona-page-select", locale: "en-US", category: "persona", page: "advanced", personaId: 5 },
-        GUILD_MEMBER,
-      ),
-    ).toBe(false);
-    expect(
-      isConfigRouteAuthorized(
-        { action: "persona-select", locale: "en-US", personaId: 5, page: "advanced" },
-        GUILD_MEMBER,
-      ),
-    ).toBe(false);
+  it("rejects every config route for a guild member", () => {
+    for (const action of Object.keys(CONFIG_ROUTE_CODECS)) {
+      const route = { action, locale: "en-US" } as ConfigPanelRoute;
+      expect(isConfigRouteAuthorized(route, GUILD_MEMBER)).toBe(false);
+    }
   });
 
   it("keeps Persona Voice routes manager-only in guilds while allowing the DM owner", () => {

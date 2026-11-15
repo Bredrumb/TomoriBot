@@ -240,9 +240,9 @@ Gerenciar predefinições de personalidade
 |---|---|
 | `/persona create` | Criar uma predefinição de personalidade simples manualmente |
 | `/persona default` | Aplicar uma predefinição de personalidade |
-| `/persona export` | Exportar a personalidade atual como um arquivo PNG compartilhável |
+| `/persona export` | Exportar uma persona como cartão PNG, JSON bruto ou pacote ZIP com mídia |
 | `/persona generate` | Geração de personalidade baseada em IA (requer um provedor compatível) |
-| `/persona import` | Importar uma persona a partir de um arquivo PNG, JSON ou CHARX |
+| `/persona import` | Importar uma persona a partir de um arquivo PNG, JSON, CHARX ou pacote ZIP TomoriBot |
 | `/persona remove` | Remover um alter do servidor |
 
 ## `/personal`

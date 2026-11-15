@@ -41,13 +41,25 @@ Configure o resfriamento da resposta global em todo o servidor em `/config` > `C
 ## Controles de Aprendizado & Privacidade
 
 - **Permissões de membro**: em `/moderation` > `Acesso de Membros`, clique em `Editar Permissões` para controlar
-  se os membros sem `Gerenciar Servidor` podem gerenciar memórias do servidor, atributos de personalidade,
-  exemplos de diálogos ou inspecionar instantâneos de prompt. O ensino de memórias do servidor vem desativado por
+  se os membros sem `Gerenciar Servidor` podem gerenciar memórias do servidor, inspecionar instantâneos de prompt
+  ou exportar personas. O ensino de memórias do servidor vem desativado por
   padrão e permite que os membros vejam suas próprias memórias, adicionem novas e editem ou removam as suas. Quando
   desativado, apenas membros com `Gerenciar Servidor` podem ver ou gerenciar memórias do servidor. Visualizar e
   gerenciar documentos e lorebooks requer `Gerenciar Servidor`.
+- **Exportações de persona**: desativadas por padrão para membros sem `Gerenciar Servidor`. Ative `Exportações de Persona`
+  em `/moderation` > `Acesso de Membros` > `Editar Permissões` para permitir que membros usem todos os formatos de
+  `/persona export`. Isso inclui pacotes com sprites, referências de personagem e, opcionalmente, o áudio de voz
+  atribuído e a transcrição. Exportações bem-sucedidas são sempre públicas no canal. Membros com acesso negado
+  recebem uma resposta privada direcionando-os a um administrador do servidor. Administradores podem exportar
+  independentemente dessa configuração.
 - **Lista negra de usuários**: em `/moderation` > `Lista Negra de Usuários`, escolha membros para TomoriBot ignorar completamente. Os membros da lista negra não podem acioná-la ou executar comandos, e suas mensagens nunca alcançam o contexto imediato. Você também pode definir bloqueios de membros específicos para cada pessoa.
 - **Regras de canal**: em `/config` > `Canais` > `Regras de Canal`, marque canais de texto públicos como privados ou adicione listas de bloqueio de ferramentas multicanal. Canais restritos do Discord são privados automaticamente. Canais privados não têm logs de pensamento nem ferramentas multicanal de entrada, incluindo espiadas, criação de tópicos e tarefas agendadas a partir de outros canais. A STM não pode entrar nem sair, a menos que `Compartilhamento de STM de Canais Privados` esteja `Permitido`. Você ainda pode pedir para o bot trabalhar dentro de um canal privado ou despachar tarefas para fora; uma tarefa enviada para fora pode incluir informações da sua conversa.
+
+`/config` exige `Gerenciar Servidor` em servidores, incluindo ver atributos da persona, diálogos de exemplo,
+sprites e memória de curto prazo. Atributos da persona e diálogos de exemplo só podem ser editados por administradores
+do servidor. Proprietários de DM mantêm acesso ao próprio workspace. A permissão de exportação concede acesso a
+`/persona export`; ela não concede acesso a `/config` nem ao botão `Exportar Sprites`. Downloads completos de prompt
+usam a permissão separada `Capturas de Prompt`.
 
 A privacidade automática verifica as permissões de cargos: `@everyone` deve conseguir visualizar o canal e nenhum cargo pode ter uma negação explícita de `Ver canal`. Sobrescritas de membros individuais não afetam essa classificação. Servidores com cargos de verificação ou cargos de restrição que negam a visualização podem, portanto, ter canais marcados como privados mesmo quando membros comuns conseguem lê-los. O painel distingue a privacidade automática de seleções manuais. Remover uma seleção manual não pode sobrepor as restrições do Discord.
 

@@ -57,9 +57,8 @@ function createScopeData(overrides: Partial<ModerationScopeData> = {}): Moderati
     readStatus: "fresh",
     memberAccess: {
       serverMemteachingEnabled: true,
-      attributeMemteachingEnabled: false,
-      sampledialogueMemteachingEnabled: true,
       promptSnapshotEnabled: false,
+      personaExportEnabled: false,
     },
     serverModelAccess: { allowServerModels: true },
     userBlacklist: {
@@ -449,9 +448,8 @@ describe("moderation interaction routes", () => {
     expect(modalNonce).toBe("nonceabc123");
     expect(modalState).toEqual({
       serverMemteachingEnabled: true,
-      attributeMemteachingEnabled: false,
-      sampledialogueMemteachingEnabled: true,
       promptSnapshotEnabled: false,
+      personaExportEnabled: false,
     });
   });
 
@@ -737,7 +735,13 @@ describe("moderation interaction routes", () => {
 
     const route = createModerationInteractionRoute({
       resolveScope: async () => createScopeData(),
-      takeCheckboxValues: () => ["servermemories", "malicious_payload", "promptsnapshot", "unknown_option"],
+      takeCheckboxValues: () => [
+        "servermemories",
+        "malicious_payload",
+        "promptsnapshot",
+        "personaexport",
+        "unknown_option",
+      ],
       operations: {
         ...moderationOperations,
         updateMemberPermissions: async (input) => {
@@ -764,7 +768,7 @@ describe("moderation interaction routes", () => {
       segments: ["member-access-submit", "en-US", "nonce123"],
     });
 
-    expect(passedSelectedValues).toEqual(["servermemories", "promptsnapshot"]);
+    expect(passedSelectedValues).toEqual(["servermemories", "promptsnapshot", "personaexport"]);
     const serialized = JSON.stringify(editReplyCalls[0]);
     expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.member_access_updated"));
     expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.member_access_updated_detail"));
@@ -898,20 +902,20 @@ describe("moderation interaction routes", () => {
         }
         return createScopeData();
       },
-      takeCheckboxValues: () => ["attributelist"],
+      takeCheckboxValues: () => ["promptsnapshot"],
       operations: {
         ...moderationOperations,
         updateMemberPermissions: async () => ({
           status: "success",
           changes: [
             {
-              dbColumn: "attribute_memteaching_enabled",
+              dbColumn: "prompt_snapshot_enabled",
               isEnabled: true,
-              value: "attributelist",
-              labelKey: "commands.server.member-permissions.attributelist_label",
+              value: "promptsnapshot",
+              labelKey: "commands.server.member-permissions.promptsnapshot_label",
             },
           ],
-          patch: { attribute_memteaching_enabled: true },
+          patch: { prompt_snapshot_enabled: true },
         }),
       },
     });
@@ -4456,9 +4460,8 @@ describe("moderation route codec wire contract, exhaustiveness, and producer cov
         "en-US",
         {
           serverMemteachingEnabled: true,
-          attributeMemteachingEnabled: false,
-          sampledialogueMemteachingEnabled: true,
           promptSnapshotEnabled: false,
+          personaExportEnabled: false,
         },
         "nonce12345678",
       ).custom_id,

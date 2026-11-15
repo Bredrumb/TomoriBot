@@ -38,7 +38,7 @@ Para detalhes sobre o direcionamento das respostas e a identidade dos webhooks, 
 
 ## Moldando a Personalidade
 
-Ajuste a aparência, fala e comportamento de uma persona:
+Ajuste a aparência, a fala e o comportamento de uma persona através de `/config`. Em servidores, isso exige `Gerenciar Servidor`, incluindo ver ou editar atributos e diálogos de exemplo. Proprietários de DM podem configurar sua própria persona.
 
 ### Atributos
 <!-- anchor: attributes -->

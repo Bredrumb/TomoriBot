@@ -43,6 +43,11 @@ Root command files may export optional boundary flags:
 - `nsfw = true`: marks the command as age-restricted.
 - `isCommandEnabled(context)`: evaluated before registration; returning `false` omits the command from the registration payload and execution map.
 
+`/config` registers with a `ManageGuild` default and also checks that permission at runtime before
+loading guild configuration. Component routes and modal submissions repeat the check using the
+current interaction, including controls from older panels. DM workspace owners retain access.
+Persona attribute and sample dialogue editing have no member teaching permission.
+
 Command metadata descriptions and choices are auto-localized by `commandLoader.ts`. Builders configure English text with `localizer("en-US", key)`. The loader matches keys across authored locale trees using `{option_name}_description` and `{choice_value}_option`.
 
 ## Runtime interaction dispatch

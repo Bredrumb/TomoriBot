@@ -266,8 +266,8 @@ export async function execute(
   );
   if (modelSelection === false) return;
   const { tomoriState } = await applyPersonalProviderSelectionsToTomoriState(baseTomoriState, userData.user_id ?? null);
-  const recoveryTips = async (credentialSource: "server" | "personal") => {
-    return withProviderOptionCopy([], {
+  const recoveryTips = async (credentialSource: "server" | "personal", tipKeys: string[] = []) => {
+    return withProviderOptionCopy(tipKeys, {
       surface: "recovery",
       managedProvider: videoCreds?.usageContext?.credentialProvider ?? null,
       userDiscId: interaction.user.id,
@@ -421,7 +421,12 @@ export async function execute(
     }
 
     if (!quotaCheck.allowed) {
-      await replyVideoQuotaExceeded(interaction, locale, quotaCheck, await recoveryTips("server"));
+      await replyVideoQuotaExceeded(
+        interaction,
+        locale,
+        quotaCheck,
+        await recoveryTips("server", ["genai.tips.use_personal_providers"]),
+      );
       return;
     }
   }
@@ -574,7 +579,12 @@ export async function execute(
     if (videoCreds.source === "server") {
       const claim = await reserveVideoQuota(tomoriState.server_id, interaction.user.id);
       if (!claim.allowed) {
-        await replyVideoQuotaExceeded(modalSubmitInteraction, locale, claim, await recoveryTips("server"));
+        await replyVideoQuotaExceeded(
+          modalSubmitInteraction,
+          locale,
+          claim,
+          await recoveryTips("server", ["genai.tips.use_personal_providers"]),
+        );
         return;
       }
       quotaReservation = claim.reservation;

@@ -11,13 +11,18 @@ import { embedMetadataInPNG, extractMetadataFromPNG } from "@/utils/image/pngMet
  * Covers compatibility with Tomori preset exports created before the schema
  * normalization branch moved trigger_words out of server config tables.
  */
-import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { afterAll, beforeAll, describe, expect, it, spyOn } from "bun:test";
 import { UNPAIRED_SAMPLE_DIALOGUE_SENTINEL, type PresetExportData } from "@/types/preset/presetExport";
-import { presetRepository, personaRepository } from "@/utils/db/repositories";
+import { presetRepository, personaRepository, personaSpriteRepository } from "@/utils/db/repositories";
 import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
 import type { PersonaAuthoredIdleNudge } from "@/modules/natural-nudges/db/types";
 import { FIXTURE_IDS, cleanupFixtures, insertFixtures, type FixtureRefs } from "./setup/fixtures";
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
+
+import { personaSpriteSchema } from "@/types/db/schema";
+import { buildPersonaBundle, readPersonaBundle } from "@/utils/persona/personaBundleArchive";
+import { restorePersonaBundleAssets } from "@/utils/persona/personaBundleOperations";
+import * as avatarStorage from "@/utils/storage/avatarStorage";
 
 const CARD_NUDGES: PersonaAuthoredIdleNudge[] = [
   {
@@ -107,6 +112,31 @@ async function insertCardPreset(
   `;
 }
 
+async function cardBundle(data: PresetExportData) {
+  const avatar = Buffer.from(await Bun.file("src/db/seed/catalog/personas/default/default.png").arrayBuffer());
+  return await readPersonaBundle(
+    await buildPersonaBundle({
+      preset: { version: "1.0.0", type: "preset", exported_at: new Date().toISOString(), data },
+      avatar,
+      sprites: [
+        {
+          sprite: personaSpriteSchema.parse({
+            persona_id: 1,
+            sprite_name: "Bundle",
+            sprite_key: "bundle",
+            usage_instructions: "When cheerful",
+            is_identity: false,
+            avatar_url: "_rt_bundle.png",
+          }),
+          pngBuffer: avatar,
+        },
+      ],
+      characterReference: null,
+      voice: null,
+    }),
+  );
+}
+
 async function resetMainPersona(personaId: number): Promise<void> {
   await testSql`
     UPDATE personas
@@ -141,6 +171,144 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Preset import - regression", () => {
 
   afterAll(async () => {
     await cleanupFixtures(testSql);
+  });
+
+  it("keeps official-preset alter bundles independent and preserves filtered triggers after media restore", async () => {
+    const presetLineageId = 900_612;
+    const uniqueTrigger = "_rt_bundle_unique";
+    const naming = { prefixes: { neutral: "Dear" }, suffixes: {}, addressTerms: {} };
+    await insertCardPreset("_rt_bundle_alter_preset", presetLineageId, []);
+    await testSql`UPDATE persona_presets SET preset_trigger_words = ARRAY[${CARD_PRESET_TRIGGER}, ${uniqueTrigger}]::text[],
+      preset_naming_config = ${naming}::jsonb WHERE preset_lineage_id = ${presetLineageId}`;
+    await personaRepository.setPersonaConfig(refs.personaId, [CARD_PRESET_TRIGGER], null);
+    const upload = spyOn(avatarStorage, "uploadPersonaSpriteToStorage").mockResolvedValue(
+      "_rt_bundle_alter_sprite.png",
+    );
+    let alterId: number | null = null;
+    try {
+      for (const identityMode of ["preserve", "fork"] as const) {
+        const bundle = await cardBundle(
+          cardData(`_rt_bundle_alter_${identityMode}`, {
+            preset_lineage_id: presetLineageId,
+            persona_lineage_id: presetLineageId,
+            trigger_words: [CARD_PRESET_TRIGGER, uniqueTrigger],
+            naming_config: naming,
+          }),
+        );
+        expect(await presetRepository.findMatchingOfficialPresetForImport(bundle.preset.data)).not.toBeNull();
+        const imported = await importAlterPreset({
+          client: {} as Client,
+          guild: null,
+          serverDiscId: FIXTURE_IDS.serverDiscId,
+          presetData: bundle.preset.data,
+          identityMode,
+          avatarImageBuffer: null,
+          importMode: "bundle",
+        });
+        if (!imported.ok) throw new Error("Expected alter bundle import");
+        alterId = imported.personaId;
+        expect(imported.displayedTriggers).toEqual([uniqueTrigger]);
+        const target = (await personaRepository.loadAllForServer(FIXTURE_IDS.serverDiscId)).find(
+          (p) => p.persona_id === alterId,
+        );
+        if (!target) throw new Error("Expected imported alter");
+        expect(
+          await restorePersonaBundleAssets({ persona: target, serverDiscId: FIXTURE_IDS.serverDiscId, bundle }),
+        ).toBe(true);
+        const [stored] = await testSql`SELECT p.is_pointer, p.persona_lineage_id, p.preset_lineage_id, c.trigger_words
+          FROM personas p JOIN persona_configs c USING (persona_id) WHERE persona_id = ${alterId}`;
+        expect(stored.is_pointer).toBe(false);
+        expect(Number(stored.preset_lineage_id)).toBe(presetLineageId);
+        expect(Number(stored.persona_lineage_id) === presetLineageId).toBe(identityMode === "preserve");
+        expect(stored.trigger_words).toEqual(imported.displayedTriggers);
+        const exported = await presetRepository.exportPresetData(FIXTURE_IDS.serverDiscId, alterId);
+        if (!exported.success) throw new Error("Expected alter bundle export");
+        expect(exported.data.data.naming_config).toEqual(naming);
+        await personaRepository.removePersona(alterId);
+        alterId = null;
+      }
+    } finally {
+      upload.mockRestore();
+      if (alterId) await personaRepository.removePersona(alterId);
+      await testSql`DELETE FROM persona_presets WHERE preset_lineage_id = ${presetLineageId}`;
+      await resetMainPersona(refs.personaId);
+    }
+  });
+
+  it("keeps main bundle sprite references through failed restoration and clears stale appearance fields", async () => {
+    const presetLineageId = 900_613;
+    await insertCardPreset("_rt_bundle_main_preset", presetLineageId, []);
+    const bundle = await cardBundle(cardData("_rt_bundle_main", { preset_lineage_id: presetLineageId }));
+    expect(await presetRepository.findMatchingOfficialPresetForImport(bundle.preset.data)).not.toBeNull();
+    await personaRepository.setCharRef(refs.personaId, null);
+    await personaRepository.setPhysicalAppearanceTags(refs.personaId, ["_rt_old_appearance"]);
+    await personaRepository.setNaiAttg(refs.personaId, {
+      nai_attg_author: "_rt_old_author",
+      nai_attg_title: "_rt_old_title",
+      nai_attg_tags: "_rt_old_tags",
+      nai_attg_genre: "_rt_old_genre",
+      nai_attg_stars: 4,
+    });
+    await personaSpriteRepository.upsertSprite({
+      personaId: refs.personaId,
+      spriteKey: "old",
+      spriteName: "Old",
+      avatarUrl: "_rt_old_sprite.png",
+      usageInstructions: "",
+      isIdentity: false,
+    });
+    const upload = spyOn(avatarStorage, "uploadPersonaSpriteToStorage")
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue("_rt_new_sprite.png");
+    const remove = spyOn(avatarStorage, "deletePersonaSpriteFromStorage").mockResolvedValue(true);
+    try {
+      for (const retry of [false, true]) {
+        const previousSprites = await personaSpriteRepository.listForPersona(refs.personaId);
+        expect(previousSprites.map((sprite) => sprite.avatar_url)).toEqual(["_rt_old_sprite.png"]);
+        const imported = await presetRepository.importPresetData(
+          FIXTURE_IDS.serverDiscId,
+          bundle.preset.data,
+          "preserve",
+          "bundle",
+        );
+        expect(imported.success).toBe(true);
+        if (!imported.success) throw new Error("Expected main bundle import");
+        expect(imported.mainPersonaIsPointer).toBe(false);
+        const target = await personaRepository.loadState(FIXTURE_IDS.serverDiscId);
+        if (!target) throw new Error("Expected imported main");
+        expect(
+          await restorePersonaBundleAssets({
+            persona: target,
+            serverDiscId: FIXTURE_IDS.serverDiscId,
+            bundle,
+            previousSprites,
+            previousCharRef: null,
+          }),
+        ).toBe(retry);
+        const sprites = await personaSpriteRepository.listForPersona(refs.personaId);
+        expect(sprites.map((sprite) => sprite.avatar_url)).toEqual([
+          retry ? "_rt_new_sprite.png" : "_rt_old_sprite.png",
+        ]);
+        const [stored] =
+          await testSql`SELECT p.is_pointer, p.preset_lineage_id, i.physical_appearance_tags, t.nai_attg_author,
+          t.nai_attg_title, t.nai_attg_tags, t.nai_attg_genre, t.nai_attg_stars FROM personas p
+          JOIN persona_imagegen_configs i USING (persona_id) JOIN persona_textgen_configs t USING (persona_id)
+          WHERE persona_id = ${refs.personaId}`;
+        expect(stored.is_pointer).toBe(false);
+        expect(Number(stored.preset_lineage_id)).toBe(presetLineageId);
+        expect(stored.physical_appearance_tags).toEqual([]);
+        for (const field of ["nai_attg_author", "nai_attg_title", "nai_attg_tags", "nai_attg_genre", "nai_attg_stars"])
+          expect(stored[field]).toBeNull();
+        expect(remove).toHaveBeenCalledTimes(retry ? 1 : 0);
+      }
+      expect(remove).toHaveBeenCalledWith("_rt_old_sprite.png");
+    } finally {
+      upload.mockRestore();
+      remove.mockRestore();
+      await personaSpriteRepository.deleteAllForPersona(refs.personaId);
+      await testSql`DELETE FROM persona_presets WHERE preset_lineage_id = ${presetLineageId}`;
+      await resetMainPersona(refs.personaId);
+    }
   });
 
   it.each<{ name: string; inputs: string[]; outputs: string[]; expectedInputs: string[] }>([

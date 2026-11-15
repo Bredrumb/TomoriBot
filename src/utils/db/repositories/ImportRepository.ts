@@ -237,11 +237,10 @@ const WORKSPACE_SECTION_TABLES: Record<WorkspaceConfigSection, readonly SectionT
       tableName: "server_member_permissions_configs",
       fields: [
         "server_memteaching_enabled",
-        "attribute_memteaching_enabled",
-        "sampledialogue_memteaching_enabled",
         "self_teaching_enabled",
         "personal_memories_enabled",
         "prompt_snapshot_enabled",
+        "persona_export_enabled",
       ],
     },
     { tableName: "server_channel_scope_configs", fields: ["stm_privacy_bypass"] },
@@ -1074,12 +1073,13 @@ class ImportRepository {
 
       const memberPermPatch = {
         server_memteaching_enabled: config.server_memteaching_enabled,
-        attribute_memteaching_enabled: config.attribute_memteaching_enabled,
-        sampledialogue_memteaching_enabled: config.sampledialogue_memteaching_enabled,
         self_teaching_enabled: config.self_teaching_enabled,
         personal_memories_enabled: config.personal_memories_enabled,
         ...(config.prompt_snapshot_enabled !== undefined && {
           prompt_snapshot_enabled: config.prompt_snapshot_enabled,
+        }),
+        ...(config.persona_export_enabled !== undefined && {
+          persona_export_enabled: config.persona_export_enabled,
         }),
       };
 

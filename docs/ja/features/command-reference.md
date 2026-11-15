@@ -240,9 +240,9 @@ Discordチャンネルを双方向リレーでMatrixルームにリンクしま�
 |---|---|
 | `/persona create` | シンプルな人格プリセットを手動で作成 |
 | `/persona default` | 人格設定のペルソナを適用します |
-| `/persona export` | 現在の人格を共有可能なPNGファイルとしてエクスポートする |
+| `/persona export` | ペルソナをPNGカード、生のJSON、またはメディア付きZIPバンドルとしてエクスポートする |
 | `/persona generate` | AIによる人格生成（対応プロバイダーが必要） |
-| `/persona import` | PNG、JSON、またはCHARXファイルからペルソナをインポートする |
+| `/persona import` | PNG、JSON、CHARX、またはTomoriBot ZIPバンドルからペルソナをインポートする |
 | `/persona remove` | サーバーからオルタペルソナを削除する |
 
 ## `/personal`

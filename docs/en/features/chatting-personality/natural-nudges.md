@@ -118,10 +118,10 @@ Open `/config` > `Persona` > `Nudges` to set:
 - **Talkativeness:** how often the persona speaks up. `Silent` personas do not nudge.
 - **Interests:** up to 8 topics the persona likes, with descriptions and examples.
 - **Idle Nudges:** up to 20 idle nudges only this persona uses. 
-Persona cards (`/persona export`) includes all of the above
 
 Official presets include these settings. `/persona generate` suggests interests for new personas;
-`Generate Interests` adds new ones through your current text model. Persona exports include all three.
+`Generate Interests` adds new ones through your current text model. Persona exports in `TomoriBot Card`
+or `Raw JSON` format, and ZIP bundles, include all three; `SillyTavern-compatible PNG` excludes nudge settings.
 
 ## When Nudges Fire
 

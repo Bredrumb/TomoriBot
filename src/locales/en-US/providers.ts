@@ -164,6 +164,7 @@ export default {
       review_messages: `Review recent messages, or clear them with \`/refresh\`.`,
       review_memories: `Check your memories and config (\`/export personal memories\`, \`/export memories\`, \`/export config\`).`,
       blacklist_member: `Blacklist a problematic member with \`/moderation\`.`,
+      use_personal_providers: `Use your own [personal provider](https://docs.tomoribot.app/en/features/knowledge/personalization/#your-own-providers) with \`/personal providers\` so your requests do not count toward this server's quota.`,
     },
     google: {
       "400_default_message": `There was an error in your request format`,

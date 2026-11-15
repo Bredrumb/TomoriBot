@@ -792,8 +792,6 @@ export async function repaint(
         personaVoiceView,
         personaVoiceRemoteView: options.personaVoiceRemoteView,
         personaVoicePageStart: options.personaVoicePageStart,
-        attributeMemteachingEnabled: scope.personas[0]?.config?.attribute_memteaching_enabled === true,
-        sampledialogueMemteachingEnabled: scope.personas[0]?.config?.sampledialogue_memteaching_enabled === true,
         namingStyle: options.namingStyle,
         readStatus: scope.readStatus,
         receipt: options.receipt,

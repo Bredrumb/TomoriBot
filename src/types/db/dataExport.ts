@@ -239,11 +239,10 @@ const serverChatConfigExportSchema = z.object({
 /** Portable server_member_permissions_configs export fields. */
 const serverMemberPermissionsConfigExportSchema = z.object({
   server_memteaching_enabled: z.boolean().default(false),
-  attribute_memteaching_enabled: z.boolean().default(false),
-  sampledialogue_memteaching_enabled: z.boolean().default(false),
   self_teaching_enabled: z.boolean().default(true),
   personal_memories_enabled: z.boolean().default(true),
   prompt_snapshot_enabled: z.boolean().optional(),
+  persona_export_enabled: z.boolean().optional(),
 });
 
 /** Portable server_capabilities_configs export fields. */

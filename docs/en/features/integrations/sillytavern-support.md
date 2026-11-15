@@ -46,6 +46,17 @@ conversion mechanics, see the
 A card's Character Book becomes that persona's [lorebook](/features/knowledge/memory/lorebooks/). Disabled entries stay disabled. Re-importing the card replaces the persona's whole lorebook, including entries you added yourself.
 :::
 
+## Character card export
+
+Use `/persona export` with `output_format` set to `SillyTavern-compatible PNG` to take a persona
+into SillyTavern. The card includes the avatar, personality, sample dialogues, persona prompt,
+and persona lorebook. It has no opening greeting; add one in SillyTavern before starting a chat.
+
+TomoriBot-specific settings, such as triggers, nudges, voice settings, and lorebook channel limits,
+are excluded. Choose `TomoriBot Card` or `Raw JSON` to preserve TomoriBot persona settings.
+`TomoriBot Bundle` also carries sprites and character reference media, plus voice reference audio
+when requested. This ZIP is a TomoriBot format; use the SillyTavern-compatible PNG for SillyTavern.
+
 ## Prompt Presets
 <!-- anchor: prompt-presets -->
 

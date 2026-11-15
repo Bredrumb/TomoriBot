@@ -240,9 +240,9 @@ Quản lý các preset persona
 |---|---|
 | `/persona create` | Tạo thủ công một preset persona đơn giản |
 | `/persona default` | Áp dụng cấu hình preset persona |
-| `/persona export` | Xuất persona hiện tại thành tệp PNG có thể chia sẻ |
+| `/persona export` | Xuất persona dưới dạng thẻ PNG, JSON thuần hoặc gói ZIP kèm phương tiện |
 | `/persona generate` | Tạo persona bằng AI (yêu cầu nhà cung cấp tương thích) |
-| `/persona import` | Nhập persona từ tệp PNG, JSON hoặc CHARX |
+| `/persona import` | Nhập persona từ tệp PNG, JSON, CHARX hoặc gói ZIP TomoriBot |
 | `/persona remove` | Xóa một persona alter khỏi máy chủ |
 
 ## `/personal`

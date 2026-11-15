@@ -22,9 +22,8 @@ function createScopeData(overrides: Partial<ModerationScopeData> = {}): Moderati
     serverModelAccess: { allowServerModels: true },
     memberAccess: {
       serverMemteachingEnabled: true,
-      attributeMemteachingEnabled: false,
-      sampledialogueMemteachingEnabled: true,
       promptSnapshotEnabled: false,
+      personaExportEnabled: false,
     },
     userBlacklist: {
       personalizationUserIds: [],

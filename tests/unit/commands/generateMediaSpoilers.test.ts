@@ -23,6 +23,7 @@ import {
 import * as dispatcher from "@/providers/custom/customEndpointDispatcher";
 import { llmModelRepo, personaRepository, statRepository } from "@/utils/db/repositories";
 import * as modals from "@/utils/discord/ui/modals";
+import * as textDisplayModal from "@/utils/discord/textDisplayModal";
 import * as credentials from "@/utils/provider/credentialResolver";
 import * as providerOptions from "@/utils/provider/providerOptionRegistry";
 import * as personal from "@/utils/provider/personalProviderRuntime";
@@ -32,6 +33,7 @@ import { log } from "@/utils/misc/logger";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { createPersona, createUserRow } from "../../helpers/fixtures";
 import { makeFakeInteraction } from "../../helpers/fakeInteraction";
+import { localizedCopy } from "../../helpers/localeCases";
 import * as downloads from "@/utils/security/safeDownload";
 import * as nvidia from "@/providers/nvidia/nvidiaImageGeneration";
 import * as zai from "@/providers/zai/zaiImageGeneration";
@@ -365,5 +367,61 @@ describe("Media generation failures", () => {
         expect(recorded(warnLog.mock.calls)).toBe(expected);
       }
     }
+  });
+
+  it("includes a What You Can Do button pointing to /personal providers on pre-modal and post-modal image quota refusals", async () => {
+    const resetTime = new Date(Date.now() + 60_000);
+    const renderedModals: Array<{ title: string; content: string }> = [];
+    spyOn(textDisplayModal, "attachTextDisplayModalCollector").mockImplementation((options) => {
+      renderedModals.push(options.render("en-US"));
+    });
+
+    spyOn(imageQuota, "checkImageQuota").mockResolvedValueOnce({
+      allowed: false,
+      reason: "user_quota_exceeded",
+      userRemaining: 0,
+      resetTime,
+    });
+    const preModal = makeFakeInteraction({
+      channel: {},
+      options: { getString: (name) => (name === "mode" ? "manual" : null), getBoolean: () => false },
+    });
+    await image({} as Client, preModal.interaction as unknown as ChatInputCommandInteraction, createUserRow(), "en-US");
+    const preReply = preModal.calls.findLast((call) => call.method === "reply")?.args[0] as {
+      components?: Array<{ toJSON(): { components?: Array<{ label?: string }> } }>;
+    };
+    expect(dispatcher.generateCustomImageViaEndpoint).not.toHaveBeenCalled();
+    expect(preReply?.components?.[0]?.toJSON().components?.[0]?.label).toBe(
+      localizedCopy("en-US", "genai.tips.button"),
+    );
+    expect(renderedModals.at(-1)?.content).toContain(localizedCopy("en-US", "genai.tips.use_personal_providers"));
+    expect(renderedModals.at(-1)?.content).toContain("/personal providers");
+
+    modal = makeFakeInteraction();
+    spyOn(imageQuota, "reserveImageQuota").mockResolvedValueOnce({
+      allowed: false,
+      reason: "serverwide_quota_exceeded",
+      userRemaining: 0,
+      resetTime,
+      reservation: null,
+    });
+    const postModal = makeFakeInteraction({
+      channel: {},
+      options: { getString: (name) => (name === "mode" ? "manual" : null), getBoolean: () => false },
+    });
+    await image(
+      {} as Client,
+      postModal.interaction as unknown as ChatInputCommandInteraction,
+      createUserRow(),
+      "en-US",
+    );
+    const postReply = modal.calls.findLast((call) => call.method === "editReply")?.args[0] as {
+      components?: Array<{ toJSON(): { components?: Array<{ label?: string }> } }>;
+    };
+    expect(dispatcher.generateCustomImageViaEndpoint).not.toHaveBeenCalled();
+    expect(postReply?.components?.[0]?.toJSON().components?.[0]?.label).toBe(
+      localizedCopy("en-US", "genai.tips.button"),
+    );
+    expect(renderedModals.at(-1)?.content).toContain(localizedCopy("en-US", "genai.tips.use_personal_providers"));
   });
 });

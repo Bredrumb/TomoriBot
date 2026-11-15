@@ -34,9 +34,8 @@ function createScopeData(overrides: Partial<ModerationScopeData> = {}): Moderati
     readStatus: "fresh",
     memberAccess: {
       serverMemteachingEnabled: true,
-      attributeMemteachingEnabled: false,
-      sampledialogueMemteachingEnabled: true,
       promptSnapshotEnabled: false,
+      personaExportEnabled: false,
     },
     serverModelAccess: { allowServerModels: true },
     userBlacklist: {

@@ -43,7 +43,9 @@ The **Main** persona is the bot's face in the server: the name and avatar in the
 
 ## Shaping Personality
 
-Fine-tune how a persona looks, talks, and behaves:
+Fine-tune how a persona looks, talks, and behaves through `/config`. In servers, this requires
+`Manage Server`, including viewing or editing attributes and sample dialogues. DM owners can
+configure their own persona.
 
 ### Attributes
 <!-- anchor: attributes -->

@@ -73,10 +73,10 @@ async function dirtyEverySingleton(serverId: number): Promise<void> {
   await testSql`
     INSERT INTO server_member_permissions_configs (server_id) VALUES (${serverId})
     ON CONFLICT (server_id) DO UPDATE SET
-      server_memteaching_enabled = true, attribute_memteaching_enabled = true,
-      sampledialogue_memteaching_enabled = true, self_teaching_enabled = false,
+      server_memteaching_enabled = true,
+      self_teaching_enabled = false,
       personal_memories_enabled = false, hide_impersonation_embeds = true,
-      prompt_snapshot_enabled = true
+      prompt_snapshot_enabled = true, persona_export_enabled = true
   `;
   await testSql`
     INSERT INTO server_capabilities_configs (server_id) VALUES (${serverId})

@@ -11,6 +11,8 @@ import { ComponentType, type ComponentInContainerData, type ContainerComponentDa
 import type { PersonaSpriteRow, StmCategoryRow, TomoriState } from "@/types/db/schema";
 import type { ConditioningGroup } from "@/utils/db/repositories/ConditioningMemoryRepository";
 import {
+  CONFIG_CATEGORY_ORDER,
+  CONFIG_PAGES_BY_CATEGORY,
   CONFIG_PERSONA_COLLECTION_PAGE_SIZE,
   CONFIG_PERSONA_SELECT_PAGE_SIZE,
   CONFIG_PERSONA_SPRITE_PAGE_SIZE,
@@ -294,20 +296,6 @@ describe("config panel shell", () => {
     expect(categoryRow.map((button) => button.style)).toEqual([1, 2, 2, 2, 2]);
   });
 
-  it("keeps Persona visible while manager-owned categories stay inert for a guild member", () => {
-    const payload = build(GUILD_MEMBER);
-    const row = payload.components[0] as unknown as { components: Array<{ components: Observed[] }> };
-    const categoryRow = row.components[0].components;
-
-    expect(categoryRow.map((button) => [button.label, button.disabled ?? false])).toEqual([
-      ["Persona", false],
-      ["Behavior", true],
-      ["Plugins", true],
-      ["Channels", true],
-      ["Models", true],
-    ]);
-  });
-
   it("omits the Channels category entirely in a DM workspace", () => {
     const payload = build(DM_OWNER);
     const row = payload.components[0] as unknown as { components: Array<{ components: Observed[] }> };
@@ -430,19 +418,23 @@ describe("config panel shell", () => {
     expect(() => validateComponentsV2MessageLimits(withReceipt)).not.toThrow();
   });
 
-  it("lists only pages the actor may open in the page selector", () => {
-    const payload = build(GUILD_MEMBER, { category: "persona", page: "general" });
-    const pageSelect = walk(payload).find(
-      (component) => component.type === STRING_SELECT && component.placeholder === "Choose a page...",
-    );
-    expect(pageSelect?.options?.map((option) => option.value)).toEqual([
-      "general",
-      "triggers",
-      "memories",
-      "naming",
-      "sprites",
-      "nudges",
-    ]);
+  it("renders a private-data-free denial for members on every config page", () => {
+    for (const category of CONFIG_CATEGORY_ORDER) {
+      for (const page of CONFIG_PAGES_BY_CATEGORY[category]) {
+        const persona = makePersona({
+          persona_id: 55,
+          attribute_list: ["private-attribute"],
+          persona_prompt: "private-prompt",
+        });
+        const payload = build(GUILD_MEMBER, { category, page, personas: [persona] });
+        const seen = walk(payload);
+        expect(seen.some((entry) => entry.customId)).toBe(false);
+        expect(JSON.stringify(payload)).not.toContain("private-attribute");
+        expect(JSON.stringify(payload)).not.toContain("private-prompt");
+        expect(JSON.stringify(payload)).toContain(localizedCopy("en-US", "commands.config.panel.denied_detail"));
+        expect(() => validateComponentsV2MessageLimits(payload)).not.toThrow();
+      }
+    }
   });
 
   it("keeps Advanced Memory last in the Behavior page selector", () => {
@@ -568,12 +560,6 @@ describe("config Persona General body", () => {
         personaId: 55,
       }),
     ).toBeUndefined();
-  });
-
-  it("disables manager-owned identity actions for a guild member without hiding them", () => {
-    const payload = build(GUILD_MEMBER);
-    expect(buttonFor(payload, { action: "avatar-open", locale: "en-US", personaId: 55 })?.disabled).toBe(true);
-    expect(buttonFor(payload, { action: "rename-open", locale: "en-US", personaId: 55 })?.disabled).toBe(true);
   });
 
   it("omits guild-only identity actions in a DM workspace", () => {
@@ -752,12 +738,6 @@ describe("config Persona General body", () => {
 });
 
 describe("config Persona Triggers body", () => {
-  it("disables both trigger actions for an ordinary guild member", () => {
-    const payload = build(GUILD_MEMBER, { page: "triggers" });
-    expect(buttonFor(payload, { action: "trigger-add-open", locale: "en-US", personaId: 55 })?.disabled).toBe(true);
-    expect(buttonFor(payload, { action: "trigger-remove-open", locale: "en-US", personaId: 55 })?.disabled).toBe(true);
-  });
-
   it("disables Remove Trigger when the persona has no trigger words", () => {
     expect(
       buttonFor(build(GUILD_MANAGER, { page: "triggers", selectedPersonaId: 56 }), {
@@ -890,95 +870,14 @@ describe("config Persona General collections", () => {
     expect(seen.some((component) => component.customId?.includes(":dlg-edit-open:"))).toBe(false);
   });
 
-  it("filters collection writes for a non-manager when teaching is disabled", () => {
-    const persona = makePersona({
-      persona_id: 55,
-      attribute_list: ["Likes tea"],
-      sample_dialogues_in: ["Hello"],
-      sample_dialogues_out: ["Hi there"],
-    });
-    const payload = build(GUILD_MEMBER, {
-      personas: [persona],
-      selectedPersonaId: 55,
-      selectedAttributeIndex: 0,
-      selectedDialogueIndex: 0,
-      attributeMemteachingEnabled: false,
-      sampledialogueMemteachingEnabled: false,
-    });
-    const seen = walk(payload);
-    const attributeFingerprint = computeAttributeFingerprint(55, 0, "Likes tea", false);
-    const dialogueFingerprint = computeDialogueFingerprint(55, 0, "Hello", "Hi there");
-
-    expect(
-      seen
-        .find(
-          (component) =>
-            component.customId === buildConfigRouteId({ action: "attribute-select", locale: "en-US", personaId: 55 }),
-        )
-        ?.options?.some((option) => option.value === "add"),
-    ).toBe(false);
-    expect(
-      seen
-        .find(
-          (component) =>
-            component.customId === buildConfigRouteId({ action: "dialogue-select", locale: "en-US", personaId: 55 }),
-        )
-        ?.options?.some((option) => option.value === "add"),
-    ).toBe(false);
-    expect(
-      buttonFor(payload, {
-        action: "attribute-edit-open",
-        locale: "en-US",
-        personaId: 55,
-        index: 0,
-        fp: attributeFingerprint,
-      })?.disabled,
-    ).toBe(true);
-    expect(
-      buttonFor(payload, {
-        action: "attribute-remove",
-        locale: "en-US",
-        personaId: 55,
-        index: 0,
-        fp: attributeFingerprint,
-      })?.disabled,
-    ).toBe(true);
-    expect(
-      buttonFor(payload, {
-        action: "dialogue-edit-open",
-        locale: "en-US",
-        personaId: 55,
-        index: 0,
-        fp: dialogueFingerprint,
-      })?.disabled,
-    ).toBe(true);
-    expect(
-      buttonFor(payload, {
-        action: "dialogue-remove",
-        locale: "en-US",
-        personaId: 55,
-        index: 0,
-        fp: dialogueFingerprint,
-      })?.disabled,
-    ).toBe(true);
-    expect(
-      seen.filter((component) => component.content === "-# Member teaching is disabled in this server."),
-    ).toHaveLength(2);
-  });
-
   it("omits empty collection selectors when teaching is disabled", () => {
-    const seen = walk(
-      build(GUILD_MEMBER, {
-        attributeMemteachingEnabled: false,
-        sampledialogueMemteachingEnabled: false,
-      }),
-    );
+    const seen = walk(build(GUILD_MEMBER, {}));
 
     expect(seen.some((component) => component.customId?.includes(":attr-select:"))).toBe(false);
     expect(seen.some((component) => component.customId?.includes(":dlg-select:"))).toBe(false);
   });
 
-  it("lets guild managers write collections regardless of teaching flags", () => {
+  it("lets guild managers write collections", () => {
     const persona = makePersona({
       persona_id: 55,
       attribute_list: ["Likes tea"],
@@ -990,8 +889,6 @@ describe("config Persona General collections", () => {
       selectedPersonaId: 55,
       selectedAttributeIndex: 0,
       selectedDialogueIndex: 0,
-      attributeMemteachingEnabled: false,
-      sampledialogueMemteachingEnabled: false,
     });
     const seen = walk(payload);
     const attributeFingerprint = computeAttributeFingerprint(55, 0, "Likes tea", false);
@@ -1037,7 +934,7 @@ describe("config Persona General collections", () => {
     ).toBe(false);
   });
 
-  it("keeps a DM owner behind the teaching flag", () => {
+  it("allows a DM owner to edit their collections", () => {
     const persona = makePersona({
       persona_id: 55,
       attribute_list: ["Likes tea"],
@@ -1049,77 +946,11 @@ describe("config Persona General collections", () => {
       selectedPersonaId: 55,
       selectedAttributeIndex: 0,
       selectedDialogueIndex: 0,
-      attributeMemteachingEnabled: false,
-      sampledialogueMemteachingEnabled: false,
     });
     const seen = walk(payload);
-
-    expect(seen.find((component) => component.customId?.includes(":attr-select:"))?.options?.[0]?.value).not.toBe(
-      "add",
-    );
-    expect(seen.find((component) => component.customId?.includes(":dlg-select:"))?.options?.[0]?.value).not.toBe("add");
-  });
-
-  it("keeps non-manager collection writes enabled when teaching is on", () => {
-    const persona = makePersona({
-      persona_id: 55,
-      attribute_list: ["Likes tea"],
-      sample_dialogues_in: ["Hello"],
-      sample_dialogues_out: ["Hi there"],
-    });
-    const payload = build(GUILD_MEMBER, {
-      personas: [persona],
-      selectedPersonaId: 55,
-      selectedAttributeIndex: 0,
-      selectedDialogueIndex: 0,
-      attributeMemteachingEnabled: true,
-      sampledialogueMemteachingEnabled: true,
-    });
-    const seen = walk(payload);
-    const attributeFingerprint = computeAttributeFingerprint(55, 0, "Likes tea", false);
-    const dialogueFingerprint = computeDialogueFingerprint(55, 0, "Hello", "Hi there");
 
     expect(seen.find((component) => component.customId?.includes(":attr-select:"))?.options?.[0]?.value).toBe("add");
     expect(seen.find((component) => component.customId?.includes(":dlg-select:"))?.options?.[0]?.value).toBe("add");
-    expect(
-      buttonFor(payload, {
-        action: "attribute-edit-open",
-        locale: "en-US",
-        personaId: 55,
-        index: 0,
-        fp: attributeFingerprint,
-      })?.disabled,
-    ).toBe(false);
-    expect(
-      buttonFor(payload, {
-        action: "dialogue-edit-open",
-        locale: "en-US",
-        personaId: 55,
-        index: 0,
-        fp: dialogueFingerprint,
-      })?.disabled,
-    ).toBe(false);
-    expect(
-      buttonFor(payload, {
-        action: "attribute-remove",
-        locale: "en-US",
-        personaId: 55,
-        index: 0,
-        fp: attributeFingerprint,
-      })?.disabled,
-    ).toBe(false);
-    expect(
-      buttonFor(payload, {
-        action: "dialogue-remove",
-        locale: "en-US",
-        personaId: 55,
-        index: 0,
-        fp: dialogueFingerprint,
-      })?.disabled,
-    ).toBe(false);
-    expect(seen.some((component) => component.content === "-# Member teaching is disabled in this server.")).toBe(
-      false,
-    );
   });
 
   it("uses 24 records per collection page and paginates only above that count", () => {
@@ -1254,16 +1085,16 @@ describe("config Persona Memories body", () => {
     expect(seen.some((component) => component.content?.includes("```markdown"))).toBe(true);
   });
 
-  it("keeps member STM readable while disabling editing and omitting conditioning management in DMs", () => {
-    const member = walk(build(GUILD_MEMBER, { page: "memories", personaMemoryView: MEMORY_VIEW }));
+  it("omits conditioning management in DMs", () => {
+    const member = walk(build(GUILD_MANAGER, { page: "memories", personaMemoryView: MEMORY_VIEW }));
     expect(member.some((component) => component.content?.includes("A stored scene"))).toBe(true);
     expect(
-      buttonFor(build(GUILD_MEMBER, { page: "memories", personaMemoryView: MEMORY_VIEW }), {
+      buttonFor(build(GUILD_MANAGER, { page: "memories", personaMemoryView: MEMORY_VIEW }), {
         action: "stm-edit-open",
         locale: "en-US",
         personaId: 55,
       })?.disabled,
-    ).toBe(true);
+    ).toBe(false);
 
     const dm = build(DM_OWNER, { page: "memories", personaMemoryView: MEMORY_VIEW });
     expect(buttonFor(dm, { action: "stm-edit-open", locale: "en-US", personaId: 55 })?.disabled).toBe(false);
@@ -1576,21 +1407,6 @@ describe("config Persona Sprites page", () => {
       seen.some(
         (component) => component.type === THUMBNAIL && component.media?.url === "attachment://persona_sprite_55_1.png",
       ),
-    ).toBe(true);
-  });
-
-  it("keeps Export live for a guild member while every mutation renders inert", () => {
-    const payload = spritesPage(GUILD_MEMBER, { selectedSpriteIndex: 0 });
-    const fp = computeSpriteFingerprint(55, 0, "happy");
-
-    expect(buttonFor(payload, { action: "sprite-export", locale: "en-US", personaId: 55 })?.disabled).toBe(false);
-    expect(walk(payload).some((component) => component.options?.some((option) => option.value === "add"))).toBe(false);
-    expect(buttonFor(payload, { action: "sprite-import-open", locale: "en-US", personaId: 55 })?.disabled).toBe(true);
-    expect(
-      buttonFor(payload, { action: "sprite-edit-open", locale: "en-US", personaId: 55, index: 0, fp })?.disabled,
-    ).toBe(true);
-    expect(
-      buttonFor(payload, { action: "sprite-remove-view", locale: "en-US", personaId: 55, index: 0, fp })?.disabled,
     ).toBe(true);
   });
 
