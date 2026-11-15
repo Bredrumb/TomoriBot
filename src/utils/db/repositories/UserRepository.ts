@@ -222,7 +222,6 @@ class UserRepository implements IRepository<UserExportShape> {
     serverDiscId: string;
     candidateDiscordIds: string[];
     normalizedHistoryText: string;
-    limit?: number;
   }): Promise<ContextReferenceCandidate[]> {
     try {
       return await withTransientDbRetry(async () => {
@@ -312,8 +311,6 @@ class UserRepository implements IRepository<UserExportShape> {
                 ) > 0
               )
             )
-            ORDER BY user_id
-            LIMIT ${params.limit ?? null}
           `;
 
         const candidates: ContextReferenceCandidate[] = [];
@@ -494,10 +491,6 @@ class UserRepository implements IRepository<UserExportShape> {
   async setPrivacyLevel(userDiscId: string, level: PrivacyLevel): Promise<UserRow | null> {
     const user = await this.setPrivacyLevelRow(userDiscId, level);
     if (user) invalidateUserCache(userDiscId);
-    if (user && level === PrivacyLevelValue.FULL) {
-      const { conversationRecordingRepository } = await import("@/modules/conversation-recording/db/repositories");
-      await conversationRecordingRepository.removePrivateParticipant(userDiscId);
-    }
     return user;
   }
 
@@ -549,10 +542,6 @@ class UserRepository implements IRepository<UserExportShape> {
   async update(userId: number, userData: Partial<UserRow>): Promise<UserRow | null> {
     const user = await this.updateUserRow(userId, userData);
     if (user) invalidateUserCache(user.user_disc_id);
-    if (user && userData.privacy_level === PrivacyLevelValue.FULL) {
-      const { conversationRecordingRepository } = await import("@/modules/conversation-recording/db/repositories");
-      await conversationRecordingRepository.removePrivateParticipant(user.user_disc_id);
-    }
     return user;
   }
 
@@ -1071,7 +1060,7 @@ class UserRepository implements IRepository<UserExportShape> {
       if (!user?.user_id) return false;
 
       await Promise.all([
-        this.update(user.user_id, {
+        this.updateUserRow(user.user_id, {
           language_pref: parsed.language_pref,
           privacy_level: parsed.privacy_level,
         }),
@@ -1496,6 +1485,7 @@ class UserRepository implements IRepository<UserExportShape> {
           WHERE created_by_user_id = ${userId} OR user_discord_id = ${user.user_disc_id}
         `;
 
+        await tx`DELETE FROM short_term_memories WHERE user_disc_id = ${user.user_disc_id}`;
         await tx`DELETE FROM users WHERE user_id = ${userId}`;
 
         return {

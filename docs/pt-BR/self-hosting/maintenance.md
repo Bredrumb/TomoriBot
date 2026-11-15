@@ -69,30 +69,6 @@ Em ambientes que não sejam de produção, a inicialização cria um backup do b
 
 Pacotes mais antigos podem conter segredos em `config.env`. A restauração não o carrega; revise-o em ambiente privado e forneça as chaves necessárias por meio da sua fonte normal de segredos.
 
-## Armazenamento de gravações de conversa
-<!-- anchor: conversation-recording-storage -->
-
-As [gravações de conversa](/features/setup-administration/conversation-recordings/) armazenam trechos do servidor autorizados no seu
-banco de dados. O modo de mensagens ao redor pode incluir outros participantes. Proteja o acesso ao banco de dados e aos
-backups como dados de conversa privados; a substituição de identidade não torna o texto anônimo.
-
-Para expirar trechos salvos por idade, defina `RECORD_RETENTION_DAYS` como um número inteiro positivo, por exemplo
-`RECORD_RETENTION_DAYS=30`, no ambiente do bot e reinicie todas as instâncias. Deixe a variável ausente
-para não expirar por idade. Valores vazios, zero, negativos, fracionários ou de outra forma inválidos falham na validação
-de inicialização. Use o mesmo valor em todas as instâncias que compartilham um banco de dados.
-
-O limite se aplica a trechos existentes bem como a novos, medido a partir do carimbo de data/hora do acionamento.
-Leituras e gravações impõem a expiração; a limpeza no processo principal executa lotes limitados a cada minuto.
-A limpeza física pode levar vários lotes. A duração da coleta apenas controla quando a captura é interrompida.
-A cota lógica de 100 MiB por proprietário entre servidores ainda se aplica quando a expiração por idade está desativada e pode
-remover trechos completos mais antigos mais cedo. O uso físico do banco de dados/índices pode diferir dessa cota.
-
-Os backups do banco de dados incluem dados de gravação. A retenção em tempo real, a poda de privacidade e a exclusão não reescrevem
-pacotes de backup ou exportações baixadas. Defina um ciclo de vida de backup separado, proteja cópias de recuperação e
-revise os dados restaurados antes de reabrir o bot: exclusões de origem perdidas não podem ser reconstruídas a partir de
-eventos de gateway. As exportações de gravações são trechos de origem e não podem restaurar o banco de dados. Consulte o
-[contrato de arquitetura](/architecture/subsystems/conversation-recording/) para a propriedade do ciclo de vida.
-
 ## Rotacionando chaves de criptografia
 <!-- anchor: rotating-encryption-keys -->
 

@@ -19,15 +19,14 @@ Esta página cubre los controles de usuario en-Discord. En instancias autohosped
 - Ajustes de configuración del servidor
 - Claves de API de proveedores cifradas
 - Metadatos de expresión, reglas de acceso de personas y archivos multimedia de expresión subidos
-- [Grabaciones de conversaciones](/features/setup-administration/conversation-recordings/) opcionales, incluidos los mensajes circundantes cuando se seleccionan
 
 ### No almacenado
 
-- Los bytes de archivos multimedia, nombres de archivo y URLs de archivos adjuntos de las grabaciones de conversaciones; solo se guardan los metadatos de tipo y cantidad de archivos adjuntos.
+- Historial de mensajes de Discord (los mensajes no se archivan en un registro de mensajes persistente)
 
 ### Enviado a tus proveedores de IA
 
-Siempre que se activa, TomoriBot recupera mensajes recientes en el canal junto con memorias relevantes como contexto para el modelo. La grabación opcional de conversaciones también lee mensajes aptos de forma independiente a las activaciones de respuesta; no realiza llamadas automáticas al proveedor.
+Siempre que se activa, TomoriBot recupera mensajes recientes en el canal junto con memorias relevantes como contexto para el modelo. Ella no lee ni procesa mensajes fuera de esas activaciones.
 
 Cuando se configura un modelo de incrustación (embedding), su proveedor recibe el mensaje más reciente y el texto de documentos y memorias en los que busca. Este puede ser un proveedor diferente al que redacta las respuestas. Las memorias personales ocultas por la configuración de privacidad quedan fuera de la búsqueda. Los datos de búsqueda se eliminan junto con su memoria; consulta [Decaimiento de memoria](/features/knowledge/memory/memory-decay/) para conocer el reposo y reemplazo automáticos.
 
@@ -47,8 +46,6 @@ La herencia utiliza el modelo y las credenciales que realmente responden, inclui
 Las exportaciones de configuración incluyen estos ajustes sin claves de API ni tokens de autenticación MCP. Las importaciones conservan las referencias de modelos y verificadores solo cuando están disponibles para el servidor o DM receptor. Registra un equivalente local o borra las selecciones no disponibles antes de importar. El restablecimiento de la configuración del servidor restaura el estado desactivado, la herencia del revisor, ningún modelo de decisiones, el prompt predeterminado y ningún verificador.
 
 ## Exporta tus datos
-
-Las grabaciones de conversaciones usan `/record data` para adjuntos privados en Markdown o JSON en el servidor actual. Sus reglas de rango, retención y eliminación están en la [guía de grabaciones](/features/setup-administration/conversation-recordings/).
 
 Las exportaciones de ajustes y memorias se envían a tus mensajes directos como un archivo JSON, para que tus mensajes directos conserven una copia que puedas restaurar más tarde. Si TomoriBot no puede enviarte un mensaje directo, el archivo se adjunta a una respuesta privada en su lugar; guárdalo antes de que la respuesta desaparezca.
 
@@ -94,7 +91,6 @@ Adjunte un archivo exportado para restaurarlo:
 
 Estas acciones eliminan o restablecen permanentemente los datos almacenados:
 
-- `/record data`: elimina los extractos grabados de tu servidor actual tras la confirmación; detén la recolección por separado con `/record stop`.
 - `/personal memories`: gestiona o elimina recuerdos personales.
 - `/memories`: administra o elimina memorias del servidor, documentos y lorebooks. Los documentos y lorebooks
   requieren `Administrar servidor`. Con la enseñanza de miembros habilitada, los miembros pueden ver, editar o eliminar sus

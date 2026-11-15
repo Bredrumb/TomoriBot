@@ -3,7 +3,6 @@ import { log } from "@/utils/misc/logger";
 import { getAppSecrets } from "@/utils/security/secretsManager";
 import { keyManager } from "@/utils/security/keyManager";
 import type { AppEnvironment } from "@/types/config";
-import { readRecordingRetentionDays } from "@/modules/conversation-recording/config";
 import { readApiKeyInactivityDays } from "@/utils/security/apiKeyRetention";
 
 /**
@@ -76,10 +75,9 @@ export async function loadSecrets(environment: AppEnvironment): Promise<void> {
   if (secrets.CONTAINER_MEMORY_LIMIT_MB && !process.env.CONTAINER_MEMORY_LIMIT_MB)
     process.env.CONTAINER_MEMORY_LIMIT_MB = secrets.CONTAINER_MEMORY_LIMIT_MB;
 
-  for (const name of ["RECORD_RETENTION_DAYS", "API_KEY_INACTIVITY_DAYS"] as const) {
-    if (secrets[name] !== undefined) process.env[name] = secrets[name];
+  if (secrets.API_KEY_INACTIVITY_DAYS !== undefined) {
+    process.env.API_KEY_INACTIVITY_DAYS = secrets.API_KEY_INACTIVITY_DAYS;
   }
-  readRecordingRetentionDays();
   readApiKeyInactivityDays();
   initializeCredentialActivityFetch();
 

@@ -15,6 +15,14 @@ import {
   stopInvalidationBus,
 } from "@/utils/cache/invalidationBus";
 import { log } from "@/utils/misc/logger";
+import {
+  filterUnwarmedStmUsers,
+  getShortTermMemoriesForUser,
+  getShortTermMemoriesForServer,
+  invalidateShortTermMemoryForUser,
+  preWarmUserStmEntries,
+  preWarmStmEntry,
+} from "@/utils/cache/shortTermMemoryCache";
 import { parseShardTopology } from "@/utils/discord/shardOwnership";
 import {
   cache,
@@ -106,6 +114,7 @@ const topology = parseShardTopology({ SHARD_COUNT: "4", SHARD_IDS: "1,3" });
 const kinds = [
   "tomoriState",
   "user",
+  "userStm",
   "userBlacklist",
   "whitelist",
   "channelPrompt",
@@ -237,6 +246,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("PostgreSQL derived cache invalidation", ()
     const cases: [() => void, string, Args][] = [
       [() => invalidateTomoriStateCache(FIXTURE_IDS.serverDiscId), "tomoriState", [FIXTURE_IDS.serverDiscId]],
       [() => invalidateUserCache(FIXTURE_IDS.userDiscId), "user", [FIXTURE_IDS.userDiscId]],
+      [() => invalidateShortTermMemoryForUser(FIXTURE_IDS.userDiscId), "userStm", [FIXTURE_IDS.userDiscId]],
       [
         () => invalidateUserBlacklistCache(FIXTURE_IDS.serverDiscId, FIXTURE_IDS.userDiscId),
         "userBlacklist",
@@ -441,6 +451,46 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("PostgreSQL derived cache invalidation", ()
     expect(getPersonalSpotlightCacheStats().size).toBe(0);
   });
 
+  it("evicts erased user STM and hydration markers from peer notifications without deleting fresh rows", async () => {
+    const user = FIXTURE_IDS.userDiscId;
+    const other = FIXTURE_IDS.regUserDiscId;
+    const channel = "_rt_bus_stm";
+    await testSql`
+      INSERT INTO short_term_memories (scope_kind, server_disc_id, user_disc_id, channel_disc_id, summary)
+      VALUES ('user', ${FIXTURE_IDS.serverDiscId}, ${user}, ${channel}, '_rt_user_summary'),
+             ('user', ${FIXTURE_IDS.serverDiscId}, ${other}, ${channel}, '_rt_other_summary'),
+             ('server', ${FIXTURE_IDS.serverDiscId}, NULL, ${channel}, '_rt_server_summary')
+    `;
+    try {
+      await preWarmUserStmEntries(user);
+      await preWarmUserStmEntries(other);
+      await preWarmStmEntry("server", FIXTURE_IDS.serverDiscId, channel);
+      expect(getShortTermMemoriesForUser(user)).toHaveLength(1);
+      expect(filterUnwarmedStmUsers([user])).toEqual([]);
+
+      await testSql`DELETE FROM short_term_memories WHERE user_disc_id = ${user}`;
+      await testSql`
+        INSERT INTO short_term_memories (scope_kind, user_disc_id, channel_disc_id, summary)
+        VALUES ('user', ${user}, ${channel}, '_rt_fresh_summary')
+      `;
+      await notify("userStm", [[user]]);
+
+      expect(getShortTermMemoriesForUser(user)).toEqual([]);
+      expect(filterUnwarmedStmUsers([user])).toEqual([user]);
+      expect(getShortTermMemoriesForUser(other)).toHaveLength(1);
+      expect(filterUnwarmedStmUsers([other])).toEqual([]);
+      expect(getShortTermMemoriesForServer(FIXTURE_IDS.serverDiscId).some((entry) => entry.channelId === channel)).toBe(
+        true,
+      );
+      await preWarmUserStmEntries(user);
+      expect(getShortTermMemoriesForUser(user)).toHaveLength(1);
+    } finally {
+      await testSql`DELETE FROM short_term_memories WHERE channel_disc_id = ${channel}`;
+      invalidateShortTermMemoryForUser(user);
+      invalidateShortTermMemoryForUser(other);
+    }
+  });
+
   it("refreshes Natural Nudges configuration and inactive gates after peer writes", async () => {
     const server = refs.serverId;
     await testSql`DELETE FROM server_natural_nudge_runtime_state WHERE server_id = ${server}`;
@@ -526,6 +576,14 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("PostgreSQL derived cache invalidation", ()
 
   it("flushes every managed cache after terminating the listener and keeps listener lifetime independent of the pool", async () => {
     const server = refs.serverId;
+    await testSql`
+      INSERT INTO short_term_memories (scope_kind, server_disc_id, user_disc_id, channel_disc_id, summary)
+      VALUES ('user', ${FIXTURE_IDS.serverDiscId}, ${FIXTURE_IDS.userDiscId}, '_rt_bus_reconnect', '_rt_reconnect_summary'),
+             ('server', ${FIXTURE_IDS.serverDiscId}, NULL, '_rt_bus_reconnect', '_rt_server_summary')
+    `;
+    await preWarmUserStmEntries(FIXTURE_IDS.userDiscId);
+    await preWarmStmEntry("server", FIXTURE_IDS.serverDiscId, "_rt_bus_reconnect");
+    expect(getShortTermMemoriesForUser(FIXTURE_IDS.userDiscId)).toHaveLength(1);
     await getCachedUserRow(FIXTURE_IDS.userDiscId);
     await getCachedWhitelistStatus(FIXTURE_IDS.serverDiscId, "one");
     setChannelPromptCache(server, "one", null);
@@ -567,6 +625,12 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("PostgreSQL derived cache invalidation", ()
     await testSql`SELECT pg_terminate_backend(${listenerPid})`;
     await until(() => subscriptions > before);
     expect(getUserCacheStats().cacheSize).toBe(0);
+    expect(getShortTermMemoriesForUser(FIXTURE_IDS.userDiscId)).toEqual([]);
+    expect(filterUnwarmedStmUsers([FIXTURE_IDS.userDiscId])).toEqual([FIXTURE_IDS.userDiscId]);
+    expect(
+      getShortTermMemoriesForServer(FIXTURE_IDS.serverDiscId).some((entry) => entry.channelId === "_rt_bus_reconnect"),
+    ).toBe(true);
+    await testSql`DELETE FROM short_term_memories WHERE channel_disc_id = '_rt_bus_reconnect'`;
     expect(getWhitelistCacheStats().size).toBe(0);
     expect(cache.size).toBe(0);
     expect(lastDbError.size).toBe(0);

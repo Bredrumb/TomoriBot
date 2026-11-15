@@ -72,32 +72,6 @@ En entornos que no son de producción, el inicio crea una copia de seguridad de 
 
 Los paquetes más antiguos pueden contener secretos en `config.env`. La restauración no lo carga; revísalo en privado y proporciona las claves requeridas a través de tu fuente habitual de secretos.
 
-## Almacenamiento de grabaciones de conversaciones
-<!-- anchor: conversation-recording-storage -->
-
-Las [grabaciones de conversaciones](/features/setup-administration/conversation-recordings/) almacenan extractos del servidor
-con consentimiento en tu base de datos. El modo de mensajes circundantes puede incluir a otros participantes. Protege el acceso a
-la base de datos y a las copias de seguridad como datos de conversaciones privadas; el reemplazo de identidad no hace que el texto
-sea anónimo.
-
-Para hacer vencer los extractos guardados por antigüedad, establece `RECORD_RETENTION_DAYS` en un número entero positivo, por ejemplo
-`RECORD_RETENTION_DAYS=30`, en el entorno del bot y reinicia todas las instancias. Deja la variable ausente para no tener vencimiento
-por antigüedad. Los valores vacíos, cero, negativos, fraccionarios o no válidos fallarán en la validación al iniciar. Usa el mismo
-valor en todas las instancias que compartan una base de datos.
-
-El límite se aplica tanto a los extractos existentes como a los nuevos, medido desde la marca de tiempo de activación. Las lecturas
-y escrituras aplican el vencimiento; la limpieza en el proceso principal ejecuta lotes limitados cada minuto. La limpieza física puede
-tomar varios lotes. La duración de la recolección solo controla cuándo se detiene la captura. La cuota lógica de 100 MiB por propietario
-en todos los servidores se sigue aplicando cuando el vencimiento por antigüedad está desactivado y puede eliminar extractos completos
-más antiguos antes. El uso físico de la base de datos y los índices puede diferir de esa cuota.
-
-Las copias de seguridad de la base de datos incluyen los datos de las grabaciones. La retención en vivo, la depuración por privacidad
-y la eliminación no reescriben los paquetes de copias de seguridad ni las exportaciones descargadas. Establece un ciclo de vida de
-copias de seguridad independiente, protege las copias de recuperación y revisa los datos restaurados antes de reabrir el bot: las
-eliminaciones en el origen perdidas no se pueden reconstruir a partir de eventos del gateway. Las exportaciones de grabaciones son
-extractos de origen y no pueden restaurar la base de datos. Consulta el [contrato de arquitectura](/architecture/subsystems/conversation-recording/)
-para la propiedad del ciclo de vida.
-
 ## Rotación de claves de cifrado
 <!-- anchor: rotating-encryption-keys -->
 

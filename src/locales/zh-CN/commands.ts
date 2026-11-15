@@ -42,7 +42,6 @@ import nsfw from "./commands/nsfw";
 import optionalKey from "./commands/optional-key";
 import scheduledTask from "./commands/scheduled-task";
 import nudgeStudio from "./commands/nudge-studio";
-import record from "./commands/record";
 import memory from "./commands/memory";
 import teach from "./commands/teach";
 import forget from "./commands/forget";
@@ -68,7 +67,6 @@ import importCommands from "./commands/import";
 
 export default {
   commands: {
-    ...record,
     ...transfer,
     ...memories,
     ...providers,
