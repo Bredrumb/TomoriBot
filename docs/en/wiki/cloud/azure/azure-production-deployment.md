@@ -15,8 +15,8 @@ a low-cost outbound SNAT path.
 
 The protected `production` GitHub environment accepts only the `release` branch. The Azure
 workflow has `contents: read` by default, grants `id-token: write` only to
-`deploy-with-terraform`, and grants `contents: write` only to the release-creation job. The Azure
-federated credential subject must be exactly:
+`migration-preflight` and `deploy-with-terraform`, and grants `contents: write` only to the
+release-creation job. The Azure federated credential subject must be exactly:
 
 ```text
 repo:<github-owner>/<repository>:environment:production
@@ -146,7 +146,12 @@ code change. The destruction gate below still catches them.
 **The destruction gate** in the deploy workflow, described below, which additionally protects the
 firewall rules, networking, and alerts.
 
-**The destructive-migration gate** scans changed migrations before database work. A migration that
+**The destructive-migration gate** checks PostgreSQL existence and scans changed migrations before
+validation and image builds, so a missing recovery-point request stops the run before that work.
+It runs again during deployment before database work, using the same
+`deploy/azure/check-pending-migrations.sh` script. Both checks run in the protected `production`
+environment; the early check only reads Azure and deployment history. First deployment skips the
+migration scan only when Azure confirms that the PostgreSQL server does not exist. A migration that
 can lose row data requires a recovery point request: `(Checkpoint)` in the push commit or
 `create_db_backup=true` on manual dispatch. Schema-only drops (constraints, indexes, triggers,
 functions, views, policies) need none, and a drop the same file recreates under the same name is not

@@ -47,7 +47,40 @@ concurrency:
 jobs:
   # ─── VALIDATION (lint, types, schema, locales, lifecycle) ─────────────────
 
+  migration-preflight:
+    if: github.ref == 'refs/heads/release' && vars.ACTIVE_PROVIDER == 'azure'
+    runs-on: ubuntu-24.04
+    environment: production
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.0
+
+      - name: Authenticate to Azure (OIDC)
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Check migration recovery-point requirement
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RECOVERY_POINT_OPT_IN: ${{ (github.event_name == 'workflow_dispatch' && inputs.create_db_backup == true) || (github.event_name == 'push' && contains(github.event.head_commit.message, '(Checkpoint)')) }}
+        run: bash deploy/azure/check-pending-migrations.sh
+
   code-quality:
+    needs: migration-preflight
     if: github.ref == 'refs/heads/release' && vars.ACTIVE_PROVIDER == 'azure'
     uses: ./.github/workflows/ci.yml
     permissions:
@@ -362,88 +395,18 @@ jobs:
               ;;
           esac
 
-      - name: Detect initial PostgreSQL bootstrap
-        id: postgres_bootstrap
-        # A manual first deployment has no previous Git ref, so the normal
-        # migration guard would scan the complete historical migration set.
-        # Skip it only while the protected server does not exist. Every later
-        # deployment retains the normal checkpoint/backup requirement. B1ms
-        # does not support customer on-demand backups, so a failed first app
-        # startup can be retried only through the explicit blank-DB input.
-        run: |
-          set -euo pipefail
-          error_file=$(mktemp)
-          set +e
-          server_id=$(az postgres flexible-server show \
-            --resource-group tomoribot-rg \
-            --name tomoribot-postgres \
-            --query id \
-            --output tsv \
-            --only-show-errors 2>"$error_file")
-          status=$?
-          set -e
-
-          if [ "$status" -eq 0 ]; then
-            echo "is_initial_bootstrap=false" >> "$GITHUB_OUTPUT"
-            echo "Azure PostgreSQL server already exists: $server_id"
-          elif grep -Eq "ResourceNotFound|ResourceGroupNotFound|could not be found" "$error_file"; then
-            echo "is_initial_bootstrap=true" >> "$GITHUB_OUTPUT"
-            echo "Azure PostgreSQL server does not exist; treating this as initial bootstrap."
-          else
-            cat "$error_file" >&2
-            exit "$status"
-          fi
-
-          rm -f "$error_file"
-
       - name: Destructive migration gate
         id: migration_gate
-        # A recovery point request never authorizes the old bot to run against a changed schema.
-        # Downtime is always allowed here because the gate reports downtime_required and the
-        # migration step stops the old bot only then; every deploy restarts it regardless.
-        # See docs/en/self-hosting/safe-migration.md.
-        if: |
-          steps.postgres_bootstrap.outputs.is_initial_bootstrap != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RECOVERY_POINT_OPT_IN: ${{ (github.event_name == 'workflow_dispatch' && inputs.create_db_backup == true) || (github.event_name == 'push' && contains(github.event.head_commit.message, '(Checkpoint)')) }}
-        run: |
-          set -euo pipefail
-          # The base must be the last SUCCESSFULLY DEPLOYED commit, not the previous push.
-          # This gate is git-delta-scoped while the migration runner is database-state-scoped, so
-          # the two desync on any failed run: if a deploy stops here, the destructive migrations
-          # stay pending in the database, but the next push diffs against the failed push's tip,
-          # finds no new migration files, passes, and the DROPs then run at startup with no backup.
-          # Diffing against the last green deploy keeps the window open until one actually succeeds.
-          # Query params rather than repeated flags so this needs no line continuations.
-          LAST_GREEN=$(gh api "repos/${{ github.repository }}/actions/workflows/deploy-azure.yml/runs?branch=${{ github.ref_name }}&status=success&per_page=1" --jq '.workflow_runs[0].head_sha' 2>/dev/null || true)
-          if [ -z "$LAST_GREEN" ] || [ "$LAST_GREEN" = "null" ]; then
-            LAST_GREEN=$(gh api "repos/${{ github.repository }}/actions/workflows/deploy-tomoribot-azure.yml/runs?branch=${{ github.ref_name }}&status=success&per_page=1" --jq '.workflow_runs[0].head_sha' 2>/dev/null || true)
-          fi
-          PREV_REF=""
-          if [ -n "$LAST_GREEN" ] && [ "$LAST_GREEN" != "null" ] && git cat-file -e "${LAST_GREEN}^{commit}" 2>/dev/null && git merge-base --is-ancestor "$LAST_GREEN" HEAD; then
-            PREV_REF="$LAST_GREEN"
-            echo "Diffing migrations against the last successful deploy: $PREV_REF"
-          fi
-
-          if [ -z "$PREV_REF" ]; then
-            # A push delta can omit a migration that failed this gate on an earlier run.
-            # Without a deployed ref, treat every migration as potentially pending.
-            echo "::warning::No reachable successful deploy. Scanning all migrations; destructive SQL requires downtime."
-            scan_args=(--all)
-          else
-            scan_args=(--changed-since "$PREV_REF" --deployed-ref "$PREV_REF")
-          fi
-          scan_args+=(--allow-downtime)
-
-          if [ "$RECOVERY_POINT_OPT_IN" = "true" ]; then scan_args+=(--recovery-point-opt-in); fi
-          bun run scripts/checks/checkPendingMigrations.ts "${scan_args[@]}"
+        run: bash deploy/azure/check-pending-migrations.sh
 
       - name: Validate recovery point or create PostgreSQL backup
         # Burstable tiers reject customer on-demand backups. Verify that the server's
         # restore window contains the target before allowing a migration to run.
         if: |
-          steps.postgres_bootstrap.outputs.is_initial_bootstrap != 'true' &&
+          steps.migration_gate.outputs.is_initial_bootstrap != 'true' &&
           (
             (github.event_name == 'workflow_dispatch' && inputs.create_db_backup == true) ||
             (github.event_name == 'push' && contains(github.event.head_commit.message, '(Checkpoint)'))
@@ -698,7 +661,7 @@ jobs:
               "dockerHubUsername=$DOCKERHUB_USERNAME" \
               "dockerHubTokenB64=$DOCKERHUB_TOKEN_B64" \
               "tomoribotImage=$TOMORIBOT_IMAGE" \
-              "initializeSchema=${{ steps.postgres_bootstrap.outputs.is_initial_bootstrap }}" \
+              "initializeSchema=${{ steps.migration_gate.outputs.is_initial_bootstrap }}" \
             --query 'value[0].message' \
             --output tsv \
             --only-show-errors)

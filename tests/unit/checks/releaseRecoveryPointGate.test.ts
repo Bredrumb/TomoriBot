@@ -1,11 +1,20 @@
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
 const workflowPath = path.join(import.meta.dir, "..", "..", "..", ".github", "workflows", "deploy-azure.yml");
 const deployScriptPath = path.join(import.meta.dir, "..", "..", "..", "deploy", "azure", "run-command-deploy.sh");
+const migrationScriptPath = path.join(
+  import.meta.dir,
+  "..",
+  "..",
+  "..",
+  "deploy",
+  "azure",
+  "check-pending-migrations.sh",
+);
 
 function recoveryPointStep(workflow: string): string {
   workflow = workflow.replaceAll("\r\n", "\n");
@@ -35,6 +44,106 @@ const bashFile = (filePath: string) =>
   process.platform === "win32"
     ? filePath.replace(/^([A-Za-z]):/, (_, drive: string) => `/${drive.toLowerCase()}`).replaceAll("\\", "/")
     : filePath;
+
+test.skipIf(process.platform === "win32" && !existsSync(bash))(
+  "migration preflight rejects missing recovery authorization and preserves initial bootstrap and lookup failures",
+  async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "tomoribot-migration-preflight-"));
+    try {
+      await mkdir(path.join(directory, "scripts", "checks"), { recursive: true });
+      await mkdir(path.join(directory, "src", "db", "migrations"), { recursive: true });
+      await copyFile(
+        path.join(import.meta.dir, "..", "..", "..", "scripts", "checks", "checkPendingMigrations.ts"),
+        path.join(directory, "scripts", "checks", "checkPendingMigrations.ts"),
+      );
+      await writeFile(
+        path.join(directory, "src", "reader.ts"),
+        'export const query = "SELECT profile_note FROM users";\n',
+      );
+      const git = async (args: string[]) => {
+        const proc = Bun.spawn(["git", ...args], {
+          cwd: directory,
+          env: {
+            ...process.env,
+            GIT_AUTHOR_NAME: "Mirri",
+            GIT_AUTHOR_EMAIL: "mirri@example.invalid",
+            GIT_COMMITTER_NAME: "Mirri",
+            GIT_COMMITTER_EMAIL: "mirri@example.invalid",
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        const [stdout, , exitCode] = await Promise.all([
+          new Response(proc.stdout).text(),
+          new Response(proc.stderr).text(),
+          proc.exited,
+        ]);
+        expect(exitCode).toBe(0);
+        return stdout.trim();
+      };
+      await git(["init", "-q"]);
+      await git(["add", "."]);
+      await git(["commit", "-qm", "deployed"]);
+      const deployedRef = await git(["rev-parse", "HEAD"]);
+      await writeFile(
+        path.join(directory, "src", "db", "migrations", "001_change.sql"),
+        "ALTER TABLE users DROP COLUMN profile_note;\n",
+      );
+      await git(["add", "."]);
+      await git(["commit", "-qm", "pending migration"]);
+      const outputPath = path.join(directory, "outputs");
+      const cases = [
+        { server: "existing", ref: deployedRef, recovery: "false", exitCode: 1, initial: false, downtime: true },
+        { server: "existing", ref: deployedRef, recovery: "true", exitCode: 0, initial: false, downtime: true },
+        { server: "existing", ref: "", recovery: "false", exitCode: 1, initial: false, downtime: true },
+        { server: "existing", ref: "", recovery: "true", exitCode: 0, initial: false, downtime: true },
+        { server: "missing", ref: deployedRef, recovery: "false", exitCode: 0, initial: true, downtime: false },
+        { server: "unavailable", ref: deployedRef, recovery: "true", exitCode: 4, initial: null, downtime: false },
+      ];
+      for (const entry of cases) {
+        await writeFile(outputPath, "");
+        const wrapper = `
+          az() {
+            case "$PREFLIGHT_SERVER" in
+              existing) echo fixture-server ;;
+              missing) echo ResourceNotFound >&2; return 3 ;;
+              unavailable) echo AuthorizationFailed >&2; return 4 ;;
+            esac
+          }
+          gh() { printf '%s\\n' "$PREFLIGHT_DEPLOYED_REF"; }
+          source "$PREFLIGHT_SCRIPT"
+        `;
+        const proc = Bun.spawn([bash, "-c", wrapper], {
+          cwd: directory,
+          env: {
+            ...process.env,
+            PREFLIGHT_SERVER: entry.server,
+            PREFLIGHT_DEPLOYED_REF: entry.ref,
+            PREFLIGHT_SCRIPT: bashFile(migrationScriptPath),
+            RECOVERY_POINT_OPT_IN: entry.recovery,
+            GITHUB_OUTPUT: outputPath.replaceAll("\\", "/"),
+            GITHUB_REPOSITORY: "example/tomoribot",
+            GITHUB_REF_NAME: "release",
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        const [, , exitCode] = await Promise.all([
+          new Response(proc.stdout).text(),
+          new Response(proc.stderr).text(),
+          proc.exited,
+        ]);
+        expect({ ...entry, actualExitCode: exitCode }).toEqual({ ...entry, actualExitCode: entry.exitCode });
+        const outputs = await readFile(outputPath, "utf8");
+        expect(outputs.includes("is_initial_bootstrap=true")).toBe(entry.initial === true);
+        expect(outputs.includes("is_initial_bootstrap=false")).toBe(entry.initial === false);
+        expect(outputs.includes("downtime_required=true")).toBe(entry.downtime);
+      }
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);
 
 test.skipIf(process.platform === "win32" && !existsSync(bash))(
   "deploy verification uses a fresh window only when Compose reuses the running container",
