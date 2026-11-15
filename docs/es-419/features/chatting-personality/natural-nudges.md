@@ -144,7 +144,7 @@ Cada persona tiene su propia página de **Intervenciones** en `/config` > Person
 - **Intereses**: hasta 8 temas que a la persona le gusta plantear y sobre los que le gusta opinar, cada uno con una breve descripción y ejemplos (por ejemplo, **anime de mechas**: ficción sobre robots gigantes tripulados, como Gundam).
 - **Intervenciones espontáneas**: hasta 20 intervenciones que solo esta persona usa, descritas en [Intervenciones espontáneas de persona](#persona-idle-nudges).
 
-Los preajustes oficiales vienen con estos ajustes. `/persona generate` sugiere intereses para nuevas personas; `Generar intereses` añade nuevos a través de tu modelo de texto actual. Las exportaciones de personas incluyen los tres.
+Los preajustes oficiales vienen con estos ajustes. `/persona generate` sugiere intereses para nuevas personas; `Generar intereses` añade nuevos a través de tu modelo de texto actual. Las exportaciones de personas en formato `Tarjeta de TomoriBot` o `JSON sin procesar`, así como los paquetes ZIP, incluyen los tres; `PNG compatible con SillyTavern` excluye los ajustes de intervenciones.
 
 ## Cuándo se activan las intervenciones
 

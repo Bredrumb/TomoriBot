@@ -11,7 +11,7 @@ sidebar:
 
 TomoriBot 目前註冊的每一個斜線指令，都是從 Discord 註冊時使用的同一批指令建構器與繁體中文說明產生的（尚未翻譯的說明會以英文顯示）。
 
-頂層指令群組：**45**。可執行的斜線指令：**94**。
+頂層指令群組：**44**。可執行的斜線指令：**91**。
 
 ## `/booru`
 
@@ -240,9 +240,9 @@ TomoriBot 目前註冊的每一個斜線指令，都是從 Discord 註冊時使�
 |---|---|
 | `/persona create` | 手動建立簡單的人格預設集 |
 | `/persona default` | 套用預設的人格設定 |
-| `/persona export` | 將目前的人格匯出成可分享的 PNG 檔 |
+| `/persona export` | 將人格匯出為 PNG 卡片、原始 JSON 或含媒體的 ZIP 組合包 |
 | `/persona generate` | AI 生成人格（需要相容的供應商） |
-| `/persona import` | 從 PNG、JSON 或 CHARX 檔匯入人格 |
+| `/persona import` | 從 PNG、JSON、CHARX 或 TomoriBot ZIP 組合包匯入人格 |
 | `/persona remove` | 從伺服器移除 alter 人格 |
 
 ## `/personal`
@@ -294,16 +294,6 @@ TomoriBot 目前註冊的每一個斜線指令，都是從 Discord 註冊時使�
 |---|---|
 | `/quota reset global` | 重置整個伺服器的生成額度池。 |
 | `/quota reset user` | 重置某位使用者的每日額度用量。 |
-
-## `/record`
-
-管理你在這個伺服器中的對話錄製
-
-| 指令 | 摘要 |
-|---|---|
-| `/record data` | 查看、匯出或刪除你在這個伺服器中的錄製內容 |
-| `/record start` | 每當你在這個伺服器發送訊息時，儲存匿名化的對話節錄 |
-| `/record stop` | 停止收集節錄並保留你已儲存的錄製內容 |
 
 ## `/refresh`
 

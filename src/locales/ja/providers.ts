@@ -163,6 +163,7 @@ export default {
       review_messages: `最近のメッセージを確認するか、\`/refresh\` でクリアしてください。`,
       review_memories: `メモリーと設定を確認してください（\`/export personal memories\`、\`/export memories\`、\`/export config\`）。`,
       blacklist_member: `問題のあるメンバーは \`/moderation\` でブラックリストに追加できます。`,
+      use_personal_providers: `[個人プロバイダー](https://docs.tomoribot.app/ja/features/knowledge/personalization/#your-own-providers)を \`/personal providers\` で設定すると、このサーバーのクォータを消費せずにリクエストできます。`,
     },
     google: {
       "400_default_message": `リクエスト形式にエラーがありました`,

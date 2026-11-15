@@ -8,6 +8,7 @@
 import { Storage } from "@google-cloud/storage";
 import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { promises as fs } from "node:fs";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
 import { PERSONA_LIMITS } from "@/utils/security/rateLimiter";
@@ -97,7 +98,7 @@ function buildAvatarObjectKey(config: AvatarStorageConfig, options: AvatarUpload
   const timestamp = Date.now();
   const serverSegment = options.serverDiscId ? `servers/${options.serverDiscId}` : "servers/unknown";
   if (options.assetKind === "sprite") {
-    return `${config.prefix}/${serverSegment}/personas/${options.personaId}/sprites/${timestamp}.png`;
+    return `${config.prefix}/${serverSegment}/personas/${options.personaId}/sprites/${randomUUID()}.png`;
   }
   return `${config.prefix}/${serverSegment}/personas/${options.personaId}/${timestamp}.png`;
 }
@@ -114,7 +115,7 @@ function buildLocalStoredPath(options: AvatarUploadOptions): string {
   if (options.assetKind === "sprite") {
     pathSegments.push("sprites");
   }
-  pathSegments.push(`${timestamp}.png`);
+  pathSegments.push(`${options.assetKind === "sprite" ? randomUUID() : timestamp}.png`);
 
   return path.posix.join(...pathSegments);
 }

@@ -52,9 +52,8 @@ function mockTomoriState(overrides: Partial<TomoriState["config"]> = {}): Tomori
     config: {
       server_id: 10,
       server_memteaching_enabled: true,
-      attribute_memteaching_enabled: false,
-      sampledialogue_memteaching_enabled: true,
       prompt_snapshot_enabled: false,
+      persona_export_enabled: false,
       ...overrides,
     },
   } as unknown as TomoriState;
@@ -266,8 +265,6 @@ describe("moderationOperations loader", () => {
     expect(data.serverId).toBe(10);
 
     expect(data.memberAccess.serverMemteachingEnabled).toBe(true);
-    expect(data.memberAccess.attributeMemteachingEnabled).toBe(false);
-    expect(data.memberAccess.sampledialogueMemteachingEnabled).toBe(true);
     expect(data.memberAccess.promptSnapshotEnabled).toBe(false);
 
     expect(data.userBlacklist.personalizationUserIds).toEqual(["user-1", "user-2"]);
@@ -400,9 +397,8 @@ describe("loadModerationMemberAccessData lightweight resolver", () => {
         expect(guildId).toBe("1001");
         return mockTomoriState({
           server_memteaching_enabled: true,
-          attribute_memteaching_enabled: false,
-          sampledialogue_memteaching_enabled: true,
           prompt_snapshot_enabled: false,
+          persona_export_enabled: false,
         });
       },
       getLastDbError: () => {
@@ -418,9 +414,8 @@ describe("loadModerationMemberAccessData lightweight resolver", () => {
       readStatus: "fresh",
       memberAccess: {
         serverMemteachingEnabled: true,
-        attributeMemteachingEnabled: false,
-        sampledialogueMemteachingEnabled: true,
         promptSnapshotEnabled: false,
+        personaExportEnabled: false,
       },
     });
     expect(getStateCalled).toBe(1);
@@ -486,9 +481,8 @@ describe("updateMemberPermissions canonical operation", () => {
         serverId: 10,
         currentState: {
           server_memteaching_enabled: true,
-          attribute_memteaching_enabled: false,
-          sampledialogue_memteaching_enabled: true,
           prompt_snapshot_enabled: false,
+          persona_export_enabled: false,
         },
         selectedValues: ["servermemories", "sampledialogues"],
       },
@@ -522,9 +516,8 @@ describe("updateMemberPermissions canonical operation", () => {
         serverId: 10,
         currentState: {
           serverMemteachingEnabled: true,
-          attributeMemteachingEnabled: false,
-          sampledialogueMemteachingEnabled: true,
           promptSnapshotEnabled: false,
+          personaExportEnabled: false,
         },
         selectedValues: ["attributelist", "sampledialogues", "promptsnapshot"],
       },
@@ -543,10 +536,9 @@ describe("updateMemberPermissions canonical operation", () => {
     expect(result.status).toBe("success");
     expect(received.patch).toEqual({
       server_memteaching_enabled: false,
-      attribute_memteaching_enabled: true,
       prompt_snapshot_enabled: true,
     });
-    expect(result.changes).toHaveLength(3);
+    expect(result.changes).toHaveLength(2);
     expect(callOrder).toEqual(["update:10", "invalidate:1001"]);
   });
 
@@ -560,9 +552,8 @@ describe("updateMemberPermissions canonical operation", () => {
         serverId: 10,
         currentState: {
           server_memteaching_enabled: true,
-          attribute_memteaching_enabled: false,
-          sampledialogue_memteaching_enabled: true,
           prompt_snapshot_enabled: false,
+          persona_export_enabled: false,
         },
         selectedValues: [],
       },
@@ -578,7 +569,7 @@ describe("updateMemberPermissions canonical operation", () => {
     );
 
     expect(result.status).toBe("failure");
-    expect(result.changes).toHaveLength(2);
+    expect(result.changes).toHaveLength(1);
     expect(updateCalled).toBe(1);
     expect(invalidateCalled).toBe(0);
   });

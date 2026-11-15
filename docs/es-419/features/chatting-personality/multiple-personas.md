@@ -38,7 +38,7 @@ Para conocer cómo se dirigen las respuestas y se identifica cada webhook, consu
 
 ## Dar forma a la personalidad
 
-Afina cómo se ve, habla y se comporta una persona:
+Afina cómo se ve, habla y se comporta una persona desde `/config`. En servidores, esto requiere `Administrar servidor`, incluido ver o editar atributos y diálogos de ejemplo. Los propietarios de mensajes directos pueden configurar su propia persona.
 
 ### Atributos
 <!-- anchor: attributes -->

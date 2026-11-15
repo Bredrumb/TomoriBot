@@ -38,6 +38,80 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona — regression", () => {
     await cleanupFixtures(testSql);
   });
 
+  it("replaces bundle sprites and reference atomically and rolls them back when a staged voice disappears", async () => {
+    const alter = await personaRepository.createAlterPersona({
+      serverId: refs.serverId,
+      nickname: "_rt_bundle",
+      attributes: [],
+      sampleDialoguesIn: [],
+      sampleDialoguesOut: [],
+    });
+    if (!alter?.persona_id) throw new Error("Expected bundle target persona");
+    const personaId = alter.persona_id;
+    let sampleId: number | null = null;
+    try {
+      await personaRepository.setVoiceConfig(personaId, {
+        speech_voice_sample_id: null,
+        speech_voice_id: null,
+        speech_voice_name: null,
+        speech_voice_design_prompt: "Warm and quiet",
+        voice_source_priority: "clone",
+      });
+      await personaRepository.setCharRef(personaId, "old-reference.png");
+      await personaSpriteRepository.upsertSprite({
+        personaId,
+        spriteName: "old",
+        spriteKey: "old",
+        avatarUrl: "old.png",
+        usageInstructions: "",
+        isIdentity: false,
+      });
+      const input = {
+        personaId,
+        serverDiscId: FIXTURE_IDS.serverDiscId,
+        charRefUrl: "new-reference.png",
+        sprites: [
+          {
+            sprite_name: "happy",
+            sprite_key: "happy",
+            avatar_url: "new.png",
+            usage_instructions: "When pleased",
+            is_identity: true,
+          },
+        ],
+        voice: { sampleId: 999999999, name: "Mirri" },
+      };
+      expect(await personaRepository.replaceBundleAssets(input)).toBe(false);
+      expect((await personaSpriteRepository.listForPersona(personaId)).map((sprite) => sprite.sprite_key)).toEqual([
+        "old",
+      ]);
+      const [unchanged] =
+        await testSql`SELECT char_ref_url FROM persona_imagegen_configs WHERE persona_id = ${personaId}`;
+      expect(unchanged.char_ref_url).toBe("old-reference.png");
+      const [sample] =
+        await testSql`INSERT INTO voice_samples (server_id, name, file_path, duration_ms) VALUES (${refs.serverId}, '_rt_bundle_voice', 'voice.wav', 1000) RETURNING sample_id`;
+      sampleId = sample.sample_id as number;
+      expect(await personaRepository.replaceBundleAssets({ ...input, voice: { sampleId, name: "Mirri" } })).toBe(true);
+      const [voice] =
+        await testSql`SELECT speech_voice_sample_id, voice_source_priority, speech_voice_design_prompt FROM persona_voice_configs WHERE persona_id = ${personaId}`;
+      expect(voice.speech_voice_sample_id).toBe(sampleId);
+      expect(voice.voice_source_priority).toBe("clone");
+      expect(voice.speech_voice_design_prompt).not.toBeNull();
+      expect((await personaSpriteRepository.listForPersona(personaId)).map((sprite) => sprite.sprite_key)).toEqual([
+        "happy",
+      ]);
+      const [changed] =
+        await testSql`SELECT char_ref_url FROM persona_imagegen_configs WHERE persona_id = ${personaId}`;
+      expect(changed.char_ref_url).toBe("new-reference.png");
+      expect(
+        await personaRepository.replaceBundleAssets({ ...input, serverDiscId: "_rt_another_workspace", voice: null }),
+      ).toBe(false);
+    } finally {
+      await personaRepository.removePersona(personaId);
+      if (sampleId) await testSql`DELETE FROM voice_samples WHERE sample_id = ${sampleId}`;
+    }
+  });
+
   it("warns when a persona disappears before its sprite receipt and retains other write failures", async () => {
     const alter = await personaRepository.createAlterPersona({
       serverId: refs.serverId,

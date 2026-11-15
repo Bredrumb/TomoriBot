@@ -5,6 +5,7 @@ import { customEndpointSchema, savedProviderConfigSchema, videoGenerationModelSc
 import * as dispatcher from "@/providers/custom/customEndpointDispatcher";
 import { llmModelRepo, personaRepository, statRepository } from "@/utils/db/repositories";
 import * as modals from "@/utils/discord/ui/modals";
+import * as textDisplayModal from "@/utils/discord/textDisplayModal";
 import * as credentials from "@/utils/provider/credentialResolver";
 import * as personal from "@/utils/provider/personalProviderRuntime";
 import * as videoQuota from "@/utils/quota/videoQuotaManager";
@@ -114,9 +115,15 @@ beforeEach(() => {
 
 afterEach(() => mock.restore());
 
-async function executeVideo(): Promise<void> {
-  const { interaction } = makeFakeInteraction({ channel: {} });
-  await videoCommand({} as Client, interaction as unknown as ChatInputCommandInteraction, createUserRow(), "en-US");
+async function executeVideo(): Promise<ReturnType<typeof makeFakeInteraction>> {
+  const commandInteraction = makeFakeInteraction({ channel: {} });
+  await videoCommand(
+    {} as Client,
+    commandInteraction.interaction as unknown as ChatInputCommandInteraction,
+    createUserRow(),
+    "en-US",
+  );
+  return commandInteraction;
 }
 
 function modalPayloadText(): string {
@@ -148,6 +155,10 @@ describe("generate video quota reservation", () => {
   });
 
   it("refuses a claimed unit and never calls the provider when the cap was reached", async () => {
+    let renderedModal: { title: string; content: string } | undefined;
+    spyOn(textDisplayModal, "attachTextDisplayModalCollector").mockImplementation((options) => {
+      renderedModal = options.render("en-US");
+    });
     reserveResult = {
       allowed: false,
       reason: "user_quota_exceeded",
@@ -165,6 +176,35 @@ describe("generate video quota reservation", () => {
         localizedProse("en-US", "commands.generate.video.user_quota_exceeded_description").test(text),
       ),
     ).toBe(true);
+    const reply = modal.calls.findLast((call) => call.method === "editReply")?.args[0] as {
+      components?: Array<{ toJSON(): { components?: Array<{ label?: string }> } }>;
+    };
+    expect(reply?.components?.[0]?.toJSON().components?.[0]?.label).toBe(localizedCopy("en-US", "genai.tips.button"));
+    expect(renderedModal?.content).toContain(localizedCopy("en-US", "genai.tips.use_personal_providers"));
+    expect(renderedModal?.content).toContain("/personal providers");
+  });
+
+  it("includes a What You Can Do button pointing to /personal providers when pre-modal video quota is exceeded", async () => {
+    let renderedModal: { title: string; content: string } | undefined;
+    spyOn(textDisplayModal, "attachTextDisplayModalCollector").mockImplementation((options) => {
+      renderedModal = options.render("en-US");
+    });
+    spyOn(videoQuota, "checkVideoQuota").mockResolvedValueOnce({
+      allowed: false,
+      reason: "serverwide_quota_exceeded",
+      userRemaining: 0,
+      resetTime: new Date(Date.now() + 60_000),
+    });
+
+    const command = await executeVideo();
+
+    expect(providerCalls).toBe(0);
+    const reply = command.calls.findLast((call) => call.method === "reply")?.args[0] as {
+      components?: Array<{ toJSON(): { components?: Array<{ label?: string }> } }>;
+    };
+    expect(reply?.components?.[0]?.toJSON().components?.[0]?.label).toBe(localizedCopy("en-US", "genai.tips.button"));
+    expect(renderedModal?.content).toContain(localizedCopy("en-US", "genai.tips.use_personal_providers"));
+    expect(renderedModal?.content).toContain("/personal providers");
   });
 
   it("replies with the quota-unavailable copy and skips the provider when the counters cannot be read", async () => {

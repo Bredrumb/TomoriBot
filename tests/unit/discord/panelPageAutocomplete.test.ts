@@ -9,9 +9,9 @@ import {
   resolvePanelPage,
   type PanelPageDestination,
 } from "@/utils/discord/autocomplete/panelPageAutocomplete";
-import { CONFIG_PAGES_BY_CATEGORY, type ConfigCategory, type ConfigPage } from "@/utils/discord/configPanelCatalog";
+import { CONFIG_PAGES_BY_CATEGORY } from "@/utils/discord/configPanelCatalog";
 import type { ConfigScope } from "@/utils/discord/interactions/configRouteContext";
-import { resolveConfigPageState, type ConfigActor } from "@/utils/discord/interactions/configPermissionPolicy";
+import type { ConfigActor } from "@/utils/discord/interactions/configPermissionPolicy";
 import { executeConfigCommand, listConfigPageDestinations } from "@/utils/discord/interactions/configRoutes";
 import { listPersonalConfigPageDestinations } from "@/utils/discord/interactions/personalConfigRoutes";
 import { listExpressionsPageDestinations } from "@/utils/discord/interactions/expressionsRoutes";
@@ -116,14 +116,10 @@ describe("panel page autocomplete", () => {
     expect(values).toHaveLength(25);
   });
 
-  it("never offers a member a page the panel omits for them", async () => {
+  it("offers no config pages to a non-manager", async () => {
     const values = await suggest(listConfigPageDestinations("en-US", MEMBER), "");
 
-    expect(values.length).toBeGreaterThan(0);
-    for (const value of values) {
-      const [category, page] = value.split(":") as [ConfigCategory, ConfigPage];
-      expect(resolveConfigPageState(category, page, MEMBER)).not.toBe("omitted");
-    }
+    expect(values).toEqual([]);
   });
 
   it("refuses a hand-typed value for a page the member may not open", () => {

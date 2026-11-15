@@ -11,6 +11,7 @@ import {
   type TextDisplayComponentData,
 } from "discord.js";
 import { CooldownType } from "@/types/db/schema";
+import { SERVER_MEMBER_PERMISSION_DEFINITIONS } from "@/utils/discord/memberPermissionsConfigMapping";
 import {
   buildMemberAccessModalFieldId,
   buildModerationRouteId,
@@ -44,9 +45,8 @@ function createScopeData(overrides: Partial<ModerationScopeData> = {}): Moderati
     serverModelAccess: { allowServerModels: true },
     memberAccess: {
       serverMemteachingEnabled: true,
-      attributeMemteachingEnabled: false,
-      sampledialogueMemteachingEnabled: true,
       promptSnapshotEnabled: false,
+      personaExportEnabled: false,
     },
     userBlacklist: {
       personalizationUserIds: [],
@@ -480,8 +480,6 @@ describe("moderationPanel UI rendering", () => {
     );
     expect(serialized).not.toContain("> Configure permissions");
     expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.member_access_servermemories_enabled"));
-    expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.member_access_attributelist_disabled"));
-    expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.member_access_sampledialogues_enabled"));
     expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.member_access_promptsnapshot_disabled"));
     expect(serialized).toContain(localizer("en-US", "commands.moderation.edit_permissions"));
     expect(serialized).toContain('"customId":"moderation:v2:member-access-open:en-US"');
@@ -615,7 +613,7 @@ describe("moderationPanel UI rendering", () => {
     expect(staleRow?.components[1].style).toBe(ButtonStyle.Secondary);
   });
 
-  it("renders opposite member access status sentence variants across all four flags", () => {
+  it("renders opposite member access status sentence variants for remaining permissions", () => {
     const payload = buildModerationPanelPayload({
       locale: "en-US",
       category: "member-access",
@@ -624,17 +622,14 @@ describe("moderationPanel UI rendering", () => {
       data: createScopeData({
         memberAccess: {
           serverMemteachingEnabled: false,
-          attributeMemteachingEnabled: true,
-          sampledialogueMemteachingEnabled: false,
           promptSnapshotEnabled: true,
+          personaExportEnabled: false,
         },
       }),
     });
 
     const serialized = JSON.stringify(payload);
     expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.member_access_servermemories_disabled"));
-    expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.member_access_attributelist_enabled"));
-    expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.member_access_sampledialogues_disabled"));
     expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.member_access_promptsnapshot_enabled"));
   });
 
@@ -1147,9 +1142,8 @@ describe("moderationPanel UI rendering", () => {
         readStatus: "stale",
         memberAccess: {
           serverMemteachingEnabled: true,
-          attributeMemteachingEnabled: true,
-          sampledialogueMemteachingEnabled: false,
           promptSnapshotEnabled: true,
+          personaExportEnabled: false,
         },
       }),
     });
@@ -1157,8 +1151,6 @@ describe("moderationPanel UI rendering", () => {
     const serialized = JSON.stringify(payload);
     expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.stale_warning"));
     expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.member_access_servermemories_enabled"));
-    expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.member_access_attributelist_enabled"));
-    expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.member_access_sampledialogues_disabled"));
     expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.member_access_promptsnapshot_enabled"));
   });
 
@@ -1343,15 +1335,14 @@ describe("moderationPanel UI rendering", () => {
     }
   });
 
-  it("builds Member Access raw modal with exact structure, four shared options, defaults, and nonce bounds", () => {
+  it("builds Member Access raw modal with shared options, defaults, and nonce bounds", () => {
     const nonce = "testnonce123";
     const modal = buildMemberAccessModal(
       "en-US",
       {
         serverMemteachingEnabled: true,
-        attributeMemteachingEnabled: false,
-        sampledialogueMemteachingEnabled: true,
         promptSnapshotEnabled: false,
+        personaExportEnabled: false,
       },
       nonce,
     );
@@ -1380,7 +1371,7 @@ describe("moderationPanel UI rendering", () => {
     expect(checkboxGroup.custom_id).toBe(buildMemberAccessModalFieldId(nonce));
     expect(checkboxGroup.custom_id.length).toBeLessThanOrEqual(100);
     expect(checkboxGroup.min_values).toBe(0);
-    expect(checkboxGroup.max_values).toBe(4);
+    expect(checkboxGroup.max_values).toBe(SERVER_MEMBER_PERMISSION_DEFINITIONS.length);
     expect(checkboxGroup.required).toBe(false);
 
     expect(checkboxGroup.options).toEqual([
@@ -1391,21 +1382,15 @@ describe("moderationPanel UI rendering", () => {
         default: true,
       },
       {
-        value: "attributelist",
-        label: localizedCopy("en-US", "commands.server.member-permissions.attributelist_option"),
-        description: localizedCopy("en-US", "commands.server.member-permissions.attributelist_desc"),
-        default: false,
-      },
-      {
-        value: "sampledialogues",
-        label: localizedCopy("en-US", "commands.server.member-permissions.sampledialogues_option"),
-        description: localizedCopy("en-US", "commands.server.member-permissions.sampledialogues_desc"),
-        default: true,
-      },
-      {
         value: "promptsnapshot",
         label: localizedCopy("en-US", "commands.server.member-permissions.promptsnapshot_option"),
         description: localizedCopy("en-US", "commands.server.member-permissions.promptsnapshot_desc"),
+        default: false,
+      },
+      {
+        value: "personaexport",
+        label: localizedCopy("en-US", "commands.server.member-permissions.personaexport_option"),
+        description: localizedCopy("en-US", "commands.server.member-permissions.personaexport_desc"),
         default: false,
       },
     ]);

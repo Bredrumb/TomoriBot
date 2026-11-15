@@ -105,8 +105,6 @@ export default {
     field_image_generation: `Image Generation`,
     field_videogen: `Video Generation`,
     field_server_memteaching: `Server Memories Teaching`,
-    field_attribute_memteaching: `Attributes Teaching`,
-    field_sampledialogue_memteaching: `Sample Dialogues Teaching`,
     field_hide_impersonation: `Hide Impersonation Embeds`,
     field_uncensor_injection: `Anti-Injection Prompt`,
     field_uncensor_unicode: `Unicode Space Replacement`,

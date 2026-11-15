@@ -75,9 +75,8 @@ function makeData(readStatus: PanelReadStatus, overrides: Partial<ModerationScop
     readStatus,
     memberAccess: {
       serverMemteachingEnabled: true,
-      attributeMemteachingEnabled: false,
-      sampledialogueMemteachingEnabled: true,
       promptSnapshotEnabled: false,
+      personaExportEnabled: false,
     },
     serverModelAccess: { allowServerModels: true },
     userBlacklist: {

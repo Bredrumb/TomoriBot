@@ -22,17 +22,16 @@ and restores are host-side operations; see [Maintenance & Backups](/self-hosting
 - Server configuration settings
 - Encrypted provider API keys
 - Expression metadata, persona access rules, and uploaded expression media
-- Opt-in [conversation recordings](/features/setup-administration/conversation-recordings/), including surrounding messages when selected
 
 ### Not stored
 
-- Media bytes, filenames, and attachment URLs from conversation recordings; only attachment type/count metadata is saved.
+- Discord message history (messages are not archived in a persistent message log)
 
 ### Sent to your AI providers
 
 Whenever triggered, TomoriBot fetches recent messages in the channel along with relevant
-memories as context for the model. Optional conversation recording also reads eligible messages independently of reply
-triggers; it makes no automatic provider calls.
+memories as context for the model. She does not read or process messages outside of those
+triggers.
 
 When an embedding model is set up, its provider receives the latest message and the document and
 memory text it searches. This can be a different provider from the one writing replies. Personal
@@ -46,10 +45,6 @@ privacy policy. Avoid sharing sensitive personal credentials or confidential dat
 
 ## Export Your Data
 
-Conversation recordings use `/record data` for private Markdown or JSON attachments in the current
-server. Their range, retention, and deletion rules are in the
-[recording guide](/features/setup-administration/conversation-recordings/).
-
 Settings and memory exports are delivered to your DMs as a JSON file, so your DMs keep a copy you can restore
 later. If TomoriBot can't DM you, the file is attached to a private reply instead; save it before
 the reply disappears.
@@ -62,8 +57,27 @@ the reply disappears.
 - **Export Lorebook** in the `/memories` lorebook panel: one book as SillyTavern world info. Channel
   limits and collection settings are left out.
 
-`/persona export` is meant for sharing, so it posts the full persona definition, including the
-persona's lorebook, in the channel instead of your DMs.
+`/persona export` is meant for sharing, so it posts the persona definition, including the
+persona's lorebook, in the channel instead of your DMs. Choose `TomoriBot Card` or `Raw JSON` to
+retain all persona settings. `SillyTavern-compatible PNG` includes the avatar and supported character
+fields, excluding TomoriBot-specific settings and lorebook channel limits.
+
+In servers, `/persona export` requires `Manage Server` unless a manager enables `Persona Exports`
+in `/moderation` > `Member Access` > `Edit Permissions`. This applies to every format. Denials are
+private; successful exports are always posted publicly. `Export Sprites` is available to server
+managers through `/config`.
+The server setting does not affect exports in DMs.
+
+Choose `TomoriBot Bundle` for a ZIP with the avatar, sprites, character reference, and persona settings.
+Set `include_voice:true` to include the assigned voice reference audio and transcript too; these
+are shared publicly with the ZIP. Provider voice IDs and credentials are excluded. Import the ZIP
+with `/persona import` to restore the persona and its bundled media in one upload.
+
+Bundle exports optimize image copies and may reduce their resolution to fit the per-image budget;
+stored originals stay unchanged. A bundle that exceeds the upload or import size limit is refused
+without dropping assets. If that happens, exclude voice audio or use a PNG card and `Export Sprites`
+separately. Keep the ZIP if import reports a media restoration failure: the persona settings may
+already be saved, and an imported alter must be removed before retrying.
 
 Uploaded expression media is stored on the server host and is outside these JSON exports.
 Self-hosters must back up database storage and media assets together; see
@@ -96,7 +110,6 @@ their original Discord server, so review channel limits when moving a backup to 
 
 These actions permanently remove or reset stored data:
 
-- `/record data`: delete your current-server recording excerpts after confirmation; stop collection separately with `/record stop`.
 - `/personal memories`: manage or remove personal memories.
 - `/memories`: manage or remove server memories, documents, and lorebooks. Documents and lorebooks
   require `Manage Server`. With member teaching enabled, members can view, edit, or remove their

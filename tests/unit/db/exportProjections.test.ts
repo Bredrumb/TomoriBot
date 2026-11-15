@@ -30,8 +30,6 @@ const workspaceRow: Record<string, unknown> = {
   context_note: "Portable context note",
   context_note_depth: 6,
   server_memteaching_enabled: true,
-  attribute_memteaching_enabled: false,
-  sampledialogue_memteaching_enabled: true,
   self_teaching_enabled: true,
   personal_memories_enabled: false,
   prompt_snapshot_enabled: true,

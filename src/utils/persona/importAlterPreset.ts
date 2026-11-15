@@ -19,7 +19,8 @@ import { log } from "@/utils/misc/logger";
 import { resolvePersonaAvatarPublicUrl, uploadPersonaAvatarToStorage } from "@/utils/storage/avatarStorage";
 import { getAllBaseTriggerWords } from "@/utils/text/localizer";
 import { selectUnclaimedTriggerWords } from "@/utils/text/triggerWords";
-import type { PresetExportData } from "@/types/preset/presetExport";
+import type { PresetImportMode, PresetExportData } from "@/types/preset/presetExport";
+import { EMPTY_PERSONA_NAMING_CONFIG } from "@/types/personaNaming";
 import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
 import {
   DEFAULT_NATURAL_NUDGE_TALKATIVENESS,
@@ -46,6 +47,7 @@ export interface ImportAlterPresetParams {
   identityMode: "preserve" | "fork";
   /** Raw persona image (PNG) used as the alter avatar, or null to inherit the main avatar. */
   avatarImageBuffer: Buffer | null;
+  importMode?: PresetImportMode;
 }
 
 /**
@@ -103,7 +105,7 @@ function isUniqueViolation(error: unknown): boolean {
  * @returns A {@link ImportAlterPresetResult} describing success or the failure reason.
  */
 export async function importAlterPreset(params: ImportAlterPresetParams): Promise<ImportAlterPresetResult> {
-  const { client, guild, serverDiscId, presetData, identityMode, avatarImageBuffer } = params;
+  const { client, guild, serverDiscId, presetData, identityMode, avatarImageBuffer, importMode = "card" } = params;
 
   if (
     presetData.lorebook_entries !== undefined &&
@@ -153,7 +155,8 @@ export async function importAlterPreset(params: ImportAlterPresetParams): Promis
   //    (pointer) imports; the loader enforces the same ownership at read time.
   const importTriggers = presetData.trigger_words ?? [];
   const uniqueTriggers = selectUnclaimedTriggerWords(importTriggers, claimedTriggerWords, { lowercase: false });
-  const matchingOfficialPreset = await presetRepository.findMatchingOfficialPresetForImport(presetData);
+  const matchingOfficialPreset =
+    importMode === "bundle" ? null : await presetRepository.findMatchingOfficialPresetForImport(presetData);
   const createdAsPointer = matchingOfficialPreset !== null;
   const displayedTriggers = uniqueTriggers;
   const hasNoTriggers = displayedTriggers.length === 0;
@@ -198,6 +201,8 @@ export async function importAlterPreset(params: ImportAlterPresetParams): Promis
           sampleDialoguesIn: presetData.sample_dialogues_in,
           sampleDialoguesOut: presetData.sample_dialogues_out,
           personaLineageId: identityMode === "preserve" ? importedLineageId : null,
+          presetLineageId: importMode === "bundle" ? (presetData.preset_lineage_id ?? null) : null,
+          namingConfig: importMode === "bundle" ? (presetData.naming_config ?? EMPTY_PERSONA_NAMING_CONFIG) : undefined,
           physicalAppearanceTags: presetData.physical_appearance_tags ?? [],
           charRefUrl: presetData.char_ref_url ?? null,
           naiAttgAuthor: presetData.nai_attg_author ?? null,

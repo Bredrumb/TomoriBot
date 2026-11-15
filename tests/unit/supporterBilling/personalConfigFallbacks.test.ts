@@ -23,6 +23,8 @@ describe("personal fallback credential sources", () => {
       llm_id: 101,
       llm_provider: "openrouter",
       llm_codename: "synthetic/shared-model",
+      input_price_per_million: 0.14,
+      output_price_per_million: 2.5,
     };
     const rows = ["openrouter", "supporter"].map((provider) =>
       userSavedProviderConfigSchema.parse({
@@ -65,6 +67,11 @@ describe("personal fallback credential sources", () => {
       const options = await loadFallbackSelectionOptions(1, "supporter", "en-US");
       expect(options.map((option) => option.refKey)).toEqual(["llm:101", "llm:101:supporter"]);
       expect(options[1]?.label).toContain(localizedCopy("en-US", "commands.providers.subscription_label"));
+      const price = localizedCopy("en-US", "commands.providers.model_price_tokens", {
+        input: "$0.140",
+        output: "$2.50",
+      });
+      expect(options.every((option) => option.description?.startsWith(price))).toBe(true);
       expect(
         await personalConfigOperations.setFallbacks({
           userId: 1,

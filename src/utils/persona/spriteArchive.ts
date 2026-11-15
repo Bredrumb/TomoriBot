@@ -1,17 +1,3 @@
-/**
- * Persona sprite archive (.zip) build/parse utilities.
- *
- * A sprite archive bundles a persona's sprite images together with a
- * `manifest.json` describing each sprite's metadata. This keeps `/persona
- * export` lightweight (it only carries the persona card) while still letting
- * users share a character's full sprite set as one portable file.
- *
- * This module is intentionally storage-agnostic: callers supply already-loaded
- * PNG buffers when building, and receive validated buffers when parsing. The
- * commands own all storage/download concerns; this module owns only the ZIP
- * container shape, the manifest schema, and the ZIP-bomb guards.
- */
-
 import JSZip from "jszip";
 import { z } from "zod";
 import type { PersonaSpriteRow } from "@/types/db/schema";
@@ -203,10 +189,18 @@ export async function readSpriteArchive(
   if (!manifestFile) {
     return { ok: false, reason: "missing_manifest" };
   }
+  const maxManifestBytes = 4096 + limits.maxEntries * 8192;
+  const manifestSize = getDeclaredUncompressedSize(manifestFile);
+  if (manifestSize === null || manifestSize > maxManifestBytes) {
+    return { ok: false, reason: "invalid_manifest" };
+  }
 
   let manifestJson: unknown;
   try {
     const manifestText = await manifestFile.async("string");
+    if (Buffer.byteLength(manifestText, "utf8") > maxManifestBytes) {
+      return { ok: false, reason: "invalid_manifest" };
+    }
     manifestJson = JSON.parse(manifestText);
   } catch (error) {
     log.warn("Failed to parse sprite archive manifest JSON", error);

@@ -11,7 +11,7 @@ sidebar:
 
 Todos os comandos de barra (slash commands) atualmente registrados pela TomoriBot, gerados a partir dos mesmos construtores de comando e descrições em português usados para o registro no Discord (descrições ainda não traduzidas aparecem em inglês).
 
-Grupos de comandos de nível superior: **45**. Comandos de barra executáveis: **94**.
+Grupos de comandos de nível superior: **44**. Comandos de barra executáveis: **91**.
 
 ## `/booru`
 
@@ -240,9 +240,9 @@ Gerenciar predefinições de personalidade
 |---|---|
 | `/persona create` | Criar uma predefinição de personalidade simples manualmente |
 | `/persona default` | Aplicar uma predefinição de personalidade |
-| `/persona export` | Exportar a personalidade atual como um arquivo PNG compartilhável |
+| `/persona export` | Exportar uma persona como cartão PNG, JSON bruto ou pacote ZIP com mídia |
 | `/persona generate` | Geração de personalidade baseada em IA (requer um provedor compatível) |
-| `/persona import` | Importar uma persona a partir de um arquivo PNG, JSON ou CHARX |
+| `/persona import` | Importar uma persona a partir de um arquivo PNG, JSON, CHARX ou pacote ZIP TomoriBot |
 | `/persona remove` | Remover um alter do servidor |
 
 ## `/personal`
@@ -294,16 +294,6 @@ Gerencie as redefinições de cota de geração.
 |---|---|
 | `/quota reset global` | Redefina o pool de cota de geração para todo o servidor. |
 | `/quota reset user` | Redefina o uso diário de cota para um usuário. |
-
-## `/record`
-
-Gerencie suas gravações de conversa neste servidor
-
-| Comando | Resumo |
-|---|---|
-| `/record data` | Veja, exporte ou exclua suas gravações neste servidor |
-| `/record start` | Salve trechos de conversas anonimizadas neste servidor sempre que enviar uma mensagem |
-| `/record stop` | Interrompa a coleta de trechos e mantenha suas gravações salvas |
 
 ## `/refresh`
 

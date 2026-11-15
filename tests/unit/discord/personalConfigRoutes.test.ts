@@ -19,11 +19,20 @@ import {
   type UserRow,
   type TomoriState,
   type UserSavedProviderConfigRow,
+  customEndpointSchema,
+  speechModelSchema,
+  transcriptionModelSchema,
+  userSavedProviderConfigSchema,
 } from "@/types/db/schema";
 import type { RawDiscordComponent } from "@/types/discord/rawApiTypes";
 import type { PersonalSpotlightStatus } from "@/utils/db/repositories/UserRepository";
 import { createPersonalConfigInteractionRoute } from "@/utils/discord/interactions/personalConfigRoutes";
-import { loadPersonalModelDisplayInfo } from "@/utils/discord/interactions/personalConfigLoaders";
+import {
+  loadFallbackSelectionOptions,
+  loadAvailableModelsForCapability,
+  loadPersonalFallbackDisplaySlots,
+  loadPersonalModelDisplayInfo,
+} from "@/utils/discord/interactions/personalConfigLoaders";
 import type { PersonalConfigRouteDependencies } from "@/utils/discord/interactions/personalConfigRouteContext";
 import {
   personalConfigOperations,
@@ -49,6 +58,7 @@ import {
 } from "@/utils/discord/personalConfigPanelCatalog";
 import {
   buildLanguageModal,
+  buildFallbacksModal,
   buildModelSelectModal,
   buildPersonalConfigModalFieldId,
   buildSpotlightAutoTriggerModal,
@@ -75,9 +85,9 @@ import { dispatchGlobalInteraction } from "@/utils/discord/interactions/router";
 import { getRegisterableLocales, initializeLocalizer, localizer } from "@/utils/text/localizer";
 import { loadCommandData } from "@/utils/discord/commandLoader";
 import type { UserPersonaNamingPreference } from "@/types/personaNaming";
-import { localizedProse, localizedCopy, expectForEveryLocale } from "../../helpers/localeCases";
+import { localizedProse, localizedCopy, expectForEveryLocale, RUNTIME_LOCALES } from "../../helpers/localeCases";
 import { expectSafePanelPayload, collectTextDisplays } from "../../helpers/panelLimits";
-import { createPersona, createUserRow } from "../../helpers/fixtures";
+import { createLlmRow, createPersona, createUserRow } from "../../helpers/fixtures";
 import {
   createRouteInteraction,
   type RouteGuildChannel,
@@ -2374,6 +2384,89 @@ describe("Models panel rendering", () => {
     expect(quickToggleAt).toBeGreaterThan(hintAt);
   });
 
+  it("labels inherited parameter values from the current workspace without inventing defaults", () => {
+    const personal = userSavedProviderConfigSchema.parse({
+      user_id: 1,
+      provider: "google",
+      api_key: null,
+      llm_id: 1,
+      diffusion_model_id: null,
+      embedding_model_id: null,
+      nai_diffusion_model_id: null,
+      nai_preset_name: null,
+      llm_temperature: null,
+      llm_min_p: null,
+      llm_top_p: null,
+      llm_top_k: null,
+      llm_frequency_penalty: null,
+      llm_presence_penalty: null,
+      llm_max_output_tokens: null,
+    });
+    const workspace = createPersona({
+      config: {
+        llm_temperature: 1.25,
+        llm_min_p: 0.17,
+        llm_top_p: 0.83,
+        llm_top_k: 37,
+        llm_frequency_penalty: -0.25,
+        llm_presence_penalty: 0.5,
+        llm_max_output_tokens: 12345,
+      },
+    });
+    const fields = [
+      ["param_temperature", "llm_temperature"],
+      ["param_min_p", "llm_min_p"],
+      ["param_top_p", "llm_top_p"],
+      ["param_top_k", "llm_top_k"],
+      ["param_frequency_penalty", "llm_frequency_penalty"],
+      ["param_presence_penalty", "llm_presence_penalty"],
+      ["param_max_output_tokens", "llm_max_output_tokens"],
+    ] as const;
+    expectForEveryLocale((locale) => {
+      const render = (config: UserSavedProviderConfigRow, personas: TomoriState[]) =>
+        collectTextDisplays(
+          buildPersonalConfigPanelPayload({
+            locale,
+            category: "models",
+            page: "parameters",
+            user: makeUser(),
+            resolvedNickname: "Mirri",
+            personas,
+            guildId: "guild-123",
+            memoryCount: 0,
+            stmCount: 0,
+            readStatus: "fresh",
+            modelDisplayInfo: makeModelDisplayInfo({
+              parametersProviders: ["google"],
+              selectedParametersConfig: config,
+            }),
+          }),
+        ).join("\n");
+      const inherited = render(personal, [workspace]);
+      for (const [label, key] of fields) {
+        expect(inherited).toMatch(localizedProse(locale, `commands.personal.config.${label}`));
+        expect(inherited).toMatch(
+          localizedProse(locale, "commands.personal.config.param_workspace_value", {
+            value: String(workspace.config[key]),
+          }),
+        );
+      }
+      const ownValues = render({ ...personal, llm_temperature: 0, llm_max_output_tokens: 8192 }, [workspace]);
+      expect(ownValues).toContain("`0`");
+      expect(ownValues).toContain("`8192`");
+      expect(ownValues).not.toMatch(
+        localizedProse(locale, "commands.personal.config.param_workspace_value", { value: "1.25" }),
+      );
+      expect(render(personal, [])).toMatch(localizedProse(locale, "commands.personal.config.param_workspace_default"));
+      const providerDefault = render(personal, [createPersona({ config: { llm_max_output_tokens: null } })]);
+      expect(providerDefault).toMatch(
+        localizedProse(locale, "commands.personal.config.param_workspace_value", {
+          value: localizedCopy(locale, "commands.personal.config.param_provider_default"),
+        }),
+      );
+    });
+  });
+
   it("renders Parameters page with grouped summaries and semantic edit buttons", () => {
     const user = makeUser();
     const payload = buildPersonalConfigPanelPayload({
@@ -3201,6 +3294,189 @@ describe("Range pagination workflow", () => {
     } finally {
       loadSpy.mockRestore();
       eligibleSpy.mockRestore();
+    }
+  });
+
+  it("renders personal fallback prices before descriptions in every slot and locale", async () => {
+    const loadModels = spyOn(llmModelRepo, "loadAvailableModelsForProvider").mockResolvedValue([
+      createLlmRow({
+        llm_id: 101,
+        llm_codename: "paid-model",
+        input_price_per_million: 0.14,
+        output_price_per_million: 2.5,
+        descriptions: { "en-US": "Synthetic model description. ".repeat(10) },
+      }),
+      createLlmRow({
+        llm_id: 102,
+        llm_codename: "free-tier-model",
+        is_free: true,
+        input_price_per_million: 0.14,
+        output_price_per_million: 2.5,
+      }),
+      createLlmRow({ llm_id: 103, llm_codename: "unpriced-model" }),
+      createLlmRow({ llm_id: 104, llm_codename: "other-model" }),
+    ]);
+    try {
+      const byLocale = new Map(
+        await Promise.all(
+          RUNTIME_LOCALES.map(
+            async (locale) => [locale, await loadFallbackSelectionOptions(1, "google", locale)] as const,
+          ),
+        ),
+      );
+      expectForEveryLocale((locale) => {
+        const available = byLocale.get(locale) ?? [];
+        const modal = buildFallbacksModal(
+          locale,
+          "nonce1234567",
+          "google",
+          available,
+          [{ type: "llm", id: 101 }],
+          [{ slot: 1, modelName: "paid-model" }],
+        );
+        const price = localizedCopy(locale, "commands.providers.model_price_tokens", {
+          input: "$0.140",
+          output: "$2.50",
+        });
+        for (const [index, field] of modal.components.entries()) {
+          const options = field.component?.options ?? [];
+          const paid = options.find((option) => option.value === "llm:101");
+          expect(paid?.description?.startsWith(price)).toBe(true);
+          expect(paid?.description?.length).toBeLessThanOrEqual(100);
+          expect(paid?.default).toBe(index === 0);
+          expect(options.find((option) => option.value === "llm:102")?.description).toBe(
+            localizedCopy(locale, "commands.providers.model_price_free_tier"),
+          );
+          expect(options.find((option) => option.value === "llm:103")?.description).toBeUndefined();
+          expect(options.some((option) => option.value === "llm:104")).toBe(false);
+        }
+      });
+    } finally {
+      loadModels.mockRestore();
+    }
+  });
+
+  it("shows saved fallback names outside the selected provider page", async () => {
+    const refs: FallbackModelRef[] = [
+      { type: "llm", id: 101 },
+      { type: "llm", id: 202 },
+      { type: "llm", id: 303 },
+      { type: "custom_endpoint", id: 404 },
+      { type: "llm", id: 505 },
+    ];
+    const models = [
+      createLlmRow({ llm_id: 101, llm_codename: "visible-model" }),
+      createLlmRow({ llm_id: 202, llm_codename: "other-page-model" }),
+      createLlmRow({ llm_id: 303, llm_codename: "other-provider-model", llm_provider: "openrouter" }),
+    ];
+    const loadModel = spyOn(llmModelRepo, "loadById").mockImplementation(
+      async (id) => models.find((model) => model.llm_id === id) ?? null,
+    );
+    const endpoint = customEndpointSchema.parse({
+      custom_endpoint_id: 404,
+      connection_id: 1,
+      user_id: 1,
+      label: "Synthetic endpoint",
+      model_name: "endpoint-model",
+      capability: "text",
+      api_style: "openai-compatible",
+      endpoint_url: "https://example.invalid/v1",
+    });
+    const loadEndpoint = spyOn(llmProviderRepo, "loadCustomEndpointsByIds").mockResolvedValue([endpoint]);
+    try {
+      const byLocale = new Map(
+        await Promise.all(
+          RUNTIME_LOCALES.map(
+            async (locale) => [locale, await loadPersonalFallbackDisplaySlots(refs, locale)] as const,
+          ),
+        ),
+      );
+      expectForEveryLocale((locale) => {
+        const slots = byLocale.get(locale) ?? [];
+        const modal = buildFallbacksModal(
+          locale,
+          "nonce1234567",
+          "google",
+          [{ refKey: "llm:101", label: "visible-model" }],
+          refs,
+          slots,
+        );
+        expect(modal.components[0]?.description).toBe(models[0]?.llm_codename);
+        expect(modal.components[1]?.description).toBe(models[1]?.llm_codename);
+        expect(modal.components[2]?.description).toContain(models[2]?.llm_codename);
+        expect(modal.components[3]?.description).toBe(endpoint.model_name ?? undefined);
+        expect(modal.components[4]?.description).toBe(`${localizedCopy(locale, "general.unknown")} (#505)`);
+        expect(modal.components[0]?.component?.options?.find((option) => option.value === "llm:101")?.default).toBe(
+          true,
+        );
+        expect(modal.components[1]?.component?.options?.some((option) => option.default)).toBe(false);
+        const empty = buildFallbacksModal(locale, "nonce1234567", "google", [], [], []);
+        expect(empty.components.every((field) => field.description === localizedCopy(locale, "general.none"))).toBe(
+          true,
+        );
+      });
+    } finally {
+      loadModel.mockRestore();
+      loadEndpoint.mockRestore();
+    }
+  });
+
+  it("preserves localized TTS and transcription descriptions in personal model pickers", async () => {
+    const descriptions = Object.fromEntries(
+      RUNTIME_LOCALES.map((locale) => [locale, `[${locale}] ${"Synthetic voice model. ".repeat(10)}`]),
+    );
+    const speech = spyOn(llmModelRepo, "loadAvailableSpeechModels").mockResolvedValue([
+      speechModelSchema.parse({
+        speech_model_id: 1,
+        provider: "google",
+        codename: "design-model",
+        voice_mode: "design",
+        descriptions,
+      }),
+      speechModelSchema.parse({
+        speech_model_id: 2,
+        provider: "google",
+        codename: "clone-model",
+        voice_mode: "clone",
+        descriptions,
+      }),
+    ]);
+    const transcription = spyOn(llmModelRepo, "loadAvailableTranscriptionModels").mockResolvedValue([
+      transcriptionModelSchema.parse({
+        transcription_model_id: 3,
+        provider: "google",
+        codename: "transcription-model",
+        descriptions,
+      }),
+    ]);
+    const capabilities = ["speech_design", "speech_clone", "transcription"] as const;
+    try {
+      const byLocale = new Map(
+        await Promise.all(
+          RUNTIME_LOCALES.map(
+            async (locale) =>
+              [
+                locale,
+                await Promise.all(
+                  capabilities.map((capability) => loadAvailableModelsForCapability(1, "google", capability, locale)),
+                ),
+              ] as const,
+          ),
+        ),
+      );
+      expectForEveryLocale((locale) => {
+        for (const [index, capability] of capabilities.entries()) {
+          const models = byLocale.get(locale)?.[index] ?? [];
+          const modal = buildModelSelectModal(locale, "nonce1234567", capability, "google", models, index + 1);
+          const option = modal.components[0]?.component?.options?.find((entry) => entry.value === String(index + 1));
+          expect(option?.description?.startsWith(`[${locale}]`)).toBe(true);
+          expect(option?.description?.length).toBeLessThanOrEqual(100);
+          expect(option?.default).toBe(true);
+        }
+      });
+    } finally {
+      speech.mockRestore();
+      transcription.mockRestore();
     }
   });
 

@@ -6,6 +6,7 @@ import {
 } from "discord.js";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
 import { invalidatePersonalSpotlightCache } from "@/utils/cache/personalSpotlightCache";
+import { invalidateShortTermMemoryForUser } from "@/utils/cache/shortTermMemoryCache";
 import { invalidateUserCache } from "@/utils/cache/userCache";
 import { userRepository } from "@/utils/db/repositories";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
@@ -65,6 +66,7 @@ export async function execute(
     }
 
     invalidateUserCache(erased.userDiscId);
+    invalidateShortTermMemoryForUser(erased.userDiscId);
     for (const serverId of erased.affectedServerIds) {
       invalidatePersonalSpotlightCache(serverId, userData.user_id);
     }

@@ -107,8 +107,6 @@ export default {
     field_image_generation: `画像生成`,
     field_videogen: `動画生成`,
     field_server_memteaching: `サーバー記憶の学習`,
-    field_attribute_memteaching: `属性の学習`,
-    field_sampledialogue_memteaching: `サンプル対話の学習`,
     field_hide_impersonation: `なりすまし埋め込みを非表示`,
     field_uncensor_injection: `インジェクション対策プロンプト`,
     field_uncensor_unicode: `Unicode空白置換`,

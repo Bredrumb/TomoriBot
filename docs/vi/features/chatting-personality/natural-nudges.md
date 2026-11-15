@@ -3,7 +3,6 @@ title: "Natural Nudges"
 description: "Cho phép các persona của TomoriBot chủ động bắt đầu cuộc trò chuyện khi kênh Discord trở nên yên ắng và tham gia vào những chủ đề phù hợp với sở thích của mình, với nhịp độ theo sát mức độ hoạt động của máy chủ."
 sidebar:
   order: 4
-aiGenerated: true
 ---
 
 Natural Nudges cho phép TomoriBot lên tiếng mà không cần được tag trước, theo hai cách:
@@ -144,7 +143,7 @@ Mỗi persona có một trang **Gợi ý** riêng trong `/config` > Persona:
 - **Sở thích**: tối đa 8 chủ đề persona thích nêu ra và tham gia thảo luận, mỗi chủ đề kèm theo mô tả ngắn gọn và ví dụ (chẳng hạn như **anime mecha**: thể loại hư cấu về robot khổng lồ có người lái, như Gundam).
 - **Gợi ý nhàn rỗi**: tối đa 20 gợi ý nhàn rỗi chỉ persona này sử dụng, được mô tả tại [Gợi ý nhàn rỗi của persona](#persona-idle-nudges).
 
-Các preset chính thức bao gồm các cài đặt này. `/persona generate` gợi ý sở thích cho các persona mới; `Tạo sở thích` thêm sở thích mới thông qua model văn bản hiện tại của bạn. Bản xuất persona bao gồm cả ba cài đặt.
+Các preset chính thức bao gồm các cài đặt này. `/persona generate` gợi ý sở thích cho các persona mới; `Tạo sở thích` thêm sở thích mới thông qua model văn bản hiện tại của bạn. Bản xuất persona ở định dạng `Thẻ TomoriBot` hoặc `JSON thuần`, cũng như gói ZIP, bao gồm cả ba cài đặt; `PNG tương thích SillyTavern` loại trừ các cài đặt gợi ý.
 
 ## Khi nào gợi ý kích hoạt
 

@@ -3,9 +3,12 @@ import type { QuotaReservation } from "@/utils/db/repositories/QuotaRepository";
 import type { TextQuotaClaim } from "@/utils/quota/textQuotaManager";
 import type { TextQuotaTriggerState } from "@/utils/chat/textQuotaState";
 import * as embedHelper from "@/utils/discord/embedHelper";
+import * as textDisplayModal from "@/utils/discord/textDisplayModal";
+import { registerProviderOption } from "@/utils/provider/providerOptionRegistry";
 import { QuotaUnavailableError } from "@/utils/quota/quotaErrors";
 import * as realTextQuotaManager from "@/utils/quota/textQuotaManager";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { localizedCopy } from "../../helpers/localeCases";
 import { createScopedModuleMocker } from "../../helpers/mockSurface";
 
 const RESERVATION: QuotaReservation = {
@@ -34,6 +37,7 @@ scopedMock.module("@/utils/quota/textQuotaManager", () => ({
 
 let checkTextQuotaForAdmission: typeof import("@/utils/chat/admissionGuards").checkTextQuotaForAdmission;
 let textQuotaTriggerStates: Map<string, TextQuotaTriggerState>;
+let restoreSendEmbed: () => void = () => {};
 const embeds: unknown[] = [];
 
 beforeAll(async () => {
@@ -48,9 +52,10 @@ beforeEach(() => {
   reserveError = null;
   reserveResult = { allowed: true, reservation: RESERVATION };
   textQuotaTriggerStates.clear();
-  spyOn(embedHelper, "sendStandardEmbed").mockImplementation(async (_channel, _locale, options) => {
+  const sendSpy = spyOn(embedHelper, "sendStandardEmbed").mockImplementation(async (_channel, _locale, options) => {
     embeds.push(options);
   });
+  restoreSendEmbed = () => sendSpy.mockRestore();
 });
 
 afterEach(() => mock.restore());
@@ -142,5 +147,90 @@ describe("text quota admission", () => {
 
     expect(result.allowed).toBe(true);
     expect(reserveCalls).toEqual([]);
+  });
+
+  it("attaches the personal-providers tip key on text quota refusals", async () => {
+    const resetTime = new Date(Date.now() + 60_000);
+    for (const reason of ["user_quota_exceeded", "serverwide_quota_exceeded"] as const) {
+      embeds.length = 0;
+      reserveResult = { allowed: false, reason, userRemaining: 0, resetTime, reservation: null };
+
+      const result = await checkTextQuotaForAdmission(admissionParams());
+
+      expect(result).toEqual({ allowed: false, state: null });
+      expect(embeds).toContainEqual(
+        expect.objectContaining({
+          titleKey: "genai.text_quota_exceeded_title",
+          tipKeys: ["genai.tips.use_personal_providers"],
+        }),
+      );
+    }
+  });
+
+  it("renders a What You Can Do button pointing to /personal providers after registered option copy", async () => {
+    restoreSendEmbed();
+    const sentPayloads: Array<{ components?: Array<{ toJSON(): { components?: Array<{ label?: string }> } }> }> = [];
+    let renderedModal: { title: string; content: string } | undefined;
+    spyOn(textDisplayModal, "attachTextDisplayModalCollector").mockImplementation((options) => {
+      renderedModal = options.render("en-US");
+    });
+    const dispose = registerProviderOption({
+      value: "quota-copy-option",
+      catalogProvider: "openrouter",
+      capabilities: ["text"],
+      copy: {
+        labelKey: "general.errors.api_key_missing_title",
+        entryDescriptionKeys: {
+          server: "general.errors.api_key_missing_description",
+          personal: "general.errors.api_key_missing_description",
+        },
+        addActionLabelKey: "general.errors.api_key_missing_title",
+        addActionDescriptionKeys: {
+          server: "general.errors.api_key_missing_description",
+          personal: "general.errors.api_key_missing_description",
+        },
+        removeImpactKey: "general.errors.api_key_missing_description",
+      },
+      contributeCopy: async () => "genai.tips.wait_and_retry",
+      availability: () => ({ eligible: true }),
+      selection: {
+        load: async () => null,
+        ensure: async () => true,
+        claim: async () => true,
+        remove: async () => "removed",
+        owns: () => false,
+        resolveCredentials: async () => null,
+      },
+    });
+    reserveResult = {
+      allowed: false,
+      reason: "user_quota_exceeded",
+      userRemaining: 0,
+      resetTime: new Date(Date.now() + 60_000),
+      reservation: null,
+    };
+    const channel = {
+      id: "channel_1",
+      send: async (payload: unknown) => {
+        sentPayloads.push(payload as (typeof sentPayloads)[number]);
+        return { id: "sent_message" };
+      },
+    } as unknown as Parameters<typeof checkTextQuotaForAdmission>[0]["channel"];
+
+    try {
+      await checkTextQuotaForAdmission(admissionParams({ channel }));
+    } finally {
+      dispose();
+    }
+
+    expect(sentPayloads[0]?.components?.[0]?.toJSON().components?.[0]?.label).toBe(
+      localizedCopy("en-US", "genai.tips.button"),
+    );
+    expect(renderedModal?.title).toBe(localizedCopy("en-US", "genai.tips.title"));
+    const lines = renderedModal?.content.split("\n") ?? [];
+    expect(lines[0]).toContain(localizedCopy("en-US", "genai.tips.wait_and_retry"));
+    expect(lines[1]).toContain(localizedCopy("en-US", "genai.tips.use_personal_providers"));
+    expect(lines[1]).toContain("/personal providers");
+    expect(lines.at(-1)).toContain(localizedCopy("en-US", "genai.tips.support_server"));
   });
 });

@@ -58,11 +58,10 @@ interface WorkspaceConfigProjectionRow {
   response_drafting_enabled: boolean;
   response_prefill: string | null;
   server_memteaching_enabled: boolean;
-  attribute_memteaching_enabled: boolean;
-  sampledialogue_memteaching_enabled: boolean;
   self_teaching_enabled: boolean;
   personal_memories_enabled: boolean;
   prompt_snapshot_enabled: boolean;
+  persona_export_enabled: boolean;
   web_search_enabled: boolean;
   emoji_usage_enabled: boolean;
   sticker_usage_enabled: boolean;
@@ -357,8 +356,6 @@ export class ExportRepository {
           COALESCE(scc.message_fetch_limit, 80)                     AS message_fetch_limit,
           scc.system_prompt                                          AS system_prompt,
           COALESCE(smpc.server_memteaching_enabled, false)          AS server_memteaching_enabled,
-          COALESCE(smpc.attribute_memteaching_enabled, false)       AS attribute_memteaching_enabled,
-          COALESCE(smpc.sampledialogue_memteaching_enabled, false)  AS sampledialogue_memteaching_enabled,
           COALESCE(smpc.self_teaching_enabled, true)                AS self_teaching_enabled,
           COALESCE(scac.web_search_enabled, true)                   AS web_search_enabled,
           COALESCE(smpc.personal_memories_enabled, true)            AS personal_memories_enabled,
@@ -422,6 +419,7 @@ export class ExportRepository {
           COALESCE(scac.short_term_memory_enabled, true)            AS short_term_memory_enabled,
           COALESCE(scac.user_info_updates_enabled, true)            AS user_info_updates_enabled,
           COALESCE(smpc.prompt_snapshot_enabled, false)             AS prompt_snapshot_enabled,
+          COALESCE(smpc.persona_export_enabled, false)              AS persona_export_enabled,
           COALESCE(smemoc.memory_tagging_enabled, false)            AS memory_tagging_enabled,
           COALESCE(smemoc.channel_memory_enabled, false)            AS channel_memory_enabled,
           swc.welcome_prompt                                         AS welcome_prompt
@@ -566,8 +564,6 @@ export class ExportRepository {
             message_fetch_limit: configData.message_fetch_limit,
             system_prompt: configData.system_prompt ?? null,
             server_memteaching_enabled: configData.server_memteaching_enabled,
-            attribute_memteaching_enabled: configData.attribute_memteaching_enabled,
-            sampledialogue_memteaching_enabled: configData.sampledialogue_memteaching_enabled,
             self_teaching_enabled: configData.self_teaching_enabled,
             web_search_enabled: configData.web_search_enabled,
             personal_memories_enabled: configData.personal_memories_enabled,
@@ -631,6 +627,7 @@ export class ExportRepository {
             short_term_memory_enabled: configData.short_term_memory_enabled,
             user_info_updates_enabled: configData.user_info_updates_enabled,
             prompt_snapshot_enabled: configData.prompt_snapshot_enabled,
+            persona_export_enabled: configData.persona_export_enabled,
             memory_tagging_enabled: configData.memory_tagging_enabled,
             channel_memory_enabled: configData.channel_memory_enabled,
             welcome_prompt: configData.welcome_prompt ?? null,
@@ -795,11 +792,10 @@ export class ExportRepository {
           scc.response_review_items AS response_review_items,
           scac.response_drafting_enabled AS response_drafting_enabled,
           COALESCE(smpc.server_memteaching_enabled, false) AS server_memteaching_enabled,
-          COALESCE(smpc.attribute_memteaching_enabled, false) AS attribute_memteaching_enabled,
-          COALESCE(smpc.sampledialogue_memteaching_enabled, false) AS sampledialogue_memteaching_enabled,
           COALESCE(smpc.self_teaching_enabled, true) AS self_teaching_enabled,
           COALESCE(smpc.personal_memories_enabled, true) AS personal_memories_enabled,
           COALESCE(smpc.prompt_snapshot_enabled, false) AS prompt_snapshot_enabled,
+          COALESCE(smpc.persona_export_enabled, false) AS persona_export_enabled,
           COALESCE(scac.web_search_enabled, true) AS web_search_enabled,
           COALESCE(scac.emoji_usage_enabled, true) AS emoji_usage_enabled,
           COALESCE(scac.sticker_usage_enabled, true) AS sticker_usage_enabled,
@@ -962,11 +958,10 @@ export class ExportRepository {
         },
         memory: {
           server_memteaching_enabled: configData.server_memteaching_enabled,
-          attribute_memteaching_enabled: configData.attribute_memteaching_enabled,
-          sampledialogue_memteaching_enabled: configData.sampledialogue_memteaching_enabled,
           self_teaching_enabled: configData.self_teaching_enabled,
           personal_memories_enabled: configData.personal_memories_enabled,
           prompt_snapshot_enabled: configData.prompt_snapshot_enabled,
+          persona_export_enabled: configData.persona_export_enabled,
           stm_privacy_bypass: configData.stm_privacy_bypass,
           memory_tagging_enabled: configData.memory_tagging_enabled,
           channel_memory_enabled: configData.channel_memory_enabled,

@@ -464,6 +464,11 @@ export function embedMetadataInPNG(pngBuffer: Buffer, metadata: PresetExport): B
   return appendTextChunkToPNG(pngBuffer, METADATA_KEY, JSON.stringify(metadata), TEXT_CHUNK_TYPE);
 }
 
+export function embedSillyTavernMetadataInPNG(pngBuffer: Buffer, metadata: Record<string, unknown>): Buffer {
+  const value = Buffer.from(JSON.stringify(metadata), "utf8").toString("base64");
+  return appendTextChunkToPNG(pngBuffer, "chara", value, TEXT_CHUNK_TYPE);
+}
+
 /** Store the full generation prompt as UTF-8 without altering existing PNG chunks. */
 export function embedImagePromptInPNG(pngBuffer: Buffer, prompt: string, negativePrompt?: string): Buffer {
   const withPrompt = appendTextChunkToPNG(pngBuffer, "TomoriPrompt", prompt, INTERNATIONAL_TEXT_CHUNK_TYPE);

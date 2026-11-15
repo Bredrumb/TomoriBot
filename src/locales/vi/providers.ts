@@ -164,6 +164,7 @@ export default {
       review_messages: `Xem lại các tin nhắn gần đây hoặc xóa chúng bằng \`/refresh\`.`,
       review_memories: `Kiểm tra bộ nhớ và cấu hình của bạn (\`/export personal memories\`, \`/export memories\`, \`/export config\`).`,
       blacklist_member: `Đưa thành viên gây sự cố vào danh sách đen bằng \`/moderation\`.`,
+      use_personal_providers: `Dùng [nhà cung cấp cá nhân](https://docs.tomoribot.app/vi/features/knowledge/personalization/#your-own-providers) của riêng bạn với \`/personal providers\` để các yêu cầu của bạn không tính vào hạn mức của máy chủ này.`,
     },
     google: {
       "400_default_message": `Định dạng yêu cầu của bạn có lỗi`,

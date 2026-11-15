@@ -22,7 +22,7 @@ The sub-pipeline provides two write paths:
 - **Dual-key scoping:** writes index into both user-scoped (`shortterm:user:userId:channelId[:personaId]`) and server-scoped (`shortterm:server:serverId:channelId[:personaId]`) keys. Direct message sessions create only the user-scoped entry.
 - **Summary priority:** same-channel context favors categories or summary text. Other-channel context can include raw messages alongside distilled content according to render mode. Passive capture preserves existing summaries.
 - **Single upgrade per turn:** `streamingContext.disableShortTermMemoryUpdate` is set to `true` after the first successful upgrade, preventing the model from invoking `update_short_term_memory` multiple times in one tool loop.
-- **Deletion ownership:** channel resets through `/refresh` call `clearShortTermMemoryForChannel()`, and user memory purges call `clearShortTermMemoryForUser()`. Both helpers evict the in-memory cache and delete rows from the `short_term_memories` table in the background.
+- **Deletion ownership:** channel resets through `/refresh` call `clearShortTermMemoryForChannel()`, and user memory purges call `clearShortTermMemoryForUser()`. Both helpers evict the in-memory cache and delete rows from the `short_term_memories` table in the background. `/personal nuke` deletes user-scoped rows in the user-erasure transaction, then calls the cache-only `invalidateShortTermMemoryForUser()` after commit. This evicts the user's entries and hydration marker locally and through the invalidation bus. Server-scoped summaries remain shared server data.
 
 ## Cross-references
 

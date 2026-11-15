@@ -36,13 +36,6 @@ Startup schema execution is coordinated by `src/utils/db/initializeDatabase.ts`:
 - Versions 900 and above are reserved for deployment-specific migrations. A clean installation executes that band after the base schema instead of recording it as applied, so `schema.sql` stays free of deployment-specific DDL.
 - A deployment-band migration can replace a stored function created by a baseline migration. Because an applied band migration is never replayed, a later baseline migration that redefines that function needs a new band migration that restores the deployment body.
 
-## Conversation recording storage
-
-The `conversation_recording_*` tables and logical-size view in `schema.sql` are paired with migration
-137. The module repository owns their writes, owner-wide transactions, source lifecycle handling,
-and reclamation. See [Conversation recording](/architecture/subsystems/conversation-recording/) for
-the cross-component contracts.
-
 ## Document heading paths
 
 `document_chunks.heading_path` is nullable JSONB shaped as
@@ -189,7 +182,7 @@ flowchart TD
 - **Server configuration split**: server settings are partitioned into command-aligned tables:
   - `server_chat_configs`: message context fetch limits, model parameters, cascade limits, stop strings, logit biases, and context notes.
   - `server_model_configs`: active model foreign keys and `subscription_capabilities`, which identifies selections funded by the server's subscription entry independently of shared OpenRouter model IDs.
-  - `server_member_permissions_configs`: member feature toggles, self-teaching, and memory permissions.
+  - `server_member_permissions_configs`: member feature toggles, self-teaching, server memory permissions, prompt snapshot access, and persona export access (disabled for ordinary members by default).
   - `server_channel_scope_configs`: channel roleplay rules, blocklists, and thought-log routing.
   - `server_trigger_behavior_configs`: cooldown modes, durations, and trigger styles.
   - `server_auto_trigger_configs` and `server_auto_trigger_persona_overrides`: auto-trigger thresholds and per-channel persona routing.

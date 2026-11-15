@@ -55,11 +55,16 @@ Trigger Behavior.
 ## Learning & Privacy Controls
 
 - **Member permissions**: in `/moderation` > Member Access, click `Edit Permissions` to control
-  whether members without `Manage Server` can manage server memories, persona attributes,
-  sample dialogues, or inspect prompt snapshots. Server memory teaching is disabled by default and
+  whether members without `Manage Server` can manage server memories, inspect prompt snapshots,
+  or export personas. Server memory teaching is disabled by default and
   lets members view their own memories, add new ones, and edit or remove their own. When disabled,
   only members with `Manage Server` can view or manage server memories. Viewing and managing documents and
   lorebooks requires `Manage Server`.
+- **Persona exports**: disabled by default for members without `Manage Server`. Enable `Persona Exports`
+  in `/moderation` > `Member Access` > `Edit Permissions` to let members use every `/persona export`
+  format. This includes bundles with sprites, character references, and optionally the assigned voice
+  audio and transcript. Successful exports are always public in the channel. Members denied access
+  receive a private reply directing them to a server manager. Managers can export regardless of this setting.
 - **User Blacklist**: in `/moderation` > User Blacklist, choose members for TomoriBot to ignore
   completely. Blacklisted members cannot trigger her or run commands, and their messages never
   reach prompt context. You can also set persona-specific member blocks.
@@ -69,6 +74,12 @@ Trigger Behavior.
   creation, and scheduled tasks from other channels. STM cannot enter or leave unless
   `Private-Channel STM Sharing` is `Allowed`. You can still ask the bot to work within a private
   channel or dispatch work outward; an outward task can include information from your conversation.
+
+`/config` requires `Manage Server` in servers, including viewing persona attributes, sample dialogues,
+sprites, and short-term memory. Persona attributes and sample dialogues can only be edited by server
+managers. DM owners retain access to their own workspace. The export permission grants access to
+`/persona export`; it does not grant access to `/config` or its `Export Sprites` button. Full prompt
+downloads use the separate `Prompt Snapshots` permission.
 
 Automatic privacy checks role permissions: `@everyone` must be able to view the channel,
 and no role may have an explicit `View Channel` deny. Individual member overwrites do not affect

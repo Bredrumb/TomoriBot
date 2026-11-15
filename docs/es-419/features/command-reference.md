@@ -11,7 +11,7 @@ sidebar:
 
 Todos los comandos de barra que TomoriBot tiene registrados actualmente, generados a partir de los mismos constructores de comandos y descripciones en español que se usan para el registro en Discord (las descripciones sin traducir aparecen en inglés).
 
-Grupos de comandos de nivel superior: **45**. Comandos de barra ejecutables: **94**.
+Grupos de comandos de nivel superior: **44**. Comandos de barra ejecutables: **91**.
 
 ## `/booru`
 
@@ -240,9 +240,9 @@ Administra los preajustes de personalidad
 |---|---|
 | `/persona create` | Crea un preajuste de personalidad sencillo manualmente |
 | `/persona default` | Aplica una configuración de personalidad preajustada |
-| `/persona export` | Exporta la personalidad actual como un archivo PNG para compartir |
+| `/persona export` | Exporta una persona como tarjeta PNG, JSON sin procesar o paquete ZIP con multimedia |
 | `/persona generate` | Generación de personalidad con IA (requiere un proveedor compatible) |
-| `/persona import` | Importa una persona desde un archivo PNG, JSON o CHARX |
+| `/persona import` | Importa una persona desde un PNG, JSON, CHARX o paquete ZIP de TomoriBot |
 | `/persona remove` | Elimina un alter del servidor |
 
 ## `/personal`
@@ -294,16 +294,6 @@ Administra los reinicios de cuotas de generación.
 |---|---|
 | `/quota reset global` | Reinicia el fondo de cuota de generación a nivel de servidor. |
 | `/quota reset user` | Reinicia el uso de la cuota diaria para un usuario. |
-
-## `/record`
-
-Administra las grabaciones de tus conversaciones en este servidor
-
-| Comando | Resumen |
-|---|---|
-| `/record data` | Consulta, exporta o elimina tus grabaciones en este servidor |
-| `/record start` | Guarda extractos anonimizados de conversaciones en este servidor cada vez que envíes un mensaje |
-| `/record stop` | Detén la recolección de extractos y conserva tus grabaciones guardadas |
 
 ## `/refresh`
 

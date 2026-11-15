@@ -152,6 +152,7 @@ export default {
       switch_model_provider: `Cambia a un modelo o proveedor diferente con \`/config\` > Modelos > Cambiar modelos o \`/providers\`.`,
       switch_model_provider_personal: `Cambia con \`/personal config\`, o actualiza el proveedor en \`/personal providers\`.`,
       disable_personal_text_override: `Este error de solicitud fue de tu [proveedor personal](https://docs.tomoribot.app/es-419/features/knowledge/personalization/#your-own-providers). Actualízalo en \`/personal providers\` o selecciona un modelo funcional con \`/personal config\`.`,
+      use_personal_providers: `Usa tu propio [proveedor personal](https://docs.tomoribot.app/es-419/features/knowledge/personalization/#your-own-providers) con \`/personal providers\` para que tus solicitudes no cuenten para la cuota de este servidor.`,
       support_server: `Visita el [Servidor de soporte oficial](https://discord.gg/bjCfHm9QsB) para obtener asistencia.`,
       shorten_message: `Intenta acortar tu mensaje y luego envíalo de nuevo.`,
       refresh_context: `Borra el contexto de la conversación con \`/refresh\`.`,

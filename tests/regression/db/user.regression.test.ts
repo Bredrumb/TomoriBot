@@ -6,9 +6,19 @@
  *
  * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md)
  */
-import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { afterAll, beforeAll, describe, expect, it, spyOn } from "bun:test";
+import { type ChatInputCommandInteraction, Client } from "discord.js";
+import { execute as executePersonalNuke } from "@/commands/personal/nuke";
 import { PrivacyLevel } from "@/types/db/schema";
+import {
+  filterUnwarmedStmUsers,
+  getShortTermMemoriesForUser,
+  preWarmUserStmEntries,
+} from "@/utils/cache/shortTermMemoryCache";
 import { userRepository } from "@/utils/db/repositories";
+import { sql } from "@/utils/db/client";
+import { initializeLocalizer } from "@/utils/text/localizer";
+import { makeFakeInteraction } from "../../helpers/fakeInteraction";
 import { FIXTURE_IDS, cleanupFixtures, insertFixtures, type FixtureRefs } from "./setup/fixtures";
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
 
@@ -114,6 +124,12 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("User — regression", () => {
         INSERT INTO personalization_blacklist (server_id, user_disc_id)
         VALUES (${server.server_id}, ${NUKE_DISC_ID})
       `;
+      await testSql`
+        INSERT INTO short_term_memories (scope_kind, server_disc_id, user_disc_id, channel_disc_id, summary)
+        VALUES ('user', ${FIXTURE_IDS.serverDiscId}, ${NUKE_DISC_ID}, '_rt_chan', '_rt_user_stm'),
+               ('user', ${FIXTURE_IDS.serverDiscId}, ${OTHER_DISC_ID}, '_rt_chan', '_rt_other_stm'),
+               ('server', ${FIXTURE_IDS.serverDiscId}, NULL, '_rt_chan', '_rt_server_stm')
+      `;
 
       // One reminder the target authored, one somebody else aimed at them, and one that touches
       // them not at all. Only the third may survive.
@@ -153,6 +169,16 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("User — regression", () => {
       `;
       expect(optOut.length).toBe(1);
 
+      const stmRows = await testSql<Array<{ scope_kind: string; user_disc_id: string | null }>>`
+        SELECT scope_kind, user_disc_id FROM short_term_memories WHERE channel_disc_id = '_rt_chan'
+        ORDER BY scope_kind
+      `;
+      expect(stmRows).toEqual([
+        { scope_kind: "server", user_disc_id: null },
+        { scope_kind: "user", user_disc_id: OTHER_DISC_ID },
+      ]);
+
+      await testSql`DELETE FROM short_term_memories WHERE channel_disc_id = '_rt_chan'`;
       await testSql`DELETE FROM reminders WHERE channel_disc_id = '_rt_chan'`;
       await testSql`DELETE FROM server_memories WHERE server_memory_id = ${serverMemory.server_memory_id}`;
       await testSql`DELETE FROM personalization_blacklist WHERE user_disc_id = ${NUKE_DISC_ID}`;
@@ -161,6 +187,44 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("User — regression", () => {
 
     it("returns null for a user that does not exist", async () => {
       expect(await userRepository.nukeUser(-1)).toBeNull();
+    });
+
+    it("clears cached short-term memories and their hydration marker after command erasure", async () => {
+      const userDiscId = "_rt_user_nuke_cached";
+      const user = await userRepository.register(userDiscId, "_rt_cached", "en-US");
+      if (!user?.user_id) throw new Error("Expected registered user");
+      await testSql`
+        INSERT INTO short_term_memories (scope_kind, user_disc_id, channel_disc_id, summary)
+        VALUES ('user', ${userDiscId}, '_rt_nuke_cached_channel', '_rt_cached_summary')
+      `;
+      await preWarmUserStmEntries(userDiscId);
+      expect(getShortTermMemoriesForUser(userDiscId)).toHaveLength(1);
+      expect(filterUnwarmedStmUsers([userDiscId])).toEqual([]);
+
+      await initializeLocalizer();
+      const { interaction } = makeFakeInteraction();
+      interaction.user.id = userDiscId;
+      interaction.options.getString = () => "yes";
+      const queries = spyOn(sql, "unsafe");
+      try {
+        await executePersonalNuke(
+          new Client({ intents: [] }),
+          interaction as unknown as ChatInputCommandInteraction,
+          user,
+          "en-US",
+        );
+        expect(
+          queries.mock.calls.filter(([query]) => /^\s*DELETE\s+FROM\s+short_term_memories\b/i.test(query)),
+        ).toHaveLength(0);
+      } finally {
+        queries.mockRestore();
+      }
+
+      expect(await userRepository.loadByDiscordId(userDiscId)).toBeNull();
+      expect(getShortTermMemoriesForUser(userDiscId)).toEqual([]);
+      expect(filterUnwarmedStmUsers([userDiscId])).toEqual([userDiscId]);
+      await preWarmUserStmEntries(userDiscId);
+      expect(getShortTermMemoriesForUser(userDiscId)).toEqual([]);
     });
   });
 

@@ -19,15 +19,14 @@ Esta página cubre los controles de usuario en-Discord. En instancias autohosped
 - Ajustes de configuración del servidor
 - Claves de API de proveedores cifradas
 - Metadatos de expresión, reglas de acceso de personas y archivos multimedia de expresión subidos
-- [Grabaciones de conversaciones](/features/setup-administration/conversation-recordings/) opcionales, incluidos los mensajes circundantes cuando se seleccionan
 
 ### No almacenado
 
-- Los bytes de archivos multimedia, nombres de archivo y URLs de archivos adjuntos de las grabaciones de conversaciones; solo se guardan los metadatos de tipo y cantidad de archivos adjuntos.
+- Historial de mensajes de Discord (los mensajes no se archivan en un registro de mensajes persistente)
 
 ### Enviado a tus proveedores de IA
 
-Siempre que se activa, TomoriBot recupera mensajes recientes en el canal junto con memorias relevantes como contexto para el modelo. La grabación opcional de conversaciones también lee mensajes aptos de forma independiente a las activaciones de respuesta; no realiza llamadas automáticas al proveedor.
+Siempre que se activa, TomoriBot recupera mensajes recientes en el canal junto con memorias relevantes como contexto para el modelo. Ella no lee ni procesa mensajes fuera de esas activaciones.
 
 Cuando se configura un modelo de incrustación (embedding), su proveedor recibe el mensaje más reciente y el texto de documentos y memorias en los que busca. Este puede ser un proveedor diferente al que redacta las respuestas. Las memorias personales ocultas por la configuración de privacidad quedan fuera de la búsqueda. Los datos de búsqueda se eliminan junto con su memoria; consulta [Decaimiento de memoria](/features/knowledge/memory/memory-decay/) para conocer el reposo y reemplazo automáticos.
 
@@ -48,15 +47,33 @@ Las exportaciones de configuración incluyen estos ajustes sin claves de API ni 
 
 ## Exporta tus datos
 
-Las grabaciones de conversaciones usan `/record data` para adjuntos privados en Markdown o JSON en el servidor actual. Sus reglas de rango, retención y eliminación están en la [guía de grabaciones](/features/setup-administration/conversation-recordings/).
-
 Las exportaciones de ajustes y memorias se envían a tus mensajes directos como un archivo JSON, para que tus mensajes directos conserven una copia que puedas restaurar más tarde. Si TomoriBot no puede enviarte un mensaje directo, el archivo se adjunta a una respuesta privada en su lugar; guárdalo antes de que la respuesta desaparezca.
 
 - `/export config`: valores de configuración del servidor (excluye claves y credenciales de API).
 - `/export personal config`: configuración de perfil personal (privacidad, etiquetas de apariencia, nombres).
 - `/export memories`: memorias del servidor, con alcance para la persona principal, una persona o todas las personas. Los límites de canales no se exportan, por lo que las memorias importadas se aplican en todos los canales hasta que vuelvas a elegir canales.
 - `/export personal memories`: recuerdos personales, de alcance global o por persona.
-- `/persona export`: definiciones completas de personas.
+
+`/persona export` está pensado para compartir, por lo que publica la definición de la persona, incluido
+su lorebook, en el canal en lugar de tus mensajes directos. Elige `Tarjeta de TomoriBot` o `JSON sin procesar`
+para conservar todos los ajustes de la persona. `PNG compatible con SillyTavern` incluye el avatar y los campos
+de personaje compatibles, excluyendo los ajustes específicos de TomoriBot y los límites de canal del lorebook.
+
+En servidores, `/persona export` requiere `Administrar servidor` a menos que un administrador habilite `Exportaciones de persona`
+en `/moderation` > `Acceso de miembros` > `Editar permisos`. Esto aplica a todos los formatos. Las denegaciones son
+privadas; las exportaciones exitosas siempre se publican públicamente. `Exportar Sprites` está disponible para los
+administradores del servidor desde `/config`. El ajuste del servidor no afecta a las exportaciones en mensajes directos.
+
+Elige `Paquete de TomoriBot` para obtener un ZIP con el avatar, sprites, referencia de personaje y ajustes de persona.
+Establece `include_voice:true` para incluir también el audio de referencia de voz asignado y su transcripción; estos
+se comparten públicamente con el ZIP. Se excluyen los ID de voz del proveedor y las credenciales. Importa el ZIP
+con `/persona import` para restaurar la persona y su multimedia empaquetada en una sola carga.
+
+Las exportaciones de paquetes optimizan las copias de las imágenes y pueden reducir su resolución para ajustarse al límite por imagen;
+los originales guardados permanecen sin cambios. Si un paquete supera el límite de tamaño de carga o importación, se rechaza
+sin omitir recursos. Si eso ocurre, excluye el audio de voz o usa una tarjeta PNG y `Exportar Sprites` por
+separado. Conserva el ZIP si la importación informa un fallo al restaurar la multimedia: es posible que los ajustes de la
+persona ya se hayan guardado, y si se importó un alter debes eliminarlo antes de reintentar.
 
 Los medios de expresión cargados se almacenan en el host del servidor y están fuera de estas exportaciones JSON. Los autohospedadores deben realizar copias de seguridad del almacenamiento de la base de datos y de los activos multimedia juntos; consulte [copias de seguridad de medios personalizados](/self-hosting/maintenance/#database-backups-and-recovery-keys).
 
@@ -74,7 +91,6 @@ Adjunte un archivo exportado para restaurarlo:
 
 Estas acciones eliminan o restablecen permanentemente los datos almacenados:
 
-- `/record data`: elimina los extractos grabados de tu servidor actual tras la confirmación; detén la recolección por separado con `/record stop`.
 - `/personal memories`: gestiona o elimina recuerdos personales.
 - `/memories`: administra o elimina memorias del servidor, documentos y lorebooks. Los documentos y lorebooks
   requieren `Administrar servidor`. Con la enseñanza de miembros habilitada, los miembros pueden ver, editar o eliminar sus

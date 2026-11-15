@@ -776,70 +776,6 @@ function personaLocation(route: ConfigPanelRoute): { personaId: number | null; e
   return { personaId: null };
 }
 
-type CollectionFamily = "attribute" | "dialogue";
-type CollectionOperation = "add" | "edit" | "remove";
-
-function collectionOperationForRoute(
-  route: ConfigPanelRoute,
-  selectedValue?: string | null,
-): { family: CollectionFamily; operation: CollectionOperation } | null {
-  switch (route.action) {
-    case "attribute-select":
-      return selectedValue === "add" ? { family: "attribute", operation: "add" } : null;
-    case "attribute-add-submit":
-      return { family: "attribute", operation: "add" };
-    case "attribute-edit-open":
-    case "attribute-edit-submit":
-      return { family: "attribute", operation: "edit" };
-    case "attribute-remove":
-      return { family: "attribute", operation: "remove" };
-    case "dialogue-select":
-      return selectedValue === "add" ? { family: "dialogue", operation: "add" } : null;
-    case "dialogue-add-submit":
-      return { family: "dialogue", operation: "add" };
-    case "dialogue-edit-open":
-    case "dialogue-edit-submit":
-      return { family: "dialogue", operation: "edit" };
-    case "dialogue-remove":
-      return { family: "dialogue", operation: "remove" };
-    default:
-      return null;
-  }
-}
-
-async function authorizeCollectionOperation(
-  interaction: GlobalRoutableInteraction,
-  scope: ConfigScope,
-  operation: { family: CollectionFamily; operation: CollectionOperation } | null,
-): Promise<boolean> {
-  if (!operation) return true;
-
-  // DM owners are not guild managers. Their workspace still obeys the same teaching flag as the
-  // legacy commands even though the static actor policy marks the DM owner as the workspace owner.
-  if (scope.guildId && scope.actor.isManager) return true;
-
-  const config = scope.personas[0]?.config;
-  const teachingEnabled =
-    operation.family === "attribute"
-      ? config?.attribute_memteaching_enabled === true
-      : config?.sampledialogue_memteaching_enabled === true;
-  if (!teachingEnabled) return false;
-
-  if (scope.guildId) {
-    try {
-      if (await userRepository.isBlacklisted(scope.serverDiscId, interaction.user.id)) return false;
-    } catch (error) {
-      await log.error("Failed to resolve persona collection blacklist state", error, {
-        errorType: "InteractionRouteError",
-        metadata: { serverDiscId: scope.serverDiscId, userDiscordId: interaction.user.id },
-      });
-      return false;
-    }
-  }
-
-  return true;
-}
-
 async function repairDialogueState(
   scope: ConfigScope,
   persona: TomoriState,
@@ -884,11 +820,6 @@ async function handleModalOpen(
   }
 
   const locale = route.locale;
-  if (!(await authorizeCollectionOperation(interaction, scope, collectionOperationForRoute(route)))) {
-    const denied = deniedReceipt(locale);
-    await replyPanelReceipt(interaction, denied);
-    return;
-  }
 
   const nonce = dependencies.createNonce();
 
@@ -1098,12 +1029,6 @@ async function handleCollectionAddSelection(
   const scope = await dependencies.resolveScope(interaction, false);
   if (!scope) {
     await replyPanelReceipt(interaction, missingScopeReceipt(route.locale, interaction, dependencies));
-    return;
-  }
-  const operation = collectionOperationForRoute(route, "add");
-  if (!(await authorizeCollectionOperation(interaction, scope, operation))) {
-    const denied = deniedReceipt(route.locale);
-    await replyPanelReceipt(interaction, denied);
     return;
   }
 
@@ -3391,6 +3316,10 @@ async function handleSpriteNavigation(
     }
 
     case "sprite-export": {
+      if (scope.readStatus !== "fresh") {
+        await replyPanelReceipt(interaction, staleReceipt(locale));
+        return "handled";
+      }
       const result = await dependencies.spriteOperations.exportSprites({
         persona,
         maxArchiveBytes: interaction.attachmentSizeLimit,
@@ -3460,6 +3389,10 @@ export function createConfigInteractionRoute(overrides: Partial<ConfigRouteDepen
       if (!route) throw new Error(`Malformed config panel route: ${interaction.customId}`);
 
       const actor = resolveConfigActor(interaction);
+      if (actor.workspaceKind === "guild" && !actor.isManager) {
+        await replyPanelReceipt(interaction, deniedReceipt(route.locale));
+        return;
+      }
       if (await handleConfigStPresetsRoute(_client, interaction, parsed, dependencies)) return;
 
       // Route dispatch runs against hand-rolled interaction doubles in four sibling suites that
@@ -3780,22 +3713,6 @@ export function createConfigInteractionRoute(overrides: Partial<ConfigRouteDepen
             await dependencies.openPersonalMemoryPanel(interaction, route.locale, selectedLineageId),
           );
         }
-        return;
-      }
-
-      if (
-        !(await authorizeCollectionOperation(interaction, scope, collectionOperationForRoute(route, submittedValue)))
-      ) {
-        await repaint(interaction, {
-          locale: route.locale,
-          scope,
-          category: "persona",
-          page: "general",
-          selectedPersonaId:
-            resolveSelectedPersona(scope.personas, personaLocation(route).personaId)?.persona_id ?? null,
-          receipt: deniedReceipt(route.locale),
-          dependencies,
-        });
         return;
       }
 
@@ -4157,6 +4074,12 @@ export async function executeConfigCommand(
 ): Promise<void> {
   const dependencies: ConfigRouteDependencies = { ...defaultDependencies, ...dependenciesOverride };
   if (!interaction.deferred && !interaction.replied) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  const actor = resolveConfigActor(interaction);
+  if (actor.workspaceKind === "guild" && !actor.isManager) {
+    await replyPanelReceipt(interaction, deniedReceipt(locale));
+    return;
+  }
 
   const scope = await dependencies.resolveScope(interaction, false);
   if (!scope) {

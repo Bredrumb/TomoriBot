@@ -1312,32 +1312,30 @@ ${localizer(locale, "commands.personal.config.no_text_providers")}`,
 ${localizer(locale, "commands.personal.config.parameters_description")}`,
         });
 
-        const tempStr =
-          config.llm_temperature !== null && config.llm_temperature !== undefined
-            ? formatStoredParameterValue(config.llm_temperature)
-            : "0.7";
-        const minPStr =
-          config.llm_min_p !== null && config.llm_min_p !== undefined
-            ? formatStoredParameterValue(config.llm_min_p)
-            : "0.05";
-        const topPStr =
-          config.llm_top_p !== null && config.llm_top_p !== undefined
-            ? formatStoredParameterValue(config.llm_top_p)
-            : "0.95";
-        const topKStr = config.llm_top_k !== null && config.llm_top_k !== undefined ? String(config.llm_top_k) : "0";
-        const freqStr =
-          config.llm_frequency_penalty !== null && config.llm_frequency_penalty !== undefined
-            ? formatStoredParameterValue(config.llm_frequency_penalty)
-            : "0";
-        const presStr =
-          config.llm_presence_penalty !== null && config.llm_presence_penalty !== undefined
-            ? formatStoredParameterValue(config.llm_presence_penalty)
-            : "0";
-        const maxTokStr =
-          config.llm_max_output_tokens !== null && config.llm_max_output_tokens !== undefined
-            ? String(config.llm_max_output_tokens)
-            : "None (provider default)";
-        const thinkStr = config.thinking_level ?? "auto";
+        const workspaceConfig = input.personas[0]?.config;
+        const parameterValue = (
+          stored: number | string | null | undefined,
+          inherited: number | string | null | undefined,
+        ): string => {
+          const format = (value: number | string) =>
+            typeof value === "number" ? formatStoredParameterValue(value) : value;
+          if (stored !== null && stored !== undefined) return format(stored);
+          if (inherited === undefined) return localizer(locale, "commands.personal.config.param_workspace_default");
+          return localizer(locale, "commands.personal.config.param_workspace_value", {
+            value:
+              inherited === null
+                ? localizer(locale, "commands.personal.config.param_provider_default")
+                : format(inherited),
+          });
+        };
+        const tempStr = parameterValue(config.llm_temperature, workspaceConfig?.llm_temperature);
+        const minPStr = parameterValue(config.llm_min_p, workspaceConfig?.llm_min_p);
+        const topPStr = parameterValue(config.llm_top_p, workspaceConfig?.llm_top_p);
+        const topKStr = parameterValue(config.llm_top_k, workspaceConfig?.llm_top_k);
+        const freqStr = parameterValue(config.llm_frequency_penalty, workspaceConfig?.llm_frequency_penalty);
+        const presStr = parameterValue(config.llm_presence_penalty, workspaceConfig?.llm_presence_penalty);
+        const maxTokStr = parameterValue(config.llm_max_output_tokens, workspaceConfig?.llm_max_output_tokens);
+        const thinkStr = parameterValue(config.thinking_level, workspaceConfig?.thinking_level);
 
         components.push(
           ...buildProviderParameterBlock({

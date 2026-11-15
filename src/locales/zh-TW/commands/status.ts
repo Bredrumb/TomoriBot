@@ -105,8 +105,6 @@ export default {
     field_image_generation: `圖片生成`,
     field_videogen: `影片生成`,
     field_server_memteaching: `伺服器記憶教導`,
-    field_attribute_memteaching: `屬性教導`,
-    field_sampledialogue_memteaching: `範例對話教導`,
     field_hide_impersonation: `隱藏模擬通知嵌入`,
     field_uncensor_injection: `反注入提示詞`,
     field_uncensor_unicode: `Unicode 空格替換`,

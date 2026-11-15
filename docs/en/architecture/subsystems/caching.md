@@ -165,7 +165,9 @@ does not roll back an already successful write. Existing cache expiry remains a 
 
 Registrations live beside their domain invalidators: server/persona state, users and blacklists,
 whitelists, emoji/stickers, channel prompt/model/context overrides, sprite and appearance state,
-persona blocks, spotlights, SillyTavern presets, guild MCP configuration, and Natural Nudge settings.
+persona blocks, spotlights, user-scoped STM, SillyTavern presets, guild MCP configuration, and Natural Nudge settings.
+User STM erasure notifications evict summaries, raw messages, and bulk-hydration markers without
+database writes. Reconnection flushes all user-scoped STM and its markers, preserving server-scoped STM.
 New cross-owner database-derived caches must register eviction and reconnect flushing with the bus.
 Active channel queues, webhook slots, and conversation runtime state stay in their owner process;
 notifications do not transfer live work. Shutdown stops publishing, unsubscribes, and settles pending

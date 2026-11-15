@@ -76,8 +76,19 @@ export default {
     name_too_long_description: `El primer nombre se usa como mi nombre para mostrar, que puede tener como máximo {max} caracteres. Acórtalo y vuelve a intentarlo.`,
     export: {
       persona_description: "Persona que quieres exportar",
-      export_json_description: "Exporta un archivo JSON importable en lugar de un PNG (sin imagen de avatar)",
-      description: `Exporta la personalidad actual como un archivo PNG para compartir`,
+      permission_denied_title: `Exportaciones de persona desactivadas`,
+      permission_denied_description: `Este servidor tiene desactivadas las exportaciones de persona para miembros sin Administrar servidor. Un administrador del servidor puede habilitar Exportaciones de persona en /moderation > Acceso de miembros > Editar permisos. Por favor, contacta a un administrador del servidor.`,
+      public_delivery_notice: `Las exportaciones de persona se publican públicamente en este canal.`,
+      output_format_description: "Formato de archivo para la persona exportada",
+      tomoribot_option: "Tarjeta de TomoriBot",
+      json_option: "JSON sin procesar",
+      sillytavern_option: "PNG compatible con SillyTavern",
+      bundle_option: `Paquete de TomoriBot (ZIP: sprites, referencia de personaje, voz opcional)`,
+      include_voice_description: `Solo paquete: incluye públicamente la muestra de voz y transcripción (por defecto: no)`,
+      description: `Exporta una persona como tarjeta PNG, JSON sin procesar o paquete ZIP con multimedia`,
+      success_description_bundle: `La persona **{nickname}** ha sido exportada con su avatar, sprites, referencia de personaje y ajustes de persona. El audio de la muestra de voz y su transcripción se incluyen solo cuando se solicitan y están asignados. Restaura este ZIP con \`/persona import\`.`,
+      bundle_too_large_description: `El paquete optimizado pesa {size} MiB; esta exportación permite {limit} MiB. Prueba excluir el audio de voz o reducir el tamaño de las imágenes de origen. También puedes exportar una tarjeta PNG y usar Exportar Sprites por separado. No se omitió ningún recurso.`,
+      bundle_failed_description: `No se pudo crear el paquete completo porque no se pudo cargar o procesar un recurso. No se exportó ningún paquete parcial. Revisa las imágenes y la muestra de voz de la persona, y vuelve a intentarlo.`,
       success_title: `🟢 Persona exportada con éxito`,
       success_description: `¡La persona actual **{nickname}** ha sido exportada! Comparte este archivo PNG con otros para difundir esta configuración de personalidad.
 1. Descarga el archivo PNG adjunto abajo
@@ -85,6 +96,7 @@ export default {
       success_description_json: `La persona actual **{nickname}** ha sido exportada como un archivo JSON.
 
 **Nota:** Este JSON se puede volver a importar con \`/persona import\`. No incluye la imagen de avatar. Usa la exportación en PNG para compartir también el avatar.`,
+      success_description_sillytavern: `La persona **{nickname}** ha sido exportada como un PNG compatible con SillyTavern. Incluye el avatar, la personalidad, los diálogos de ejemplo, el prompt de la persona y el lorebook. Usa Tarjeta de TomoriBot o JSON sin procesar para conservar los ajustes de TomoriBot, o Paquete de TomoriBot para incluir también multimedia.`,
       json_importable_note: `Este JSON exportado se puede importar con /persona import. No incluye la imagen de avatar; usa la exportación en PNG para compartir también el avatar.`,
       failed_title: `🔴 Exportación fallida`,
       avatar_failed_title: `🔴 Falló la descarga del avatar`,
@@ -97,8 +109,11 @@ export default {
       error_export_failed: `Falló la exportación de los datos de la persona`,
     },
     import: {
-      description: `Importa una persona desde un archivo PNG, JSON o CHARX`,
-      file_description: `Archivo PNG, JSON o CHARX que contiene datos de persona`,
+      description: `Importa una persona desde un PNG, JSON, CHARX o paquete ZIP de TomoriBot`,
+      file_description: `Archivo PNG, JSON, CHARX o paquete ZIP de TomoriBot con datos de persona`,
+      invalid_bundle_description: `Este ZIP no es un paquete de persona válido de TomoriBot, contiene multimedia no válida o supera los límites de tamaño descomprimido del paquete. Usa un ZIP creado por /persona export. No se modificó ningún dato de persona.`,
+      bundle_assets_failed_description: `Se importaron los ajustes de la persona, pero no se pudo restaurar la multimedia del paquete. La importación está incompleta. Conserva el ZIP y vuelve a intentarlo; si es un alter, elimina el alter recién importado antes de reintentar.`,
+      bundle_assets_restored_description: `Se restauraron los sprites y la referencia de personaje del paquete, junto con el audio de voz cuando estaba incluido. Los proveedores de voz y las credenciales se mantuvieron sin cambios.`,
       type_description: `Importar como persona principal o alter`,
       triggers_description: `Palabras de activación adicionales opcionales, separadas por comas ("," o "、")`,
       memories_description: `¿Conservar las memorias del usuario y del servidor de esta persona?`,
@@ -143,7 +158,7 @@ Por favor, edita el archivo de importación para usar un nombre diferente o elim
       sprite_cleanup_failed_description: `La persona fue importada, pero no se pudieron borrar sus sprites anteriores. La importación está incompleta. Inténtalo de nuevo o contacta a un administrador.`,
       sprite_storage_cleanup_partial_description: `La persona fue importada, pero no se pudieron eliminar {failed_count} imagen(es) de sprite anteriores del almacenamiento.`,
       invalid_file_type_title: `🔴 Tipo de archivo inválido`,
-      invalid_file_type_description: `Por favor, sube un archivo .png, .json o .charx válido que contenga datos de persona.`,
+      invalid_file_type_description: `Por favor, sube un archivo .png, .json, .charx o un paquete de persona .zip de TomoriBot.`,
       file_too_large_title: `🔴 Archivo demasiado grande`,
       file_too_large_description: `El archivo es demasiado grande. El tamaño máximo de archivo es de {max_size}MB.`,
       download_failed_title: `🔴 Falló la descarga`,

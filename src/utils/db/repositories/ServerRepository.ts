@@ -146,12 +146,11 @@ type ServerNoticeEmbedsConfigsRow = {
 /** Row shape for server_member_permissions_configs (Phase 6). */
 type ServerMemberPermissionsConfigsRow = {
   server_memteaching_enabled: boolean;
-  attribute_memteaching_enabled: boolean;
-  sampledialogue_memteaching_enabled: boolean;
   self_teaching_enabled: boolean;
   personal_memories_enabled: boolean;
   hide_impersonation_embeds: boolean;
   prompt_snapshot_enabled: boolean;
+  persona_export_enabled: boolean;
 };
 
 /** Row shape for server_channel_scope_configs (Phase 6). */
@@ -1186,9 +1185,9 @@ class ServerRepository implements IRepository<ServerExportShape> {
         `;
         await tx`
           INSERT INTO server_member_permissions_configs (
-            server_id, server_memteaching_enabled, attribute_memteaching_enabled, sampledialogue_memteaching_enabled
+            server_id, server_memteaching_enabled
           ) VALUES (
-            ${server.server_id}, ${isDMChannel}, ${isDMChannel}, ${isDMChannel}
+            ${server.server_id}, ${isDMChannel}
           ) ON CONFLICT (server_id) DO NOTHING
         `;
         const isUserByok = resolvedAccess?.mode === "user-byok";
@@ -2026,9 +2025,9 @@ class ServerRepository implements IRepository<ServerExportShape> {
   private async sqlLoadMemberPermissionsConfigs(serverId: number): Promise<ServerMemberPermissionsConfigsRow | null> {
     try {
       const [row] = await sql`
-        SELECT server_memteaching_enabled, attribute_memteaching_enabled,
-               sampledialogue_memteaching_enabled, self_teaching_enabled,
-               personal_memories_enabled, hide_impersonation_embeds, prompt_snapshot_enabled
+        SELECT server_memteaching_enabled,
+               self_teaching_enabled,
+               personal_memories_enabled, hide_impersonation_embeds, prompt_snapshot_enabled, persona_export_enabled
         FROM server_member_permissions_configs
         WHERE server_id = ${serverId}
       `;
@@ -2143,23 +2142,22 @@ class ServerRepository implements IRepository<ServerExportShape> {
   ): Promise<void> {
     await sql`
       INSERT INTO server_member_permissions_configs (
-        server_id, server_memteaching_enabled, attribute_memteaching_enabled,
-        sampledialogue_memteaching_enabled, self_teaching_enabled,
-        personal_memories_enabled, hide_impersonation_embeds, prompt_snapshot_enabled
+        server_id, server_memteaching_enabled,
+        self_teaching_enabled,
+        personal_memories_enabled, hide_impersonation_embeds, prompt_snapshot_enabled, persona_export_enabled
       ) VALUES (
-        ${serverId}, ${row.server_memteaching_enabled}, ${row.attribute_memteaching_enabled},
-        ${row.sampledialogue_memteaching_enabled}, ${row.self_teaching_enabled},
+        ${serverId}, ${row.server_memteaching_enabled},
+        ${row.self_teaching_enabled},
         ${row.personal_memories_enabled}, ${row.hide_impersonation_embeds},
-        ${row.prompt_snapshot_enabled}
+        ${row.prompt_snapshot_enabled}, ${row.persona_export_enabled ?? false}
       )
       ON CONFLICT (server_id) DO UPDATE SET
         server_memteaching_enabled         = EXCLUDED.server_memteaching_enabled,
-        attribute_memteaching_enabled      = EXCLUDED.attribute_memteaching_enabled,
-        sampledialogue_memteaching_enabled = EXCLUDED.sampledialogue_memteaching_enabled,
         self_teaching_enabled              = EXCLUDED.self_teaching_enabled,
         personal_memories_enabled          = EXCLUDED.personal_memories_enabled,
         hide_impersonation_embeds          = EXCLUDED.hide_impersonation_embeds,
         prompt_snapshot_enabled            = EXCLUDED.prompt_snapshot_enabled,
+        persona_export_enabled             = EXCLUDED.persona_export_enabled,
         updated_at                         = NOW()
     `;
   }

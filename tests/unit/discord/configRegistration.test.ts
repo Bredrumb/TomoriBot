@@ -119,7 +119,7 @@ describe("Config command registration", () => {
     expect([...(executionMap.get("model") ?? new Map()).keys()]).toContain("override.remove");
   });
 
-  it("registers /config as a bare root with no contexts and no default member permission", async () => {
+  it("registers /config with Manage Guild permission while retaining DM availability", async () => {
     const { registrationData, executionMap } = await loadCommandData();
 
     const configCommand = registrationData.find((command) => command.name === "config") as unknown as
@@ -129,9 +129,7 @@ describe("Config command registration", () => {
     expect(configCommand).toBeDefined();
     if (!configCommand) return;
 
-    // Undefined rather than "0": the panel filters per actor, so Discord must show the command to
-    // every member and let the routes decide. A blanket permission would hide the member surface.
-    expect(configCommand.default_member_permissions).toBeUndefined();
+    expect(configCommand.default_member_permissions).toBe("32");
     // Undefined contexts keeps the DM-backed workspace reachable.
     expect(configCommand.contexts).toBeUndefined();
     expect(configCommand.options).toEqual([

@@ -53,16 +53,14 @@ const enabledCapabilitiesManageState: CapabilitiesManageConfigState = {
 
 const disabledServerMemberPermissionsState: ServerMemberPermissionsCommandConfigState = {
   server_memteaching_enabled: false,
-  attribute_memteaching_enabled: false,
-  sampledialogue_memteaching_enabled: false,
   prompt_snapshot_enabled: false,
+  persona_export_enabled: false,
 };
 
 const enabledServerMemberPermissionsState: ServerMemberPermissionsCommandConfigState = {
   server_memteaching_enabled: true,
-  attribute_memteaching_enabled: true,
-  sampledialogue_memteaching_enabled: true,
   prompt_snapshot_enabled: true,
+  persona_export_enabled: true,
 };
 
 describe("config command write mappings", () => {
@@ -165,14 +163,14 @@ describe("config command write mappings", () => {
         "attributelist",
         "sampledialogues",
         "promptsnapshot",
+        "personaexport",
       ]);
 
       expect(plan.method).toBe("updateMemberPermissionsConfig");
       expect(plan.patch).toEqual({
         server_memteaching_enabled: true,
-        attribute_memteaching_enabled: true,
-        sampledialogue_memteaching_enabled: true,
         prompt_snapshot_enabled: true,
+        persona_export_enabled: true,
       });
     });
 
@@ -183,9 +181,8 @@ describe("config command write mappings", () => {
       expect(patchColumns).not.toContain("personal_memories_enabled");
       expect(patchColumns).not.toContain("self_teaching_enabled");
       expect(sorted(patchColumns)).toEqual([
-        "attribute_memteaching_enabled",
+        "persona_export_enabled",
         "prompt_snapshot_enabled",
-        "sampledialogue_memteaching_enabled",
         "server_memteaching_enabled",
       ]);
     });

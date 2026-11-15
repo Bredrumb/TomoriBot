@@ -21,6 +21,8 @@
 import { sql } from "@/utils/db/client";
 import { normalizeStmCategories, type ShortTermMemoryRow } from "@/types/db/schema";
 import { log } from "@/utils/misc/logger";
+import { z } from "zod";
+import { broadcastInvalidation, invalidationKey, registerInvalidation } from "@/utils/cache/invalidationBus";
 
 /**
  * A single message in a short-term memory conversation
@@ -1168,16 +1170,7 @@ export function clearShortTermMemoryForServerChannel(
  */
 export function clearShortTermMemoryForUser(userId: string): void {
   try {
-    let clearedCount = 0;
-
-    for (const key of cache.keys()) {
-      if (key.startsWith(`${USER_CACHE_PREFIX}:${userId}:`)) {
-        cache.delete(key);
-        clearedCount++;
-      }
-    }
-
-    stats.invalidations += clearedCount;
+    evictUserShortTermMemory(userId);
 
     deleteStmRowsInBackground({
       whereClause: "scope_kind = 'user' AND user_disc_id = $1",
@@ -1192,6 +1185,30 @@ export function clearShortTermMemoryForUser(userId: string): void {
     });
   }
 }
+
+function evictUserShortTermMemory(userId?: string): void {
+  const prefix = userId === undefined ? `${USER_CACHE_PREFIX}:` : `${USER_CACHE_PREFIX}:${userId}:`;
+  for (const key of cache.keys()) {
+    if (key.startsWith(prefix)) {
+      cache.delete(key);
+      stats.invalidations++;
+    }
+  }
+  if (userId === undefined) bulkWarmedUsers.clear();
+  else bulkWarmedUsers.delete(userId);
+}
+
+export function invalidateShortTermMemoryForUser(userId: string): void {
+  evictUserShortTermMemory(userId);
+  broadcastInvalidation("userStm", [[userId]]);
+}
+
+registerInvalidation(
+  "userStm",
+  z.tuple([invalidationKey]),
+  ([user]) => invalidateShortTermMemoryForUser(user),
+  () => evictUserShortTermMemory(),
+);
 
 /**
  * Remove expired entries from cache (cleanup job)

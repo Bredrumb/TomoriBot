@@ -175,7 +175,7 @@ export interface PersonalConfigRouteDependencies {
     locale: string,
     nonce: string,
     provider: string,
-    availableOptions: Array<{ refKey: string; label: string }>,
+    availableOptions: Array<{ refKey: string; label: string; description?: string }>,
     currentRefs: FallbackModelRef[],
   ): Promise<void>;
   showImpersonationModal(

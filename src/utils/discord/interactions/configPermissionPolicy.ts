@@ -37,7 +37,7 @@ export type ConfigPersonaGeneralAction =
   | "trigger-remove"
   | "promote"
   | "resync";
-export type ConfigPersonaCollectionAction =
+type ConfigPersonaCollectionAction =
   | "attribute-add"
   | "attribute-edit"
   | "attribute-remove"
@@ -125,7 +125,7 @@ export function resolveConfigCategoryState(category: ConfigCategory, actor: Conf
   }
   if (actor.isManager) return "enabled";
 
-  return category === "persona" ? "enabled" : "disabled";
+  return "omitted";
 }
 
 export function resolveConfigPageState(
@@ -146,13 +146,7 @@ export function resolveConfigPageState(
 
   if (actor.isManager) return "enabled";
 
-  if (category === "persona") {
-    // Appearance, Advanced, Overrides, and Voice hold manager-owned image, prompt, note, routing, and voice state.
-    if (page === "appearance" || page === "advanced" || page === "overrides" || page === "voice") return "omitted";
-    return page === "general" ? "enabled" : "read-only";
-  }
-
-  return page === "notices" ? "enabled" : "read-only";
+  return "omitted";
 }
 
 /**
@@ -212,10 +206,7 @@ export function resolvePersonaGeneralActionState(
   return "disabled";
 }
 
-/**
- * Collection actions share the General page's static access. Teaching flags and blacklist state
- * are workspace data, so the route layer applies those dynamic gates after it loads the scope.
- */
+/** @public Used by the release branch's src/utils/discord/ui/configPanel.ts collection controls. */
 export function resolvePersonaCollectionActionState(
   _action: ConfigPersonaCollectionAction,
   actor: ConfigActor,
@@ -271,16 +262,6 @@ export function resolvePersonaOverridesActionState(
   return "omitted";
 }
 
-/**
- * Per-action policy for Persona > Sprites, re-derived from the five commands these actions absorb.
- * `/persona sprites export` carries neither a guild nor a Manage Guild gate and keys its workspace
- * as `interaction.guild?.id ?? interaction.user.id`, so it stays available to a guild member and in
- * a DM. `add`, `edit`, `import`, and `remove` all require a guild and Manage Guild.
- *
- * The page itself resolves to `read-only` for a guild member, so Export is authorized on a page
- * whose state is not `enabled`. That is why the sprites branch of {@link isConfigRouteAuthorized}
- * tests for `omitted` rather than copying the Persona General branch's `!== "enabled"` shape.
- */
 export function resolvePersonaSpritesActionState(
   action: ConfigPersonaSpritesAction,
   actor: ConfigActor,
@@ -367,20 +348,19 @@ export const PERSONA_OVERRIDES_ACTION_BY_ROUTE: Partial<
   "text-override-clear": "text-override",
 };
 
-export const PERSONA_SPRITES_ACTION_BY_ROUTE: Partial<Record<ConfigPanelRoute["action"], ConfigPersonaSpritesAction>> =
-  {
-    "sprite-select": "inspect",
-    "sprite-page": "inspect",
-    "sprite-remove-cancel": "inspect",
-    "sprite-export": "export",
-    "sprite-add-submit": "add",
-    "sprite-edit-open": "edit",
-    "sprite-edit-submit": "edit",
-    "sprite-remove-view": "remove",
-    "sprite-remove-confirm": "remove",
-    "sprite-import-open": "import",
-    "sprite-import-submit": "import",
-  };
+const PERSONA_SPRITES_ACTION_BY_ROUTE: Partial<Record<ConfigPanelRoute["action"], ConfigPersonaSpritesAction>> = {
+  "sprite-select": "inspect",
+  "sprite-page": "inspect",
+  "sprite-remove-cancel": "inspect",
+  "sprite-export": "export",
+  "sprite-add-submit": "add",
+  "sprite-edit-open": "edit",
+  "sprite-edit-submit": "edit",
+  "sprite-remove-view": "remove",
+  "sprite-remove-confirm": "remove",
+  "sprite-import-open": "import",
+  "sprite-import-submit": "import",
+};
 
 export const PERSONA_VOICE_PAGE_BY_ROUTE: Partial<Record<ConfigPanelRoute["action"], ConfigPage>> = {
   "voice-select": "voice",
@@ -495,7 +475,7 @@ export const PLUGINS_CONTEXT_ADDITIONS_ACTION_BY_ROUTE: Partial<
 };
 
 /** Every Natural Nudges route resolves to the page that owns it; the page state is its gate. */
-export const NATURAL_NUDGE_PAGE_BY_ROUTE: Partial<
+const NATURAL_NUDGE_PAGE_BY_ROUTE: Partial<
   Record<ConfigPanelRoute["action"], { category: ConfigCategory; page: ConfigPage }>
 > = {
   "nudge-talk-select": { category: "persona", page: "nudges" },
@@ -630,7 +610,7 @@ export function resolveBehaviorTriggerActionState(
   return actor.isManager ? "enabled" : "disabled";
 }
 
-export function resolveBehaviorExperimentalActionState(
+function resolveBehaviorExperimentalActionState(
   _action: ConfigBehaviorExperimentalAction,
   actor: ConfigActor,
 ): ConfigSurfaceState {
@@ -638,7 +618,7 @@ export function resolveBehaviorExperimentalActionState(
   return actor.isManager ? "enabled" : "disabled";
 }
 
-export function resolveBehaviorNoticesActionState(
+function resolveBehaviorNoticesActionState(
   action: ConfigBehaviorNoticesAction,
   actor: ConfigActor,
 ): ConfigSurfaceState {
@@ -649,10 +629,7 @@ export function resolveBehaviorNoticesActionState(
   return "disabled";
 }
 
-export function resolveBehaviorMemoryActionState(
-  _action: ConfigBehaviorMemoryAction,
-  actor: ConfigActor,
-): ConfigSurfaceState {
+function resolveBehaviorMemoryActionState(_action: ConfigBehaviorMemoryAction, actor: ConfigActor): ConfigSurfaceState {
   if (actor.workspaceKind === "dm") return "omitted";
   return actor.isManager ? "enabled" : "disabled";
 }
@@ -681,12 +658,12 @@ export function resolvePluginsContextAdditionsActionState(
   return actor.isManager ? "enabled" : "disabled";
 }
 
-export function resolveMcpActionState(_action: ConfigMcpAction, actor: ConfigActor): ConfigSurfaceState {
+function resolveMcpActionState(_action: ConfigMcpAction, actor: ConfigActor): ConfigSurfaceState {
   if (actor.workspaceKind === "dm") return "enabled";
   return actor.isManager ? "enabled" : "disabled";
 }
 
-export function resolveStPresetsActionState(_action: ConfigStPresetsAction, actor: ConfigActor): ConfigSurfaceState {
+function resolveStPresetsActionState(_action: ConfigStPresetsAction, actor: ConfigActor): ConfigSurfaceState {
   if (actor.workspaceKind === "dm") return "enabled";
   return actor.isManager ? "enabled" : "disabled";
 }
@@ -779,6 +756,7 @@ export const MODELS_PAGE_BY_ROUTE: Partial<Record<ConfigPanelRoute["action"], Co
  * read the message, so the answer must come from the actor resolved on this interaction.
  */
 export function isConfigRouteAuthorized(route: ConfigPanelRoute, actor: ConfigActor): boolean {
+  if (actor.workspaceKind === "guild" && !actor.isManager) return false;
   if (route.action.startsWith("draft-")) {
     return resolveConfigPageState("plugins", "response-drafting", actor) === "enabled";
   }

@@ -47,29 +47,18 @@ export function stopTimers(): void {
 }
 
 export async function initTimers(client: Client): Promise<void> {
-  const [
-    scheduled,
-    memory,
-    metrics,
-    pruner,
-    rag,
-    catalog,
-    stm,
-    quota,
-    { initializeRecordingCleanup, stopRecordingCleanup },
-    { initializeApiKeyJanitor, stopApiKeyJanitor },
-  ] = await Promise.all([
-    import("@/timers/scheduledWorkCoordinator"),
-    import("@/timers/memoryMonitor"),
-    import("@/timers/cacheMetricsLogger"),
-    import("@/timers/messageProxyIndexPruner"),
-    import("@/timers/ragAvailabilityMonitor"),
-    import("@/timers/openrouterCatalogRefresher"),
-    import("@/timers/stmJanitor"),
-    import("@/utils/security/rateLimiter"),
-    import("@/modules/conversation-recording/runtime/cleanup"),
-    import("@/timers/apiKeyJanitor"),
-  ]);
+  const [scheduled, memory, metrics, pruner, rag, catalog, stm, quota, { initializeApiKeyJanitor, stopApiKeyJanitor }] =
+    await Promise.all([
+      import("@/timers/scheduledWorkCoordinator"),
+      import("@/timers/memoryMonitor"),
+      import("@/timers/cacheMetricsLogger"),
+      import("@/timers/messageProxyIndexPruner"),
+      import("@/timers/ragAvailabilityMonitor"),
+      import("@/timers/openrouterCatalogRefresher"),
+      import("@/timers/stmJanitor"),
+      import("@/utils/security/rateLimiter"),
+      import("@/timers/apiKeyJanitor"),
+    ]);
   if (isDraining()) return;
   timerStops = [
     scheduled.stopScheduledWorkCoordinator,
@@ -79,7 +68,6 @@ export async function initTimers(client: Client): Promise<void> {
     rag.stopRagAvailabilityMonitor,
     catalog.stopOpenRouterCatalogRefresher,
     stm.stopStmJanitor,
-    stopRecordingCleanup,
     stopApiKeyJanitor,
   ];
   client.once("clientReady", () => {
@@ -94,6 +82,5 @@ export async function initTimers(client: Client): Promise<void> {
   rag.initializeRagAvailabilityMonitor();
   catalog.initializeOpenRouterCatalogRefresher();
   stm.initializeStmJanitor();
-  initializeRecordingCleanup();
   initializeApiKeyJanitor();
 }

@@ -260,16 +260,6 @@ export async function buildServerConfigPages(
         value: formatBooleanLocalized(config.server_memteaching_enabled, locale),
         inline: true,
       },
-      {
-        nameKey: "commands.status.field_attribute_memteaching",
-        value: formatBooleanLocalized(config.attribute_memteaching_enabled, locale),
-        inline: true,
-      },
-      {
-        nameKey: "commands.status.field_sampledialogue_memteaching",
-        value: formatBooleanLocalized(config.sampledialogue_memteaching_enabled, locale),
-        inline: true,
-      },
     ],
   };
 

@@ -275,7 +275,7 @@ export async function handlePersonalConfigModalOpen(
       return "handled";
     }
 
-    let availableOptions: Array<{ refKey: string; label: string }> = [];
+    let availableOptions: Array<{ refKey: string; label: string; description?: string }> = [];
     try {
       availableOptions = await loadFallbackSelectionOptions(cachedScope.userId, chosenProvider, route.locale);
     } catch (error) {

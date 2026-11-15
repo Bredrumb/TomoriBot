@@ -1,4 +1,5 @@
 import * as triggerProcessor from "@/utils/chat/triggerProcessor";
+import { EventEmitter } from "node:events";
 import * as replyDecision from "@/utils/chat/replyDecision";
 import { REST, type Client, type Message } from "discord.js";
 import { createPersona } from "../../helpers/fixtures";
@@ -71,7 +72,10 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("subscription capability ownership", () => 
       isThread: () => false,
       send: async (payload: { embeds?: unknown[] }) => {
         sends.push(payload);
-        return { id: `_rt_planner_sent_${sends.length}` };
+        return {
+          id: `_rt_planner_sent_${sends.length}`,
+          createMessageComponentCollector: () => new EventEmitter(),
+        };
       },
     } as unknown as Message["channel"];
     const client = { user: { id: "_rt_bot" } } as Client;
@@ -307,7 +311,11 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("subscription capability ownership", () => 
       id: "_rt_quota_channel",
       client: { rest: new REST() },
       isThread: () => false,
-      send: async () => ({ id: "_rt_quota_notice", channelId: "_rt_quota_channel" }),
+      send: async () => ({
+        id: "_rt_quota_notice",
+        channelId: "_rt_quota_channel",
+        createMessageComponentCollector: () => new EventEmitter(),
+      }),
     } as unknown as Message["channel"];
     const client = { user: { id: "_rt_bot" } } as Client;
     const message = {

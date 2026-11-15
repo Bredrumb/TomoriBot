@@ -1762,7 +1762,7 @@ describe("config models authorization", () => {
 
     expect(update).not.toHaveBeenCalled();
     expect(naiUpdate).not.toHaveBeenCalled();
-    expect(renderedText(harness.edits.at(-1))).toContain(
+    expect(renderedText(harness.replies.at(-1))).toContain(
       localizedCopy("en-US", "commands.config.panel.denied_heading"),
     );
     update.mockRestore();
@@ -1792,7 +1792,7 @@ describe("config models authorization", () => {
 
     expect(modelUpdate).not.toHaveBeenCalled();
     expect(naiUpdate).not.toHaveBeenCalled();
-    expect(renderedText(harness.edits.at(-1))).toContain(
+    expect(renderedText(harness.replies.at(-1))).toContain(
       localizedCopy("en-US", "commands.config.panel.denied_heading"),
     );
     modelUpdate.mockRestore();
@@ -1818,7 +1818,7 @@ describe("config models authorization", () => {
     );
 
     expect(update).not.toHaveBeenCalled();
-    expect(renderedText(harness.edits.at(-1))).toContain(
+    expect(renderedText(harness.replies.at(-1))).toContain(
       localizedCopy("en-US", "commands.config.panel.denied_heading"),
     );
     update.mockRestore();
@@ -2000,7 +2000,7 @@ describe("config models parameters page", () => {
 
       await dispatch(harness, interaction);
 
-      expect(interaction.deferred).toBe(true);
+      expect(interaction.deferred).toBe(context.isManager !== false);
     }
 
     expect(apply).not.toHaveBeenCalled();

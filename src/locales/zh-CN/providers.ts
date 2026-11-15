@@ -164,6 +164,7 @@ export default {
       review_messages: `检查一下最近的消息，或者用 \`/refresh\` 清空它们。`,
       review_memories: `检查你的记忆和配置（\`/export personal memories\`、\`/export memories\`、\`/export config\`）。`,
       blacklist_member: `用 \`/moderation\` 把有问题的成员加入屏蔽名单。`,
+      use_personal_providers: `通过 \`/personal providers\` 使用你自己的[个人提供方](https://docs.tomoribot.app/zh-CN/features/knowledge/personalization/#your-own-providers)，这样你的请求就不会计入这个服务器的配额。`,
     },
     google: {
       "400_default_message": `你的请求格式有问题`,

@@ -52,7 +52,6 @@ import {
   resolvePersonaAdvancedActionState,
   resolvePersonaOverridesActionState,
   resolvePersonaMemoriesActionState,
-  resolvePersonaCollectionActionState,
   resolvePersonaGeneralActionState,
   resolvePersonaSpritesActionState,
   resolveBehaviorGeneralActionState,
@@ -271,8 +270,6 @@ export interface ConfigPanelRenderInput {
   selectedAttributeIndex?: number;
   dialoguePageStart?: number;
   selectedDialogueIndex?: number;
-  attributeMemteachingEnabled?: boolean;
-  sampledialogueMemteachingEnabled?: boolean;
   namingStyle?: AddressingStyle;
   readStatus: PanelReadStatus;
   receipt?: PanelReceipt;
@@ -573,17 +570,6 @@ function collectionRangeIndex(
   return Math.min(Math.max(requestedRange, 0), rangeCount - 1);
 }
 
-function mayWritePersonaCollection(
-  input: ConfigPanelRenderInput,
-  action: "attribute-add" | "dialogue-add",
-  teachingEnabled: boolean | undefined,
-): boolean {
-  return (
-    resolvePersonaCollectionActionState(action, input.actor) === "enabled" &&
-    ((input.actor.isManager && input.actor.workspaceKind === "guild") || teachingEnabled === true)
-  );
-}
-
 function getPersonaGeneralFixedChromeLength(input: ConfigPanelRenderInput, persona: TomoriState): number {
   const { locale, selectedPersonaAvatarUrl } = input;
   const heading: TextDisplayComponentData = {
@@ -598,19 +584,11 @@ ${localizer(locale, "commands.config.panel.general_description")}
   };
   const headingComp = buildOptionalThumbnailSection(heading, selectedPersonaAvatarUrl);
 
-  const mayWriteAttr = mayWritePersonaCollection(input, "attribute-add", input.attributeMemteachingEnabled);
   const attrTitleDesc = `${localizer(locale, "commands.config.panel.attributes_title")}
 ${localizer(locale, "commands.config.panel.attributes_description")}`;
-  const attrDisabled = mayWriteAttr
-    ? ""
-    : withLinePrefix("-# ", localizer(locale, "commands.config.panel.collection_teaching_disabled"));
 
-  const mayWriteDlg = mayWritePersonaCollection(input, "dialogue-add", input.sampledialogueMemteachingEnabled);
   const dlgTitleDesc = `${localizer(locale, "commands.config.panel.dialogues_title")}
 ${localizer(locale, "commands.config.panel.dialogues_description")}`;
-  const dlgDisabled = mayWriteDlg
-    ? ""
-    : withLinePrefix("-# ", localizer(locale, "commands.config.panel.collection_teaching_disabled"));
 
   const attributes = persona.attribute_list ?? [];
   const hasSelectedAttr =
@@ -626,11 +604,9 @@ ${localizer(locale, "commands.config.panel.dialogues_description")}`;
 
   let fixed = measureFormattedPanelTextLength(headingComp);
   fixed += measurePanelTextLength(attrTitleDesc);
-  if (attrDisabled) fixed += measurePanelTextLength(attrDisabled);
   if (hasSelectedAttr) fixed += 1;
 
   fixed += measurePanelTextLength(dlgTitleDesc);
-  if (dlgDisabled) fixed += measurePanelTextLength(dlgDisabled);
   if (hasSelectedDlg) fixed += 1;
 
   return fixed;
@@ -661,7 +637,6 @@ function getPersonaGeneralCollectionBudget(input: ConfigPanelRenderInput, person
 
 function buildAttributeCollectionBody(input: ConfigPanelRenderInput, persona: TomoriState): ComponentInContainerData[] {
   const { locale, readStatus } = input;
-  const mayWrite = mayWritePersonaCollection(input, "attribute-add", input.attributeMemteachingEnabled);
   const attributes = persona.attribute_list ?? [];
   const selectedIndex =
     input.selectedAttributeIndex !== undefined &&
@@ -674,14 +649,10 @@ function buildAttributeCollectionBody(input: ConfigPanelRenderInput, persona: To
   const visibleAttributes = attributes.slice(start, start + CONFIG_PERSONA_COLLECTION_PAGE_SIZE);
   const selectedAttributeContent = selectedIndex !== undefined ? attributes[selectedIndex] : undefined;
   const options: SelectMenuComponentOptionData[] = [
-    ...(mayWrite
-      ? [
-          {
-            label: safeSelectOptionText(localizer(locale, "commands.config.panel.attribute_add_option"), 100),
-            value: "add",
-          },
-        ]
-      : []),
+    {
+      label: safeSelectOptionText(localizer(locale, "commands.config.panel.attribute_add_option"), 100),
+      value: "add",
+    },
     ...visibleAttributes.map((attribute, offset) => ({
       label: safeSelectOptionText(`${start + offset + 1}. ${attribute}`, 100),
       value: String(start + offset),
@@ -702,13 +673,6 @@ function buildAttributeCollectionBody(input: ConfigPanelRenderInput, persona: To
 ${localizer(locale, "commands.config.panel.attributes_description")}${renderedSelectedContent}`,
     },
   ];
-
-  if (!mayWrite) {
-    components.push({
-      type: ComponentType.TextDisplay,
-      content: withLinePrefix("-# ", localizer(locale, "commands.config.panel.collection_teaching_disabled")),
-    });
-  }
 
   if (options.length > 0) {
     components.push({
@@ -769,7 +733,7 @@ ${localizer(locale, "commands.config.panel.attributes_description")}${renderedSe
             fp,
           }),
           label: localizer(locale, "commands.config.panel.attribute_edit_button"),
-          disabled: readStatus !== "fresh" || !mayWrite,
+          disabled: readStatus !== "fresh",
         },
         {
           type: ComponentType.Button,
@@ -782,7 +746,7 @@ ${localizer(locale, "commands.config.panel.attributes_description")}${renderedSe
             fp,
           }),
           label: localizer(locale, "commands.config.panel.attribute_remove_button"),
-          disabled: readStatus !== "fresh" || !mayWrite,
+          disabled: readStatus !== "fresh",
         },
       ],
     });
@@ -793,7 +757,6 @@ ${localizer(locale, "commands.config.panel.attributes_description")}${renderedSe
 
 function buildDialogueCollectionBody(input: ConfigPanelRenderInput, persona: TomoriState): ComponentInContainerData[] {
   const { locale, readStatus } = input;
-  const mayWrite = mayWritePersonaCollection(input, "dialogue-add", input.sampledialogueMemteachingEnabled);
   const inputs = persona.sample_dialogues_in ?? [];
   const outputs = persona.sample_dialogues_out ?? [];
   const pairCount = Math.min(inputs.length, outputs.length);
@@ -809,14 +772,10 @@ function buildDialogueCollectionBody(input: ConfigPanelRenderInput, persona: Tom
   const selectedInput = selectedIndex !== undefined ? inputs[selectedIndex] : undefined;
   const selectedOutput = selectedIndex !== undefined ? outputs[selectedIndex] : undefined;
   const options: SelectMenuComponentOptionData[] = [
-    ...(mayWrite
-      ? [
-          {
-            label: safeSelectOptionText(localizer(locale, "commands.config.panel.dialogue_add_option"), 100),
-            value: "add",
-          },
-        ]
-      : []),
+    {
+      label: safeSelectOptionText(localizer(locale, "commands.config.panel.dialogue_add_option"), 100),
+      value: "add",
+    },
     ...visibleInputs.map((dialogue, offset) => ({
       label: safeSelectOptionText(`${start + offset + 1}. ${dialogue}`, 100),
       value: String(start + offset),
@@ -840,13 +799,6 @@ ${localizer(locale, "commands.config.panel.dialogue_bot_prefix")}: ${selectedOut
 ${localizer(locale, "commands.config.panel.dialogues_description")}${renderedSelectedContent}`,
     },
   ];
-
-  if (!mayWrite) {
-    components.push({
-      type: ComponentType.TextDisplay,
-      content: withLinePrefix("-# ", localizer(locale, "commands.config.panel.collection_teaching_disabled")),
-    });
-  }
 
   if (options.length > 0) {
     components.push({
@@ -903,7 +855,7 @@ ${localizer(locale, "commands.config.panel.dialogues_description")}${renderedSel
             fp,
           }),
           label: localizer(locale, "commands.config.panel.dialogue_edit_button"),
-          disabled: readStatus !== "fresh" || !mayWrite,
+          disabled: readStatus !== "fresh",
         },
         {
           type: ComponentType.Button,
@@ -916,7 +868,7 @@ ${localizer(locale, "commands.config.panel.dialogues_description")}${renderedSel
             fp,
           }),
           label: localizer(locale, "commands.config.panel.dialogue_remove_button"),
-          disabled: readStatus !== "fresh" || !mayWrite,
+          disabled: readStatus !== "fresh",
         },
       ],
     });
@@ -4320,6 +4272,11 @@ function computeChannelOverridesFingerprintForView(input: ConfigPanelRenderInput
 
 export function buildConfigPanelPayload(input: ConfigPanelRenderInput): ConfigPanelPayload {
   const { locale, actor, category, page, readStatus, receipt } = input;
+  if (actor.workspaceKind === "guild" && !actor.isManager) {
+    return buildPayload([
+      { type: ComponentType.TextDisplay, content: localizer(locale, "commands.config.panel.denied_detail") },
+    ]);
+  }
   const writesDisabled = readStatus !== "fresh";
 
   const categoryEntries = visibleConfigCategories(actor);

@@ -11,7 +11,7 @@ sidebar:
 
 TomoriBot 当前注册的全部斜杠指令，由与 Discord 注册所用的同一批指令构建器和简体中文描述生成（尚未翻译的描述以英文显示）。
 
-顶层指令组：**45**。可执行的斜杠指令：**94**。
+顶层指令组：**44**。可执行的斜杠指令：**91**。
 
 ## `/booru`
 
@@ -240,9 +240,9 @@ TomoriBot 当前注册的全部斜杠指令，由与 Discord 注册所用的同�
 |---|---|
 | `/persona create` | 手动创建一个简单的人格预设集 |
 | `/persona default` | 应用一套人格预设集 |
-| `/persona export` | 把当前人格导出成可分享的 PNG 文件 |
+| `/persona export` | 将人格导出为 PNG 卡片、原始 JSON 或包含媒体的 ZIP 压缩包 |
 | `/persona generate` | 用 AI 生成人格（需要兼容的提供方） |
-| `/persona import` | 从 PNG、JSON 或 CHARX 文件导入人格 |
+| `/persona import` | 从 PNG、JSON、CHARX 或 TomoriBot ZIP 压缩包导入人格 |
 | `/persona remove` | 从服务器移除一个副人格 |
 
 ## `/personal`
@@ -294,16 +294,6 @@ TomoriBot 当前注册的全部斜杠指令，由与 Discord 注册所用的同�
 |---|---|
 | `/quota reset global` | 重置全服务器共用的生成配额池。 |
 | `/quota reset user` | 重置某个用户的每日配额用量。 |
-
-## `/record`
-
-管理你在当前服务器中的对话记录
-
-| 指令 | 摘要 |
-|---|---|
-| `/record data` | 查看、导出或删除你在当前服务器中的记录 |
-| `/record start` | 在当前服务器中每当你发送消息时，保存匿名化的对话摘录 |
-| `/record stop` | 停止收集摘录并保留已保存的记录 |
 
 ## `/refresh`
 

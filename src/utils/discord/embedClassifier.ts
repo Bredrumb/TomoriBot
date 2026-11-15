@@ -44,9 +44,7 @@ export type LinkPreviewResult = {
   thumbnailInfo: LinkPreviewImageInfo | null;
 };
 
-export function extractEmbedTextParts(
-  embed: Pick<Embed, "author" | "title" | "description" | "fields" | "footer">,
-): string[] {
+function extractEmbedTextParts(embed: Pick<Embed, "author" | "title" | "description" | "fields" | "footer">): string[] {
   const parts: string[] = [];
   if (embed.author?.name) parts.push(embed.author.name);
   if (embed.title) parts.push(embed.title);

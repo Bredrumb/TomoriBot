@@ -25,6 +25,7 @@ import {
   type LlmRow,
   type NaiPresetRow,
   type PersonaAttributeRow,
+  type PersonaSpriteRow,
   type PersonaConfigRow,
   type AssembledServerConfig,
   type TomoriRow,
@@ -38,6 +39,7 @@ import { DatabaseUnavailableError } from "@/types/errors";
 import { getCachedLLM } from "@/utils/cache/llmCache";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
 import { invalidatePersonaAppearance } from "@/utils/cache/personaAppearanceCacheStore";
+import { invalidatePersonaSpriteCache } from "@/utils/cache/personaSpriteCacheStore";
 import { sql, withTransientDbRetry } from "@/utils/db/client";
 import { validateTomoriFields } from "@/utils/db/sqlSecurity";
 import { llmModelRepo } from "@/utils/db/repositories/LlmModelRepository";
@@ -849,6 +851,60 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
     }
   }
 
+  async replaceBundleAssets(input: {
+    personaId: number;
+    serverDiscId: string;
+    sprites: Array<
+      Pick<PersonaSpriteRow, "sprite_name" | "sprite_key" | "avatar_url" | "usage_instructions" | "is_identity">
+    >;
+    charRefUrl: string | null;
+    voice: { sampleId: number; name: string } | null;
+  }): Promise<boolean> {
+    try {
+      await sql.transaction(async (tx) => {
+        const [owner] = await tx`
+          SELECT p.persona_id FROM personas p JOIN servers s ON s.server_id = p.server_id
+          WHERE p.persona_id = ${input.personaId} AND s.server_disc_id = ${input.serverDiscId}
+          FOR UPDATE OF p
+        `;
+        if (!owner || !(await this.materializeIfPointerWithClient(input.personaId, tx))) {
+          throw new Error("Bundle target persona is unavailable");
+        }
+        await tx`DELETE FROM persona_sprites WHERE persona_id = ${input.personaId}`;
+        for (const sprite of input.sprites) {
+          await tx`
+            INSERT INTO persona_sprites (persona_id, sprite_name, sprite_key, avatar_url, usage_instructions, is_identity)
+            VALUES (${input.personaId}, ${sprite.sprite_name}, ${sprite.sprite_key}, ${sprite.avatar_url},
+              ${sprite.usage_instructions}, ${sprite.is_identity})
+          `;
+        }
+        await tx`
+          INSERT INTO persona_imagegen_configs (persona_id, char_ref_url)
+          VALUES (${input.personaId}, ${input.charRefUrl})
+          ON CONFLICT (persona_id) DO UPDATE SET char_ref_url = EXCLUDED.char_ref_url, updated_at = NOW()
+        `;
+        if (input.voice) {
+          const [sample] = await tx`
+            SELECT v.sample_id FROM voice_samples v JOIN personas p ON p.server_id = v.server_id
+            WHERE v.sample_id = ${input.voice.sampleId} AND p.persona_id = ${input.personaId}
+          `;
+          if (!sample) throw new Error("Bundle voice sample belongs to another workspace");
+          await tx`
+            UPDATE persona_voice_configs SET speech_voice_sample_id = ${input.voice.sampleId},
+              speech_voice_name = ${input.voice.name}, speech_voice_id = NULL, updated_at = NOW()
+            WHERE persona_id = ${input.personaId}
+          `;
+        }
+      });
+      invalidatePersonaSpriteCache(input.personaId);
+      invalidateTomoriStateCache(input.serverDiscId);
+      return true;
+    } catch (error) {
+      log.error("Persona bundle asset write failed", error, { personaId: input.personaId });
+      return false;
+    }
+  }
+
   /**
    * Clears the persona's character reference only when it is still the shared preset image.
    * @returns Whether a preset reference was cleared
@@ -1156,6 +1212,8 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
     sampleDialoguesOut: string[];
     personaLineageId?: number | null;
     physicalAppearanceTags?: string[];
+    presetLineageId?: number | null;
+    namingConfig?: PersonaNamingConfig;
     charRefUrl?: string | null;
     naiAttgAuthor?: string | null;
     naiAttgTitle?: string | null;
@@ -1174,6 +1232,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
           sample_dialogues_out,
           is_alter,
           persona_lineage_id,
+          preset_lineage_id,
           is_nsfw
         )
         VALUES (
@@ -1184,6 +1243,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
           ${sql.array(params.sampleDialoguesOut, "TEXT")},
           true,
           COALESCE(${params.personaLineageId ?? null}::bigint, nextval('persona_lineage_id_seq')),
+          ${params.presetLineageId ?? null},
           ${params.isNsfw === true}
         )
         RETURNING *
@@ -1229,6 +1289,10 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
           INSERT INTO persona_attributes (persona_id, attribute_order, attribute_text, is_public)
           VALUES (${personaId}, ${index + 1}, ${params.attributes[index]}, ${flags[index]})
         `;
+      }
+
+      if (params.namingConfig) {
+        await userNamingRepository.savePersonaConfig(personaId, params.namingConfig, tx);
       }
 
       return insertedRow;
@@ -2001,10 +2065,11 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         scc.llm_frequency_penalty, scc.llm_presence_penalty, scc.llm_min_p,
         scc.llm_logit_biases, scc.fallback_model_refs,
         -- 3. server_member_permissions_configs
-        smpc.server_memteaching_enabled, smpc.attribute_memteaching_enabled,
-        smpc.sampledialogue_memteaching_enabled, smpc.self_teaching_enabled,
+        smpc.server_memteaching_enabled,
+        smpc.self_teaching_enabled,
         smpc.personal_memories_enabled, smpc.hide_impersonation_embeds,
         smpc.prompt_snapshot_enabled,
+        smpc.persona_export_enabled,
         -- 4. server_capabilities_configs
         scaps.emoji_usage_enabled, scaps.sticker_usage_enabled, scaps.web_search_enabled,
         scaps.manage_message_enabled, scaps.thread_creation_enabled, scaps.conditioning_interactions_enabled, scaps.dice_rolling_enabled, scaps.imagegen_enabled,
@@ -2117,10 +2182,11 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         scc.llm_frequency_penalty, scc.llm_presence_penalty, scc.llm_min_p,
         scc.llm_logit_biases, scc.fallback_model_refs,
         -- 3. server_member_permissions_configs
-        smpc.server_memteaching_enabled, smpc.attribute_memteaching_enabled,
-        smpc.sampledialogue_memteaching_enabled, smpc.self_teaching_enabled,
+        smpc.server_memteaching_enabled,
+        smpc.self_teaching_enabled,
         smpc.personal_memories_enabled, smpc.hide_impersonation_embeds,
         smpc.prompt_snapshot_enabled,
+        smpc.persona_export_enabled,
         -- 4. server_capabilities_configs
         scaps.emoji_usage_enabled, scaps.sticker_usage_enabled, scaps.web_search_enabled,
         scaps.manage_message_enabled, scaps.thread_creation_enabled, scaps.conditioning_interactions_enabled, scaps.dice_rolling_enabled, scaps.imagegen_enabled,

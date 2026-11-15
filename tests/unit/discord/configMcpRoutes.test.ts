@@ -219,7 +219,7 @@ describe("Config-hosted MCP Servers", () => {
     }
   });
 
-  it("denies a guild member before the canonical operation and repaints MCP in the Config shell", async () => {
+  it("denies a guild member before the canonical operation and returns a private denial", async () => {
     const harness = makeHarness({ manager: false });
     await dispatch(
       harness,
@@ -227,9 +227,11 @@ describe("Config-hosted MCP Servers", () => {
       { manager: false },
     );
     expect(harness.operationCalls).toBe(0);
-    expect(JSON.stringify(harness.edits.at(-1))).toContain("MCP Servers");
-    expect(JSON.stringify(harness.edits.at(-1))).not.toContain("server-1");
-    expect(JSON.stringify(harness.edits.at(-1))).toContain(localizer("en-US", "commands.config.panel.denied_heading"));
+    expect(harness.edits).toEqual([]);
+    expect(JSON.stringify(harness.replies.at(-1))).not.toContain("server-1");
+    expect(JSON.stringify(harness.replies.at(-1))).toContain(
+      localizer("en-US", "commands.config.panel.denied_heading"),
+    );
   });
 
   it("opens the add modal without deferring and keeps the Config route namespace", async () => {

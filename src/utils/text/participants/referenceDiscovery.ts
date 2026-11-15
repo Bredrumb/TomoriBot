@@ -3,12 +3,7 @@ import type { SimplifiedMessageForContext } from "@/utils/text/context/types";
 import { getTriggerFirstMatchIndexInContent } from "@/utils/chat/triggerProcessor";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 import { buildAliasCollisionIndex } from "./aliases";
-import {
-  serializeParticipantKey,
-  type ParticipantAlias,
-  type ParticipantAliasPurpose,
-  type ParticipantKey,
-} from "./identity";
+import { serializeParticipantKey, type ParticipantAlias, type ParticipantKey } from "./identity";
 
 const STANDALONE_ALIAS_CHARACTER_CLASS = "\\p{L}\\p{N}\\p{M}_";
 const REAL_DISCORD_MENTION_PATTERN = /<@!?(\d+)>/g;
@@ -22,7 +17,6 @@ export interface AliasReferenceDiagnostics {
 
 export interface AliasReferenceResolution {
   referencedOwners: readonly ParticipantKey[];
-  spans: readonly { start: number; end: number; owner: ParticipantKey }[];
   diagnostics: AliasReferenceDiagnostics;
 }
 
@@ -35,27 +29,23 @@ export function extractRealDiscordMentionIds(historyText: string): Set<string> {
   return mentionIds;
 }
 
-function standaloneAliasMatches(text: string, alias: ParticipantAlias): RegExpStringIterator<RegExpExecArray> {
+function containsStandaloneAlias(text: string, alias: ParticipantAlias): boolean {
   const aliasPattern = escapeRegExp(alias.normalized).replace(/\s+/gu, "\\s+");
-  return text.matchAll(
-    new RegExp(
-      `(?:` +
-        `(?<![${STANDALONE_ALIAS_CHARACTER_CLASS}])@${aliasPattern}` +
-        `|(?<![${STANDALONE_ALIAS_CHARACTER_CLASS}@])${aliasPattern}` +
-        `)(?![${STANDALONE_ALIAS_CHARACTER_CLASS}])`,
-      "giu",
-    ),
-  );
+  return new RegExp(
+    `(?:` +
+      `(?<![${STANDALONE_ALIAS_CHARACTER_CLASS}])@${aliasPattern}` +
+      `|(?<![${STANDALONE_ALIAS_CHARACTER_CLASS}@])${aliasPattern}` +
+      `)(?![${STANDALONE_ALIAS_CHARACTER_CLASS}])`,
+    "iu",
+  ).test(text);
 }
 
 export function resolveUniqueParticipantAliasReferences(
   historyText: string,
   aliases: readonly ParticipantAlias[],
-  purpose: ParticipantAliasPurpose = "input_reference",
 ): AliasReferenceResolution {
-  const collisionIndex = buildAliasCollisionIndex(aliases, purpose);
+  const collisionIndex = buildAliasCollisionIndex(aliases, "input_reference");
   const referencedOwners = new Map<string, ParticipantKey>();
-  const spans: { start: number; end: number; owner: ParticipantKey }[] = [];
   const diagnostics: AliasReferenceDiagnostics = {
     evaluatedAliasCount: collisionIndex.size,
     acceptedAliasCount: 0,
@@ -65,8 +55,7 @@ export function resolveUniqueParticipantAliasReferences(
 
   for (const collision of collisionIndex.values()) {
     const representative = collision.aliases[0];
-    const matches = representative ? [...standaloneAliasMatches(historyText, representative)] : [];
-    if (!matches.length) {
+    if (!representative || !containsStandaloneAlias(historyText, representative)) {
       diagnostics.unmatchedAliasCount += 1;
       continue;
     }
@@ -78,16 +67,9 @@ export function resolveUniqueParticipantAliasReferences(
     if (!owner) continue;
     diagnostics.acceptedAliasCount += 1;
     referencedOwners.set(serializeParticipantKey(owner), owner);
-    for (const match of matches) spans.push({ start: match.index, end: match.index + match[0].length, owner });
   }
 
-  spans.sort(
-    (a, b) =>
-      a.start - b.start ||
-      b.end - a.end ||
-      serializeParticipantKey(a.owner).localeCompare(serializeParticipantKey(b.owner)),
-  );
-  return { referencedOwners: [...referencedOwners.values()], spans, diagnostics };
+  return { referencedOwners: [...referencedOwners.values()], diagnostics };
 }
 
 export function discoverReferencedPersonaIds(

@@ -921,12 +921,11 @@ export type ServerChatConfigRow = z.infer<typeof serverChatConfigSchema>;
 const serverMemberPermissionsConfigSchema = z.object({
   server_id: z.number().int(),
   server_memteaching_enabled: z.boolean().default(false),
-  attribute_memteaching_enabled: z.boolean().default(false),
-  sampledialogue_memteaching_enabled: z.boolean().default(false),
   self_teaching_enabled: z.boolean().default(true),
   personal_memories_enabled: z.boolean().default(true),
   hide_impersonation_embeds: z.boolean().default(false),
   prompt_snapshot_enabled: z.boolean().default(false),
+  persona_export_enabled: z.boolean().default(false),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });

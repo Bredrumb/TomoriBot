@@ -47,7 +47,7 @@ bun run vl > /tmp/vl.log 2>&1; echo "VL_EXIT=$?" >> /tmp/vl.log
   `src/utils/discord/attachmentFilename.ts`
   (`tomori-{kind}[-{scope}][-{subject}]-{YYYYMMDDTHHMMSSZ}[-{shortId}][-part-{n}-of-{m}].{ext}`).
   Share one timestamp across every file in a multipart export, sanitize user-provided subjects, and
-  omit server, account, and Discord IDs from privacy-minimized exports such as recordings.
+  omit server, account, and Discord IDs from privacy-minimized exports.
   Operational host backups (`backup_*`, `personas_*`) keep their existing directory conventions.
 - Comments follow the [comment policy](/contributing/policies/comments/). JSDoc on exported functions
   only where behavior is not obvious from the name and types.

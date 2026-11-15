@@ -37,6 +37,7 @@ import {
 import { getFallbackModelRefKey } from "@/utils/provider/fallbackModelIdentity";
 import { THINKING_LEVEL_LOCALIZER_KEYS, THINKING_LEVEL_VALUES } from "@/constants/thinkingLevels";
 import { formatUtcOffsetInput } from "@/utils/text/timezoneHelper";
+import type { PersonalConfigFallbackDisplaySlot } from "@/utils/discord/ui/personalConfigPanel";
 
 export function buildPersonalConfigModalFieldId(field: string, nonce: string): string {
   return `${field}_${nonce}`;
@@ -777,8 +778,9 @@ export function buildFallbacksModal(
   locale: string,
   nonce: string,
   provider: string,
-  availableOptions: Array<{ refKey: string; label: string }>,
+  availableOptions: Array<{ refKey: string; label: string; description?: string }>,
   currentRefs: FallbackModelRef[],
+  currentSlots: readonly PersonalConfigFallbackDisplaySlot[],
 ): { custom_id: string; title: string; components: RawDiscordComponent[] } {
   const components: RawDiscordComponent[] = [];
 
@@ -799,6 +801,7 @@ export function buildFallbacksModal(
       ...availableOptions.slice(0, PERSONAL_FALLBACK_PAGE_SIZE).map((opt) => ({
         value: opt.refKey,
         label: safeSelectOptionText(opt.label, 100),
+        description: opt.description ? safeSelectOptionText(opt.description, 100) : undefined,
         default: currentRefKey === opt.refKey,
       })),
     ];
@@ -807,12 +810,19 @@ export function buildFallbacksModal(
       type: 18,
       label: safeSelectOptionText(localizer(locale, "commands.personal.config.fallback_slot_label", { slot }), 45),
       description: safeSelectOptionText(
-        localizer(locale, "commands.personal.config.fallback_slot_desc", { slot }),
+        currentSlots.find((entry) => entry.slot === slot)?.modelName ??
+          (currentRefForSlot
+            ? `${localizer(locale, "general.unknown")} (#${currentRefForSlot.id})`
+            : localizer(locale, "general.none")),
         100,
       ),
       component: {
         type: 3,
         custom_id: buildPersonalConfigModalFieldId(`slot_${slot}`, nonce),
+        placeholder: safeSelectOptionText(
+          localizer(locale, "commands.personal.config.fallback_slot_desc", { slot }),
+          150,
+        ),
         required: false,
         min_values: 0,
         max_values: 1,

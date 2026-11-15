@@ -37,6 +37,12 @@ TomoriBot可以从 [SillyTavern](https://github.com/SillyTavern/SillyTavern) 导
 卡片中的角色书会成为该人格的[世界书](/features/knowledge/memory/lorebooks/)。已停用的条目会保持停用状态。重新导入卡片会替换该人格的整本世界书，包括你自己添加的条目。
 :::
 
+## 角色卡导出
+
+使用 `/persona export` 并将 `output_format` 设为 `兼容 SillyTavern 的 PNG`，即可将人格带入 SillyTavern。导出的角色卡包含头像、性格、示例对话、人格提示词和人格世界书。卡片不包含开场白；开始聊天前请在 SillyTavern 中自行添加。
+
+触发设置、搭话、语音设置以及世界书频道限制等 TomoriBot 专属设置不会包含在内。选择 `TomoriBot 卡片` 或 `原始 JSON` 可保留 TomoriBot 人格设置。`TomoriBot 压缩包` 还会携带立绘与角色参考媒体，以及在请求时包含语音参考音频。这个 ZIP 是 TomoriBot 格式；用于 SillyTavern 时请使用 `兼容 SillyTavern 的 PNG`。
+
 ## 提示词预设集
 <!-- anchor: prompt-presets -->
 

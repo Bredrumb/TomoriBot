@@ -11,7 +11,7 @@ sidebar:
 
 Every slash command currently registered by TomoriBot, generated from the same command builders and English locale descriptions used for Discord registration.
 
-Top-level command groups: **45**. Runnable slash commands: **94**.
+Top-level command groups: **44**. Runnable slash commands: **91**.
 
 ## `/booru`
 
@@ -240,9 +240,9 @@ Manage personality presets
 |---|---|
 | `/persona create` | Create a simple personality preset manually |
 | `/persona default` | Apply a preset personality configuration |
-| `/persona export` | Export current personality as a shareable PNG file |
+| `/persona export` | Export a persona as a PNG card, raw JSON, or ZIP bundle with media |
 | `/persona generate` | AI-powered personality generation (requires a compatible provider) |
-| `/persona import` | Import a persona from a PNG, JSON, or CHARX file |
+| `/persona import` | Import a persona from a PNG, JSON, CHARX, or TomoriBot ZIP bundle |
 | `/persona remove` | Remove an alter persona from the server |
 
 ## `/personal`
@@ -294,16 +294,6 @@ Manage generation quota resets.
 |---|---|
 | `/quota reset global` | Reset the server-wide generation quota pool. |
 | `/quota reset user` | Reset daily quota usage for a user. |
-
-## `/record`
-
-Manage your conversation recordings in this server
-
-| Command | Summary |
-|---|---|
-| `/record data` | View, export or delete your recordings in this server |
-| `/record start` | Save anonymized conversation excerpts in this server whenever you send a message |
-| `/record stop` | Stop collecting excerpts and keep your saved recordings |
 
 ## `/refresh`
 
