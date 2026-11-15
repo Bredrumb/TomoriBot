@@ -25,13 +25,13 @@ describe("attachmentFilename", () => {
 
     expect(
       buildExportFilename({
-        kind: "recordings",
+        kind: "chat-diagnostic",
         shortId: "a1b2c3d4",
         part: { index: 1, total: 1 },
-        extension: ".md",
+        extension: ".json",
         now: FIXED_UTC,
       }),
-    ).toBe("tomori-recordings-20261113T040502Z-a1b2c3d4.md");
+    ).toBe("tomori-chat-diagnostic-20261113T040502Z-a1b2c3d4.json");
 
     expect(
       buildExportFilename({
