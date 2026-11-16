@@ -978,5 +978,68 @@
     "codename": "cloudflare/clairic",
     "releaseDate": null,
     "offeredAt": "2026-11-09"
+  },
+  {
+    "provider": "anthropic",
+    "table": "llmSections",
+    "codename": "claude-fable-5-2",
+    "releaseDate": "2026-11-09",
+    "offeredAt": "2026-11-16"
+  },
+  {
+    "provider": "openrouter",
+    "table": "llmSections",
+    "codename": "qwen/qwen4-max",
+    "releaseDate": "2026-11-16",
+    "offeredAt": "2026-11-16"
+  },
+  {
+    "provider": "openrouter",
+    "table": "decisionSections",
+    "codename": "heygen/heygen-decision-1-turbo",
+    "releaseDate": null,
+    "offeredAt": "2026-11-16"
+  },
+  {
+    "provider": "openrouter",
+    "table": "decisionSections",
+    "codename": "heygen/heygen-decision-1",
+    "releaseDate": null,
+    "offeredAt": "2026-11-16"
+  },
+  {
+    "provider": "openrouter",
+    "table": "decisionSections",
+    "codename": "perplexity/pplx-decider-flash-v1.3:free",
+    "releaseDate": null,
+    "offeredAt": "2026-11-16"
+  },
+  {
+    "provider": "openrouter",
+    "table": "decisionSections",
+    "codename": "perplexity/pplx-decider-v1.3:free",
+    "releaseDate": null,
+    "offeredAt": "2026-11-16"
+  },
+  {
+    "provider": "openrouter",
+    "table": "decisionSections",
+    "codename": "google/gemini-decision-1",
+    "releaseDate": null,
+    "offeredAt": "2026-11-16"
+  },
+  {
+    "provider": "openrouter",
+    "table": "decisionSections",
+    "codename": "nace-ai/drex-max-finance",
+    "releaseDate": null,
+    "offeredAt": "2026-11-16"
+  },
+  {
+    "provider": "openrouter",
+    "table": "decisionSections",
+    "codename": "parallel/decisions-fast",
+    "releaseDate": null,
+    "offeredAt": "2026-11-16"
   }
 ]
