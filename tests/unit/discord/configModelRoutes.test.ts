@@ -2626,6 +2626,11 @@ describe("config models view loaders", () => {
     expect(singlePageView.expandedProvider).toBeNull();
     expect(singlePageView.providerEntries).toHaveLength(1);
 
+    models.mockClear();
+    const deletedProviderView = await loadConfigFallbacksView(makeState(), "en-US", "openrouter");
+    expect(deletedProviderView.expandedProvider).toBeNull();
+    expect(models).not.toHaveBeenCalled();
+
     providers.mockRestore();
     models.mockRestore();
   });

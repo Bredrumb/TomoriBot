@@ -98,6 +98,23 @@ describe("provider page entries", () => {
     expect(expandedStartIndex).toBe(0);
   });
 
+  it("reports zero expanded pages when expandedProvider is absent from providers", () => {
+    const { entries, expandedStartIndex, expandedPageCount } = buildProviderPageEntries({
+      providers: ["google"],
+      expandedProvider: "openrouter",
+      expandedOptionCount: 60,
+      pageSize: 25,
+      pageLabelKey: "commands.personal.config.provider_page_label",
+      locale: "en-US",
+      encodeProviderValue,
+      encodePageValue: encodeProviderPageValue,
+    });
+
+    expect(entries.map((entry) => entry.value)).toEqual(["google"]);
+    expect(expandedStartIndex).toBe(0);
+    expect(expandedPageCount).toBe(0);
+  });
+
   it("round-trips a page value and rejects a bare provider value", () => {
     expect(decodeProviderPageValue(encodeProviderPageValue("custom:12", 50))).toEqual({
       provider: "custom:12",
