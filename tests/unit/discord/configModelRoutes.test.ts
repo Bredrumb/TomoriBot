@@ -326,13 +326,13 @@ function makeHarness(options: HarnessOptions = {}): Harness {
         };
       },
       loadNaiPresets: async (target) => (options.naiPresets ?? []).filter((preset) => preset.model_target === target),
-      loadFallbacksView: async () => ({
+      loadFallbacksView: async (_state, _locale, expandedProvider, entryStart) => ({
         slots: [{ label: null }, { label: null }, { label: null }, { label: null }, { label: null }],
         providerEntries: options.fallbackProviderEntries ?? [
           { value: encodeConfigProviderPageValue("google", 0), label: "Google" },
         ],
-        expandedProvider: null,
-        entryStart: 0,
+        expandedProvider: expandedProvider ?? null,
+        entryStart: entryStart ?? 0,
         randomizerEnabled: options.state?.config.model_randomizer_enabled ?? false,
         hasFallbacks: (options.state?.config.fallback_model_refs ?? []).length > 0,
       }),
@@ -2378,10 +2378,52 @@ describe("config models fallbacks and randomizer", () => {
     expect(write).toHaveBeenCalledWith(9, [{ type: "llm", id: 7 }], { serverDiscId: "guild-1" });
     expect(harness.telemetry).toContain("server-config.workspace.fallbacks.set");
 
+    const select = findComponentByCustomId(
+      harness.edits.at(-1),
+      buildConfigRouteId({ action: "fallback-provider-select", locale: "en-US" }),
+    );
+    const selectOptions = (select?.options ?? []) as Array<{ value?: string; default?: boolean }>;
+    expect(selectOptions.length).toBeGreaterThan(0);
+    expect(selectOptions.every((option) => option.default !== true)).toBe(true);
+
     providers.mockRestore();
     endpoints.mockRestore();
     models.mockRestore();
     write.mockRestore();
+  });
+
+  it("does not pre-select any option in the Fallbacks provider dropdown when expanded", async () => {
+    const harness = makeHarness({
+      fallbackProviderEntries: [
+        { value: encodeConfigProviderPageValue("openrouter", 0), label: "OpenRouter (Page 1)" },
+        { value: encodeConfigProviderPageValue("openrouter", 24), label: "OpenRouter (Page 2)" },
+        { value: encodeConfigProviderPageValue("google", 0), label: "Google" },
+      ],
+    });
+
+    await dispatch(
+      harness,
+      makeInteraction({
+        customId: buildConfigRouteId({
+          action: "fallback-provider-page",
+          locale: "en-US",
+          provider: "openrouter",
+          start: 0,
+        }),
+        harness,
+      }),
+    );
+
+    const select = findComponentByCustomId(
+      harness.edits.at(-1),
+      buildConfigRouteId({ action: "fallback-provider-select", locale: "en-US" }),
+    );
+    const selectOptions = (select?.options ?? []) as Array<{ value?: string; default?: boolean }>;
+    expect(selectOptions).toHaveLength(3);
+    expect(selectOptions.every((option) => option.default !== true)).toBe(true);
+    expect(select?.placeholder).toBe(
+      localizedCopy("en-US", "commands.config.panel.fallback_provider_page_placeholder", { provider: "OpenRouter" }),
+    );
   });
 });
 
@@ -2575,8 +2617,14 @@ describe("config models view loaders", () => {
     );
 
     const view = await loadConfigFallbacksView(makeState(), "en-US", "google");
+    expect(view.expandedProvider).toBe("google");
     expect(view.providerEntries.length).toBeGreaterThan(1);
     expect(decodeConfigProviderPageValue(view.providerEntries[1].value)?.start).toBe(24);
+
+    models.mockResolvedValueOnce([{ llm_id: 1, llm_codename: "gemini-2.5-flash", llm_provider: "google" }] as never);
+    const singlePageView = await loadConfigFallbacksView(makeState(), "en-US", "google");
+    expect(singlePageView.expandedProvider).toBeNull();
+    expect(singlePageView.providerEntries).toHaveLength(1);
 
     providers.mockRestore();
     models.mockRestore();

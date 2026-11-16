@@ -307,7 +307,7 @@ export async function loadConfigFallbacksView(
   const chain = state.fallback_chain ?? [];
 
   const expandedOptionCount = expandedProvider ? (await loadConfigFallbackOptions(state, expandedProvider)).length : 0;
-  const { entries, expandedStartIndex } = buildProviderPageEntries({
+  const { entries, expandedStartIndex, expandedPageCount } = buildProviderPageEntries({
     providers: providers.map((row) => row.provider),
     expandedProvider,
     expandedOptionCount,
@@ -323,7 +323,7 @@ export async function loadConfigFallbacksView(
       label: describeFallbackEntry(locale, chain[index] ?? null, refs[index] ?? null),
     })),
     providerEntries: entries,
-    expandedProvider,
+    expandedProvider: expandedPageCount > 0 ? expandedProvider : null,
     entryStart: resolveProviderEntryStart(entryStart, expandedStartIndex),
     randomizerEnabled: state.config.model_randomizer_enabled ?? false,
     hasFallbacks: refs.length > 0,
