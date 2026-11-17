@@ -125,7 +125,7 @@ export function isAccountBalanceExhaustedError(error: ProviderError): boolean {
   );
 }
 
-const FREE_TIER_PATTERN = [/\bfree[\s_-]?tier\b/i];
+const FREE_TIER_PATTERN = [/(?<![A-Za-z0-9])free[\s_-]?tier(?![A-Za-z0-9])/i, /FreeTier(?![A-Za-z0-9])/];
 const PER_DAY_PATTERN = [/\bper\s+day\b/i, /PerDay/];
 const PER_MINUTE_PATTERN = [/\bper\s+minute\b/i, /PerMinute/];
 

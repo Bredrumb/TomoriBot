@@ -204,6 +204,17 @@ describe("public provider error descriptions", () => {
     }
   });
 
+  it("falls back to quota guidance when a non-OpenRouter tool failure hits a credit limit", () => {
+    for (const credentialScope of ["server", "personal"] as const) {
+      const result = createProviderToolFailure(
+        { message: "HTTP 402: Insufficient credits.", status: 402 },
+        { locale: "en-US", provider: "custom", credentialScope },
+      );
+      expect(result.failure?.reason).toBe(localizedCopy("en-US", "genai.tool_failure.credit_limit"));
+      expect(result.failure?.suggestedActions).toEqual([localizedCopy("en-US", "genai.tips.check_provider_quota")]);
+    }
+  });
+
   const googleBody = (code: number, message: string, status: string) =>
     JSON.stringify({ error: { code, message, status } });
   it.each([

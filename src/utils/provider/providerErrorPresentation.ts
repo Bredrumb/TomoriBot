@@ -150,6 +150,7 @@ export function resolveProviderErrorPresentation(
             : freeTierWindow === "minute"
               ? "genai.tips.google_free_tier_minute"
               : "genai.tips.wait_and_retry",
+          scoped("genai.tips.switch_model_provider"),
           ...(isPersonal ? [] : ["genai.tips.api_key_rotation"]),
           ...modelFallbackTip,
           ...(isOpenRouter ? [scoped("genai.tips.openrouter_free_models")] : []),

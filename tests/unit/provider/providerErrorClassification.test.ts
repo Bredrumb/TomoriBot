@@ -109,6 +109,20 @@ describe("Gemini free-tier quota window", () => {
     expect(getGeminiFreeTierQuotaWindow(both)).toBe("day");
   });
 
+  it("matches underscored metric names and attached FreeTier suffixes", () => {
+    const underscoredMetric = providerError(
+      `Google API error (429): You exceeded your current quota. head to: https://ai.google.dev/gemini-api/docs/rate-limits.\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, quotaId: GenerateRequestsPerDayPerProjectPerModel`,
+      "429",
+    );
+    const attachedSuffix = providerError(
+      `Google API error (429): You exceeded your current quota. head to: https://ai.google.dev/gemini-api/docs/rate-limits.\n* Quota exceeded for metric: generativelanguage.googleapis.com/x, quotaId: GenerateContentRequestsPerMinutePerProjectPerRegionFreeTier`,
+      "429",
+    );
+
+    expect(getGeminiFreeTierQuotaWindow(underscoredMetric)).toBe("day");
+    expect(getGeminiFreeTierQuotaWindow(attachedSuffix)).toBe("minute");
+  });
+
   it("ignores paid-tier limits and non-Gemini providers", () => {
     expect(
       getGeminiFreeTierQuotaWindow(

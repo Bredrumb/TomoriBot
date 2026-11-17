@@ -183,6 +183,8 @@ export function createProviderToolFailure(error: unknown, context: ProviderToolF
         "genai.tips.api_key_rotation",
         "genai.tips.reduce_output_tokens",
         "genai.tips.reduce_output_tokens_personal",
+        "genai.tips.switch_model_provider",
+        "genai.tips.switch_model_provider_personal",
       ].includes(key),
   );
   if (reasonKey === "content_blocked" || reasonKey === "invalid_request") tipKeys = ["genai.tips.revise_tool_request"];
@@ -196,7 +198,8 @@ export function createProviderToolFailure(error: unknown, context: ProviderToolF
     tipKeys = [
       context.credentialScope === "personal" ? "genai.tips.verify_api_key_personal" : "genai.tips.verify_api_key",
     ];
-  else if (kind === "quota" && reasonKey === "quota") tipKeys = ["genai.tips.check_provider_quota"];
+  else if ((kind === "quota" && reasonKey === "quota") || (reasonKey === "credit_limit" && tipKeys.length === 0))
+    tipKeys = ["genai.tips.check_provider_quota"];
   else if (kind === "cancelled") tipKeys = [];
   else if (
     ["missing_voice", "missing_sample", "sample_read_failed", "model_error", "not_configured"].includes(reasonKey)

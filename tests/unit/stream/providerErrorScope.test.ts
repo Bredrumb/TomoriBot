@@ -259,6 +259,14 @@ describe("provider error tips resolve against the credential source", () => {
     expect(tips).toContain("/config");
     expect(tips).not.toContain("/personal");
   });
+
+  it("recommends switching model or provider on rate limits in the matching scope", async () => {
+    const serverTips = await renderTips(RATE_LIMIT_ERROR, "server");
+    const personalTips = await renderTips(RATE_LIMIT_ERROR, "personal");
+
+    expect(serverTips).toContain(localizedCopy("en-US", "genai.tips.switch_model_provider"));
+    expect(personalTips).toContain(localizedCopy("en-US", "genai.tips.switch_model_provider_personal"));
+  });
 });
 
 describe("error embeds name where the failure came from", () => {
