@@ -26,8 +26,6 @@ import { config } from "dotenv";
 import { createScriptSqlClient } from "./lib/scriptSqlClient";
 import { usesModuleMocks } from "./lib/testIsolation";
 
-config({ quiet: true });
-
 /**
  * Per-test and per-hook budget handed to every `bun test` child.
  *
@@ -38,7 +36,12 @@ config({ quiet: true });
  * per-test argument because only the flag also covers hooks; Bun silently ignores a third argument
  * to `describe`.
  */
-const TEST_TIMEOUT_MS = process.env.TOMORI_TEST_TIMEOUT_MS ?? "30000";
+function getTestTimeoutMs(): string {
+  return process.env.TOMORI_TEST_TIMEOUT_MS ?? "30000";
+}
+
+// Windows CreateProcessW limits a command line to 32,767 characters, so capping file arguments leaves headroom for bun and reporter flags.
+export const MAX_TEST_BATCH_ARG_CHARS = 16_000;
 
 const DATABASE_ENV_KEYS = [
   "DATABASE_URL",
@@ -190,6 +193,30 @@ async function fileUsesModuleMocks(file: string): Promise<boolean> {
   return usesModuleMocks(source);
 }
 
+export function buildFileBatches(files: readonly string[], maxArgChars = MAX_TEST_BATCH_ARG_CHARS): Batch[] {
+  const batches: Batch[] = [];
+  let current: string[] = [];
+  let currentChars = 0;
+
+  for (const file of files) {
+    // Reserve 3 chars per path so worst-case quoting and separating spaces fit under the budget.
+    const argCost = file.length + 3;
+    if (current.length > 0 && currentChars + argCost > maxArgChars) {
+      batches.push({ files: current });
+      current = [];
+      currentChars = 0;
+    }
+    current.push(file);
+    currentChars += argCost;
+  }
+
+  if (current.length > 0) {
+    batches.push({ files: current });
+  }
+
+  return batches;
+}
+
 /**
  * Groups test files into concurrently-runnable lanes.
  *
@@ -200,9 +227,9 @@ async function fileUsesModuleMocks(file: string): Promise<boolean> {
  * That hazard is confined to a single process, so the rule required is "no two
  * mock-using files share a process", NOT "no two files ever share a process".
  * Mock users are therefore detected by source inspection and given a batch each,
- * while everything else shares one. Detection is by content rather than a
- * hardcoded list so a newly-added mock user isolates itself automatically instead
- * of silently corrupting its neighbours.
+ * while everything else shares batches capped to the command-line limit. Detection
+ * is by content rather than a hardcoded list so a newly-added mock user isolates
+ * itself automatically instead of silently corrupting its neighbours.
  *
  * DB regression files all live in one lane and never run concurrently with each
  * other: they share a single disposable Postgres database with fixed-id fixtures,
@@ -212,7 +239,7 @@ async function fileUsesModuleMocks(file: string): Promise<boolean> {
  * Input order is preserved within every lane so batching never reorders DB
  * fixture interactions relative to a sequential run.
  */
-async function planLanes(files: string[]): Promise<Lane[]> {
+export async function planLanes(files: string[]): Promise<Lane[]> {
   const mockFlags = await Promise.all(files.map(fileUsesModuleMocks));
 
   const shared: Record<"unit" | "db", string[]> = { unit: [], db: [] };
@@ -226,17 +253,14 @@ async function planLanes(files: string[]): Promise<Lane[]> {
   const lanes: Lane[] = [];
 
   // Lane order doubles as the deterministic order buffered output is replayed in.
-  if (shared.unit.length > 0) lanes.push({ id: "unit", batches: [{ files: shared.unit }] });
+  if (shared.unit.length > 0) lanes.push({ id: "unit", batches: buildFileBatches(shared.unit) });
   if (isolated.unit.length > 0) {
     lanes.push({ id: "unit-isolated", batches: isolated.unit.map((file) => ({ files: [file] })) });
   }
 
-  // Shared batch first, then any mock-using regression file on its own: all
+  // Shared batches first, then any mock-using regression file on its own: all
   // sequential within the single DB lane.
-  const dbBatches: Batch[] = [
-    ...(shared.db.length > 0 ? [{ files: shared.db }] : []),
-    ...isolated.db.map((file) => ({ files: [file] })),
-  ];
+  const dbBatches: Batch[] = [...buildFileBatches(shared.db), ...isolated.db.map((file) => ({ files: [file] }))];
   if (dbBatches.length > 0) lanes.push({ id: "db", batches: dbBatches });
 
   return lanes;
@@ -285,7 +309,7 @@ async function runLane(
     // The wrapper owns environment loading and database selection. Prevent a child from loading a
     // more specific local env file and silently undoing the disposable-database or skip decision.
     const proc = Bun.spawn(
-      ["bun", "--no-env-file", "test", "--timeout", TEST_TIMEOUT_MS, ...batch.files, ...reporterArgs],
+      ["bun", "--no-env-file", "test", "--timeout", getTestTimeoutMs(), ...batch.files, ...reporterArgs],
       {
         env: childEnv,
         stdout: streamOutput ? "inherit" : "pipe",
@@ -457,7 +481,11 @@ async function main(): Promise<void> {
   process.exit(exitCode);
 }
 
-main().catch(async (err) => {
-  console.error("[test-runner] Fatal:", err);
-  process.exit(1);
-});
+// Guarded so unit tests can import batching helpers without running the suite or loading .env.
+if (import.meta.main) {
+  config({ quiet: true });
+  main().catch(async (err) => {
+    console.error("[test-runner] Fatal:", err);
+    process.exit(1);
+  });
+}

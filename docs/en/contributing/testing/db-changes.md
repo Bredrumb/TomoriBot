@@ -48,9 +48,9 @@ is one `bun test` process.
 
 | Lane | Files | Batching |
 |---|---|---|
-| `unit` | `tests/unit/` without `mock.module()` | One batch |
+| `unit` | `tests/unit/` without `mock.module()` | Shared batches capped to the command-line limit |
 | `unit-isolated` | `tests/unit/` with `mock.module()` | One batch per file |
-| `db` | `tests/regression/` | One batch for files without `mock.module()`, one per file with it |
+| `db` | `tests/regression/` | Shared batches capped to the command-line limit for files without `mock.module()`, one per file with it |
 
 Bun applies `mock.module()` to the whole process and never undoes it, so two mocking files in one
 process break each other with errors like `X is not a function`. The runner detects `mock.module` in
