@@ -1436,7 +1436,6 @@ ${localizer(locale, "commands.personal.config.fallbacks_description")}`,
           fallbackRangeIndex * PERSONAL_PROVIDER_DIRECT_LIMIT,
           fallbackRangeIndex * PERSONAL_PROVIDER_DIRECT_LIMIT + PERSONAL_PROVIDER_DIRECT_LIMIT,
         );
-        const selectedProviderValue = encodeProviderParam(selectedProvider);
 
         // The select is the only way into the fallback modal, so it renders even for a single
         // provider. The primary model is chosen on Switch Models, and repeating it here would give
@@ -1470,7 +1469,6 @@ ${localizer(locale, "commands.personal.config.fallbacks_description")}`,
                 options: slicedFallbackEntries.map((entry) => ({
                   value: entry.value,
                   label: safeSelectOptionText(entry.label, 100),
-                  default: entry.value === selectedProviderValue,
                 })),
                 disabled: writesDisabled,
               },

@@ -320,7 +320,7 @@ export default {
       channels_auto_trigger_threshold_label: `回复频率`,
       channels_auto_trigger_threshold_input_description: `0 表示每条消息都回复。50 表示每 50 条消息回复一次。50-60 每次抽取一个随机消息数。`,
       channels_auto_trigger_threshold_placeholder: `0、50 或 50-60`,
-      channels_auto_trigger_threshold_invalid_detail: `请输入 0、1 到 100 的数字，或类似 50-60 的范围。`,
+      channels_auto_trigger_threshold_invalid_detail: `请输入 0、1 到 {max} 的数字，或类似 50-60 的范围。`,
       channels_auto_trigger_threshold_updated_heading: `活跃度阈值已更新`,
       channels_auto_trigger_threshold_updated_detail: `频道活跃度阈值已更新。`,
       channels_rules_title: `频道规则`,

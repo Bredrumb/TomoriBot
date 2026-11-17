@@ -48,9 +48,11 @@ export function buildProviderPageEntries(input: ProviderPageEntriesInput): Provi
 
   const entries: ProviderSelectEntry[] = [];
   let expandedStartIndex = 0;
+  let matchedExpanded = false;
 
   for (const provider of input.providers) {
     if (expanded && provider.toLowerCase() === expanded.toLowerCase()) {
+      matchedExpanded = true;
       expandedStartIndex = entries.length;
       for (let page = 0; page < pageCount; page += 1) {
         entries.push({
@@ -72,7 +74,7 @@ export function buildProviderPageEntries(input: ProviderPageEntriesInput): Provi
     });
   }
 
-  return { entries, expandedStartIndex, expandedPageCount: pageCount };
+  return { entries, expandedStartIndex, expandedPageCount: matchedExpanded ? pageCount : 0 };
 }
 
 export interface ModelRoutingControlInput {

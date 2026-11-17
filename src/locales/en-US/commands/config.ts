@@ -316,7 +316,7 @@ export default {
       channels_auto_trigger_threshold_label: `How often to reply`,
       channels_auto_trigger_threshold_input_description: `0 means every message. 50 means every 50 messages. 50-60 picks a random count each time.`,
       channels_auto_trigger_threshold_placeholder: `0, 50, or 50-60`,
-      channels_auto_trigger_threshold_invalid_detail: `Use 0, a number from 1 to 100, or a range like 50-60.`,
+      channels_auto_trigger_threshold_invalid_detail: `Use 0, a number from 1 to {max}, or a range like 50-60.`,
       channels_auto_trigger_threshold_updated_heading: `Activity Threshold Updated`,
       channels_auto_trigger_threshold_updated_detail: `The channel activity threshold was updated.`,
       channels_rules_title: `Channel Rules`,

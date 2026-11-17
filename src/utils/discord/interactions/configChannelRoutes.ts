@@ -1,3 +1,4 @@
+import type { LocalizerVariables } from "@/types/discord/global";
 import type { PanelReceipt } from "@/types/discord/panel";
 import { ChannelType, type ModalSubmitInteraction } from "discord.js";
 import type { PanelAction } from "@/constants/panelActions";
@@ -60,7 +61,12 @@ import {
 } from "@/utils/discord/ui/configChannelModals";
 import { buildConfigModalFieldId } from "@/utils/discord/ui/configModals";
 import { localizer } from "@/utils/text/localizer";
-import { parseThresholdInput, rollAutochatTarget, validateThresholdInput } from "@/utils/discord/autoTriggerThreshold";
+import {
+  MAX_THRESHOLD,
+  parseThresholdInput,
+  rollAutochatTarget,
+  validateThresholdInput,
+} from "@/utils/discord/autoTriggerThreshold";
 import type { AutochatPersonaOverride, ChannelPromptMode, TomoriState } from "@/types/db/schema";
 import { combineModalPromptParts } from "@/utils/text/modalPromptParts";
 import type { ConfigPanelView } from "@/utils/discord/ui/configPanel";
@@ -163,16 +169,17 @@ function receipt(
   tone: "success" | "info" | "warning" | "error",
   headingKey: string,
   detailKey: string,
+  vars?: LocalizerVariables,
 ): PanelReceipt {
   return {
     tone,
     heading: localizer(locale, headingKey),
-    detail: localizer(locale, detailKey),
+    detail: localizer(locale, detailKey, vars),
   };
 }
 
-function invalid(locale: string, detailKey: string): PanelReceipt {
-  return receipt(locale, "error", "commands.config.panel.channels_invalid_input_heading", detailKey);
+function invalid(locale: string, detailKey: string, vars?: LocalizerVariables): PanelReceipt {
+  return receipt(locale, "error", "commands.config.panel.channels_invalid_input_heading", detailKey, vars);
 }
 
 function externalReceipt(
@@ -806,18 +813,15 @@ async function runAutoTriggerWrite(
     const parsed = parseThresholdInput(
       submitted.fields.fields.has(thresholdField) ? submitted.fields.getTextInputValue(thresholdField) : "",
     );
-    if (!parsed) {
+    const validation = parsed ? validateThresholdInput(parsed.threshold, parsed.maxThreshold) : null;
+    if (!parsed || !validation?.isValid) {
       return {
-        receipt: invalid(route.locale, "commands.config.panel.channels_auto_trigger_threshold_invalid_detail"),
+        receipt: invalid(route.locale, "commands.config.panel.channels_auto_trigger_threshold_invalid_detail", {
+          max: MAX_THRESHOLD,
+        }),
       };
     }
     const { threshold, maxThreshold } = parsed;
-    const validation = validateThresholdInput(threshold, maxThreshold);
-    if (!validation.isValid) {
-      return {
-        receipt: invalid(route.locale, "commands.config.panel.channels_auto_trigger_threshold_invalid_detail"),
-      };
-    }
     const currentThreshold = state.config.autoch_threshold ?? 0;
     const currentMaxThreshold = state.config.autoch_threshold_max ?? currentThreshold;
     if (threshold === currentThreshold && maxThreshold === currentMaxThreshold) {

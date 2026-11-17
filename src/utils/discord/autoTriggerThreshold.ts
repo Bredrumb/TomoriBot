@@ -1,6 +1,6 @@
 export const MIN_THRESHOLD = 0; // 0 means always-reply in configured auto-chat channels
 export const MIN_RANDOM_THRESHOLD = 1;
-export const MAX_THRESHOLD = 100; // The absolute maximum value allowed
+export const MAX_THRESHOLD = 1000; // The absolute maximum value allowed
 
 export interface ThresholdValidationResult {
   isValid: boolean;
@@ -31,8 +31,8 @@ export interface ThresholdInput {
 
 const THRESHOLD_INPUT_PATTERN = /^(\d+)(?:\s*-\s*(\d+))?$/;
 
-/** Sized for a padded "100 - 100" range: a shorter field cap truncates text the parser accepts. */
-export const THRESHOLD_INPUT_MAX_LENGTH = 16;
+/** Sized for a padded "1000 - 1000" range: a shorter field cap truncates text the parser accepts. */
+export const THRESHOLD_INPUT_MAX_LENGTH = 18;
 
 /**
  * Reads the one-field modal form: `0` for every message, `50` for a fixed count, or `50-60` for a

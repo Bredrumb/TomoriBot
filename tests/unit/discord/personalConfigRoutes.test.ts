@@ -2686,7 +2686,8 @@ describe("Models panel rendering", () => {
       const providerSelect = collectComponents(payload).find((component) =>
         component.customId?.includes(":fallbacks-provider-select:"),
       );
-      expect(providerSelect?.options?.find((option) => option.default)?.value).toBe("deepseek");
+      expect(providerSelect?.options?.map((option) => option.value)).toEqual(["anthropic", "deepseek"]);
+      expect(providerSelect?.options?.every((option) => option.default !== true)).toBe(true);
       expect(JSON.stringify(payload)).toContain("model-300");
     } finally {
       for (const spy of spies) spy.mockRestore();
@@ -3287,6 +3288,7 @@ describe("Range pagination workflow", () => {
         "OpenRouter (page 1)",
         "OpenRouter (page 2)",
       ]);
+      expect(providerSelect?.options?.every((option) => option.default !== true)).toBe(true);
       expect(providerSelect?.placeholder).toBe("Choose a page of OpenRouter models");
       const rendered = JSON.stringify(repaintedPayload);
       expect(rendered).toContain(localizedCopy("en-US", "commands.personal.config.fallbacks_paged_heading"));

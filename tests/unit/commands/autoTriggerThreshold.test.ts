@@ -27,20 +27,20 @@ describe("/server auto-trigger threshold write plan", () => {
     });
 
     it("(min, max) with min < max is valid range mode", () => {
-      const result = validateThresholdInput(10, 100);
+      const result = validateThresholdInput(10, 1000);
       expect(result.isValid).toBe(true);
       expect(result.isAlwaysReplyMode).toBe(false);
       expect(result.isRangeMode).toBe(true);
     });
 
-    it("boundary: (1, 100) is valid range mode", () => {
+    it("boundary: (1, 1000) is valid range mode", () => {
       const result = validateThresholdInput(MIN_RANDOM_THRESHOLD, MAX_THRESHOLD);
       expect(result.isValid).toBe(true);
       expect(result.isRangeMode).toBe(true);
     });
 
-    it("boundary: (100, 100) is valid fixed mode", () => {
-      const result = validateThresholdInput(100, 100);
+    it("boundary: (1000, 1000) is valid fixed mode", () => {
+      const result = validateThresholdInput(1000, 1000);
       expect(result.isValid).toBe(true);
       expect(result.isAlwaysReplyMode).toBe(false);
     });
@@ -51,8 +51,8 @@ describe("/server auto-trigger threshold write plan", () => {
       expect(result.isAlwaysReplyMode).toBe(false);
     });
 
-    it("(0, 100) is invalid — zero threshold requires zero max for always-reply mode", () => {
-      const result = validateThresholdInput(0, 100);
+    it("(0, 1000) is invalid — zero threshold requires zero max for always-reply mode", () => {
+      const result = validateThresholdInput(0, 1000);
       expect(result.isValid).toBe(false);
     });
 
@@ -61,10 +61,15 @@ describe("/server auto-trigger threshold write plan", () => {
       expect(result.isValid).toBe(false);
     });
 
+    it("(1001, 1001) and (10, 1001) are invalid — threshold cannot exceed MAX_THRESHOLD", () => {
+      expect(validateThresholdInput(1001, 1001).isValid).toBe(false);
+      expect(validateThresholdInput(10, 1001).isValid).toBe(false);
+    });
+
     it("exposed constants match the command's min/max option constraints", () => {
       expect(MIN_THRESHOLD).toBe(0);
       expect(MIN_RANDOM_THRESHOLD).toBe(1);
-      expect(MAX_THRESHOLD).toBe(100);
+      expect(MAX_THRESHOLD).toBe(1000);
     });
   });
 
@@ -90,9 +95,9 @@ describe("/server auto-trigger threshold write plan", () => {
     });
 
     it("keeps the modal field cap wide enough for a padded maximum range", () => {
-      const padded = "  100  -  100  ";
+      const padded = "  1000  -  1000  ";
       expect(padded.length).toBeLessThanOrEqual(THRESHOLD_INPUT_MAX_LENGTH);
-      expect(parseThresholdInput(padded)).toEqual({ threshold: 100, maxThreshold: 100 });
+      expect(parseThresholdInput(padded)).toEqual({ threshold: 1000, maxThreshold: 1000 });
     });
 
     it("returns null for text that is neither a number nor a range", () => {
@@ -120,8 +125,8 @@ describe("/server auto-trigger threshold write plan", () => {
       for (const [threshold, maxThreshold] of [
         [0, 0],
         [1, 1],
-        [100, 100],
-        [1, 100],
+        [1000, 1000],
+        [1, 1000],
       ] as const) {
         expect(parseThresholdInput(formatThresholdInput(threshold, maxThreshold))).toEqual({ threshold, maxThreshold });
       }
@@ -150,7 +155,7 @@ describe("/server auto-trigger threshold write plan", () => {
     });
 
     it("returns an integer for a range", () => {
-      const target = rollAutochatTarget(1, 100);
+      const target = rollAutochatTarget(1, 1000);
       expect(Number.isInteger(target)).toBe(true);
     });
   });

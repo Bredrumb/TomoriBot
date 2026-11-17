@@ -732,7 +732,6 @@ function buildFallbacksBody(input: ConfigModelsPageInput): ComponentInContainerD
     rangeIndex * CONFIG_MODEL_PROVIDER_DIRECT_LIMIT,
     rangeIndex * CONFIG_MODEL_PROVIDER_DIRECT_LIMIT + CONFIG_MODEL_PROVIDER_DIRECT_LIMIT,
   );
-  const expandedEntryValue = view.expandedProvider ? encodeConfigProviderPageValue(view.expandedProvider, 0) : null;
 
   const providerSelectRow: ActionRowData<StringSelectMenuComponentData> = {
     type: ComponentType.ActionRow,
@@ -753,7 +752,6 @@ function buildFallbacksBody(input: ConfigModelsPageInput): ComponentInContainerD
             ? visibleEntries.map((entry) => ({
                 label: safeSelectOptionText(entry.label, 100),
                 value: entry.value,
-                default: entry.value === expandedEntryValue,
               }))
             : [
                 {

@@ -350,7 +350,7 @@ export default {
       channels_auto_trigger_threshold_label: `Con qué frecuencia responder`,
       channels_auto_trigger_threshold_input_description: `0 significa cada mensaje. 50 significa cada 50 mensajes. 50-60 elige una cantidad aleatoria cada vez.`,
       channels_auto_trigger_threshold_placeholder: `0, 50 o 50-60`,
-      channels_auto_trigger_threshold_invalid_detail: `Usa 0, un número del 1 al 100 o un rango como 50-60.`,
+      channels_auto_trigger_threshold_invalid_detail: `Usa 0, un número del 1 al {max} o un rango como 50-60.`,
       channels_auto_trigger_threshold_updated_heading: `Umbral de actividad actualizado`,
       channels_auto_trigger_threshold_updated_detail: `Se actualizó el umbral de actividad del canal.`,
       channels_rules_title: `Reglas de canal`,
