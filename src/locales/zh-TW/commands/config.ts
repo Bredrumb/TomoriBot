@@ -321,7 +321,7 @@ export default {
       channels_auto_trigger_threshold_label: `回覆頻率`,
       channels_auto_trigger_threshold_input_description: `0 表示每則訊息都回覆。50 表示每 50 則訊息回覆一次。50-60 則每次隨機選取該範圍內的次數。`,
       channels_auto_trigger_threshold_placeholder: `0、50 或 50-60`,
-      channels_auto_trigger_threshold_invalid_detail: `請輸入 0、1 到 100 的數字，或像 50-60 這樣的範圍。`,
+      channels_auto_trigger_threshold_invalid_detail: `請輸入 0、1 到 {max} 的數字，或像 50-60 這樣的範圍。`,
       channels_auto_trigger_threshold_updated_heading: `活動門檻已更新`,
       channels_auto_trigger_threshold_updated_detail: `頻道活動門檻已更新。`,
       channels_rules_title: `頻道規則`,

@@ -343,7 +343,7 @@ export default {
       channels_auto_trigger_threshold_label: `Tần suất trả lời`,
       channels_auto_trigger_threshold_input_description: `0 nghĩa là mỗi tin nhắn. 50 nghĩa là mỗi 50 tin nhắn. 50-60 sẽ chọn ngẫu nhiên một số mỗi lần.`,
       channels_auto_trigger_threshold_placeholder: `0, 50 hoặc 50-60`,
-      channels_auto_trigger_threshold_invalid_detail: `Hãy dùng 0, một số từ 1 đến 100, hoặc một khoảng như 50-60.`,
+      channels_auto_trigger_threshold_invalid_detail: `Hãy dùng 0, một số từ 1 đến {max}, hoặc một khoảng như 50-60.`,
       channels_auto_trigger_threshold_updated_heading: `Đã cập nhật ngưỡng hoạt động`,
       channels_auto_trigger_threshold_updated_detail: `Ngưỡng hoạt động của kênh đã được cập nhật.`,
       channels_rules_title: `Quy tắc kênh`,
