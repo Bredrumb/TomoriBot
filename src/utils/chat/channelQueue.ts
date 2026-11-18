@@ -61,6 +61,7 @@ export type QueuedMessage = {
   manualTriggerInvoker?: ManualTriggerInvoker;
   systemTriggerIdentity?: SystemTriggerIdentity;
   borrowsTriggerMessage?: boolean;
+  suppressSelfReply?: boolean;
   manualStreamingContextOverrides?: Pick<
     StreamingContext,
     "disableCrossChannelMessage" | "disableRecentMessageReplyTool" | "disableReminderTool"
@@ -90,6 +91,7 @@ export interface ChannelLockEntry {
   activeTriggeredPersonaIds?: number[];
   /** Set during a Natural Nudges turn so gateway echoes cannot schedule duplicate persona replies. */
   activeNaturalNudge?: "single" | "scene";
+  activeSuppressSelfReply?: boolean;
   nudgeInterrupted?: boolean;
   activeIsUserImpersonation?: boolean;
   activeImpersonatedUserId?: string;
@@ -115,6 +117,7 @@ export const channelLocks = new Map<string, ChannelLockEntry>();
 export const selfReplySuppressionUntil = new Map<string, number>();
 /** A nudge turn's last message can reach the gateway after its lock releases, so its output stays ignored briefly. */
 const nudgeOutputQuietUntil = new Map<string, number>();
+const suppressedTurnQuietUntil = new Map<string, number>();
 
 function ownsMessage(message: Message): boolean {
   return (
@@ -177,9 +180,11 @@ export async function runWithChannelLock<T>(
     triggeredPersonaIds: admission.incoming.triggeredPersonaIds,
     isCommandTriggered: admission.incoming.isManuallyTriggered ?? false,
     naturalNudge: admission.incoming.naturalNudge ? (admission.incoming.sceneTurn ? "scene" : "single") : undefined,
+    suppressSelfReply: admission.incoming.suppressSelfReply,
   });
   // The quiet window only bridges to the next nudge turn; any other turn's persona output is real.
   if (!admission.incoming.naturalNudge) nudgeOutputQuietUntil.delete(channelId);
+  if (!admission.incoming.suppressSelfReply) suppressedTurnQuietUntil.delete(channelId);
 
   const turnController = lockEntry.activeTurnAbortController;
   const ownerSignal = getShardTopology().ownsAllShards() ? undefined : getOwnerWorkSignal();
@@ -315,6 +320,7 @@ export function releaseStaleChannelLockIfExpired(channelId: string, lockEntry: C
   lockEntry.activePersonaId = undefined;
   lockEntry.activeTriggeredPersonaIds = undefined;
   lockEntry.activeNaturalNudge = undefined;
+  lockEntry.activeSuppressSelfReply = undefined;
   lockEntry.activeIsUserImpersonation = undefined;
   lockEntry.activeImpersonatedUserId = undefined;
   lockEntry.followUpEligible = false;
@@ -336,6 +342,7 @@ export function acquireChannelLockForTurn(
     triggeredPersonaIds?: number[];
     isCommandTriggered: boolean;
     naturalNudge?: "single" | "scene";
+    suppressSelfReply?: boolean;
   },
 ): void {
   lockEntry.isLocked = true;
@@ -351,6 +358,7 @@ export function acquireChannelLockForTurn(
   lockEntry.activePersonaId = args.selectedPersonaId;
   lockEntry.activeTriggeredPersonaIds = args.triggeredPersonaIds;
   lockEntry.activeNaturalNudge = args.naturalNudge;
+  lockEntry.activeSuppressSelfReply = args.suppressSelfReply;
   lockEntry.nudgeInterrupted = false;
   lockEntry.activeIsUserImpersonation = undefined;
   lockEntry.activeImpersonatedUserId = undefined;
@@ -712,6 +720,10 @@ export function releaseChannelLockAndReplayQueue(args: {
     nudgeOutputQuietUntil.set(args.channelId, Date.now() + SELF_REPLY_SUPPRESSION_TTL_MS);
   }
   args.lockEntry.activeNaturalNudge = undefined;
+  if (args.lockEntry.activeSuppressSelfReply) {
+    suppressedTurnQuietUntil.set(args.channelId, Date.now() + SELF_REPLY_SUPPRESSION_TTL_MS);
+  }
+  args.lockEntry.activeSuppressSelfReply = undefined;
   args.lockEntry.activeIsUserImpersonation = undefined;
   args.lockEntry.activeImpersonatedUserId = undefined;
   args.lockEntry.followUpEligible = false;
@@ -893,6 +905,7 @@ export function forceKillChannelStream(channelId: string): boolean {
 }
 
 export function clearChannelProcessingQueue(channelId: string): number {
+  suppressedTurnQuietUntil.delete(channelId);
   const lockEntry = channelLocks.get(channelId);
   if (lockEntry) {
     lockEntry.historyWindow = undefined;
@@ -1050,6 +1063,12 @@ export function isNudgeOutputActive(channelId: string): boolean {
   if (lockEntry?.isLocked && lockEntry.activeNaturalNudge) return true;
   if (lockEntry?.messageQueue.some((queuedMsg) => queuedMsg.naturalNudge)) return true;
   return Date.now() < (nudgeOutputQuietUntil.get(channelId) ?? 0);
+}
+
+export function isSuppressedTurnOutputActive(channelId: string): boolean {
+  const lockEntry = channelLocks.get(channelId);
+  if (lockEntry?.isLocked && lockEntry.activeSuppressSelfReply) return true;
+  return Date.now() < (suppressedTurnQuietUntil.get(channelId) ?? 0);
 }
 
 function discardQueuedMessages(messages: QueuedMessage[], reason: QueuedMessageDiscardReason): void {

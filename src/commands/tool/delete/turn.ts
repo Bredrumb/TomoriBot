@@ -1,7 +1,7 @@
 import { verifyMessageWebhook } from "@/utils/chat/webhookIdentity";
 import type { AnyThreadChannel, ChatInputCommandInteraction, Client, Message } from "discord.js";
 import { BaseGuildTextChannel, MessageFlags, type SlashCommandSubcommandBuilder } from "discord.js";
-import { tomoriChat, suppressNextSelfReply } from "@/events/messageCreate/tomoriChat";
+import { tomoriChat } from "@/events/messageCreate/tomoriChat";
 import type { TomoriState, UserRow } from "@/types/db/schema";
 import { getCachedAllPersonas, getCachedMainPersona } from "@/utils/cache/tomoriStateCache";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
@@ -412,9 +412,6 @@ export async function execute(
           }
 
           if (lastMessage) {
-            // Prevent the self-reply suppression guard from blocking this trigger
-            suppressNextSelfReply(channel.id);
-
             // Fire-and-forget, so do not await so the command interaction resolves
             void tomoriChat({
               client,
@@ -429,6 +426,7 @@ export async function execute(
               textQuotaSource: "user",
               textQuotaTriggerKey: interaction.id,
               textQuotaUserDiscId: interaction.user.id,
+              suppressSelfReply: true,
               manualTriggerInvoker: {
                 userDiscId: interaction.user.id,
                 username: interaction.user.username,

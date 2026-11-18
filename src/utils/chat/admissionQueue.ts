@@ -6,9 +6,7 @@ import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { ColorCode, log } from "@/utils/misc/logger";
 import {
   hasExplicitCrossPersonaTrigger,
-  isAutochatCounterChannelActive,
   isAutochatOverrideChannel,
-  isAutochatQualifyingMessage,
   isSelfTriggerMessage,
 } from "@/utils/chat/triggerProcessor";
 import {
@@ -19,9 +17,11 @@ import {
   requestNaturalStopForLockedTurn,
 } from "@/utils/chat/channelQueue";
 import {
+  canAdvanceAutochatCounter,
   enforceGlobalRateLimit,
   evaluateChatAccess,
   rejectOnMessageTriggerCooldown,
+  updateAutochatCounter,
   type ChatAccessState,
 } from "@/utils/chat/admissionGuards";
 import { shouldBotReply } from "@/utils/chat/replyDecision";
@@ -295,6 +295,7 @@ async function evaluateLockedChannelAdmission(
       manualTriggerInvoker: incoming.manualTriggerInvoker,
       systemTriggerIdentity: incoming.systemTriggerIdentity,
       borrowsTriggerMessage: incoming.borrowsTriggerMessage,
+      suppressSelfReply: incoming.suppressSelfReply,
       conditioningInteraction: incoming.conditioningInteraction,
       reminderRecipientID: incoming.reminderRecipientID,
       reminderData: incoming.reminderData,
@@ -375,14 +376,24 @@ async function evaluatePreLockReplyGate(args: AdmissionQueueAndTriggerArgs): Pro
     };
   }
 
-  const stateForReplyCheck =
-    isAutochatCounterChannelActive(earlyTomoriState.config, channelIds.effectiveChannelId) &&
-    isAutochatQualifyingMessage(triggerMessage, isSelfMessage)
-      ? {
-          ...earlyTomoriState,
-          autoch_counter: earlyTomoriState.autoch_counter + 1,
-        }
-      : earlyTomoriState;
+  let stateForReplyCheck = earlyTomoriState;
+  if (
+    canAdvanceAutochatCounter({
+      message: triggerMessage,
+      tomoriState: earlyTomoriState,
+      allPersonas: earlyAllPersonas,
+      effectiveChannelId: channelIds.effectiveChannelId,
+      isSelfMessage,
+      personalAutoTriggerPersonaId: accessState.personalSpotlightStatus?.autoTriggerPersonaId ?? null,
+      allowedPersonaIds: accessState.allowedPersonaIds,
+    })
+  ) {
+    const snapshot = await updateAutochatCounter(triggerMessage, earlyTomoriState, channelScope.serverDiscId);
+    if (snapshot) {
+      incoming.autochatCounterSnapshot = snapshot;
+      stateForReplyCheck = { ...earlyTomoriState, ...snapshot };
+    }
+  }
 
   if (
     shouldBotReply(triggerMessage, stateForReplyCheck, earlyAllPersonas, {

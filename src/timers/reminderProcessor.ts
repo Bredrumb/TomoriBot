@@ -18,7 +18,7 @@ import {
 
 import type { ReminderRow } from "../types/db/schema";
 import { calculateLateness } from "@/utils/text/processors/timeUtils";
-import { tomoriChat, suppressNextSelfReply } from "../events/messageCreate/tomoriChat";
+import { tomoriChat } from "../events/messageCreate/tomoriChat";
 import { createStandardEmbed, truncateForEmbedDescription } from "../utils/discord/embedHelper";
 import { getCachedAllPersonas } from "../utils/cache/tomoriStateCache";
 import { getCachedUserRow } from "../utils/cache/userCache";
@@ -229,8 +229,6 @@ export class ReminderProcessor {
         work,
       });
 
-      suppressNextSelfReply(channel.id);
-
       const disposition = await tomoriChat({
         client: this.client,
         message: lastMessage,
@@ -246,6 +244,7 @@ export class ReminderProcessor {
           created_by_user_id: reminder.created_by_user_id,
         },
         borrowsTriggerMessage: true,
+        suppressSelfReply: true,
         selectedPersonaId: reminder.persona_id ?? undefined,
         isPersonaJob: false,
         isUserImpersonation: false,

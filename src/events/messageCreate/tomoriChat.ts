@@ -205,6 +205,7 @@ async function runAdmittedChatTurn(
           manualTriggerInvoker: queued.manualTriggerInvoker,
           systemTriggerIdentity: queued.systemTriggerIdentity,
           borrowsTriggerMessage: queued.borrowsTriggerMessage,
+          suppressSelfReply: queued.suppressSelfReply,
           manualStreamingContextOverrides: queued.manualStreamingContextOverrides,
           sceneTurn: queued.sceneTurn,
           naturalNudge: queued.naturalNudge,

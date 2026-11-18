@@ -141,7 +141,6 @@ export function shouldBotReply(
   }
   const personalAutoTriggerPersonaId = options.personalAutoTriggerPersonaId ?? null;
   const hasPersonalAutoTrigger = Number.isInteger(personalAutoTriggerPersonaId);
-  const isAutoTriggerChannel = isAutochatConfiguredChannel(config, msgEffectiveChannelId) || hasPersonalAutoTrigger;
   const serverAutochatPersonaId = isAutochatConfiguredChannel(config, msgEffectiveChannelId)
     ? getAutochatAssignedPersonaId(config, msgEffectiveChannelId)
     : null;
@@ -184,13 +183,7 @@ export function shouldBotReply(
         isDeliberate = true;
       } else {
         matched = getTriggerFirstMatchIndex(message, normalizedTrigger) !== Number.POSITIVE_INFINITY;
-        const isPersonaDtmExempt =
-          isAutoTriggerChannel &&
-          (autochatPersonaId === null ? !persona.is_alter : autochatPersonaId === persona.persona_id);
-        isDeliberate =
-          isDtmActive && !isPersonaDtmExempt
-            ? getDeliberateTriggerMatch(message.content, normalizedTrigger) !== null
-            : true;
+        isDeliberate = isDtmActive ? getDeliberateTriggerMatch(message.content, normalizedTrigger) !== null : true;
       }
 
       if (matched) {

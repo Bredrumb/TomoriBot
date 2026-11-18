@@ -524,4 +524,40 @@ describe("per-persona planning", () => {
       quota.mockRestore();
     }
   });
+
+  it("preserves an admitted auto-trigger hit when a concurrent message rolls the shared cache counter", async () => {
+    const turn = lockedTurn();
+    Object.assign(turn.admission.message, { channelId: turn.channelId });
+    const sharedState = createPersona({
+      autoch_counter: 1,
+      autoch_next_target: 10,
+      config: {
+        autoch_disc_ids: [turn.channelId],
+        autoch_threshold: 10,
+        autoch_threshold_max: 10,
+      },
+    });
+    turn.admission.tomoriState = sharedState;
+    turn.admission.allPersonas = [sharedState];
+    turn.admission.incoming.autochatCounterSnapshot = {
+      autoch_counter: 10,
+      autoch_next_target: 10,
+    };
+
+    const replySpy = spyOn(replyDecision, "shouldBotReply").mockImplementation(
+      (_msg, state) => state.autoch_counter >= state.autoch_next_target,
+    );
+    const matchSpy = spyOn(triggers, "determineMatchingPersonas").mockImplementation(
+      (_msg, all, _client, _ref, _replyBot, _replyPersona, _mentioned, isAutoMsgHit) => (isAutoMsgHit ? [all[0]] : []),
+    );
+    try {
+      resolutions.push(resolved("server"));
+      const plan = await planChatTurns(turn);
+      expect(plan.turns).toHaveLength(1);
+      expect(plan.turns[0]?.persona.persona_id).toBe(sharedState.persona_id);
+    } finally {
+      replySpy.mockRestore();
+      matchSpy.mockRestore();
+    }
+  });
 });

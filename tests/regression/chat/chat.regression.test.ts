@@ -3,6 +3,7 @@ stubAllShardOwnership();
 import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { TextChannel, type Client, type Message } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
+import { normalizeChatInvocation } from "@/utils/chat/admission";
 import { evaluateAdmissionQueueAndTriggerGate } from "@/utils/chat/admissionQueue";
 import {
   acquireChannelLockForTurn,
@@ -37,6 +38,7 @@ import { ToolRegistry } from "@/tools/toolRegistry";
 import type { LLMProvider, StreamResult } from "@/types/provider/interfaces";
 import { createPersona } from "../../helpers/fixtures";
 import { verifyMessageWebhook, clearWebhookIdentityCache } from "@/utils/chat/webhookIdentity";
+import { configRepository } from "@/utils/db/repositories";
 import { serverRepository } from "@/utils/db/repositories/ServerRepository";
 
 type ProviderFixtureName = "google" | "openrouter" | "novelai";
@@ -83,7 +85,6 @@ type ConversationFixture = {
     autoTriggerPersonaId: number | null;
     alwaysReplyFallbackPersonaId: number | null;
     deliberateTriggerMode: boolean;
-    isAutochatDtmExemptChannel: boolean;
     allowedPersonaIds: number[] | null;
   };
 };
@@ -295,7 +296,6 @@ describe("chat regression harness", () => {
           fixture.triggerContext.autoTriggerPersonaId,
           fixture.triggerContext.alwaysReplyFallbackPersonaId,
           fixture.triggerContext.deliberateTriggerMode,
-          fixture.triggerContext.isAutochatDtmExemptChannel,
           allowedPersonaIds,
         ).map((persona) => persona.persona_nickname ?? `id:${persona.persona_id}`),
       };
@@ -483,7 +483,6 @@ describe("chat regression harness", () => {
         autoTriggerPersonaId: null,
         alwaysReplyFallbackPersonaId: null,
         deliberateTriggerMode: false,
-        isAutochatDtmExemptChannel: false,
         allowedPersonaIds: null,
       },
     };
@@ -509,7 +508,6 @@ describe("chat regression harness", () => {
         fixture.triggerContext.autoTriggerPersonaId,
         fixture.triggerContext.alwaysReplyFallbackPersonaId,
         fixture.triggerContext.deliberateTriggerMode,
-        fixture.triggerContext.isAutochatDtmExemptChannel,
         null,
       ).map((persona) => persona.persona_nickname),
     ).toEqual(["Quetz"]);
@@ -563,7 +561,6 @@ describe("chat regression harness", () => {
         autoTriggerPersonaId: null,
         alwaysReplyFallbackPersonaId: null,
         deliberateTriggerMode: false,
-        isAutochatDtmExemptChannel: false,
         allowedPersonaIds: null,
       },
     };
@@ -584,7 +581,6 @@ describe("chat regression harness", () => {
         fixture.triggerContext.autoTriggerPersonaId,
         fixture.triggerContext.alwaysReplyFallbackPersonaId,
         fixture.triggerContext.deliberateTriggerMode,
-        fixture.triggerContext.isAutochatDtmExemptChannel,
         null,
       ).map((persona) => persona.persona_nickname),
     ).toEqual([]);
@@ -1201,6 +1197,167 @@ describe("chat regression harness", () => {
     expect(disposition?.disposition).toBe("ignore");
     expect(disposition?.reason).toBe("non_trigger_pre_lock");
     expect(channelLocks.get(channelId)?.isLocked).not.toBe(true);
+  });
+
+  it("keeps deliberate trigger mode active for an auto-trigger channel's assigned persona on plain trigger words", () => {
+    const client = makeClient();
+    const fixture: ConversationFixture = {
+      id: "autochat-channel-dtm-enforced",
+      provider: "google",
+      description: "an auto-trigger channel override must not bypass deliberate trigger mode on plain trigger words",
+      message: {
+        authorId: "user_dtm_autochat",
+        authorName: "Mirri",
+        content: "vibe total de vagabond",
+        mentionedUserIds: [],
+      },
+      state: {
+        deliberateTriggerMode: true,
+        alwaysReplyEnabled: false,
+        autochDiscIds: [channelId],
+        autochPersonaOverrides: [{ channelDiscId: channelId, personaId: 2 }],
+        autochCounter: 46,
+        autochNextTarget: 100,
+      },
+      personas: [
+        { id: 1, nickname: "Tomori", isAlter: false, triggers: ["tomori"] },
+        { id: 2, nickname: "DE", isAlter: true, triggers: ["de", "disco elysium"] },
+      ],
+      triggerContext: {
+        isReplyToBot: false,
+        replyPersonaId: null,
+        isBotMentioned: false,
+        isAutoMsgHit: false,
+        isAlwaysReply: false,
+        autoTriggerPersonaId: 2,
+        alwaysReplyFallbackPersonaId: null,
+        deliberateTriggerMode: true,
+        allowedPersonaIds: null,
+      },
+    };
+    const message = makeMessage(fixture, client);
+    const personas = fixture.personas.map((persona) => makeTomoriState(fixture, persona));
+    const mainPersona = personas[0];
+    mainPersona.config.autoch_threshold = 90;
+    mainPersona.config.autoch_threshold_max = 100;
+
+    expect(shouldBotReply(message, mainPersona, personas, { referencedMessage: null })).toBe(false);
+    expect(
+      determineMatchingPersonas(message, personas, client, null, false, null, false, false, false, 2, null, true, null),
+    ).toEqual([]);
+  });
+
+  it("advances the auto-trigger counter during pre-lock admission and admits when the threshold hits", async () => {
+    const client = makeClient();
+    const fixture = conversations[0];
+    const stateFixture: ConversationFixture = {
+      ...fixture,
+      state: {
+        ...fixture.state,
+        alwaysReplyEnabled: false,
+        autochDiscIds: [channelId],
+        autochPersonaOverrides: [{ channelDiscId: channelId, personaId: 1001 }],
+        autochCounter: 8,
+        autochNextTarget: 10,
+      },
+    };
+    const earlyTomoriState = makeTomoriState(stateFixture, {
+      id: 1001,
+      nickname: "Tomori",
+      isAlter: false,
+      triggers: ["tomori"],
+    });
+    earlyTomoriState.config.autoch_threshold = 10;
+    earlyTomoriState.config.autoch_threshold_max = 10;
+    earlyTomoriState.config.thought_log_channel_disc_id = null;
+
+    const incrementSpy = spyOn(configRepository, "incrementTomoriCounter").mockImplementation(async (personaId) => ({
+      persona_id: personaId,
+      autoch_counter: earlyTomoriState.autoch_counter + 1,
+      autoch_next_target: earlyTomoriState.autoch_next_target,
+      updated_at: new Date(),
+    }));
+
+    try {
+      const prefixCommand = makeMessage(
+        {
+          ...stateFixture,
+          id: "autoch_pre_lock_prefix",
+          message: { ...fixture.message, content: "!rank", mentionedUserIds: [] },
+        },
+        client,
+      );
+      const prefixDisposition = await evaluateAdmissionQueueAndTriggerGate({
+        incoming: normalizeChatInvocation({ client, message: prefixCommand, isFromQueue: false }),
+        channelScope: { guild: null, serverDiscId: guildId, isDMChannel: false },
+        earlyTomoriState,
+        earlyAllPersonas: [earlyTomoriState],
+        userDiscId: prefixCommand.author.id,
+        cooldownUserDiscId: prefixCommand.author.id,
+        isActiveNaturalStopMessage: false,
+        isNaturalStopMessage: false,
+        referencedMessage: null,
+      });
+
+      expect(prefixDisposition?.reason).toBe("non_trigger_pre_lock");
+      expect(earlyTomoriState.autoch_counter).toBe(8);
+      expect(incrementSpy).toHaveBeenCalledTimes(0);
+
+      const firstMessage = makeMessage(
+        {
+          ...stateFixture,
+          id: "autoch_pre_lock_miss",
+          message: { ...fixture.message, content: "ordinary chat 1", mentionedUserIds: [] },
+        },
+        client,
+      );
+      const missDisposition = await evaluateAdmissionQueueAndTriggerGate({
+        incoming: normalizeChatInvocation({ client, message: firstMessage, isFromQueue: false }),
+        channelScope: { guild: null, serverDiscId: guildId, isDMChannel: false },
+        earlyTomoriState,
+        earlyAllPersonas: [earlyTomoriState],
+        userDiscId: firstMessage.author.id,
+        cooldownUserDiscId: firstMessage.author.id,
+        isActiveNaturalStopMessage: false,
+        isNaturalStopMessage: false,
+        referencedMessage: null,
+      });
+
+      expect(missDisposition?.reason).toBe("non_trigger_pre_lock");
+      expect(earlyTomoriState.autoch_counter).toBe(9);
+      expect(incrementSpy).toHaveBeenCalledTimes(1);
+
+      const secondMessage = makeMessage(
+        {
+          ...stateFixture,
+          id: "autoch_pre_lock_hit",
+          message: { ...fixture.message, content: "ordinary chat 2", mentionedUserIds: [] },
+        },
+        client,
+      );
+      const hitIncoming = normalizeChatInvocation({ client, message: secondMessage, isFromQueue: false });
+      const hitDisposition = await evaluateAdmissionQueueAndTriggerGate({
+        incoming: hitIncoming,
+        channelScope: { guild: null, serverDiscId: guildId, isDMChannel: false },
+        earlyTomoriState,
+        earlyAllPersonas: [earlyTomoriState],
+        userDiscId: secondMessage.author.id,
+        cooldownUserDiscId: secondMessage.author.id,
+        isActiveNaturalStopMessage: false,
+        isNaturalStopMessage: false,
+        referencedMessage: null,
+      });
+
+      expect(hitDisposition).toBeNull();
+      expect(earlyTomoriState.autoch_counter).toBe(10);
+      expect(hitIncoming.autochatCounterSnapshot).toEqual({
+        autoch_counter: 10,
+        autoch_next_target: 10,
+      });
+      expect(incrementSpy).toHaveBeenCalledTimes(2);
+    } finally {
+      incrementSpy.mockRestore();
+    }
   });
 
   it("admits a reply to Tomori whose target is no longer in the message cache", async () => {

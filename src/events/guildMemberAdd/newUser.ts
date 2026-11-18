@@ -6,7 +6,7 @@ import type { StructuredContextItem } from "@/types/misc/context";
 import type { EnhancedImageContent } from "@/types/tool/enhancedContextTypes";
 import { PrivacyLevel, type TomoriState } from "@/types/db/schema";
 import { ContextItemTag } from "@/types/misc/context";
-import { tomoriChat, suppressNextSelfReply } from "@/events/messageCreate/tomoriChat";
+import { tomoriChat } from "@/events/messageCreate/tomoriChat";
 import { getCachedAllPersonas, getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { getCachedPrivacyLevel } from "@/utils/cache/userCache";
 import { userRepository } from "@/utils/db/repositories";
@@ -380,7 +380,6 @@ async function sendWelcome(params: {
 
   const welcomeStartTime = Date.now();
 
-  suppressNextSelfReply(welcomeChannel.id);
   log.info(
     `Triggering welcome message for ${member.user.tag} in channel ${welcomeChannel.id} using persona ${chosenPersona.persona_nickname}`,
   );
@@ -398,6 +397,7 @@ async function sendWelcome(params: {
     textQuotaSource: "system",
     textQuotaTriggerKey: `welcome:${member.guild.id}:${member.id}:${lastMessage.id}`,
     borrowsTriggerMessage: true,
+    suppressSelfReply: true,
     injectedContextItems: [welcomeContextItem],
     forcedMentions: forcedMentions.length > 0 ? forcedMentions : undefined,
   });

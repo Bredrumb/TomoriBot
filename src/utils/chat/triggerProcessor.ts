@@ -204,7 +204,12 @@ export function getAutochatAssignedPersonaId(config: AssembledServerConfig, chan
 }
 
 export function isAutochatQualifyingMessage(message: Message, isSelfMessage: boolean): boolean {
-  return !isSelfMessage && isRealUserLikeMessage(message) && !(message.channel instanceof DMChannel);
+  return (
+    !isSelfMessage &&
+    !message.content.startsWith("!") &&
+    isRealUserLikeMessage(message) &&
+    !(message.channel instanceof DMChannel)
+  );
 }
 
 export function isAutochatCounterChannelActive(config: AssembledServerConfig, channelId: string): boolean {
@@ -301,7 +306,6 @@ export function determineMatchingPersonas(
   autoTriggerPersonaId?: number | null,
   alwaysReplyFallbackPersonaId?: number | null,
   deliberateTriggerMode = false,
-  isAutochatDtmExemptChannel = false,
   allowedPersonaIds?: ReadonlySet<number> | null,
 ): TomoriState[] {
   const mainPersona = allPersonas.find((persona) => !persona.is_alter);
@@ -399,10 +403,7 @@ export function determineMatchingPersonas(
     let firstMatchIndex = Number.MAX_SAFE_INTEGER;
 
     for (const trigger of triggers) {
-      const isPersonaDtmExempt =
-        isAutochatDtmExemptChannel &&
-        (autoTriggerPersonaId === null ? !persona.is_alter : autoTriggerPersonaId === persona.persona_id);
-      const matchIndex = getTriggerFirstMatchIndex(message, trigger, deliberateTriggerMode && !isPersonaDtmExempt);
+      const matchIndex = getTriggerFirstMatchIndex(message, trigger, deliberateTriggerMode);
       if (matchIndex !== Number.POSITIVE_INFINITY) {
         hasMatch = true;
         if (matchIndex < firstMatchIndex) {

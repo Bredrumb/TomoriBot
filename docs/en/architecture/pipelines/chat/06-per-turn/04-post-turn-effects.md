@@ -60,7 +60,7 @@ flowchart TD
    retaining the original invoker for human requests. Cross-channel dispatches and thread-creation
    reports preserve the source turn's `borrowsTriggerMessage` flag. Borrowed system turns carry no
    human invoker, so an anchor author's blacklist, role whitelist, and personal credentials do not
-   govern generation in either channel. `suppressNextSelfReply()` suppresses the follow-up's gateway echo.
+   govern generation in either channel. `suppressSelfReply: true` suppresses the follow-up's gateway echo.
 8. **Last reply token cache**: `rememberLastReplyUsage()` caches the prompt token count in `lastReplyUsageCache`
    so the `/context` command can display prompt token consumption.
 9. **Usage statistics**: `recordUsageStats()` dispatches fire-and-forget database writes recording model

@@ -7,6 +7,7 @@ import { getCachedActiveBlocksForUser } from "@/utils/cache/personaUserBlockCach
 import { getCachedWhitelistStatus } from "@/utils/cache/channelWhitelistCache";
 import { getCachedBlacklistStatus, getCachedUserRow } from "@/utils/cache/userCache";
 import { getLastDbError } from "@/utils/cache/tomoriStateCache";
+import { configRepository } from "@/utils/db/repositories";
 import { cooldownRepository } from "@/utils/db/repositories/CooldownRepository";
 import { isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
 import { sendCooldownDM } from "@/utils/discord/cooldownDM";
@@ -17,8 +18,15 @@ import { QuotaUnavailableError } from "@/utils/quota/quotaErrors";
 import { reserveTextQuota, type TextQuotaClaim } from "@/utils/quota/textQuotaManager";
 import { checkServerRateLimit, checkUserRateLimit } from "@/utils/security/rateLimiter";
 import { isBaseTriggerWordMatch } from "@/utils/chat/errorVisibility";
-import { isMessageProxyMessage } from "@/utils/chat/triggerProcessor";
-import { isAutochatOverrideChannel } from "@/utils/chat/triggerProcessor";
+import {
+  getAutochatAssignedPersonaId,
+  getAutochatRange,
+  isAutochatCounterChannelActive,
+  isAutochatOverrideChannel,
+  isAutochatQualifyingMessage,
+  isMessageProxyMessage,
+  isRealUserLikeMessage,
+} from "@/utils/chat/triggerProcessor";
 import type { ChatIncoming } from "@/utils/chat/types";
 import {
   buildTextQuotaResetInfo,
@@ -636,5 +644,73 @@ async function sendServerRateLimitEmbed(
     log.info(`Sent rate limit embed to channel ${channel.id} (${currentCount} active messages in server)`);
   } catch (error) {
     log.warn(`Failed to send rate limit embed to channel ${channel.id}`, error);
+  }
+}
+
+export function canAdvanceAutochatCounter(params: {
+  message: Message;
+  tomoriState: TomoriState;
+  allPersonas: TomoriState[];
+  effectiveChannelId: string;
+  isSelfMessage: boolean;
+  personalAutoTriggerPersonaId?: number | null;
+  allowedPersonaIds?: ReadonlySet<number> | null;
+}): boolean {
+  if (Number.isInteger(params.personalAutoTriggerPersonaId)) return false;
+  if (
+    !isAutochatCounterChannelActive(params.tomoriState.config, params.effectiveChannelId) ||
+    !isAutochatQualifyingMessage(params.message, params.isSelfMessage)
+  ) {
+    return false;
+  }
+  const assignedPersonaId = getAutochatAssignedPersonaId(params.tomoriState.config, params.effectiveChannelId);
+  const autoReplyPersona =
+    (assignedPersonaId ? params.allPersonas.find((persona) => persona.persona_id === assignedPersonaId) : undefined) ??
+    params.allPersonas.find((persona) => !persona.is_alter);
+  return Boolean(
+    autoReplyPersona &&
+      (!params.allowedPersonaIds ||
+        (typeof autoReplyPersona.persona_id === "number" && params.allowedPersonaIds.has(autoReplyPersona.persona_id))),
+  );
+}
+
+export async function updateAutochatCounter(
+  message: Message,
+  tomoriState: TomoriState,
+  serverDiscId: string,
+): Promise<{ autoch_counter: number; autoch_next_target: number } | null> {
+  const { minThreshold, maxThreshold } = getAutochatRange(tomoriState.config);
+  const effectiveChannelId =
+    "isThread" in message.channel && typeof message.channel.isThread === "function" && message.channel.isThread()
+      ? (message.channel.parentId ?? message.channel.id)
+      : message.channel.id;
+  if (!isAutochatCounterChannelActive(tomoriState.config, effectiveChannelId) || !isRealUserLikeMessage(message)) {
+    return null;
+  }
+  if (!tomoriState.persona_id) {
+    log.error(`Tomori ID missing for server ${serverDiscId} during counter increment.`);
+    return null;
+  }
+
+  try {
+    const updatedTomoriRow = await configRepository.incrementTomoriCounter(
+      tomoriState.persona_id,
+      minThreshold,
+      maxThreshold,
+    );
+    if (!updatedTomoriRow) {
+      log.warn(`Failed to update auto-message counter for server ${serverDiscId}.`);
+      return null;
+    }
+    const snapshot = {
+      autoch_counter: updatedTomoriRow.autoch_counter,
+      autoch_next_target: updatedTomoriRow.autoch_next_target,
+    };
+    tomoriState.autoch_counter = snapshot.autoch_counter;
+    tomoriState.autoch_next_target = snapshot.autoch_next_target;
+    return snapshot;
+  } catch (error) {
+    log.error(`Error updating auto-message counter for server ${serverDiscId}`, error);
+    return null;
   }
 }

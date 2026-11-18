@@ -62,7 +62,7 @@ flowchart TD
 - **Re-entrant invocations**:
   - Empty-response retries bypass the channel lock using `skipLock=true` to reuse the existing turn lock.
   - Natural stop responses execute through `handleStopResponse` via `setImmediate` after outer lock release.
-  - Cross-channel boomerang turns execute through `suppressNextSelfReply` via `setImmediate` after lock release.
+  - Cross-channel boomerang turns execute with `suppressSelfReply: true` via `setImmediate` after lock release.
 
 ## Troubleshooting files
 

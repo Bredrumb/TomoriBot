@@ -124,8 +124,7 @@ function fixture(history: Message[], anchorLookup?: () => Promise<Collection<str
     source: "legacy_id",
   });
   const dispatch = spyOn(chat, "tomoriChat").mockResolvedValue("run");
-  const suppress = spyOn(chat, "suppressNextSelfReply").mockImplementation(() => {});
-  for (const spy of [privacy, proxies, labels, mentions, resolve, dispatch, suppress]) {
+  for (const spy of [privacy, proxies, labels, mentions, resolve, dispatch]) {
     restores.push(() => spy.mockRestore());
   }
   return { context, target, privacy, proxies, labels, mentions, dispatch, fetches };

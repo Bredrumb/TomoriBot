@@ -86,8 +86,9 @@ is currently busy:
     via `queueFollowUpForLockedTurn()`, signals an interrupt to active streaming, and returns `"queued"`.
   - If the message matches a trigger and passes rate limits and cooldowns, it enqueues the message via
     `enqueueBusyChannelMessage()` for FIFO replay and returns `"queued"`.
-- **Channel is free**: verifies access rules and reply criteria. If admitted, the message returns
-  disposition `"run"` and proceeds to the channel lock.
+- **Channel is free**: verifies access rules, advances `updateAutochatCounter()` for qualifying messages in
+  configured counter channels, and evaluates reply criteria. If admitted, the message returns disposition
+  `"run"` and proceeds to the channel lock.
 
 ## Constraints and rationale
 

@@ -582,10 +582,6 @@ export class CrossChannelMessageTool extends BaseTool {
       metadataTag: ContextItemTag.SYSTEM_INSTRUCTION_BLOCK,
     };
 
-    // Suppress self-reply to avoid loop
-    const { suppressNextSelfReply } = await import("../../events/messageCreate/tomoriChat");
-    suppressNextSelfReply(targetChannel.id);
-
     const { tomoriChat } = await import("../../events/messageCreate/tomoriChat");
 
     const sourcePersonaId = context.activePersonaId ?? context.tomoriState.persona_id ?? undefined;
@@ -619,6 +615,7 @@ export class CrossChannelMessageTool extends BaseTool {
         injectedContextItems: [taskInjection],
         manualTriggerInvoker,
         borrowsTriggerMessage,
+        suppressSelfReply: true,
         manualStreamingContextOverrides: { disableCrossChannelMessage: true },
       });
 

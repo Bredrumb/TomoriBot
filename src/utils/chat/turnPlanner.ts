@@ -7,7 +7,7 @@ import { PrivacyLevel } from "@/types/db/schema";
 import { DatabaseUnavailableError } from "@/types/errors";
 import { getCachedUserRow, getCachedBlacklistStatus, getCachedPrivacyLevel } from "@/utils/cache/userCache";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
-import { configRepository, userRepository, whitelistRepository } from "@/utils/db/repositories";
+import { userRepository, whitelistRepository } from "@/utils/db/repositories";
 import { isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
 import { resolvePreferredDiscordDisplayName } from "@/utils/discord/displayName";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
@@ -20,12 +20,14 @@ import {
   resolvePersonalCapabilityCredentials,
 } from "@/utils/provider/credentialResolver";
 import {
+  canAdvanceAutochatCounter,
   checkTextQuotaForAdmission,
   enforceGlobalRateLimit,
   enforceServerTriggerCooldownForAdmission,
   evaluateChatAccess,
   resolveChannelScope,
   shouldApplyServerTextQuota,
+  updateAutochatCounter,
   validateDirectChatTrigger,
 } from "@/utils/chat/admissionGuards";
 import { channelLocks, queueScenePersonaJobsAtFront, setActiveChannelTurnState } from "@/utils/chat/channelQueue";
@@ -38,10 +40,7 @@ import { buildSceneTextQuotaTriggerKey, buildSceneTurnDirective } from "@/utils/
 import {
   determineMatchingPersonas,
   getAutochatAssignedPersonaId,
-  getAutochatRange,
   isAutochatAlwaysReplyChannelActive,
-  isAutochatConfiguredChannel,
-  isAutochatCounterChannelActive,
   isAutochatCounterHit,
   isAutochatOverrideChannel,
   isAutochatQualifyingMessage,
@@ -76,7 +75,11 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
   const allPersonas = admission.allPersonas?.length ? admission.allPersonas : await getCachedAllPersonas(serverDiscId);
   const mainPersona = allPersonas.find((persona) => !persona.is_alter) ?? null;
   const fallbackPersona = mainPersona ?? allPersonas[0] ?? null;
-  const tomoriState = admission.tomoriState ?? fallbackPersona;
+  const baseTomoriState = admission.tomoriState ?? fallbackPersona;
+  let tomoriState =
+    baseTomoriState && incoming.autochatCounterSnapshot
+      ? { ...baseTomoriState, ...incoming.autochatCounterSnapshot }
+      : baseTomoriState;
   if (!tomoriState) {
     const shouldSurfaceNoStateError = shouldSurfaceChatUserErrors({
       incoming,
@@ -170,8 +173,6 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
     return { lockedTurn, turns: [] };
   }
 
-  await updateAutochatCounter(message, tomoriState, serverDiscId);
-
   const channelIds = resolveChannelScope(message);
   const isAutochatOverride = isAutochatOverrideChannel(tomoriState.config, channelIds.effectiveChannelId);
   const accessState = await evaluateChatAccess({
@@ -199,6 +200,30 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
   const isSystemInitiatedTurn = isSystemInitiatedIncoming(incoming);
   if (accessState.rejectedByWhitelist && !isSystemInitiatedTurn) {
     return { lockedTurn, turns: [] };
+  }
+
+  if (
+    !incoming.autochatCounterSnapshot &&
+    !incoming.isManuallyTriggered &&
+    !incoming.isStopResponse &&
+    !incoming.isPersonaJob &&
+    !isSystemInitiatedTurn &&
+    canAdvanceAutochatCounter({
+      message,
+      tomoriState,
+      allPersonas,
+      effectiveChannelId: channelIds.effectiveChannelId,
+      isSelfMessage,
+      personalAutoTriggerPersonaId: accessState.personalSpotlightStatus?.autoTriggerPersonaId ?? null,
+      allowedPersonaIds: accessState.allowedPersonaIds,
+    })
+  ) {
+    const snapshot = await updateAutochatCounter(message, tomoriState, serverDiscId);
+    if (snapshot) {
+      incoming.autochatCounterSnapshot = snapshot;
+      tomoriState = { ...tomoriState, ...snapshot };
+      admission.tomoriState = tomoriState;
+    }
   }
 
   if (
@@ -586,36 +611,6 @@ async function loadOrRegisterTriggerUser(
   return registered;
 }
 
-async function updateAutochatCounter(message: Message, tomoriState: TomoriState, serverDiscId: string): Promise<void> {
-  const { minThreshold, maxThreshold } = getAutochatRange(tomoriState.config);
-  const effectiveChannelId = message.channel.isThread()
-    ? (message.channel.parentId ?? message.channel.id)
-    : message.channel.id;
-  if (!isAutochatCounterChannelActive(tomoriState.config, effectiveChannelId) || !isRealUserMessage(message)) {
-    return;
-  }
-  if (!tomoriState.persona_id) {
-    log.error(`Tomori ID missing for server ${serverDiscId} during counter increment.`);
-    return;
-  }
-
-  try {
-    const updatedTomoriRow = await configRepository.incrementTomoriCounter(
-      tomoriState.persona_id,
-      minThreshold,
-      maxThreshold,
-    );
-    if (!updatedTomoriRow) {
-      log.warn(`Failed to update auto-message counter for server ${serverDiscId}.`);
-      return;
-    }
-    tomoriState.autoch_counter = updatedTomoriRow.autoch_counter;
-    tomoriState.autoch_next_target = updatedTomoriRow.autoch_next_target;
-  } catch (error) {
-    log.error(`Error updating auto-message counter for server ${serverDiscId}`, error);
-  }
-}
-
 /**
  * A borrowed-trigger turn counts as system-initiated because an admin configured it (random trigger
  * or Natural Nudges allow-list), as creation authorizes a reminder.
@@ -897,7 +892,6 @@ function selectPersonasForTurn(args: {
         ? serverAutoTriggerPersonaId
         : null,
     isDtmActive,
-    isAutochatConfiguredChannel(config, args.effectiveChannelId) || isPersonalAutoTriggerActive,
     args.allowedPersonaIds,
   );
 

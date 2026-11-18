@@ -16,12 +16,12 @@ flowchart TD
   turn["LockedChatTurn"] --> load["loadOrRegisterTriggerUser()<br/>hydrates UserRow and locale"]
   load --> direct["validateDirectChatTrigger()<br/>validates direct mention / trigger words"]
   direct --> access["evaluateChatAccess()<br/>checks whitelist, blacklist, and role rules"]
-  access --> cooldown["rejectOnMessageTriggerCooldown()<br/>enforces trigger cooldowns"]
-  cooldown --> autochat["updateAutochatCounter()<br/>advances autochat count when qualifying"]
+  access --> autochat["updateAutochatCounter()<br/>advances count for queued turns that skipped pre-lock"]
   autochat --> match["determineMatchingPersonas()"]
   match -->|"0 matches"| zero["returns turns: []<br/>(silent skip, lock released)"]
-  match -->|"1 match"| one["returns turns: [ChatTurn]"]
-  match -->|"&gt;1 matches"| first["first persona → turns: [ChatTurn] (runs now)<br/>extra personas → queueAdditionalPersonaTurns() (queued at front)"]
+  match -->|"≥1 matches"| guards["resolveTextCredentialPolicy() & enforceTurnGuards()<br/>credentials, quota, rate limits, and trigger cooldowns"]
+  guards -->|"1 admitted"| one["returns turns: [ChatTurn]"]
+  guards -->|"&gt;1 admitted"| first["first persona → turns: [ChatTurn] (runs now)<br/>extra personas → queueAdditionalPersonaTurns() (queued at front)"]
 ```
 
 ### User hydration and trigger validation

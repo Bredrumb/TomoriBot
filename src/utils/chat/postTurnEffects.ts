@@ -15,7 +15,7 @@ import { releaseTextQuotaForTrigger, textQuotaTriggerStates } from "@/utils/chat
 import { localizer } from "@/utils/text/localizer";
 import { normalizeCustomEmojisForLlm } from "@/utils/text/processors/mentionProcessor";
 import { MAX_EMPTY_RESPONSE_RETRIES } from "@/utils/discord/stream/constants";
-import { channelLocks, queuePersonaJobsAtFront, suppressNextSelfReply } from "@/utils/chat/channelQueue";
+import { channelLocks, queuePersonaJobsAtFront } from "@/utils/chat/channelQueue";
 import { getMatchLimit } from "@/utils/chat/personaQueue";
 import { getTriggerFirstMatchIndexInContent } from "@/utils/chat/triggerProcessor";
 import {
@@ -487,6 +487,7 @@ async function maybeScheduleEmptyResponseRetry(context: ChatTurnContext, result:
     naturalNudge: incoming.naturalNudge,
     conditioningInteraction: incoming.conditioningInteraction,
     borrowsTriggerMessage: incoming.borrowsTriggerMessage,
+    suppressSelfReply: incoming.suppressSelfReply,
     carriedExpressionDelivery: context.currentPersona.persona_id
       ? { personaId: context.currentPersona.persona_id, state: context.expressionDelivery }
       : undefined,
@@ -751,7 +752,6 @@ function scheduleBoomerangFollowUp(context: ChatTurnContext): void {
       }
 
       const { tomoriChat } = await import("@/events/messageCreate/tomoriChat");
-      suppressNextSelfReply(sourceChannel.id);
       await tomoriChat({
         client: context.client,
         message: sourceLastMessage,
@@ -766,6 +766,7 @@ function scheduleBoomerangFollowUp(context: ChatTurnContext): void {
         textQuotaSource: "system",
         manualTriggerInvoker: boomerang.manualTriggerInvoker,
         borrowsTriggerMessage: boomerang.borrowsTriggerMessage,
+        suppressSelfReply: true,
         shouldSurfaceUserErrors: context.shouldSurfaceUserErrors,
         injectedContextItems: buildBoomerangContext(boomerang),
         manualStreamingContextOverrides: { disableCrossChannelMessage: true },

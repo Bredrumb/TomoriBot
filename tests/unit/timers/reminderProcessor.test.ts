@@ -33,7 +33,6 @@ const scheduleReminderRetryMock = mock(
 );
 const deleteReminderByIdMock = mock(async () => true);
 const tomoriChatMock = mock<typeof realTomoriChat.tomoriChat>(async () => "run");
-const suppressNextSelfReplyMock = mock(() => {});
 const ensureDiscordUserMentionMock = mock(async () => {});
 
 // Every factory spreads the real surface first, then overrides only the exports
@@ -62,7 +61,6 @@ scopedMock.module("@/utils/db/repositories", () => ({
 scopedMock.module("@/events/messageCreate/tomoriChat", () => ({
   ...realTomoriChat,
   tomoriChat: tomoriChatMock,
-  suppressNextSelfReply: suppressNextSelfReplyMock,
 }));
 
 scopedMock.module("@/utils/discord/mentionHelper", () => ({
@@ -186,7 +184,6 @@ describe("ReminderProcessor delivery acknowledgement", () => {
     );
     deleteReminderByIdMock.mockImplementation(async () => true);
     tomoriChatMock.mockImplementation(async () => "run");
-    suppressNextSelfReplyMock.mockClear();
     ensureDiscordUserMentionMock.mockClear();
   });
 
@@ -331,7 +328,6 @@ describe("ReminderProcessor delivery retry cap", () => {
       }),
     );
     deleteReminderByIdMock.mockImplementation(async () => true);
-    suppressNextSelfReplyMock.mockClear();
     ensureDiscordUserMentionMock.mockClear();
   });
 

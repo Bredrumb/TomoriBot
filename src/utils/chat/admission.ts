@@ -26,6 +26,7 @@ import {
   getChannelTurnAbortSignal,
   isActiveNaturalStopTurn,
   isNudgeOutputActive,
+  isSuppressedTurnOutputActive,
   selfReplySuppressionUntil,
 } from "@/utils/chat/channelQueue";
 import { cleanupTextQuotaTriggerStates } from "@/utils/chat/textQuotaState";
@@ -117,6 +118,7 @@ export function normalizeChatInvocation(input: TomoriChatInput): ChatIncoming {
     conditioningInteraction: input.conditioningInteraction,
     nudgeSceneCatcherPersonaId: input.nudgeSceneCatcherPersonaId,
     borrowsTriggerMessage: input.borrowsTriggerMessage,
+    suppressSelfReply: input.suppressSelfReply,
     carriedExpressionDelivery: input.carriedExpressionDelivery,
     onGenerationResult: input.onGenerationResult,
     onQueueDiscard: input.onQueueDiscard,
@@ -194,6 +196,11 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
   if (isSeedPlaceholderMessage && !incoming.isManuallyTriggered) {
     updateSelfReplyChainState(channel.id, false);
     return ignored("seed_placeholder");
+  }
+
+  if (!incoming.isManuallyTriggered && isLikelySelfMessage && isSuppressedTurnOutputActive(channel.id)) {
+    updateSelfReplyChainState(channel.id, false);
+    return ignored("self_reply_suppressed");
   }
 
   const suppressionUntil = selfReplySuppressionUntil.get(channel.id);

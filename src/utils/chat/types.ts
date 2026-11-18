@@ -134,6 +134,7 @@ export interface TomoriChatInput {
    * a bystander: not their personal key, reunion clock, or access gates.
    */
   borrowsTriggerMessage?: boolean;
+  suppressSelfReply?: boolean;
   carriedExpressionDelivery?: CarriedExpressionDelivery;
   onGenerationResult?: ChatGenerationResultHandler;
   onQueueDiscard?: QueuedMessageDiscardHandler;
@@ -181,6 +182,8 @@ export interface ChatIncoming {
    * a bystander: not their personal key, reunion clock, or access gates.
    */
   borrowsTriggerMessage?: boolean;
+  suppressSelfReply?: boolean;
+  autochatCounterSnapshot?: { autoch_counter: number; autoch_next_target: number };
   carriedExpressionDelivery?: CarriedExpressionDelivery;
   onGenerationResult?: ChatGenerationResultHandler;
   onQueueDiscard?: QueuedMessageDiscardHandler;
