@@ -56,25 +56,19 @@ Some intro text with [link](/somewhere).
       "ja/features/knowledge/memory.md",
     ]);
 
-    // Exact .md file
     expect(resolveDocPath("/features/knowledge/memory", docFiles)).toBe("en/features/knowledge/memory.md");
     expect(resolveDocPath("/features/knowledge/memory/", docFiles)).toBe("en/features/knowledge/memory.md");
 
-    // Exact .mdx file
     expect(resolveDocPath("/introduction/quickstart/", docFiles)).toBe("en/introduction/quickstart.mdx");
 
-    // Directory README.mdx
     expect(resolveDocPath("/self-hosting/local-endpoints/text-to-speech/", docFiles)).toBe(
       "en/self-hosting/local-endpoints/text-to-speech/README.mdx",
     );
 
-    // Root path
     expect(resolveDocPath("/", docFiles)).toBe("ROOT");
 
-    // Static asset / llms.txt
     expect(resolveDocPath("/llms.txt", docFiles)).toBe("STATIC_ASSET");
 
-    // Non-existent route
     expect(resolveDocPath("/features/non-existent-page", docFiles)).toBeNull();
   });
 
@@ -85,7 +79,6 @@ Some intro text with [link](/somewhere).
       "ja/features/knowledge/memory.md",
     ]);
 
-    // A translated page resolves in its own locale.
     expect(resolveDocPath("/ja/features/knowledge/memory/", docFiles, undefined, "ja")).toBe(
       "ja/features/knowledge/memory.md",
     );
@@ -93,7 +86,6 @@ Some intro text with [link](/somewhere).
     // An untranslated page falls back to the default locale's tree, which is what the site serves.
     expect(resolveDocPath("/ja/contributing/", docFiles, undefined, "ja")).toBe("en/contributing/README.md");
 
-    // A route with no page in either tree is still broken.
     expect(resolveDocPath("/ja/features/missing/", docFiles, undefined, "ja")).toBeNull();
   });
 
@@ -124,7 +116,6 @@ External resources:
 
     const links = extractProjectDocLinks(prose, "test.ts");
 
-    // Only 2 project-owned links extracted; third-party links are ignored
     expect(links.length).toBe(2);
     expect(links[0].url).toBe("https://docs.tomoribot.app/en/features/knowledge/memory/#long-term-memory");
     expect(links[0].pathname).toBe("/en/features/knowledge/memory/");
@@ -150,8 +141,8 @@ External resources:
   it("rejects unauthored locales and scans the .github README for a translated target", async () => {
     expect(validateLocaleLinks({ locale: "fr" })).rejects.toThrow("no source files");
 
-    // The Japanese scan covers .github/README_ja.md. Its project-owned routes resolve through the
-    // locale-aware lookup, so the scan reports only the pre-existing Japanese fragment drift.
+    // Scanning ja covers .github/README_ja.md through locale-aware lookup, so only pre-existing fragment drift
+    // reports.
     const summary = await validateLocaleLinks({ locale: "ja" });
     expect(summary.totalLinksChecked).toBeGreaterThan(0);
     expect(summary.findings.every((finding) => finding.type === "missing_fragment")).toBe(true);

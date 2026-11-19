@@ -60,14 +60,8 @@ const GENERIC_MACRO_REGEX = /\{\{([^{}]+)\}\}/g;
 const HTML_TAG_REGEX =
   /<(?:div|span|style|br|p|h[1-6]|table|tr|td|th|ul|ol|li|details|summary|img|a|strong|em|b|i|u|s|pre|code)\b[^>]*>/i;
 
-// Additional placeholder conventions seen in real ST presets that fall outside the official
-// macro spec. Some presets rely on ST's regex post-processing to resolve these, and TomoriBot
-// does not implement that regex engine, so they are handled here as direct replacements. Each
-// entry records the observed preset and the rationale for its patch.
-
 function applyCompatibilityPatches(text: string, userName: string, charName: string): string {
-  // Patch 1: <USER> / <BOT> XML-style identity placeholders
-  // Case-sensitive to avoid false positives with lowercase HTML-like tags
+  // Non-standard ST preset placeholders (<USER>, <BOT>) stay case-sensitive so lowercase HTML tags never match.
   let result = text.replaceAll("<USER>", userName);
   result = result.replaceAll("<BOT>", charName);
 
@@ -96,7 +90,7 @@ function processVarDeclarations(
       vars.set(normalizedKey, value);
     }
 
-    return ""; // Remove the variable declaration macro from content
+    return "";
   });
 
   return { cleaned, vars };
@@ -148,8 +142,7 @@ function processGetVars(text: string, vars: Map<string, string>): string {
 }
 
 function processContentMacros(text: string, ctx: MacroContext, expanded: Set<string>): string {
-  // Map of ST macro name → { value, trackingKey }
-  // trackingKey is used for deduplication tracking in the context builder
+  // trackingKey records which native markers were already expanded so presetContextBuilder avoids duplicating them.
   const macroMap: Array<{
     pattern: RegExp;
     value: string;
@@ -284,8 +277,8 @@ function processRandom(text: string): string {
 
 function processRoll(text: string): string {
   return text.replace(ROLL_REGEX, (_match, countStr: string, sidesStr: string) => {
-    const count = Math.min(Number.parseInt(countStr, 10), 100); // Cap at 100 dice
-    const sides = Math.min(Number.parseInt(sidesStr, 10), 1000); // Cap at 1000 sides
+    const count = Math.min(Number.parseInt(countStr, 10), 100);
+    const sides = Math.min(Number.parseInt(sidesStr, 10), 1000);
     if (count <= 0 || sides <= 0) return "0";
 
     let sum = 0;
@@ -399,7 +392,7 @@ export function resolvePresetMacros(
 
     content = applyCompatibilityPatches(content, macroContext.userName, macroContext.charName);
 
-    // Process trim (must be last text transform)
+    // Trim runs last because earlier macro expansions must finish first.
     const { result: trimmedContent, isEmpty } = processTrim(content);
     content = trimmedContent;
 

@@ -510,7 +510,6 @@ class PresetRepository {
     description?: string | null,
   ): Promise<StPresetRow | null> {
     try {
-      // Use a transaction to ensure atomicity (preset + all nodes or nothing)
       const result = await sql.begin(async (tx) => {
         // Deleting the old preset first is safe because its nodes are covered by
         // the st_preset_nodes foreign-key cascade.
@@ -519,14 +518,12 @@ class PresetRepository {
           WHERE server_id = ${serverId} AND preset_name = ${presetName}
         `;
 
-        // Insert the preset metadata + raw JSON
         const [preset] = await tx`
           INSERT INTO st_presets (server_id, preset_name, raw_json, description)
           VALUES (${serverId}, ${presetName}, ${JSON.stringify(rawJson)}, ${description ?? null})
           RETURNING *
         `;
 
-        // Insert each node with a reference to the new preset_id
         for (const node of nodes) {
           await tx`
             INSERT INTO st_preset_nodes (
@@ -784,7 +781,6 @@ class PresetRepository {
 
       const serverId = serverRows[0].server_id;
 
-      // Query target persona row (explicit selection) or default main persona
       const personaRows =
         typeof targetPersonaId === "number"
           ? await sql`
@@ -914,7 +910,6 @@ class PresetRepository {
       const lore = await lorebookRepository.listScope(serverId, lineageId);
       if (lore.status !== "fresh") return { success: false, error: "commands.persona.export.error_export_failed" };
 
-      // Build export object with metadata (includes NovelAI persona fields)
       const exportData: PresetExport = {
         version: PRESET_EXPORT_VERSION,
         type: "preset",
@@ -993,7 +988,6 @@ class PresetRepository {
         return { success: false, error: "commands.persona.import.error_invalid_config" };
       }
 
-      // Get internal server ID and tomori ID (main persona only)
       const serverRows = await sql`
         SELECT s.server_id, t.persona_id, t.persona_lineage_id
         FROM servers s
@@ -1012,7 +1006,6 @@ class PresetRepository {
       const importedLineageId = validatedImportData.persona_lineage_id ?? null;
       const importedPresetLineageId = normalizeLineageId(validatedImportData.preset_lineage_id);
 
-      // Enforce persona nickname uniqueness within this server (excluding current main persona)
       const conflictingNameRows = await sql<Array<{ persona_id: number }>>`
         SELECT persona_id
         FROM personas
@@ -1093,7 +1086,6 @@ class PresetRepository {
         };
       }
 
-      // Format arrays as PostgreSQL array literals for safe insertion
       const attributeArrayLiteral = `{${validatedImportData.attribute_list
         .map((item: string) => `"${item.replace(/(["\\])/g, "\\$1")}"`)
         .join(",")}}`;
@@ -1285,7 +1277,6 @@ class PresetRepository {
       return { valid: false, error: "commands.persona.import.error_not_json" };
     }
 
-    // Check version compatibility
     const version = (jsonData as { version?: string }).version;
     if (version !== PRESET_EXPORT_VERSION) {
       return {

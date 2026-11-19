@@ -6,10 +6,8 @@ import { Glob } from "bun";
 import { normalizeProviderName } from "@/utils/provider/providerInfoRegistry";
 
 export namespace ProviderFactory {
-  // Map of provider names (including aliases) to provider instances
   const providerInstances = new Map<string, LLMProvider>();
 
-  // Map of provider names to their class constructors for lazy loading
   const providerRegistry = new Map<string, () => Promise<new () => LLMProvider>>();
 
   let discoveryComplete = false;
@@ -47,7 +45,6 @@ export namespace ProviderFactory {
 
       for (const { name: providerName, fileName: providerFileName } of providerEntries) {
         try {
-          // Register the provider with a lazy loader
           const importPath = `../../providers/${providerName}/${providerFileName.replace(".ts", "")}`;
           providerRegistry.set(providerName, async () => {
             const module = await import(importPath);
@@ -71,7 +68,8 @@ export namespace ProviderFactory {
       log.success(`Provider discovery complete. Registered ${providerRegistry.size} providers.`);
     } catch (error) {
       log.error("Error during provider discovery", error as Error);
-      discoveryComplete = true; // Mark as complete to avoid retry loops
+      // Mark complete on failure so failed scans do not loop on every lookup.
+      discoveryComplete = true;
     }
   }
 
@@ -80,7 +78,6 @@ export namespace ProviderFactory {
 
     const normalizedName = normalizeProviderName(providerName);
 
-    // Check if we already have an instance (check cache first for canonical and alias)
     if (providerInstances.has(normalizedName)) {
       const instance = providerInstances.get(normalizedName);
       if (instance) {
@@ -97,10 +94,8 @@ export namespace ProviderFactory {
       const ProviderClass = await ProviderClassLoader();
       const provider = new ProviderClass();
 
-      // Cache the instance under canonical name
       providerInstances.set(normalizedName, provider);
 
-      // Also cache under all aliases
       const info = provider.getInfo();
       if (info.aliases) {
         for (const alias of info.aliases) {
@@ -114,7 +109,7 @@ export namespace ProviderFactory {
       return provider;
     }
 
-    // This is less efficient but handles the case where an alias is used before the provider is loaded
+    // Aliases are only discovered after loading the provider class, so scan unloaded providers as a fallback.
     for (const [registeredName, loader] of providerRegistry.entries()) {
       try {
         const ProviderClass = await loader();
@@ -122,10 +117,8 @@ export namespace ProviderFactory {
         const info = tempInstance.getInfo();
 
         if (info.aliases?.some((alias) => alias.toLowerCase().trim() === normalizedName)) {
-          // Found a match! Cache it properly
           providerInstances.set(info.name.toLowerCase(), tempInstance);
 
-          // Cache all aliases
           if (info.aliases) {
             for (const alias of info.aliases) {
               const aliasLower = alias.toLowerCase().trim();
@@ -143,7 +136,6 @@ export namespace ProviderFactory {
       }
     }
 
-    // Provider not found
     const availableProviders = Array.from(providerRegistry.keys());
     throw new Error(`Unsupported provider: ${providerName}. Available providers: ${availableProviders.join(", ")}`);
   }
@@ -156,10 +148,9 @@ export namespace ProviderFactory {
     const providerName = normalizeProviderName(tomoriState.llm.llm_provider);
     const modelCodename = tomoriState.llm.llm_codename;
 
-    // Get the provider instance (handles aliases automatically)
     const provider = await getProviderInstance(providerName);
 
-    // Skip validation if supportedModels is empty (indicates provider accepts any model, e.g., OpenRouter)
+    // Empty supportedModels means the provider accepts arbitrary model IDs (such as OpenRouter).
     const providerInfo = provider.getInfo();
     if (
       modelCodename &&

@@ -28,8 +28,7 @@ describe("docs locale configuration", () => {
   });
 
   it("reserves a locale root path segment for every locale in the table", () => {
-    // The route segment is the locale id, so an id that shadows a docs section would make one of
-    // the two unreachable. This asserts the reserved set is exactly the locale ids.
+    // Locale ids become root route segments, so any id shadowing a docs section would make one unreachable.
     const sectionDirectories = ["introduction", "features", "self-hosting", "legal", "meet-tomori", "wiki"];
     for (const locale of DOCS_LOCALES) {
       expect(sectionDirectories).not.toContain(locale.id);
@@ -60,8 +59,7 @@ describe("docs locale configuration", () => {
   });
 
   it("keys the alias map in the casing every lookup normalizes to", () => {
-    // The alias lookup lowercases the caller's tag. A camel-cased key such as `es-ES` would therefore
-    // be unreachable and silently degrade to the base-language branch.
+    // Alias lookup lowercases the caller's tag, so a camel-cased key like `es-ES` would be unreachable.
     expect(DOCS_LOCALE_ALIASES["es-es"]).toBe("es-419");
     for (const key of Object.keys(DOCS_LOCALE_ALIASES)) {
       expect(key).toBe(key.toLowerCase());
@@ -105,9 +103,7 @@ describe("docs locale resolution", () => {
   });
 
   it("resolves a Chinese base language only while one Chinese tree is published", () => {
-    // `zh` alone cannot choose between `zh-TW` and `zh-CN`, so the base-language branch picks a
-    // locale only while exactly one of them is published. Both published means the tag is genuinely
-    // ambiguous and resolves to the default; the shared helper keeps that rule.
+    // Base `zh` resolves to a Chinese locale only when one variant is published, defaulting to English when both are.
     const chineseTrees = PUBLISHED_DOCS_LOCALES.filter((id) => id.split("-")[0].toLowerCase() === "zh");
     const expected = chineseTrees.length === 1 ? chineseTrees[0] : DEFAULT_DOCS_LOCALE_ID;
 
@@ -116,8 +112,7 @@ describe("docs locale resolution", () => {
 });
 
 describe("docs URL building", () => {
-  // Each locale lane flips its own `docsTree`, so a hardcoded "unpublished" locale goes stale on the
-  // next publication. An unlisted tag keeps the fallback covered once every planned tree ships.
+  // Using the first unpublished or unlisted tag keeps the fallback tested as each locale flips `docsTree`.
   const unpublishedLocale = DOCS_LOCALES.find((locale) => !locale.docsTree)?.id ?? "de";
 
   it("prefixes a published locale onto every registered route", () => {

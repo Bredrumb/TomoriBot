@@ -30,8 +30,7 @@ export type MemoryExportScope = TransferExportScope;
 // Capped at 25 because Discord allows at most this many choices in an autocomplete response.
 const MEMORY_EXPORT_PERSONA_CHOICES_MAX = 25;
 
-// Workspace has no account-global memory namespace, so its single-lineage scope is "main" (current main persona),
-// while only personal has "global".
+// Workspace has no global memory namespace, so its single-lineage scope is "main" rather than personal's "global".
 export const WORKSPACE_MEMORY_EXPORT_SELECTIONS = ["main", "persona", "all"] as const;
 export const PERSONAL_MEMORY_EXPORT_SELECTIONS = ["global", "persona", "all"] as const;
 
@@ -50,8 +49,7 @@ export const isCommandEnabled = () => false;
 export interface MemoryExportDependencies {
   exportWorkspaceMemories(serverDiscId: string, scope: WorkspaceMemoryExportMode): Promise<ExportResult>;
   exportPersonalMemories(userDiscId: string, scope: PersonalMemoryExportMode): Promise<ExportResult>;
-  // Must hit the DB rather than cache because persona options come from a client-rendered picker, so stale cache
-  // could reject live personas or miss deletions.
+  // Must hit DB rather than cache because client-rendered picker options can reflect edits or deletions.
   loadWorkspacePersonas(workspaceKey: string): Promise<TomoriState[]>;
   deliverDirectMessage(
     interaction: ChatInputCommandInteraction,
@@ -169,7 +167,6 @@ export async function runMemoryExport(
       return;
     }
 
-    // Acknowledge before the memory read and the DM, both of which outlive Discord's three-second window.
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     let exportResult: ExportResult;
@@ -281,7 +278,7 @@ export async function respondWithMemoryExportPersonas(
     try {
       await interaction.respond([]);
     } catch {
-      // The dispatcher logs and answers on its own when the interaction can no longer be answered.
+      // Discord rejects replies past the 3s autocomplete window, and an expired autocomplete has no fallback.
     }
   }
 }

@@ -59,8 +59,7 @@ export function listTrackedFiles(): string[] {
 }
 
 export function listUntrackedInScopePaths(prefixes: string[]): string[] {
-  // --others = untracked files; --exclude-standard = respect .gitignore.
-  // Passing the prefixes as pathspecs scopes the output without a repo-wide walk.
+  // Pass prefixes as pathspecs so git lists untracked non-ignored files without a repo-wide walk.
   const result = spawnSync(["git", "ls-files", "--others", "--exclude-standard", "-z", "--", ...prefixes], {
     stdout: "pipe",
     stderr: "pipe",

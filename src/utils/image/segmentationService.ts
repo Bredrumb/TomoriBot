@@ -75,12 +75,7 @@ async function callGeminiSegmentation(
     ),
   );
 
-  // Build the request following Google's spatial understanding reference:
-  // Simple, direct segmentation prompt: no extra reasoning instructions
-  // Text prompt BEFORE image (Gemini processes instructions better when text leads)
-  // Temperature 0.5 (prevents model from looping on repeated tokens)
-  // Safety settings disabled (prevents silent blocks on anime/artistic content)
-  // Thinking disabled (adds latency without quality benefit for structured extraction)
+  // Keep the prompt terse before the image with temperature 0.5 and thinking off so Gemini does not loop or stall.
   const apiCallPromise = genAI.models.generateContent({
     model: NAI_SEGMENTATION_MODEL,
     contents: [
@@ -176,8 +171,6 @@ async function buildBoundingBoxMask(
     let x1 = Math.round((x1Norm / 1000) * originalWidth);
     let y1 = Math.round((y1Norm / 1000) * originalHeight);
 
-    // Apply padding: expand each side by a fraction of the box dimension
-    // to capture content that extends beyond Gemini's detected bounding box
     const padX = Math.round((x1 - x0) * NAI_INPAINT_PADDING);
     const padY = Math.round((y1 - y0) * NAI_INPAINT_PADDING);
     x0 = Math.max(0, x0 - padX);
@@ -213,29 +206,19 @@ async function buildBoundingBoxMask(
 
   let maskBuffer = await sharp(svgMask).resize(originalWidth, originalHeight).greyscale().toBuffer();
 
-  // Quantize the mask to NAI's latent space grid (1/8th resolution). The mask gets
-  // downsampled internally regardless, but a full-res mask with smooth edges creates
-  // intermediate grey values at the boundaries during that downsampling, which the model
-  // reads as partial redraw (= halo). Pre-quantizing with nearest-neighbor keeps every mask
-  // pixel aligned to a latent-space cell, matching ComfyUI_NAIDGenerator's resize_to_naimask().
+  // Nearest-neighbor quantize to 1/8th latent grid so NovelAI's internal downsampling cannot create boundary halos.
   const latentW = Math.ceil(originalWidth / 64) * 8;
   const latentH = Math.ceil(originalHeight / 64) * 8;
 
   maskBuffer = await sharp(maskBuffer).resize(latentW, latentH, { kernel: sharp.kernel.nearest }).toBuffer();
 
-  // For V4+ models: upscale back to full resolution (still nearest-neighbor)
-  // This creates the characteristic "blocky" mask that V4 models expect
+  // Upscale back to full resolution with nearest-neighbor because V4 models expect a blocky latent-aligned mask.
   if (isV4) {
     maskBuffer = await sharp(maskBuffer)
       .resize(latentW * 8, latentH * 8, { kernel: sharp.kernel.nearest })
       .toBuffer();
   }
 
-  // NAI expects RGBA PNG where:
-  //   - White pixels (redraw):   R=255, G=255, B=255, A=255
-  //   - Black pixels (preserve): R=0,   G=0,   B=0,   A=0
-  // The alpha channel acts as the actual mask signal.
-  // (Matches naimask_to_base64() from ComfyUI_NAIDGenerator)
   const { data, info } = await sharp(maskBuffer).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
 
   for (let i = 0; i < data.length; i += 4) {
@@ -292,7 +275,6 @@ async function generateDebugOverlay(
     const color = BBOX_COLORS[i % BBOX_COLORS.length];
     const [y0Norm, x0Norm, y1Norm, x1Norm] = segment.box_2d;
 
-    // Convert normalized 0-1000 coordinates to pixel coordinates (raw Gemini bbox)
     const x0 = Math.round((x0Norm / 1000) * imgWidth);
     const y0 = Math.round((y0Norm / 1000) * imgHeight);
     const x1 = Math.round((x1Norm / 1000) * imgWidth);
@@ -323,7 +305,7 @@ async function generateDebugOverlay(
 
     const label = segment.label || `Segment ${i + 1}`;
     const escapedLabel = label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    const labelY = Math.max(py0 - 4, 14); // Keep label visible at top edge
+    const labelY = Math.max(py0 - 4, 14);
     svgElements.push(
       `<text x="${px0 + 4}" y="${labelY}" font-size="14" font-family="sans-serif" fill="${color}" stroke="black" stroke-width="0.5">${escapedLabel}</text>`,
     );
@@ -363,7 +345,6 @@ export async function segmentImage(
 
   const maskBase64 = maskBuffer.toString("base64");
 
-  // Generate debug artifacts when debug mode is enabled
   let debugMaskBuffer: Buffer | undefined;
   let debugOverlayBuffer: Buffer | undefined;
 

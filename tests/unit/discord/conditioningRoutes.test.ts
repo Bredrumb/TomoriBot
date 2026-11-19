@@ -331,7 +331,6 @@ describe("conditioning panel routes", () => {
         return groups.length;
       },
       showRemoveModal: async () => {},
-      // Only index 0 remained checked; index 1 and index 2 were unchecked
       takeCheckboxValues: () => ["0"],
       createNonce: () => "nonce123",
     };
@@ -371,8 +370,6 @@ describe("conditioning panel routes", () => {
   });
 
   it("verifies non-vacuity of fingerprint check", async () => {
-    // Proves that when fingerprint check is bypassed/weakened, deletions occur on stale data,
-    // but with the active guard, deletions are strictly blocked.
     const initialEntries = [
       makeEntry({ personaLineageId: 101, conditioningType: "reward", actionKey: "feed", reasonNormalized: "old" }),
     ];
@@ -392,13 +389,12 @@ describe("conditioning panel routes", () => {
         return groups.length;
       },
       showRemoveModal: async () => {},
-      takeCheckboxValues: () => [], // unchecked everything
+      takeCheckboxValues: () => [],
       createNonce: () => "nonce123",
     };
 
     const route = createConditioningInteractionRoute(dependencies);
 
-    // Stale submission (using oldFp against updated entries)
     const staleRoute: ConditioningPanelRoute = {
       action: "remove-submit",
       locale: "en-US",
@@ -416,10 +412,8 @@ describe("conditioning panel routes", () => {
       parseRouteOrThrow(staleInteraction.customId),
     );
 
-    // Guard blocked the deletion
     expect(deleteCallCount).toBe(0);
 
-    // Matching submission (using newFp against updated entries)
     const freshRoute: ConditioningPanelRoute = {
       action: "remove-submit",
       locale: "en-US",
@@ -437,7 +431,6 @@ describe("conditioning panel routes", () => {
       parseRouteOrThrow(freshInteraction.customId),
     );
 
-    // Deletion succeeded only with valid fingerprint
     expect(deleteCallCount).toBe(1);
   });
 });

@@ -48,16 +48,14 @@ export async function recordPanelActionStat(
   input: RecordPanelActionInput,
   deps: PanelActionMetricsDependencies = defaultDependencies,
 ): Promise<void> {
-  // stat_counters.server_id and user_id are NOT NULL FKs. An unscoped action
-  // or an unregistered user records nothing rather than inventing a sentinel row.
+  // stat_counters.server_id and user_id are NOT NULL FKs, so unscoped or unregistered actions skip recording.
   if (!input.serverId || !input.userDiscId) return;
 
   try {
     const userRow = await deps.loadUserRow(input.userDiscId);
     if (!userRow?.user_id) return;
 
-    // Cleared before the write, because `record` returns void and a buffered counter cannot report
-    // its own later failure. The next action that reaches this point re-arms reporting.
+    // Cleared before record() because buffered writes return void, so the next action reaching here re-arms reporting.
     hasReportedSinceSuccess = false;
     deps.record({
       serverId: input.serverId,

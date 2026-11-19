@@ -91,9 +91,7 @@ function isGeminiProModel(model: string): boolean {
   return normalizeModel(model).includes("pro");
 }
 
-// Pro models and Gemini 3.7 Flash onward reject MINIMAL with a 400 instead of clamping it, while
-// every Gemini 3 model accepts LOW. An allow-list therefore costs an unlisted release a little extra
-// thinking rather than every request; add a Flash release here once it is confirmed to accept MINIMAL.
+// Allow-list MINIMAL only for confirmed Gemini 3 Flash releases because Pro and 3.7+ reject it with 400 unlike LOW.
 const GEMINI_MINIMAL_THINKING_PREFIXES = [
   "gemini-3-flash",
   "gemini-3.1-flash-lite",
@@ -114,10 +112,8 @@ interface AnthropicThinkingProfile {
   extraHighEffort: "xhigh" | "max";
 }
 
-// Each family answers another family's off switch or sampling fields with a 400, so every profile
-// was confirmed against the live API. An unlisted release keeps the pre-adaptive request (no thinking
-// fields, sampling sent); add it here once its accepted fields are confirmed. A longer codename
-// precedes its prefix so `claude-sonnet-5-5` is not read as `claude-sonnet-5`.
+// Live-verified profiles ordered longest-prefix-first so unlisted releases fall back safely without 400s from
+// mismatched switches or sampling fields.
 const ANTHROPIC_THINKING_PROFILES: ReadonlyArray<readonly [prefix: string, profile: AnthropicThinkingProfile]> = [
   ["claude-fable-", { off: null, samplingLocked: true, extraHighEffort: "xhigh" }],
   ["claude-opus-5-5", { off: null, samplingLocked: true, extraHighEffort: "xhigh" }],

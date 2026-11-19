@@ -349,19 +349,14 @@ export function buildSetupWizardPayload(
   const providerComplete =
     isSetupDraftProviderAccessComplete(draft.providerAccess) &&
     (draft.providerAccess?.mode !== "option" || input.optionReady === true);
-  // The stored identities are resolved against the live catalogs, so a persona or prompt row removed
-  // since the save re-pends the step here rather than only at the final commit. A catalog read that
-  // failed re-pends it too: the alternative is claiming a selection is complete when nothing could
-  // confirm it, and the two loaders return the same null for "no rows" and "query blew up".
+  // Revalidate saved IDs against live catalogs because missing rows or failed catalog loads must re-pend the step.
   const settingsComplete =
     draft.startingSettings !== null &&
     input.settingsCatalogs != null &&
     isSetupStartingSettingsResolvable(draft.startingSettings, input.settingsCatalogs);
   const policiesComplete = draft.policiesAccepted;
 
-  // The catalog-aware verdict governs the whole ready state, not only the step rows. Gating the
-  // finish action on the catalog-blind draft predicate instead would leave it enabled and Primary
-  // beside a step the same panel had just re-pended.
+  // Gate completion on catalog checks as well as draft fields so Primary Finish never enables beside a pending step.
   const isComplete = isSetupDraftComplete(draft) && settingsComplete && providerComplete;
 
   const total = isHosted ? 3 : 2;
@@ -1064,9 +1059,7 @@ export function buildSetupByokModal(
         ),
       },
       {
-        // 18 is Label, and it is the only path by which a routed modal value is recorded: the
-        // type-18 walk in interactionCore is what reads a submission back, so the same group at
-        // the modal root would render, submit, and read back as no selection at all.
+        // Wrap inside Label (18) because interactionCore only captures modal selections nested under type 18.
         type: 18,
         label: safeSelectOptionText(localizer(locale, "commands.setup.wizard.byok_confirm_label"), 45),
         component: {
@@ -1137,9 +1130,7 @@ export function buildSetupSettingsModal(
     default: existing?.humanizer === index,
   }));
 
-  // The plan's contract for this modal is that its selects reopen on their placeholders, so the
-  // `default` flags below are a best-effort hint the client is free to ignore rather than a
-  // pre-fill. Only the text input is expected to come back carrying its stored value.
+  // Selects reopen on placeholders by contract, so `default` flags remain hints while only text inputs pre-fill.
   const timezoneValue = existing ? formatUtcOffsetInput(existing.timezoneOffset) : undefined;
   const storedPrompt = existing?.systemPrompt;
 
@@ -1289,9 +1280,7 @@ export function buildSetupPoliciesModal(
         content: `${localizer(locale, "commands.setup.wizard.policies_modal_context")}\n\n${acceptance}`,
       },
       {
-        // 18 is Label. The group sits inside it rather than at the modal root because the type-18
-        // walk in interactionCore is what records a checkbox submission, so a root-level group
-        // would render and then read back as no selection at all.
+        // Keep CheckboxGroup inside a type-18 Label so the raw packet walk records selections instead of empty.
         type: 18,
         label: safeSelectOptionText(localizer(locale, "commands.setup.wizard.policies_modal_choice_label"), 45),
         component: {

@@ -167,9 +167,7 @@ async function synthesizeLocalVoiceMessage(
       return failure("tts-voice-design", "No active speech endpoint is configured for this server.");
     }
 
-    // `auto` accepts design bodies too. Gating this on the dedicated-endpoint check instead is what
-    // silently disables voice design on every mixed deployment, which is the one mode the modal's
-    // voice-source radio exists to serve.
+    // Gate on capability rather than voiceMode because auto endpoints accept design requests on mixed deployments.
     if (!capabilities.acceptsDesignShape) {
       return failure(
         "tts-voice-design",
@@ -205,9 +203,7 @@ async function synthesizeLocalVoiceMessage(
       );
     }
 
-    // Capability, not `api_style` alone: a voice-design-only endpoint rejects a clone body even
-    // though it is still a `tts-clone` endpoint, so posting one would reach the server and fail
-    // there instead of here.
+    // Check capability rather than api_style because voice-design-only tts-clone endpoints reject clone requests.
     if (!capabilities.acceptsCloneShape) {
       return failure(
         "tts-clone",

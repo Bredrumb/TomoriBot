@@ -699,7 +699,6 @@ describe("chat regression harness", () => {
       isPersonaJob: false,
       isCommandTriggered: false,
     });
-    // The fixture always carries an id, but TomoriState types it optional.
     const personaId = tomoriState.persona_id;
     if (personaId === undefined) throw new Error("Fixture persona is missing a persona_id");
 
@@ -792,7 +791,6 @@ describe("chat regression harness", () => {
       isPersonaJob: false,
       isCommandTriggered: false,
     });
-    // The fixture always carries an id, but TomoriState types it optional.
     const personaId = tomoriState.persona_id;
     if (personaId === undefined) throw new Error("Fixture persona is missing a persona_id");
 
@@ -891,7 +889,6 @@ describe("chat regression harness", () => {
       isPersonaJob: false,
       isCommandTriggered: false,
     });
-    // The fixture always carries an id, but TomoriState types it optional.
     const personaId = tomoriState.persona_id;
     if (personaId === undefined) throw new Error("Fixture persona is missing a persona_id");
 

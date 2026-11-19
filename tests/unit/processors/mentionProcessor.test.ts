@@ -132,7 +132,7 @@ describe("replaceMentionHandles", () => {
   const mentionMap = new Map([
     ["alice", ["111111111111111111"]],
     ["bob", ["222222222222222222"]],
-    ["ambiguous", ["333333333333333333", "444444444444444444"]], // two IDs, so ambiguous
+    ["ambiguous", ["333333333333333333", "444444444444444444"]],
   ]);
   const mentionIdSet = new Set(["111111111111111111", "222222222222222222"]);
 

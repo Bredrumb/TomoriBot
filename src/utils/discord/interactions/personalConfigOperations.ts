@@ -646,7 +646,7 @@ export const personalConfigOperations: PersonalConfigOperations = {
       if (val === "") {
         if (existingRefs[i]) mergedRefs.push(existingRefs[i]);
       } else if (val === "__none__") {
-        // clear
+        // No-op sentinel (keeps branch non-empty for Biome).
       } else if (val.startsWith("custom_endpoint:") || val.startsWith("ce:")) {
         const id = Number(val.replace(/^(custom_endpoint:|ce:)/, ""));
         const ep = selectableEndpoints.find((endpoint) => endpoint.custom_endpoint_id === id);

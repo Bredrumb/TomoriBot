@@ -51,10 +51,8 @@ const CJK_KANA_HANGUL_START =
 const PUNCTUATION_OR_SYMBOL_END = /[\p{P}\p{S}]$/u;
 const PUNCTUATION_OR_SYMBOL_START = /^[\p{P}\p{S}]/u;
 
-// Punctuation that closes the prefix into its own word instead of binding it to what
-// follows, so an abbreviation or interjection keeps its space: "Ms. Mirri", "Yo! Mirri".
-// Everything else punctuation-ended still joins directly, which "@mirri" and
-// "super-Mirri" rely on to keep their single-token styling.
+// Terminal punctuation keeps a space after prefixes like "Ms." or "Yo!", whereas symbols like "@" or "-" attach
+// directly.
 const PREFIX_TERMINAL_PUNCTUATION_END = /[.,;:!?]$/u;
 
 function formatPrefix(prefix: string, nickname: string): string {
@@ -86,10 +84,8 @@ export function formatUserName(nickname: string, prefix = "", suffix = ""): stri
   const normalizedNickname = nickname.trim();
   const assembled = formatSuffix(formatPrefix(prefix, normalizedNickname), suffix);
 
-  // The leading token (prefix if present, else the nickname) always supplies the assembled
-  // name's first character. Capitalize it only when that token is entirely lowercase, so a
-  // casually-typed prefix like "dad" reads as "Dad Mirri" while deliberate styling such as
-  // "@mirri" or a script-script nickname is left untouched.
+  // Capitalize only when the leading token is all lowercase so "dad" becomes "Dad Mirri" while deliberate styling
+  // like "@mirri" stays intact.
   const leadingToken = prefix.trim() || normalizedNickname;
   return leadingToken === leadingToken.toLowerCase() ? capitalizeLeadingChar(assembled) : assembled;
 }

@@ -244,8 +244,7 @@ export function buildConfigStopStringManageModal(
       label: modalLabel(locale, "commands.config.panel.stop_speaker_label"),
       description: modalDescription(locale, "commands.config.panel.stop_speaker_description"),
       component: {
-        // 22 is CheckboxGroup. A FileUpload (19) also renders and submits, but carries no option
-        // values, which would read back as the pattern being switched off.
+        // 22 is CheckboxGroup; FileUpload (19) also submits without option values, which would disable the flag.
         type: 22,
         custom_id: buildConfigModalFieldId(CONFIG_STOP_SPEAKER_PATTERN_FIELD, nonce),
         min_values: 0,

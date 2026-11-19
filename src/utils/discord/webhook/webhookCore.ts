@@ -251,13 +251,11 @@ async function attemptWebhookAvatarRecovery(
 
   log.info(`[Webhook Manager] Attempting avatar recovery for persona ${personaId} by scanning guild ${guild.id}`);
 
-  // Scan all text channels in guild for surviving webhooks
   for (const channel of guild.channels.cache.values()) {
     if (!channel.isTextBased()) {
       continue;
     }
 
-    // Skip channels without webhook support
     if (!("fetchWebhooks" in channel)) {
       continue;
     }
@@ -266,7 +264,6 @@ async function attemptWebhookAvatarRecovery(
       const webhooks = await (channel as TextChannel).fetchWebhooks();
       const matching = webhooks.find((wh) => wh.name === personaWebhookName);
 
-      // Found a surviving webhook for this persona!
       if (matching?.avatar) {
         const avatarUrl = matching.avatarURL({ extension: "png", size: 256 });
         if (!avatarUrl) {
@@ -275,7 +272,6 @@ async function attemptWebhookAvatarRecovery(
 
         log.info(`[Webhook Manager] Found surviving webhook in channel ${channel.id}, attempting to download avatar`);
 
-        // Download avatar from surviving webhook
         const downloadResult = await safeDownload(avatarUrl, {
           maxSizeMB: PERSONA_LIMITS.MAX_AVATAR_SIZE_MB,
         });
@@ -571,13 +567,11 @@ async function getOrCreateWebhookInternal(
 
     const cachedWebhook = webhookCache.get(channelId);
     if (cachedWebhook) {
-      // Verify cached webhook still has a valid token (not deleted)
       if (!cachedWebhook.token) {
         log.warn(
           `[Webhook Manager] Cached webhook for channel ${channelId} has no token (likely deleted), invalidating cache`,
         );
         invalidateWebhookCache(channelId, cachedWebhook.id);
-        // Continue to fetch/create a new webhook
       } else {
         try {
           // Verify webhook still exists remotely; cached objects may survive manual deletes.
@@ -597,7 +591,6 @@ async function getOrCreateWebhookInternal(
             fetchError,
           );
           invalidateWebhookCache(channelId, cachedWebhook.id);
-          // Continue to fetch/create a new webhook
         }
       }
     }
@@ -1179,7 +1172,6 @@ export async function sendUserTranscriptViaWebhook(
     return null;
   }
 
-  // Reuse the shared TomoriBot Multi-Persona webhook for this channel
   const webhookResult = await getOrCreateWebhook(webhookTargetChannel);
   assertOwned();
   if (!webhookResult.webhook) {
@@ -1222,7 +1214,6 @@ function resolvePersonaAvatarURL(persona: TomoriState, guild: Guild | null | und
     return sanitizeAvatarUrl(resolvedUrl);
   };
 
-  // Alter personas: Use webhook_avatar_url from database
   if (persona.is_alter && persona.webhook_avatar_url) {
     const validatedURL = validateAvatarURL(persona.webhook_avatar_url);
     if (validatedURL) {
@@ -1240,7 +1231,6 @@ function resolvePersonaAvatarURL(persona: TomoriState, guild: Guild | null | und
       return memberAvatar;
     }
 
-    // Fallback to webhook_avatar_url if guild has no icon
     if (persona.webhook_avatar_url) {
       const validatedURL = validateAvatarURL(persona.webhook_avatar_url);
       if (validatedURL) {

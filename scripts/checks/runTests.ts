@@ -218,7 +218,6 @@ async function runLane(
       junitOutfiles.push(batchOutfile);
     }
 
-    // Spawn the batch and track it so signal-driven cleanup can terminate it.
     const streamOutput = process.env.TOMORI_TEST_STREAM_OUTPUT === "true";
     const childEnv = { ...process.env, ...extraEnv };
     if (omitDatabaseEnv) {
@@ -227,8 +226,7 @@ async function runLane(
       childEnv.STAT_TRACKING_ENABLED = "false";
     }
 
-    // The wrapper owns environment loading and database selection. Prevent a child from loading a
-    // more specific local env file and silently undoing the disposable-database or skip decision.
+    // Pass --no-env-file so a child test process cannot reload local .env files and bypass disposable DB isolation.
     const proc = Bun.spawn(
       ["bun", "--no-env-file", "test", "--timeout", getTestTimeoutMs(), ...batch.files, ...reporterArgs],
       {
@@ -268,8 +266,7 @@ async function runTestFiles(
     lanes.map((lane) => runLane(lane, extraEnv, requestedOutfile, omitDatabaseEnv || lane.id !== "db")),
   );
 
-  // Replay buffered output in fixed lane order so concurrent runs stay readable.
-  // TOMORI_TEST_QUIET is set by `vl` in quiet mode to mute passing lanes while keeping failing ones.
+  // `vl` sets TOMORI_TEST_QUIET to suppress passing lanes while keeping failing ones in fixed lane order.
   for (const result of results) {
     if (process.env.TOMORI_TEST_QUIET === "true" && result.exitCode === 0) continue;
     const fileCount = result.lane.batches.reduce((total, batch) => total + batch.files.length, 0);
@@ -286,9 +283,7 @@ async function runTestFiles(
 }
 
 async function main(): Promise<void> {
-  // Suites assume the self-hosted branch, and a workstation `.env` may be production-shaped to exercise
-  // hosted-only flows by hand. Pinning here instead of refusing keeps `bun run test` working as typed;
-  // `isLocalHost` is what keeps a production database out of reach, not this.
+  // Pin self-hosted mode so production-shaped local .env files still run tests; isLocalHost guards production DBs.
   process.env.RUN_ENV = "development";
   delete process.env.TEST_PRODUCTION;
 
@@ -314,7 +309,6 @@ async function main(): Promise<void> {
     process.exit(await runTestFiles(testFiles, {}, true));
   }
 
-  // Non-local host detected, so fall back to skip mode to avoid touching remote DBs.
   if (!isLocalHost(params)) {
     console.warn(
       `[test-runner] Postgres host "${params.host}" is not local. Skipping DB provisioning.\n` +
@@ -329,7 +323,6 @@ async function main(): Promise<void> {
   let adminSql: SQL | null = null;
 
   async function cleanup(): Promise<void> {
-    // Lanes run concurrently, so several processes may be alive at once.
     await killLiveTestProcesses();
     if (adminSql) {
       // Terminate any remaining connections so DROP DATABASE can proceed.
@@ -345,7 +338,6 @@ async function main(): Promise<void> {
     }
   }
 
-  // Register signal handlers so Ctrl+C and process termination still drop the DB.
   process.on("SIGINT", async () => {
     await cleanup();
     process.exit(130);
@@ -372,8 +364,7 @@ async function main(): Promise<void> {
     await adminSql`DROP DATABASE IF EXISTS ${adminSql(tempDbName)} WITH (FORCE)`;
     await adminSql`CREATE DATABASE ${adminSql(tempDbName)}`;
 
-    // Inject the test DB coordinates into the child environment.
-    //    TEST_DB_READY=1 tells testDb.ts to enable the DB regression suites.
+    // TEST_DB_READY=1 is required because testDb.ts skips DB regression suites without it.
     const testEnv: Record<string, string> = {
       POSTGRES_HOST: params.host,
       POSTGRES_PORT: params.port,
@@ -384,8 +375,6 @@ async function main(): Promise<void> {
       TEST_DB_READY: "1",
     };
 
-    // Run the lanes; every spawned process registers itself in liveProcesses so
-    // signal-driven cleanup can terminate them all and still drop the DB.
     exitCode = await runTestFiles(testFiles, testEnv);
   } finally {
     console.log(`[test-runner] Dropping test database: ${tempDbName}`);

@@ -234,9 +234,7 @@ async function dispatchVisionRequest(
     return await callAnthropicVision(apiKey, model, image, prompt, signal);
   }
 
-  // The custom check needs the stored name, not the canonical one: a custom provider is keyed
-  // by connection (`custom:17`), and canonicalizing it to `custom` first would lose the
-  // connection the endpoint URL is looked up from.
+  // Pass rawProvider (custom:<id>) rather than canonical custom so resolveChatCompletionsUrl keeps the connection ID.
   const endpointUrl = resolveChatCompletionsUrl(rawProvider, creds.customEndpoint?.endpoint_url ?? null);
   if (!endpointUrl) {
     throw new UnsupportedVisionProviderError(provider);

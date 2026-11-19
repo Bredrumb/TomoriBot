@@ -77,7 +77,7 @@ export async function generateGoogleNativeVideo(
       : request.prompt,
     response_format: { type: "video", resolution, ...(aspectRatio ? { aspect_ratio: aspectRatio } : {}) },
     ...(startImage ? { generation_config: { video_config: { task: "image_to_video" } } } : {}),
-    // A synchronous call can outlive the HTTP connection, so the job runs in the background and must be stored to be polled.
+    // Sync calls can outlive the HTTP connection, so run in background and store the job for polling.
     background: true,
     store: true,
   };

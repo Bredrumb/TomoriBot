@@ -236,8 +236,6 @@ export async function getAvailableToolsWithMCP(
             voice_source_priority: stateForContext.activePersonaVoiceSourcePriority,
           },
         }).length > 0;
-      // Read split-table model slots: diffusion_model_id/video_model_id live in
-      //    server_model_configs; nai_diffusion_model_id lives in server_novelai_imagegen_configs.
       const [toolConfigRow] = await withTransientDbRetry(
         () => sql<
           [{ diffusion_model_id: number | null; nai_diffusion_model_id: number | null; video_model_id: number | null }]

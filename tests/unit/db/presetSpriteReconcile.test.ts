@@ -74,8 +74,7 @@ function captureWarnings() {
 
 describe("reconcileRemovedSprites", () => {
   it("keeps stored rows when every declared sprite failed to seed", async () => {
-    // `seededAny: false` must be a no-op delete. These keys are the only reference to images that
-    // are already uploaded and immutable, so losing them costs the art until a later run uploads it.
+    // `seededAny: false` must be a no-op delete because these keys are the sole reference to immutable uploaded art.
     const { client, statements } = makeClient(["smug", "silly", "happy"]);
     const warnings = captureWarnings();
 
@@ -87,7 +86,6 @@ describe("reconcileRemovedSprites", () => {
   });
 
   it("deletes only the stored keys the catalog no longer declares", async () => {
-    // `retired` is gone from the catalog; `smug` and `silly` are still declared.
     const { client, statements } = makeClient(["smug", "silly", "retired"]);
     const removed = await reconcileRemovedSprites(client, SCOPE, ["smug", "silly"], true);
 
@@ -100,7 +98,6 @@ describe("reconcileRemovedSprites", () => {
   });
 
   it("protects a failed sprite while still collecting a removed one", async () => {
-    // The protected set carries the seeded key and the failed one, so only `gone` comes back.
     const { client, statements } = makeClient(["smug", "happy", "gone"]);
     const removed = await reconcileRemovedSprites(client, SCOPE, ["smug", "happy"], true);
 
@@ -109,9 +106,8 @@ describe("reconcileRemovedSprites", () => {
   });
 
   it("is destructive on an empty protected set, which is why the seeder never calls it that way", async () => {
-    // An empty protected set collects every row, so the seeder's empty-array `continue` is the only
-    // thing standing between an empty declaration and a wipe. This call is unreachable in
-    // production; the test pins what the guard is protecting against.
+    // An empty protected set wipes every row, so this pins the catastrophic behavior the seeder's
+    // empty-array guard prevents.
     const { client, statements } = makeClient(["smug"]);
     const warnings = captureWarnings();
 

@@ -183,8 +183,6 @@ export class VertexProvider
       return { valid: false, error: providerError };
     }
 
-    // Validate project, location, credentials, and endpoint access without
-    // coupling setup to whichever model is currently selected.
     try {
       log.info("Validating Vertex AI configuration...");
 
@@ -407,7 +405,6 @@ export class VertexProvider
         allowedToolNames: streamingContext?.deliberateToolAllowedNames,
       }));
 
-      // Use the Vertex tool adapter to get all tools in Gemini format
       const vertexAdapter = getVertexToolAdapter();
       const allToolsConfig = await vertexAdapter.getAllToolsInProviderFormat(
         finalBuiltInTools,
@@ -478,7 +475,6 @@ export class VertexProvider
       }),
     };
 
-    // Only attach tools for models that support function calling
     if (resolveToolsEnabled(tomoriState, tomoriState.llm.has_tools)) {
       config.tools = await this.getTools(tomoriState);
     }
@@ -512,7 +508,6 @@ export class VertexProvider
     try {
       const vertexConfig = config as VertexProviderConfig;
 
-      // Ensure safety settings exist
       const safetySettings = vertexConfig.safetySettings || [
         {
           category: "HARM_CATEGORY_HARASSMENT",

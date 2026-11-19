@@ -108,8 +108,6 @@ describe("a reply whose source channel left the cache", () => {
       state,
     );
 
-    // The captured channel object is still usable, so the reply lands there rather than through a
-    // fetch, and the reference is what makes it a reply at all.
     expect(sent).not.toBeNull();
     expect(replySends).toHaveLength(1);
     expect(replySends[0]).toMatchObject({
@@ -120,7 +118,6 @@ describe("a reply whose source channel left the cache", () => {
     expect(state.hasRepliedToOriginalMessage).toBe(true);
     expect(stopCalls).toEqual([]);
     expect(fetchedChannels).toEqual([]);
-    // The cache-dependent path was never taken.
     expect(source.replyCalls).toBe(0);
   });
 
@@ -156,7 +153,6 @@ describe("a reply whose source channel left the cache", () => {
     const source = makeUncachedSourceMessage();
 
     const context = {
-      // A partial channel: it exposes an id but no send surface.
       channel: { id: CHANNEL_ID },
       client: {
         channels: {
@@ -234,7 +230,6 @@ describe("a reply whose source channel left the cache", () => {
     expect(first).not.toBeNull();
     expect(second).not.toBeNull();
     expect(replySends).toHaveLength(2);
-    // Only the first chunk replies, and only the first needs the lookup.
     expect(replySends[0]).toMatchObject({ reply: { messageReference: SOURCE_MESSAGE_ID } });
     expect(replySends[1]).not.toHaveProperty("reply");
     expect(fetchedChannels).toEqual([CHANNEL_ID]);
@@ -277,8 +272,8 @@ describe("a deleted destination channel", () => {
     const goneError = () => Object.assign(new Error("Unknown Channel"), { code: 10003 });
 
     const context = {
-      // Webhook-capable so the initial webhook path is taken, and sendable so the bot fallback
-      // attempts a real send rather than failing on resolution. Both reports are the deletion.
+      // Webhook-capable and sendable so both the initial webhook send and the bot fallback hit the deletion
+      // error.
       channel: {
         id: CHANNEL_ID,
         fetchWebhooks: async () => new Map(),
@@ -361,8 +356,6 @@ describe("a transient failure while resolving the destination", () => {
       tomoriState: { is_alter: false, config: {} },
     } as unknown as StreamContext;
 
-    // It still fails, but as a send failure rather than as a deletion, so the stop registry is
-    // left alone and no log claims the channel is gone.
     await expect(
       updater.sendSinglePayload({ content: "hello" }, "hello", context, createDefaultStreamState()),
     ).rejects.toBeInstanceOf(DiscordDeliveryError);
@@ -391,8 +384,8 @@ describe("a transient failure while resolving the destination", () => {
 
     const sent = await updater.sendSinglePayload({ content: "hello" }, "hello", context, createDefaultStreamState());
 
-    // Same teardown, different cause. Reporting 50001 as a deletion sends an operator looking for a
-    // channel that still exists, when the fix is to grant the permission back.
+    // Reporting 50001 as a deletion misdirects operators to a channel that still exists when the fix is restoring
+    // permissions.
     expect(sent).toBeNull();
     expect(stopCalls).toEqual([{ channelId: CHANNEL_ID, requesterId: "missing_access" }]);
   });
@@ -505,7 +498,6 @@ describe("a webhook-delivered send into a channel that cannot be resolved", () =
     expect(sent).not.toBeNull();
     expect(stopCalls).toEqual([]);
     expect(webhookSends).toHaveLength(1);
-    // The delivery still counts, so the send is not silently dropped on the floor.
     expect(state.messageSentCount).toBe(1);
   });
 });
@@ -517,7 +509,6 @@ describe("a reply whose source channel is unreachable", () => {
     const src = makeSourceMessageInChannel("999999999999999999");
 
     const context = {
-      // The reachable destination the turn falls back to, which is not the source's channel.
       channel: {
         id: CHANNEL_ID,
         client: { rest: new REST() },
@@ -529,7 +520,6 @@ describe("a reply whose source channel is unreachable", () => {
       client: {
         channels: {
           cache: new Map(),
-          // The source channel is gone, so the captured channel is what remains.
           fetch: async (id: string) => {
             if (id === "999999999999999999") {
               throw Object.assign(new Error("Unknown Channel"), { code: 10003 });

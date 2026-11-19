@@ -1,6 +1,6 @@
 export const MIN_THRESHOLD = 0; // 0 means always-reply in configured auto-chat channels
 export const MIN_RANDOM_THRESHOLD = 1;
-export const MAX_THRESHOLD = 1000; // The absolute maximum value allowed
+export const MAX_THRESHOLD = 1000;
 
 export interface ThresholdValidationResult {
   isValid: boolean;

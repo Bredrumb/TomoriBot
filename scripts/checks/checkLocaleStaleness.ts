@@ -459,10 +459,7 @@ export function buildStalenessReport(input: {
   const changed: ChangedKeyReport[] = [];
   const removed: KeyDetail[] = [];
 
-  // A key is withheld from all three sections when any locale in either revision defines it twice
-  // with different values. The test is on the bare key rather than the `en-US` one, because a
-  // conflict in a translation is enough to leave the key's meaning unsettled, and the skipped list
-  // would otherwise contradict a section that still reported the key.
+  // Exclude keys conflicted in any locale rather than only en-US so the skipped list never contradicts reported sections.
   const conflictedKeys = collectConflictedKeys(base, head);
   const sortByKey = (left: { key: string }, right: { key: string }) => left.key.localeCompare(right.key);
   const targets = translationLocales(head.locales);
@@ -747,8 +744,7 @@ export async function checkLocaleStaleness(options: CheckLocaleStalenessOptions)
   // exactly what `HEAD` holds, and claiming otherwise would be a false alarm.
   const includesUncommittedEdits = uncommittedLocalePaths.length > 0;
 
-  // Exactly one source feeds the head side. Mixing committed content for missing files with working
-  // tree content for edited ones would describe a tree that exists nowhere.
+  // Feed the head side from one source because mixing committed missing files with working-tree edits invents a tree.
   const head =
     source === "worktree"
       ? await readWorkingTreeSnapshot(git, repoRoot, dirtyPaths)

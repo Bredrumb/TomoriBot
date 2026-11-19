@@ -41,8 +41,7 @@ type MemoryValidationError =
   | "CONTENT_EMPTY";
 
 export function getMemoryLimits(): MemoryLimits {
-  // Counted per (owner, persona_lineage_id), so a multi-persona server holds this
-  // many times the persona count. Memory length, not count, is the context tax.
+  // Counted per (owner, persona_lineage_id), so totals scale with persona count while length drives context cost.
   const maxPersonalMemories = parsePositiveIntegerEnv("MAX_PERSONAL_MEMORIES", 100);
   const maxServerMemories = parsePositiveIntegerEnv("MAX_SERVER_MEMORIES", 100);
   const maxMemoryLength = parsePositiveIntegerEnv("MAX_MEMORY_LENGTH", 1000);

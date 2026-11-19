@@ -11,12 +11,9 @@ const SERVICE_NAME = "searxng";
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
 
-// Per-request timeout. Matches the 5s engine-budget from the migration plan.
 const REQUEST_TIMEOUT_MS = Math.max(1000, Number.parseInt(process.env.WEB_SEARCH_TIMEOUT_MS ?? "5000", 10) || 5000);
 
-// Cache duration for the "SearXNG reachable" probe, so avoids re-probing on every
-//    LLM tool turn while still allowing recovery within a minute when the server
-//    comes back online.
+// Caches the SearXNG reachability probe so tool turns avoid re-probing while still recovering within a minute.
 const HEALTHCHECK_CACHE_MS = 60_000;
 
 interface HealthcheckCache {
@@ -36,9 +33,7 @@ function reportAvailabilityTransition(available: boolean, reason?: string): void
   const firstResolution = lastReportedAvailability === null;
   lastReportedAvailability = available;
 
-  // log.error persists to the database, so it is awaited nowhere on this path: a health
-  // probe must not block a tool call on a write, and an unobserved rejection here would
-  // take down the process.
+  // Swallows DB-backed log.error rejections without awaiting so a health probe never blocks a tool call or crashes.
   const emit = (message: string, errorType: string): void => {
     void log.error(message, undefined, { errorType }).catch(() => undefined);
   };
@@ -75,7 +70,6 @@ export async function isSearxngAvailable(force = false): Promise<boolean> {
     return healthcheckCache.available;
   }
 
-  // Probe the lightweight `/healthz` endpoint exposed by SearXNG.
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 3000);
 
@@ -113,7 +107,7 @@ async function makeSearxngRequest(
 
   const timeoutMs = config.timeoutMs ?? REQUEST_TIMEOUT_MS;
 
-  // Build query-string, so SearXNG returns HTML by default, explicitly request JSON.
+  // Request format=json explicitly because SearXNG returns HTML by default.
   const url = new URL(`${baseUrl}/search`);
   url.searchParams.append("format", "json");
   for (const [key, value] of Object.entries(params)) {
@@ -211,7 +205,6 @@ export function formatSearxngResults(response: SearxngResponse, category: Searxn
     formatted += "\n";
   }
 
-  // Surface SearXNG's first answer snippet (Wikipedia / calculator / etc.) when present.
   const firstAnswer = response.answers?.[0];
   if (firstAnswer) {
     const answerText = typeof firstAnswer === "string" ? firstAnswer : firstAnswer.answer;

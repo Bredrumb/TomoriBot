@@ -174,7 +174,6 @@ export class ExportRepository {
   }
 
   private sanitizeForJson(content: string): { sanitized: string; wasSanitized: boolean } {
-    // Remove null bytes and control characters except \n (0x0A) and \t (0x09)
     // biome-ignore lint/suspicious/noControlCharactersInRegex: Intentionally matching control characters for sanitization
     const cleaned = content.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F]/g, "");
     return { sanitized: cleaned, wasSanitized: cleaned !== content };
@@ -262,7 +261,6 @@ export class ExportRepository {
         tags: row.tags ?? [],
       }));
 
-      // Sanitize memories for safe JSON export
       const sanitizedMemories = this.sanitizeMemoryItems(rawPersonalMemories, "personal memories");
 
       const exportData: PersonalExport = {
@@ -305,8 +303,7 @@ export class ExportRepository {
 
       const serverId = serverRows[0].server_id;
 
-      // Get tomori configuration: 13 split-table LEFT JOINs + welcome (E6: replaces dual tomori_configs join).
-      //    COALESCE defaults are belt-and-suspenders for the migration window (servers without a split row).
+      // COALESCE defaults apply when a server is missing a secondary split-config row.
       const configRows = await sql`
         SELECT
           COALESCE(smc.llm_temperature, 1.0)                        AS llm_temperature,
@@ -497,7 +494,6 @@ export class ExportRepository {
         legacy_channel_tags: row.legacy_channel_tags ?? [],
       }));
 
-      // Sanitize memories for safe JSON export
       const sanitizedServerMemories = this.sanitizeMemoryItems(rawServerMemories, "server memories");
 
       const lore = await lorebookRepository.listScope(serverId, targetPersonaLineageId);
@@ -506,9 +502,7 @@ export class ExportRepository {
         return { success: false, error: "commands.data.export.error_export_failed" };
       }
 
-      // Per-channel STM state is intentionally excluded from the export: only the
-      // reusable customization (cadence, render mode, prompt overrides, categories)
-      // is portable across servers.
+      // Exclude per-channel STM state because only cadence, render mode, prompt overrides, and categories are portable.
       const stmExport = await shortTermMemoryRepository.toExportShape(serverDiscId);
 
       const exportData: ServerExport = {
@@ -605,7 +599,6 @@ export class ExportRepository {
             memory_tagging_enabled: configData.memory_tagging_enabled,
             channel_memory_enabled: configData.channel_memory_enabled,
             welcome_prompt: configData.welcome_prompt ?? null,
-            // STM customization (nested config object + ordered categories array).
             stm_config: stmExport?.stm_config ?? null,
             stm_categories: stmExport?.stm_categories ?? [],
           },

@@ -322,7 +322,7 @@ class ToolRegistryImpl implements ToolRegistryInterface {
   }
 
   getExecutionHistory(limit = 100): ToolExecutionEvent[] {
-    return this.executionHistory.slice(-limit).reverse(); // Most recent first
+    return this.executionHistory.slice(-limit).reverse();
   }
 
   clearRegistry(): void {
@@ -344,7 +344,7 @@ class ToolRegistryImpl implements ToolRegistryInterface {
     }
 
     const recentExecutions = this.executionHistory.filter(
-      (event) => Date.now() - event.timestamp.getTime() < 24 * 60 * 60 * 1000, // Last 24 hours
+      (event) => Date.now() - event.timestamp.getTime() < 24 * 60 * 60 * 1000,
     ).length;
 
     return {

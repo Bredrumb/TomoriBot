@@ -1,20 +1,16 @@
 import { z } from "zod";
 import { broadcastInvalidation, registerInvalidation, invalidationKey } from "@/utils/cache/invalidationBus";
 import { PrivacyLevel, type UserRow } from "@/types/db/schema";
-// Import the singleton directly from its defining module rather than the
-// repositories barrel: the barrel re-exports every repository, so importing it
-// here pulled all of them (and their transitive graph) into the user-cache
-// module and routed cycles through `repositories/index.ts`. The direct import
-// yields the same singleton (`UserRepository.ts` defines it) and narrows the
-// remaining cycle to the value-safe UserRepository <-> userCache pair.
+// Import UserRepository directly rather than the repositories barrel so this module avoids pulling every repository
+// into a cycle.
 import { userRepository } from "@/utils/db/repositories/UserRepository";
 import { log } from "../misc/logger";
 
 interface UserCacheEntry {
-  userRow: UserRow | null; // null if user doesn't exist in DB
+  userRow: UserRow | null;
   privacyLevel: PrivacyLevel;
-  blacklistStatus: Map<string, boolean>; // serverDiscId -> userRepository.isBlacklisted
-  cachedAt: number; // Timestamp in milliseconds
+  blacklistStatus: Map<string, boolean>;
+  cachedAt: number;
 }
 
 const cache = new Map<string, UserCacheEntry>();
@@ -37,11 +33,8 @@ async function getOrCreateCacheEntry(userDiscId: string): Promise<UserCacheEntry
       cacheHits++;
       return cachedEntry;
     }
-
-    // Cache stale - fall through to refresh
   }
 
-  // Cache miss or stale - refresh from DB
   cacheMisses++;
 
   try {
@@ -68,13 +61,8 @@ async function getOrCreateCacheEntry(userDiscId: string): Promise<UserCacheEntry
       return cachedEntry;
     }
 
-    // FULL rather than MINIMAL: with nothing readable and nothing cached, the user's own
-    // setting is unknown, and over-protecting for one call costs nothing while the reverse
-    // exposes someone who chose to be invisible.
-    //
-    // Deliberately not written to `cache`: storing it would pin the restrictive guess for the
-    // whole 30 minute TTL, so a blip measured in seconds turned into a half hour of degraded
-    // personalization. Leaving it out makes the next call retry the database.
+    // Default to FULL without writing to cache, because unknown privacy must fail closed while leaving it uncached
+    // lets the next call retry.
     return {
       userRow: null,
       privacyLevel: PrivacyLevel.FULL,

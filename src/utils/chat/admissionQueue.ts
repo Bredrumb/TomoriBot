@@ -59,8 +59,8 @@ export async function evaluateAdmissionQueueAndTriggerGate(
   args: AdmissionQueueAndTriggerArgs,
 ): Promise<NonRunnableChatAdmission | null> {
   const { incoming, messageProxyRecord } = args;
-  // PluralBuddy can verify a repost after the original's wait has ended. The original may
-  // already have started a reply, so admitting the repost would answer the same message twice.
+  // PluralBuddy can verify a repost after the original's wait ended, so admitting it would answer the same message
+  // twice.
   if (
     messageProxyRecord &&
     !messageProxyRecord.originalSuppressed &&
@@ -146,8 +146,7 @@ async function evaluateLockedChannelAdmission(
       : {}),
     disableRecentMessageReplyTool: true,
   };
-  // Skip follow-up path if the message explicitly targets a different persona.
-  // activePersonaId must be set (i.e. turn state is established) for this to apply.
+  // Skip follow-up queuing when targeting another persona, requiring activePersonaId so turn state is established.
   const hasCrossPersonaTrigger =
     lockEntry.activePersonaId !== undefined &&
     hasExplicitCrossPersonaTrigger(triggerMessage, earlyAllPersonas, lockEntry.activePersonaId, args.referencedMessage);

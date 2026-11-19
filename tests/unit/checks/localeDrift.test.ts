@@ -127,8 +127,7 @@ describe("locale drift: key extraction", () => {
 
 describe("locale drift: runtime-equivalent normalization", () => {
   it("dedents a wrapped value the way the localizer does, so a reflow is not a change", () => {
-    // The first line sets the indent the runtime strips. Both of these collapse to
-    // "\nOne sentence\ncontinued", so wrapping the value differently is not a content change.
+    // Runtime strips the first line's indent, so both wrapped literals collapse to "\nOne sentence\ncontinued".
     const wrapped = extractLocaleValues(localeFile([["key", "`\n      One sentence\n      continued`"]]));
     const differentlyIndented = extractLocaleValues(
       localeFile([["key", "`\n          One sentence\n          continued`"]]),
@@ -142,8 +141,7 @@ describe("locale drift: runtime-equivalent normalization", () => {
   });
 
   it("keeps layout that the runtime preserves, so a meaningful newline change is a change", () => {
-    // Markdown hard breaks, fenced blocks, and panel markers all survive the runtime dedent. A
-    // collapse-everything comparison would call each of these pairs equal and hide the edit.
+    // Hard breaks, fenced blocks, and panel markers survive runtime dedent, so normalization must preserve them.
     expect(normalizeLocaleValue("Line one\nLine two")).not.toBe(normalizeLocaleValue("Line one Line two"));
     expect(normalizeLocaleValue("```\n/help\n```")).not.toBe(normalizeLocaleValue("``` /help ```"));
     expect(normalizeLocaleValue("-# first\n-# second")).not.toBe(normalizeLocaleValue("-# first -# second"));
@@ -178,8 +176,7 @@ describe("locale drift: line provenance", () => {
   });
 
   it("blames every line of a multi-line value, not only the line it opens on", () => {
-    // The opening line is old, the closing line is newer. Blaming only the opening line would
-    // attribute the whole value to the older commit and miss the edit that produced the value.
+    // Blaming only the opening line would pick the older commit when a closing line changed later.
     const chronology = createChronology(
       new Map([
         ["aaa", 1_700_000_000],
@@ -201,8 +198,7 @@ describe("locale drift: line provenance", () => {
   });
 
   it("orders revisions by commit time rather than by id", () => {
-    // Lexically "zzz" sorts after "aaa", but it was committed first. Comparing ids would pick it as
-    // the newer baseline and compare against English from a month earlier.
+    // Commit time must beat lexical id order because "zzz" was committed before "aaa".
     const chronology = createChronology(
       new Map([
         ["zzz", 1_700_000_000],
@@ -405,8 +401,6 @@ describe("locale drift: end-to-end scan", () => {
   });
 
   it("reports a file's baseline span rather than one representative revision", () => {
-    // Two findings in one file, from baselines a commit apart, which is the case a single
-    // representative revision would misstate.
     const english = localeFile([
       ["early", "`English moved`"],
       ["late", "`English moved later`"],
@@ -469,8 +463,6 @@ describe("locale drift: end-to-end scan", () => {
       order: ["aaa"],
     });
 
-    // No baseline means nothing to compare against. Treating it as "every key is new" is the
-    // avalanche this guard exists to prevent.
     expect(report.entries).toEqual([]);
   });
 

@@ -58,9 +58,7 @@ function withoutRecreatedDrops(sql: string): string {
 }
 
 function stripComments(sql: string): string {
-  return sql
-    .replace(/--[^\n]*/g, "") // line comments
-    .replace(/\/\*[\s\S]*?\*\//g, ""); // block comments
+  return sql.replace(/--[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
 }
 
 function findUnfilteredDeletes(sql: string): string[] {
@@ -100,8 +98,6 @@ async function listPendingMigrationsViaDb(allUp: PendingFile[]): Promise<Pending
     const applied = new Set(rows.map((r) => r.name));
     return allUp.filter((m) => !applied.has(m.name));
   } catch (err) {
-    // If the schema_migrations table doesn't exist yet, every up-migration is pending.
-    // We surface the error so the operator knows the DB was untracked, but proceed.
     const msg = err instanceof Error ? err.message : String(err);
     if (/schema_migrations.*does not exist/i.test(msg)) {
       console.warn("schema_migrations table not found; treating ALL up-migrations as pending.");

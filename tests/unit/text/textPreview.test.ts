@@ -41,7 +41,6 @@ describe("buildTextPreview", () => {
     // the locale string wraps it in, mangling the rest of the card.
     const preview = buildTextPreview("intro\n```js\nalert(1)\n```\noutro");
     expect(preview.text).not.toContain("```");
-    // Visible characters survive; only zero-width guards are interleaved.
     expect(preview.text.replaceAll("​", "")).toBe("intro\n```js\nalert(1)\n```\noutro");
   });
 
@@ -78,8 +77,6 @@ describe("buildTextPreview", () => {
   });
 
   it("leaves short confirmation previews unmarked", () => {
-    // Regression guard for the old `{preview}...` locale strings, which claimed
-    // truncation even for text far under the preview width.
     const preview = buildTextPreview("Speak warmly.", CONFIRMATION_PREVIEW_BUDGET);
     expect(preview.truncated).toBe(false);
     expect(textPreviewFooterKey(preview)).toBeUndefined();
@@ -113,7 +110,6 @@ describe("buildTextPreview", () => {
   });
 
   it("measures totalChars and shownChars in codepoints rather than UTF-16 code units", () => {
-    // Astral-plane emoji require 2 UTF-16 code units per codepoint.
     const emojiInput = "🎉🎈🚀🔥🌟";
     expect(emojiInput.length).toBe(10);
     expect([...emojiInput].length).toBe(5);
@@ -125,7 +121,6 @@ describe("buildTextPreview", () => {
     expect(emojiPreview.text).toBe("🎉🎈🚀");
     expect([...emojiPreview.text].length).toBe(3);
 
-    // Basic Multilingual Plane characters remain 1 UTF-16 unit and 1 codepoint each.
     const bmpPreview = buildTextPreview("你好世界", 2);
     expect(bmpPreview.totalChars).toBe(4);
     expect(bmpPreview.shownChars).toBe(2);

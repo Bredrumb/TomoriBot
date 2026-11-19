@@ -51,7 +51,6 @@ describe("persona default — name resolution helpers", () => {
     });
 
     it("taken-name comparison is case-insensitive", () => {
-      // takenNames has "TOMORI" (upper-case), so must block "Tomori" as default name
       const result = resolveAvailablePersonaName("Tomori", [], ["TOMORI"]);
       expect(result).toBeNull();
     });
@@ -109,7 +108,6 @@ describe("persona default — name resolution helpers", () => {
     it("deduplicates trigger words from the preset", () => {
       const preset = makePreset({ preset_trigger_words: ["alice", "alice", "ali"] });
       const words = resolvePresetTriggerWords(preset, "en-US");
-      // The duplicate "alice" is removed; unique set size should equal array length
       const uniqueWords = new Set(words.map((w) => w.toLowerCase()));
       expect(uniqueWords.size).toBe(words.length);
       expect(words.length).toBeLessThan(3);

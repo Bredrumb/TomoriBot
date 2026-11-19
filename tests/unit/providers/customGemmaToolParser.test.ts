@@ -52,9 +52,8 @@ describe("GemmaToolCallParser — tool_code dialect (<tool_code>)", () => {
   });
 
   it("keeps text before the block visible, and resumes visible text in a later chunk", () => {
-    // A completed call ends the turn for the pipeline (the adapter drops same-chunk
-    // trailing content), but the parser returns to idle so a *subsequent* chunk's
-    // prose is emitted normally.
+    // The adapter drops same-chunk trailing content after a completed call, so the parser returns to idle for later
+    // chunks.
     const { visible, calls } = run(['Sure!<tool_code>note(text="hi")</tool_code>', "Done."]);
     expect(visible).toBe("Sure!Done.");
     expect(calls).toEqual([{ name: "note", args: { text: "hi" } }]);

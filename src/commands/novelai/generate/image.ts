@@ -251,8 +251,6 @@ export async function execute(
     if (modelSelection === false) return;
     const spoiler = interaction.options.getBoolean("nsfw") ?? false;
 
-    // Overlay the invoking user's personal (BYOK) provider selections so their
-    // personal NovelAI model/key is used when configured, mirroring /generate image.
     const serverTomoriState = tomoriState;
     const overlay = await applyPersonalProviderSelectionsToTomoriState(tomoriState, userData.user_id ?? null);
     tomoriState = overlay.tomoriState;
@@ -530,7 +528,7 @@ export async function execute(
       effectiveNegativePrompt,
       modalSubmitInteraction.attachmentSizeLimit,
     );
-    // Settled at the old increment point: after preparation, before delivery.
+    // Marked consumed before Discord upload so a failed message delivery does not refund generation quota.
     quotaConsumed = true;
     // Record canonical generation telemetry; quota tables enforce limits only.
     if (userData.user_id) {

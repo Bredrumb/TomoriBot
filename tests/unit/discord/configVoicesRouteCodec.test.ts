@@ -61,7 +61,6 @@ describe("config voices route catalog & codecs", () => {
       expect(customId.length).toBeLessThanOrEqual(100);
     }
 
-    // Also test maximum length with a 32-character nonce
     const maxNonceRoute: ConfigPanelRoute = {
       action: "voice-sample-remove-confirm",
       locale: "en-US",

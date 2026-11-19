@@ -246,8 +246,7 @@ export function buildPersonaAvatarModal(locale: string, personaId: number, nonce
         label: modalLabel(locale, "commands.config.panel.avatar_input_label"),
         description: modalDescription(locale, "commands.config.panel.avatar_input_description"),
         component: {
-          // 19 is FileUpload. Component types are bare numbers on the wire, so TypeScript accepts
-          // any of them here and only a literal assertion catches a wrong one.
+          // 19 is FileUpload; wire types are bare numbers, so only a literal catches the wrong type.
           type: 19,
           custom_id: buildConfigModalFieldId("avatar", nonce),
           min_values: 0,
@@ -807,8 +806,7 @@ function buildPublicCheckboxGroup(
     label: modalLabel(locale, labelKey),
     description: modalDescription(locale, descriptionKey),
     component: {
-      // 22 is CheckboxGroup. A single option preserves the distinction between an explicit clear
-      // and a submit that carried no checkbox evidence at all.
+      // 22 is CheckboxGroup: one option separates an explicit clear from a submit missing checkbox data.
       type: 22,
       custom_id: buildConfigModalFieldId(field, nonce),
       min_values: 0,

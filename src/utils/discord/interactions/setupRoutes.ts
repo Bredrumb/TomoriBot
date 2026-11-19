@@ -773,9 +773,7 @@ async function applySetupPresetAvatar(
   presetName: string,
 ): Promise<"applied" | "failed" | "skipped"> {
   if (!guild) return "skipped";
-  // The catalog read that produced this draft also produced its row, so a null here is a preset that
-  // vanished between the revalidation and this call. Leaving the avatar alone is the safe answer: the
-  // preset id no longer names anything to draw.
+  // Skip avatar sync if the preset vanished between validation and commit because no target row remains.
   if (!presetRow) return "skipped";
   try {
     const cachedAvatar = getCachedPresetAvatar(presetId);
@@ -852,18 +850,13 @@ async function runSetupPostCommitEffects(input: {
   try {
     await deliverGuardedPanel(input.interaction, payload, { locale, method: "editReply" });
   } catch (deliveryError) {
-    // Not swallowed like the adjustments above: the workspace is committed, so an actor shown the
-    // still-open wizard would be looking at a setup that already exists, and every later press would
-    // read the consumed draft as expired. Returning false is what turns that into a truthful answer.
+    // Return false because the setup already committed, so showing the open wizard would read as expired on retry.
     log.error("[Setup] Failed to deliver the success receipt for a committed setup:", deliveryError);
     return false;
   }
 
   if (input.serverInternalId) {
-    // One low-cardinality action per completed setup. Opening the wizard, saving a draft, failing a
-    // validation, cancelling, and expiring all record nothing, so the counter reads as completed
-    // setups rather than as interest in the surface. Recording is detached and swallows its own
-    // failure because telemetry must never turn an already-committed setup into a failure notice.
+    // Emit one detached metric per completed setup so telemetry failures never convert a committed setup into an error.
     void recordPanelActionStat({
       action: "setup.workspace.setup.complete",
       serverId: input.serverInternalId,
@@ -897,8 +890,7 @@ async function finishSetupWizardDraft(
   const claim = claimSetupDraft(nonce, actorDiscId, workspaceKey, context);
 
   if (claim.status === "in-flight") {
-    // A second press while the first is still committing. Repainting is safe here, unlike on the
-    // success path: the wizard is still the live surface and the first press will replace it.
+    // Safe to repaint on in-flight because the wizard stays live until the first commit finishes and replaces it.
     await repaintSetupWizard(interaction, draft, locale, nonce, {
       method: "editReply",
       receipt: setupInFlightReceipt(locale),
@@ -907,9 +899,7 @@ async function finishSetupWizardDraft(
   }
 
   if (claim.status !== "claimed") {
-    // Missing means the draft expired or a racing confirmation already consumed it. Neither may
-    // start a second transaction, and both have to answer because a silent return reads as a failed
-    // interaction in the client.
+    // Answer missing claims explicitly because a silent return reads as a failed interaction when expired or raced.
     await deliverGuardedPanel(interaction, buildSetupExpiredPayload(locale), {
       locale,
       method: "editReply",
@@ -919,11 +909,9 @@ async function finishSetupWizardDraft(
   }
 
   const claimedDraft = claim.draft;
-  // Whether the transaction landed. It survives the try so the unexpected-error handler can tell an
-  // actor whose setup may already exist from one whose attempt never reached the database.
+  // Survives try so catch can distinguish partial failures before DB commit from post-commit ones.
   let committed = false;
-  // Whether a refusal left the actor something to correct. A drift re-pends one step and the panel
-  // keeps serving it, so that draft outlives the attempt; every other outcome ends the attempt.
+  // Drift refusals keep preserved=true because only correctable drift retains the draft across retries.
   let preserved = false;
 
   try {
@@ -1101,16 +1089,13 @@ async function finishSetupWizardDraft(
         providerLabel,
       });
     } catch (effectsError) {
-      // An unexpected throw inside the tail. The receipt may or may not have landed, and the one
-      // thing that cannot be reported is "nothing was saved", because the transaction did commit.
+      // Post-commit throw must never report an uncommitted error because the transaction already landed.
       log.error("[Setup] Post-commit effects failed after a committed setup:", effectsError);
       receiptDelivered = false;
     }
 
     if (!receiptDelivered) {
-      // The draft is still consumed by the exit path, so a retry starts over rather than resuming
-      // anything. What the actor gets here is the one honest answer left: the setup could not be
-      // confirmed, not that it did not happen.
+      // Still consumed on exit so retries start fresh while telling the user delivery could not confirm.
       try {
         await deliverGuardedPanel(interaction, buildSetupCommitFailedPayload(locale), {
           locale,
@@ -1125,9 +1110,7 @@ async function finishSetupWizardDraft(
 
     return { status: "committed" };
   } catch (error) {
-    // Anything past the claim that is not one of the handled outcomes above. An uncommitted attempt
-    // saved nothing; a committed one may have, so the two are logged apart even though the actor is
-    // told the same thing either way, because only one of them needs a human to look at the rows.
+    // Separate committed vs uncommitted error logs because only post-commit failures require manual DB cleanup.
     log.error(
       committed
         ? "[Setup] Commit path failed after the transaction committed; the workspace may already be configured:"
@@ -1145,11 +1128,7 @@ async function finishSetupWizardDraft(
     }
     return { status: "failed" };
   } finally {
-    // The claim is always drained here, so no exception can leave a frozen draft holding an encrypted
-    // credential. Releasing first is also what lets the consume below get past the store's own freeze:
-    // a committed setup consumes its draft, a drift keeps the corrected draft for the next press, and
-    // every other outcome consumes it so the actor starts over rather than resuming an attempt whose
-    // state is unknown.
+    // Always release the claim before consuming the draft so exceptions never strand an encrypted credential.
     releaseSetupDraftClaim(nonce, actorDiscId, workspaceKey, context);
     if (!preserved) {
       consumeSetupDraft(nonce, actorDiscId, workspaceKey, context);
@@ -1259,9 +1238,7 @@ export const setupInteractionRoute: GlobalInteractionRoute = {
     }
 
     if (readResult.status === "in-flight") {
-      // A commit is running on this draft, so every other action is refused rather than dispatched:
-      // the draft is frozen until that commit finishes, and a repaint that read it would be showing
-      // state the commit is about to replace.
+      // Refuse actions while committing because the draft is frozen and a repaint would show stale state.
       await deliverGuardedPanel(interaction, buildSetupInFlightPayload(locale), {
         locale,
         method: "update",
@@ -1309,10 +1286,7 @@ export const setupInteractionRoute: GlobalInteractionRoute = {
         if (interaction.isModalSubmit()) {
           return;
         }
-        // A policy control on a draft that renders no policy step is forged, so the modal opens
-        // only for the draft's own captured requirement rather than a fresh environment read. The
-        // refusal replies rather than returning silently, because an unanswered component
-        // interaction surfaces as a failed interaction in the client.
+        // Reply to refuse forged policy clicks because unanswered component interactions fail in Discord.
         if (!draft.requiresPolicies) {
           if (!interaction.replied && !interaction.deferred) {
             await replyPanelReceipt(interaction, {
@@ -1360,11 +1334,7 @@ export const setupInteractionRoute: GlobalInteractionRoute = {
         }
 
         const updated = updateSetupDraft(nonce, actorDiscId, workspaceKey, context, { policiesAccepted: true });
-        // Repainting is conditional on the write landing: a draft that expired across the
-        // acknowledgement round trip has recorded no acceptance, and showing a completed step for it
-        // would claim a legal acceptance that does not exist. The refusal still answers, because the
-        // modal has already closed and a silent return leaves the actor unable to tell whether their
-        // acceptance registered.
+        // Repaint only if updated so expired drafts never show accepted; still answer to confirm modal submission.
         if (updated.status === "ok") {
           await repaintSetupWizard(interaction, updated.draft, locale, nonce, { method: "editReply" });
           return;

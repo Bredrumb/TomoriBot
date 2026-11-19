@@ -1,4 +1,5 @@
-// The index retains successful guild-user pairs for this process, so add expiry if its size approaches the memory saved by filtering presences.
+// The index retains successful guild-user pairs for this process, so add expiry if its size approaches the memory
+// saved by filtering presences.
 export class DiscordPresenceRetention {
   private readonly participants = new Set<string>();
 

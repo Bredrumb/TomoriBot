@@ -226,7 +226,6 @@ const FREE_FUNC_MAP: Record<string, { repoVar: string; methodName: string }> = {
   validateImportFile: { repoVar: "importRepository", methodName: "validateImportFile" },
 };
 
-// Types that remain in index.ts: only need import path kept as-is
 const KNOWN_TYPES = new Set(["OpenRouterModelScope", "ImportValidationResult", "ImportFileType"]);
 
 const REPO_INSTANCES = new Set([
@@ -281,8 +280,6 @@ function rewriteImports(source: string): string {
   const typeNamesKept = new Set<string>();
   const repoInstancesKept = new Set<string>();
 
-  // Find all import blocks, collect metadata, then replace from last to first
-  // so offsets stay valid.
   const matches: Array<{ full: string; isTypeImport: boolean; names: string[] }> = [];
   IMPORT_RE.lastIndex = 0;
   let m = IMPORT_RE.exec(source);
@@ -309,7 +306,6 @@ function rewriteImports(source: string): string {
       } else if (FREE_FUNC_MAP[name]) {
         repoVarsNeeded.add(FREE_FUNC_MAP[name].repoVar);
       }
-      // Unknown names: leave as-is in kept instances (graceful fallback)
     }
   }
 
@@ -330,9 +326,7 @@ function rewriteImports(source: string): string {
     replacement += (replacement ? "\n" : "") + typeLine;
   }
 
-  // Replace all original import blocks with the consolidated one,
-  // putting it in place of the first block and removing the rest.
-  // We do this by replacing text from last-to-first to preserve offsets.
+  // Replace in reverse so earlier string offsets stay valid.
   IMPORT_RE.lastIndex = 0;
   const allBlocks: Array<{ index: number; length: number }> = [];
   let blk = IMPORT_RE.exec(source);
@@ -348,8 +342,7 @@ function rewriteImports(source: string): string {
     out = out.slice(0, index) + sub + out.slice(index + length);
   }
 
-  // The consolidated import supersedes stale direct repository imports such as
-  // `import { personaRepository } from "@/utils/db/repositories/PersonaRepository"`.
+  // Strip direct repository imports because the consolidated barrel import supersedes them.
   for (const repoVar of repoVarsNeeded) {
     const directRe = new RegExp(
       `import\\s+\\{\\s*${repoVar}\\s*\\}\\s+from\\s+"@\\/utils\\/db\\/repositories\\/[^"]+";?\\n?`,
@@ -368,7 +361,6 @@ function rewriteCallSites(source: string, fileFuncs: Set<string>): string {
     const mapping = FREE_FUNC_MAP[funcName];
     if (!mapping) continue;
     const { repoVar, methodName } = mapping;
-    // \b word boundary: avoids matching inside longer names
     const re = new RegExp(`\\b${funcName}\\b`, "g");
     out = out.replace(re, `${repoVar}.${methodName}`);
   }
@@ -402,7 +394,7 @@ for (const filePath of files) {
 
   if (fileFuncs.size === 0) {
     skipped++;
-    continue; // Only imports repo instances or types: nothing to drain
+    continue;
   }
 
   let updated = source;

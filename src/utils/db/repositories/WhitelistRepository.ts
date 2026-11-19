@@ -54,7 +54,6 @@ class WhitelistRepository {
     };
 
     try {
-      // Resolve server DB ID
       const [serverRow] = await sql`SELECT server_id FROM servers WHERE server_disc_id = ${serverDiscId}`;
       if (!serverRow) return fallbackResult;
 
@@ -63,7 +62,6 @@ class WhitelistRepository {
       const [countRow] = await sql`SELECT COUNT(*) as count FROM channel_whitelist WHERE server_id = ${serverId}`;
       const hasActiveChannelWhitelist = Number.parseInt(countRow?.count as string, 10) > 0;
 
-      // Check if the specific channel is whitelisted (thread falls back to parent)
       const [channelRow] = hasActiveChannelWhitelist
         ? await sql<Array<{ cooldown_type: CooldownType | null; cooldown_length: number | null }>>`
             SELECT cooldown_type, cooldown_length
@@ -117,7 +115,7 @@ class WhitelistRepository {
       ]);
       const hasActiveRoleWhitelist = roleRows.length > 0;
 
-      // Role whitelist check (fail-open when role data is unavailable)
+      // Fail open when memberRoleDiscIds is undefined because callers lack role data.
       let isRoleWhitelisted = false;
       if (hasActiveRoleWhitelist) {
         if (memberRoleDiscIds === undefined) {
@@ -128,7 +126,6 @@ class WhitelistRepository {
         }
       }
 
-      // Persona-channel whitelist (threads inherit from parent)
       const restrictedPersonaIds = this.normalizeTomoriIds(restrictedPersonaRows);
       const hasActivePersonaWhitelist = restrictedPersonaIds.length > 0;
 

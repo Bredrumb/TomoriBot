@@ -1,11 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import { buildModelSeedStatements } from "@/db/seed/catalog/modelSeed";
 
-// A live curated model must publish globally even when a workspace registered its codename first.
-// Deprecated seed rows still leave an explicit scoped registration untouched across restarts.
+// Curated models publish globally over workspace registrations, so only deprecated rows leave scoped ones untouched.
 
 describe("model seed scoped-registration guard", () => {
-  // Map each backing table to the guard clause its ON CONFLICT must contain.
   const expectedGuards: Record<string, string> = {
     llms: "WHERE COALESCE(llms.is_scoped_registration, false) = false",
     image_diffusion_models: "WHERE COALESCE(image_diffusion_models.is_scoped_registration, false) = false",
@@ -27,9 +25,7 @@ describe("model seed scoped-registration guard", () => {
   });
 
   it("never resets is_scoped_registration without the guard", () => {
-    // The dangerous combination is `is_scoped_registration = false` in the SET
-    // clause without the WHERE guard that confines it to curated rows. If any
-    // statement clears the flag, it must also carry its guard.
+    // Clearing `is_scoped_registration` without the curated-row WHERE guard would hijack scoped registrations.
     for (const statement of statements) {
       if (statement.includes("is_scoped_registration = false")) {
         expect(statement).toContain("WHERE COALESCE(");

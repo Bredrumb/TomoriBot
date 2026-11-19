@@ -18,8 +18,6 @@ export const encryptApiKey = async (apiKey: string): Promise<{ encrypted: Buffer
     const currentKey = keyManager.getCurrentKey();
     const currentVersion = keyManager.getCurrentVersion();
 
-    // Use PostgreSQL's pgp_sym_encrypt function with armor option to encrypt the API key
-    // Note: The bytea output is directly compatible with Buffer
     const [result] = await sql`
       SELECT pgp_sym_encrypt(
         ${apiKey.trim()},
@@ -57,8 +55,6 @@ export const decryptApiKey = async (
   try {
     const key = keyManager.getKey(keyVersion);
 
-    // Use PostgreSQL's pgp_sym_decrypt function to decrypt the API key
-    // No need for typecasting to bytea since encryptedKey is already a Buffer
     const [result] = await withTransientDbRetry(
       () => sql`SELECT pgp_sym_decrypt(${encryptedKey}, ${key}) AS decrypted_key`,
       "decrypt API key",
@@ -95,7 +91,6 @@ export const storeOptApiKey = async (serverId: number, serviceName: string, apiK
     const previous = await getOptApiKey(serverId, serviceName);
     if (previous === apiKey.trim()) return true;
 
-    // Encrypt the API key using the current key version
     const { encrypted, version } = await encryptApiKey(apiKey);
 
     await sql`

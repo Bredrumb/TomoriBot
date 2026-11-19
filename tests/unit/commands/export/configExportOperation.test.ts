@@ -141,8 +141,7 @@ describe("config export operation", () => {
   });
 
   it("still refuses when the guild is absent from the client cache", async () => {
-    // guildId arrives in the payload while guild is a cache lookup. A guard reading guild would take its DM branch
-    // here while the export key still named this guild.
+    // guildId arrives in the payload while guild is a cache lookup, so reading guild would misroute this to DMs.
     const interaction = makeWorkspaceInteraction({ inGuild: true, canManageGuild: false });
     interaction.guild = null;
     const { deps, calls } = makeDependencies();

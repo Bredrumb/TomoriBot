@@ -73,29 +73,21 @@ export async function resolveSendableChannel(
   const cached = client.channels.cache.get(channelId);
   if (cached && canSend(cached)) return { channel: cached as SendableChannel };
 
-  // ChannelManager.fetch is cache-first itself and only reaches REST for a missing or partial
-  // entry, so this stays one lookup in the common case.
-  //
-  // Only a permanent answer becomes a reason. Mapping every rejection to one would make a rate
-  // limit, a 5xx, or a socket error indistinguishable from a deletion, and the caller treats a
-  // reason as terminal: it stops the stream and drops the turn's remaining retry arms. A
-  // transient failure keeps its own error so it stays an ordinary send failure.
+  // Transient fetch errors must rethrow rather than returning a terminal reason because callers abort stream
+  // retries on any ChannelResolution failure.
   let fetched: Channel | null;
   try {
     fetched = await client.channels.fetch(channelId);
   } catch (error) {
     if (isPermanentFetchFailure(error)) return { failed: "channel_deleted" };
 
-    // Checked here rather than folded into the predicate above, because only this call site has a
-    // terminal answer for it. A 50001 on a send can clear when a timeout expires, so the shared
-    // predicate must stay narrow and let those keep their retry arms.
+    // Kept out of isPermanentFetchFailure because 50001 on a send can clear after a timeout and must keep retrying.
     if (isMissingChannelAccessError(error)) return { failed: "missing_access" };
     throw error;
   }
 
-  // A channel that resolves but exposes no send surface is unreachable for reasons this cannot
-  // name, so it stays on the deletion path rather than claiming a permission the bot may still
-  // hold.
+  // A non-sendable fetched channel maps to channel_deleted because the cause is unknown and may not be
+  // missing_access.
   return fetched && canSend(fetched) ? { channel: fetched as SendableChannel } : { failed: "channel_deleted" };
 }
 

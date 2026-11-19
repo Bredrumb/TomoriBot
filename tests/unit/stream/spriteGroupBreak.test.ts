@@ -88,13 +88,9 @@ describe("sprite group-break naming", () => {
       return identity.username;
     };
 
-    // First sprite stays clean.
     expect(send("imagining")).toBe(CLEAN);
-    // Sprite change collides with the previous clean name, so it takes the group-break name.
     expect(send("mad")).toBe(GROUP_BREAK);
-    // Another change flips back to clean (still distinct from the prior group-break name).
     expect(send("imagining")).toBe(CLEAN);
-    // And back to the group-break name.
     expect(send("mad")).toBe(GROUP_BREAK);
   });
 
@@ -107,11 +103,9 @@ describe("sprite group-break naming", () => {
       return identity.username;
     };
 
-    // Same sprite twice: both clean, identical → they group under one avatar.
     expect(send("mad")).toBe(CLEAN);
     expect(send("mad")).toBe(CLEAN);
 
-    // Switch sprite to the group-break name, then repeat it: identical names still group.
     expect(send("imagining")).toBe(GROUP_BREAK);
     expect(send("imagining")).toBe(GROUP_BREAK);
   });
@@ -126,7 +120,6 @@ describe("sprite group-break naming", () => {
 
     expect(groupBreak.username).toBe(GROUP_BREAK);
     expect(groupBreak.avatarUrl).toBe(cleanIdentity.avatarUrl);
-    // The clean source identity must not be mutated in place.
     expect(cleanIdentity.username).toBe(CLEAN);
   });
 
@@ -138,8 +131,6 @@ describe("sprite group-break naming", () => {
     expect(first.username).toBe(CLEAN);
     channel.deliverWebhook(first);
 
-    // New turn, new processor/stream, but the same channel with our message still last, so a
-    // sprite CHANGE must still break the group rather than restart on the clean name.
     const queuedTurn = makeResolver();
     expect(queuedTurn(cleanIdentity, decoratedFor("shy"), "shy", CHANNEL, channel.lastMessageId).username).toBe(
       GROUP_BREAK,
@@ -167,12 +158,10 @@ describe("sprite group-break naming", () => {
     channel.deliverWebhook(first);
     channel.foreignMessage();
 
-    // Someone spoke, so this one restarts clean...
     const afterForeign = resolve(cleanIdentity, decoratedFor("shy"), "shy", CHANNEL, channel.lastMessageId);
     expect(afterForeign.username).toBe(CLEAN);
     channel.deliverWebhook(afterForeign);
 
-    // ...but the next sprite change is adjacent to our own message and must still break.
     expect(resolve(cleanIdentity, decoratedFor("mad"), "mad", CHANNEL, channel.lastMessageId).username).toBe(
       GROUP_BREAK,
     );
@@ -211,12 +200,10 @@ describe("sprite group-break naming", () => {
     expect(first.username).toBe(CLEAN);
     channel.deliverWebhook(first);
 
-    // A different channel starts its own run: first sprite there is still clean.
     const otherFirst = resolve(cleanIdentity, decoratedFor("shy"), "shy", otherChannelId, otherChannel.lastMessageId);
     expect(otherFirst.username).toBe(CLEAN);
     otherChannel.deliverWebhook(otherFirst);
 
-    // The original channel's alternation is unaffected by the interleaved channel.
     expect(resolve(cleanIdentity, decoratedFor("shy"), "shy", CHANNEL, channel.lastMessageId).username).toBe(
       GROUP_BREAK,
     );

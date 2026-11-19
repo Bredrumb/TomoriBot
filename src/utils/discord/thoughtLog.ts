@@ -137,10 +137,8 @@ function buildThoughtLogEmbeds(args: {
 
   let metadataAttached = false;
   for (const section of sections) {
-    // Code-block sections: split content across multiple embeds, each with
-    // properly opened and closed triple-backtick fences.
     if (section.codeBlock) {
-      const fenceOverhead = "```\n\n```".length; // Opening + closing backticks with newlines
+      const fenceOverhead = "```\n\n```".length;
       const sectionHeader = `**${section.label}**\n`;
       let remaining = section.content;
 

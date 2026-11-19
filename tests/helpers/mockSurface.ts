@@ -146,16 +146,13 @@ export function overrideMembers<TReal extends object, TOverrides extends object>
   real: TReal,
   overrides: TOverrides,
 ): TReal & TOverrides {
-  // Subclassing a class inherits the constructor plus every non-enumerable
-  // static, which a spread would drop; `Object.assign` then shadows only the
-  // listed statics.
+  // Subclassing inherits the constructor and non-enumerable statics a spread drops,
+  // then Object.assign shadows only the listed statics.
   if (typeof real === "function") {
     class Overridden extends (real as unknown as new (...args: never[]) => object) {}
     return Object.assign(Overridden, overrides) as unknown as TReal & TOverrides;
   }
 
-  // For a class instance, plain object, or namespace, putting the real value on
-  // the prototype chain keeps unlisted members resolvable; the overrides land as
-  // own properties that shadow it.
+  // Inherit from real via Object.create so unlisted members stay resolvable while overrides shadow them.
   return Object.assign(Object.create(real) as TReal, overrides) as TReal & TOverrides;
 }

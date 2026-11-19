@@ -11,7 +11,6 @@ export async function loadSecrets(environment: AppEnvironment): Promise<void> {
   log.section("Loading Application Secrets...");
   const secrets = await getAppSecrets();
 
-  // Assign secrets to process.env for backwards compatibility with existing code
   process.env.DISCORD_TOKEN = secrets.DISCORD_TOKEN;
   process.env.POSTGRES_HOST = secrets.POSTGRES_HOST;
   process.env.POSTGRES_PORT = secrets.POSTGRES_PORT;
@@ -66,8 +65,8 @@ export async function loadSecrets(environment: AppEnvironment): Promise<void> {
   // An empty list must survive loading because it admits no one, while dropping it would read as unset and admit everyone.
   if (secrets.VERTEX_ALLOWED_OWNERS !== undefined) process.env.VERTEX_ALLOWED_OWNERS = secrets.VERTEX_ALLOWED_OWNERS;
 
-  // Must be set before any module reads MEMORY_PROTECTION(). Deployment env wins: a stale bundle
-  // value could otherwise restore a limit above physical memory, leaving the guard unreachable.
+  // Set before MEMORY_PROTECTION() reads it, letting deployment env win so a stale bundle cannot exceed physical
+  // memory.
   if (secrets.CONTAINER_MEMORY_LIMIT_MB && !process.env.CONTAINER_MEMORY_LIMIT_MB)
     process.env.CONTAINER_MEMORY_LIMIT_MB = secrets.CONTAINER_MEMORY_LIMIT_MB;
 
@@ -87,7 +86,7 @@ export async function loadSecrets(environment: AppEnvironment): Promise<void> {
           : "AWS Secrets Manager";
   log.success(`Secrets loaded successfully from ${secretsSource}`);
 
-  // Initialize encryption key manager after process.env is fully populated
+  // Initialize after process.env is populated because keyManager reads CRYPTO_SECRET_* from env.
   keyManager.initialize();
 
   const rotationStatus = keyManager.getRotationStatus();

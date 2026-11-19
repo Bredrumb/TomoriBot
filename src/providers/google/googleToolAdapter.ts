@@ -72,7 +72,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
 
   convertResult(result: ToolResult): Record<string, unknown> {
     try {
-      // Google expects a Part object with text content
       if (result.success) {
         let resultText = result.message || "Tool executed successfully";
 
@@ -123,7 +122,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
     try {
       const functionDeclarations = tools.map((tool) => this.convertTool(tool));
 
-      // Google expects tools in this specific format
       return [
         {
           functionDeclarations: functionDeclarations,
@@ -154,9 +152,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
     try {
       const allFunctionDeclarations: Record<string, unknown>[] = [];
 
-      // Brave-key dance removed: the unified `web_search` tool is gated centrally
-      // in `availability.ts` via `requiresFeatureFlag = "web_search"`, and the
-      // engine chain inside the tool decides Brave-vs-SearXNG-vs-DuckDuckGo at call time.
       if (builtInTools.length > 0) {
         const builtInDeclarations = builtInTools.map((tool) => this.convertTool(tool));
         allFunctionDeclarations.push(...builtInDeclarations);

@@ -165,9 +165,8 @@ function makeMockInteraction({
     values,
     fields: {
       getTextInputValue: (fieldId: string) => {
-        // Discord omits an empty optional text input from a modal submission, and discord.js then
-        // throws on the lookup, which is why every optional read in the route is guarded. A mock
-        // that returned "" instead would make those guards look unnecessary and hide a real crash.
+        // Throws on missing keys to match discord.js when Discord omits empty optional inputs, avoiding hidden
+        // route-guard gaps.
         if (!(fieldId in fields)) {
           throw new Error(`Modal submit field not found: ${fieldId}`);
         }
@@ -478,7 +477,7 @@ describe("setupWizardRoutes", () => {
     const dmInteraction = makeMockInteraction({
       customId,
       actorDiscId: "actor-1",
-      guildId: null, // context dm
+      guildId: null,
     });
 
     await dispatchGlobalInteraction({} as Client, dmInteraction);
@@ -538,7 +537,6 @@ describe("setupWizardRoutes", () => {
     const payloadStr = JSON.stringify(interaction.updateCalls[0]);
     expect(payloadStr).toContain(localizer("en-US", "commands.setup.wizard.cancelled_title"));
 
-    // Verify draft was consumed
     const check = readSetupDraft(nonce, "actor-1", "guild-1", "guild");
     expect(check.status).toBe("missing");
 
@@ -602,9 +600,7 @@ describe("setupWizardRoutes", () => {
     expect(typeof notice.content).toBe("string");
     expect(notice.content).toContain("/personal providers");
 
-    // 18 is Label, and the group has to sit inside one: the type-18 walk in interactionCore is the
-    // only path that records a modal value, so a root-level group renders, submits, and reads back as
-    // no selection at all, which is exactly how this path was unreachable before.
+    // Type 18 is Label, which interactionCore requires to record modal values instead of dropping root-level groups.
     expect(wrapper.type).toBe(18);
     expect(typeof wrapper.label).toBe("string");
 
@@ -941,7 +937,6 @@ describe("setupWizardRoutes", () => {
 
       expect(interaction.editReplyCalls.length).toBe(1);
 
-      // Confirm plaintext key appears in no reply or edit payloads
       const payloadString = JSON.stringify(interaction.editReplyCalls[0]);
       expect(payloadString).not.toContain(fakeKey);
       expect(payloadString).not.toContain(localizer("en-US", "commands.setup.wizard.provider_validation_failed"));
@@ -1916,8 +1911,7 @@ describe("setupWizardRoutes", () => {
     expect(rootTypes[0]).toBe(10);
     expect(rootTypes).toContain(18);
 
-    // 18 is the Label wrapper. The walk in interactionCore only records a checkbox submission for
-    // a group nested inside one, so a root-level group would render and read back as no selection.
+    // Type 18 is Label, which interactionCore requires so checkbox submissions are recorded rather than dropped.
     const wrapper = modal.components.find((component) => component.type === 18);
     const checkboxGroup = wrapper?.component;
     expect(checkboxGroup?.type).toBe(22);
@@ -2013,9 +2007,8 @@ describe("setupWizardRoutes", () => {
 
       await dispatchGlobalInteraction({} as Client, interaction);
 
-      // A verdict of "accepted" for a draft that no longer exists is the one outcome this path must
-      // not invent. The modal has already closed by then, so a silent return would leave the actor
-      // unable to tell whether their acceptance registered.
+      // A closed modal cannot leave the actor guessing, so a missing draft must render session-ended rather
+      // than silent success.
       expect(updateSpy).toHaveBeenCalledTimes(1);
       expect(interaction.editReplyCalls.length).toBe(1);
       const repainted = JSON.stringify(interaction.editReplyCalls[0]);
@@ -2095,9 +2088,7 @@ describe("setupWizardRoutes", () => {
     const nonce = "nonce-policies-forged";
     process.env.RUN_ENV = "production";
 
-    // Nothing can flip a live draft's captured requirement: startSetupWizard stores it from the same
-    // predicate the route re-reads, so the reachable form of drift is the environment moving under a
-    // draft, which is what this pins. The submit must not acknowledge, repaint, or write.
+    // Pins environment drift under a live draft, requiring the submit to refuse without repaints or writes.
     const draft = makeDraft({ requiresPolicies: false });
     storeSetupDraft(nonce, draft);
 
@@ -2161,9 +2152,8 @@ describe("setupWizardRoutes", () => {
 
         await dispatchGlobalInteraction({} as Client, interaction);
 
-        // An unacknowledged component interaction renders as a failed interaction, so both routes
-        // have to answer. A button answers with its own ephemeral reply; a modal submit has already
-        // deferred by then and answers through the repaint channel.
+        // Unacknowledged interactions fail in Discord, so buttons reply ephemerally while pre-deferred modals
+        // use editReply.
         const answered = open.channel === "reply" ? interaction.replyCalls[0] : interaction.editReplyCalls[0];
         expect(answered).toBeDefined();
         expect(JSON.stringify(answered)).toContain(localizer("en-US", "commands.setup.wizard.policies_denied"));
@@ -2212,8 +2202,7 @@ describe("setupWizardRoutes", () => {
       const rows = openedModal?.components ?? [];
       expect(rows.length).toBe(5);
       for (const row of rows) {
-        // 18 is the Label wrapper, which is what the type-18 walk in interactionCore reads. A row
-        // left at the modal root renders and then submits as no value at all.
+        // Type 18 is the Label wrapper interactionCore walks, so root-level rows render but submit no value.
         expect(row.type).toBe(18);
         expect(row.component).toBeDefined();
       }
@@ -2347,8 +2336,8 @@ describe("setupWizardRoutes", () => {
     });
 
     try {
-      // Discord omits an empty optional text input from the submission, so a real submit of a blank
-      // timezone arrives with no field at all. This is the only case that reaches the guarded read.
+      // Discord omits empty optional inputs from submissions, so an empty `fields` map is what exercises the
+      // guarded read.
       const customId = buildSetupSettingsSubmitRouteId({ locale: "en-US", nonce });
       const interaction = makeMockInteraction({ customId, kind: "modal", fields: {} });
 
@@ -2588,9 +2577,7 @@ describe("setupWizardRoutes", () => {
     ] as never);
 
     try {
-      // Read back through the spied method first: if some earlier case left its own spy installed,
-      // the fixture below would be silently ignored and this test would pass against the real
-      // catalog instead of the one it declared.
+      // Verifies the spy took effect before running so a leaked earlier spy cannot silently supply the wrong catalog.
       const personaRows = await configRepository.loadPresetRowsByLocale("en-US", { nsfw: false });
       expect(personaRows?.map((row) => row.persona_preset_id)).toEqual([3585]);
 
@@ -2756,8 +2743,7 @@ describe("setupWizardRoutes", () => {
         },
       });
 
-    // 1770 resolves in the fixture, 9999 does not, so the two renders differ only in whether the
-    // stored persona still exists. The whole ready state has to follow that, not just the step row.
+    // 1770 resolves while 9999 drifts, so the whole wizard ready state must follow whether the stored persona exists.
     for (const [label, presetId, settingsResolve] of [
       ["resolved", 1770, true],
       ["drifted", 9999, false],
@@ -3049,11 +3035,7 @@ describe("setupWizardFinish", () => {
 
       await dispatchGlobalInteraction({} as Client, interaction);
 
-      // Discord drops an unacknowledged component interaction at three seconds, and the commit path
-      // is a claim, several catalog reads, a transaction, a cache invalidation, an expression sync,
-      // and a REST avatar update before the receipt is edited in. Sampling the flag from inside the
-      // write is the only way to see the ordering, because the ordering is invisible in what is
-      // called: every delivery method here is editReply either way.
+      // Sampling inside the write proves deferUpdate ran before slow commit work, because every outcome uses editReply.
       expect<boolean | null>(acknowledgedAtWrite).toBe(true);
       expect(interaction.editReplyCalls.length).toBe(1);
     } finally {
@@ -3079,10 +3061,8 @@ describe("setupWizardFinish", () => {
       );
       claimSetupDraft(COMMIT_NONCE, "actor-1", "guild-1", "guild");
 
-      // The same authorized actor saves a different provider mode while the commit that claimed the
-      // draft is still running. Without a freeze this mutation reaches
-      // wipeDisplacedProviderAccessSecrets, which zero-fills the buffer the running commit is about
-      // to write, and the setup succeeds with a key that cannot authenticate.
+      // Concurrent mode change mid-commit: without a freeze it reaches wipeDisplacedProviderAccessSecrets
+      // and zeroes the live key.
       const customId = buildSetupProviderModeRouteId({ locale: "en-US", nonce: COMMIT_NONCE });
       const interaction = makeMockInteraction({ customId, kind: "string", values: ["custom-endpoint"] });
 
@@ -3101,9 +3081,8 @@ describe("setupWizardFinish", () => {
   });
 
   it("freezes the draft at the store, so a save cannot zero the credential being committed", async () => {
-    // The route-level refusal above is the outer half of this guard. This is the inner half: the
-    // store itself refuses a mutation on a claimed draft, because a caller reaching it by any other
-    // path would otherwise wipe the displaced buffer and hand the commit a zeroed key.
+    // Inner store-level guard: direct callers must also see claimed drafts frozen so the live key buffer is
+    // never wiped.
     const liveBuffer = Buffer.from("live-credential");
     storeSetupDraft(
       COMMIT_NONCE,
@@ -3159,9 +3138,8 @@ describe("setupWizardFinish", () => {
 
       const customId = buildSetupFinishRouteId({ locale: "en-US", nonce: COMMIT_NONCE });
       const interaction = makeMockInteraction({ customId, guild: COMMIT_GUILD });
-      // The transaction has landed by the time the commit path re-reads the workspace to report on
-      // it, so throwing on that read is the window that used to leave the draft claimed with its
-      // credential still in memory. The first read is the pre-commit health check.
+      // First loadState is the pre-commit health check; failing the second post-commit read tests cleanup
+      // after a landed write.
       let loadStateCalls = 0;
       stubs.loadStateSpy.mockImplementation((async () => {
         loadStateCalls += 1;

@@ -80,7 +80,8 @@ async function postWithRateLimitWait(
   }
 }
 
-// A per-send client view preserves discord.js serialization and message reconstruction without mutating its readonly client.
+// A per-send client view preserves discord.js serialization and message reconstruction without mutating its readonly
+// client.
 async function withPostRest<T extends { client: Client }, R>(
   target: T,
   beforePost: () => void,

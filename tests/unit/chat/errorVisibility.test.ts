@@ -1,9 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { BASE_TRIGGER_WORDS, isBaseTriggerWordMatch } from "@/utils/chat/errorVisibility";
 
-// Read from the module rather than hardcoding "tomo": BASE_TRIGGER_WORDS is resolved from env at
-// import time, so a self-hoster running the suite would otherwise get a red test for a config
-// choice. Japanese base words take the substring path instead, so they cannot exercise boundaries.
+// Derive a Latin base word from BASE_TRIGGER_WORDS because it reads env at import time and Japanese words bypass
+// boundary matching.
 const latinBaseWord = BASE_TRIGGER_WORDS.find((word) => /^[a-z]+$/i.test(word));
 
 describe("isBaseTriggerWordMatch", () => {

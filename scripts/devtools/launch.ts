@@ -9,19 +9,6 @@ import { DEFAULT_PYTHON_HEALTH_TIMEOUT_MS, resolvePositiveTimeoutMs } from "../l
 
 config();
 
-// scripts/devtools/launch.ts
-//
-//   bun run launch [--searxng] [--crawl4ai] [--slopguard] [--qwen3tts] [--chatterbox] [--irodoritts] [--voxcpm2] [--fishs2] [--cosyvoice3] [--moss]
-//
-//   Starts requested local servers, waits for them to be ready, then
-//   launches the bot in watch mode (equivalent to `bun run dev`).
-//
-//   Docker-backed servers are started via docker inspect/start/run and polled until
-//   their healthcheck reports "healthy". Python servers are spawned directly
-//   from their pre-built venv and polled through their JSON health endpoint.
-//
-//   Press Ctrl+C to stop everything.
-
 const ROOT = process.cwd();
 
 const argv = process.argv.slice(2);
@@ -282,7 +269,6 @@ async function waitForHealthy(def: DockerLocalServer, timeoutMs: number): Promis
     if (health === "healthy") return;
     if (health === "unhealthy") throw new Error(`Container "${containerName}" reported unhealthy.`);
 
-    // No Docker healthcheck on this container, so fall back to HTTP probe.
     if (health === "" && httpHealthUrl) {
       try {
         const res = await fetch(httpHealthUrl, { signal: AbortSignal.timeout(3_000) });
@@ -394,7 +380,7 @@ function terminateProcess(proc: ReturnType<typeof Bun.spawn>): void {
       proc.kill();
     }
   } catch {
-    /* already exited */
+    // already exited
   }
 }
 
@@ -488,7 +474,6 @@ async function main(): Promise<void> {
   });
   childProcesses.push(bot);
 
-  // Graceful shutdown because kill all managed processes on Ctrl+C.
   let isShuttingDown = false;
   const shutdown = () => {
     if (isShuttingDown) return;
@@ -501,7 +486,6 @@ async function main(): Promise<void> {
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
 
-  // Wait for the bot to exit (its exit code becomes this process's exit code).
   const exitCode = await bot.exited;
   for (const p of childProcesses) {
     if (p !== bot) {

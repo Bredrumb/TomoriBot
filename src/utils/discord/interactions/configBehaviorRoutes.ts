@@ -264,12 +264,8 @@ async function repaintBehavior(
           : "general",
     selectedPersonaId: null,
     receipt: receiptValue,
-    // Only removal-range window paging positions the page. Every ordinary repaint lands on the
-    // first schedule page, because the ordinary page has no paging controls: carrying a batch
-    // start out of the removal state would strand its summary on a range it cannot leave.
+    // Only removal-range paging sets the page because ordinary repaints lack paging controls and would strand a slice.
     randomTriggerPageStart: route.action === "behavior-random-remove-page" ? route.start : undefined,
-    // Only the removal-range state renders the range selector and its window paging. Remove-open
-    // repaints only on overflow entry, and remove-page exists only inside that state.
     randomTriggerRemoveMode:
       route.action === "behavior-random-remove-page" || route.action === "behavior-random-remove-open",
     dependencies,
@@ -278,10 +274,8 @@ async function repaintBehavior(
 
 function getText(modalInteraction: ModalSubmitInteraction, field: string, nonce: string): string {
   const id = buildConfigModalFieldId(field, nonce);
-  // A presence check is not enough: discord.js records every submitted component under its custom
-  // id regardless of type, so a radio, select, or checkbox field read as text passes `has` and
-  // then throws from the type check, taking the whole route down. Absent and wrong-typed both
-  // read as empty, which lands in the caller's invalid-input receipt.
+  // Check the component type instead of `has` because discord.js throws on wrong-typed modal fields;
+  // absent and non-text fields read as empty so they surface as invalid-input receipts.
   const component = modalInteraction.fields.fields.get(id);
   return component?.type === ComponentType.TextInput ? modalInteraction.fields.getTextInputValue(id) : "";
 }
@@ -299,8 +293,6 @@ function parseRandomSettings(raw: string): {
   silenceThresholdHours: number | null;
   failureThreshold: number | null;
 } | null {
-  // A trailing optional position left out of a short entry is an empty value, never undefined, so
-  // blank and partial timing input lands in the invalid receipt instead of throwing.
   const parts = raw.split(",").map((value) => value.trim());
   const timerRaw = parts[0] ?? "";
   const chanceRaw = parts[1] ?? "";
@@ -328,8 +320,7 @@ function triggerRows(triggers: readonly RandomTriggerRow[]): Array<RandomTrigger
   );
 }
 
-// Modal-open routes must run before deferring because a modal is its own Discord acknowledgement; submit routes
-// re-resolve state rather than trusting defaults.
+// Modal-open routes must run before deferring because a modal is its own Discord acknowledgement.
 export async function handleConfigBehaviorModalOpen(
   interaction: GlobalRoutableInteraction,
   route: ConfigPanelRoute,
@@ -445,9 +436,7 @@ export async function handleConfigBehaviorModalOpen(
       return true;
     }
     if (route.action === "behavior-random-remove-open" && rows.length > RANDOM_TRIGGER_PAGE_SIZE) {
-      // Overflow no longer refuses inline: Remove repaints the Trigger page into an explicit
-      // removal-range state whose selector and pagination only exist there. The button must be
-      // acknowledged first because this branch sits in the modal-open path, which never defers.
+      // Acknowledge before repainting because this overflow branch sits in the modal-open path, which never defers.
       await interaction.deferUpdate();
       await repaintBehavior(interaction, scope, route, dependencies);
       return true;
@@ -876,8 +865,6 @@ async function runTriggerWrite(
   }
   if (route.action === "behavior-cooldown-submit") {
     const submitted = modal(interaction);
-    // Same split as the humanizer modal: the cooldown type is a radio group, and only the length
-    // is a text input.
     const cooldownTypeRaw = dependencies.takeSelectValue(
       submitted.id,
       buildConfigModalFieldId(BEHAVIOR_COOLDOWN_TYPE_FIELD, route.nonce),
@@ -1551,8 +1538,6 @@ async function runD10Write(
     };
   }
   if (route.action === "behavior-memory-tagging-submit") {
-    // The legacy command's blacklist branch only rejected non-managers. The D10 manager-only
-    // policy rejects those actors before this operation, while retaining the manager bypass.
     const memoryValue = dependencies.takeSelectValue(
       submitted.id,
       buildConfigModalFieldId(BEHAVIOR_MEMORY_TAGGING_FIELD, route.nonce),

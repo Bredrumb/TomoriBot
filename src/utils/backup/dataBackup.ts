@@ -415,8 +415,7 @@ export async function runDataBackup(options: DataBackupOptions = {}): Promise<Da
   let requiredKeyVersions: number[];
   try {
     writeFileSync(dbDumpPath, "", { mode: 0o600 });
-    // --no-owner/--no-privileges keep dumps restorable across role names (e.g. Cloud SQL
-    // `postgres` → Azure `tomoriadmin`); objects are owned by whichever role runs the restore.
+    // --no-owner/--no-privileges keep dumps restorable across role names so the restoring role owns objects.
     await withPostgresPassfile(dbUrl, ({ connectionUrl, env }) =>
       runExternalCommand(
         "pg_dump",

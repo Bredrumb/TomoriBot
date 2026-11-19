@@ -4,10 +4,6 @@ import type { RawDiscordComponent } from "@/types/discord/rawApiTypes";
 import { getDiscordTextLength, truncateDiscordText } from "@/utils/text/discordTextLimits";
 import type { RawModalPayload } from "./configModals";
 
-// Discord Component Limits
-// Reference: https://discord.com/developers/docs/interactions/message-components
-// Components V2 guide: docs/en/architecture/integrations/discord/message-components-v2.md
-
 // Discord's 40-component cap applies to the whole tree because Discord counts top-level layouts, nested children, and
 // Section accessories together.
 export const DISCORD_MESSAGE_TOTAL_COMPONENTS_MAX = 40;

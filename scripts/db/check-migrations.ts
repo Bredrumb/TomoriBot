@@ -32,7 +32,6 @@ async function checkMigrationPairing(): Promise<void> {
 
   let ok = true;
 
-  // Every up-migration must have a paired .down.sql
   for (const stem of [...upMigrations].sort()) {
     if (!downMigrations.has(stem)) {
       console.error(`[ERROR] Missing rollback file: ${stem}.down.sql`);
@@ -46,14 +45,9 @@ async function checkMigrationPairing(): Promise<void> {
     }
   }
 
-  // Uniqueness: no two up-migrations may share an NNN prefix.
-  //    A duplicate number means the runner has to tie-break two migrations
-  //    that were each authored as "the next one": an ordering hazard and a
-  //    review-clarity hazard. Group stems by their 3-digit prefix and fail on
-  //    any group with more than one member.
   const byNumber = new Map<string, string[]>();
   for (const stem of upMigrations) {
-    const num = stem.slice(0, 3); // "043" from "043_description"
+    const num = stem.slice(0, 3);
     const group = byNumber.get(num) ?? [];
     group.push(stem);
     byNumber.set(num, group);

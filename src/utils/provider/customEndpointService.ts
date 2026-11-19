@@ -68,8 +68,7 @@ export interface CustomEndpointRegistrationInput {
   seesImages?: boolean;
   seesVideos?: boolean;
   supportsStructOutput?: boolean;
-  // Strict chat-completion compatibility toggles (text capability). Synced to the synthetic llms
-  // row so the runtime resolves them uniformly with built-in providers.
+  // Text compatibility toggles synced to the synthetic llms row so runtime resolves them like built-in providers.
   strictRoleAlternation?: boolean;
   supportsPrefixCompletion?: boolean;
   supportsAssistantPrefill?: boolean;
@@ -77,8 +76,7 @@ export interface CustomEndpointRegistrationInput {
   // the panel reads the endpoint row, so both must carry the same value.
   verbatimToolCalling?: boolean;
   extraConfig?: Record<string, unknown>;
-  // When set, edit that exact endpoint row in place (update its model + row by id) instead of
-  // registering a new model. Add flows omit it; the edit command supplies the selected row's id.
+  // Present only when editing an existing endpoint row in place rather than adding a new registration.
   editingEndpointId?: number;
 }
 
@@ -580,14 +578,12 @@ export async function registerCustomEndpoint(
     return null;
   }
 
-  // New registrations become active immediately. Edits preserve the existing
-  // active slot unless the provider did not have one yet.
+  // New registrations activate immediately, while edits keep the existing active slot when one is already set.
   const currentActive = existingConfig ? getCapabilityModelId(existingConfig, input.capability) : null;
   const activeId = shouldActivateNewRegistration ? modelId : (currentActive ?? modelId);
 
   const savedConfig = await buildSavedConfigForCustomEndpoint(input.scope, provider, existingConfig, input, modelId);
-  // Registering an image-capable text model never claims the vision slot: that write also moved the
-  // live text model, so one submit silently changed two models. Vision is chosen via /model vision.
+  // Never assign vision_llm_id here because vision is chosen separately via /model vision without changing text.
   const nextSavedConfig = {
     ...savedConfig,
     llm_id: input.capability === "text" ? activeId : savedConfig.llm_id,
@@ -768,15 +764,12 @@ export async function validateCustomEndpointReachability(params: {
       return response.ok ? { ok: true } : { ok: false, reason: `HTTP ${response.status} ${response.statusText}` };
     }
 
-    // openai-compatible-transcription servers expose /v1/models (OpenAI-compatible) or /models.
-    // The stored URL may already carry /v1, so probe versioned and unversioned roots instead of
-    // blindly appending /v1 (which would double it into /v1/v1/models).
+    // Probe normalized /v1/models then /models because stored transcription URLs may already include /v1.
     if (params.apiStyle === "openai-compatible-transcription") {
       const versionedRoot = /\/v1$/i.test(baseUrl) ? baseUrl : `${baseUrl}/v1`;
       const unversionedRoot = /\/v1$/i.test(baseUrl) ? baseUrl.replace(/\/v1$/i, "") : baseUrl;
       const response = await fetchUserRemoteUrl(`${versionedRoot}/models`, { headers }, fetchOptions);
       if (response.ok) return { ok: true };
-      // Fall back to the shorter /models path some servers expose.
       const fallback = await fetchUserRemoteUrl(`${unversionedRoot}/models`, { headers }, fetchOptions);
       return fallback.ok ? { ok: true } : { ok: false, reason: `HTTP ${response.status} ${response.statusText}` };
     }
@@ -795,8 +788,7 @@ export async function validateCustomEndpointReachability(params: {
         { headers, signal: AbortSignal.timeout(10_000) },
         fetchOptions,
       );
-      // Discovery is optional on compatible gateways. A route miss proves reachability only;
-      // protocol and model support remain the operator's declaration until execution.
+      // Treat 404/405 as reachable because discovery is optional on gateways and execution checks models later.
       const ok = response.ok || response.status === 404 || response.status === 405;
       await response.body?.cancel();
       log.info(
@@ -827,8 +819,7 @@ export async function validateCustomEndpointReachability(params: {
   }
 }
 
-// These protocols append their operation to a versioned base. Other styles use an origin
-// route or a preset URL, so adding /v1 would change their target.
+// Only these versioned-base protocols append /v1 because other styles target origin or preset paths.
 const VERSIONED_API_STYLES = new Set<CustomEndpointApiStyle>([
   "openai-compatible",
   "openai-compatible-transcription",

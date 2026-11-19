@@ -43,7 +43,6 @@ export async function initDatabase(environment: AppEnvironment): Promise<void> {
     }
   } catch (error) {
     log.warn("Error during startup cooldowns cleanup:", error);
-    // Non-critical, so continue startup
   }
 
   if (!managesSchema) {

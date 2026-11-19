@@ -162,7 +162,8 @@ export interface WebSearchParams extends BaseSearchParams {
   // Brave Search API treats pagination `offset` as zero-based and caps it at 9 because `number` hides both bounds.
   offset?: number;
   safesearch?: "off" | "moderate" | "strict";
-  freshness?: "pd" | "pw" | "pm" | "py" | string; // Also supports date ranges
+  // String values also accept date ranges (beyond pd/pw/pm/py).
+  freshness?: "pd" | "pw" | "pm" | "py" | string;
   text_decorations?: boolean;
   // Brave Web Search expects a comma-delimited string here because the API does not accept an array.
   result_filter?: string;
@@ -185,7 +186,8 @@ export interface VideoSearchParams extends BaseSearchParams {
   // Brave Video Search expects a zero-based page offset capped at 9, so passing 10 or item counts breaks pagination.
   offset?: number;
   safesearch?: "off" | "moderate" | "strict";
-  freshness?: "pd" | "pw" | "pm" | "py" | string; // Also supports date ranges
+  // String values also accept date ranges (beyond pd/pw/pm/py).
+  freshness?: "pd" | "pw" | "pm" | "py" | string;
 }
 
 export interface NewsSearchParams extends BaseSearchParams {
@@ -195,7 +197,8 @@ export interface NewsSearchParams extends BaseSearchParams {
   // Brave News Search expects a zero-based page offset capped at 9, so passing 10 or item counts breaks pagination.
   offset?: number;
   safesearch?: "off" | "moderate" | "strict";
-  freshness?: "pd" | "pw" | "pm" | "py" | string; // Also supports date ranges
+  // String values also accept date ranges (beyond pd/pw/pm/py).
+  freshness?: "pd" | "pw" | "pm" | "py" | string;
   extra_snippets?: boolean;
   goggles?: string[];
 }

@@ -112,8 +112,8 @@ beforeAll(async () => {
 
 describe("buildVoiceMessageModalComponents", () => {
   it("builds exactly five components in the worst case", () => {
-    // Chatterbox `auto` with an upload, a typed design prompt, and a persona holding both a
-    // sample and a design prompt. Nothing may be added to this list without cutting another.
+    // Discord caps modals at five rows, so nothing can be added to this worst-case input without cutting another
+    // component.
     const components = buildVoiceMessageModalComponents(
       buildInput({
         endpoint: CHATTERBOX_AUTO,

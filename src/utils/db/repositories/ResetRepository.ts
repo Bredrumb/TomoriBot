@@ -58,10 +58,8 @@ export const SERVER_SINGLETON_RESET_TABLES: readonly SingletonResetClassificatio
   {
     table: "server_model_configs",
     reset: ["llm_temperature", "thinking_level", "llm_disabled_params", "fallback_llm_ids", "hide_respond_embed"],
-    // Clearing any of these takes the bot offline or destroys something the database cannot
-    // restore: `api_key` is the only copy of a credential whose plaintext exists nowhere else,
-    // and the model and endpoint ids are the active identity the runtime reads. The other-model
-    // capability cache is bound to `other_model_codename`, so it survives with it.
+    // Active model/endpoint ids, plaintext-irrecoverable api_key, and the capability cache bound to other_model_codename
+    // must survive reset so the bot stays configured.
     preserved: [
       "llm_id",
       "embedding_model_id",
@@ -341,8 +339,7 @@ class ResetRepository {
           updated_at = NOW()
       `;
 
-      // Model identities and credentials are absent from this SET on purpose. See the preserve set
-      // on SERVER_SINGLETON_RESET_TABLES for why each one survives.
+      // Active model identities and credentials stay omitted here (see SERVER_SINGLETON_RESET_TABLES.preserved).
       await tx`
         INSERT INTO server_model_configs (server_id) VALUES (${serverId})
         ON CONFLICT (server_id) DO UPDATE SET
@@ -500,8 +497,7 @@ class ResetRepository {
           updated_at = NOW()
       `;
 
-      // Quota settings only. The per-user and server-wide usage tables record consumption that
-      // already happened, so they are not part of a configuration reset.
+      // Reset quota settings only because usage tables record historical consumption.
       await tx`
         INSERT INTO image_quota_configs (server_id) VALUES (${serverId})
         ON CONFLICT (server_id) DO UPDATE SET
@@ -550,8 +546,7 @@ class ResetRepository {
       `;
 
       await tx`DELETE FROM server_auto_trigger_persona_overrides WHERE server_id = ${serverId}`;
-      // Deletes the category definitions only. Persisted short_term_memories carry their own
-      // categories payload and render from it, so STM data survives a configuration reset.
+      // Delete category definitions only because persisted short_term_memories carry their own categories payload.
       await tx`DELETE FROM stm_categories WHERE server_id = ${serverId}`;
       await tx`DELETE FROM random_triggers WHERE server_id = ${serverId}`;
       await tx`DELETE FROM channel_llm_overrides WHERE server_id = ${serverId}`;

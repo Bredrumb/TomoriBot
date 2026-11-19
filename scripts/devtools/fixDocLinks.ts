@@ -10,8 +10,6 @@ for await (const rel of glob.scan(docsDir)) {
   const filePath = join(docsDir, rel);
   const original = await Bun.file(filePath).text();
 
-  // Match markdown links: [text](./path/to/file.md) or [text](../path.mdx)
-  // Only strip .md/.mdx when the link is clearly a relative path (starts with ./ or ../)
   const updated = original.replace(/(\[.*?\])\((\.\.?\/[^)]*?)\.mdx?\)/g, "$1($2)");
 
   if (updated === original) {

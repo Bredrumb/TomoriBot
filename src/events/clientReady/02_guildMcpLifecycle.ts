@@ -20,7 +20,6 @@ export default async (): Promise<void> => {
         if (isDraining() || !hasShardLeaseOwnership()) return;
         if (allEnabled.length > 0) {
           log.info(`[GuildMCP] Dev mode: eager-connecting ${allEnabled.length} enabled guild MCP server(s)...`);
-          // Non-blocking, so failures are logged but don't prevent startup
           guildMcpManager.eagerConnectAll(allEnabled).catch((err) => {
             log.warn("[GuildMCP] Eager connect encountered errors (non-fatal)", err);
           });
@@ -41,7 +40,6 @@ export default async (): Promise<void> => {
 
     await log.error("Error during guild MCP startup:", error, context);
 
-    // Guild MCP is optional; built-in tools work without it.
     log.info("Bot will continue startup despite guild MCP startup failure");
   }
 };

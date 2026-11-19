@@ -71,8 +71,7 @@ async function getDefaultNovelAIModel(): Promise<string> {
 }
 
 export interface NovelaiProviderConfig extends ProviderConfig {
-  // NovelAI uses flat parameters in the service layer
-  // No provider-specific config needed here
+  // NovelAI passes flat parameters to the service layer without provider-specific config fields.
 }
 
 export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {

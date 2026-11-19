@@ -297,7 +297,6 @@ describe("formatVoiceSourceOptionDescription", () => {
 
     expect(formatted.length).toBeLessThanOrEqual(VOICE_SOURCE_OPTION_TEXT_LIMIT);
     expect(formatted.startsWith("Design | ")).toBe(true);
-    // The budget is the limit minus the prefix, and the tail is what gets dropped.
     expect(formatted.startsWith(`Design | ${longPrompt.slice(0, 60)}`)).toBe(true);
     expect(formatted.endsWith("...")).toBe(true);
   });

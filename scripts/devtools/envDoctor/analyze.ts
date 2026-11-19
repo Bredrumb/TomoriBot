@@ -195,9 +195,8 @@ export function analyze(input: EnvDoctorInput): EnvDoctorReport {
     }
     universe.add(name);
   };
-  // Workflow and Terraform entries only enrich names found elsewhere: a workflow step variable is
-  // not operator configuration, and a Terraform env entry cannot be attributed to the bot's
-  // container rather than a sibling container, so neither may create a dead candidate on its own.
+  // Workflow and Terraform entries only enrich known names because step vars and sibling-container env entries are not
+  // bot-owned operator config.
   for (const declaration of scan.declarations) {
     if (declaration.layer !== "workflow-env" && declaration.layer !== "terraform-env") admit(declaration.name);
   }

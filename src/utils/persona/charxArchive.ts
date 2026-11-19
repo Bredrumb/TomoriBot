@@ -86,9 +86,7 @@ export async function readCharxCard(charxBuffer: Buffer, limits: CharxReadLimits
     return { ok: false, reason: "invalid_card" };
   }
 
-  // Only a card that names a different format is refused here. An absent `spec`
-  // is left to the converter, which recognizes root-level V2 cards without one;
-  // refusing here would make the container stricter than the format it carries.
+  // Allow omitted spec for root-level V2 cards so the archive stays as permissive as the converter.
   const envelope = charxEnvelopeSchema.safeParse(cardJson);
   if (!envelope.success) {
     return { ok: false, reason: "invalid_card" };
@@ -98,10 +96,7 @@ export async function readCharxCard(charxBuffer: Buffer, limits: CharxReadLimits
     return { ok: false, reason: "not_character_card" };
   }
 
-  // Backstop measuring the decompressed bytes, not a re-serialization of them:
-  // whitespace and duplicate keys survive the former and vanish from the latter.
-  // jszip already refuses an entry that delivers more than it declared, so this
-  // covers a declared size that was simply absent.
+  // Measure raw decompressed bytes because JSON re-serialization drops whitespace and jszip ignores missing sizes.
   if (Buffer.byteLength(cardText, "utf8") > limits.maxCardBytes) {
     return { ok: false, reason: "card_too_large" };
   }
@@ -125,9 +120,7 @@ function inspectDeclaredAssets(
     return { ok: true, ignoredAssetCount: 0 };
   }
 
-  // Checked against the raw list length, before any per-entry work: counting only
-  // successfully parsed entries would let 400k junk values block the event loop
-  // under a cap of 500, since each one would `continue` past the counter.
+  // Cap raw array length before iterating because skipping invalid entries would let huge junk lists stall the loop.
   if (rawAssets.length > limits.maxAssets) {
     return { ok: false };
   }

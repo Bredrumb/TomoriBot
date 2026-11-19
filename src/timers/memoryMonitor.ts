@@ -17,7 +17,7 @@ class MemoryMonitor {
   private readonly client?: Client;
 
   constructor(pollIntervalMs = 30000, client?: Client) {
-    this.POLL_INTERVAL_MS = pollIntervalMs; // Default 30 seconds
+    this.POLL_INTERVAL_MS = pollIntervalMs;
     this.client = client;
   }
 
@@ -81,7 +81,6 @@ class MemoryMonitor {
       const memCheck = memoryGuard.checkMemory();
       const currentStatus = memCheck.status;
 
-      // Only log if status changed (avoid spam)
       if (currentStatus !== this.lastStatus) {
         const summary = formatMemoryStatus(memCheck);
 

@@ -56,7 +56,6 @@ export async function generatePresetFromPromptDeepseek(
   const toolContext = options.toolContext;
   const toolsEnabled = tools.length > 0 && toolContext;
 
-  // Build messages: schema-steered system prompt + user character prompt
   const messages: PresetMessage[] = [
     { role: "system", content: buildDeepseekPresetSystemPrompt() },
     { role: "user", content: buildPresetPrompt(params) },

@@ -115,11 +115,8 @@ export function buildQueuedReplyDirective(
     directive += ` saying: "${normalizedPreview}"`;
   }
 
-  // The persona-sprite prompt teaches `Name (sprite):` as the opening line format. Anchoring
-  // the reply to a bare `Name:` here contradicts it on precisely the turns this directive
-  // fires on (queued ones), and models resolve the conflict by dropping the sprite tag :
-  // which is why sprites silently stopped working mid-chain. Offer both forms whenever the
-  // sprite prompt is present, so neither instruction has to be violated to satisfy the other.
+  // Offer both `Name:` and `Name (sprite):` openings when sprites are enabled so this directive does not conflict
+  // with the sprite prompt and suppress sprite tags.
   const openingInstruction = allowSpriteLabel
     ? `Start your next reply with "${normalizedPersonaLabel}:", or with "${normalizedPersonaLabel} ({sprite label}):" if you are using a sprite`
     : `Start your next reply with "${normalizedPersonaLabel}:"`;

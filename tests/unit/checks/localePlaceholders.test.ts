@@ -14,26 +14,20 @@ describe("locale placeholder parity check", () => {
   });
 
   it("passes when placeholders match exactly regardless of order", () => {
-    // English
     const en = "User {user} in {channel}";
 
-    // Portuguese (Latin)
     const pt = "Usuário {user} no {channel}";
     expect(checkKeyPlaceholderParity("test.key", en, pt, "pt-BR")).toBeNull();
 
-    // Japanese (CJK) - reverse order in natural translation
     const ja = "{channel} でユーザー {user}";
     expect(checkKeyPlaceholderParity("test.key", en, ja, "ja")).toBeNull();
 
-    // Russian (Cyrillic)
     const ru = "Пользователь {user} в канале {channel}";
     expect(checkKeyPlaceholderParity("test.key", en, ru, "ru")).toBeNull();
 
-    // Korean (Hangul)
     const ko = "{channel} 채널의 {user} 사용자";
     expect(checkKeyPlaceholderParity("test.key", en, ko, "ko")).toBeNull();
 
-    // Vietnamese (Latin with diacritics)
     const vi = "Người dùng {user} trong kênh {channel}";
     expect(checkKeyPlaceholderParity("test.key", en, vi, "vi")).toBeNull();
   });
@@ -58,9 +52,7 @@ describe("locale placeholder parity check", () => {
     const esRenamed = "Modelo actual: {modelo}";
     const result = checkKeyPlaceholderParity("test.key", en, esRenamed, "es-419");
     expect(result).not.toBeNull();
-    // {model} missing from translation -> error
     expect(result?.missingInTarget).toEqual(["model"]);
-    // {modelo} extra in translation -> warning
     expect(result?.extraInTarget).toEqual(["modelo"]);
   });
 

@@ -10,17 +10,15 @@ export interface TomoriSecrets {
   POSTGRES_DB: string;
   CRYPTO_SECRET?: string;
   CRYPTO_SECRET_CURRENT?: string;
-  CRYPTO_SECRET_V1?: string; // Optional: Key rotation support
-  CRYPTO_SECRET_V2?: string; // Optional: Key rotation support
-  CRYPTO_SECRET_V3?: string; // Optional: Key rotation support
-  DISCORD_WEBHOOK_URL?: string; // Optional: Error logging webhook
-  // GCP Cloud Storage (set when deployed to GCP; injected as env vars by Cloud Run terraform)
+  CRYPTO_SECRET_V1?: string;
+  CRYPTO_SECRET_V2?: string;
+  CRYPTO_SECRET_V3?: string;
+  DISCORD_WEBHOOK_URL?: string;
   AVATAR_GCS_BUCKET?: string;
   AVATAR_PUBLIC_BASE_URL?: string;
   VOICE_SAMPLE_GCS_BUCKET?: string;
   VOICE_SAMPLE_GCS_PREFIX?: string;
   VOICE_SAMPLE_PUBLIC_BASE_URL?: string;
-  // AWS S3 storage (set when deployed to AWS)
   AWS_ACCESS_KEY_ID?: string;
   AWS_SECRET_ACCESS_KEY?: string;
   S3_ENDPOINT?: string;
@@ -34,15 +32,15 @@ export interface TomoriSecrets {
   CHARREF_S3_REGION?: string;
   CHARREF_S3_PREFIX?: string;
   CHARREF_PUBLIC_BASE_URL?: string;
-  MATRIX_HOMESERVER_URL?: string; // e.g., http://localhost:8448 or https://your-hs.example.com
-  MATRIX_ACCESS_TOKEN?: string; // Appservice token (as_token) used to authenticate to the homeserver
-  MATRIX_BOT_USER_ID?: string; // e.g., @tomoribot:yourdomain.com
-  MATRIX_SERVER_NAME?: string; // Homeserver domain (e.g., localhost or yourdomain.com)
-  MATRIX_HS_TOKEN?: string; // Homeserver token (hs_token): homeserver sends this to verify its identity
-  MATRIX_APPSERVICE_PUBLIC_URL?: string; // Optional callback URL used in appservice registration for remote homeservers
-  TOPGG_TOKEN?: string; // Optional: Top.gg API token for posting server stats
-  CONTAINER_MEMORY_LIMIT_MB?: string; // Optional: Container memory limit in MB (default: 1024)
-  [key: string]: string | undefined; // Allow dynamic CRYPTO_SECRET_V* keys
+  MATRIX_HOMESERVER_URL?: string;
+  MATRIX_ACCESS_TOKEN?: string;
+  MATRIX_BOT_USER_ID?: string;
+  MATRIX_SERVER_NAME?: string;
+  MATRIX_HS_TOKEN?: string;
+  MATRIX_APPSERVICE_PUBLIC_URL?: string;
+  TOPGG_TOKEN?: string;
+  CONTAINER_MEMORY_LIMIT_MB?: string;
+  [key: string]: string | undefined;
 }
 
 const OPTIONAL_SECRET_FIELDS = [
@@ -101,8 +99,7 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
   const isProduction = runEnv === "production";
   const isTestProduction = process.env.TEST_PRODUCTION === "true";
 
-  // Development mode OR test production mode: Use process.env (loaded via dotenv)
-  // TEST_PRODUCTION allows testing production behavior locally without AWS
+  // TEST_PRODUCTION reads local process.env instead of AWS Secrets Manager so production paths can be tested locally.
   if (!isProduction || isTestProduction) {
     log.info(`Loading secrets from .env (${isTestProduction ? "test production" : "development"} mode)`);
 
@@ -116,14 +113,12 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
       CRYPTO_SECRET: process.env.CRYPTO_SECRET || "",
     };
 
-    // Auto-detect key versions (CRYPTO_SECRET_V1, V2, V3, etc.)
     for (const key of Object.keys(process.env)) {
       if ((/^CRYPTO_SECRET_V[1-9]\d*$/.test(key) || key === "CRYPTO_SECRET_CURRENT") && process.env[key]) {
         secrets[key] = process.env[key];
       }
     }
 
-    // Optional fields: read from process.env matching the same keys as the JSON secret blob
     for (const field of optionalSecretFields()) {
       if (process.env[field]) {
         secrets[field] = process.env[field];
@@ -141,7 +136,6 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
   if (secretFile) {
     log.info(`Reading secrets from mounted JSON secret file: ${secretFile}`);
     try {
-      // Read and parse the JSON blob written by the platform secret mount
       const fileContent = await Bun.file(secretFile).text();
       if (!fileContent) {
         throw new Error(`Secret file "${secretFile}" is empty. Ensure the secret version is populated.`);
@@ -159,7 +153,6 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
         CRYPTO_SECRET: rawSecrets.CRYPTO_SECRET,
       };
 
-      // Auto-detect key versions (CRYPTO_SECRET_V1, V2, V3, etc.)
       for (const key of Object.keys(rawSecrets)) {
         if (/^CRYPTO_SECRET_V[1-9]\d*$/.test(key) || key === "CRYPTO_SECRET_CURRENT") {
           secrets[key] = rawSecrets[key];
@@ -167,7 +160,6 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
         }
       }
 
-      // Optional fields: same shape as AWS secret blob
       for (const field of optionalSecretFields()) {
         if (rawSecrets[field] !== undefined) {
           secrets[field] = rawSecrets[field];
@@ -195,7 +187,6 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
     }
   }
 
-  // Production mode: Fetch from AWS Secrets Manager
   const awsRegion = process.env.AWS_REGION || "us-east-1";
   log.info(`Fetching secrets from AWS Secrets Manager (production mode, region: ${awsRegion})`);
 
@@ -224,8 +215,6 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
       CRYPTO_SECRET: rawSecrets.CRYPTO_SECRET,
     };
 
-    // Auto-detect key versions (CRYPTO_SECRET_V1, V2, V3, etc.)
-    // This allows for unlimited key rotation versions
     for (const key of Object.keys(rawSecrets)) {
       if (/^CRYPTO_SECRET_V[1-9]\d*$/.test(key) || key === "CRYPTO_SECRET_CURRENT") {
         secrets[key] = rawSecrets[key];
@@ -245,7 +234,6 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
 
     return secrets;
   } catch (error) {
-    // Enhance error message for common AWS errors
     if (error instanceof Error) {
       if (error.name === "ResourceNotFoundException") {
         throw new Error(

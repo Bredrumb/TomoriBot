@@ -32,8 +32,7 @@ cacheMocker.module("@/utils/cache/userCache", () => ({
     if (!nickname) return null;
     return { user_disc_id: userDiscId, user_nickname: nickname } as unknown as UserRow;
   },
-  // This lane has no migrated schema, so the real lookup fails closed to "blacklisted" and would
-  // replace every saved nickname with the Discord display name. Naming is what these cases pin.
+  // Unit lanes lack a migrated schema, so the real blacklist lookup would fail closed and mask saved nicknames.
   getCachedBlacklistStatus: async () => false,
 }));
 

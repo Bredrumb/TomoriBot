@@ -181,7 +181,7 @@ export async function generateZaiNativeVideo(
       });
 
       if (!pollResponse.ok) {
-        await pollResponse.text(); // Drain body
+        await pollResponse.text();
         log.warn(`Z.ai video poll request failed (taskId: ${taskId}, status: ${pollResponse.status})`);
         return { done: false };
       }

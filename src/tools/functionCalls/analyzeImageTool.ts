@@ -37,8 +37,7 @@ export class AnalyzeImageTool extends BaseTool {
   category = "utility" as const;
   requiresFollowUp = true;
 
-  // Only expose to non-vision models during context building (system prompt tool list).
-  // The full vision_llm check happens in isAvailableForContext() at execution time.
+  // Only checks sees_images here; vision_llm availability is checked at execution time in isAvailableForContext().
   requiredModelCapabilities = { sees_images: false as const };
 
   parameters: ToolParameterSchema = {
@@ -66,7 +65,6 @@ export class AnalyzeImageTool extends BaseTool {
     const hasVisionModel = !!context.tomoriState?.vision_llm;
     const chatModelSeesImages = context.tomoriState?.llm?.sees_images ?? false;
 
-    // Only available when vision model is set AND chat model can't see images
     return hasVisionModel && !chatModelSeesImages;
   }
 
@@ -174,8 +172,6 @@ export class AnalyzeImageTool extends BaseTool {
     context: ToolContext,
     signal: AbortSignal,
   ): Promise<VisionImage[]> {
-    // Discover images on the message, or on its direct reply target when the
-    //    reply itself is text-only.
     const { imageUrls, sourceMessageId } = await resolveMessageImageUrls(messageId, context);
 
     log.info(`Found ${imageUrls.length} image(s) in message ${sourceMessageId} for vision analysis`);

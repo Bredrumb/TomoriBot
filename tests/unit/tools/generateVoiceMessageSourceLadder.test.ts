@@ -106,9 +106,8 @@ scopedMock.module("@/utils/speech/voiceMessageSynthesis", () => ({
   synthesizeVoiceMessage: synthesizeMock,
 }));
 
-// A null waveform metadata result is the tool's own supported path: it falls back to a plain
-// attachment. Stubbing it at null keeps delivery out of the picture without pretending the tool
-// took a branch it did not.
+// Returning null exercises the tool's supported plain-attachment fallback without coupling the test to waveform
+// generation.
 scopedMock.module("@/utils/audio/voiceMessageMetadata", () => ({
   ...realVoiceMessageMetadata,
   generateVoiceMessageMetadata: async () => null,
@@ -367,8 +366,8 @@ describe("GenerateVoiceMessageTool source ladder", () => {
   });
 
   it("falls past a sample to the ElevenLabs voice on an ElevenLabs endpoint", async () => {
-    // The union-guard regression: the sample is preferred and then discarded, and the voice id has
-    // to remain reachable afterwards. A list-wide capability check stranded this persona.
+    // A list-wide capability check stranded this persona when the preferred sample was discarded, so voiceId must
+    // stay reachable.
     const { source, error } = await runTool({ ...SAMPLE, ...ELEVENLABS_VOICE }, ELEVENLABS_ENDPOINT);
 
     expect(error).toBeNull();
@@ -383,8 +382,7 @@ describe("GenerateVoiceMessageTool source ladder", () => {
   });
 
   it("uses Clone priority even when both sources exist", async () => {
-    // A design prompt is present too, but the sentinel is what selects the design branch. Without
-    // it the sample must stay in play.
+    // Even when a design prompt exists, the sample must stay selected unless the design-branch sentinel is set.
     const { source, error } = await runTool(
       { ...SAMPLE, ...DESIGN_PROMPT, speech_voice_name: "VoiceDesign", voice_source_priority: "clone" },
       makeEndpoint("auto"),

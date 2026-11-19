@@ -8,8 +8,7 @@ import { TranslationProvider } from "../../types/discord/embed";
 
 const handler = async (_client: Client, message: Message): Promise<void> => {
   try {
-    // Skip if message has translation flag or is from a bot
-    // EXPERIMENTAL FEATURE ONLY FOR TESTING
+    // Experimental test handler: keep gated to configured test servers so it never replies in general guilds.
     if (
       message.content.includes("><") ||
       message.author.bot ||

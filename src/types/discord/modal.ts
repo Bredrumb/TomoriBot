@@ -13,7 +13,7 @@ export interface SelectOption {
 export interface ModalInputField {
   customId: string;
   labelKey: string;
-  descriptionKey?: string; // New: description for the text input
+  descriptionKey?: string;
   style?: TextInputStyle;
   placeholder?: string;
   required?: boolean;
@@ -25,7 +25,7 @@ export interface ModalInputField {
 export interface ModalSelectField {
   customId: string;
   labelKey: string;
-  descriptionKey?: string; // New: description for the select menu
+  descriptionKey?: string;
   placeholder?: string;
   required?: boolean;
   options: SelectOption[];
@@ -87,9 +87,12 @@ export interface ModalFileUploadField {
   customId: string;
   labelKey: string;
   descriptionKey?: string;
-  minValues?: number; // Minimum number of files (0-10, defaults to 1)
-  maxValues?: number; // Maximum number of files (1-10, defaults to 1)
-  required?: boolean; // Whether files are required before submitting (defaults to true)
+  // Discord caps file uploads at 0-10 and defaults minValues to 1 when omitted.
+  minValues?: number;
+  // Discord caps file uploads at 1-10 and defaults maxValues to 1 when omitted.
+  maxValues?: number;
+  // Omitting required defaults to true rather than false, so pass false explicitly to make uploads optional.
+  required?: boolean;
 }
 
 export interface ModalUserSelectField {
@@ -180,7 +183,7 @@ export function isModalChannelSelectField(component: ModalComponent): component 
 export interface ModalOptions {
   modalTitleKey: string;
   modalCustomId: string;
-  components: ModalComponent[]; // Changed from inputs to components
+  components: ModalComponent[];
   // Applies only past 25 options (<=25 opens a direct modal) and defaults to "legacy" so existing callers stay
   // unchanged unless they opt in.
   selectorStyle?: "legacy" | "componentsV2";

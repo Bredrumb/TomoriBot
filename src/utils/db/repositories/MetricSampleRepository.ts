@@ -78,13 +78,11 @@ export class MetricSampleRepository {
   // Never throws or retries with withTransientDbRetry because droppable telemetry must not break callers or amplify
   // failing DB pool load.
   async recordSample(metricName: string, fields: MetricFields): Promise<void> {
-    // `fields` is bound as an object, not a `JSON.stringify` result: under Bun's driver a
-    // stringified value binds as text and `::jsonb` parses it into a JSONB scalar string, which
-    // makes every `fields->>'...'` read in the Grafana panels return null. See migration 064.
-    // Called through a local so `this` stays undefined at the call site, matching a bare `sql`.
     const run = this.executor;
     try {
       const { sanitizeLogPayload } = await import("@/utils/misc/logger");
+      // Bind `fields` as an object rather than JSON.stringify because Bun binds strings as text and ::jsonb turns them
+      // into scalar strings that break Grafana `fields->>'...'` queries.
       await run`
         INSERT INTO metric_samples (metric_name, fields)
         VALUES (${metricName}, ${sanitizeLogPayload(fields, 0, false)})

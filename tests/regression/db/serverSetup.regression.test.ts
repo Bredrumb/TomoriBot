@@ -468,15 +468,13 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server setup transaction regression", () =
       VALUES (${server.server_id}, 'SurvivingAlter', true)
     `;
 
-    // Seed pre-existing config rows representing the state before setup was retried.
     await testSql`
       INSERT INTO server_chat_configs (server_id, context_note)
       VALUES (${server.server_id}, '_rt_must_survive_rollback')
       ON CONFLICT (server_id) DO UPDATE SET context_note = EXCLUDED.context_note
     `;
 
-    // A mock guild whose emoji collection contains an entry with a null identifier.
-    // This trips a not-null database constraint on server_emojis at the very end of the transaction.
+    // Null emoji id: trips the server_emojis NOT NULL constraint at the end of the setup transaction.
     const failingGuild = {
       emojis: {
         cache: new Map([["broken", { id: null as unknown as string, name: "boom", animated: false }]]),
@@ -503,14 +501,12 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server setup transaction regression", () =
 
     await expect(setupPromise).rejects.toThrow();
 
-    // Verify orphan cleanup was rolled back: the pre-existing config row remains intact.
     const [preservedChat] = await testSql<Array<{ context_note: string | null }>>`
       SELECT context_note FROM server_chat_configs WHERE server_id = ${server.server_id}
     `;
     expect(preservedChat).toBeDefined();
     expect(preservedChat.context_note).toBe("_rt_must_survive_rollback");
 
-    // Verify no main persona was committed.
     const mainPersonas = await testSql<Array<{ persona_id: number }>>`
       SELECT persona_id FROM personas WHERE server_id = ${server.server_id} AND is_alter = false
     `;

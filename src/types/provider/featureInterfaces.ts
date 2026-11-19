@@ -250,8 +250,10 @@ export interface SupportsNativeImageGeneration {
 
 interface ProviderNativeVideoReference {
   mimeType: string;
-  data: string; // Base64-encoded image data (used when url is not available)
-  url?: string; // Original source URL ; preferred over base64 for remote APIs to avoid body size limits
+  // Base64 fallback used when url is absent.
+  data: string;
+  // Preferred over base64 data for remote APIs so large images do not exceed request body size limits.
+  url?: string;
   fallbackUrl?: string;
 }
 
@@ -277,7 +279,8 @@ export interface ProviderNativeVideoGenerationRequest {
 }
 
 export interface ProviderNativeVideoGenerationResult {
-  videoData: Buffer | null; // Raw MP4 bytes (not base64 : videos are too large)
+  // Raw MP4 bytes rather than base64 because video payloads are too large.
+  videoData: Buffer | null;
   mimeType: string | null;
   filename?: string;
   durationSeconds?: number;

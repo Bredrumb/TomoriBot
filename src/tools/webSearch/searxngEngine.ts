@@ -10,7 +10,6 @@ export class SearxngEngine implements WebSearchEngine {
   readonly name = "searxng" as const;
 
   async available(_context: ToolContext): Promise<boolean> {
-    // SEARXNG_BASE_URL must be set AND the /healthz probe must succeed (cached).
     return await isSearxngAvailable();
   }
 
@@ -19,8 +18,7 @@ export class SearxngEngine implements WebSearchEngine {
   }
 
   async search(query: string, category: SearchCategory, context: ToolContext, count?: number): Promise<ToolResult> {
-    // Surface a "searching..." notice in Discord ; parallel to the Brave engine's
-    //    Internal*Tool classes that call sendToolNotice themselves.
+    // SearxngEngine emits its own Discord notice because the dispatcher leaves notice timing to each engine.
     await sendToolNotice(
       context,
       getSearchNoticeKey(category),

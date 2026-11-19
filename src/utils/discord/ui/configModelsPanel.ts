@@ -298,9 +298,7 @@ function buildSwitchModelsBody(input: ConfigModelsPageInput): ComponentInContain
     if (!slot) continue;
     const capabilityLabel = localizer(locale, CONFIG_MODEL_CAPABILITY_LOCALE_KEYS[capability]);
 
-    // The clear entry is re-prepended to every provider page, so it costs one option slot per
-    // page: the direct limit has to shrink or the last provider of each page would be sliced away
-    // with no page able to reach it.
+    // Prepending clear on each page leaves one fewer slot per page so trailing providers stay reachable.
     const showClear = slot.currentModelName !== null && CONFIG_CLEARABLE_MODEL_CAPABILITIES.has(capability);
     const clearDescriptionKey = showClear ? MODEL_CLEAR_DESCRIPTION_LOCALE_KEYS[capability] : undefined;
     const directLimit = CONFIG_MODEL_PROVIDER_DIRECT_LIMIT - (showClear ? 1 : 0);
@@ -355,9 +353,7 @@ function buildSwitchModelsBody(input: ConfigModelsPageInput): ComponentInContain
         serverDefaultDescription: clearDescriptionKey ? localizer(locale, clearDescriptionKey) : undefined,
         serverDefaultDisplay: localizer(locale, "commands.config.panel.none_label"),
         placeholderOverride: routingWindow.placeholderOverride,
-        // A model assignment can outlive the provider it came from, so the clear entry keeps the
-        // select live even with nothing eligible left to pick; without it the select is inert
-        // rather than absent, and the placeholder is what keeps the assignment readable.
+        // Keep selects active when Clear is available so orphaned model assignments remain removable and readable.
         disabled: writesDisabled || (entries.length === 0 && !showClear),
       }),
     );
@@ -697,9 +693,7 @@ function buildFallbacksBody(input: ConfigModelsPageInput): ComponentInContainerD
     content: `${localizer(locale, "commands.config.panel.fallback_order_description")}\n${slotLines}`,
   });
 
-  // One expanded provider contributes an entry per option page, so the entry list outgrows a single
-  // select long before the provider list does; slicing it and paging the rest is what keeps the
-  // payload under Discord's 25-option ceiling.
+  // Expanded providers emit one entry per option page, so paging avoids exceeding Discord's 25-option cap.
   const rangeCount = Math.max(1, Math.ceil(view.providerEntries.length / CONFIG_MODEL_PROVIDER_DIRECT_LIMIT));
   const rangeIndex = Math.min(
     Math.max(0, Math.floor(view.entryStart / CONFIG_MODEL_PROVIDER_DIRECT_LIMIT)),
@@ -801,9 +795,7 @@ ${localizer(locale, "commands.config.panel.randomizer_description")}${
     ),
     {
       type: ComponentType.TextDisplay,
-      // Clearing every fallback slot leaves the stored flag on, so the selection above tracks the
-      // stored value while this sentence tracks the effective one. Collapsing the two would report
-      // a randomizer as running for a workspace whose chain is empty.
+      // Track the effective randomizer state here because clearing all fallback slots leaves the stored flag enabled.
       content: `> ${localizer(
         locale,
         view.randomizerEnabled && view.hasFallbacks

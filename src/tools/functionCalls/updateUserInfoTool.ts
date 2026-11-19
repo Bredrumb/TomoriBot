@@ -279,10 +279,8 @@ function buildSuccessBody(
     });
   });
 
-  // Keyed on the rendered name rather than on which fields changed: an
-  // addressing-style switch moves the affix with no naming field present, while a
-  // pronoun edit leaves the name alone. Reporting it either way would restate the
-  // unchanged name as if it were news.
+  // Keyed on the rendered name rather than changed fields because addressing-style switches move affixes without
+  // touching naming fields.
   const nameChanged = namingBefore.formattedName !== namingAfter.formattedName;
   const summary = nameChanged
     ? `\n${localizer(locale, "tools.user_info_update.success_summary", {
@@ -293,9 +291,7 @@ function buildSuccessBody(
     : "";
 
   const intro = localizer(locale, "tools.user_info_update.success_intro");
-  // Quoting each line rather than opening a `>>>` block, which would run to the end of
-  // the message and pull the summary in with it. The summary reads as the conclusion
-  // only from outside the quote.
+  // Quote each line rather than using `>>>` because a block quote would swallow the trailing summary.
   const quoted = lines.map((line) => `> ${line}`).join("\n");
   return {
     notice: `${intro}\n${quoted}${summary}`,

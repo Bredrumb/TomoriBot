@@ -144,9 +144,7 @@ export function createTransferSnapshotStore(now: () => number = Date.now): Trans
 
     // State updates never extend expiresAt, so an active mapping session still ends at its original deadline.
     const updatedSnapshot = { ...result.snapshot, ...patch };
-    // The destructive preview describes one exact plan, so any patch that moves the strategy or the mapping on
-    // invalidates a recorded confirmation. Enforcing it here rather than at each call site is what keeps a future
-    // mapping action from re-opening a Replace whose confirmation the reader gave for different destinations.
+    // Clear Replace confirmation whenever strategy or mapping changes so prior consent never applies to a new plan.
     if (patch.strategy !== undefined || patch.mapping !== undefined) {
       updatedSnapshot.replaceConfirmed = false;
     }

@@ -111,7 +111,6 @@ export class AnthropicProvider
       if (!response.ok) {
         const errorText = await response.text();
 
-        // 401 = invalid key, 403 = permission denied
         if (response.status === 401 || response.status === 403) {
           log.info("Anthropic API key validation failed: invalid credentials");
           return {
@@ -124,7 +123,6 @@ export class AnthropicProvider
           };
         }
 
-        // Other errors (400, 429, etc.) mean the key is valid but something else went wrong
         log.info(`Anthropic API key validation: key accepted but got status ${response.status}`);
       }
 

@@ -30,8 +30,7 @@ export function initializeMessageProxyIndexPruner(): void {
     parsePositiveIntegerEnv(process.env.MESSAGE_PROXY_MESSAGE_INDEX_PRUNE_INTERVAL_HOURS) ??
     DEFAULT_PRUNE_INTERVAL_HOURS;
 
-  // Sweeps at startup as well so downtime cannot leave a backlog until the first interval. Never
-  // awaited: a slow DB must not delay startup readiness.
+  // Sweep at startup without awaiting so downtime backlogs clear immediately while a slow DB cannot delay readiness.
   void runPrunePass(retentionDays);
 
   pruneInterval = setInterval(() => {

@@ -105,9 +105,8 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
     this.accumulatedReasoningContent = "";
     this.pendingThinkBlockThoughtText = "";
     this.reasoningContentSpillGuard.reset();
-    // Fallback `</think>` closer. Requiring a line boundary keeps false positives out,
-    //    because a mid-sentence mention of the persona ("as Nerine would") never closes
-    //    the think block, while a real speaker label starts its own line.
+    // Require a line boundary on the fallback </think> speaker regex so mid-sentence persona mentions never close a think
+    // block.
     const personaName = context.tomoriState.persona_nickname?.trim();
     const personaSpeakerLabelRegex = personaName
       ? new RegExp(`(?:^|\\n)\\s*${escapeRegExp(personaName)}\\s*[:：]`, "i")
@@ -128,10 +127,6 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
       collectPersonaNameAliases(context.tomoriState, botName, context.impersonatedSpeakerLabel),
     );
 
-    // Determine whether the resolved endpoint accepts system-role messages.
-    // The supportsSystemRole callback receives the final API URL and model so
-    // that adapters (e.g. Custom/Chatmock) can opt out of the system role on
-    // a per-request basis.  Defaults to true when not provided.
     const supportsSystemRole = this.options.supportsSystemRole?.(apiUrl, config.model ?? "") ?? true;
 
     let messages = await buildOpenAICompatibleMessages({
@@ -144,11 +139,8 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
       supportsSystemRole,
     });
 
-    // Strict role alternation (gated): merge consecutive same-role turns and guarantee a leading
-    // user turn so backends like Claude-behind-a-proxy accept the history. The column on the
-    // active llms row is the source of truth (D4); providerRequiresAlternation is the request-time
-    // safety net so a mis-seeded row can never emit an invalid body. Default OFF → byte-identical
-    // for endpoints that do not need it.
+    // Keep providerRequiresAlternation as a safety net alongside strict_role_alternation so mis-seeded rows satisfy
+    // proxy backends.
     const enforceAlternation =
       providerRequiresAlternation(this.options.providerName) ||
       (context.tomoriState.llm?.strict_role_alternation ?? false);
@@ -238,10 +230,7 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
         context,
       });
 
-      // Assistant prefix-completion (gated): flag the trailing assistant prefill turn with
-      // `prefix: true` so DeepSeek/Z.ai-style "continue this turn" backends extend it. Resolved
-      // from the active llms column (D4) with providerRequiresPrefixCompletion as the safety net
-      // that keeps built-in deepseek/zai/zaicoding ON. Runs last so it targets the final message.
+      // Apply prefix completion last after body mutations so it targets the final assistant prefill message.
       const enablePrefixCompletion =
         providerRequiresPrefixCompletion(this.options.providerName) ||
         (context.tomoriState.llm?.supports_prefix_completion ?? false);
@@ -319,11 +308,8 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
         targetedAttemptCount += 1;
         return true;
       };
-      // A multimodal rejection (e.g. vLLM without --enable-multimodal returns a
-      // 500) means every payload that still carries image blocks will fail the
-      // same way, so jump straight to the image-strip attempt instead of walking
-      // the sampler-probe rungs first. The strip injects a text notice per
-      // message so the model stays aware images were attached.
+      // Strip images immediately on multimodal 500s (such as vLLM without --enable-multimodal) instead of probing
+      // samplers first.
       let imageStripAttemptQueued = false;
       const queueImageStripAttempt = (
         currentIndex: number,
@@ -423,9 +409,8 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
               continue;
             }
 
-            // createOpenAICompatibleHttpError collapses the payload to `message`, dropping any
-            // sibling fields the endpoint used to name the real cause. Log the raw body here so a
-            // terminal failure leaves the same evidence a retried one does.
+            // Log the raw body before createOpenAICompatibleHttpError narrows it to message so terminal failures keep
+            // sibling cause fields.
             log.warn(
               `${this.options.adapterName}: Endpoint returned HTTP ${response.status} on attempt '${attempt.label}' with no remaining fallback payload`,
               { model: config.model, statusText: response.statusText, responseErrorText },
@@ -444,9 +429,7 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
           for await (const chunk of streamOpenAICompatibleSseChunks(response)) {
             const midStreamError = this.getMidStreamError(chunk);
             if (midStreamError && !committedToAttempt) {
-              // An opaque mid-SSE error is the only evidence the endpoint gives, and everything
-              // downstream narrows it: the classifier keeps status + message, the ProviderError
-              // keeps message + type. Log the raw event so a future bisect starts from the wire.
+              // Log the raw SSE error before downstream classifiers narrow it so wire evidence survives.
               log.warn(`${this.options.adapterName}: Raw SSE error event before stream commitment`, {
                 model: config.model,
                 attemptLabel: attempt.label,
@@ -614,9 +597,7 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
       const rawType = openAIChunk.error.type;
       const isModelError = isProviderModelErrorMessage(rawMessage);
 
-      // An SSE error event carries the same status semantics as a failed fetch, so route it
-      // through the shared classifier. Hardcoding a non-retryable api_error here is what made a
-      // transient mid-stream 500 read to the user as a permanent request error.
+      // Route SSE error events through the shared HTTP classifier so transient mid-stream 5xx statuses remain retryable.
       const numericCode = typeof rawCode === "number" ? rawCode : Number(rawCode);
       const classification = classifyOpenAICompatibleStatus(
         Number.isFinite(numericCode) ? numericCode : null,
@@ -646,9 +627,8 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
 
     const choice = openAIChunk.choices?.[0];
     if (!choice) {
-      // With `stream_options.include_usage`, the API emits a final chunk that has
-      // empty `choices` but carries `usage`. Surface that usage (the orchestrator
-      // captures it from any chunk's metadata) instead of dropping it here.
+      // Preserve usage on choice-less final chunks emitted under stream_options.include_usage so the orchestrator
+      // captures it.
       const trailingMetadata: Record<string, unknown> = {};
       if (openAIChunk.usage) {
         trailingMetadata.usage = openAIChunk.usage;

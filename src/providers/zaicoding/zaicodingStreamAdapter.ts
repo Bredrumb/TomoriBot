@@ -37,8 +37,6 @@ export class ZaicodingStreamAdapter extends OpenAICompatibleStreamAdapter {
         if (Array.isArray(requestBody.tools) && requestBody.tools.length > 0) {
           requestBody.tool_stream = true;
         }
-        // Assistant prefix-completion is applied by the shared seam in
-        // OpenAICompatibleStreamAdapter (providerRequiresPrefixCompletion → "zaicoding").
       },
     });
   }

@@ -73,7 +73,6 @@ export async function generatePresetFromPromptNvidia(
   const toolContext = options.toolContext;
   const toolsEnabled = tools.length > 0 && toolContext;
 
-  // Build the initial user message content (text + optional image)
   const contentParts: PresetContentPart[] = [{ type: "text", text: buildPresetPrompt(params) }];
 
   if (params.imageBase64 && params.imageMimeType) {
@@ -89,8 +88,6 @@ export async function generatePresetFromPromptNvidia(
   const userContent =
     contentParts.length === 1 && contentParts[0].type === "text" ? contentParts[0].text : contentParts;
 
-  // Messages start with just the user prompt; system message is prepended
-  // on each request when in json_object fallback mode
   const messages: PresetMessage[] = [{ role: "user", content: userContent }];
 
   type FormatMode = "json_schema" | "json_object";
@@ -145,7 +142,6 @@ export async function generatePresetFromPromptNvidia(
     if (!response.ok) {
       const errorBody = await response.text();
 
-      // Fall back to json_object if json_schema is not supported by this model
       if (
         !formatFallbackDone &&
         formatMode === "json_schema" &&
@@ -263,7 +259,6 @@ export async function generatePresetFromPromptNvidia(
       continue;
     }
 
-    // Extract and parse the final JSON response
     const responseText = extractResponseText(message.content);
     if (!responseText) {
       return {

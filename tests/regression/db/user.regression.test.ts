@@ -118,8 +118,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("User — regression", () => {
                ('server', ${FIXTURE_IDS.serverDiscId}, NULL, '_rt_chan', '_rt_server_stm')
       `;
 
-      // One reminder the target authored, one somebody else aimed at them, and one that touches
-      // them not at all. Only the third may survive.
       await testSql`
         INSERT INTO reminders (server_id, channel_disc_id, user_discord_id, user_nickname,
                                reminder_purpose, reminder_time, created_by_user_id)
@@ -265,12 +263,9 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("User — regression", () => {
     });
   });
 
-  // Deliberately skip this test in normal runs; enable it manually to verify the
-  // harness detects regressions. To prove it works: add "WHERE 1=0" to the
-  // loadUserRow SELECT and confirm this test fails.
+  // Manual regression probe: enable and inject `WHERE 1=0` into loadUserRow to verify the harness fails.
   it.skip("[REGRESSION PROBE] loadUserRow returns the correct row after rename", async () => {
     const user = await userRepository.loadByDiscordId(FIXTURE_IDS.regUserDiscId);
-    // If loadUserRow's SELECT were broken (e.g. wrong WHERE), this would be null
     expect(user?.user_nickname).toBe("_rt_renamed");
   });
 });

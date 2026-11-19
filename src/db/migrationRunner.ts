@@ -55,18 +55,15 @@ async function getPendingMigrations(applied: Set<string>, migrationsDir: string)
     }
 
     const version = Number.parseInt(match[1], 10);
-    const name = file.slice(0, -".sql".length); // strip .sql extension
+    const name = file.slice(0, -".sql".length);
 
     if (!applied.has(name)) {
       pending.push({ version, name, filePath: path.join(migrationsDir, file) });
     }
   }
 
-  // Primary key: ascending version number.
-  // Tie-break: code-point comparison of the full stem, so same-numbered
-  //    migrations apply in a stable, filesystem-independent order. We compare
-  //    by code point (not localeCompare) to stay deterministic across host
-  //    locales; stems are restricted to [a-z0-9_] so this is well-defined.
+  // Sort ties by code point rather than localeCompare so same-numbered migrations apply deterministically across host
+  // locales.
   return pending.sort((a, b) => {
     if (a.version !== b.version) return a.version - b.version;
     return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
@@ -102,8 +99,7 @@ async function applyMigration(client: SQL, migration: PendingMigration): Promise
   const sqlText = await readFile(migration.filePath, "utf-8");
   const statements = splitSqlStatements(sqlText);
 
-  // Execute each statement in order; a failure here aborts the migration
-  // and leaves schema_migrations unchanged so the next boot retries it.
+  // Record schema_migrations only after every statement succeeds so a partial failure retries on the next boot.
   for (const stmt of statements) {
     await client.unsafe(stmt);
   }

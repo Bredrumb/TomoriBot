@@ -1,11 +1,8 @@
 import { DiscordAPIError } from "discord.js";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 
-// Static imports are hoisted and evaluated before any `mock.module` runs, so
-// these namespaces hold the genuine exports. Spreading them keeps every mock
-// full-surface: `mock.module` is process-global and never restored, so a partial
-// factory would break unrelated test files loaded later in a monolithic
-// `bun test`.
+// Static imports evaluate before `mock.module`, so spreading them keeps full surfaces across unrelated files in
+// process-global `bun test` runs.
 import * as realMatrix from "@/utils/bridges/matrix";
 import * as realTomoriStateCache from "@/utils/cache/tomoriStateCache";
 import * as realRepositories from "@/utils/db/repositories";
@@ -35,8 +32,6 @@ const deleteReminderByIdMock = mock(async () => true);
 const tomoriChatMock = mock<typeof realTomoriChat.tomoriChat>(async () => "run");
 const ensureDiscordUserMentionMock = mock(async () => {});
 
-// Every factory spreads the real surface first, then overrides only the exports
-// this file actually needs to control.
 const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/db/repositories": realRepositories,
   "@/events/messageCreate/tomoriChat": realTomoriChat,

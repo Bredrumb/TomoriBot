@@ -716,7 +716,6 @@ export function createStPresetsInteractionRoute(
         return;
       }
 
-      // Remaining button/modal actions that acknowledge via deferUpdate
       const initialScope = await beginPanelInteraction(interaction, {
         authorize: isRouteAuthorized,
         onDenied: async () => {

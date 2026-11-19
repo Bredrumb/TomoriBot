@@ -37,7 +37,6 @@ describe("parseJUnitSuites", () => {
   });
 
   it("produces identical results on both platforms", () => {
-    // Same suite, same counts, same display name regardless of separator.
     expect(parseJUnitSuites(junitXml("\\"))).toEqual(parseJUnitSuites(junitXml("/")));
   });
 

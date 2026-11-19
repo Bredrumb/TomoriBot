@@ -37,14 +37,10 @@ function collectTextDisplayBlocks(component: unknown, blocks: string[]): void {
   const data = toComponentRecord(component);
   if (!data) return;
 
-  // Leaf case: a TextDisplay carries the actual notice text.
   if (data.type === ComponentType.TextDisplay && typeof data.content === "string" && data.content.length > 0) {
     blocks.push(data.content);
   }
 
-  // Recurse into any nested children (Container -> components,
-  //    Section -> components). Buttons/separators have no text and are skipped
-  //    naturally because they carry no TextDisplay descendants.
   if (Array.isArray(data.components)) {
     for (const child of data.components) {
       collectTextDisplayBlocks(child, blocks);
@@ -70,17 +66,14 @@ export function extractNoticeTextFromComponents(
 ): ComponentNoticeText | null {
   if (!components || components.length === 0) return null;
 
-  // Flatten every TextDisplay in the tree into ordered text blocks.
   const blocks: string[] = [];
   for (const component of components) {
     collectTextDisplayBlocks(component, blocks);
   }
   if (blocks.length === 0) return null;
 
-  // Split into lines, preserving order across blocks.
   const lines = blocks.join("\n").split("\n");
 
-  // Pull the title off line 0 only, and only if it is a heading.
   let title: string | null = null;
   const headingMatch = lines[0]?.match(HEADING_LINE_PATTERN);
   if (headingMatch) {
@@ -88,7 +81,6 @@ export function extractNoticeTextFromComponents(
     lines.shift();
   }
 
-  // Partition the remainder into footer (subtext) and description lines.
   const descriptionLines: string[] = [];
   const footerLines: string[] = [];
   for (const line of lines) {

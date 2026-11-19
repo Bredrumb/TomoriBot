@@ -234,7 +234,6 @@ export type PersonalConfigPanelRoute =
   | { action: "crossserver-toggle"; locale: string }
   | { action: "crossserver-set"; locale: string; enabled: boolean }
   | { action: "ping-user-set"; locale: string; enabled: boolean }
-  // Models - Switch Models
   | { action: "quick-toggle-open"; locale: string }
   | { action: "quick-toggle-submit"; locale: string; nonce: string }
   | { action: "model-provider-select"; locale: string; capability: PersonalConfigManagedCapability }
@@ -245,30 +244,24 @@ export type PersonalConfigPanelRoute =
       provider: string;
       nonce: string;
     }
-  // Models - Parameters
   | { action: "parameters-provider-select"; locale: string }
   | { action: "parameters-1-open"; locale: string; provider: string }
   | { action: "parameters-1-submit"; locale: string; provider: string; nonce: string }
   | { action: "parameters-2-open"; locale: string; provider: string }
   | { action: "parameters-2-submit"; locale: string; provider: string; nonce: string }
-  // Models - Fallbacks
   | { action: "fallbacks-provider-select"; locale: string }
   | { action: "fallbacks-page"; locale: string; provider: string; start: number }
   | { action: "fallbacks-submit"; locale: string; provider: string; nonce: string }
   | { action: "randomizer-toggle"; locale: string; provider: string }
   | { action: "randomizer-set"; locale: string; provider: string; enabled: boolean }
-  // Models - Fallbacks, account-wide
   | { action: "server-fallback-set"; locale: string; enabled: boolean }
-  // Advanced - Response Modes
   | { action: "trigger-mode-set"; locale: string; mode: "off" | "follow" | "on" }
   | { action: "tool-mode-set"; locale: string; mode: "off" | "follow" | "on" }
-  // Advanced - Impersonation
   | { action: "impersonation-open"; locale: string }
   | { action: "impersonation-submit"; locale: string; nonce: string }
   | { action: "impersonation-clear-view"; locale: string }
   | { action: "impersonation-clear-confirm"; locale: string; nonce: string }
   | { action: "impersonation-clear-cancel"; locale: string }
-  // Advanced - Personal Spotlight
   | { action: "spotlight-set-open"; locale: string }
   | { action: "spotlight-set-step1"; locale: string; nonce: string }
   | { action: "spotlight-set-block"; locale: string; channelId: string; hours: number; fp: string; blockIdx: number }
@@ -368,8 +361,6 @@ export type PersonalConfigPanelRoute =
       page: PersonalConfigPage;
       lineageId?: number;
     };
-
-// const WIRE_ACTION_TOKENS was folded into PERSONAL_CONFIG_ROUTE_CODECS; wire tokens are defined per codec.
 
 export type PersonalConfigAction = PersonalConfigPanelRoute["action"];
 

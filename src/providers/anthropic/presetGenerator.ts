@@ -201,8 +201,6 @@ export async function generatePresetFromPromptAnthropic(
     const presetToolCall = toolUseBlocks.find((tc) => tc.name === "preset_export_data");
 
     if (presetToolCall) {
-      // The tool-call path hands over an already-decoded object, so there is no text to
-      // parse and no truncation to repair; only the preset contract is left to enforce.
       const decoded = validatePresetGenerationFields(presetToolCall.input);
 
       if (!decoded.ok) {
@@ -223,7 +221,6 @@ export async function generatePresetFromPromptAnthropic(
       return { preset };
     }
 
-    // If no tool_use blocks, try to parse text content as JSON (fallback)
     const responseText = textBlocks
       .map((b) => (b as { text?: string }).text ?? "")
       .join("")
@@ -242,8 +239,7 @@ export async function generatePresetFromPromptAnthropic(
     if (!decoded.ok) {
       log.error(`Anthropic preset generation rejected: ${decoded.failure.code}`);
       return {
-        // A payload nothing could read is a provider fault worth naming; a schema miss is
-        // the model's, and the shared message is the instruction the user can act on.
+        // Surface unparseable JSON as a provider fault, while schema misses keep the shared copy for user guidance.
         error:
           decoded.failure.code === "PARSE_FAILED"
             ? "Invalid JSON response from Anthropic."

@@ -126,9 +126,7 @@ it("resolves a persona in conversation without treating it as a separate user", 
 });
 
 describe("resolveUserTarget — conversation stage primary-name precedence", () => {
-  // Reproduces the real collision: the asking user is rendered as their DB
-  // nickname "Misuzu" but carries server nickname "Zallya" as a secondary
-  // alias, while a different account's actual name is "Zallya".
+  // Reproduces the collision where a user's secondary alias matches another user's primary name, so primary wins.
   const misuzu: ConversationUserReference = {
     targetId: "111",
     displayLabel: "Misuzu",

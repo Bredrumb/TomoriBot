@@ -68,9 +68,8 @@ export async function getCachedActiveBlocksForUser(
       return cached.value;
     }
 
-    // With nothing cached, "which personas are blocked" has no safe expressible answer: an empty
-    // list is read downstream as "none", which lifts every block. Propagating instead aborts the
-    // turn, and a persona that stays silent is the same outcome the block asks for.
+    // With nothing cached, returning [] would lift every block downstream, so propagate the error to keep the persona
+    // silent.
     log.error(`Failed to load persona user blocks for user ${userDiscId}`, error);
     throw error;
   }

@@ -16,7 +16,7 @@ function startFastMonitor(): EventLoopMonitor {
 function blockFor(ms: number): void {
   const blockUntil = Date.now() + ms;
   while (Date.now() < blockUntil) {
-    /* deliberately blocking */
+    // deliberately blocking
   }
 }
 
@@ -48,8 +48,6 @@ describe("eventLoopMonitor", () => {
     const monitor = startFastMonitor();
     monitor.takeIntervalPeakLagMs();
 
-    // Synchronous spin: the thread is busy rather than idle, so no amount of Discord or WebSocket
-    // state would reveal it.
     blockFor(FAST_INTERVAL_MS * 2);
     await sleep(FAST_INTERVAL_MS * 2);
 

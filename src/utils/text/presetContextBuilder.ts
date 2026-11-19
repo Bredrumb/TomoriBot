@@ -34,11 +34,9 @@ interface MentionParams {
 }
 
 const MARKER_TO_TAGS: Record<string, ContextItemTag[]> = {
-  // Primary character blocks. The per-channel append-mode prompt rides with `main`
-  // so it stays directly after the system prompt; replace mode already replaces the
-  // SYSTEM_HUMANIZER_RULES content upstream, so no separate channel block exists then.
+  // SYSTEM_CHANNEL_PROMPT rides with main for append mode, because replace mode swaps SYSTEM_HUMANIZER_RULES upstream.
   main: [ContextItemTag.SYSTEM_HUMANIZER_RULES, ContextItemTag.SYSTEM_CHANNEL_PROMPT],
-  charDescription: [ContextItemTag.SYSTEM_PERSONA_PROMPT], // Persona prompt tag
+  charDescription: [ContextItemTag.SYSTEM_PERSONA_PROMPT],
   charPersonality: [ContextItemTag.SYSTEM_PERSONALITY],
 
   dialogueExamples: [ContextItemTag.DIALOGUE_SAMPLE],
@@ -73,7 +71,8 @@ function buildMacroContext(params: PresetMacroParams): MacroContext {
     charName: params.tomoriNickname,
     personality: params.tomoriAttributes.join("\n"),
     description: params.personaPrompt ?? "",
-    scenario: "", // Card import folds scenario into attributes until a separate scenario field exists.
+    // Card import folds scenario into attributes until a separate scenario field exists.
+    scenario: "",
     mesExamples: mesExamples.join("\n"),
     lastChatMessage: params.lastUserMessage,
     model: params.model,
@@ -106,7 +105,7 @@ function pullBucket(
   tag: ContextItemTag,
 ): StructuredContextItem[] {
   const items = buckets.get(tag) ?? [];
-  buckets.delete(tag); // Consume the bucket
+  buckets.delete(tag);
   return items;
 }
 
@@ -239,7 +238,7 @@ export async function reassembleWithPreset(
   const depthNodes: ResolvedNode[] = [];
 
   for (const node of resolved) {
-    // Skip disabled nodes and comment-only nodes (is_comment never injects regardless of enabled state)
+    // Comment-only nodes never inject even when enabled.
     if (!node.is_enabled || node.is_comment) continue;
 
     if (node.injection_position === 1) {
@@ -249,11 +248,10 @@ export async function reassembleWithPreset(
     }
   }
 
-  // Sort depth nodes: by depth ascending (matching ST's bottom-to-top processing),
-  // then injection_order ascending for same-depth nodes
+  // Ascending depth puts lower-depth injections closer to the end of history so order matches SillyTavern.
   depthNodes.sort((a, b) => {
     if (a.injection_depth !== b.injection_depth) {
-      return a.injection_depth - b.injection_depth; // Lower depth first (closer to end of history)
+      return a.injection_depth - b.injection_depth;
     }
     return a.injection_order - b.injection_order;
   });
@@ -294,8 +292,7 @@ export async function reassembleWithPreset(
         );
       }
 
-      // The native builder puts system prompt + persona prompt under this single tag.
-      // `main` takes only the first item (system prompt), `charDescription` takes the rest (persona).
+      // Native builder shares the tag across system and persona prompts, so main pulls only the first item.
       if (node.identifier === "main") {
         if (markerTags) {
           for (const tag of markerTags) {
@@ -357,7 +354,8 @@ export async function reassembleWithPreset(
         toolMacroExpandedContent,
         mentionParams.client,
         mentionParams.guildId,
-        mentionParams.triggererName, // Preset custom nodes should resolve {{user}} to the actual triggerer
+        // Pass triggererName so preset custom nodes resolve {{user}} to the actual triggerer.
+        mentionParams.triggererName,
         mentionParams.botName,
         mentionParams.personalMemoriesEnabled,
         undefined,
@@ -375,9 +373,7 @@ export async function reassembleWithPreset(
     }
   }
 
-  // ── Step 5: Flush any remaining TomoriBot-only blocks ──
-  // If the preset's node order didn't include the anchor markers,
-  // append remaining blocks before dialogue history.
+  // Flush unanchored TomoriBot blocks before draining remaining buckets so they precede dialogue history.
   flushKnowledgeBlocks();
   flushDialogueBlocks();
 
@@ -387,9 +383,7 @@ export async function reassembleWithPreset(
     }
   }
 
-  // Depth-injection nodes merge INTO existing dialogue history items rather than creating new
-  // messages. Same-depth injections are batched into a single [System: ...] block to reduce
-  // token waste and match SillyTavern's contiguous injection behavior.
+  // Batch depth injections into existing history items instead of creating messages so formatting matches SillyTavern.
   const resolvedInjections: Array<{
     depth: number;
     content: string;
@@ -437,9 +431,7 @@ export async function reassembleWithPreset(
       `(${systemNodes.length} system nodes, ${depthNodes.length} depth injections)`,
   );
 
-  // Tail directives, uncensor directive, and the out-of-band STM nudge + deferred STM
-  // content block pass through unchanged because they are injected positionally
-  // downstream of assembly, so preset reassembly must never re-anchor them.
+  // Pass tail directives, uncensor, and deferred STM fields through unchanged because downstream stages anchor them.
   return {
     contextItems,
     tailDirectives: nativeOutput.tailDirectives,

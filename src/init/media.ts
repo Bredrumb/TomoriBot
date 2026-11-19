@@ -40,9 +40,8 @@ export function initMediaProcessing(): void {
     );
 
     if (process.env.RUN_ENV === "production") {
-      // Production defaults pino to `level: "error"`, so the line above is not emitted there and the
-      // applied limits would be unverifiable from outside the process. `log.metric` is emitted at
-      // every level and routes to TomoriBotMetrics_CL.
+      // Production sets pino to error level, so emit log.metric to make applied libvips limits visible in
+      // TomoriBotMetrics_CL.
       log.metric("media_config", {
         sharp_concurrency: concurrency,
         sharp_cache_memory_mb: cacheMemoryMb,

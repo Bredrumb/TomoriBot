@@ -257,8 +257,8 @@ export class ReminderProcessor {
 
       log.info(`tomoriChat call completed for reminder ${reminder.reminder_id} (disposition: ${disposition})`);
 
-      // If the chat call was rejected before it could run (ignored/blocked/error), do not delete
-      // the DB row. Defer it so transient blocked/ignored states cannot consume the reminder.
+      // Defer rejected calls instead of deleting the row so transient ignored or blocked states never consume a
+      // reminder.
       if (disposition !== "run" && disposition !== "queued") {
         log.warn(`Reminder ${reminder.reminder_id} not executed (disposition: ${disposition}); deferring for retry.`);
         await deliveryTracker.deferRetry(`admission_${disposition}`);

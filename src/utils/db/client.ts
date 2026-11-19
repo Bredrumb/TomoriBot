@@ -16,15 +16,11 @@ interface PostgresPoolOptions {
 // oven-sh/bun#30646 rejects in-flight queries.
 function resolveProductionPoolOptions(): PostgresPoolOptions {
   return {
-    // Well inside the ~4 minute gateway reap while giving Bun's buggy timer far fewer chances
-    // to fire than the 30s this previously used.
     idleTimeout: parseIntegerEnvFlag(process.env.POSTGRES_IDLE_TIMEOUT_SECONDS, 180, 5),
     // Hard age cap so no connection lingers indefinitely even under steady load.
     maxLifetime: parseIntegerEnvFlag(process.env.POSTGRES_MAX_LIFETIME_SECONDS, 1800, 30),
     connectionTimeout: parseIntegerEnvFlag(process.env.POSTGRES_CONNECTION_TIMEOUT_SECONDS, 10, 1),
-    // Stated rather than inherited so the pool width is auditable from this file and tunable
-    // during an incident without a rebuild. Matches Bun's own default, so this is not a
-    // behaviour change on its own.
+    // Explicit rather than relying on Bun's identical default so pool width stays auditable and env-tunable.
     max: parseIntegerEnvFlag(process.env.POSTGRES_POOL_MAX, 10, 1),
   };
 }
@@ -39,27 +35,25 @@ function createDatabaseClient(): SQL {
   const password = process.env.POSTGRES_PASSWORD;
   const database = process.env.POSTGRES_DB || "tomodb";
 
-  // Allow initialization without password for scripts that don't use the database
-  // (e.g., localization checks, linting). Database operations will fail if attempted.
+  // Allow dummy initialization when POSTGRES_PASSWORD is unset so non-DB scripts (e.g., linting) can import modules.
   if (!password) {
     return new SQL({
       hostname: host,
       port: port,
       username: user,
-      password: "dummy", // Will fail on actual connection attempt
+      password: "dummy",
       database: database,
     });
   }
 
   const poolOptions = resolveProductionPoolOptions();
 
-  // Production: verified TLS for TCP connections; no TLS for unix sockets (Cloud SQL Auth Proxy)
   if (isProduction) {
     // Unix socket path (e.g. /cloudsql/<connection-name>): Cloud SQL Auth Proxy handles TLS
     // internally; the client connects via a local socket and must not add a second TLS layer.
     if (host.startsWith("/")) {
       return new SQL({
-        path: host, // Use path for Unix socket connections
+        path: host,
         port: port,
         username: user,
         password: password,
@@ -82,7 +76,6 @@ function createDatabaseClient(): SQL {
     });
   }
 
-  // Development: No SSL for localhost PostgreSQL
   log.info("Database SSL mode: disabled (development)");
   return new SQL({
     hostname: host,
@@ -171,8 +164,6 @@ export function resetDatabaseConnection(): void {
   }
 }
 
-// Proxy keeps the same sql API (tagged template + helper methods) while
-// deferring the real client creation until first use.
 export const sql = new Proxy(
   function sqlTag(strings: TemplateStringsArray, ...values: unknown[]) {
     return getClient()(strings, ...values);
@@ -196,12 +187,8 @@ const RETIRED_CONNECTION_ERROR_CODES = new Set([
   "ERR_POSTGRES_LIFETIME_TIMEOUT",
   "ERR_POSTGRES_IDLE_TIMEOUT",
   "ERR_POSTGRES_CONNECTION_CLOSED",
-  // The next two reach us from the wire-protocol reader rather than the socket: when a
-  // connection dies mid-message, Bun rejects the pending queries from `#onClose` carrying
-  // whatever state its parser stopped in, so the code marks where the byte stream was
-  // truncated. Neither code is exclusive to that path (Bun can also raise them from encoding
-  // faults), so read the stack before the code when triaging: a replay costs one query, but a
-  // real encoding bug retried here will look like ordinary connection churn in the logs.
+  // Bun emits these parser codes on truncated mid-message drops from `#onClose` (also check stacks for real encoding
+  // faults before assuming connection churn).
   "ERR_POSTGRES_INVALID_MESSAGE",
   "ERR_POSTGRES_UNSUPPORTED_INTEGER_SIZE",
 ]);
@@ -223,9 +210,7 @@ interface TransientRetryOptions {
 
 function resolveTransientRetryOptions(): TransientRetryOptions {
   return {
-    // Three rather than two because a cascade retires successive cohorts: production logged
-    // `Exhausted 2 attempt(s)` 1,905 times in one episode and 103 times in eight minutes of
-    // another, so the second attempt frequently lands inside the same cascade as the first.
+    // Three rather than two because pool cascades retire successive cohorts, so a second try often hits the same cascade.
     attempts: parseIntegerEnvFlag(process.env.POSTGRES_TRANSIENT_RETRY_ATTEMPTS, 3, 1),
     // A retired socket is replaced on the pool's next tick; retrying in the same tick
     // can land on the still-closing connection.
@@ -302,9 +287,7 @@ function reportPoolEvent(error: unknown, operationName: string, attempt: number,
     return;
   }
 
-  // `log.metric` rather than `log.error`: production pins pino at level `error`, so this is the
-  // only route besides an error that reaches the host JSONL, and an episode marker is a
-  // measurement rather than a fault the operator must act on line by line.
+  // `log.metric` rather than `log.error` reaches production's error-pinned JSONL without paging as an actionable fault.
   log.metric("pool_event", {
     code,
     operation: operationName,

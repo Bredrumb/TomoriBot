@@ -395,10 +395,8 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     includeUnassigned = false,
   ): Promise<ReminderRow[] | null> {
     try {
-      // Query for pending reminders (reminder_time > now) for the user
       let reminderData: unknown[];
       if (serverDiscId && typeof personaId === "number") {
-        // Join with servers table to filter by server_disc_id
         reminderData = includeUnassigned
           ? await sql`
               SELECT r.* FROM reminders r
@@ -1009,7 +1007,6 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
 
   private async sqlGetDueRandomTriggers(topology?: ShardTopology): Promise<RandomTriggerRow[]> {
     try {
-      // Fetch all triggers scheduled at or before now
       const rows = await sql`
         SELECT t.* FROM random_triggers t
         JOIN servers s ON s.server_id = t.server_id
@@ -1092,7 +1089,6 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
 
   private async sqlGetServerRandomTriggerCount(serverId: number): Promise<number> {
     try {
-      // Count triggers for this server
       const [row] = await sql<Array<{ count: string | number }>>`
         SELECT COUNT(*) AS count FROM random_triggers
         WHERE server_id = ${serverId}
@@ -1110,7 +1106,6 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     personaId: number,
   ): Promise<RandomTriggerRow | null> {
     try {
-      // Find matching trigger for the specific named persona in this channel
       const [row] = await sql`
         SELECT * FROM random_triggers
         WHERE server_id = ${serverId}
@@ -1138,7 +1133,6 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
 
   private async sqlInsertRandomTrigger(data: RandomTriggerData): Promise<RandomTriggerRow | null> {
     try {
-      // Insert trigger; schedule first roll after one full timer cycle
       const [row] = await sql`
         INSERT INTO random_triggers (
           server_id,
@@ -1270,7 +1264,6 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
           : 0;
       const nextTimerHours = Math.max(1, timerHours + randomOffset);
 
-      // Advance next_trigger_at and persist the current consecutive failure count
       const [row] = await sql`
         UPDATE random_triggers
         SET next_trigger_at      = NOW() + (${nextTimerHours} * INTERVAL '1 hour'),

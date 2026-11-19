@@ -1797,7 +1797,6 @@ describe("config trigger removal", () => {
       }),
     );
 
-    // Unchecked means remove, so index 1 ("two") goes and the remaining list is what is written.
     expect(removeSpy).toHaveBeenCalledWith(55, ["one", "three"]);
     expect(harness.telemetry).toEqual(["server-config.workspace.persona-trigger.remove"]);
     removeSpy.mockRestore();
@@ -1816,7 +1815,6 @@ describe("config trigger removal", () => {
           action: "trigger-remove-submit",
           locale: "en-US",
           personaId: 55,
-          // Fingerprint of the list as it was before a concurrent add.
           fp: computeTriggerRemoveFingerprint(55, ["one", "two"]),
           nonce: "nonce1234567",
         }),
@@ -2759,7 +2757,6 @@ describe("config persona collections", () => {
     );
     expect(addSpy).toHaveBeenCalledWith(55, ["New"], ["Response"]);
     expect(limitSpy).toHaveBeenCalledWith(55);
-    // A manager passes the gate before the blacklist is read, so the read count stays at zero.
     addSpy.mockRestore();
     limitSpy.mockRestore();
   });
@@ -3252,7 +3249,7 @@ describe("config promotion", () => {
       });
     try {
       const first = gatedPromote();
-      // The first run parks inside setNickname, i.e. after the swap committed and before its avatar work.
+      // The first run parks inside setNickname after the swap committed and before avatar work.
       await Bun.sleep(0);
 
       expect(await gatedPromote()).toEqual({ status: "in-progress" });
@@ -4314,14 +4311,13 @@ describe("config Persona Sprites routes", () => {
       }),
     );
 
-    // The panel root defers ephemerally, so an `editReply` carrying the archive would silently make
-    // a public export private. The archive must arrive on its own message with no Ephemeral flag.
+    // The panel root defers ephemerally, so an editReply would hide a public export that must
+    // arrive via followUp without an Ephemeral flag.
     expect(harness.followUps).toHaveLength(2);
     for (const followUp of harness.followUps as Array<{ files?: unknown[]; flags?: number }>) {
       expect(followUp.files).toHaveLength(1);
       expect(followUp.flags ?? 0).toBe(0);
     }
-    // The panel still repaints in place beside it.
     expect(harness.edits.length).toBeGreaterThan(0);
     expect(harness.telemetry).toContain("server-config.workspace.persona-sprite.export");
   });
@@ -4338,7 +4334,6 @@ describe("config Persona Sprites routes", () => {
           locale: "en-US",
           personaId: 55,
           index: 0,
-          // The fingerprint of the sprite that used to sit at position 0.
           fp: computeSpriteFingerprint(55, 0, "angry"),
           nonce: SPRITE_NONCE,
         }),
@@ -4509,8 +4504,8 @@ describe("config Persona Sprites routes", () => {
     const componentTypes = (
       harness.modals as Array<{ components: Array<{ type: number; component: { type: number } }> }>
     ).map((modal) => modal.components.map((label) => label.component.type));
-    // 4 is TextInput, 19 is FileUpload, 22 is CheckboxGroup. Every component type is a bare number
-    // on the wire, so TypeScript accepts a wrong one and only a literal assertion catches it.
+    // Bare wire component types (4 TextInput, 19 FileUpload, 22 CheckboxGroup) pass TypeScript
+    // regardless of kind, so literal assertions are needed to catch wrong components.
     expect(componentTypes).toEqual([[4, 19, 4, 22], [4, 19, 4, 22], [19]]);
     // The image is required on add and optional on edit, so an edit can change only the name.
     const [addModal, editModal] = harness.modals as Array<{
@@ -4641,7 +4636,6 @@ describe("config Persona Sprites routes", () => {
       success: true,
       buffer: exported.files[0].buffer,
     } as Awaited<ReturnType<typeof safeDownloadModule.safeDownload>>);
-    // The target persona starts empty, so every archive entry lands as a new sprite.
     listSpy.mockResolvedValue([]);
 
     const imported = await configSpriteOperations.importSprites({
@@ -4660,7 +4654,6 @@ describe("config Persona Sprites routes", () => {
 
     expect(imported).toMatchObject({ status: "success", created: 2, replaced: 0, failed: 0 });
     expect(upserts.map((entry) => entry.spriteKey).sort()).toEqual(["happy", "sad"]);
-    // The identity flag and usage note survive the archive rather than resetting to their defaults.
     expect(upserts.find((entry) => entry.spriteKey === "happy")).toMatchObject({
       usageInstructions: "When cheerful",
       isIdentity: true,
@@ -4803,8 +4796,8 @@ describe("config modal opening", () => {
     );
 
     const modal = harness.modals[0] as { components: Array<{ type: number; component: { type: number } }> };
-    // 22 is CheckboxGroup. A FileUpload (19) also renders and submits, but carries no option values,
-    // which would make unchecked-means-remove delete every presented word.
+    // Pinning 22 (CheckboxGroup) catches FileUpload (19), which submits no option values and
+    // would cause unchecked-means-remove to delete every word.
     expect(modal.components.every((label) => label.type === 18)).toBe(true);
     expect(modal.components.map((label) => label.component.type)).toEqual([22]);
   });

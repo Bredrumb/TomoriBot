@@ -88,8 +88,6 @@ export async function buildSpriteArchive(options: {
   const zip = new JSZip();
   const imageFolder = zip.folder(SPRITE_ARCHIVE_IMAGE_DIR);
   if (!imageFolder) {
-    // JSZip.folder only returns null on an invalid name; our constant is valid,
-    // so this is effectively unreachable but typed defensively.
     throw new Error("Failed to create sprite image folder in archive");
   }
 
@@ -119,8 +117,7 @@ export async function buildSpriteArchive(options: {
   };
   zip.file(SPRITE_ARCHIVE_MANIFEST_NAME, `${JSON.stringify(manifest, null, 2)}\n`);
 
-  // Generate the bytes. DEFLATE is cheap here (PNGs are already compressed,
-  //    but the manifest and any incidental redundancy still benefit).
+  // Use DEFLATE so the JSON manifest compresses even though PNG entries are already compressed.
   const buffer = await zip.generateAsync({
     type: "nodebuffer",
     compression: "DEFLATE",
@@ -144,8 +141,6 @@ export async function readSpriteArchive(
     return { ok: false, reason: "invalid_zip" };
   }
 
-  // Locate the manifest (case-insensitive, ignoring any folder prefix some
-  //    archivers add) and parse it as JSON.
   const manifestFile = findManifestFile(zip);
   if (!manifestFile) {
     return { ok: false, reason: "missing_manifest" };
@@ -175,7 +170,6 @@ export async function readSpriteArchive(
   }
   const manifest = parsedManifest.data;
 
-  // Reject archives produced by a newer, incompatible format version.
   if (manifest.version > SPRITE_ARCHIVE_VERSION) {
     return { ok: false, reason: "incompatible_version" };
   }
@@ -195,8 +189,6 @@ export async function readSpriteArchive(
       return { ok: false, reason: "missing_image" };
     }
 
-    // Best-effort pre-read size check using JSZip's declared uncompressed
-    //     size, so an oversized entry is rejected before it is decompressed.
     const declaredSize = getDeclaredUncompressedSize(imageFile);
     if (declaredSize !== null && declaredSize > limits.maxFileBytes) {
       return { ok: false, reason: "file_too_large" };
@@ -229,9 +221,6 @@ function buildUniqueImageFilename(sprite: PersonaSpriteRow, index: number, used:
     maxLength: 40,
   });
   let filename = `${prefix}-${safeKey}.png`;
-  // Guard against the (rare) case where sanitization collapses two keys to the
-  // same string; the index prefix already makes this near-impossible, but stay
-  // defensive so no image silently overwrites another.
   let suffix = 1;
   while (used.has(filename)) {
     filename = `${prefix}-${safeKey}-${suffix}.png`;

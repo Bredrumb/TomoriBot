@@ -122,14 +122,12 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Atomic personal configuration reset: regre
     it("restores all personal singletons, deletes spotlights and preferences, and returns affected server IDs", async () => {
       await dirtyPersonalSingletons(targetUserId);
 
-      // Seed naming preferences
       await testSql`
         INSERT INTO user_persona_naming_preferences (user_id, persona_lineage_id, nickname_override)
         VALUES (${targetUserId}, ${personaLineageId}, '_rt_preferred_nick')
         ON CONFLICT (user_id, persona_lineage_id) DO UPDATE SET nickname_override = EXCLUDED.nickname_override
       `;
 
-      // Seed personal spotlights across serverIdA and serverIdB
       await testSql`
         INSERT INTO personal_spotlights (server_id, user_id, channel_disc_id)
         VALUES (${serverIdA}, ${targetUserId}, 'channel_a_1')
@@ -141,7 +139,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Atomic personal configuration reset: regre
         ON CONFLICT (server_id, user_id, channel_disc_id) DO NOTHING
       `;
 
-      // Seed child rows in personal_spotlight_personas to verify cascade
       const [persona] = await testSql<Array<{ persona_id: number }>>`
         SELECT persona_id FROM personas WHERE server_id = ${serverIdA} LIMIT 1
       `;
@@ -156,7 +153,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Atomic personal configuration reset: regre
       `;
       expect(childBefore.count).toBe(1);
 
-      // Seed user-associated data that MUST SURVIVE
       await testSql`
         INSERT INTO reminders (server_id, channel_disc_id, user_discord_id, user_nickname, reminder_purpose, reminder_time, created_by_user_id)
         VALUES (${serverIdA}, 'chan_remind', ${targetUserDiscId}, 'Nick', '_rt_surviving_reminder', NOW() + INTERVAL '1 day', ${targetUserId})
@@ -171,14 +167,12 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Atomic personal configuration reset: regre
         VALUES (${targetUserId}, ${personaLineageId}, '_rt_surviving_personal_memory', NOW(), NOW())
       `;
 
-      // Execute personal reset
       const result = await resetRepository.resetPersonalConfiguration(targetUserId);
 
       expect(result).not.toBeNull();
       expect(result?.userDiscId).toBe(targetUserDiscId);
       expect(result?.affectedServerIds.sort()).toEqual([serverIdA, serverIdB].sort());
 
-      // Verify users table reset and preserve
       const [userRow] = await testSql<
         Array<{ language_pref: string; privacy_level: number; registration_locale: string | null }>
       >`
@@ -188,9 +182,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Atomic personal configuration reset: regre
       `;
       expect(userRow.language_pref).toBe("en-US");
       expect(userRow.privacy_level).toBe(0);
-      expect(userRow.registration_locale).toBe("ja-JP"); // Preserved!
+      expect(userRow.registration_locale).toBe("ja-JP");
 
-      // Verify user_personalization_configs reset to DDL defaults
       const [configRow] = await testSql<Array<Record<string, unknown>>>`
         SELECT
           user_nickname,
@@ -226,13 +219,11 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Atomic personal configuration reset: regre
       expect(configRow.addressing_style).toBeNull();
       expect(configRow.natural_nudge_opt_out).toBe(true);
 
-      // Verify user_persona_naming_preferences deleted
       const [namingCount] = await testSql<Array<{ count: number }>>`
         SELECT COUNT(*)::int as count FROM user_persona_naming_preferences WHERE user_id = ${targetUserId}
       `;
       expect(namingCount.count).toBe(0);
 
-      // Verify personal_spotlights and cascade deleted
       const [spotlightCount] = await testSql<Array<{ count: number }>>`
         SELECT COUNT(*)::int as count FROM personal_spotlights WHERE user_id = ${targetUserId}
       `;
@@ -243,7 +234,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Atomic personal configuration reset: regre
       `;
       expect(childCount.count).toBe(0);
 
-      // Verify surviving tables
       const [reminder] = await testSql<Array<{ reminder_purpose: string }>>`
         SELECT reminder_purpose FROM reminders WHERE user_discord_id = ${targetUserDiscId}
       `;
@@ -267,7 +257,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Atomic personal configuration reset: regre
     });
 
     it("proves user_saved_provider_configs, personal_memories, and reminders are never written, while spotlight reset is reported", async () => {
-      // Seed user-associated records that must survive reset
       const [reminderInsert] = await testSql<Array<{ reminder_id: number }>>`
         INSERT INTO reminders (server_id, channel_disc_id, user_discord_id, user_nickname, reminder_purpose, reminder_time, created_by_user_id)
         VALUES (${serverIdA}, 'chan_remind_unwritten', ${targetUserDiscId}, 'Nick', '_rt_surviving_reminder_unwritten', NOW() + INTERVAL '1 day', ${targetUserId})
@@ -284,14 +273,12 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Atomic personal configuration reset: regre
         RETURNING personal_memory_id
       `;
 
-      // Seed spotlight to verify report and deletion
       await testSql`
         INSERT INTO personal_spotlights (server_id, user_id, channel_disc_id)
         VALUES (${serverIdA}, ${targetUserId}, 'channel_unwritten_test')
         ON CONFLICT (server_id, user_id, channel_disc_id) DO NOTHING
       `;
 
-      // Snapshot full row state prior to reset
       const [preReminder] = await testSql<Array<Record<string, unknown>>>`
         SELECT * FROM reminders WHERE reminder_id = ${reminderInsert.reminder_id}
       `;
@@ -308,7 +295,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Atomic personal configuration reset: regre
 
       const result = await resetRepository.resetPersonalConfiguration(targetUserId);
 
-      // Proves spotlight reset is reported and rows deleted
       expect(result).not.toBeNull();
       expect(result?.affectedServerIds).toContain(serverIdA);
 
@@ -317,7 +303,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Atomic personal configuration reset: regre
       `;
       expect(postSpotlight.count).toBe(0);
 
-      // Proves user_saved_provider_configs, personal_memories, and reminders were completely untouched
       const [postReminder] = await testSql<Array<Record<string, unknown>>>`
         SELECT * FROM reminders WHERE reminder_id = ${reminderInsert.reminder_id}
       `;
@@ -345,7 +330,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Atomic personal configuration reset: regre
       `;
       const missingUserId: number = missingRowUser.user_id;
 
-      // Ensure no personalization config exists
       await testSql`DELETE FROM user_personalization_configs WHERE user_id = ${missingUserId}`;
 
       const result = await resetRepository.resetPersonalConfiguration(missingUserId);
@@ -384,14 +368,12 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Atomic personal configuration reset: regre
           "_rt injected personal reset failure",
         );
 
-        // Transaction failure must leave dirty user state unchanged.
         const [userRow] = await testSql<Array<{ language_pref: string; privacy_level: number }>>`
           SELECT language_pref, privacy_level FROM users WHERE user_id = ${targetUserId}
         `;
         expect(userRow.language_pref).toBe("ja");
         expect(userRow.privacy_level).toBe(2);
 
-        // Transaction failure must leave dirty personalization columns unchanged.
         const [configRow] = await testSql<Array<{ user_nickname: string | null }>>`
           SELECT user_nickname FROM user_personalization_configs WHERE user_id = ${targetUserId}
         `;

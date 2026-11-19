@@ -440,9 +440,8 @@ describe("Channels Destinations routes", () => {
   });
 
   it("opens the Welcome modal on the persona page its range entry names", async () => {
-    // A roster past one page is reachable only through the range select, so the start the option
-    // carries has to reach the builder: otherwise every range would reopen page one.
-    // The server state is the roster's first entry, so the stored welcome persona lives there.
+    // A roster past one page is only reachable through the range select, so the option's start
+    // must reach the builder instead of reopening page one.
     const personas = Array.from({ length: 60 }, (_unused, index) =>
       makePersona({
         persona_id: index + 1,

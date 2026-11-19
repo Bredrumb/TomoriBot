@@ -18,7 +18,6 @@ async function buildVerbatimToolDefinitionsJson(
   isUserImpersonation: boolean,
   userId?: number,
 ): Promise<Array<Record<string, unknown>>> {
-  // Build the minimal availability state (mirrors every <Provider>.getTools block).
   const provider = tomoriState.llm.llm_provider;
   const toolStateForContext: ToolStateForContext = {
     server_id: tomoriState.server_id.toString(),
@@ -62,11 +61,9 @@ async function buildVerbatimToolDefinitionsJson(
     },
   };
 
-  // Feature-flag-gated built-in tools + allowed MCP function names.
   const { builtInTools, mcpFunctionNames } = await getAvailableToolsWithMCP(provider, toolStateForContext);
 
-  // Serialize to full native schemas (built-in + global/guild MCP) via the
-  //    OpenAI-compatible adapter: the same shape that lands in `config.tools`.
+  // Uses OpenAI-compatible schemas for all providers because verbatim mode expects uniform JSON parameter definitions.
   const adapter = new OpenAICompatibleToolAdapter(provider);
   return adapter.getAllToolsInProviderFormat(
     applyStreamContextAvailability({

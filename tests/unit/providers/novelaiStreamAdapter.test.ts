@@ -457,7 +457,6 @@ describe("NovelaiStreamAdapter.startStream error propagation", () => {
       chunks.push(chunk);
     }
 
-    // Must yield the initial token chunk, then the error chunk, NEVER the raw error JSON as text
     expect(chunks).toHaveLength(2);
 
     const tokenChunk = adapter.processChunk(chunks[0]);
@@ -470,7 +469,6 @@ describe("NovelaiStreamAdapter.startStream error propagation", () => {
     expect(errorProcessed.type).toBe("error");
     expect(errorProcessed.error?.message).toContain("out of anlas");
 
-    // The raw error JSON must never be emitted as text content
     const textContents = chunks.map((c) => (c.data as { token?: string })?.token).filter(Boolean);
     expect(textContents).not.toContain('{"error":"out of anlas"}');
 

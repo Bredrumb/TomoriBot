@@ -56,7 +56,6 @@ describe("SearXNG availability transition logging", () => {
     delete process.env[BASE_URL_ENV];
 
     expect(await isSearxngAvailable(true)).toBe(false);
-    // An unset base URL means SearXNG was never enabled, which is not an outage.
     expect(errorTypes.length).toBe(before);
   });
 });

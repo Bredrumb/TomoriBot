@@ -66,8 +66,7 @@ export async function buildOpenAICompatibleMessages(
       }
 
       if (part.type === "video") {
-        // Generic OpenAI-compatible endpoints don't support video embedding.
-        // Add a text placeholder so the model is aware a video was attached.
+        // Generic OpenAI-compatible endpoints reject video blocks, so emit a text placeholder.
         contentParts.push({
           type: "text",
           text: "[System: A video is attached to this message that this model cannot process.]",
@@ -79,9 +78,7 @@ export async function buildOpenAICompatibleMessages(
         return contentParts;
       }
       if (!options.seesImages) {
-        // Image part present but model cannot process it, so add a text placeholder
-        // so the model is still aware an image was attached. This can happen when
-        // context was built with images included for a vision-capable fallback model.
+        // Keep a text placeholder when !seesImages leaks here (fallback context) so images are not silently dropped.
         contentParts.push({
           type: "text",
           text: "[System: An image is attached to this message that this model cannot process.]",
@@ -91,8 +88,6 @@ export async function buildOpenAICompatibleMessages(
 
       const imagePart = await convertImagePartToOpenAIContentPart(part);
       if (imagePart) {
-        // Image parts are attached to the message here regardless of role; assistant media is
-        // relocated to a synthetic user turn by relocateAssistantMediaToUserTurns after the loop.
         contentParts.push(imagePart);
       }
       return contentParts;
@@ -100,9 +95,6 @@ export async function buildOpenAICompatibleMessages(
     const contentParts = partsByInput.flat();
 
     if (role === "assistant") {
-      // Emit the assistant turn with its parts intact. relocateAssistantMediaToUserTurns (run after
-      // the dialogue loop) peels any image parts into a synthetic user turn and flattens the
-      // remaining text-only assistant content back to a string, so matching the previous output.
       if (contentParts.length > 0) {
         messages.push({
           role,
@@ -126,21 +118,13 @@ export async function buildOpenAICompatibleMessages(
     });
   }
 
-  // Relocate media off assistant turns into synthetic user turns (always-on, never gated by a
-  // toggle): the assistant role cannot carry media in input history across OpenAI/Anthropic/Gemini
-  // shaped APIs. Runs only over the dialogue turns assembled above: system, tool/function history,
-  // and prefill turns are appended afterwards and never carry relocatable media.
+  // Relocate assistant media unconditionally before system/tool/prefill turns because APIs reject media on assistant
+  // history.
   messages = relocateAssistantMediaToUserTurns(messages);
 
   if (systemInstructionParts.length > 0) {
     const systemContent = systemInstructionParts.join("\n\n");
 
-    // Some endpoints (e.g. Chatmock proxying Codex CLI) strip system-role
-    //    turns before forwarding to the underlying model.  When the adapter
-    //    signals this via supportsSystemRole: false, inject the instructions
-    //    as the first user turn so the model still receives them in-band.
-    // The wrapper preamble mirrors the Gemma in-band injection pattern
-    //    used in googleStreamAdapter.ts.
     if (options.supportsSystemRole === false) {
       messages.unshift({
         role: "user",
@@ -183,10 +167,8 @@ export async function buildOpenAICompatibleMessages(
           },
         ],
       };
-      // DeepSeek thinking mode rejects a replayed tool-call turn that omits `reasoning_content`
-      // but accepts an empty string, so the key must be present even when nothing was captured.
-      // A turn can legitimately carry none: a degraded retry that drops `thinking` (guarded by
-      // mandatoryBodyKeys) still calls tools, and that reply has no reasoning to capture.
+      // DeepSeek rejects replayed tool turns without reasoning_content (after degraded retries), so stamp "" when
+      // missing.
       const capturedReasoning = interaction.functionCall.deepseekReasoningContent;
       if (options.requiresReasoningContentReplay) {
         assistantMessage.reasoning_content = capturedReasoning ?? "";
@@ -206,9 +188,7 @@ export async function buildOpenAICompatibleMessages(
         content: JSON.stringify(interaction.functionResponse),
       });
 
-      // The function response is already serialized in the role=tool message.
-      // A synthetic user turn is needed only when image metadata must be moved
-      // onto a role that supports image inputs.
+      // Emit a follow-up user turn only for tool image metadata because the function response already sits in role=tool.
       const responseParts: Array<Record<string, unknown>> = [];
 
       if (

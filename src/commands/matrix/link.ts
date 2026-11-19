@@ -70,7 +70,6 @@ export async function execute(
       return;
     }
 
-    // Defer before async work (Pattern 2)
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     if (!isMatrixConfigured()) {
@@ -98,7 +97,6 @@ export async function execute(
     const channel = interaction.options.getChannel("channel", true);
     const roomId = interaction.options.getString("room", true).trim();
 
-    // Validate Matrix room ID format: must start with "!" and contain ":"
     if (!roomId.startsWith("!") || !roomId.includes(":")) {
       await replyInfoEmbed(interaction, locale, {
         color: ColorCode.ERROR,

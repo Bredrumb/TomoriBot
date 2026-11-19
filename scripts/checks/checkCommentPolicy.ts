@@ -135,10 +135,8 @@ export interface CommentAuditLimits {
 }
 
 export const DEFAULT_AUDIT_LIMITS: CommentAuditLimits = {
-  // A duplicate has to clear the length floor before it is worth a maintainer's attention: a short
-  // fallback note such as `// Fallback: keep last value` is repeated by design, while a
-  // sentence-long rationale repeated verbatim is a copy. The character floor keeps a string of
-  // identifiers from reaching the word count without carrying a sentence.
+  // Short fallback notes repeat by design while repeated sentence rationales are copies, and the char floor prevents
+  // short identifier runs from triggering on word count alone.
   duplicateMinChars: 60,
   duplicateMinWords: 12,
   longBlockMinLines: 11,
@@ -383,10 +381,8 @@ export function findDuplicateCommentBlocks(
       (block) => block.words >= limits.duplicateMinWords && block.chars >= limits.duplicateMinChars,
     );
     if (!eligible) continue;
-    // Each locale tree collapses to one identity, so the same English comment carried into every
-    // translated file reads as one authored sentence rather than one repetition per language. A
-    // group that spans more than one identity still reports, as does genuine repetition inside a
-    // single file, where the extraction is the obvious fix.
+    // Collapse locale trees to one identity so mirrored comments across translations read as one copy while cross-scope
+    // or same-file repeats still report.
     const identities = new Set(group.map((block) => commentScope(block.file)));
     const files = new Set(group.map((block) => block.file));
     if (identities.size === 1 && files.size === group.length) {
@@ -656,8 +652,7 @@ function blankMarkdownDataSpans(line: string): string {
   blank(/(?:^|\s)--[A-Za-z0-9][\w-]*/g);
   // Discord's subtext marker, which is syntax at the head of a rendered line.
   blank(/^\s*-#\s/g);
-  // A dash alone in a table cell marks "not applicable". It is a typographic convention with no
-  // two halves to relate, so the rule has nothing to name; prose in the same cell still reports.
+  // Blank standalone N/A table dashes because they relate no clauses, leaving prose in the same cell intact.
   blank(/(?<=\|)\s*[—–]\s*(?=\|)/g);
 
   return masked;
@@ -1334,9 +1329,7 @@ function parseArguments(args: string[]): ParsedArguments {
       parsed.auditNarration = true;
       continue;
     }
-    // Detail level, shared with the other gates so `vl` can forward one flag. Any other
-    // dash-prefixed value is a mistake, and accepting it as a path would silently
-    // replace the default roots with a nonexistent one and scan nothing at all.
+    // Shared detail flag forwarded by `vl` across gates; any unknown flag below throws rather than scanning as a path.
     if (value === "--verbose" || value === "--no-verbose") {
       parsed.verboseOutput = value === "--verbose";
       continue;
@@ -1419,9 +1412,7 @@ async function main(): Promise<void> {
   const errors = result.findings.filter((finding) => finding.severity === "error");
   const warnings = result.findings.length - errors.length;
 
-  // Errors print in full under either mode: they are why anyone runs this. Warnings do
-  // not change the exit code, so under quiet mode their count is the whole report and
-  // the per-finding listing would be detail nobody can act on yet.
+  // Print finding listings only when errors exist or --verbose is set because quiet warnings report only a count.
   const printsDetail = errors.length > 0 || warnings === 0 || args.verboseOutput;
   if (printsDetail) {
     console.log(`Comment policy guide: ${POLICY_DOC_PATH}`);

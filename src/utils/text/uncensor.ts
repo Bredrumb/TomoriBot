@@ -1,7 +1,9 @@
 import profaneWords from "profane-words";
 
-const UNICODE_SPACE = "⠀"; // U+2800 braille pattern blank
-const OBFUSCATION_DOT = "·"; // U+00B7 middle dot
+// Codepoint U+2800 (braille pattern blank): kept explicit because it renders like a normal space.
+const UNICODE_SPACE = "⠀";
+// Codepoint U+00B7 (middle dot): kept explicit because it resembles a period or bullet.
+const OBFUSCATION_DOT = "·";
 
 const DEFAULT_SENSITIVE_WORDS = [
   "fuck",
@@ -128,7 +130,7 @@ function obfuscateWord(word: string): string {
 
   if (slots.length <= 1) return word;
 
-  const maxDots = Math.max(1, slots.length - 1); // never dot every slot
+  const maxDots = Math.max(1, slots.length - 1);
   const dotCount = randomInt(1, maxDots);
   const positions = new Set<number>();
   while (positions.size < dotCount) {
@@ -146,27 +148,6 @@ function obfuscateWord(word: string): string {
   return result;
 }
 
-/*
-function deobfuscateSensitiveWords(text: string, wordSet: Set<string>): string {
-	const dotPattern = escapeRegExp(OBFUSCATION_DOT);
-	const obfuscatedToken = new RegExp(
-		`[A-Za-z](?:[A-Za-z'’\\-]*${dotPattern}[A-Za-z'’\\-]*)+`,
-		"g",
-	);
-
-	return text.replace(obfuscatedToken, (match) => {
-		if (!match.includes(OBFUSCATION_DOT)) return match;
-		const normalized = normalizeToken(
-			match.replace(new RegExp(dotPattern, "g"), ""),
-		);
-		if (wordSet.has(normalized)) {
-			return match.replace(new RegExp(dotPattern, "g"), "");
-		}
-		return match;
-	});
-}
-	*/
-
 function protectSegments(text: string): {
   protectedText: string;
   restore: (value: string) => string;
@@ -182,14 +163,9 @@ function protectSegments(text: string): {
     });
   };
 
-  // Protect code blocks and inline code
   protect(/```[\s\S]*?```/g, "CODEBLOCK");
   protect(/`[^`]*`/g, "INLINE");
-
-  // Protect URLs (keep consistent with stringHelper behavior)
   protect(/(https?|ftps?):\/\/[^\s<>[\](){}'"]+/g, "URL");
-
-  // Protect Discord/HTML-like tags and emoji-like tokens
   protect(/<[^>]+>/g, "TAG");
   protect(/:[a-zA-Z0-9_]{2,}:/g, "EMOJI");
 

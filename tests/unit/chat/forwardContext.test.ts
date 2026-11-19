@@ -86,9 +86,7 @@ async function runBuildForwardContext(message: Message) {
 
 describe("buildForwardContext", () => {
   test("extracts images from an image-only forward and synthesizes content", async () => {
-    // Regression: forwarding a message with ONLY images (no text) must still
-    // produce non-empty content so the message survives the empty-message drop
-    // check in simplifyMessage, and the snapshot image must be extracted.
+    // Image-only forwards must still synthesize non-empty content so simplifyMessage does not drop them.
     const message = makeForwardMessage({
       id: "wrapper-1",
       originalMessageId: "original-999",
@@ -113,9 +111,8 @@ describe("buildForwardContext", () => {
   });
 
   test("registers the wrapper message id as the media source, not the original's", async () => {
-    // Regression: the original message lives in the SOURCE channel, so tools
-    // resolving media IDs against the current channel could never fetch it. The
-    // wrapper id resolves in-channel and its snapshots carry the same media.
+    // Register the wrapper id instead of the source-channel original because in-channel media tools can fetch
+    // snapshots from the wrapper.
     const message = makeForwardMessage({
       id: "wrapper-1",
       originalMessageId: "original-999",
@@ -155,10 +152,8 @@ describe("buildForwardContext", () => {
   });
 
   test("recovers media from a forward of a forward", async () => {
-    // Regression: Discord's message_snapshots is non-recursive, so forwarding an
-    // already-forwarded message hands the bot an EMPTY snapshot, so no text, no media.
-    // The wrapper's own reference still points at the intermediate forward, whose
-    // snapshots hold the original image, so the chain must be re-fetched.
+    // Discord's message_snapshots is non-recursive, so nested forwards give an empty snapshot and must re-fetch
+    // through the wrapper reference chain.
     const intermediateForward = makeForwardMessage({
       id: "wrapper-1",
       originalMessageId: "original-999",
@@ -186,16 +181,14 @@ describe("buildForwardContext", () => {
     expect(imageAttachments[0]?.proxyUrl).toBe("https://media.discordapp.net/attachments/2/3/cat.png");
     expect(result.content).toContain("(with 1 image)");
     expect(result.remoteMediaSourceKind).toBe("forwarded");
-    // The OUTERMOST wrapper is what resolves in the current channel, so tools must
-    // key off it, so re-resolving it walks the same chain again to reach the bytes.
+    // Tools must key off the outermost wrapper because it resolves in-channel and walks the chain on re-fetch.
     expect(result.mediaSourceMessageIds).toEqual(["wrapper-2"]);
     expect(registeredIds).toContain("wrapper-2");
   });
 
   test("reports an unreachable nested forward instead of an empty message", async () => {
-    // Regression: when the origin channel cannot be read, the old code emitted
-    // "[System: No text content was included]" with no media ID. That asserts a
-    // forward the model cannot see, which led it to invent a media_id and fail.
+    // Unreachable origins must not emit "No text content was included" without a media ID because that prompts
+    // the model to hallucinate a media_id.
     const outerForward = makeForwardMessage({
       id: "wrapper-2",
       originalMessageId: "wrapper-1",

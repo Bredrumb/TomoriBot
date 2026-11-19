@@ -18,10 +18,7 @@ import type { ManualTriggerInvoker } from "@/utils/chat/types";
 import { getChannelPrivacyReason } from "@/utils/discord/channelPrivacy";
 import { localizer } from "@/utils/text/localizer";
 
-// Stores pending boomerang data keyed by source channel ID.
-// After tomoriChat() completes in the target channel, the source channel
-// consumes this data to trigger a separate follow-up generation.
-
+// Consumed by the source channel after tomoriChat() finishes in the target channel to trigger a follow-up turn.
 export interface PendingBoomerang {
   sourceChannelId: string;
   targetChannelName: string;
@@ -226,7 +223,6 @@ export class CrossChannelMessageTool extends BaseTool {
     const requestedChannel =
       targetChannelArg?.trim() || legacyChannelNameArg?.trim() || legacyChannelIdArg?.trim() || inferredChannelFromTask;
 
-    // Validate: at least one channel identifier must be provided
     if (!requestedChannel) {
       return {
         success: false,
@@ -238,7 +234,6 @@ export class CrossChannelMessageTool extends BaseTool {
       };
     }
 
-    // Validate: task must be non-empty unless peeking
     if (!isPeekOnly && (typeof taskArg !== "string" || !taskArg.trim())) {
       return {
         success: false,
@@ -251,7 +246,6 @@ export class CrossChannelMessageTool extends BaseTool {
       };
     }
 
-    // DM guard: cross-channel only works within a guild
     if (!context.guildId) {
       return {
         success: false,
@@ -312,7 +306,6 @@ export class CrossChannelMessageTool extends BaseTool {
 
     const targetChannel: GuildTextBasedChannel = channelResolution.channel;
 
-    // Same-channel guard
     if (targetChannel.id === context.channel.id) {
       return {
         success: false,
@@ -358,7 +351,6 @@ export class CrossChannelMessageTool extends BaseTool {
       };
     }
 
-    // Permission check: ViewChannel always required; send permissions only for dispatch mode
     const botMember =
       guild.members.me ??
       (context.client.user ? await guild.members.fetch(context.client.user.id).catch(() => null) : null);
@@ -395,7 +387,6 @@ export class CrossChannelMessageTool extends BaseTool {
 
       const perms = targetChannel.permissionsFor(botMember);
 
-      // Check ViewChannel permission (required for both peek and dispatch)
       if (perms && !perms.has(PermissionFlagsBits.ViewChannel)) {
         return {
           success: false,
@@ -447,7 +438,6 @@ export class CrossChannelMessageTool extends BaseTool {
       }
     }
 
-    // Peek-only path: fetch recent messages and return as context without dispatching
     if (isPeekOnly) {
       const fetchLimit = normalizeMessageFetchLimit(context.tomoriState.config.message_fetch_limit);
       let recentMessages: Awaited<ReturnType<typeof targetChannel.messages.fetch>> | null = null;
@@ -576,10 +566,7 @@ export class CrossChannelMessageTool extends BaseTool {
         `Cross-channel tool: Successfully dispatched to #${targetChannel.name} (task: "${(taskArg as string).trim().substring(0, 80)}...")`,
       );
 
-      // Handle boomerang: store data for follow-up generation in source channel
       if (boomerangArg) {
-        // Fetch last 10 messages from target channel (including the one the bot just sent),
-        // but respect refresh embed boundaries, only include messages after the most recent one
         let targetMessages: Array<{
           author: string;
           content: string;
@@ -618,9 +605,8 @@ export class CrossChannelMessageTool extends BaseTool {
         );
       }
 
-      // When boomerang is enabled, end the LLM's current turn immediately.
-      // The boomerang mechanism will trigger a separate generation with the actual
-      // target channel context, so we must prevent the LLM from fabricating a report here.
+      // End the turn immediately when boomerang is enabled so the LLM cannot fabricate a report before the follow-up
+      // turn runs.
       if (boomerangArg) {
         return {
           success: true,
@@ -648,7 +634,6 @@ export class CrossChannelMessageTool extends BaseTool {
       assertActive();
       log.error(`Cross-channel tool: Failed to dispatch to #${targetChannel.name}:`, error as Error);
 
-      // Store failed boomerang if requested
       if (boomerangArg) {
         pendingBoomerangs.set(context.channel.id, {
           sourceChannelId: context.channel.id,

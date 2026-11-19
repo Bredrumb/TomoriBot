@@ -398,7 +398,7 @@ describe("actual status page builders", () => {
 
     const mutatedPage: DashboardPage = {
       ...page,
-      fields: [page.fields[0]], // dropped language_pref
+      fields: [page.fields[0]],
     };
 
     const assertFieldsSurvive = (expectedPage: DashboardPage, renderedJson: string) => {

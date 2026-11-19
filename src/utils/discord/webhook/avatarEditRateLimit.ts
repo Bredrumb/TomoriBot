@@ -8,8 +8,7 @@ import { type RateLimitData, RateLimitError } from "discord.js";
 // resets so bursts fall back.
 export const WEBHOOK_AVATAR_PATCH_MAX_WAIT_MS = 5_000;
 
-// Bucket routes for editing the webhook itself, with and without the token. Message edits
-// (`/webhooks/:id/:token/messages/:id`) share the prefix and must keep waiting.
+// Match only webhook-edit bucket routes so message edits under `/webhooks/:id/:token/messages/:id` still wait.
 const WEBHOOK_EDIT_BUCKET_ROUTES = new Set(["/webhooks/:id", "/webhooks/:id/:token"]);
 
 // `rejectOnRateLimit` is one client-wide option, so this scope is what keeps every request outside

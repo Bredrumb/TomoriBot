@@ -66,7 +66,6 @@ describe("locale drift: real repository history", () => {
       "2026-01-01T00:00:00Z",
     );
 
-    // English moves on its own. The translation still holds the older text.
     await commitFiles(
       { [englishPath]: localeFile([["moved", "`Rewritten English`"]]) },
       "rewrite english",
@@ -98,8 +97,6 @@ describe("locale drift: real repository history", () => {
   it(
     "refuses a depth-1 clone instead of reporting it clean",
     async () => {
-      // The failure this guards against is a false clean report, so asserting only the throw would
-      // miss a regression that returns an empty report instead.
       const drift = findDriftedTranslations("ja", shallowRepo);
       await expect(drift).rejects.toBeInstanceOf(DriftHistoryError);
       await expect(drift).rejects.toThrow(/shallow/);
@@ -120,7 +117,6 @@ describe("locale drift: real repository history", () => {
 
       expect(result.exitCode).toBe(2);
       expect(output).toContain("git fetch --unshallow");
-      // The documented contract: no report at all, rather than a clean one.
       expect(output).not.toContain("None. Every translated key matches");
     },
     REPO_TIMEOUT_MS,
@@ -149,9 +145,8 @@ describe("locale drift: real repository history", () => {
       const japanesePath = join(sourceRepo, "src/locales/ja/general.ts");
       const committed = await Bun.file(japanesePath).text();
 
-      // An uncommitted edit that adds a line ahead of the key. Blame without a revision follows the
-      // working tree, so the key's line number moves and its provenance shifts, while every value the
-      // report prints still comes from HEAD. The report has to describe one revision, not two.
+      // Adding a line above the key shifts its working-tree line number, so unpinned blame would
+      // mix working-tree provenance with HEAD values.
       await writeFile(
         japanesePath,
         localeFile([

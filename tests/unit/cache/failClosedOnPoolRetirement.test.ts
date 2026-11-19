@@ -36,10 +36,8 @@ afterEach(() => {
   invalidatePersonaUserBlockCache(SERVER_ID, 1, USER_ID);
 });
 
-// Every case here asserts the restrictive answer, never the permissive default these paths
-// used to return. A permissive default is indistinguishable from a real reading, so the whole
-// class of bug is invisible in production until someone notices a privacy setting stopped
-// applying; only a test can hold the direction in place.
+// Assert the restrictive answer because permissive defaults look like valid reads in production and silently drop
+// privacy or moderation guards.
 describe("privacy and moderation reads under a pool retirement", () => {
   it("reports FULL privacy rather than MINIMAL when the privacy read fails", async () => {
     const rowSpy = spyOn(userRepository, "loadByDiscordId").mockRejectedValue(retiredConnectionError());
@@ -87,8 +85,8 @@ describe("privacy and moderation reads under a pool retirement", () => {
       retiredConnectionError(),
     );
 
-    // An empty array is read downstream as "no blocks apply", which lifts every persona-level
-    // block. Aborting the turn instead produces silence, which is what the block asks for.
+    // Propagate the failure because returning an empty array reads downstream as "no blocks apply" and lifts every
+    // persona-level block.
     await expect(getCachedActiveBlocksForUser(SERVER_ID, USER_ID)).rejects.toThrow(DatabaseUnavailableError);
 
     blockSpy.mockRestore();

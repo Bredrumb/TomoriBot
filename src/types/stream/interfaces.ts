@@ -45,7 +45,7 @@ export interface ProviderError {
   retryable: boolean;
   originalError?: unknown;
 
-  userMessage?: string; // User-friendly error message from provider
+  userMessage?: string;
 }
 
 export interface StreamConfig extends ProviderConfig {
@@ -127,22 +127,23 @@ export interface StreamContext {
 
   provider: string;
   locale: string;
-  suppressUserErrors?: boolean; // Suppress user-facing error embeds during retries or non-deliberate chat turns
+  suppressUserErrors?: boolean;
   // Identifies whose credentials answered the turn so error formatting selects server- or personal-scoped provider
   // tips.
   textCredentialSource?: "server" | "personal";
-  rotationKeyRetriesUsed?: boolean; // True if one or more rotation-key retries were attempted
+  rotationKeyRetriesUsed?: boolean;
   // Suppresses surfacing stream interruption errors because the generation turn will retry on the same key.
   retryStreamInterruption?: boolean;
-  replyNoticeState?: { attempted: boolean; sent: boolean }; // Tracks the standalone alter reply notice across tool-call stream retries
+  // Shared across tool-call stream retries so the alter reply notice posts only once.
+  replyNoticeState?: { attempted: boolean; sent: boolean };
 
-  disableYouTubeProcessing?: boolean; // Temporarily disable YouTube function during enhanced context restart
+  disableYouTubeProcessing?: boolean;
 
-  webhook?: import("discord.js").Webhook; // Webhook for alter persona responses
-  personaAvatarUrl?: string; // Avatar URL or data URI for current persona
-  personaUsername?: string; // Username override for current persona (shown in Discord UI)
-  prefixStrippingName?: string; // Name used for prefix stripping (may differ from personaUsername for user impersonation)
-  impersonatedSpeakerLabel?: string; // Naming-aware label the impersonation prompt asks the model to open with; stripped like prefixStrippingName
+  webhook?: import("discord.js").Webhook;
+  personaAvatarUrl?: string;
+  personaUsername?: string;
+  prefixStrippingName?: string;
+  impersonatedSpeakerLabel?: string;
 
   forcedMentions?: Array<{
     handle: string;
@@ -161,8 +162,7 @@ export interface StreamContext {
 
   abortSignal?: AbortSignal;
 
-  // Empty-response retry count of the current chat turn , so lets the opening-label leak guard
-  // discard-and-retry while budget remains, then strip-and-deliver on the final attempt
+  // Empty-response retry count for this turn so the opening-label leak guard retries until budget runs out.
   emptyResponseRetryCount?: number;
 
   onStreamProgress?: () => void;

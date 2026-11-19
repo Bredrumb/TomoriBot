@@ -105,8 +105,7 @@ describe("channel delivery continuity — last delivered identity", () => {
     expect(lastWebhookIdentity(CHANNEL)).toBeNull();
 
     recordChannelDeliveredWebhookIdentity(CHANNEL, { username: "Ellen" }, messageId, null, "1400000000000000002");
-    // ...and recording an identity must not disturb the alternation: a sprite CHANGE still
-    // flips to the decorated name.
+    // Recording an identity must not disturb the alternation: a sprite change still flips to the decorated name.
     expect(advanceChannelSpriteGroupParity(CHANNEL, "shy", messageId)).toBe(true);
   });
 

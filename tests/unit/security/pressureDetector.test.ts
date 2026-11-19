@@ -87,9 +87,8 @@ describe("evaluatePressure", () => {
   });
 
   it("tolerates dips without losing accumulated pressure", () => {
-    // The defect a 12-day replay exposed: io_full crosses any threshold constantly but is rarely
-    // above it uninterrupted, so a continuous-run rule reset on every dip and fired zero times
-    // through real incidents. One calm sample in twelve must not discard the window.
+    // Real io_full incidents cross thresholds intermittently, so one calm sample in twelve must not reset the
+    // dwell window.
     const dippy = [...Array(6).fill(stressed), calm, ...Array(6).fill(stressed)];
     const { verdicts } = run(dippy);
 
@@ -98,7 +97,6 @@ describe("evaluatePressure", () => {
   });
 
   it("does not act when the pressure is a minority of the window", () => {
-    // Alternating samples sit at 50% duty, below the 0.7 requirement.
     const alternating = Array.from({ length: 24 }, (_, i) => (i % 2 === 0 ? stressed : calm));
     const { verdicts } = run(alternating);
 
@@ -161,8 +159,7 @@ describe("DEFAULT_PRESSURE_THRESHOLDS", () => {
   });
 
   it("ships a duty cycle that a chronically degraded host cannot satisfy by baseline alone", () => {
-    // Replaying 12 days of production at 0.7 produced 2 recommendations per day spaced one rate
-    // limit apart, which is a chronic baseline being reported as repeated incidents.
+    // A chronically degraded baseline satisfies 0.7 duty, so minDutyCycle must stay at or above 0.9.
     expect(DEFAULT_PRESSURE_THRESHOLDS.minDutyCycle).toBeGreaterThanOrEqual(0.9);
   });
 });

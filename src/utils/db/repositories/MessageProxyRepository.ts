@@ -234,11 +234,8 @@ class MessageProxyRepository {
           throw new Error("External identity resolved to a different synthetic user");
         }
 
-        // Naming and profile writes require a personalization row. A null nickname leaves the
-        // service display name active until the user explicitly sets an override. Pronouns are
-        // seeded only when the statement above was the insert that first registered the
-        // identity, so a repeat attestation never revisits the column and an edit made through
-        // the personalization panel or a chat tool outlives every later proxy message.
+        // Seed NULL nickname (so service display name stays active) and initial pronouns only on first identity insert so
+        // later proxy messages never overwrite user edits.
         const seededPronouns = insertedExternalIdentity ? (input.pronouns?.trim() ?? "") : "";
         await tx`
           INSERT INTO user_personalization_configs (user_id, user_nickname, pronouns)

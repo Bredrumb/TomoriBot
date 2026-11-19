@@ -1,7 +1,7 @@
 export type ContextPart =
   | { type: "text"; text: string }
-  | { type: "image"; uri: string; mimeType: string; fallbackUri?: string } // URI could be a public URL or a data URI; fallbackUri tried on fetch failure
-  | { type: "video"; uri: string; mimeType: string; isYouTubeLink?: boolean }; // Video support with YouTube detection
+  | { type: "image"; uri: string; mimeType: string; fallbackUri?: string }
+  | { type: "video"; uri: string; mimeType: string; isYouTubeLink?: boolean };
 
 export interface MediaDescriptor {
   kind: "image" | "video";
@@ -16,10 +16,11 @@ export interface MediaDescriptor {
 }
 
 export interface ConversationUserReference {
-  targetId: string; // Discord snowflake or bridge user ID
+  // Discord snowflake or bridge user ID (not always numeric).
+  targetId: string;
   displayLabel: string;
   aliases: string[];
-  mentionable: boolean; // True only when this target can be converted into a Discord mention
+  mentionable: boolean;
 }
 
 interface ContextItemSender {
@@ -29,12 +30,13 @@ interface ContextItemSender {
 }
 
 export enum ContextItemTag {
-  SYSTEM_INSTRUCTION_BLOCK = "system_instruction_block", // For the main consolidated system prompt
-  SYSTEM_PERSONALITY = "system_personality", // Specific to bot's core personality attributes
-  SYSTEM_HUMANIZER_RULES = "system_humanizer_rules", // Specific to humanization instructions
-  SYSTEM_CHANNEL_PROMPT = "system_channel_prompt", // Per-channel system prompt override (append mode); injected after SYSTEM_HUMANIZER_RULES
-  SYSTEM_PERSONA_PROMPT = "system_persona_prompt", // Specific to persona prompt
-  SYSTEM_FUNCTION_GUIDE = "system_function_guide", // New: For instructions on using available functions
+  SYSTEM_INSTRUCTION_BLOCK = "system_instruction_block",
+  SYSTEM_PERSONALITY = "system_personality",
+  SYSTEM_HUMANIZER_RULES = "system_humanizer_rules",
+  // Injected after SYSTEM_HUMANIZER_RULES when using append mode.
+  SYSTEM_CHANNEL_PROMPT = "system_channel_prompt",
+  SYSTEM_PERSONA_PROMPT = "system_persona_prompt",
+  SYSTEM_FUNCTION_GUIDE = "system_function_guide",
 
   KNOWLEDGE_SERVER_INFO = "knowledge_server_info",
   KNOWLEDGE_SERVER_EMOJIS = "knowledge_server_emojis",
@@ -45,18 +47,18 @@ export enum ContextItemTag {
   KNOWLEDGE_RECALLED_MEMORIES = "knowledge_recalled_memories",
   KNOWLEDGE_LOREBOOK_BEFORE = "knowledge_lorebook_before",
   KNOWLEDGE_LOREBOOK_AFTER = "knowledge_lorebook_after",
-  KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS = "knowledge_verbatim_tool_definitions", // Available tool JSON schemas, injected only for a model with verbatim tool calling enabled
+  KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS = "knowledge_verbatim_tool_definitions",
   KNOWLEDGE_SERVER_CONDITIONING = "knowledge_server_conditioning",
   KNOWLEDGE_PERSONA_USER_BLOCKS = "knowledge_persona_user_blocks",
-  KNOWLEDGE_USER_MEMORIES = "knowledge_user_memories", // For a block of multiple users' memories
-  KNOWLEDGE_USER_STATUS = "knowledge_user_status", // For a block of multiple users' statuses
-  KNOWLEDGE_CURRENT_CONTEXT = "knowledge_current_context", // Time, channel info
-  KNOWLEDGE_USERS_IN_CONVERSATION = "knowledge_users_in_conversation", // Combined: time, channel, user status, memories, reminders
-  KNOWLEDGE_SHORT_TERM_MEMORY = "knowledge_short_term_memory", // Short-term memory for recent conversations (goes to dialogue history)
+  KNOWLEDGE_USER_MEMORIES = "knowledge_user_memories",
+  KNOWLEDGE_USER_STATUS = "knowledge_user_status",
+  KNOWLEDGE_CURRENT_CONTEXT = "knowledge_current_context",
+  KNOWLEDGE_USERS_IN_CONVERSATION = "knowledge_users_in_conversation",
+  KNOWLEDGE_SHORT_TERM_MEMORY = "knowledge_short_term_memory",
 
-  DIALOGUE_SAMPLE = "dialogue_sample", // For individual sample user/model turns
-  DIALOGUE_HISTORY = "dialogue_history", // For actual conversation history turns
-  CONTEXT_NOTE_INJECTION = "context_note_injection", // Author's note injected into dialogue at configurable depth
+  DIALOGUE_SAMPLE = "dialogue_sample",
+  DIALOGUE_HISTORY = "dialogue_history",
+  CONTEXT_NOTE_INJECTION = "context_note_injection",
 }
 
 export interface ContextMemoryEntry {
@@ -71,24 +73,24 @@ export type StructuredContextItem = {
   boomerangTranscript?: boolean;
   memoryEntries?: ContextMemoryEntry[];
   personalMemoryItems?: StructuredContextItem[];
-  role: "system" | "user" | "model"; // 'system' for initial instructions, 'user' for user/tool inputs, 'model' for LLM responses
+  role: "system" | "user" | "model";
   parts: ContextPart[];
   mediaDescriptors?: MediaDescriptor[];
-  metadataTag?: ContextItemTag; // Optional tag for internal processing
-  messageId?: string; // Optional Discord message ID for tools that need to reference the original message
+  metadataTag?: ContextItemTag;
+  messageId?: string;
   // All Discord message IDs folded into a merged turn (`messageId` holds only the first), so replies to later split
   // chunks still resolve.
   combinedMessageIds?: string[];
-  sender?: ContextItemSender; // Hidden sender metadata for provider-side history normalization
+  sender?: ContextItemSender;
   participantReviewEvidence?: {
     participants: Array<{ name: string; fields: string[] }>;
     channel: string;
     currentTime: string;
     timezone: string;
   };
-  conversationUsers?: ConversationUserReference[]; // Hidden metadata for user resolution and mention handling
+  conversationUsers?: ConversationUserReference[];
   participantTargetIndex?: import("@/utils/text/participants/targetIndex").ParticipantTargetIndex;
-  personaMentionMap?: Map<string, string>; // Hidden metadata for preserving known persona @trigger text
+  personaMentionMap?: Map<string, string>;
   // Built only when the context model can call tools, so a generation attempt that sends no tools drops it.
   requiresToolCalling?: true;
 };

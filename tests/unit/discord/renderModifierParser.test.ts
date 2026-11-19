@@ -165,9 +165,7 @@ describe("render modifier parser", () => {
       ["tomori", persona("Tomori", 456)],
     ]);
 
-    // New persona-impersonates-persona display: "Tomori (Ren)" = Ren disguised
-    // as Tomori. Legacy messages with the same shape are misattributed until
-    // they age out of the history fetch window (documented trade-off).
+    // "Tomori (Ren)" now resolves as Ren disguised as Tomori, trading off legacy messages until they age out.
     const result = resolveRenderModifierSourcePersona("Tomori (Ren)", personaByNickname);
 
     expect(result?.persona.persona_id).toBe(123);

@@ -102,9 +102,8 @@ export function flattenLocale(node: unknown, path: string[], out: Map<string, st
 export async function auditTextPreview(): Promise<TextPreviewAuditResult> {
   const violations: TextPreviewViolation[] = [];
 
-  // Flatten every audited locale so each string carries its dotted key.
-  //    Locales load concurrently because this runs inside `bun run vl`'s shared unit
-  //    lane, so avoidable serial I/O lands directly on the critical path.
+  // Read locales concurrently because this runs in `bun run vl`'s shared unit lane, where serial I/O hits the critical
+  // path.
   const loaded = await Promise.all(AUDITED_LOCALES.map(async (locale) => [locale, await loadLocale(locale)] as const));
   const perLocale = new Map<string, Map<string, string>>();
   for (const [locale, tree] of loaded) {
@@ -121,7 +120,7 @@ export async function auditTextPreview(): Promise<TextPreviewAuditResult> {
   const sourceFiles = (await Array.fromAsync(new Glob("src/**/*.ts").scan(TEXT_PREVIEW_REPO_ROOT))).filter(
     (file) => !file.replaceAll("\\", "/").includes("src/locales/"),
   );
-  // Read concurrently because serializing roughly 850 file reads dominates this audit.
+  // Read source files concurrently because serializing every file read across src/ dominates this audit.
   const sources = new Map<string, string>(
     await Promise.all(
       sourceFiles.map(

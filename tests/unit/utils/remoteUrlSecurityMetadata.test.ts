@@ -11,9 +11,8 @@ const PRIVATE_NETWORK_ENV = "ALLOW_PRIVATE_NETWORK";
 
 useEnvSandbox([RUN_ENV_NAME, PRIVATE_NETWORK_ENV]);
 
-// Gate 2 (validateRemoteUrl) backs the safe_http fetch engine, every redirect
-// hop, and all custom-endpoint/MCP HTTP calls. The cloud-metadata denylist must
-// hold across every relaxation path.
+// validateRemoteUrl backs safe_http, redirect hops, and endpoint/MCP calls, so the metadata denylist must hold
+// across every relaxation path.
 describe("validateRemoteUrl cloud-metadata denylist", () => {
   it("blocks the IMDS address outside production (general blocklist relaxed)", async () => {
     delete process.env[RUN_ENV_NAME];
@@ -39,11 +38,9 @@ describe("validateRemoteUrl cloud-metadata denylist", () => {
   it("relaxes ordinary private targets in production when opted in, but not metadata", async () => {
     process.env[RUN_ENV_NAME] = "production";
 
-    // An ordinary private address is permitted under the opt-in.
     const privateResult = await validateRemoteUrl("https://192.168.1.50/", { allowPrivateNetwork: true });
     expect(privateResult.valid).toBe(true);
 
-    // Link-local / metadata stays blocked regardless of the opt-in.
     const metadataResult = await validateRemoteUrl("https://169.254.169.254/", { allowPrivateNetwork: true });
     expect(metadataResult.valid).toBe(false);
   });

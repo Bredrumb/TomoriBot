@@ -602,8 +602,7 @@ describe("providers panel rendering", () => {
     ]);
     expect(firstOptions.map((option) => option.value)).not.toContain("add:speech");
     expect(firstOptions.map((option) => option.value)).not.toContain("add:transcription");
-    // Decision is absent from this fixture, so only four add actions appear. Paging reserves room
-    // for all endpoint capabilities, including decision, even when this entry offers fewer.
+    // Paging reserves slots for all endpoint capabilities including decision even when this fixture omits it.
     expect(firstOptions.map((option) => option.value)).not.toContain("add:decision");
     const addCount = entry.capabilities.filter((section) => section.availability !== "unavailable").length;
     const editCapacity = DISCORD_SELECT_OPTIONS_MAX - Object.keys(ENDPOINT_API_STYLES).length;
@@ -1066,9 +1065,7 @@ describe("providers panel rendering", () => {
   });
 });
 
-// A provider with a catalog-sized model list made the whole panel fail with
-// BASE_TYPE_BAD_LENGTH rather than render, because the per-capability model list is unbounded and
-// Discord caps a TextDisplay at 4000 characters.
+// Unbounded model lists trigger BASE_TYPE_BAD_LENGTH because Discord caps a TextDisplay at 4000 characters.
 describe("Provider entry body stays inside the TextDisplay budget", () => {
   it("caps a catalog-sized model list and states how many lines it hid", () => {
     const many = providerEntry("provider:openrouter", "OpenRouter");
@@ -1107,7 +1104,7 @@ describe("Provider entry body stays inside the TextDisplay budget", () => {
     const texts = container.components.filter((component) => typeof component.content === "string");
     expect(texts.length).toBeGreaterThan(0);
     for (const text of texts) {
-      // Discord's own bound. Exceeding it rejects the entire payload, not just this block.
+      // Discord's 4000-char TextDisplay bound: exceeding it rejects the entire payload.
       expect((text.content as string).length).toBeLessThanOrEqual(4000);
       expect((text.content as string).length).toBeGreaterThan(0);
     }

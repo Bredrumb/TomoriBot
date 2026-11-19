@@ -59,9 +59,8 @@ const destPageField: RouteFieldCodec<"destPage", number> = {
 
 const bucketIndexField: RouteFieldCodec<"bucketIndex", number> = {
   key: "bucketIndex",
-  // The wire carries an index because bucket names in the import schema are unrestricted and may contain colons
-  // or exceed the custom ID budget, while the snapshot bucket array is immutable for its lifetime, making the index
-  // safe and stable within one flow.
+  // Carry an index instead of raw bucket names (which can hold colons or exceed custom-ID limits) because the
+  // snapshot array is immutable.
   encode: (value) => String(value),
   decode: (value) => parseNonNegativeInt(value),
 };

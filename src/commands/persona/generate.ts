@@ -68,7 +68,7 @@ import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
 
 const MODAL_CUSTOM_ID = "preset_generate_modal";
 const CHARACTER_NAME_ID = "character_name";
-const CHARACTER_INFO_ID = "character_info"; // Combined description and speech examples
+const CHARACTER_INFO_ID = "character_info";
 const WEB_SEARCH_ID = "web_search";
 const ADDITIONAL_INST_ID = "additional_inst";
 const FILE_UPLOAD_ID = "avatar_image";
@@ -312,7 +312,6 @@ export async function execute(
   let replyUsesComponentsV2 = false;
 
   try {
-    // Load Tomori state to check provider (works for both guilds and DMs)
     const serverDiscId = interaction.guild?.id ?? interaction.user.id;
     const baseTomoriState = await personaRepository.loadState(serverDiscId);
     if (!baseTomoriState) {
@@ -325,11 +324,6 @@ export async function execute(
       return;
     }
 
-    // Overlay the invoking user's personal (BYOK) provider selections onto the
-    //    server state. This mirrors every other AI-generation command (e.g.
-    //    /generate image, /memories) and ensures generation uses the
-    //    user's personal text provider when configured, instead of always falling
-    //    back to the server's configured model.
     let { tomoriState, activeConfigs } = await applyPersonalProviderSelectionsToTomoriState(
       baseTomoriState,
       userData.user_id ?? null,
@@ -380,8 +374,7 @@ export async function execute(
       return;
     }
 
-    // Only check for structured output before modal (always required)
-    // Image vision and tools will be validated after modal based on user selections
+    // Only structured output is checked pre-modal because image vision and tool support depend on modal inputs.
     if (!tomoriState.llm.supports_structoutput) {
       log.warn(`[Generate Persona] Model "${effectiveModelName}" does not support structured output`, undefined, {
         userId: userData.user_id,
@@ -422,7 +415,7 @@ export async function execute(
         placeholder: "commands.persona.generate.modal.character_info_placeholder",
         required: true,
         style: TextInputStyle.Paragraph,
-        maxLength: 2000, // Increased to accommodate both description and speech examples
+        maxLength: 2000,
       },
       {
         customId: WEB_SEARCH_ID,
@@ -467,7 +460,7 @@ export async function execute(
         modalTitleKey: "commands.persona.generate.modal.title",
         components: modalComponents,
       },
-      true, // Auto-defer with public reply
+      true,
     );
 
     if (modalResult.outcome !== "submit") {
@@ -558,7 +551,6 @@ export async function execute(
       return;
     }
 
-    // Reserve persona operation quota (atomic check+increment for DDoS protection)
     const quotaReserve = reservePersonaQuota(interaction.user.id);
     if (!quotaReserve.allowed) {
       const resetTime = quotaReserve.resetAt ? new Date(quotaReserve.resetAt).toLocaleString(locale) : "unknown";
@@ -573,25 +565,20 @@ export async function execute(
       return;
     }
 
-    // Split combined character info into description and speech examples
-    // Users are expected to use natural formatting (newlines or clear sections)
-    // We'll pass the full info as description and let the AI parse it intelligently
+    // Both fields receive the full modal string so the model separates traits from speech examples in context.
     const characterDesc = characterInfo;
-    const speechExamples = characterInfo; // AI will extract speech patterns from context
+    const speechExamples = characterInfo;
 
-    // The primary model always performs generation, so these stay the primary model's own
-    // resolved provider and key. A vision model only ever contributes a text description.
+    // Generation always uses the primary model's credentials because a separate vision model only supplies a text caption.
     const generationTomoriState = tomoriState;
     const generationProviderName = providerName;
     const generationApiKey = decryptedApiKey;
-    // Set when the primary model cannot see the image and a vision model must describe it
-    // first. The caption travels to the primary model as text, never as image data.
+    // Set when a vision model must caption the image first so the primary model receives text instead of image bytes.
     let visionCaptionPending = false;
 
     if (imageAttachment) {
       const memCheck = memoryGuard.checkMemory();
       if (memCheck.status === "critical") {
-        // Preserve modal inputs for user convenience
         const embed = new EmbedBuilder()
           .setTitle(localizedStatusTitle(locale, "rate_limit.error_memory_critical_title", ColorCode.ERROR))
           .setDescription(localizer(locale, "rate_limit.error_memory_critical_description"))
@@ -637,7 +624,6 @@ export async function execute(
         return;
       }
 
-      // Download once with safeDownload
       const downloadResult = await safeDownload(imageAttachment.url, {
         maxSizeMB: PERSONA_LIMITS.MAX_AVATAR_SIZE_MB,
         timeoutMs: 10000,
@@ -663,8 +649,6 @@ export async function execute(
         return;
       }
 
-      // Store buffer for later reuse (image processing) and convert to base64 (AI generation)
-      // Buffer is guaranteed to exist when success is true
       if (!downloadResult.buffer) {
         await replyInfoEmbed(modalSubmitInteraction, locale, {
           titleKey: "commands.persona.generate.error_download_failed",
@@ -678,10 +662,6 @@ export async function execute(
       imageBase64 = imageBuffer.toString("base64");
       imageMimeType = imageAttachment.content_type || "image/png";
       log.info("Image attachment downloaded and converted to base64");
-
-      // Attempt to extract existing card/preset data from the uploaded image
-      // This enables "transform/tweak" workflows where users upload a card
-      // and ask the AI to modify it (e.g., "make it more conversational")
 
       const tomoriPreset = extractMetadataFromPNG(imageBuffer);
       if (tomoriPreset?.data) {
@@ -702,8 +682,6 @@ export async function execute(
         }
       }
 
-      // The image path is decided by a pure helper so all four documented cases stay covered
-      // by tests rather than by reading this branch.
       const imagePlan = planImageHandling({
         primarySeesImages: tomoriState.llm.sees_images ?? false,
         visionSeesImages: tomoriState.vision_llm?.sees_images ?? false,
@@ -888,7 +866,7 @@ export async function execute(
         usageContext,
         userId: interaction.user.id,
         guildId: interaction.guild?.id,
-        suppressProgressNotices: true, // Search runs in background during generation; don't leak tool embeds into chat
+        suppressProgressNotices: true,
         suppressFailureNotices: true,
       };
     } else if (useWebSearch) {
@@ -985,11 +963,9 @@ export async function execute(
 
     log.success("Generated preset passed validation");
 
-    // Get image for export (uploaded image or server avatar)
     let pngBuffer: Buffer;
 
     if (imageBuffer) {
-      // Use uploaded image (already downloaded earlier, reuse buffer)
       try {
         pngBuffer = await centerCropToSquare(imageBuffer);
         log.info("Uploaded image cropped to 1:1 square (reused buffer)");
@@ -1005,7 +981,6 @@ export async function execute(
         return;
       }
     } else {
-      // Use server avatar
       try {
         const avatarBuffer = await getServerAvatar(interaction.guild, client);
         pngBuffer = await centerCropToSquare(avatarBuffer);
@@ -1057,9 +1032,6 @@ export async function execute(
 
     const isDM = !interaction.guild;
 
-    // Format attribute preview (first attribute). The ellipsis is conditional:
-    // it previously appended unconditionally, claiming truncation that had not
-    // happened for any attribute under the preview width.
     const firstAttribute = genResult.preset.attribute_list[0];
     const attributePreview = firstAttribute
       ? firstAttribute.length > CONFIRMATION_PREVIEW_BUDGET
@@ -1067,7 +1039,6 @@ export async function execute(
         : firstAttribute
       : "No attributes generated";
 
-    // Format dialogue preview (up to 3 examples, 100 chars each)
     const dialoguePreview = formatDialoguePreview(
       genResult.preset.sample_dialogues_in,
       genResult.preset.sample_dialogues_out,
@@ -1075,9 +1046,6 @@ export async function execute(
       100,
     );
 
-    // Build the Components V2 result container (title, hero image, description,
-    // next-steps block, plus a DM footer when avatar updates are skipped). The
-    // accent color encodes the same SUCCESS/WARN signal the old embed used.
     const successContainerOptions: Omit<PersonaResultContainerOptions, "button"> = {
       locale,
       color: isDM ? ColorCode.WARN : ColorCode.SUCCESS,
@@ -1090,15 +1058,12 @@ export async function execute(
         dialogue_preview: dialoguePreview,
       },
       imageAttachmentName: filename,
-      // Guilds get the picker-style thumbnail+button; DMs (no button) keep the hero image.
+      // DMs lack alter import, so they omit the Import Now button and use image-top instead of thumbnail-section.
       layout: isDM ? "image-top" : "thumbnail-section",
-      // Next Steps is the last section, so in guilds the avatar thumbnail attaches
-      // here and the Import Now button sits tightly beneath it.
+      // Next Steps stays the last section so thumbnail-section pairs the avatar and Import Now button beside it.
       sections: [
         {
           titleKey: "commands.persona.generate.success_next_steps_title",
-          // Guild copy matches /persona create (right-aligned PNG + Import button);
-          // DMs have no button/thumbnail, so use the DM-safe variant.
           bodyKey: isDM
             ? "commands.persona.generate.success_next_steps_description_dm"
             : "commands.persona.generate.success_next_steps_description",
@@ -1109,9 +1074,6 @@ export async function execute(
       ...(isDM ? { footerKey: "commands.persona.generate.avatar_update_skipped_dm" } : {}),
     };
 
-    // Send the result. In guilds, attach an "Import Now" button (manager-only)
-    //     so the persona can be imported as an alter without re-uploading the PNG.
-    //     Alter import is guild-only, so DMs get the container without the button.
     if (isDM || !interaction.guild) {
       await modalSubmitInteraction.editReply(buildGenerateResultPayload(successContainerOptions, attachment));
     } else {
@@ -1139,7 +1101,6 @@ export async function execute(
       });
     }
 
-    // Quota already reserved at step 8 - no increment needed
     log.success(`Preset generated successfully for: ${characterName}`);
   } catch (error) {
     const denied = findProviderRequestDeniedError(error);

@@ -10,16 +10,12 @@ import { cleanLLMOutput } from "@/utils/text/processors/llmOutputProcessor";
 export async function cleanToolReplyText(content: string, context: ToolContext): Promise<string> {
   const contextItems = context.contextItems ?? [];
 
-  // Reuse the stream path's conversation-derived lookup so tool replies resolve
-  // @mentions identically to normal replies.
   const { mentionMap, mentionIdSet, personaMentionMap } = buildMentionLookup(contextItems);
 
   const filtered = filterDuplicateCustomEmojis(content, contextItems);
 
-  // Run the shared LLM-output cleaner: resolves emoji shortcodes/tags against the server
-  //    emoji list, strips the active persona's own-name labels, resolves @handle mentions, and
-  //    applies uncensor transforms. Runs on the still-prefixed text so own-label stripping can
-  //    make its real-turn vs leaked-preamble decision correctly.
+  // Run cleanLLMOutput before stripping foreign prefixes so own-label stripping can tell a real turn from a
+  // leaked preamble.
   const botName = context.personaUsername ?? context.tomoriState.persona_nickname;
   // Aliases the active persona also answers to (lore/default name + trigger words), so the cleaner
   // can peel a leaked multi-name opening label chain like "Tomori: Lilya: ...".
@@ -39,8 +35,8 @@ export async function cleanToolReplyText(content: string, context: ToolContext):
     personaMentionMap,
   );
 
-  // Strip any leading *foreign* persona speaker labels (e.g. "Bella:") that the own-name-only
-  //    cleaner leaves behind, so the model is often steered to prefix its turn with a speaker name.
+  // Strip foreign persona prefixes left behind by cleanLLMOutput when the model is steered to open with a
+  // speaker name.
   const speakerNames = await getKnownPersonaSpeakerNames(context.guildId, [
     context.personaUsername,
     context.tomoriState.persona_nickname,

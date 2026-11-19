@@ -52,16 +52,11 @@ import { resolveCredentialsWithMediaQuota } from "@/utils/quota/mediaQuotaGate";
 // can hurt generation reliability; enable again once the API is consistently healthy.
 const NAI_IMAGE_ENABLE_TAG_RESOLUTION =
   (process.env.NAI_IMAGE_ENABLE_TAG_RESOLUTION || "false").toLowerCase() === "true";
-// Inpainting strength: denoising level for the masked region (0.0-1.0).
-// 1.0 fully redraws the masked area from the prompt with no original pixel bleed-through.
-// Lower values preserve more of the original structure but cause color blending artifacts
-// when the edit changes colors (e.g. white hair → red hair at 0.7 produces grey).
+// 1.0 fully redraws the masked area because lower denoising values blend old and new colors (white to red turns grey).
 const NAI_INPAINT_STRENGTH = 1.0;
 const NAI_ENABLE_CHAR_REFERENCES = (process.env.NAI_ENABLE_CHAR_REFERENCES || "true").toLowerCase() === "true";
-// Intentionally disabled: profile-driven autofill can conflict with inline tags the
-// LLM picks from context. The LLM reads Physical Appearance tags from context and writes them
-// directly into `tags`, so no DB merge needed.  Re-enable only after conflict resolution
-// strategy is designed and validated.
+// Disabled because the LLM already reads Physical Appearance tags from context, so DB autofill would conflict with
+// inline tags.
 const NAI_ENABLE_PROFILE_CHARACTER_AUTOFILL = false;
 const NAI_ENABLE_PROFILE_CHARACTER_REMOVE_TAGS = false;
 const NAI_IMAGE_BASE_URL = "https://image.novelai.net";
@@ -166,7 +161,8 @@ export class GenerateImageNaiTool extends BaseTool {
     "Generate an anime-styled AI image with NovelAI diffusion's uncensored models. Use this only when the user explicitly asks you to make, draw, generate, create, edit, or continue an image; do not call it for casual visual discussion. If the user asks you to make/draw/generate an image and this tool is available, call this tool instead of only describing the image. Put shared scene, background, composition, camera, lighting, atmosphere, and style tags in 'prompt'. Use 'characters' for visible people in the image, and describe each character fully in that character's 'tags'. When known users or personas have Physical Appearance context, copy the relevant comma-separated tags into the matching character tags.";
   category = "utility" as const;
   requiresFeatureFlag = "image_gen";
-  requiresFollowUp = true; // Allow model to generate a text response after image is sent, preventing orphaned self-reply
+  // Prevents an orphaned self-reply by letting the model send a follow-up text message after the image.
+  requiresFollowUp = true;
 
   parameters: ToolParameterSchema = {
     type: "object",
@@ -226,18 +222,6 @@ export class GenerateImageNaiTool extends BaseTool {
           required: ["tags", "x", "y"],
         },
       },
-      /* Inpainting parameters temporarily disabled
-      media_id: {
-        type: "string",
-        description:
-          "Optional: The media reference ID (e.g., media_1) from the system hint for the message containing the image to edit. When provided with edit_target, enables inpainting mode. The first image found in the message (attachment, embed, sticker, or emoji) will be used as the source.",
-      },
-      edit_target: {
-        type: "string",
-        description:
-          "Optional: Natural language description of the region to edit (e.g. 'background', 'hair', 'cat'). Required when media_id is provided. Gemini AI will segment this region to create an inpainting mask.",
-      },
-      */
     },
     required: ["prompt"],
   };
@@ -801,7 +785,6 @@ export class GenerateImageNaiTool extends BaseTool {
       };
     }
 
-    // Default to allowed; overwritten below for server-credential users
     let quotaCheck: ImageQuotaClaim = { allowed: true, reservation: null };
     let failureScope: "server" | "personal" | undefined;
     let quotaReservation: QuotaReservation | null = null;
@@ -868,7 +851,6 @@ export class GenerateImageNaiTool extends BaseTool {
           getResolvedCapabilityModelId(creds, "image-nai") ?? context.tomoriState.config.nai_diffusion_model_id,
       };
 
-      // Resolve the dedicated NovelAI diffusion model slot.
       const resolvedModel = await resolveNaiDiffusionModel(resolvedConfig);
       if (!resolvedModel) {
         return {
@@ -934,9 +916,7 @@ export class GenerateImageNaiTool extends BaseTool {
         "GenerateImageNaiTool",
       );
 
-      // Build base scene tag list, so server style tags are trusted and should
-      //    bypass suggest-tags normalization. Character tags are handled separately
-      //    through v4_prompt.caption.char_captions when characters[] is provided.
+      // Server style tags are trusted, so they bypass suggest-tags normalization.
       const effectiveImageParams = resolveNaiImageParams(context.tomoriState.config);
       const styleTags = context.tomoriState.config.image_default_positive_tags ?? [];
       const configuredNegativeTags = context.tomoriState.config.image_default_negative_tags ?? [];
@@ -956,7 +936,6 @@ export class GenerateImageNaiTool extends BaseTool {
         .filter((t) => t.length > 0);
       const trustedTags = [...styleTags];
 
-      // Resolve only the model-provided tags via suggest-tags API when enabled
       const resolvedModelTags = NAI_IMAGE_ENABLE_TAG_RESOLUTION
         ? await withProviderUsageContext(creds.usageContext, () =>
             this.normalizeTags(modelTags, baseModelCodename, apiKey),
@@ -967,7 +946,6 @@ export class GenerateImageNaiTool extends BaseTool {
         log.info("[NAI] Tag resolution via suggest-tags is disabled; using raw model-provided tags");
       }
 
-      // Prepend artist:/location: prefixed tags when provided (trusted, skip normalization)
       const specialPrefixTags: string[] = [];
       if (artistRaw) {
         for (const name of artistRaw
@@ -986,11 +964,9 @@ export class GenerateImageNaiTool extends BaseTool {
         }
       }
 
-      // Combine: trusted tags first (as-is), then resolved/raw model tags
       const normalizedTags = [...specialPrefixTags, ...trustedTags, ...resolvedModelTags];
 
-      // Build spoken text section for the base prompt when characters have dialogue.
-      // Spoken lines use a final Text: block, with English-only tagging on V4/V4.5.
+      // NovelAI renders spoken lines via a final Text: block and always treats V4/V4.5 speech as English text.
       const spokenEntries: { index: number; text: string }[] = [];
       for (let i = 0; i < characters.length; i++) {
         const raw = characters[i].spoken_text;
@@ -1089,7 +1065,6 @@ export class GenerateImageNaiTool extends BaseTool {
           `[NAI] Segmentation complete: ${segResult.segmentCount} segment(s) found [${segResult.labels.join(", ")}]`,
         );
 
-        // If debug mode is enabled, DM the invoking user the mask and bbox overlay
         if ((segResult.debugMaskBuffer || segResult.debugOverlayBuffer) && context.userId) {
           try {
             const debugUser = await context.client.users.fetch(context.userId);
@@ -1217,8 +1192,7 @@ export class GenerateImageNaiTool extends BaseTool {
         success: true,
         message: successMessage,
         data: generationSource,
-        // imageMetadata intentionally omitted, so Discord CDN URLs are protected
-        // End the LLM turn immediately when this tool is the target of a hidden agent turn
+        // Omit imageMetadata because external model servers cannot fetch protected Discord CDN URLs.
         endTurn: context.streamContext?.endTurnAfterTools?.includes(this.name) ?? false,
       };
     } catch (error) {

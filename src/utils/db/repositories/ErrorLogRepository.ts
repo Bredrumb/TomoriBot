@@ -16,9 +16,7 @@ export interface ErrorLogPayload {
 export function buildErrorLogPayload(msg: string, err: unknown, context?: ErrorContext): ErrorLogPayload {
   const stackTrace = toErrorStack(err);
 
-  // Mirrors the `if (err)` branch in `logger.error`, so a row matches the line already on stdout.
-  // `log.error(msg)` with no error is a valid call at roughly 400 sites, and appending
-  // `toErrorMessage(undefined)` wrote a literal " - undefined" into every one of those rows.
+  // Mirrors `logger.error`'s `if (err)` branch so omitted-error calls do not append literal " - undefined" to rows.
   const errorMessage = err ? ` - ${toErrorMessage(err)}` : "";
 
   return {

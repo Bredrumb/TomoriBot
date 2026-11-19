@@ -94,9 +94,7 @@ describe("MetricSampleRepository", () => {
     expect(deletes()).toHaveLength(1);
   });
 
-  // Retention is enforced here rather than by pg_cron, which is not installed in production and
-  // would be skipped anyway while schema management is off. If this gate ever stops firing the
-  // table grows unbounded with nothing to report it, which is the failure this test exists for.
+  // Production has no pg_cron and skips schema management, so this gate is the only safeguard against unbounded growth.
   it("prunes again once the interval has elapsed", async () => {
     process.env.METRIC_SAMPLE_PRUNE_INTERVAL_MS = "1";
     const repository = new MetricSampleRepository(injectedSql);

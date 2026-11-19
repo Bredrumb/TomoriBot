@@ -205,9 +205,7 @@ export async function handleConfigModelModalOpen(
 ): Promise<boolean> {
   if (!CONFIG_MODEL_MODAL_OPEN_ACTIONS.has(route.action)) return false;
 
-  // Clearing is a write rather than a modal, and it rides the provider select alongside the entries
-  // that do open one. Declining before the gate below routes it through the deferred path, which
-  // owns both the acknowledgement a write needs and the denial repaint an unauthorized replay gets.
+  // Clear actions bypass the modal-open gate because clearing writes state and needs the deferred denial path.
   if (
     route.action === "model-provider-select" &&
     interaction.isStringSelectMenu() &&

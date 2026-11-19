@@ -121,8 +121,7 @@ export async function addVoiceSample(
     knownSize: input.upload.size,
   });
   if (!downloadResult.success || !downloadResult.buffer) {
-    // A refused or failed attachment download is the only reason a valid upload never reaches
-    // storage. The receipt shows a generic failure, so the reason has to survive here.
+    // Log the download failure reason here because the user receipt only shows a generic failure.
     log.error("Voice sample attachment download failed", undefined, {
       errorType: "VoiceSampleDownloadFailed",
       metadata: {

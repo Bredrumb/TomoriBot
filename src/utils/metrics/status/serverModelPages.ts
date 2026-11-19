@@ -70,9 +70,7 @@ export async function buildServerModelPages(
     : config.user_byok_mode
       ? localizer(locale, "commands.choices.none_user_byok")
       : localizer(locale, "commands.choices.none");
-  // custom_model_name and other_model_codename describe the *text* model, so passing them here
-  // renders the chat model's name in the vision field whenever the vision model is a custom
-  // endpoint. The vision model's own upstream name lives on its endpoint row.
+  // Use the vision endpoint's own model_name rather than text overrides so custom vision models render accurately.
   const visionModelValue = tomoriState.vision_llm
     ? formatLlmDisplayLabel(tomoriState.vision_llm, visionEndpoint?.model_name, null)
     : localizer(locale, "commands.choices.none");

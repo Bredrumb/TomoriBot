@@ -246,8 +246,7 @@ export async function buildUserSavedProviderConfigFromExistingOrDefaults(params:
     llm_logit_biases: existingConfig?.llm_logit_biases ?? params.baseConfig?.llm_logit_biases ?? [],
     thinking_level: existingConfig?.thinking_level ?? params.baseConfig?.thinking_level ?? DEFAULT_THINKING_LEVEL,
     enabled_capabilities: enabledCapabilities,
-    // Anything switched on here is owned here. Previously assigned capabilities are
-    // kept even when currently off, so a re-enable still resolves to this provider.
+    // Switched-on capabilities claim ownership while keeping prior assignments so re-enabling returns here.
     assigned_capabilities: Array.from(
       new Set([...(existingConfig?.assigned_capabilities ?? []), ...enabledCapabilities]),
     ),
@@ -338,9 +337,7 @@ function savedProviderSelectionServesCapability(
       return config.diffusion_model_id !== null || config.nai_diffusion_model_id !== null;
     case "video":
       return config.video_model_id !== null;
-    // Unlike the other slots, vision has no saved selection to require: registering an
-    // image-capable text endpoint is what makes the label eligible, and the picker chooses
-    // among that label's image-capable models.
+    // Vision needs no saved slot because any image-capable text endpoint qualifies and the picker picks among them.
     case "vision":
       return true;
     default:

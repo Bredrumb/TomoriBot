@@ -219,7 +219,7 @@ export function parseOrderedDecisionAnswers(payload: unknown, request: DecisionI
 
 function parseDecisionJson(raw: string): unknown {
   const parsed: unknown = JSON.parse(raw);
-  // JSON.parse overwrites duplicate named answers. Inspect decoded keys before admitting that map.
+  // Inspect raw keys before admitting the map because JSON.parse silently overwrites duplicate keys.
   const tokens = raw.match(/"(?:[^"\\]|\\.)*"|[{}[\]:]/g) ?? [];
   const objects: Array<Set<string> | null> = [];
   for (let index = 0; index < tokens.length; index++) {
@@ -323,8 +323,8 @@ export async function executeDecisionTransport(
   if (request.abortSignal?.aborted) return cancelled();
   if (!validDecisionInput(request)) return { status: "invalid-input", correlationId, errorLogged: false };
   const body = JSON.stringify(transport.body);
-  // A UTF-8 byte ceiling is conservative across tokenizers. Use the model's tokenizer once callers
-  // need packets that this ceiling refuses; never truncate evidence to make a request fit.
+  // Use a UTF-8 byte ceiling conservatively across tokenizers, and never truncate evidence if callers later need exact
+  // counts.
   if (Buffer.byteLength(body, "utf8") > request.inputTokenLimit) {
     return { status: "invalid-input", correlationId, errorLogged: false };
   }

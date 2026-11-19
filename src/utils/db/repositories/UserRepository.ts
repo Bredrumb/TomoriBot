@@ -323,9 +323,7 @@ class UserRepository implements IRepository<UserExportShape> {
         "get privacy level",
       );
 
-      // A user with no row is genuinely new, and MINIMAL is the right default for them. This
-      // branch must not be merged with the failure path below: an absent row and an unreadable
-      // database are different facts, and only one of them permits a permissive answer.
+      // Missing rows represent new users (MINIMAL default), which must stay separate from DB errors that throw below.
       if (!result.length) {
         return PrivacyLevelValue.MINIMAL;
       }
@@ -339,9 +337,8 @@ class UserRepository implements IRepository<UserExportShape> {
 
       return level as PrivacyLevel;
     } catch (error) {
-      // Returning MINIMAL here treated a user who chose FULL (completely invisible) as fully
-      // personalizable for the duration of every pool cascade, because this catch cannot tell
-      // an unreadable database from a new user. Callers that cannot propagate must pick FULL.
+      // Throw on DB failures instead of returning MINIMAL so opt-out (FULL) users stay invisible during outages (callers
+      // that cannot propagate must default to FULL).
       log.error(`Error checking privacy level for user ${userDiscId}:`, error);
       throw new DatabaseUnavailableError(`Failed to read the privacy level for user ${userDiscId}`);
     }
@@ -392,8 +389,7 @@ class UserRepository implements IRepository<UserExportShape> {
       // biome-ignore lint/style/noNonNullAssertion: Query guarantees result[0] exists.
       return result[0]!.exists;
     } catch (error) {
-      // Returning false meant a moderation control that evaporated whenever the database
-      // hiccuped. Callers that cannot propagate must treat the restriction as still in force.
+      // Throw on DB errors instead of returning false so blacklist restrictions fail closed during outages.
       log.error(`Error checking blacklist for user ${userDiscId} in server ${serverDiscId}:`, error);
       throw new DatabaseUnavailableError(`Failed to read the blacklist entry for user ${userDiscId}`);
     }
@@ -663,7 +659,7 @@ class UserRepository implements IRepository<UserExportShape> {
       return status;
     }
 
-    // Orphaned spotlight: remove it so it doesn't accumulate
+    // Zero-persona rows are orphaned after persona deletion, so prune them to avoid stale buildup.
     await this.removePersonalSpotlight(serverId, userId, channelDiscId);
     return null;
   }
@@ -1083,9 +1079,8 @@ class UserRepository implements IRepository<UserExportShape> {
     try {
       log.info(`Ensuring user ${userDiscId} exists (${displayName})`);
 
-      // Wrapped where the raw driver error can still reach the helper: a `try/catch` inside the
-      // thunk would hand it a resolved value and the retry would never fire. Replay-safe because
-      // both writes are `ON CONFLICT DO NOTHING`.
+      // Replay-safe (both writes are ON CONFLICT DO NOTHING); wrapped outside any catch so raw driver errors reach the
+      // retry helper.
       await withTransientDbRetry(async () => {
         await sql.begin(async (tx) => {
           const [row] = await tx`
@@ -1336,10 +1331,8 @@ class UserRepository implements IRepository<UserExportShape> {
           SELECT DISTINCT server_id FROM personal_spotlights WHERE user_id = ${userId}
         `;
 
-        // Reminders are ON DELETE SET NULL, so the cascade alone would leave both halves behind:
-        // one the user authored (their own prose and schedule, firing forever with a null creator
-        // nobody can claim) and one aimed at them (their Discord id and nickname, held by a row
-        // somebody else created). An erasure has to reach both.
+        // Delete reminders explicitly before erasing the user because ON DELETE SET NULL would leave authored schedules
+        // and Discord-ID targets intact.
         const reminders = await tx`
           DELETE FROM reminders
           WHERE created_by_user_id = ${userId} OR user_discord_id = ${user.user_disc_id}

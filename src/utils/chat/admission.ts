@@ -273,10 +273,8 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
     // No person is behind this chain to credit, and late gateway echoes of nudge output also land here.
     return ignored("persona_chain_without_origin");
   }
-  // System-initiated turns (reminders, boomerangs) pass whatever message was last in the
-  // channel as their trigger, which in a DM is frequently one of Tomori's own. Falling back
-  // to the author there would resolve the DM owner (and thus the DM's server key) to the
-  // bot itself, so prefer the channel's recipient whenever the author is the client user.
+  // System turns in DMs often pass a bot-authored message as trigger, so prefer the DM recipient over author to
+  // avoid resolving the DM owner to the bot.
   const dmOwnerDiscId = channel instanceof DMChannel ? (channel.recipientId ?? null) : null;
   // A webhook's author ID is never a person (persona webhooks are even pooled per channel), so a system turn
   // anchored on one is credited to the bot account; Matrix relays keep their bridge webhook identity.
@@ -338,16 +336,14 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
       return blocked("cannot_send_in_channel");
     }
 
-    // A timed-out member keeps every permission bit, so the check above passes while Discord
-    // rejects the send with 50013 regardless. Nothing in the bitfield expresses this, so it
-    // has to be read from the member rather than inferred from permissions.
+    // Timed-out members retain all permission bits even though Discord rejects sends with 50013, so check timeout
+    // state on the member.
     if (isBotTimedOut(channel.guild, client)) {
       return blocked("bot_timed_out_in_guild");
     }
 
-    // Backstop for whatever the two checks above cannot see. They both reason about state that
-    // should predict a refusal; this one reacts to a refusal that actually happened, so it holds
-    // for causes not yet identified. Cleared the moment a send lands.
+    // Reactive backstop for unseen send refusals (cleared once a send lands) when permission and timeout checks
+    // still pass.
     if (getBlockedSendReason(channel.id)) {
       return blocked("recent_send_refused");
     }
@@ -440,10 +436,8 @@ async function resolveMessageProxyRecord(
     return null;
   }
 
-  // Client-owned webhooks (persona replies, user impersonation) can never be message-proxy reposts.
-  // Skipping them avoids guaranteed transport misses that would stall this message's admission for
-  // the full retry cap and extend live speedbump waits. Managed webhook ownership is verified
-  // before this check, so a proxy member may safely share a persona's display name.
+  // Skip client-owned webhooks to avoid proxy transport retries, because managed webhook ownership is verified
+  // beforehand so proxy members can safely share persona names.
   if (getCachedImpersonatedUserIdForWebhook(message.webhookId)) {
     return null;
   }
@@ -732,9 +726,8 @@ function createNaturalStopPatterns(): RegExp[] {
     "ちょっと待って",
   ];
 
-  // Only the single-word English stops take a word boundary. The Japanese phrases must stay
-  // unwrapped: Japanese writes without inter-word spaces, so a boundary would reject every
-  // natural form that continues past the phrase (「もういい」 inside 「もういいよ」).
+  // Only English stops take word boundaries, because Japanese lacks spaces and boundaries reject natural
+  // continuations (such as 「もういい」 inside 「もういいよ」).
   const patterns: RegExp[] = [];
   for (const stop of basicStops) {
     patterns.push(new RegExp(wrapWithWordBoundary(stop), "iu"));
@@ -782,10 +775,8 @@ export async function resolveAdmissionChannelScope(
   }
 
   if (channel instanceof DMChannel) {
-    // A DM's synthetic server key is its human recipient, which is a property of the
-    // channel and not of whoever authored the trigger message. Guilds get this for free
-    // via guild.id; DMs must not fall back to the author or a bot-authored trigger
-    // message would key the lookup to the bot and report the DM as unconfigured.
+    // Key DMs on the human recipient rather than message author so bot-authored system triggers do not resolve the
+    // DM to the bot itself.
     const serverDiscId = incoming.systemTriggerIdentity?.serverDiscId ?? channel.recipientId ?? userDiscId;
     log.info(`Processing DM from user ${userDiscId} in channel ${channel.id}`);
     return {

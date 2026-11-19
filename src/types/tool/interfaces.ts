@@ -78,49 +78,54 @@ export interface StreamingContext {
   mentionableUserIds?: readonly string[];
   usageContext?: ProviderUsageContext;
   speechToolState?: { userId?: number; selection?: string };
-  disableYouTubeProcessing: boolean; // Flag to temporarily disable YouTube function during enhanced context restart
-  disableProfilePictureProcessing?: boolean; // Flag to temporarily disable profile picture processing during enhanced context restart
-  disableGifProcessing?: boolean; // Flag to temporarily disable GIF processing during enhanced context restart
-  disableShortTermMemoryUpdate?: boolean; // Flag to prevent update_short_term_memory from being called more than once per turn
+  disableYouTubeProcessing: boolean;
+  disableProfilePictureProcessing?: boolean;
+  disableGifProcessing?: boolean;
+  disableShortTermMemoryUpdate?: boolean;
   disableConditioningInteraction?: boolean;
-  disableCrossChannelMessage?: boolean; // Flag to prevent nested cross-channel dispatch during tool-driven cross-channel turns
-  explicitLongTermMemoryIntent?: boolean; // Flag to suppress STM tool nudges when the current user message explicitly asks for persistent memory
-  disableMessageMetadataContext?: boolean; // Flag to prevent reveal_message_metadata from being called more than once per turn
-  disableRecentMessageReplyTool?: boolean; // Allow reactions but block tool-sent replies when the stream is already replying
-  forceReason?: boolean; // Flag to indicate reasoning mode for enhanced AI responses
-  isManuallyTriggered?: boolean; // Flag to indicate this stream was triggered by a manual command
-  suppressUserErrors?: boolean; // Suppress user-facing error embeds during retries or non-deliberate chat turns
+  disableCrossChannelMessage?: boolean;
+  // Suppresses STM tool nudges when persistent memory is requested.
+  explicitLongTermMemoryIntent?: boolean;
+  disableMessageMetadataContext?: boolean;
+  // Blocks tool-sent replies when the stream is already replying (reactions stay allowed).
+  disableRecentMessageReplyTool?: boolean;
+  forceReason?: boolean;
+  isManuallyTriggered?: boolean;
+  suppressUserErrors?: boolean;
   // Error recovery relies on this scope because server and personal keys can share a provider; omit only for non-chat
   // calls without user routing.
   textCredentialSource?: "server" | "personal";
-  forceModelFallback?: boolean; // Force suppress errors regardless of key availability (model fallback retries)
+  // Suppresses user errors regardless of key availability when retrying fallbacks.
+  forceModelFallback?: boolean;
   // Each fallback attempt clears this held timeout notice, so the generation loop emits it only if no later attempt
   // replaces it.
   deferredTimeoutNotice?: { providerName: string; sawStreamProgress: boolean };
-  rotationKeyRetriesUsed?: boolean; // True if one or more rotation-key retries were attempted
+  rotationKeyRetriesUsed?: boolean;
   // The generation turn retries an interrupted stream on the same key when set, so its error stays unsurfaced.
   retryStreamInterruption?: boolean;
-  disableAllTools?: boolean; // Flag to disable all tool calling (e.g., during user impersonation)
-  deliberateToolAllowedNames?: string[]; // Optional per-turn allowlist when deliberate tool mode detects scoped intent
-  disableReminderTool?: boolean; // Flag to prevent create_task from being called during a reminder-triggered turn
+  disableAllTools?: boolean;
+  deliberateToolAllowedNames?: string[];
+  disableReminderTool?: boolean;
   // Written per attempt by applyAssistantPrefill, so the stream layer can strip any echoed prefix instead of
   // displaying it.
   outputPrefill?: string;
   triggerMessageId?: string;
-  replyNoticeState?: { attempted: boolean; sent: boolean }; // Tracks the standalone alter reply notice across tool-call stream retries
+  // Tracks the alter reply notice across tool-call stream retries so it posts once.
+  replyNoticeState?: { attempted: boolean; sent: boolean };
   // This dedup flag prevents duplicate failure rows for one message because a failed turn reaches the emitter via
   // both the stream result and catch block.
   generationErrorReported?: boolean;
   forcedMentions?: Array<{
     handle: string;
     userId: string;
-  }>; // Additional mention handles to force-resolve (e.g., reminder recipients)
+  }>;
   // Impersonation prompts can tell the model a speaker label that differs from the Discord webhook name, so the
   // output cleaner must strip both.
   impersonatedSpeakerLabel?: string;
   holdResponseText?: boolean;
   pendingResponseLimit?: import("@/types/stream/pendingResponse").PendingResponseLimit;
-  suppressTextOutput?: boolean; // Suppress text output to Discord (NAI tool retry mode : keeps model state coherent but hides repeated text)
+  // Hides Discord output during NAI tool retries so repeated text stays hidden while model state stays coherent.
+  suppressTextOutput?: boolean;
   // Provider adapters forward this signal to the underlying HTTP request so an SDK call timeout aborts the in-flight
   // stream.
   abortSignal?: AbortSignal;
@@ -168,22 +173,22 @@ export interface ToolContext {
   // pays.
   borrowsTriggerMessage?: boolean;
   guildId?: string;
-  streamContext?: StreamingContext; // Optional streaming context for enhanced functionality
+  streamContext?: StreamingContext;
 
   webhook?: Webhook;
   personaUsername?: string;
-  personaAvatarUrl?: string; // URL or data URI for the active persona/user identity
-  activePersonaId?: number; // Active responding persona for tool-driven follow-up turns
-  isUserImpersonation?: boolean; // True when the active turn is a user impersonation session
-  impersonatedUserId?: string; // Discord user ID currently being impersonated, if any
+  personaAvatarUrl?: string;
+  activePersonaId?: number;
+  isUserImpersonation?: boolean;
+  impersonatedUserId?: string;
   suppressProgressNotices?: boolean;
   mirrorSuppressedProgressNotices?: boolean;
   suppressFailureNotices?: boolean;
   // Shared mutable state across search-engine attempts so fallback notices are deduplicated without hiding error
   // embeds.
   progressNoticeState?: { attempted: boolean };
-  showKillHint?: boolean; // When true, tool notice footers include the /kill hint (set after SOFT_WARN_ITERATION_THRESHOLD)
-  contextItems?: StructuredContextItem[]; // Current LLM context for tools that need hidden resolution metadata
+  showKillHint?: boolean;
+  contextItems?: StructuredContextItem[];
 
   messageIdMap?: MessageIdMap;
 
@@ -253,9 +258,8 @@ export interface ToolAssemblyState {
     videogen_enabled: boolean;
     voice_message_enabled: boolean;
     user_blocking_enabled: boolean;
-    // Required, not optional: every construction site copies these fields by hand, and an
-    // optional flag here silently reads as enabled through the mapper's fallback, leaving
-    // the capability toggle with no effect and no compile error.
+    // Required (not optional): an optional field silently falls back to enabled in the mapper with no compile
+    // error.
     user_info_updates_enabled: boolean;
     thread_creation_enabled: boolean;
     conditioning_interactions_enabled: boolean;
@@ -293,7 +297,7 @@ export interface Tool {
   requiredModelCapabilities?: ToolModelCapabilityRequirements;
   requiresPermissions?: string[];
   requiresFeatureFlag?: string;
-  requiresFollowUp?: boolean; // If true, always allow follow-up generation after tool execution (e.g., search/fetch tools)
+  requiresFollowUp?: boolean;
 }
 
 export abstract class BaseTool implements Tool {

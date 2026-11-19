@@ -1102,10 +1102,7 @@ async function resolveScope(
       ? ((await userRepository.isBlacklisted(interaction.guildId, userDiscId)) ?? false)
       : false;
 
-    // The state is required rather than optional. Reading the teaching flag as
-    // `tomoriState?.config.server_memteaching_enabled ?? false` turns a cache miss into a
-    // confident "teaching is disabled" on a server where it is enabled, and every legacy leaf
-    // instead dereferences a non-null state, so a missing one means unavailable, not restricted.
+    // Require a non-null state because a cache miss must read as unavailable rather than restricted.
     const tomoriState = await getCachedTomoriState(workspaceId);
     const internalServerId = tomoriState?.server_id ?? (await serverRepository.loadServerIdByDiscId(workspaceId));
     if (!internalServerId || !tomoriState) return null;
@@ -1324,8 +1321,7 @@ async function repaint(
       ? await dependencies.getMemoryCountsByLineage(scope.serverId, ownerFilter)
       : undefined;
 
-  // Documents key on persona_id, so the face beside that heading is looked up directly rather
-  // than through the lineage representative the Memories page uses. Serverwide (0) has none.
+  // Look up directly by persona_id instead of lineage representative because documents key on persona_id.
   const representative =
     category === "memories"
       ? personaRepresentativeForLineage(scope.personas, selectedLineageId)
@@ -1702,7 +1698,7 @@ export function createMemoriesInteractionRoute(
         return;
       }
 
-      // Modals and modal-opening select choices handle their own acknowledgement
+      // Select choices precede deferUpdate so modal-opening actions can call showModal.
       if (route.action === "select") {
         if (!interaction.isStringSelectMenu()) {
           throw new Error("Memories select route requires StringSelectMenu interaction");

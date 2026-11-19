@@ -613,8 +613,6 @@ class ServerRepository implements IRepository<ServerExportShape> {
     const isDMChannel = guild === null;
     log.section(`Starting server setup transaction (${isDMChannel ? "DM" : "Guild"} context)`);
 
-    // Provider access is a discriminated union with no legacy fallback: the pre-wizard `/setup` modal
-    // was the last caller to build the boolean flags this used to resolve from.
     const resolvedAccess = validConfig.providerAccess;
 
     if (resolvedAccess?.mode === "custom-endpoint") {
@@ -654,8 +652,6 @@ class ServerRepository implements IRepository<ServerExportShape> {
               `
               )[0] ?? null;
           }
-          // Find the default model for the selected provider within the transaction
-          // First try to get the default model (is_default = true), excluding deprecated
           selectedLlm = (
             await tx`
               SELECT * FROM llms
@@ -667,7 +663,6 @@ class ServerRepository implements IRepository<ServerExportShape> {
             `
           )[0];
 
-          // Fallback: if no default model found, get the first available non-deprecated model
           if (!selectedLlm) {
             selectedLlm = (
               await tx`
@@ -690,7 +685,6 @@ class ServerRepository implements IRepository<ServerExportShape> {
             log.info(`Using default model for ${catalogProvider}: ${selectedLlm.llm_codename}`);
           }
 
-          // Find the default diffusion model for the selected provider
           selectedDiffusionModel = (
             await tx`
               SELECT * FROM image_diffusion_models
@@ -726,7 +720,6 @@ class ServerRepository implements IRepository<ServerExportShape> {
             log.info(`Using default diffusion model for ${catalogProvider}: ${selectedDiffusionModel.codename}`);
           }
 
-          // Find the default embedding model for the selected provider
           selectedEmbeddingModel = (
             await tx`
               SELECT * FROM embedding_models
@@ -821,13 +814,8 @@ class ServerRepository implements IRepository<ServerExportShape> {
           await configRepository.resetAllServerConfigs(server.server_id, tx);
         }
 
-        // Setup reaches here only when the server has no main persona, and it deliberately
-        // preserves alters while clearing config rows. An alter can therefore already hold the
-        // default name (swapPersona demotes the old main into one), and the persona INSERT below
-        // is the only write in this transaction without an ON CONFLICT clause, so the collision
-        // surfaced as a raw constraint violation that blocked recovery entirely.
-        // Suffixing the alter rather than the incoming main matches the priority schema.sql
-        // already applies to legacy duplicates: `ORDER BY is_alter ASC` keeps mains unsuffixed.
+        // Rename any colliding alter rather than the incoming main (matching schema.sql's `ORDER BY is_alter ASC`
+        // priority) because surviving alters can hold the default name and block the main persona INSERT.
         await tx`
           UPDATE personas
           SET persona_nickname = persona_nickname || ' [dup-' || persona_id::TEXT || ']'
@@ -888,7 +876,6 @@ class ServerRepository implements IRepository<ServerExportShape> {
             updated_at = NOW()
         `;
 
-        // Format trigger words as PostgreSQL array
         const triggerWordsArrayLiteral = `{${defaultTriggers.map((t) => `"${t.replace(/(["\\])/g, "\\$1")}"`).join(",")}}`;
 
         let customLlmId: number | null = null;
@@ -1036,7 +1023,6 @@ class ServerRepository implements IRepository<ServerExportShape> {
           finalKeyVersion = customKeyVersion;
         }
 
-        // Seed the split config tables
         await tx`
           INSERT INTO server_model_configs (
             server_id, llm_id, embedding_model_id, diffusion_model_id, vision_llm_id, api_key, key_version
@@ -1122,7 +1108,6 @@ class ServerRepository implements IRepository<ServerExportShape> {
           ON CONFLICT (persona_id) DO NOTHING
         `;
 
-        // Seed saved_provider_configs row for catalog or custom-endpoint
         if (resolvedAccess?.mode === "catalog" && finalLlmId && finalApiKey) {
           await tx`
             INSERT INTO saved_provider_configs (
@@ -1171,7 +1156,6 @@ class ServerRepository implements IRepository<ServerExportShape> {
           `;
         }
 
-        // Register guild emojis in bulk insert (only for guild contexts)
         const emojis = [];
         if (!isDMChannel && guild) {
           const emojiValues = Array.from(guild.emojis.cache.values()).map((e) => ({
@@ -1205,7 +1189,6 @@ class ServerRepository implements IRepository<ServerExportShape> {
           log.info("Skipping emoji registration for DM context");
         }
 
-        // Register guild stickers (only for guild contexts)
         const stickers = [];
         if (!isDMChannel && guild) {
           log.info(`Registering stickers for server ${server.server_id}`);
@@ -2139,7 +2122,6 @@ class ServerRepository implements IRepository<ServerExportShape> {
   // Every listed table must have a server_id column and sit outside the persona subtree and preserved tables, because
   // a missing column aborts the wipe transaction.
   private static readonly PRESERVE_MODE_WIPE_TABLES: readonly string[] = [
-    // Server config tables
     "server_chat_configs",
     "server_model_configs",
     "server_notice_embeds_configs",
@@ -2155,12 +2137,10 @@ class ServerRepository implements IRepository<ServerExportShape> {
     "server_speech_configs",
     "server_byok_configs",
     "server_memory_configs",
-    // Whitelists / blacklists
     "channel_whitelist",
     "role_whitelist",
     "channel_persona_whitelist",
     "personalization_blacklist",
-    // Quotas
     "image_quota_configs",
     "image_quotas",
     "image_serverwide_quotas",
@@ -2170,22 +2150,17 @@ class ServerRepository implements IRepository<ServerExportShape> {
     "video_quota_configs",
     "video_quotas",
     "video_serverwide_quotas",
-    // API keys / providers
     "opt_api_keys",
     "api_key_rotation",
     "saved_provider_configs",
-    // History / triggers / scheduling
     "conditioning_history",
     "reminders",
     "random_triggers",
-    // Integrations / overrides
     "matrix_channel_links",
     "channel_llm_overrides",
     "guild_mcp_servers",
     "custom_endpoint_connections",
-    // Model registrations
     "scoped_model_registrations",
-    // Misc server-scoped
     "server_emojis",
     "server_stickers",
     "custom_expressions",
@@ -2234,7 +2209,6 @@ class ServerRepository implements IRepository<ServerExportShape> {
           return { deleted: deleted.count > 0, media };
         }
         let totalDeleted = 0;
-        // Wipe every server-scoped table in the maintained list
         for (const table of ServerRepository.PRESERVE_MODE_WIPE_TABLES) {
           // table name is a constant from a private allowlist, not user input, so safe to interpolate
           const result = await tx.unsafe(`DELETE FROM ${table} WHERE server_id = $1`, [serverId]);

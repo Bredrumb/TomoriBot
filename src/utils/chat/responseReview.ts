@@ -676,8 +676,8 @@ async function reviewCandidate(
       !proposedCall && state.pending.some((part) => part.truncation)
         ? "A pending_cut_at_length_limit candidate stopped at the delivery length limit and will be delivered as cut. Judge the kept text; an abrupt ending alone never requires revision."
         : "";
-    // Admins read the panel's reviewer prompt as the reviewer's whole instruction, so no hidden
-    // protocol wraps it. Only situational addenda the panel cannot express are appended.
+    // Admins read the panel prompt as the whole instruction, so wrap no hidden protocol and append only situational
+    // addenda.
     const systemPrompt = [state.prompt, toolTask, cutTask].filter(Boolean).join("\n\n");
     // An unknown window is trusted the way the author's own request trusts it; the provider rejects
     // an oversized prompt as an ordinary transport failure.
@@ -788,8 +788,8 @@ async function reviewCandidate(
       return { status: "cancelled" };
     }
     if (!result || timeout.aborted) return unavailable("timeout", "operation");
-    // One retry with reasoning off, because an exhausted reasoning budget is the usual cause of an
-    // empty reply. It reuses this review's count and deadline, so a bad format cannot add a review.
+    // Retry once with reasoning off (reusing this review's count and deadline) because exhausted reasoning causes
+    // empty replies.
     if (!result.success && result.failure === "malformed" && result.malformed) {
       trace("format_retry", { reason: result.malformed.reason, usage });
       result = await ask(

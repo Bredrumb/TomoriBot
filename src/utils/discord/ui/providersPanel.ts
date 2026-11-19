@@ -652,8 +652,7 @@ export function offeredChatCompatFlags(
   entryKind: "provider" | "endpoint",
   entryKey: string,
 ): ReadonlyArray<(typeof CHAT_COMPAT_FLAGS)[number]> {
-  // A custom endpoint is served by the `custom` provider, whose OpenAI-compatible adapter reads both
-  // compat columns. These toggles were introduced for exactly that case and must keep working there.
+  // Map custom endpoints to "custom" because that OpenAI-compatible adapter owns both compat flags.
   const provider = entryKind === "endpoint" ? "custom" : entryKey;
   if (providerUsesApiFamily(provider, "openrouter")) return ["prefill"];
   if (!providerUsesApiFamily(provider, "openai-compatible")) return [];

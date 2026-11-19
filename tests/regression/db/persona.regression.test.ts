@@ -152,7 +152,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona — regression", () => {
     const state = await personaRepository.loadState(FIXTURE_IDS.serverDiscId);
     expect(state).not.toBeNull();
     expect(state?.persona_id).toBe(refs.personaId);
-    // Config should load the server-scoped row
     expect(state?.config).not.toBeNull();
     expect(state?.llm).not.toBeNull();
   });

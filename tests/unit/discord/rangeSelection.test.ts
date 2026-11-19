@@ -187,17 +187,14 @@ describe("buildPaginationRow boundary states", () => {
 
 describe("deletion-clamping scenarios", () => {
   it("clamps to previous page when the sole item on the final page is deleted", () => {
-    // Initial state: 21 items -> 3 pages (10, 10, 1)
     const initialItems = Array.from({ length: 21 }, (_, i) => `doc-${i + 1}`);
     const beforeDeletion = resolveRangeSelection(initialItems, 2, 10);
     expect(beforeDeletion.rangeIndex).toBe(2);
     expect(beforeDeletion.rangeCount).toBe(3);
     expect(beforeDeletion.visibleItems).toEqual(["doc-21"]);
 
-    // Actor deletes doc-21 -> 20 items remain (2 pages of 10)
     const remainingItems = initialItems.slice(0, 20);
 
-    // Repaint requests the old rangeIndex 2, which should clamp to index 1
     const afterDeletion = resolveRangeSelection(remainingItems, 2, 10);
     expect(afterDeletion.rangeIndex).toBe(1);
     expect(afterDeletion.rangeCount).toBe(2);
@@ -206,7 +203,6 @@ describe("deletion-clamping scenarios", () => {
     expect(afterDeletion.visibleItems[0]).toBe("doc-11");
     expect(afterDeletion.visibleItems[9]).toBe("doc-20");
 
-    // Pagination row updates accordingly: Page 2 of 2 with Next disabled
     const row = createPaginationRow(afterDeletion.rangeIndex, afterDeletion.rangeCount);
     expect(row).not.toBeNull();
     expect(row?.components[1].label).toBe("Page 2 of 2");
@@ -215,9 +211,8 @@ describe("deletion-clamping scenarios", () => {
   });
 
   it("clamps across multiple page drops during bulk deletion", () => {
-    // 50 items (5 pages of 10) dropping to 15 items (2 pages of 10)
     const bulkRemaining = Array.from({ length: 15 }, (_, i) => `item-${i + 1}`);
-    const staleRangeIndex = 4; // previously on page 5
+    const staleRangeIndex = 4;
 
     const resolved = resolveRangeSelection(bulkRemaining, staleRangeIndex, 10);
     expect(resolved.rangeIndex).toBe(1);
@@ -258,7 +253,6 @@ describe("stale-state scenarios", () => {
 
   it("safely handles stale route submissions against mutated backend state", () => {
     const freshState = ["alpha", "beta"];
-    // Client clicked a stale Next button requesting rangeIndex 5
     const resolved = resolveRangeSelection(freshState, 5, 10);
     expect(resolved.rangeIndex).toBe(0);
     expect(resolved.rangeCount).toBe(1);
@@ -274,7 +268,6 @@ describe("stale-state scenarios", () => {
 
 describe("concurrent-addition scenarios", () => {
   it("enables Next button when concurrent additions create new pages", () => {
-    // Initially on last page: 15 items -> 2 pages (10, 5), parked on page 2 of 2
     const initialItems = Array.from({ length: 15 }, (_, i) => `item-${i + 1}`);
     const beforeAdd = resolveRangeSelection(initialItems, 1, 10);
     expect(beforeAdd.rangeIndex).toBe(1);
@@ -282,9 +275,8 @@ describe("concurrent-addition scenarios", () => {
 
     const initialRow = createPaginationRow(beforeAdd.rangeIndex, beforeAdd.rangeCount);
     expect(initialRow?.components[1].label).toBe("Page 2 of 2");
-    expect(initialRow?.components[2].disabled).toBe(true); // Next was disabled
+    expect(initialRow?.components[2].disabled).toBe(true);
 
-    // 15 items added concurrently -> 30 items (3 pages of 10)
     const expandedItems = Array.from({ length: 30 }, (_, i) => `item-${i + 1}`);
     const afterAdd = resolveRangeSelection(expandedItems, 1, 10);
     expect(afterAdd.rangeIndex).toBe(1);
@@ -295,17 +287,15 @@ describe("concurrent-addition scenarios", () => {
 
     const updatedRow = createPaginationRow(afterAdd.rangeIndex, afterAdd.rangeCount);
     expect(updatedRow?.components[1].label).toBe("Page 2 of 3");
-    expect(updatedRow?.components[0].disabled).toBe(false); // Previous enabled
-    expect(updatedRow?.components[2].disabled).toBe(false); // Next is now enabled!
+    expect(updatedRow?.components[0].disabled).toBe(false);
+    expect(updatedRow?.components[2].disabled).toBe(false);
   });
 
   it("introduces pagination row when single page expands past page size", () => {
-    // Initially 5 items -> single page, no pagination row
     const initialItems = Array.from({ length: 5 }, (_, i) => `item-${i + 1}`);
     const beforeAdd = resolveRangeSelection(initialItems, 0, 10);
     expect(createPaginationRow(beforeAdd.rangeIndex, beforeAdd.rangeCount)).toBeNull();
 
-    // Concurrently expanded to 12 items -> 2 pages
     const expandedItems = Array.from({ length: 12 }, (_, i) => `item-${i + 1}`);
     const afterAdd = resolveRangeSelection(expandedItems, 0, 10);
     expect(afterAdd.rangeCount).toBe(2);

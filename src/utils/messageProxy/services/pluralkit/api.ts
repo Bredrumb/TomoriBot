@@ -40,8 +40,7 @@ const pkMemberInfoSchema = z.object({
   name: z.string().min(1),
   display_name: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
-  // Public pronouns only. PluralKit omits or nulls this key when the member keeps
-  // pronouns private, so a value here is always the member's own public claim.
+  // PluralKit omits or nulls private pronouns, so any populated value here is the member's own public claim.
   pronouns: z.string().nullable().optional(),
 });
 
@@ -70,8 +69,7 @@ const pkApiMessageResponseSchema = z.object({
 
 type PkApiMessageResponse = z.infer<typeof pkApiMessageResponseSchema>;
 
-// A resolved identity is immutable, so it is cached for good. Failures are deliberately NOT cached:
-// that would poison a message PK could resolve on a later attempt, such as after an outage clears.
+// Cache immutable resolved identities permanently, while leaving failures uncached so later retries can recover.
 const identityCache = new Map<string, PkMessageLookup>();
 const inFlightLookups = new Map<string, Promise<PkMessageLookup | null>>();
 
@@ -123,9 +121,7 @@ async function fetchWithRetry(
 ): Promise<PkMessageLookup | null> {
   const perAttemptCapMs = attemptCapMs(lookupTimeoutMs);
   const headers: Record<string, string> = { "User-Agent": "TomoriBot" };
-  // Optional bot-owned PK token, sent as-is (no "Bearer" prefix: PluralKit's own
-  // convention, not OAuth). It raises the base rate limit for all lookups and grants
-  // no access to other users' private data.
+  // PluralKit expects its optional bot rate-limit token without a Bearer prefix, and it grants no private user access.
   const apiToken = instance.instanceId === "pluralkit:official" ? process.env.PLURALKIT_API_TOKEN?.trim() : null;
   if (apiToken) headers.Authorization = apiToken;
 

@@ -500,9 +500,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Custom Endpoint connection and model split
 
     const downPath = path.join(process.cwd(), "src", "db", "migrations", "068_custom_endpoint_connections.down.sql");
     const upPath = path.join(process.cwd(), "src", "db", "migrations", "068_custom_endpoint_connections.sql");
-    // 068 down drops the connections table and 068 up recreates it at its 068 shape, so every later
-    // migration that adds a connection column must be replayed too. The DB is shared across test
-    // files, and a missing column here fails unrelated repository reads in later files.
+    // 068 recreates the connections table at its 068 shape, so later column migrations must replay to keep
+    // shared-DB reads valid.
     const laterConnectionMigrationPaths = [
       path.join(process.cwd(), "src", "db", "migrations", "084_custom_endpoint_connection_behavior.sql"),
     ];
@@ -548,8 +547,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Custom Endpoint connection and model split
       expect(reloaded?.requires_auth).toBe(true);
       expect(reloaded?.model_name).toBe("cycle-model");
     } finally {
-      // Keep the shared disposable database at the current fresh-install
-      // schema after exercising Migration A's legacy coexistence state.
+      // Restore the current schema after testing 068 so subsequent suites on the shared DB see fresh-install tables.
       await executeTestSqlFile(upPath);
       for (const laterPath of laterConnectionMigrationPaths) {
         await executeTestSqlFile(laterPath);

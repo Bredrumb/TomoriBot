@@ -45,7 +45,6 @@ function isThinkWordPrefix(s: string): boolean {
 // A bare trailing < resolves to close rather than open because callers expect prior close-first matching when a tag
 // splits at <.
 export function findTrailingReasoningTagPrefix(text: string): TrailingReasoningTagPrefix | null {
-  // Isolate a trailing `<` (optional `/`) followed only by tag-interior chars.
   const match = /<\/?[A-Za-z0-9_.:-]*$/.exec(text);
   if (!match) {
     return null;

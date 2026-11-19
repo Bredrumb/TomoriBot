@@ -64,7 +64,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Ensure command is run in a guild text channel - let helper functions manage interaction state
   if (!interaction.channel || !("messages" in interaction.channel)) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.guild_only_title",
@@ -88,7 +87,6 @@ export async function execute(
       return;
     }
 
-    // Get the guild channel (we know it exists from check above, but need type narrowing)
     const guildChannel = interaction.guild.channels.cache.get(interaction.channel.id) ?? interaction.channel;
 
     if (!("permissionsFor" in guildChannel)) {
@@ -131,11 +129,9 @@ export async function execute(
 
   const invokingMember = interaction.member as import("discord.js").GuildMember | null;
 
-  // Check cooldown (shares cooldown pool with message triggers)
   const cooldownType = tomoriState.config.cooldown_type ?? CooldownType.OFF;
   const cooldownLength = tomoriState.config.cooldown_length ?? 5;
 
-  // Uses whitelist-aware version to respect per-channel cooldown overrides
   const cooldownResult = await cooldownRepository.checkMessageTriggerCooldownWithWhitelist(
     serverDiscId,
     interaction.user.id,
@@ -321,9 +317,8 @@ export async function execute(
       });
     }
 
-    // tomoriChat injects its "[Continue your last message]" prompt when a manual
-    // trigger's tail message is the bot's own, so replaying the latest message keeps
-    // /respond on that path instead of a plain chat turn.
+    // Replays the latest message rather than synthesizing one so tomoriChat treats a bot-authored tail as a
+    // continuation trigger.
     const passportMessage = latestMessage;
 
     log.info(
@@ -352,8 +347,6 @@ export async function execute(
       },
     });
 
-    // Set cooldown after successful response (shares cooldown pool with message triggers)
-    // Uses whitelist-aware version to respect per-channel cooldown overrides
     await cooldownRepository.setMessageTriggerCooldownWithWhitelist(
       serverDiscId,
       interaction.user.id,

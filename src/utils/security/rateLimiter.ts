@@ -10,7 +10,7 @@ import {
 } from "@/utils/misc/processMemory";
 
 const IS_PRODUCTION = process.env.RUN_ENV === "production";
-export const GUARDS_ENABLED = IS_PRODUCTION; // Automatically disabled in dev
+export const GUARDS_ENABLED = IS_PRODUCTION;
 
 const MESSAGE_RATE_LIMITS = {
   MAX_USER_ACTIVE_MESSAGES: GUARDS_ENABLED
@@ -94,8 +94,8 @@ export const FETCH_LIMITS = {
 
   FETCH_CHAR_LIMIT: 50000,
 
-  MEMORY_REDUCTION_WARNING: 0.3, // 30% of base limit
-  MEMORY_REDUCTION_CRITICAL: 0.04, // 4% of base limit
+  MEMORY_REDUCTION_WARNING: 0.3,
+  MEMORY_REDUCTION_CRITICAL: 0.04,
 } as const;
 
 export const STREAMING_LIMITS = {
@@ -124,7 +124,7 @@ export interface MemoryCheckResult {
   memoryLimitMB: number;
   percentUsed: number;
   shouldProcessMedia: boolean;
-  reducedMediaWindow?: number; // Suggested reduced media window during warning
+  reducedMediaWindow?: number;
 }
 
 interface MemoryEmergencyEvent {
@@ -197,7 +197,6 @@ class MemoryGuard {
   checkMemory(): MemoryCheckResult {
     const protection = MEMORY_PROTECTION();
 
-    // Disabled in development
     if (!GUARDS_ENABLED) {
       return {
         status: "safe",
@@ -208,9 +207,7 @@ class MemoryGuard {
       };
     }
 
-    // Use RSS (Resident Set Size): the total memory the OS has allocated to this
-    // process, including heap, native buffers, and shared libraries. This is what
-    // the kernel's OOM killer tracks, so it's the correct metric for preventing crashes.
+    // Measure RSS rather than heap because the kernel OOM killer tracks total resident process memory.
     const rssBytes = process.memoryUsage().rss;
     const limitBytes = protection.CONTAINER_MEMORY_LIMIT_MB * 1024 * 1024;
 
@@ -262,7 +259,7 @@ class MemoryGuard {
         memoryLimitMB: protection.CONTAINER_MEMORY_LIMIT_MB,
         percentUsed,
         shouldProcessMedia: true,
-        reducedMediaWindow: 5, // Reduce to only last 5 messages
+        reducedMediaWindow: 5,
       };
     }
 
@@ -310,7 +307,7 @@ class MemoryGuard {
     const memCheck = this.checkMemory();
 
     if (memCheck.status === "critical") {
-      return 0; // No media in critical mode
+      return 0;
     }
 
     if (memCheck.status === "warning" && memCheck.reducedMediaWindow) {
@@ -324,14 +321,14 @@ class MemoryGuard {
     const memCheck = this.checkMemory();
 
     if (memCheck.status === "critical") {
-      return Math.floor(FETCH_LIMITS.FETCH_CHAR_LIMIT * FETCH_LIMITS.MEMORY_REDUCTION_CRITICAL); // 4% = 2k chars
+      return Math.floor(FETCH_LIMITS.FETCH_CHAR_LIMIT * FETCH_LIMITS.MEMORY_REDUCTION_CRITICAL);
     }
 
     if (memCheck.status === "warning") {
-      return Math.floor(FETCH_LIMITS.FETCH_CHAR_LIMIT * FETCH_LIMITS.MEMORY_REDUCTION_WARNING); // 30% = 15k chars
+      return Math.floor(FETCH_LIMITS.FETCH_CHAR_LIMIT * FETCH_LIMITS.MEMORY_REDUCTION_WARNING);
     }
 
-    return FETCH_LIMITS.FETCH_CHAR_LIMIT; // 100% = 50k chars in safe mode
+    return FETCH_LIMITS.FETCH_CHAR_LIMIT;
   }
 
   getStatus(): MemoryStatus {
@@ -364,10 +361,10 @@ interface QuotaCheckResult {
   max?: number;
 }
 
-const personaQuotaMap = new Map<string, QuotaEntry>(); // Key: userId
-const importQuotaMap = new Map<string, QuotaEntry>(); // Key: userId
-const documentQuotaMap = new Map<string, QuotaEntry>(); // Key: userId
-const avatarQuotaMap = new Map<string, QuotaEntry>(); // Key: guildId (server-level)
+const personaQuotaMap = new Map<string, QuotaEntry>();
+const importQuotaMap = new Map<string, QuotaEntry>();
+const documentQuotaMap = new Map<string, QuotaEntry>();
+const avatarQuotaMap = new Map<string, QuotaEntry>();
 
 const DAILY_QUOTA_WINDOW_MS = 24 * 60 * 60 * 1000;
 
@@ -418,7 +415,6 @@ export function checkServerRateLimit(serverActiveCount: number): RateLimitResult
 
 // Check and increment stay in one synchronous call so concurrent callers cannot both pass before the count updates.
 function reserveDailyQuota(quotaMap: Map<string, QuotaEntry>, key: string, limit: number): QuotaCheckResult {
-  // Disabled in development
   if (!GUARDS_ENABLED) {
     return { allowed: true };
   }
@@ -426,7 +422,6 @@ function reserveDailyQuota(quotaMap: Map<string, QuotaEntry>, key: string, limit
   const now = Date.now();
   const quota = quotaMap.get(key);
 
-  // First operation or expired quota - create with count 1 (atomically reserve)
   if (!quota || now >= quota.resetAt) {
     quotaMap.set(key, {
       count: 1,
@@ -444,7 +439,6 @@ function reserveDailyQuota(quotaMap: Map<string, QuotaEntry>, key: string, limit
     };
   }
 
-  // Atomically increment and return success
   quota.count++;
   return { allowed: true };
 }
@@ -474,7 +468,7 @@ export function formatMemoryStatus(check: MemoryCheckResult): string {
 // Must be called once at startup because it does not guard against duplicate intervals.
 /** @public Dynamically loaded by `src/init/timers.ts` on main and release. */
 export function initializeQuotaCleanup(): void {
-  const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+  const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 
   setInterval(() => {
     const now = Date.now();

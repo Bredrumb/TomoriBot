@@ -439,8 +439,7 @@ function createGuildIdentityPort(guildId: string, interaction: GlobalRoutableInt
       return { ok: result.success, rateLimited: result.error === "rate_limited", details: result.details };
     },
     async currentAvatarReference() {
-      // The bot's live guild avatar is what the outgoing main persona actually looked like. A
-      // forced fetch avoids a cached member returning the pre-swap image on a repeat promotion.
+      // Force-fetch because a cached member can still hold the pre-swap avatar on a repeat promotion.
       const fetched = interaction.client.user
         ? await interaction.guild?.members.fetch({ user: interaction.client.user.id, force: true }).catch(() => null)
         : null;
@@ -2921,9 +2920,7 @@ async function runPersonaWrite(
     case "trigger-remove-submit": {
       const modal = interaction as ModalSubmitInteraction;
       const triggerWords = persona.trigger_words ?? [];
-      // Unchecked-means-remove derives its removal set from positions in the list the modal
-      // presented, so a list that changed under the open modal must fail stale rather than delete a
-      // different word than the one the user unchecked.
+      // Fail stale if trigger words changed since opening because removals index by modal position.
       if (computeTriggerRemoveFingerprint(persona.persona_id as number, triggerWords) !== route.fp) {
         return { receipt: staleReceipt(locale) };
       }
@@ -2931,10 +2928,7 @@ async function runPersonaWrite(
       const checked = new Set<number>();
       const presentedCount = Math.min(triggerWords.length, CONFIG_TRIGGER_CHECKBOX_CAPACITY);
       const groupCount = Math.ceil(presentedCount / CONFIG_TRIGGER_CHECKBOX_GROUP_SIZE);
-      // An undefined group means no checkbox data reached this submit at all, which is a different
-      // fact from an empty array. Unchecked-means-remove would read that absence as "the user
-      // cleared every box" and delete every presented word, so a submit is acted on only when at
-      // least one group actually arrived.
+      // Treat an undefined group differently from `[]` so missing checkbox data never clears every trigger.
       let hasCheckboxEvidence = false;
       for (let groupIndex = 0; groupIndex < groupCount; groupIndex++) {
         const values = dependencies.takeCheckboxValues(

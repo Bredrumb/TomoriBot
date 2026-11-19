@@ -264,11 +264,12 @@ const serverAutoTriggerConfigExportSchema = z.object({});
 const serverTriggerBehaviorConfigExportSchema = z.object({
   always_reply_enabled: z.boolean().optional(),
   deliberate_trigger_mode: z.boolean().optional(),
-  deliberate_tool_mode: z.boolean().optional(), // Added May 2026
-  deliberate_tool_context_turns: z.number().int().min(0).max(10).nullable().optional(), // Added May 2026
+  deliberate_tool_mode: z.boolean().optional(),
+  deliberate_tool_context_turns: z.number().int().min(0).max(10).nullable().optional(),
+  // .optional() stays outside z.preprocess because Zod rejects an absent key before running the pipe transform.
   deliberate_tool_triggers: z
     .preprocess(normalizeJsonColumn, z.record(z.string(), z.array(deliberateToolTriggerEntrySchema)))
-    .optional(), // Added May 2026 - keyed by tool target, values are literal strings or {type, value} entries (regex). Shared schema with DB row to prevent drift. The optional sits outside the preprocess because a pipe rejects an absent key before its transform runs.
+    .optional(),
   cooldown_type: z.number().int().min(0).max(4).optional(),
   cooldown_length: z.number().int().min(1).max(86400).optional(),
 });

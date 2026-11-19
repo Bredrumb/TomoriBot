@@ -6,8 +6,8 @@ import { clearUserCache } from "@/utils/cache/userCache";
 export const FIXTURE_IDS = {
   serverDiscId: "_rt_server_001",
   userDiscId: "_rt_user_001",
-  regUserDiscId: "_rt_user_reg_001", // used by write tests that registerUser
-  altUserDiscId: "_rt_user_alt_001", // for personal memory tests
+  regUserDiscId: "_rt_user_reg_001",
+  altUserDiscId: "_rt_user_alt_001",
 } as const;
 
 export interface FixtureRefs {
@@ -83,12 +83,10 @@ export async function insertFixtures(db: SQL): Promise<FixtureRefs> {
   `;
   await db`DELETE FROM persona_attributes WHERE persona_id = ${personaId}`;
 
-  // Server-scoped split config rows.
   for (const table of SERVER_CONFIG_TABLES) {
     await db.unsafe(`INSERT INTO ${table} (server_id) VALUES ($1) ON CONFLICT (server_id) DO NOTHING`, [serverId]);
   }
 
-  // Persona-scoped config
   await db`
     INSERT INTO persona_configs (persona_id, trigger_words)
     VALUES (${personaId}, ARRAY['_rt_trigger']::TEXT[])

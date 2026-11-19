@@ -38,21 +38,18 @@ export const PANEL_ACTIONS = [
   "expressions.workspace.custom.delete",
   "expressions.workspace.whitelist.add",
   "expressions.workspace.whitelist.remove",
-  // mcps
   "mcps.workspace.server.add",
   "mcps.workspace.server.enable",
   "mcps.workspace.server.disable",
   "mcps.workspace.server.remove",
   "mcps.workspace.server.reconnect",
 
-  // st-presets
   "st-presets.workspace.preset.add",
   "st-presets.workspace.preset.activate",
   "st-presets.workspace.preset.deactivate",
   "st-presets.workspace.preset.remove",
   "st-presets.workspace.nodes.save",
 
-  // providers (workspace)
   "providers.workspace.provider.add",
   "providers.workspace.provider.edit",
   "providers.workspace.endpoint.add",
@@ -60,7 +57,6 @@ export const PANEL_ACTIONS = [
   "providers.workspace.model.save",
   "providers.workspace.entry.remove",
 
-  // providers (personal)
   "providers.personal.provider.add",
   "providers.personal.provider.edit",
   "providers.personal.endpoint.add",
@@ -68,7 +64,6 @@ export const PANEL_ACTIONS = [
   "providers.personal.model.save",
   "providers.personal.entry.remove",
 
-  // moderation
   "moderation.workspace.member-access.set",
   "moderation.workspace.model-access.set",
   "moderation.workspace.user-blacklist.add",
@@ -82,13 +77,11 @@ export const PANEL_ACTIONS = [
   "moderation.workspace.persona-channel.remove",
   "moderation.workspace.quota.set",
 
-  // personal-memories
   "personal-memories.personal.memory.add",
   "personal-memories.personal.memory.edit",
   "personal-memories.personal.memory.remove",
   "personal-memories.personal.stm.clear",
 
-  // memories (workspace)
   "memories.workspace.memory.add",
   "memories.workspace.memory.edit",
   "memories.workspace.memory.remove",
@@ -107,7 +100,6 @@ export const PANEL_ACTIONS = [
   "memories.workspace.lorebook.import",
   "memories.workspace.lorebook.remove",
 
-  // personal-config
   "personal-config.personal.naming.set",
   "personal-config.personal.about.set",
   "personal-config.personal.language.set",
@@ -128,11 +120,10 @@ export const PANEL_ACTIONS = [
   "personal-config.personal.spotlight.set",
   "personal-config.personal.spotlight.remove",
 
-  // setup wizard
   "setup.workspace.setup.complete",
 
-  // server config panel; the surface avoids a bare "config" prefix because `check-locales` treats
-  // that as a locale namespace root and would read these identifiers as missing locale keys
+  // Uses "server-config" rather than "config" because check-locales treats a bare "config" prefix as a locale
+  // namespace root.
   "server-config.workspace.persona-avatar.set",
   "server-config.workspace.persona.rename",
   "server-config.workspace.persona-naming.set",

@@ -33,7 +33,6 @@ export class GemmaThinkingParser {
       return { visibleText, thoughts: [] };
     }
 
-    // Stream ended mid-accumulation, so treat buffered content as a partial thought.
     log.info("CustomGemmaThinkingParser: Stream ended during thinking accumulation — recovering partial thought");
     const content = this.thinkBuffer.replace(/^\n/, "").trim();
     this.reset();
@@ -63,8 +62,7 @@ export class GemmaThinkingParser {
       return this.checkForEnd(visibleBefore);
     }
 
-    // No full match. Hold back only the minimum tail that is a genuine prefix
-    // of any start token variant, to handle tokens split across chunk boundaries.
+    // Hold back only the longest tail matching a start-token prefix so split tokens survive chunk boundaries.
     const holdback = this.longestSuffixPrefixOfAny(combined);
     this.scanHoldback = holdback;
     return { visibleText: combined.slice(0, combined.length - holdback.length), thoughts: [] };
@@ -90,10 +88,9 @@ export class GemmaThinkingParser {
       content = content.slice(1);
     }
 
-    // Build thought entry; drop empty suppressors (26B/31B thinking OFF).
+    // Drop empty thought blocks emitted by Gemma 26B/31B when thinking is off.
     const thoughts: ThoughtLogEntry[] = content.trim().length > 0 ? [{ kind: "raw", content }] : [];
 
-    // Scan remaining text for any subsequent thinking blocks (e.g. multi-turn).
     const rest = this.scanForStart(remaining);
 
     return {

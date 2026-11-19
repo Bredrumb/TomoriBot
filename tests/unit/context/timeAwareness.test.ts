@@ -255,8 +255,7 @@ describe("appendDialogueHistoryContext — time-awareness injections", () => {
       convertMentions: async (text) => text,
     });
 
-    // The prompt carries guidance, not a greeting the model must reproduce. From a shared
-    // account it may only claim this identity is new, never that the account is.
+    // On a shared account, the prompt guidance may claim only that this identity is new, never that the account is.
     const notes = contextItems.filter((item) => itemText(item).startsWith("[System: Locke"));
     expect(notes).toHaveLength(1);
     const noteText = itemText(notes[0]);
@@ -342,10 +341,8 @@ describe("appendDialogueHistoryContext — time-awareness injections", () => {
   });
 
   it("keeps the context-build phase of the reunion presence protocol wired", async () => {
-    // The clock only works if phase 1 (resolve, at context build) and phase 2 (commit, post-turn)
-    // both run. Phase 2's call site and its response gate are proven by behavior in
-    // postTurnEffects.test.ts and reunionPresence.test.ts; building a whole turn context to prove
-    // phase 1 the same way would cost more than this scan.
+    // Phase 2 is tested behaviorally elsewhere, while this source scan guards phase 1's wiring without building
+    // a full turn.
     const producer = await Bun.file("src/utils/chat/contextPipeline.ts").text();
     const presence = await Bun.file("src/utils/chat/reunionPresence.ts").text();
 

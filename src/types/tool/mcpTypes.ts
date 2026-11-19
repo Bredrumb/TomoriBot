@@ -20,9 +20,9 @@ export interface TypedMCPToolResult extends ToolResult {
     status: "completed" | "completed_and_sent" | "failed" | "partial";
     completionMessage?: string;
 
-    error?: string; // For error scenarios
-    searchProvider?: string; // For search-specific information
-    contentLength?: number; // For fetch-specific information
+    error?: string;
+    searchProvider?: string;
+    contentLength?: number;
 
     [key: string]: unknown;
   };
@@ -32,8 +32,10 @@ export interface GuildMCPConnection {
   guildMcpId: number;
   serverId: number;
   name: string;
-  client: unknown; // MCP Client : typed as unknown to avoid coupling mcpTypes to SDK imports
-  callableTool: unknown; // CallableTool from @google/genai : same reason
+  // Typed as unknown (actually MCP Client) to avoid coupling mcpTypes to SDK imports.
+  client: unknown;
+  // Typed as unknown (CallableTool from @google/genai) to avoid coupling mcpTypes to SDK imports.
+  callableTool: unknown;
   functionNames: string[];
   connectedAt: number;
   lastUsedAt: number;

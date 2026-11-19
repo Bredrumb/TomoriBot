@@ -34,9 +34,7 @@ export async function transcribeViaOpenAIAdapter(
   const modelName = (endpoint.extra_config.model as string | undefined) ?? "whisper-1";
   const languageHint = (endpoint.extra_config.language as string | undefined) ?? null;
   const baseUrl = endpoint.endpoint_url.replace(/\/+$/, "");
-  // Stored URLs may or may not carry /v1: new registrations normalize bare origins to /v1,
-  // while legacy rows and explicit custom paths can omit it. Only prepend when it is absent,
-  // so a URL that already ends in /v1 never becomes /v1/v1/audio/transcriptions.
+  // Legacy endpoints or custom paths can omit /v1 while new ones include it, so only prepend /v1 when absent.
   const targetUrl = /\/v1$/i.test(baseUrl) ? `${baseUrl}/audio/transcriptions` : `${baseUrl}/v1/audio/transcriptions`;
 
   const form = new FormData();

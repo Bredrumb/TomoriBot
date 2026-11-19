@@ -77,30 +77,25 @@ export function makeFakeInteraction(overrides: Partial<FakeInteraction> = {}): {
       },
     },
 
-    // reply: sets replied=true so subsequent calls route to editReply
     reply: async (...args: unknown[]) => {
       calls.push({ method: "reply", args });
       interaction.replied = true;
     },
 
-    // deferReply: sets deferred=true; represents the initial deferred ack
     deferReply: async (...args: unknown[]) => {
       calls.push({ method: "deferReply", args });
       interaction.deferred = true;
     },
 
-    // showModal: the acknowledgement path for modal commands; does NOT set
-    //    replied=true in Discord.js, but the interaction IS consumed.
+    // Leave replied=false because discord.js does not set it on showModal even though the interaction is consumed.
     showModal: async (...args: unknown[]) => {
       calls.push({ method: "showModal", args });
     },
 
-    // editReply: only valid after deferReply() or reply()
     editReply: async (...args: unknown[]) => {
       calls.push({ method: "editReply", args });
     },
 
-    // followUp: only valid after any acknowledgement
     followUp: async (...args: unknown[]) => {
       calls.push({ method: "followUp", args });
     },
@@ -113,16 +108,13 @@ export function makeFakeInteraction(overrides: Partial<FakeInteraction> = {}): {
       calls.push({ method: "update", args });
     },
 
-    // fetchReply: not an acknowledgement; returns a fake message so ping-style
-    // commands that measure latency don't throw.
+    // Returns a fake message without acknowledging so latency checks do not throw.
     fetchReply: async () => ({
       id: "fake_reply_id",
       createdTimestamp: Date.now(),
     }),
   };
 
-  // Apply caller-supplied overrides after all defaults are set so partial
-  // objects (e.g. only guild) merge cleanly without breaking method closures.
   Object.assign(interaction, overrides);
 
   return { interaction, calls };

@@ -23,9 +23,7 @@ export async function resolveContextBudget(
 
   const limits = await resolveModelLimits(tomoriState, refreshLiveLimits);
   if (!limits.contextWindow) return null;
-  // Reserve exactly what the request builder sends: over-reserving drops history that would have fit.
-  // The one exception is an OpenRouter model with no known ceiling, whose request omits max_tokens:
-  // the default reply budget is reserved so a long channel still trims instead of overflowing.
+  // Match the output cap so history stays intact, except unknown-ceiling OpenRouter models reserve default budget.
   return {
     contextLength: limits.contextWindow,
     outputReserve: resolveChatMaxOutputTokens({

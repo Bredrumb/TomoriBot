@@ -83,16 +83,13 @@ describe("promptWithPaginatedModal selectorStyle", () => {
     expect(result.outcome).toBe("timeout");
     expect(calls).toHaveLength(1);
     const payload = calls[0].payload;
-    // Legacy path carries embeds, never IsComponentsV2.
     expect(Array.isArray(payload.embeds)).toBe(true);
     const flags = (payload.flags as number) ?? 0;
     expect(flags & MessageFlags.IsComponentsV2).toBe(0);
-    // Numbered page buttons: 26 options -> 2 pages -> page_1, page_2.
     const actionRow = (payload.components as Array<{ toJSON: () => unknown }>)[0];
     const ids = collectCustomIds(actionRow.toJSON());
     expect(ids).toContain("page_1");
     expect(ids).toContain("page_2");
-    // The legacy selector must NOT mark the interaction as V2.
     expect(hasComponentsV2Reply(interaction)).toBe(false);
   });
 
@@ -104,10 +101,8 @@ describe("promptWithPaginatedModal selectorStyle", () => {
     expect(result.outcome).toBe("timeout");
     expect(calls).toHaveLength(1);
     const payload = calls[0].payload;
-    // V2 payload: components + IsComponentsV2 + Ephemeral, never embeds.
     expect("embeds" in payload).toBe(false);
     expect(payload.flags).toBe(MessageFlags.Ephemeral | MessageFlags.IsComponentsV2);
-    // Range + navigation buttons scoped to a per-session prefix.
     const ids = collectCustomIds(payload.components);
     expect(ids.some((id) => id.endsWith("_range_0"))).toBe(true);
     expect(ids.some((id) => id.endsWith("_range_1"))).toBe(true);

@@ -613,9 +613,8 @@ async function enrichPresenceField(
   let lines: string[] = [];
   let failed = false;
   const hasPresenceIntent = params.client.options.intents?.has(GatewayIntentBits.GuildPresences);
-  // Proxy identities carry no presence of their own and are never mentionable, so idle/DND etiquette
-  // has nothing to govern. The host's own presence still renders whenever the host is a participant
-  // in its own right.
+  // Skip presence for proxy identities because they have no Discord account status, while independent host entries
+  // still show theirs.
   if (base.policy.exposePresence && !base.messageProxy) {
     if (params.isDMChannel) {
       lines = ["- Status: Online (Direct Message)"];

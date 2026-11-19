@@ -13,7 +13,6 @@ export class CommandRegistry {
     }
 
     try {
-      // Fetch application commands (global commands)
       const commands = await client.application?.commands.fetch();
 
       if (!commands) {
@@ -21,12 +20,9 @@ export class CommandRegistry {
         return;
       }
 
-      // Cache command IDs with their names
       for (const [id, command] of commands) {
-        // Store base command
         this.commandIds.set(command.name, id);
 
-        // If command has subcommands, store them with format "command:subcommand"
         if (command.options && command.options.length > 0) {
           for (const option of command.options) {
             if (option.type === 1) {
@@ -35,7 +31,6 @@ export class CommandRegistry {
               this.commandIds.set(subcommandKey, id);
             } else if (option.type === 2) {
               // Type 2 = SUB_COMMAND_GROUP
-              // For subcommand groups, we need to go one level deeper
               if ("options" in option && option.options) {
                 for (const subOption of option.options) {
                   if (subOption.type === 1) {
@@ -60,13 +55,10 @@ export class CommandRegistry {
     let commandString: string;
 
     if (subcommandOrGroup && subcommand) {
-      // Format: "/command group subcommand"
       commandString = `/${commandName} ${subcommandOrGroup} ${subcommand}`;
     } else if (subcommandOrGroup) {
-      // Format: "/command subcommand"
       commandString = `/${commandName} ${subcommandOrGroup}`;
     } else {
-      // Format: "/command"
       commandString = `/${commandName}`;
     }
 
@@ -89,5 +81,4 @@ export class CommandRegistry {
   }
 }
 
-// Export a singleton instance
 export const commandRegistry = new CommandRegistry();

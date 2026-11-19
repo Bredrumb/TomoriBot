@@ -83,8 +83,7 @@ export async function execute(
   const regenerate = interaction.options.getBoolean("regenerate") ?? false;
   const selectPersona = interaction.options.getBoolean("select_persona") ?? false;
 
-  // Both execution branches perform asynchronous state/persona loads. Acknowledge
-  // before those reads so the optional persona picker can safely edit this reply.
+  // Deferred before state and persona DB loads so both branches and the optional picker stay within Discord's 3s window.
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const tomoriState = await getCachedMainPersona(guildId);
@@ -97,9 +96,7 @@ export async function execute(
     return;
   }
 
-  // Permission check: requires ManageGuild OR use in a designated RP channel.
-  //    When the command is run inside a thread, channelId is the thread's own ID:
-  //    not the parent channel's ID. Check both so threads inherit their parent's RP status.
+  // Both channelId and parentChannelId are checked so threads inherit their parent channel's RP designation.
   const hasManageGuild = interaction.memberPermissions?.has("ManageGuild") ?? false;
   const parentChannelId = channel.isThread() ? channel.parentId : null;
   const isRpChannel =
@@ -114,16 +111,13 @@ export async function execute(
     return;
   }
 
-  // Check bot's MANAGE_MESSAGES permission: determines whether direct
-  //      deletion methods (bulkDelete, msg.delete) will work. The command
-  //      proceeds regardless, but uses webhook-based deletion as fallback.
+  // Missing ManageMessages is non-fatal because webhook messages can still be deleted via the webhook API.
   const botMember = interaction.guild.members.me;
   let botHasManageMessages = false;
   if (botMember && "permissionsFor" in channel) {
     botHasManageMessages = Boolean(channel.permissionsFor(botMember)?.has("ManageMessages"));
   }
 
-  // Race-condition lock check, so prevents double-invocation for the same channel
   if (activeDeleteLocks.has(channelId)) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.tool.delete.turn.already_running_title",
@@ -133,7 +127,6 @@ export async function execute(
     return;
   }
 
-  // Acquire lock before any async work
   activeDeleteLocks.add(channelId);
 
   let personaWorkflowStarted = false;
@@ -145,14 +138,12 @@ export async function execute(
       initialPersona: TomoriState | null,
       updateStatus: (status: DeleteTurnStatus) => Promise<void>,
     ): Promise<void> => {
-      // Target persona tracking: null means auto-detect from message history
       let resolvedPersona = initialPersona;
 
       const fetchLimit = normalizeMessageFetchLimit(tomoriState.config.message_fetch_limit);
       const fetched = await channel.messages.fetch({ limit: fetchLimit });
 
-      // Discord returns messages newest-first; reverse to chronological order
-      // so index 0 = oldest and the last index = newest
+      // Discord returns fetched messages newest-first, so reverse them for chronological turn detection.
       const messages: Message[] = [...fetched.values()].reverse();
 
       await Promise.all(messages.map(verifyMessageWebhook));
@@ -202,13 +193,10 @@ export async function execute(
       let deletedCount = 0;
       let failedCount = 0;
 
-      // Delete webhook messages via webhook API (no MANAGE_MESSAGES needed)
       if (webhookMessages.length > 0) {
         const hostChannel = resolveWebhookHostChannel(channel);
         const threadId = resolveWebhookThreadId(channel);
 
-        // Group messages by webhookId to minimize resolution calls.
-        // The filter narrows the type from (string | null) to string.
         const webhooksOnly = webhookMessages.filter((m): m is Message & { webhookId: string } => !!m.webhookId);
 
         const messagesByWebhook = new Map<string, Message[]>();
@@ -224,7 +212,6 @@ export async function execute(
           for (const msg of messages) {
             try {
               if (webhook) {
-                // Webhook API deletion: no channel permission required
                 await webhook.deleteMessage(msg.id, threadId);
                 deletedCount++;
               } else if (botHasManageMessages) {
@@ -254,10 +241,8 @@ export async function execute(
         }
       }
 
-      // Delete direct bot messages (requires MANAGE_MESSAGES)
       if (directBotMessages.length > 0) {
         if (botHasManageMessages) {
-          // Partition by age for bulk delete optimization
           const recentIds: string[] = [];
           const oldDirectMessages: Message[] = [];
 
@@ -269,7 +254,7 @@ export async function execute(
             }
           }
 
-          // Bulk-delete recent direct messages (≥ 2 IDs, text channel only)
+          // Discord bulkDelete rejects single messages and non-text channels, so <2 messages fall back to single delete.
           if (recentIds.length >= 2 && channel instanceof BaseGuildTextChannel) {
             try {
               await channel.bulkDelete(recentIds);
@@ -307,7 +292,6 @@ export async function execute(
             }
           }
 
-          // Delete old direct messages individually (bulk-delete not allowed > 14 days)
           for (const msg of oldDirectMessages) {
             try {
               await msg.delete();
@@ -318,7 +302,6 @@ export async function execute(
             }
           }
         } else {
-          // Bot lacks MANAGE_MESSAGES, so cannot delete direct bot messages at all
           failedCount += directBotMessages.length;
           log.warn(
             `[deleteTurn] Bot lacks MANAGE_MESSAGES in channelId=${channelId}; skipping ${directBotMessages.length} direct bot messages`,
@@ -375,14 +358,14 @@ export async function execute(
           const remaining = await channel.messages.fetch({ limit: 1 });
           let lastMessage: Message | undefined = remaining.first();
 
-          // If the channel has no messages left after deletion, seed a braille
-          // blank placeholder so tomoriChat has a valid Message to operate on
+          // Seeds a braille blank placeholder when deletion empties the channel because tomoriChat requires a trigger
+          // Message.
           if (!lastMessage && channel instanceof BaseGuildTextChannel) {
             lastMessage = await channel.send("\u2800");
           }
 
           if (lastMessage) {
-            // Fire-and-forget, so do not await so the command interaction resolves
+            // Intentionally unawaited so the delete command completes without blocking on generation.
             void tomoriChat({
               client,
               message: lastMessage,
@@ -495,7 +478,6 @@ export async function execute(
       // Interaction may have already expired, so nothing we can do
     }
   } finally {
-    // Always release the channel lock regardless of outcome
     activeDeleteLocks.delete(channelId);
   }
 }

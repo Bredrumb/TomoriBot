@@ -13,10 +13,8 @@ const CACHE_TTL_MS = 120 * 60 * 1000;
 const parsedRetentionDays = Number.parseInt(process.env.PERSONA_SPRITE_MESSAGE_RETENTION_DAYS || "30", 10);
 const RETENTION_DAYS = Number.isFinite(parsedRetentionDays) && parsedRetentionDays > 0 ? parsedRetentionDays : 30;
 
-// Housekeeping internals (not operational limits), both piggybacked on the write path so no timer
-// wiring is needed. The sweep is time-gated, not size-gated: the production working set peaks just
-// under any threshold high enough to be cheap, so a size gate never fired and expired entries stayed
-// until restart. A lower size gate would rescan the whole map on every insert once it held fresh entries.
+// Piggybacked on writes to avoid timers, and time-gated rather than size-gated because a cheap size threshold never
+// fires while a low one rescans fresh entries on every insert.
 const SWEEP_INTERVAL_MS = 10 * 60 * 1000;
 const PRUNE_INTERVAL_MS = 6 * 60 * 60 * 1000;
 

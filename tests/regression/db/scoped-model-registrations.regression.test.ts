@@ -87,8 +87,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Scoped model registrations (Migration D)",
   });
 
   it("upserts every scoped registration through the repository, in both scopes", async () => {
-    // The isolation test below inserts with raw SQL, so it never exercised ON CONFLICT inference.
-    // Each arbiter must repeat its partial index's `IS NOT NULL` conjunct or Postgres raises 42P10.
+    // Each ON CONFLICT arbiter must repeat its partial index's `IS NOT NULL` conjunct or Postgres raises 42P10,
+    // which the raw-SQL isolation test below does not exercise.
     const [llm] = await testSql<[{ llm_id: number }]>`
       INSERT INTO llms (llm_provider, llm_codename, is_scoped_registration)
       VALUES (${SHARED_PROVIDER}, 'arbiter-text', true) RETURNING llm_id

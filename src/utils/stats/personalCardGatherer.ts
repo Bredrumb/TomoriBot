@@ -39,9 +39,7 @@ export async function gatherPersonalCardData(args: GatherPersonalCardArgs): Prom
       getCachedAllPersonas(guildDiscId),
       loadStatsPresetAvatarLookup(),
     ]);
-    // Ranked by total tokens (desc) so the list order matches the card's
-    // Tokens/Spent columns. `getPersonaTokenCostBreakdown` already orders the
-    // whole population by tokens, so the top five are the genuine token leaders.
+    // getPersonaTokenCostBreakdown sorts all rows by tokens desc, so slice(0, 5) matches the card's Tokens/Spent order.
     favoritePersonas = await Promise.all(
       personaTokenCosts.slice(0, 5).map(async (entry) => {
         const persona = personas.find((candidate) => candidate.persona_lineage_id === entry.lineageId);

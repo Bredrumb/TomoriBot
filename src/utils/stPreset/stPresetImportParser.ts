@@ -93,7 +93,7 @@ export function validateAttachment(
     return { isValid: false, errorKey: "invalid_format" };
   }
 
-  // Check content type if provided (Discord may not always set this)
+  // Discord may omit attachment contentType, so skip the MIME check when absent.
   if (contentType && !contentType.includes("json")) {
     return { isValid: false, errorKey: "invalid_format" };
   }
@@ -420,8 +420,7 @@ export function parsePresetNodes(normalizedPreset: NormalizedPresetShape): Parse
     }
   }
 
-  // Find the user-prompt order (character_id 100001)
-  // Falls back to character_id 100000 (system prompt order) if 100001 is missing
+  // SillyTavern stores user-prompt order under character_id 100001 with system-prompt order 100000 as fallback.
   const promptOrders = normalizedPreset.preset.prompt_order;
   let orderEntries: RawSTPromptOrderEntry[] | null = null;
 
@@ -459,8 +458,7 @@ export function parsePresetNodes(normalizedPreset: NormalizedPresetShape): Parse
     const content = prompt.content ?? "";
     const isMarker = prompt.marker === true;
 
-    // Flag comment-only nodes: stored in DB and visible in the toggle UI,
-    // but never injected into the prompt regardless of enabled state
+    // Comment-only nodes stay stored for the toggle UI so users see them, while never injecting even when enabled.
     const isComment = !isMarker && isCommentOnly(content);
     if (isComment) {
       commentOnlyCount++;

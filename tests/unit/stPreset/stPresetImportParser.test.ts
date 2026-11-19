@@ -230,12 +230,10 @@ describe("stPresetImportParser", () => {
       expect(parsed.sourceKind).toBe("legacy_text_completion");
       expect(parsed.nodes.length).toBeGreaterThan(0);
 
-      // Verify that chatHistory marker was synthesized
       const chatHistoryNode = parsed.nodes.find((n) => n.identifier === "chatHistory");
       expect(chatHistoryNode).toBeDefined();
       expect(chatHistoryNode?.is_marker).toBe(true);
 
-      // Verify imported legacy system prompt node
       const sysNode = parsed.nodes.find((n) => n.name === "Imported Legacy System Prompt");
       expect(sysNode).toBeDefined();
       expect(sysNode?.content).toBe("Legacy base system instruction.");

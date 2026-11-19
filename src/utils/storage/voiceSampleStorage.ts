@@ -30,7 +30,6 @@ function getVoiceSampleStorageConfig(): VoiceSampleStorageConfig | null {
     return null;
   }
 
-  // GCS takes priority when VOICE_SAMPLE_GCS_BUCKET is set
   const gcsBucket = process.env.VOICE_SAMPLE_GCS_BUCKET?.trim();
   if (gcsBucket) {
     const prefix = (process.env.VOICE_SAMPLE_GCS_PREFIX || "voice-samples").replace(/^\/+/, "").replace(/\/+$/, "");
@@ -39,7 +38,6 @@ function getVoiceSampleStorageConfig(): VoiceSampleStorageConfig | null {
     return { backend: "gcs", bucket: gcsBucket, prefix, publicBaseUrl };
   }
 
-  // S3 fallback
   const s3Bucket = process.env.VOICE_SAMPLE_S3_BUCKET?.trim();
   if (!s3Bucket) {
     log.warn(
@@ -162,7 +160,6 @@ export async function storeVoiceSample(options: VoiceSampleStoreOptions): Promis
         }
       }
 
-      // S3 path
       try {
         await getS3Client(config.region, config.endpoint).send(
           new PutObjectCommand({
@@ -260,7 +257,6 @@ export async function deleteStoredVoiceSample(reference: string): Promise<boolea
       }
     }
 
-    // S3 path
     try {
       await getS3Client(config.region, config.endpoint).send(
         new DeleteObjectCommand({

@@ -2,12 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { buildOpenAICompatibleMessages } from "@/providers/openaiCompatible/openaiCompatibleMessageBuilder";
 import type { StructuredContextItem } from "@/types/misc/context";
 
-// Golden-body regression coverage for the OpenAI-compatible message builder, which every
-// OpenAI-compatible provider (deepseek, zai, zaicoding, custom, nvidia, ...) shares. The media
-// notice intentionally supersedes the plan-07 byte-identical wording so relocated persona images
-// can name their actual sender.
-//
-// Inline base64 image parts are used so no network/image-processing runs in the test.
+// Uses inline base64 image parts so tests stay off the network and image-processing paths.
 function inlineImagePart(data: string): StructuredContextItem["parts"][number] {
   return {
     type: "image",

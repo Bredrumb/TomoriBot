@@ -348,10 +348,7 @@ export async function crawl4aiCrawlWithCookies(
     const rawLen = result.markdown?.raw_markdown?.length ?? 0;
     log.info(`${SERVICE_NAME} /crawl response: fit_markdown=${fitLen}chars raw_markdown=${rawLen}chars`);
 
-    // Respect the requested filter mode: raw requests read raw_markdown directly;
-    // fit (default) prefers fit_markdown and falls back to raw_markdown.
-    // Use || (not ??) because /crawl returns fit_markdown as "" (not null) when
-    // pruning removes all content, and ?? does not fall through on empty strings.
+    // Use || instead of ?? because /crawl returns "" (not null) for fit_markdown when pruning strips all content.
     const markdown =
       request.f === "raw"
         ? result.markdown?.raw_markdown || ""

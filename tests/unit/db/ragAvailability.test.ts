@@ -47,9 +47,7 @@ describe("detectRagAvailability", () => {
 });
 
 describe("probeRagUsable", () => {
-  // The re-probe only ever runs when startup detection failed, which is also the run where
-  // `initializeDatabase` skipped creating the RAG schema. Reporting usable on the extension
-  // alone would hand document commands a database with no `document_chunks` table.
+  // Startup skips the RAG schema when detection fails, so re-probe must require both extension and document_chunks.
   it("requires both the extension and the RAG schema", async () => {
     expect(await probeRagUsable(stubClient(async () => [{ usable: true }]))).toBe(true);
     expect(await probeRagUsable(stubClient(async () => [{ usable: false }]))).toBe(false);
@@ -65,9 +63,7 @@ describe("probeRagUsable", () => {
 });
 
 describe("isRagAvailable", () => {
-  // Reading the gate must never touch the database: it sits on the per-chat-turn context
-  // build, so any I/O here becomes a Postgres round-trip per message. `ragAvailabilityMonitor`
-  // owns recovery instead.
+  // `isRagAvailable` sits on every chat turn, so it must stay I/O-free while `ragAvailabilityMonitor` owns recovery.
   it("is side-effect free while availability is unknown", () => {
     expect(isRagAvailable()).toBe(false);
     expect(getRagAvailabilityState()).toBeNull();

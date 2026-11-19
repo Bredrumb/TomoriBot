@@ -101,7 +101,6 @@ describe("preset generation response extraction", () => {
   });
 
   test("recovers the finished fields from a response cut off mid-payload", () => {
-    // Cut inside the last dialogue, so the attributes and the whole input list survived.
     const truncated = `${validJson.slice(0, validJson.lastIndexOf('"5"]'))}"5`;
 
     const result = extractPresetGenerationFields(truncated, JSON.parse, () => {});

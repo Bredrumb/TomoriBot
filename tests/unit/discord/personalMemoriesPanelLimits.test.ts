@@ -59,7 +59,6 @@ describe("PersonalMemoriesPanel Limits & Boundary Sweeps", () => {
         for (const readStatus of readStatuses) {
           for (const category of categories) {
             for (const privacyLevel of privacyLevels) {
-              // Sweep memory collection sizes
               for (const size of memorySizes) {
                 const memories = Array.from({ length: size }, (_, i) =>
                   makePersonalMemory(i + 1, { persona_lineage_id: category === "global" ? 0 : 100 }),
@@ -102,7 +101,6 @@ describe("PersonalMemoriesPanel Limits & Boundary Sweeps", () => {
                 }
               }
 
-              // Sweep persona collection sizes (when category === "persona")
               if (category === "persona") {
                 for (const pSize of personaSizes) {
                   const personas = Array.from({ length: pSize }, (_, i) =>
@@ -134,7 +132,6 @@ describe("PersonalMemoriesPanel Limits & Boundary Sweeps", () => {
                 }
               }
 
-              // Sweep stmCount values
               for (const stmCount of stmCounts) {
                 expectSafePanelPayload(
                   buildPersonalMemoriesPanelPayload({
@@ -160,7 +157,6 @@ describe("PersonalMemoriesPanel Limits & Boundary Sweeps", () => {
   });
 
   it("covers every record in the union of paginated pages without dropping overflow", () => {
-    // Test collection with MAX_PERSONAL_MEMORY_PAGE_SIZE + 1 items
     const totalMemories = MAX_PERSONAL_MEMORY_PAGE_SIZE + 1;
     const memories = Array.from({ length: totalMemories }, (_, i) =>
       makePersonalMemory(i + 1, { persona_lineage_id: 0 }),

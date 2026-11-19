@@ -103,10 +103,6 @@ export class AnthropicToolAdapter implements MCPCapableToolAdapter {
     try {
       const allTools: Record<string, unknown>[] = [];
 
-      // The unified `web_search` tool is gated centrally in `availability.ts`
-      //    via its `requiresFeatureFlag = "web_search"`. No per-adapter Brave-key
-      //    filtering needed here anymore, because the dispatcher inside the tool itself
-      //    decides which engine (Brave/SearXNG/DuckDuckGo) serves the request at call time.
       if (builtInTools.length > 0) {
         allTools.push(...this.convertToolsArray(builtInTools));
         log.info(`Anthropic adapter: Converted ${builtInTools.length} built-in tools`);

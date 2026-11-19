@@ -61,9 +61,8 @@ describe("/impersonate root registration", () => {
     expect(userOption).toBeDefined();
     expect(userOption?.type).toBe(ApplicationCommandOptionType.User);
 
-    // /impersonate user takes ONLY the target. The bot generates the message itself via
-    // tomoriChat(isUserImpersonation), so a `message` option here would be a field the user
-    // must fill and the command then discards.
+    // /impersonate user generates the message itself via tomoriChat(isUserImpersonation), so
+    // adding a message option would force the user to fill a field the command discards.
     expect(user?.options?.length).toBe(1);
     expect(user?.options?.some((option) => option.name === "message")).toBe(false);
 

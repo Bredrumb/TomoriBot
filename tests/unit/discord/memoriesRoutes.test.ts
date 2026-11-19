@@ -839,7 +839,6 @@ describe("memories permissions and scoping", () => {
   });
 
   it("passes actor userId as owner filter for non-managers and undefined for managers", async () => {
-    // Non-manager interaction
     const nonManagerInteraction = {
       user: { id: "user-42", username: "user42" },
       guildId: "guild-123",
@@ -858,7 +857,6 @@ describe("memories permissions and scoping", () => {
     expect(callsNonManager).toContain("getMemoryCountsByLineage:1:42");
     expect(panelNonManager.components.length).toBeGreaterThan(0);
 
-    // Manager interaction
     const managerInteraction = {
       user: { id: "user-42", username: "user42" },
       guildId: "guild-123",
@@ -903,15 +901,12 @@ describe("memories permissions and scoping", () => {
       requireRoute(nonManagerInteraction.customId),
     );
 
-    // Non-manager must NOT trigger getStmEntries or preWarmServerStm
     expect(calls.some((c) => c.startsWith("getStmEntries"))).toBe(false);
     expect(calls.some((c) => c.startsWith("preWarmServerStm"))).toBe(false);
 
-    // Non-manager receives the explanatory notice
     const textDisplays = collectTextDisplays(editedReply);
     expect(textDisplays.some((t) => t.includes("You need Manage Server permission to view"))).toBe(true);
 
-    // Now test manager in guild
     calls.length = 0;
     const managerInteraction = {
       id: "int-stm-manager",
@@ -1089,7 +1084,6 @@ describe("memories permissions and scoping", () => {
 
     const values = personaSelect?.options?.map((o) => o.value) ?? [];
     expect(values).toEqual(["100", "200"]);
-    // Option label uses the representative (main persona)
     expect(personaSelect?.options?.[0]?.label).toBe(localizer("en-US", "commands.export.memories.scope_choice_main"));
 
     const components = (JSON.parse(JSON.stringify(payload)).components[0].components ?? []) as unknown[];
@@ -1105,7 +1099,6 @@ describe("memories permissions and scoping", () => {
   it("renders the shared pagination row for memory and document selectors", () => {
     const personas = [makePersona(1, 100, "Main Persona", false)];
 
-    // 48 memories = 2 pages (page size 24) -> one pagination row.
     const smallMemories = Array.from({ length: 48 }, (_, i) =>
       makeMemory(i + 1, { persona_lineage_id: 100, content: `Memory ${i + 1}` }),
     );
@@ -1128,7 +1121,6 @@ describe("memories permissions and scoping", () => {
     expect(rangeButtons.map((button) => button.label)).toEqual(["← Previous", "Page 1 of 2", "Next →"]);
     expect(rangeButtons.map((button) => button.disabled)).toEqual([true, true, false]);
 
-    // 150 memories = 7 pages (page size 24) -> still one in-place pagination row.
     const largeMemories = Array.from({ length: 150 }, (_, i) =>
       makeMemory(i + 1, { persona_lineage_id: 100, content: `Memory ${i + 1}` }),
     );
@@ -2122,7 +2114,6 @@ describe("memories permissions and scoping", () => {
       expect(collectTextDisplays(refusalPayload).join(" ")).toContain("blacklisted");
       expect(addRepositoryCalled).toBe(false);
 
-      // Verify add-submit also refuses write
       let editReplyPayload: unknown = null;
       const addSubmitInteraction = {
         id: "int-add-submit-blacklisted",
@@ -2289,7 +2280,6 @@ describe("memories permissions and scoping", () => {
       const { dependencies } = createTestDependencies();
       const route = createMemoriesInteractionRoute(dependencies);
 
-      // Memory ID 999 does not exist in dependencies.memories
       let editReplyPayload: unknown = null;
       const editSubmitInteraction = {
         id: "int-edit-stale",
@@ -2405,7 +2395,6 @@ describe("memories permissions and scoping", () => {
       );
 
       expect(addBatchCalled).toBe(true);
-      // "Already existing line" filtered out, "New memory line A" deduplicated
       expect(insertedLines).toEqual(["New memory line A", "New memory line B"]);
 
       const text = collectTextDisplays(editReplyPayload);
@@ -2439,7 +2428,6 @@ describe("memories permissions and scoping", () => {
     ]);
 
     try {
-      // Test edit cache invalidation
       invalidatedWorkspace = null;
       const editResult = await serverMemoriesOperations.edit({
         serverId: 1,
@@ -2456,7 +2444,6 @@ describe("memories permissions and scoping", () => {
       expect(editResult.status).toBe("success");
       expect<string | null>(invalidatedWorkspace).toBe("guild-123");
 
-      // Test remove cache invalidation
       invalidatedWorkspace = null;
       const removeResult = await serverMemoriesOperations.remove({
         serverId: 1,
@@ -2471,7 +2458,6 @@ describe("memories permissions and scoping", () => {
       expect(removeResult.status).toBe("success");
       expect<string | null>(invalidatedWorkspace).toBe("guild-123");
 
-      // Test addBatch cache invalidation
       invalidatedWorkspace = null;
       const batchResult = await serverMemoriesOperations.addBatch({
         serverId: 1,

@@ -155,8 +155,7 @@ export function buildAddPersonalMemoryModal(
             100,
           ),
           max_length: memoryLimits.maxMemoryLength,
-          // Optional because the file field below can supply the memories instead. The submit
-          // handler rejects the case where both arrive empty.
+          // Optional because the file upload field below can supply memories instead.
           required: false,
         },
       },
@@ -165,8 +164,7 @@ export function buildAddPersonalMemoryModal(
         label: safeSelectOptionText(localizer(locale, "commands.personal.memories.modal_file_label"), 45),
         description: safeSelectOptionText(localizer(locale, "commands.personal.memories.modal_file_description"), 100),
         component: {
-          // 19 is FileUpload. 22 is CheckboxGroup and 3 is StringSelect, and Discord accepts any of
-          // them in a modal without complaint, so the number is load-bearing.
+          // 19 is FileUpload; Discord accepts CheckboxGroup (22) or StringSelect (3) here too without rejecting.
           type: 19,
           custom_id: buildPersonalMemoryModalFieldId("file", nonce),
           min_values: 0,
@@ -606,7 +604,6 @@ ${localizer(locale, "commands.personal.memories.selector_guidance")}`,
         },
       );
   } else {
-    // Persona category
     const personaHeading: TextDisplayComponentData = {
       type: ComponentType.TextDisplay,
       content: `### ${localizer(locale, "commands.personal.memories.persona_title")}
@@ -627,9 +624,8 @@ ${localizer(locale, "commands.personal.memories.persona_scope_description")}`,
         content: localizer(locale, "commands.personal.memories.no_personas"),
       });
     } else {
-      // Personal memories are keyed by lineage, not by persona, and two personas in one server can
-      // share a lineage: a preset-derived persona keeps its ancestor's. One option per persona then
-      // repeats an option value, which Discord rejects with COMPONENT_OPTION_VALUE_DUPLICATED.
+      // Group by lineage rather than persona so preset-derived personas sharing an ancestor do not trigger
+      // Discord's duplicate-option-value rejection.
       const personasByLineage = new Map<number, TomoriState[]>();
       for (const p of personas) {
         const lineage = p.persona_lineage_id;

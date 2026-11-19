@@ -63,12 +63,12 @@ export function sanitizeSampleDialogueText(dialogue: string): string {
   if (!dialogue) return "";
 
   const cleaned = dialogue
-    .replace(/^{{char}}:\s*/i, "") // Remove {{char}}: prefix
-    .replace(/^{{character}}:\s*/i, "") // Remove {{character}}: prefix
-    .replace(/^{user}:\s*/i, "") // Remove {user}: prefix
-    .replace(/^User:\s*/i, "") // Remove User: prefix
-    .replace(/^Character:\s*/i, "") // Remove Character: prefix
-    .replace(/^[^:]+:\s*/, ""); // Remove any "Name:" style prefix
+    .replace(/^{{char}}:\s*/i, "")
+    .replace(/^{{character}}:\s*/i, "")
+    .replace(/^{user}:\s*/i, "")
+    .replace(/^User:\s*/i, "")
+    .replace(/^Character:\s*/i, "")
+    .replace(/^[^:]+:\s*/, "");
 
   return cleaned.trim();
 }
@@ -357,8 +357,6 @@ export function stripAnthropicUnsupportedConstraints(schema: Record<string, unkn
   for (const [key, value] of Object.entries(schema)) {
     if (key === "maxItems" || key === "minItems") continue;
 
-    // Recurse into nested schema objects (properties, items, etc.) but not into
-    // plain arrays like `enum` whose elements are primitive values
     if (value !== null && typeof value === "object" && !Array.isArray(value)) {
       result[key] = stripAnthropicUnsupportedConstraints(value as Record<string, unknown>);
     } else {

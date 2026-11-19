@@ -2,16 +2,14 @@ import type { Sticker } from "discord.js";
 
 export const STICKER_UNUSABLE_ERROR_CODE = 50081;
 
-// Rejections are process-local on purpose: a restart refetches every guild's stickers, which is
-// also the moment a restored boost tier should get a clean slate. Capped because the bot runs
-// long uptimes on a memory-constrained host and nothing else ever prunes this set.
+// Rejections stay process-local so restarts clear restored boost tiers, and capped because nothing else prunes
+// the set.
 const MAX_REJECTED_STICKERS = 512;
 const rejectedStickerIds = new Set<string>();
 
 export function isStickerSendable(sticker: Pick<Sticker, "id" | "available">): boolean {
-  // `available` is null on a partial sticker, which means "unknown", not "locked": only an
-  // explicit false is Discord reporting the slot as unusable, so narrowing this to `=== true`
-  // would silently suppress every sticker the bot has not fully fetched.
+  // Partial stickers have available === null ("unknown"), so only explicit false means Discord marked the sticker
+  // unusable.
   return sticker.available !== false && !rejectedStickerIds.has(sticker.id);
 }
 

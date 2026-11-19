@@ -6,10 +6,8 @@ import { personaRepository } from "@/utils/db/repositories";
 import { cache, lastDbError, invalidateTomoriStateCache } from "./tomoriStateCacheStore";
 import { log } from "../misc/logger";
 
-// Re-export so existing callers can still import these from "tomoriStateCache".
-// New code (especially repositories) should import directly from
-// "tomoriStateCacheStore" to avoid the circular dependency through the
-// repositories barrel.
+// Kept as a re-export for existing callers; repositories must import tomoriStateCacheStore directly to avoid a
+// barrel cycle.
 export { invalidateTomoriStateCache };
 
 const DB_ERROR_STALENESS_MS = 2 * 60 * 1000;
@@ -42,9 +40,6 @@ export function getLastDbError(serverDiscId: string): { message: string; timesta
   const entry = getRecordedDbError(serverDiscId);
   if (entry) return entry;
 
-  // During startup grace period, treat empty results as "updating"
-  //    so users don't see "Initial Setup Required" on servers that ARE
-  //    configured but whose data hasn't been fetched yet.
   if (Date.now() - botStartTimestamp < STARTUP_GRACE_PERIOD_MS) {
     return {
       message: "Bot is still starting up (startup grace period)",
@@ -60,17 +55,13 @@ export async function getCachedAllPersonas(serverDiscId: string): Promise<Tomori
   const cachedEntry = cache.get(serverDiscId);
 
   if (cachedEntry) {
-    // Check if cache is still fresh (< 10 minutes old)
     const cacheAge = now - cachedEntry.cachedAt;
     if (cacheAge < TOMORI_STATE_CACHE_TTL_MS) {
       cacheHits++;
       return cachedEntry.personas;
     }
-
-    // Cache stale - fall through to refresh
   }
 
-  // Cache miss or stale - refresh from DB
   cacheMisses++;
 
   try {
@@ -82,14 +73,11 @@ export async function getCachedAllPersonas(serverDiscId: string): Promise<Tomori
       const mainPersona = personas.find((p) => !p.is_alter);
       if (!mainPersona) {
         log.error(`[TomoriState Cache] No main persona found for server ${serverDiscId}`);
-        return personas; // Return alters anyway, but log error
+        return personas;
       }
 
-      // Apply tool-use master toggle: when tool_use_enabled is false, artificially
-      // override has_tools to false on every persona so all providers see no tools.
-      // The narrowed flag also carries the toggle into context synthesis, but it is not the
-      // enforcement point: a provider holding a live capability catalog can raise it again, so
-      // `resolveToolsEnabled` re-reads tool_use_enabled at every gate.
+      // Narrowing has_tools informs context synthesis only; resolveToolsEnabled re-checks tool_use_enabled at every
+      // gate because live capability catalogs can raise it again.
       const effectivePersonas = personas.map((p) =>
         p.config.tool_use_enabled ? p : { ...p, llm: { ...p.llm, has_tools: false } },
       );
@@ -118,13 +106,11 @@ export async function getCachedAllPersonas(serverDiscId: string): Promise<Tomori
 
     log.error(`[TomoriState Cache] Error loading personas for server ${serverDiscId}:`, error);
 
-    // Return stale cache if available (graceful fallback)
     if (cachedEntry) {
       log.warn(`[TomoriState Cache] Returning stale cache for server ${serverDiscId} due to error`);
       return cachedEntry.personas;
     }
 
-    // No cache available, return empty array
     return [];
   }
 }
@@ -139,7 +125,6 @@ export async function getCachedMainPersona(serverDiscId: string): Promise<Tomori
     }
   }
 
-  // Cache miss or stale - load all personas
   const personas = await getCachedAllPersonas(serverDiscId);
 
   if (personas.length === 0) {

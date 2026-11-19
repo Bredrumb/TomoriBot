@@ -98,9 +98,8 @@ async function main(): Promise<void> {
   const suppressed: Record<string, number> = {};
   const perDay: Record<string, { samples: number; elevated: number; critical: number; actions: number }> = {};
 
-  // The observer has no pswpin/pswpout split, so the major-fault rate stands in for active
-  // swap-in. It is the proxy the design already nominates, but it is a proxy: the live detector
-  // reads /proc/vmstat directly, so replayed and live verdicts are not guaranteed identical.
+  // Approximate active swap-in with major-fault rate because the observer lacks pswpin/pswpout, so verdicts may differ
+  // from /proc/vmstat.
   const processStartMs = rows[0].atMs;
 
   for (const row of rows) {

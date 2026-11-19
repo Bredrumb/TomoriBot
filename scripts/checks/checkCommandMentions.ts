@@ -13,8 +13,7 @@ const MENTION_PATTERN = /(?:\\)?`\/([a-z][a-z0-9_-]*(?: [a-z][a-z0-9_-]*)*)(?:\\
 // `action` as root commands.
 const WRAPPER_ALLOWLIST = ["src/utils/discord/helpCatalog.ts"];
 
-// Overridable so a test can point at a temporary baseline instead of mutating the tracked file.
-// vl runs checks in parallel, so an in-place edit races the real check-command-mentions run.
+// Overridable so tests can use a temporary baseline without racing parallel `vl` runs on the tracked file.
 const BASELINE_PATH =
   process.env.COMMAND_MENTION_BASELINE_PATH ?? join(process.cwd(), "scripts", "checks", "docs-mention-baseline.json");
 
@@ -149,7 +148,6 @@ async function main(): Promise<void> {
     findings.push(...findRuntimeMentions(source, join("src", file).replace(/\\/g, "/")));
   }
 
-  // Scan documentation files
   const docGlobs = [
     { pattern: "**/*.{md,mdx}", root: join(process.cwd(), "docs"), prefix: "docs" },
     { pattern: "**/*.md", root: join(process.cwd(), ".github"), prefix: ".github" },
@@ -179,9 +177,6 @@ async function main(): Promise<void> {
     (finding) => !validPaths.has(finding.mention) && !allowed.has(finding.mention) && !baseline.has(finding.mention),
   );
 
-  // Self-cleaning: a baseline entry earns removal two different ways, and catching only the
-  // first leaves an entry claiming a path is broken after it has been fixed. /impersonate and
-  // /natres are baselined today and both are planned to register in a later wave.
   const unusedBaseline = analyzeStaleBaseline(findings, validPaths, baseline);
 
   if (stale.length === 0 && unusedBaseline.length === 0) {

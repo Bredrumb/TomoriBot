@@ -135,7 +135,6 @@ describe("check-command-mentions CLI", () => {
     expect(stderr).toContain("STALE BASELINE ENTRIES");
     expect(stderr).toContain("/fake non existent command");
     expect(stderr).toContain("no longer occurs anywhere");
-    // Bun's 5s default is not enough: this spawns a subprocess that loads the entire command
-    // graph, which alone takes ~6s uncontended and longer when vl runs its lanes in parallel.
+    // Needs 60s because loading the entire command graph in a subprocess under parallel vl exceeds Bun's 5s default.
   }, 60000);
 });

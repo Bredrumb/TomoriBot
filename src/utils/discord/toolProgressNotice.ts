@@ -9,8 +9,8 @@ import { canMirrorToThoughtLog } from "@/utils/discord/thoughtLogAudience";
 import { localizer } from "@/utils/text/localizer";
 import { log } from "@/utils/misc/logger";
 
-// Keyed on the text rather than the locale: the description may already have fallen back to
-// English. Hangul is excluded because Korean prose ends sentences with an ASCII period.
+// Keyed on text instead of locale in case copy fell back to English, excluding Hangul because Korean ends
+// sentences with ASCII periods.
 const FULL_WIDTH_SENTENCE_SCRIPT_END = /[぀-ヿ㐀-鿿豈-﫿＀-￯]$/;
 
 const KILL_HINT_FOOTER_KEY = "tools.tool_notice.kill_hint";

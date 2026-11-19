@@ -36,11 +36,9 @@ describe("channelPromptCacheStore", () => {
     setSystemTime(new Date(start));
     setChannelPromptCache(1, "chan-a", { prompt: "hello", mode: "replace" });
 
-    // Just inside the TTL, so still present.
     setSystemTime(new Date(start + TTL_MS - 1));
     expect(getChannelPromptCacheEntry(1, "chan-a")).toEqual({ prompt: "hello", mode: "replace" });
 
-    // Past the TTL, so expired (treated as a miss) and evicted.
     setSystemTime(new Date(start + TTL_MS + 1));
     expect(getChannelPromptCacheEntry(1, "chan-a")).toBeUndefined();
     expect(getChannelPromptCacheSize()).toBe(0);

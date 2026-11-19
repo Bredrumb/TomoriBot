@@ -90,8 +90,6 @@ export function isExtractableDocument(contentType: string | null, filename: stri
     return false;
   }
 
-  // Accept everything else: any text-based MIME type (text/*) or unknown
-  //    extension falls through here and will be decoded as UTF-8.
   return true;
 }
 
@@ -108,8 +106,7 @@ export async function extractTextFromBuffer(
   return buffer.toString("utf8");
 }
 
-// The size cap bounds bytes, not parse time: a crafted PDF under the cap can loop in pdf.js. An
-// ordinary document parses in a few seconds, so this only stops pathological files.
+// Bounds pdf.js parse time against pathological PDFs under the byte cap because size alone does not cap parse loops.
 const PDF_PARSE_TIMEOUT_MS = 20_000;
 
 export class PdfParseTimeoutError extends Error {}
@@ -118,9 +115,7 @@ export class PdfParseTimeoutError extends Error {}
 // otherwise stall the event loop.
 export function parsePdfWithDeadline(buffer: Buffer, timeoutMs: number): Promise<string> {
   return new Promise((resolve, reject) => {
-    // Resolved beside this source file. Tools and commands are imported from `src/` at runtime even
-    // under `dist/index.js`, so this module never lands in the bundle; a static import from the
-    // entry point would make this URL point into `dist/`, where no worker file is emitted.
+    // This worker path resolves beside src/, so entry-point code must not statically bundle this module into dist/.
     const worker = new Worker(new URL("./pdfParseWorker.ts", import.meta.url));
     const finish = (settle: () => void) => {
       clearTimeout(timer);
@@ -165,7 +160,6 @@ export async function extractTextFromUrl(
     return { success: false, truncated: false, error: "memory_pressure" };
   }
 
-  // Download the file with size and timeout protections
   const maxSizeMB = options.maxSizeBytes / (1024 * 1024);
   const downloadResult = await safeDownload(url, {
     maxSizeMB,

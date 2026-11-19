@@ -34,13 +34,9 @@ export class ZaiStreamAdapter extends OpenAICompatibleStreamAdapter {
         }
         normalizeZaiRequestSamplingParams(requestBody);
 
-        // Enable tool streaming when tools are present
         if (Array.isArray(requestBody.tools) && requestBody.tools.length > 0) {
           requestBody.tool_stream = true;
         }
-
-        // Assistant prefix-completion is applied by the shared seam in
-        //    OpenAICompatibleStreamAdapter (providerRequiresPrefixCompletion → "zai").
       },
     });
   }

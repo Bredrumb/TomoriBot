@@ -1,8 +1,4 @@
 import { invalidateTomoriStateCaches } from "@/utils/cache/tomoriStateCacheStore";
-// Runtime model seeding from the typed catalog (`models.ts`), the single source of truth for
-// seeded models: the catalog is rendered into INSERT … ON CONFLICT statements and executed
-// directly during database initialization (see `seedModelsFromCatalog`). There is no generated
-// .sql file to keep in sync, and seeding stays an idempotent upsert on every startup.
 
 import type { SQL } from "bun";
 import {
@@ -53,7 +49,7 @@ interface TableSpec<T extends RowLike> {
   sections: ModelSection<T>[];
 }
 
-// Per-table specs (column order MUST match the column list)
+// tuple() value order must match columns.
 const llmSpec: TableSpec<LlmInput> = {
   table: "llms",
   columns:
@@ -83,12 +79,8 @@ const llmSpec: TableSpec<LlmInput> = {
       num(m.contextWindow),
       num(m.maxOutputTokens),
     ].join(", "),
-  // The trailing WHERE guard is the key protection for scoped OpenRouter registrations:
-  // a row that a server/user has promoted to a scoped registration (is_scoped_registration = true)
-  // is user-owned, not a curated catalog entry, so the per-boot reseed must leave it untouched.
-  // Without this guard the reseed would reset is_scoped_registration = false and re-apply
-  // is_deprecated, silently reverting a user's deprecated-model registration on every restart.
-  // Curated (non-scoped, possibly NULL) rows still upsert normally and get normalized to false.
+  // Trailing WHERE skips user-owned scoped OpenRouter rows unless the catalog re-activates them, so reseeding does not
+  // revert deprecated user registrations on restart.
   onConflict: `ON CONFLICT (llm_provider, llm_codename) DO UPDATE SET
   llm_description = EXCLUDED.llm_description,
   descriptions = EXCLUDED.descriptions,
@@ -132,8 +124,7 @@ const imageSpec: TableSpec<ImageInput> = {
       desc(m.desc),
       jsonb(localizedDescriptions(m)),
     ].join(", "),
-  // WHERE guard: preserve scoped OpenRouter image registrations across the per-boot reseed.
-  // See the llmSpec onConflict note for the full rationale.
+  // Preserves user-owned scoped OpenRouter image registrations across reseeds (see llmSpec).
   onConflict: `ON CONFLICT (provider, codename) DO UPDATE SET
   model_description = EXCLUDED.model_description,
   descriptions = EXCLUDED.descriptions,
@@ -163,8 +154,7 @@ const videoSpec: TableSpec<VideoInput> = {
       desc(m.desc),
       jsonb(localizedDescriptions(m)),
     ].join(", "),
-  // WHERE guard: preserve scoped OpenRouter video registrations across the per-boot reseed.
-  // See the llmSpec onConflict note for the full rationale.
+  // Preserves user-owned scoped OpenRouter video registrations across reseeds (see llmSpec).
   onConflict: `ON CONFLICT (provider, codename) DO UPDATE SET
   model_description = EXCLUDED.model_description,
   descriptions = EXCLUDED.descriptions,
@@ -193,8 +183,7 @@ const embeddingSpec: TableSpec<EmbeddingInput> = {
       desc(m.desc),
       jsonb(localizedDescriptions(m)),
     ].join(", "),
-  // WHERE guard: preserve scoped OpenRouter embedding registrations across the per-boot reseed.
-  // See the llmSpec onConflict note for the full rationale.
+  // Preserves user-owned scoped OpenRouter embedding registrations across reseeds (see llmSpec).
   onConflict: `ON CONFLICT (provider, codename) DO UPDATE SET
   model_family = EXCLUDED.model_family,
   model_description = EXCLUDED.model_description,
@@ -323,9 +312,8 @@ function validateSpec<T extends RowLike>(spec: TableSpec<T>, errors: string[]): 
   }
 }
 
-// Providers whose llms rows MUST carry a strict chat-completion flag. Kept in lockstep with the
-// request-time safety net in src/providers/utils/strictChatCompat.ts (providerRequires*). Defined
-// locally so the seed catalog stays independent of the provider runtime layer.
+// Defined locally so the seed catalog stays independent of the provider runtime layer (keep in lockstep with
+// src/providers/utils/strictChatCompat.ts).
 export const REQUIRED_ALTERNATION_PROVIDERS = new Set<string>(["anthropic"]);
 export const REQUIRED_PREFIX_PROVIDERS = new Set<string>(["deepseek", "zai", "zaicoding"]);
 export const MODEL_DRIFT_TODO = "MODEL_DRIFT_TODO";
@@ -349,12 +337,8 @@ export function collectStrictChatFlagViolations(rows: LlmInput[]): string[] {
   return errors;
 }
 
-// Providers billed per-token by the live `/tool estimate cost` path. Every active, billable row of these
-// providers must carry an explicit catalog price: the env-based price fallback has been removed, so an
-// unpriced row makes resolveModelPricing (src/utils/provider/modelPricing.ts) return null and the command
-// reports "pricing unavailable". OpenRouter is intentionally absent, because it is priced live from the OpenRouter
-// API cache, with any catalog price acting only as a cache-miss fallback. Its llms rows are still filled in at
-// startup by syncOpenrouterCatalogPricing (src/init/loaders.ts), which SQL-computed cost surfaces read.
+// First-party metered providers without live pricing caches, so unpriced active rows break `/tool estimate cost`;
+// OpenRouter is excluded because live API sync fills its prices.
 const METERED_FIRST_PARTY_PROVIDERS = new Set<string>([
   "google",
   "vertex",
@@ -365,8 +349,7 @@ const METERED_FIRST_PARTY_PROVIDERS = new Set<string>([
   "zaicoding",
 ]);
 
-// Active first-party rows whose provider has not published a price yet. A codename belongs here only
-// until its official rate lands in models.ts or the row is deprecated.
+// Temporary exemptions for active metered rows without published rates until priced in models.ts or deprecated.
 const PRICING_PENDING_CODENAMES = new Set<string>();
 
 // Unpriced rows surface "pricing unavailable" in /tool estimate cost, and is_free does not exempt metered-provider
@@ -389,9 +372,8 @@ function collectMeteredPriceViolations(rows: LlmInput[]): string[] {
   return errors;
 }
 
-// Providers whose token limits come only from the catalog (or the catalog backs a live lookup), so an
-// active row without them silently loses history truncation and output clamping. NVIDIA model cards
-// publish a context window but rarely an output ceiling, so it is held to the window alone.
+// Catalog-backed providers where missing token limits disable history truncation or output clamping (NVIDIA cards omit
+// output ceilings, so it only requires contextWindow).
 const LIMIT_REQUIRED_PROVIDERS = new Set<string>([
   "google",
   "vertex",
@@ -403,8 +385,7 @@ const LIMIT_REQUIRED_PROVIDERS = new Set<string>([
 ]);
 const WINDOW_ONLY_LIMIT_PROVIDERS = new Set<string>(["nvidia"]);
 
-// Active rows whose vendor documents a context window but no output ceiling. A codename leaves this set
-// once its vendor publishes one.
+// Active rows whose vendor publishes a context window without an output ceiling, until one is published.
 const OUTPUT_CEILING_UNPUBLISHED = new Set<string>([
   "gemma-4-31b-it",
   "gemma-4-26b-a4b-it",

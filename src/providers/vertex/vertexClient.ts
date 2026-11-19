@@ -9,7 +9,8 @@ export interface VertexConfig {
 
 const COMPOSITE_KEY_SEPARATOR = "::";
 
-// The SDK interpolates location into the request hostname and the project into its path, both beside the host's ADC token, so anything beyond a plain label redirects or re-scopes that token.
+// The SDK interpolates location into the hostname and project into the path beside the host ADC token, so anything
+// beyond a plain label redirects or re-scopes that token.
 const VERTEX_SEGMENT_PATTERN = /^[a-z0-9-]+$/i;
 
 export const VERTEX_OWNER_NOT_ALLOWED_CODE = "vertex_owner_not_allowed";

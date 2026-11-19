@@ -175,15 +175,13 @@ describe("OpenRouter catalog refresh", () => {
   });
 
   it("refreshes only once the TTL has elapsed", async () => {
-    // Within the freshness window a stale check reuses the snapshot the startup fetch stored.
     const freshCatalog = makeCatalog({ minRefreshIntervalMs: 0, ttlMs: 3600000 });
     await freshCatalog.initialize();
 
     await freshCatalog.refreshIfStale();
     expect(fetchSpy).toHaveBeenCalledTimes(1);
 
-    // Past it, the same check refreshes. Each catalog carries its own window, so the elapsed
-    // case needs its own catalog rather than a mutated shared setting.
+    // Each catalog carries its own window, so the elapsed case needs a separate instance.
     const expiredCatalog = makeCatalog({ minRefreshIntervalMs: 0, ttlMs: 1 });
     await expiredCatalog.initialize();
     await Bun.sleep(2);

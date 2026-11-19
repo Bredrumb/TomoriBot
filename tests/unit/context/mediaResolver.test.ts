@@ -25,9 +25,7 @@ function makeState(overrides: { seesImages?: boolean; seesVideos?: boolean; hasV
       sees_videos: overrides.seesVideos ?? false,
     }),
     vision_llm: overrides.hasVisionTool ? makeLlm({ llm_id: 2, sees_images: true }) : undefined,
-    // `resolveMediaForModel` forwards these capability flags and model pointers to the prompt
-    // macro resolver, and the guidance text below is asserted verbatim, so the fixture keeps its
-    // all-off set rather than the shared defaults that enable most tool families.
+    // Verbatim guidance assertions require an all-off capability fixture rather than the shared defaults.
     config: {
       diffusion_model_id: null,
       nai_diffusion_model_id: null,

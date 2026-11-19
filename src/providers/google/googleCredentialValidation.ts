@@ -11,7 +11,8 @@ export async function validateGoogleModelsEndpoint(client: Pick<GoogleGenAI, "mo
   });
 }
 
-// ModelGardenService.ListPublisherModels rejects Vertex AI Express API keys with 401, so Express validates via countTokens instead.
+// ModelGardenService.ListPublisherModels rejects Vertex AI Express API keys with 401, so Express validates via
+// countTokens instead.
 export async function validateVertexExpressEndpoint(client: Pick<GoogleGenAI, "models">, model: string): Promise<void> {
   await client.models.countTokens({
     model,

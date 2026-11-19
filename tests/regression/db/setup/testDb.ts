@@ -11,9 +11,7 @@ const effectiveUser = process.env.TEST_POSTGRES_USER ?? process.env.POSTGRES_USE
 const effectivePassword = process.env.TEST_POSTGRES_PASSWORD ?? process.env.POSTGRES_PASSWORD;
 const effectiveDatabase = process.env.POSTGRES_DB ?? "tomodb";
 
-// Keep the application singleton DB client pointed at the same test database as
-// the direct fixture client below. dbRead/dbWrite import the singleton lazily, so
-// setting these at module load is early enough for the harness.
+// Set env before lazy dbRead/dbWrite imports so the app singleton targets the same test database as fixtureClient.
 process.env.POSTGRES_HOST = effectiveHost;
 process.env.POSTGRES_PORT = effectivePort;
 process.env.POSTGRES_USER = effectiveUser;
@@ -70,8 +68,7 @@ export async function executeTestSqlFile(filePath: string): Promise<void> {
 
 let bootstrapPromise: Promise<void> | null = null;
 
-// Bootstrap is memoized across every beforeAll in the process because replaying schema, migrations, and catalogs
-// costs ~2s per call.
+// Bootstrap is memoized across every beforeAll in the process because replaying schema, migrations, and catalogs is slow.
 export async function setupTestDb(): Promise<void> {
   bootstrapPromise ??= bootstrap();
   await bootstrapPromise;

@@ -173,8 +173,7 @@ export function buildConfigTransferPreviewPayload(input: {
     }),
     500,
   );
-  // One line per block, with quote rows for the values each heading introduces. Blank lines between a heading and
-  // its own rows read as unrelated panels, and the blockquote marker applies per line, so every row carries one.
+  // Prefix every row with `>` without blank lines so Discord renders headings and values as one visual block.
   const content = safeUserText(
     [
       `### ${safeUserText(localizer(input.locale, "commands.transfer.config_preview_title"), 100)}`,
@@ -419,8 +418,7 @@ export function buildMemoryTransferPreviewPayload(input: {
         }),
       ].join("\n")
     : null;
-  // One block of single-spaced lines in the config preview's shape: a heading line immediately above its own quoted
-  // rows, and a bold lead line. Blank lines between a heading and its rows read as unrelated panels.
+  // Omit blank lines between headings and quoted lines because Discord styles separated blocks as unrelated cards.
   const content = safeUserText(
     [
       `### ${safeUserText(localizer(input.locale, "commands.transfer.memory_preview_title"), 100)}`,

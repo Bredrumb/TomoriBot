@@ -138,8 +138,6 @@ describe("Google preset generation", () => {
   });
 
   it("sends the vision caption to the model instead of dropping it", async () => {
-    // Google once carried its own copy of the preset prompt, which silently discarded the
-    // caption and generated a persona with neither the image nor a description of it.
     const prompts: string[] = [];
     const client = {
       models: {

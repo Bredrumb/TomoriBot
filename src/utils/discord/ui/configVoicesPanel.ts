@@ -44,9 +44,10 @@ export interface ConfigVoicesView {
   turboEnabled: boolean;
   cfgWeight: number;
   exaggeration: number;
-  samples: readonly VoiceSampleRow[]; // the page slice, already sliced by the caller
-  totalSampleCount: number; // full library size, for pagination
-  start: number; // pagination offset of this slice
+  // Caller passes an already-sliced page rather than the full library, so totalSampleCount and start drive paging.
+  samples: readonly VoiceSampleRow[];
+  totalSampleCount: number;
+  start: number;
   selectedIndex: number | null;
   preview?: ConfigVoiceSamplePreview;
   removeConfirm?: { index: number; fp: string; refCount: number; nonce?: string };

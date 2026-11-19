@@ -24,14 +24,9 @@ import {
 import type { ProviderStructuredJsonRequest } from "@/types/provider/featureInterfaces";
 import { ContextItemTag } from "@/types/misc/context";
 import { beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
-// Captured BEFORE the `mock.module` calls below run. Static imports are
-// evaluated at link time, ahead of any top-level statement, so this binds the
-// REAL deliberateToolMode module; we re-register it in afterAll to undo the
-// simplified stub for files loaded later in the monolithic run.
+// Link-time captures keep real namespaces before mock.module runs so full-surface spreads cannot break
+// transitive linking in later files.
 import * as realDeliberateToolMode from "@/utils/tools/deliberateToolMode";
-// Same link-time capture for every other module mocked below. Spreading these
-// namespaces makes each factory full-surface, so a partial mock can never break
-// the module linking of a file loaded later in the monolithic `bun test`.
 import * as realToolRegistry from "@/tools/toolRegistry";
 import * as realChannelQueue from "@/utils/chat/channelQueue";
 import * as realContextAnnotations from "@/utils/chat/contextAnnotations";
@@ -75,9 +70,6 @@ let onStopCheck: (() => void) | null = null;
 
 // Module mocks: all must appear before the first lazy import of toolLoop.ts
 
-// The real `ColorCode` enum comes through the spread, so its values stay the hex
-// STRINGS other modules rely on at load time (e.g. contextEmbeds.ts calls
-// ColorCode.ERROR.replace("#", "")). Only `log` is silenced.
 const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/db/repositories/ApiKeyRetentionRepository": retention,
   "@/utils/discord/embedHelper": realEmbedHelper,
@@ -146,14 +138,8 @@ scopedMock.module("@/utils/provider/providerInfoRegistry", () => ({
   },
 }));
 
-// Pass through to the REAL deliberateToolMode (captured at link time above).
-// toolLoop.ts never calls these functions: it reads deliberate-mode data from
-// `context` so the loop tests don't need a behavioral stub here; the mock
-// exists only to satisfy transitive linking. Returning the real exports keeps
-// the mock harmless if it leaks into a later file in the monolithic `bun test`
-// (e.g. deliberateToolMode.test.ts, which asserts the real behavior). Spreading
-// a statically-captured namespace is safe; unlike `await import()` inside a
-// factory, it was evaluated before any mock.module call took effect.
+// Pass through the link-time namespace because toolLoop reads deliberate-mode data from context and a stub
+// would leak into later files.
 scopedMock.module("@/utils/tools/deliberateToolMode", () => ({ ...realDeliberateToolMode }));
 
 scopedMock.module("@/utils/chat/channelQueue", () => ({
@@ -169,15 +155,12 @@ scopedMock.module("@/utils/chat/channelQueue", () => ({
   queueStopResponseAtFront: () => undefined,
 }));
 
-// Only the annotation entry point needs an inert stub for the loop tests; every
-// other export passes through to the real module so this mock stays harmless
-// when it leaks into a later file (e.g. contextMedia -> formatInlineSystemContent).
+// Spread realContextAnnotations so unstubbed exports like formatInlineSystemContent still work in later files.
 scopedMock.module("@/utils/chat/contextAnnotations", () => ({
   ...realContextAnnotations,
   annotateRecentMessageMetadataInContext: () => ({ annotatedCount: 0, patchedReplyReferenceCount: 0 }),
 }));
 
-// The ToolRegistry singleton: executeTool drains toolExecuteQueue.
 scopedMock.module("@/tools/toolRegistry", () => ({
   ...realToolRegistry,
   // A class instance: its methods live on the prototype, so delegate rather
@@ -216,8 +199,7 @@ function makeTomoriState(): TomoriState {
       supports_structoutput: false,
     }),
     config: {
-      // The schema stores the decrypted credential as bytes. The loop's credential arrives
-      // through `providerConfig`, so this field only has to be present.
+      // Schema requires api_key as bytes even when the loop reads its credential from providerConfig.
       api_key: Buffer.from("test-key"),
       llm_temperature: 0.7,
     },
@@ -253,7 +235,6 @@ function makeContext(): ChatTurnContext {
     shouldApplyTextQuota: false,
     textQuotaTriggerKey: "turn_1",
     textQuotaState: null,
-    // Disable user-facing embeds so sendStandardEmbed is never called for routing issues.
     shouldSurfaceUserErrors: false,
     isDMChannel: false,
     isFromQueue: true,
@@ -412,8 +393,8 @@ function makeReviewContext(): ChatTurnContext & { responseReview: ResponseReview
   context.currentPersona.config.response_reviewer_prompt = "Evaluate the character in the admitted scene.";
   context.tomoriState.llm.supports_structoutput = true;
   context.tomoriState.llm.context_window = 64000;
-  // The author-model reviewer takes its key from the provider config. A stored key would start a
-  // background live-limits lookup that fails to decrypt the fixture value and logs an error.
+  // Clear stored api_key so the reviewer uses providerConfig instead of triggering a failing background
+  // live-limits decrypt.
   context.tomoriState.config.api_key = null;
   context.contextItems = [
     {
@@ -656,7 +637,6 @@ describe("runToolLoop — contract tests", () => {
       makeFunctionCallResult("bad_tool", {}),
       { status: "completed", accumulatedText: "sorry about that" },
     ]);
-    // One failure: below the consecutive-error cap (3).
     toolExecuteQueue.push({
       success: false,
       error: "something broke",
@@ -672,7 +652,6 @@ describe("runToolLoop — contract tests", () => {
 
     expect(toolExecuteCalls).toHaveLength(1);
 
-    // History entry for the failed call uses the standardized failure shape.
     const secondHistory = capturedHistories[1] as Array<{
       functionCall: { name: string };
       functionResponse: { functionResponse: { response: { result: { status: string; tool_name: string } } } };
@@ -685,7 +664,6 @@ describe("runToolLoop — contract tests", () => {
     expect(JSON.stringify(secondHistory)).not.toContain("PRIVATE_FAILURE_DATA");
     expect(JSON.stringify(secondHistory)).not.toContain("something broke");
 
-    // The raw internal error string is not surfaced as the final response text.
     expect(result.personaResponses[0]?.text).not.toContain("something broke");
   });
 
@@ -749,7 +727,6 @@ describe("runToolLoop — contract tests", () => {
     ]);
 
     const context = makeContext();
-    // Deliberate mode is on; only "allowed_tool" is exposed.
     context.deliberateToolModeActive = true;
     context.streamingContext.deliberateToolAllowedNames = ["allowed_tool"];
 
@@ -757,12 +734,9 @@ describe("runToolLoop — contract tests", () => {
 
     expect(result.status).toBe("completed");
 
-    // ToolRegistry.executeTool must NOT have been called for the blocked tool.
     expect(toolExecuteCalls).toHaveLength(0);
 
-    // The history entry given to the provider must carry the standardized failure shape.
-    // Note: toolResult.data has `blocked_by_deliberate_tool_mode` but since success===false,
-    // executeToolCall routes through the generic failure path → status="tool_execution_failed".
+    // Deliberate-mode blocks return success: false, so executeToolCall routes them as status "tool_execution_failed".
     const secondHistory = capturedHistories[1] as Array<{
       functionCall: { name: string };
       functionResponse: {
@@ -776,14 +750,12 @@ describe("runToolLoop — contract tests", () => {
     const syntheticResult = secondHistory[0]?.functionResponse?.functionResponse?.response?.result;
     expect(syntheticResult?.status).toBe("tool_execution_failed");
     expect(syntheticResult?.tool_name).toBe("blocked_tool");
-    // Reason must mention that the tool was not exposed (not a generic failure).
     expect(syntheticResult?.reason).toContain("not exposed");
   });
 
   it("loop bound: exits with 'timeout' after MAX_FUNCTION_CALL_ITERATIONS with no final answer", async () => {
     const { runToolLoop, MAX_FUNCTION_CALL_ITERATIONS } = await import("@/utils/chat/toolLoop");
 
-    // Provider never produces a terminal result, always requests another tool.
     const { provider } = makeProvider(
       Array.from({ length: MAX_FUNCTION_CALL_ITERATIONS + 5 }, () => makeFunctionCallResult("infinite_tool", {})),
     );
@@ -795,7 +767,6 @@ describe("runToolLoop — contract tests", () => {
     const result = await runToolLoop(makeParams(context, provider));
 
     expect(result.status).toBe("timeout");
-    // Exactly one tool call per iteration, and no more iterations than the loop allows.
     expect(toolExecuteCalls).toHaveLength(MAX_FUNCTION_CALL_ITERATIONS);
     expect(result.streamResults).toHaveLength(MAX_FUNCTION_CALL_ITERATIONS);
   });
@@ -803,7 +774,6 @@ describe("runToolLoop — contract tests", () => {
   it("malformed function-call (missing name) aborts with 'error' without dispatching any tool", async () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");
 
-    // data has no `name` field, so should trigger the validation abort path.
     const { provider } = makeProvider([{ status: "function_call", data: {} }]);
 
     const context = makeContext();
@@ -821,7 +791,6 @@ describe("runToolLoop — contract tests", () => {
       { status: "completed", accumulatedText: "here you go" },
     ]);
 
-    // Tool returns a context_restart_youtube signal with an enhanced_context_item.
     const fakeContextItem: StructuredContextItem = {
       role: "user",
       parts: [{ type: "text", text: "YouTube transcript: ..." }],
@@ -840,16 +809,12 @@ describe("runToolLoop — contract tests", () => {
     expect(result.status).toBe("completed");
     expect(result.personaResponses[0]?.text).toBe("here you go");
 
-    // The enriched item must be appended to contextItems.
     expect(context.contextItems).toContain(fakeContextItem);
 
-    // The streaming-context disable flag must have been set.
     expect(context.streamingContext.disableYouTubeProcessing).toBe(true);
 
-    // The context-restart call must NOT appear in the function history
-    // passed to the second provider call (restart replaces it with enriched context).
     expect(capturedHistories).toHaveLength(2);
-    expect(capturedHistories[1]).toHaveLength(0); // no history entry for the restart call
+    expect(capturedHistories[1]).toHaveLength(0);
   });
 
   it("context-restart response: stashed item injected when the tool returns only a pending_context_key", async () => {
@@ -944,8 +909,6 @@ describe("runToolLoop — contract tests", () => {
     });
   });
 
-  // Pre-tool text preservation (post-tool-call amnesia regression)
-
   it("pre-tool text is preserved in the history entry passed to the follow-up provider call", async () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");
     const narration = "Yeah, let me remember that.";
@@ -959,14 +922,10 @@ describe("runToolLoop — contract tests", () => {
     const context = makeContext();
     const result = await runToolLoop(makeParams(context, provider));
 
-    // The loop continued to a follow-up provider call, so long-term memory
-    // must NOT behave as an end-turn tool.
     expect(result.status).toBe("completed");
     expect(capturedHistories).toHaveLength(2);
     expect(result.personaResponses[0]?.text).toBe(`${narration}\n${followUp}`);
 
-    // The follow-up call's history entry carries the already-sent text so the
-    // model knows not to repeat it (the amnesia fix contract).
     const secondHistory = capturedHistories[1] as Array<{
       functionCall: { name: string };
       preToolCallTextParts?: Array<Record<string, unknown>>;
@@ -1032,8 +991,6 @@ describe("runToolLoop — contract tests", () => {
     expect(result.status).toBe("completed");
     expect(capturedHistories).toHaveLength(3);
 
-    // The third provider call sees both entries, each with its own text:
-    // no duplication across iterations (fresh stream state per streamOnce).
     const thirdHistory = capturedHistories[2] as Array<{
       functionCall: { name: string };
       preToolCallTextParts?: Array<Record<string, unknown>>;
@@ -1074,7 +1031,6 @@ describe("runToolLoop — contract tests", () => {
     const context = makeContext();
     const result = await runToolLoop(makeParams(context, provider));
 
-    // Suppress-set tool ends the turn after pre-tool text; the visible text is the response.
     expect(result.status).toBe("completed");
     expect(capturedHistories).toHaveLength(1);
     expect(result.personaResponses[0]?.text).toBe("Got it, noting that down.");
@@ -1303,8 +1259,8 @@ describe("runToolLoop — contract tests", () => {
   it("refuses a truncated call before the deliberate-mode allowlist can report it", async () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");
 
-    // Both gates would fire here. The refusal runs first, so the model is told the payload was
-    // cut short rather than that deliberate mode hid the tool, which is the actionable cause.
+    // Truncation refusal must precede the deliberate-mode allowlist so the model gets the actionable cause
+    // when both fire.
     const truncatedCall: StreamResult = {
       status: "function_call",
       data: { name: "hidden_tool", args: {}, argumentsTruncated: true },
@@ -1330,7 +1286,6 @@ describe("runToolLoop — contract tests", () => {
   it("counts a refused truncated call toward the consecutive tool error cap", async () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");
 
-    // A model that keeps reissuing a truncated call must not loop forever.
     const truncatedCall: StreamResult = {
       status: "function_call",
       data: { name: "update_short_term_memory", args: {}, argumentsTruncated: true },

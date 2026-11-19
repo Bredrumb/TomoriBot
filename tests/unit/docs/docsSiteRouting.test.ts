@@ -98,8 +98,8 @@ describe("docs site routing", () => {
     });
 
     it("emits nothing for a locale-fallback route", () => {
-      // A genuine pair, so the empty result is the guard's doing rather than the page existing in
-      // one locale only. The case above asserts the same pair with the flag off.
+      // Using `features/pair` ensures the empty result comes from `isFallback`, because this page exists
+      // in both locales.
       expect(buildHreflangAlternates(docsRoot, "features/pair", { isFallback: true, site: SITE })).toEqual([]);
     });
 
@@ -170,8 +170,7 @@ describe("docs site routing", () => {
     });
 
     it("never claims a fallback route is a translation of an unmarked page", () => {
-      // The fallback serves the default locale's own page, so a translation notice would promise a
-      // translation and link to identical content. `isFallback` outranks the unmarked source.
+      // `isFallback` outranks an unmarked source so fallback pages never link to themselves as translations.
       expect(
         resolveTranslationNoticeMode({
           docsRoot,

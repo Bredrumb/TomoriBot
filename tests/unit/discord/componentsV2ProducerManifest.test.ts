@@ -95,8 +95,6 @@ export const COMPONENTS_V2_PRODUCER_MANIFEST: readonly ProducerManifestEntry[] =
     builderName: "buildSetupWizardPayload",
     coverage: { kind: "suite", suites: ["tests/unit/discord/setupPanelLimits.test.ts"] },
   },
-
-  // --- Tier 2: Declared tier (19 non-panel or one-shot producers) ---
   {
     modulePath: "src/commands/persona/create.ts",
     reason: "Terminal persona creation flow message",
@@ -287,11 +285,10 @@ describe("Components V2 Producer Manifest", () => {
     const srcDir = join(process.cwd(), "src");
     const scannedModules = scanComponentsV2Producers(srcDir);
 
-    // Subtract the validator module by name
     const producerScannedSet = new Set(scannedModules.filter((mod) => mod !== VALIDATOR_MODULE_PATH));
     const manifestSet = new Set(COMPONENTS_V2_PRODUCER_MANIFEST.map((entry) => entry.modulePath));
 
-    // Wiring verification: assert a known module is present to prevent vacuous comparisons
+    // Assert a known module is present so an empty scan cannot pass set equality vacuously.
     expect(producerScannedSet.has("src/utils/discord/ui/configPanel.ts")).toBe(true);
     expect(manifestSet.has("src/utils/discord/ui/configPanel.ts")).toBe(true);
 

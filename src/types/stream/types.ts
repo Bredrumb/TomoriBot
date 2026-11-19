@@ -5,8 +5,8 @@ import type { TokenUsage } from "@/utils/text/tokenEstimate";
 export const DISCORD_STREAMING_CONSTANTS = {
   MAX_SINGLE_MESSAGE_LENGTH: 1950,
 
-  FLUSH_BUFFER_SIZE_REGULAR: 1000, // For normal text
-  FLUSH_BUFFER_SIZE_CODE_BLOCK: 15000, // For code blocks (much larger)
+  FLUSH_BUFFER_SIZE_REGULAR: 1000,
+  FLUSH_BUFFER_SIZE_CODE_BLOCK: 15000,
 
   BASE_TYPE_SPEED_MS_PER_CHAR: 10,
   MAX_TYPING_TIME_MS: 4000,
@@ -16,12 +16,10 @@ export const DISCORD_STREAMING_CONSTANTS = {
   MAX_RANDOM_PAUSE_MS: 1500,
   THINKING_PAUSE_CHANCE: 0.25,
 
-  INACTIVITY_TIMEOUT_MS: 120000, // 2 minutes
-  // Hosted queues (NVIDIA NIM's free tier measured 266s, OpenRouter free models similar) can hold a
-  // healthy request for minutes before the first token, so the wait for it gets a longer budget
-  // than the gaps after it. Every stall detector must honor this for the pre-first-token phase,
-  // or the shortest one silently caps the wait for all of them.
-  FIRST_TOKEN_TIMEOUT_MS: 300000, // 5 minutes
+  INACTIVITY_TIMEOUT_MS: 120000,
+  // Hosted queues can stall for minutes before token 1, so every stall detector must honor this longer budget or the
+  // shortest timeout wins.
+  FIRST_TOKEN_TIMEOUT_MS: 300000,
 } as const;
 
 export enum VisibleDeliveryMode {
@@ -80,11 +78,13 @@ export interface StreamState {
   hasSemanticMarkers: boolean;
   messageSentCount: number;
   hasRepliedToOriginalMessage: boolean;
-  accumulatedText: string; // Track all text sent to Discord for short-term memory
-  prefillTarget?: string; // Prefill text to strip from streamed output (hybrid prefix)
-  prefillMatched: number; // Number of prefill chars matched/stripped so far
-  prefillMatchFailed: boolean; // Whether prefill matching failed (no stripping)
-  prefillHeld: string; // Segment text withheld while a partial echo match spans segments
+  // Delivered Discord text only (feeds short-term memory).
+  accumulatedText: string;
+  prefillTarget?: string;
+  prefillMatched: number;
+  prefillMatchFailed: boolean;
+  // Text withheld while a partial prefill-echo match spans segments.
+  prefillHeld: string;
   thoughtSummarySegments: string[];
   thoughtRawSegments: string[];
   // OpenRouter-only: tracks the upstream serving endpoint (such as `"minimax-cn"`) for thought-log attribution.
@@ -169,7 +169,7 @@ export function createDefaultStreamState(): StreamState {
     hasSemanticMarkers: false,
     messageSentCount: 0,
     hasRepliedToOriginalMessage: false,
-    accumulatedText: "", // Initialize empty for short-term memory tracking
+    accumulatedText: "",
     prefillTarget: undefined,
     prefillMatched: 0,
     prefillMatchFailed: false,

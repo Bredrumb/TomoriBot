@@ -69,7 +69,6 @@ export async function runConfigExport(
       return;
     }
 
-    // Acknowledge before the configuration read and the DM, both of which outlive Discord's three-second window.
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const exportResult =

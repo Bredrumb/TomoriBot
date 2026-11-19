@@ -27,16 +27,13 @@ export async function sendCooldownDM(
       cooldownEmbed.setFooter({ text: localizer(locale, footerKey) });
     }
 
-    // Attempt to send DM
     await user.send({ embeds: [cooldownEmbed] });
     log.info(`Sent cooldown DM to user ${user.id} (${descriptionKey})`);
   } catch (error) {
-    // DM failed (user has DMs disabled or blocked the bot)
     log.info(
       `Could not send cooldown DM to user ${user.id}: ${error instanceof Error ? error.message : "Unknown error"}`,
     );
 
-    // Fallback to ephemeral reply if interaction is provided
     if (interaction) {
       try {
         await replyInfoEmbed(

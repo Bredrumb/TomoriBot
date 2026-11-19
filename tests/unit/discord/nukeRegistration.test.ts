@@ -24,7 +24,7 @@ describe("/nuke registration", () => {
     expect(nukeCommand).toBeDefined();
     if (!nukeCommand) return;
 
-    expect(nukeCommand.contexts).toEqual([0]); // InteractionContextType.Guild only, never a DM context
+    expect(nukeCommand.contexts).toEqual([0]);
     expect(nukeCommand.default_member_permissions).toBe(String(PermissionsBitField.Flags.ManageGuild));
     expect(executionMap.get("nuke")?.has(ROOT_COMMAND_EXECUTION_KEY)).toBe(true);
   });

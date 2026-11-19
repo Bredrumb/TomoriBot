@@ -296,9 +296,7 @@ function failOnceThen<T>(code: string, value: T): { run: () => Promise<T>; calls
 }
 
 describe("withTransientDbRetry connection-retirement classification", () => {
-  // Bun rejects in-flight queries from `#onClose` using whatever state its wire-protocol
-  // reader stopped in, so one dead connection surfaces under several codes. Missing any
-  // of them means a healthy query fails outright instead of retrying on a fresh socket.
+  // Bun's `#onClose` rejects in-flight queries under several wire-reader error codes that must all retry.
   it.each([
     "ERR_POSTGRES_CONNECTION_CLOSED",
     "ERR_POSTGRES_LIFETIME_TIMEOUT",

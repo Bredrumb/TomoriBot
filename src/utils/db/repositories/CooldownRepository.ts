@@ -188,7 +188,6 @@ class CooldownRepository {
         `[Cooldown Set] Successfully set cooldown - type: ${cooldownType}, server: ${serverId}, user: ${userDiscIdParam}, channel: ${channelDiscIdParam}, expires in ${cooldownLengthSeconds}s (expiryTime: ${expiryTime})`,
       );
 
-      // Read-back verification to confirm the write committed
       const [verification] = await sql`
         SELECT expiry_time FROM cooldowns
         WHERE cooldown_type = ${cooldownType}

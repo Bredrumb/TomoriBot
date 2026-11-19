@@ -59,7 +59,6 @@ export async function pollForCompletion<T>(options: PollOptions<T>): Promise<T> 
       return pollResult.result;
     }
 
-    // Log progress periodically (every 5th attempt)
     if (attempt % 5 === 0) {
       log.info(`${logLabel ?? "Poll"}: still waiting (attempt ${attempt}/${maxAttempts})`);
     }

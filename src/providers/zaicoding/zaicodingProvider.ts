@@ -433,7 +433,6 @@ export class ZaicodingProvider
   async generatePreset(request: ProviderPresetGenerationRequest): Promise<PresetGenerationResult> {
     const tools = await this.getPresetGenerationTools(request);
 
-    // Use the shared ZAI generator with the coding endpoint and coding tool adapter
     return await generatePresetFromPromptZai(request.apiKey, request.params, request.locale, {
       model: request.tomoriState.llm.llm_codename,
       temperature: getActiveTemperature(request.tomoriState.config),
@@ -446,12 +445,10 @@ export class ZaicodingProvider
   }
 
   async generateConversationSummary(request: ProviderCompactSummaryRequest): Promise<CompactConversationResult> {
-    // Use the shared ZAI generator with the coding endpoint
     return await generateConversationSummaryZai(request, ZAI_CODING_CHAT_COMPLETIONS_URL);
   }
 
   async generateRoleplaySummary(request: ProviderCompactSummaryRequest): Promise<CompactRoleplayResult> {
-    // Use the shared ZAI generator with the coding endpoint
     return await generateRoleplaySummaryZai(request, ZAI_CODING_CHAT_COMPLETIONS_URL);
   }
 }

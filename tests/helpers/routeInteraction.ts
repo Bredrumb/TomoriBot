@@ -78,9 +78,8 @@ export interface RouteInteractionOptions {
 
 const IDENTITY_OVERRIDE_KEYS = new Set(["id", "user"]);
 
-// Destructuring drops a key it does not name, and a spread-built options object escapes the
-// excess-property check, so a misplaced `user:` at the top level would otherwise run the route as the
-// default actor unnoticed.
+// Destructuring and spread options bypass excess-property checks, so OPTION_KEYS catches
+// misplaced keys like a top-level user.
 const OPTION_KEYS = new Set<string>([
   "customId",
   "kind",

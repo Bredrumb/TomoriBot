@@ -54,7 +54,6 @@ export class ReadFileTool extends BaseTool {
     );
 
     try {
-      // Fetch recent messages from the channel (last 100)
       const recentMessages = await context.channel.messages.fetch({
         limit: 100,
       });
@@ -71,7 +70,6 @@ export class ReadFileTool extends BaseTool {
         };
       }
 
-      // Find document attachment by extension/MIME type
       let docAttachment: {
         url: string;
         name: string;
@@ -163,10 +161,6 @@ export class ReadFileTool extends BaseTool {
         };
       }
 
-      // In the streaming pipeline (tomoriChat.ts), only `toolResult.data` is serialized into
-      // the functionResponse the LLM sees; `toolResult.message` is used by provider adapter
-      // convertResult() but not the main streaming path. The document text must therefore go
-      // in `data`, matching Brave search's `data.results` pattern.
       const truncationNote = result.truncated
         ? ` (truncated from ${result.originalLength?.toLocaleString()} to ${result.text?.length.toLocaleString()} characters)`
         : "";
@@ -203,6 +197,7 @@ export class ReadFileTool extends BaseTool {
         success: true,
         message: `Successfully read document "${docAttachment.name}" (${result.text?.length.toLocaleString()} characters)${truncationNote}`,
         data: {
+          // Streaming serializes only toolResult.data into functionResponse, so documentContent must live in data.
           summary: documentContent,
           filename: docAttachment.name,
           truncated: result.truncated,

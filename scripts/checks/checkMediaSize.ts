@@ -8,7 +8,6 @@ function main(): void {
 
   const offenders = listInScopeMedia().filter((file) => file.size > limit);
 
-  // Report. Persona art is listed first and tagged, since it ships to Discord.
   if (offenders.length > 0) {
     offenders.sort((a, b) => Number(b.isPersona) - Number(a.isPersona) || b.size - a.size);
     console.error(

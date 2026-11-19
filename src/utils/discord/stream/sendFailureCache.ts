@@ -31,12 +31,8 @@ export function classifySendFailure(error: unknown): SendFailureReason | null {
     return "missing_access";
   }
 
-  // 10003 is the REST answer that the channel no longer exists, which Discord never reverses for
-  // that id, so there is no recovery to wait for. The client-side `ChannelNotCached` is
-  // deliberately excluded: it only means the channel was absent from the local cache, which an
-  // uncached thread or an evicted DM entry also produces, so caching it would blacklist a live
-  // channel for the whole TTL over a local eviction. The send path resolves that case with a REST
-  // fetch instead.
+  // Cache 10003 (permanent deletion) and exclude ChannelNotCached because local cache eviction resolves via REST
+  // fetch.
   if (code === 10003 || code === "10003") {
     return "channel_gone";
   }

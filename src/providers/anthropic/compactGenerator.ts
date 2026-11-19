@@ -28,7 +28,6 @@ export async function generateConversationSummaryAnthropic(
       temperature: request.temperature ?? 0.7,
     };
 
-    // Add system prompt if provided (Anthropic uses top-level system parameter)
     if (request.systemPrompt) {
       body.system = request.systemPrompt;
     }

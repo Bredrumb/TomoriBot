@@ -158,9 +158,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Reset classification: regression", () => {
 
     const migrationsDir = join(import.meta.dir, "..", "..", "..", "src", "db", "migrations");
 
-    // Every DB regression file shares one disposable database, and sibling fixtures insert `users`
-    // rows that rely on this default. Re-applying the up migration from `finally` keeps a failed
-    // assertion here from surfacing as an unrelated failure in a later file.
+    // Re-apply the up migration from finally because sibling suites on the shared database rely on this default.
     await executeTestSqlFile(join(migrationsDir, "079_language_pref_default_en_us.down.sql"));
     try {
       const rolledBack = await readDefault();

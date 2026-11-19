@@ -73,9 +73,7 @@ const stats: CacheStats = {
 // In-flight DB hydrations keyed by cache key: prevents duplicate reads and allows awaiting.
 const pendingHydrations = new Map<string, Promise<void>>();
 
-// Servers/users whose full STM row set has been bulk-loaded from the DB this process.
-// After the one-shot bulk warm, every live STM write updates the cache directly, so we
-// never need to re-query: this guards against re-running the bulk SELECT each turn.
+// Tracks bulk-loaded scopes so live turns do not re-run the full STM SELECT query.
 const bulkWarmedServers = new Set<string>();
 const bulkWarmedUsers = new Set<string>();
 
@@ -227,12 +225,9 @@ async function hydrateEntryFromDb(
 
 // Existing warm keys are never overwritten so concurrent live writes always win over stale DB state.
 function warmRowIntoCache(key: string, row: ShortTermMemoryRow): void {
-  // Only warm if another path hasn't already populated this key.
   if (cache.has(key)) return;
-  // `sql.unsafe` returns the JSONB `categories` column as a raw JSON string (it bypasses
-  // the zod row schema that would normally parse it), so normalize it back to an object.
-  // Without this, `Object.keys`/`Object.entries` would enumerate the string
-  // character-by-character downstream and corrupt rendering.
+  // `sql.unsafe` returns JSONB `categories` as a raw string instead of a parsed object, so normalize it to avoid
+  // character-by-character enumeration downstream.
   const normalizedCategories = normalizeStmCategories(row.categories);
   const hasCategories = Object.keys(normalizedCategories).length > 0;
   cache.set(key, {
@@ -447,7 +442,6 @@ export async function preWarmStmEntry(
 
   if (cache.has(key)) return;
 
-  // Reuse an in-flight hydration rather than launching a second DB query
   const inflight = pendingHydrations.get(key);
   if (inflight) {
     await inflight;
@@ -568,7 +562,6 @@ function updateSummaryForKey(
   }
 
   cache.set(key, existing);
-  // (categories, turnsSinceRefresh, lastRefreshedTurn preserved automatically since we mutate existing)
 }
 
 export function storeShortTermMemory(
@@ -621,7 +614,6 @@ export function storeShortTermMemory(
       );
     }
 
-    // Ensure durable rows exist (fire-and-forget; DO NOTHING on conflict to preserve categories/summary)
     const serverDiscId = serverId !== "DM" ? serverId : null;
     void ensureStmRow("user", serverDiscId, userId, channelId, resolvedPersonaId, resolvedLineageId).catch((err) =>
       log.warn("[shortTermMemoryCache] Failed to persist user STM row", { error: err }),
@@ -770,7 +762,6 @@ export function updateShortTermMemorySummary(
       );
     }
 
-    // Persist to DB after successful cache update (CLAUDE.md rule 5)
     const serverDiscId = serverId && serverId !== "DM" ? serverId : null;
     void upsertStmSummary(
       "user",
@@ -847,8 +838,6 @@ export function clearShortTermMemorySummary(
   try {
     invalidateShortTermMemory(userId, channelId, personaId, serverId);
 
-    // Eviction alone is not durable: hydrateEntryFromDb would resurrect the old
-    // summary on the next cache miss, so the clear must also reach the DB.
     const serverDiscId = serverId && serverId !== "DM" ? serverId : null;
     const resolvedPersonaId = personaId ?? null;
     void clearStmSummary("user", serverDiscId, userId, channelId, resolvedPersonaId).catch((err) =>
@@ -1102,7 +1091,6 @@ export async function updateShortTermMemoryCategories(
       cache.set(serverKey, serverEntry);
     }
 
-    // Persist to DB after cache is updated (CLAUDE.md rule 5)
     const serverDiscId = serverId && serverId !== "DM" ? serverId : null;
     await upsertStmCategories(
       "user",

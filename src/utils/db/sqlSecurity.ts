@@ -7,28 +7,20 @@ function schemaKeysExcluding<T>(schema: { shape: Record<string, unknown> }, excl
   return new Set(Object.keys(schema.shape).filter((k) => !excludeSet.has(k)) as (keyof T)[]);
 }
 
-const ALLOWED_USER_FIELDS = schemaKeysExcluding<UserRow>(userSchema, [
-  "user_id", // primary key
-  "created_at",
-  "updated_at",
-]);
+const ALLOWED_USER_FIELDS = schemaKeysExcluding<UserRow>(userSchema, ["user_id", "created_at", "updated_at"]);
 
-const ALLOWED_TOMORI_FIELDS = schemaKeysExcluding<TomoriRow>(tomoriSchema, [
-  "persona_id", // primary key (renamed from persona_id in migration 016)
-  "created_at",
-  "updated_at",
-]);
+const ALLOWED_TOMORI_FIELDS = schemaKeysExcluding<TomoriRow>(tomoriSchema, ["persona_id", "created_at", "updated_at"]);
 
 const ALLOWED_TOMORI_CONFIG_FIELDS = schemaKeysExcluding<AssembledServerConfig>(assembledServerConfigSchema, [
-  "tomori_config_id", // primary key
-  "persona_id", // FK anchor
-  "server_id", // FK anchor
+  "tomori_config_id",
+  "persona_id",
+  "server_id",
   "created_at",
   "updated_at",
 ]);
 
 const ALLOWED_PERSONA_CONFIG_FIELDS = schemaKeysExcluding<PersonaConfigRow>(personaConfigSchema, [
-  "persona_id", // FK anchor / primary key
+  "persona_id",
   "created_at",
   "updated_at",
 ]);

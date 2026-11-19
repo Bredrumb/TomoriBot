@@ -39,7 +39,6 @@ async function scanMigrationFiles(): Promise<Map<string, MigrationFile>> {
   const byName = new Map<string, MigrationFile>();
 
   for (const file of files) {
-    // Only consider up-migrations; .down.sql files are resolved by derived name.
     if (file.endsWith(".down.sql")) continue;
     const match = MIGRATION_FILENAME.exec(file);
     if (!match) continue;
@@ -84,7 +83,6 @@ function parseArgs(): { lastCount?: number; fromVersion?: number; confirmed: boo
   const argv = process.argv.slice(2);
   const confirmed = argv.includes("--yes") || argv.includes("-y");
 
-  // --last or --last=N : roll back the N most recently applied migrations.
   const lastArg = argv.find((a) => a === "--last" || a.startsWith("--last="));
   if (lastArg) {
     const eq = lastArg.indexOf("=");
@@ -96,14 +94,12 @@ function parseArgs(): { lastCount?: number; fromVersion?: number; confirmed: boo
     return { lastCount: count, confirmed };
   }
 
-  // Positional version or full name stem (e.g. "051" or "051_stm_customization").
   const positional = argv.find((a) => !a.startsWith("-"));
   if (!positional) {
     log.error("Provide a target version (e.g. 034) or --last[=N]. See script header for usage.");
     process.exit(1);
   }
 
-  // Accept a bare number, a zero-padded number, or a full stem; extract the version.
   const numeric = /^\d+$/.test(positional)
     ? Number.parseInt(positional, 10)
     : Number.parseInt(MIGRATION_FILENAME.exec(`${positional}.sql`)?.[1] ?? "", 10);
@@ -122,8 +118,7 @@ async function main(): Promise<void> {
   const filesByName = await scanMigrationFiles();
   const appliedNames = await getAppliedNames();
 
-  // Only rollback migrations that still have files on disk (rollback
-  //    needs the .down.sql), sorted DESCENDING so dependents undo before deps.
+  // Sort descending so dependent migrations roll back before their dependencies (skipping entries without .down.sql).
   const appliedWithFiles = [...appliedNames]
     .map((name) => filesByName.get(name))
     .filter((m): m is MigrationFile => m !== undefined)
@@ -141,7 +136,6 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  // Guard: Ensure rollback files exist before starting destructive operations.
   for (const t of targets) {
     const exists = await readFile(t.downPath).then(
       () => true,
@@ -154,8 +148,6 @@ async function main(): Promise<void> {
     }
   }
 
-  // Down migrations are typically destructive; print the ordered plan for review.
-  //    the consequence explicit before any execution.
   log.section(`Rollback plan (${targets.length} migration(s), newest first):`);
   for (const t of targets) {
     log.info(`  ↓ ${t.name}`);

@@ -33,7 +33,6 @@ export async function validateProtocolMarkers(targetLocales?: string[]): Promise
   const authoredLocales = targetLocales ?? getSupportedLocales();
   const issues: ProtocolMarkerIssue[] = [];
 
-  // Discover dynamic reward and punish protocol keys across authored locales
   const allEntries = [...PROTOCOL_KEYS];
   for (const locale of authoredLocales) {
     for (const namespace of ["commands.reward", "commands.punish"] as const) {
@@ -49,7 +48,6 @@ export async function validateProtocolMarkers(targetLocales?: string[]): Promise
     }
   }
 
-  // Verify presence of all protocol keys across authored locales
   for (const locale of authoredLocales) {
     for (const entry of allEntries) {
       if (!hasLocaleKey(locale, entry.key)) {
@@ -63,7 +61,6 @@ export async function validateProtocolMarkers(targetLocales?: string[]): Promise
     }
   }
 
-  // Test reverse lookup assembly to catch collisions, placeholder differences, and missing anchors
   try {
     buildProtocolLookup(allEntries, authoredLocales, (locale, key) =>
       hasLocaleKey(locale, key) ? localizer(locale, key) : undefined,

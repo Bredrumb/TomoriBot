@@ -347,12 +347,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
   try {
     const actualTriggeringUserId =
       impersonatedUserId ?? shortTermMemoryUserId ?? snapshot?.triggererUserRow?.user_disc_id;
-    // Per-server master switch (migration 054): when STM is disabled we no longer skip the
-    // whole build. "Off" means the bot stops AUTO-managing STM (the write tool and the
-    // cadence nudge are suppressed): but existing STM content STILL surfaces so admins can
-    // curate it by hand via `/persona stm edit` and crude messages remain visible. The
-    // nudge suppression now lives inside buildShortTermMemoryContext (gated on the same
-    // switch), and the write tool gates itself in updateShortTermMemoryTool.
+    // Run even when short_term_memory_enabled is false so curated STM still renders while auto-nudges stay suppressed.
     if (actualTriggeringUserId) {
       const stmResult = await buildShortTermMemoryContext({
         triggeringUserId: actualTriggeringUserId,

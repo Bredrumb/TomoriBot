@@ -437,8 +437,7 @@ export async function executeAutoImageCommand(
     return;
   }
 
-  // The hidden image agent requires function-calling support on the active model.
-  //    Without tool support the model cannot call generate_image / generate_image_nai.
+  // Hidden image planning invokes image tools, so models without tool-calling support cannot run it.
   if (!tomoriState.llm.has_tools) {
     if (!interaction.replied && !interaction.deferred) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     await replyInfoEmbed(interaction, locale, {
@@ -480,7 +479,7 @@ export async function executeAutoImageCommand(
     return;
   }
 
-  // Quota check before showing the modal (avoids wasting user interaction).
+  // Quota runs before opening the modal so denied users do not fill inputs unnecessarily.
   const isPersonalImageBackend = modelSelection
     ? modelSelection.source === "personal"
     : (backendAvailability.currentProvider && Boolean(activeConfigs?.image)) ||
@@ -530,7 +529,6 @@ export async function executeAutoImageCommand(
     return;
   }
 
-  // Show the modal (fire-and-forget UX; no public bot response until image posts).
   const defaultPersonaId = availablePersonaSummaries.some((persona) => persona.persona_id === tomoriState.persona_id)
     ? (tomoriState.persona_id ?? fallbackPersonaSummary?.persona_id ?? -1)
     : (fallbackPersonaSummary?.persona_id ?? -1);
@@ -654,8 +652,7 @@ export async function executeAutoImageCommand(
     if (selectedPersona) {
       senderPersonaUsername = selectedPersona.persona_nickname;
 
-      // Attempt to get or create the channel webhook for persona-identity posting.
-      // Threads and channels without ManageWebhooks permission fall back to a direct bot message.
+      // Threads and channels without ManageWebhooks skip webhook creation and fall back to posting as the bot.
       const webhookChannel = interaction.guild?.channels.cache.get(interaction.channel.id) ?? interaction.channel;
 
       if ("fetchWebhooks" in webhookChannel) {
@@ -682,11 +679,7 @@ export async function executeAutoImageCommand(
       `[/generate image:auto] Starting hidden image agent for channel ${interaction.channel.id}, backend=${selectedBackend}, preset=${settingPreset.plannerLabel}, sender=${selectedPersona?.persona_nickname ?? "active"}`,
     );
 
-    // Invoke the hidden image agent turn. The model sees the full conversation context
-    // (persona prompt, users, memories, RAG docs, etc.) and is directed via a tail directive
-    // to call the appropriate image tool.
-    // Pass a context override only when the selected persona differs from the active one,
-    // so buildContext() prompts the model as the chosen sender persona.
+    // Pass an override only when the chosen persona differs from active so buildContext() uses that sender.
     const contextPersonaOverride =
       selectedPersona && selectedPersona.persona_id !== tomoriState.persona_id
         ? {
@@ -743,14 +736,12 @@ export async function executeAutoImageCommand(
       `[/generate image:auto] Hidden image agent completed for channel ${interaction.channel.id}, backend=${selectedBackend}`,
     );
 
-    // Acknowledge the modal submit interaction with an ephemeral success notice.
     await replyInfoEmbed(modalSubmitInteraction, locale, {
       titleKey: "commands.tool.visualize.success_title",
       descriptionKey: "commands.tool.visualize.success_description",
       color: ColorCode.SUCCESS,
     });
 
-    // Record the cooldown entry after confirmed success.
     await cooldownRepository.setMessageTriggerCooldownWithWhitelist(
       serverDiscId,
       interaction.user.id,

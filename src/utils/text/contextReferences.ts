@@ -158,10 +158,7 @@ export async function resolveContextReferences(params: {
       return eligible;
     })
     .map((candidate) => candidate.userRow);
-  // Stable proxy identities have real user rows, so the human candidate query can
-  // match them on nickname or server activity. Their separate lane prevents a
-  // synthetic identifier from reaching guild.members.fetch(), which would
-  // spend a REST call to earn an Unknown Member error and a bogus non_member rejection.
+  // Filter out proxy user rows here so synthetic IDs never trigger doomed guild.members.fetch() REST calls.
   const uniqueEligibleRows = [...new Map(eligibleRows.map((row) => [row.user_disc_id, row])).values()].filter(
     (row) => !isMessageProxyIdentityUserId(row.user_disc_id),
   );
@@ -185,9 +182,7 @@ export async function resolveContextReferences(params: {
     )
   ).filter((candidate): candidate is NonNullable<typeof candidate> => candidate !== null);
 
-  // A stable proxy identity can never resolve through the Discord member directory. It gets its own
-  // lookup but shares the alias resolver below, so identities and humans answering to the same name
-  // collide with each other instead of each winning inside its own lane.
+  // Proxy identities skip Discord directory lookup so shared alias resolution catches colliding names across pools.
   const messageProxyReferences = await (
     params.messageProxyIdentitySource ?? repositoryMessageProxyIdentityReferenceSource
   ).loadIdentities({

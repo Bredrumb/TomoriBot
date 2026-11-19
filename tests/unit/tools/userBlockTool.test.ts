@@ -128,7 +128,6 @@ describe("formatBlockedUserNoticeContent", () => {
   const now = new Date("2026-06-11T00:00:00.000Z");
 
   it("rounds remaining hours up and pluralizes for multi-hour blocks", () => {
-    // 2.5 hours out -> ceil to 3
     const expiresAt = new Date(now.getTime() + 2.5 * 60 * 60 * 1000);
     const notice = formatBlockedUserNoticeContent("Alice", expiresAt, now);
 
@@ -136,7 +135,6 @@ describe("formatBlockedUserNoticeContent", () => {
   });
 
   it("floors at one hour and uses singular when under an hour remains", () => {
-    // 12 minutes out -> ceil is 1, singular "hour"
     const expiresAt = new Date(now.getTime() + 12 * 60 * 1000);
     const notice = formatBlockedUserNoticeContent("Bob", expiresAt, now);
 

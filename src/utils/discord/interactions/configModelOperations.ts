@@ -765,7 +765,8 @@ export const configModelOperations: ConfigModelOperations = {
         if (!updated) return { status: "write-failed" };
       }
 
-      // Stored vectors from another embedding family cannot be searched by the active model, so mismatched documents are re-embedded rather than left unsearchable.
+      // Stored vectors from another embedding family cannot match the active model, so mismatched documents
+      // are re-embedded rather than left unsearchable.
       const shouldReembed = familyChanged || hasMismatchedChunks;
       let reembedded = false;
       if (shouldReembed && ragAvailable) {
@@ -1126,9 +1127,7 @@ export const configModelOperations: ConfigModelOperations = {
         continue;
       }
       if (raw === CONFIG_FALLBACK_CLEAR_VALUE) continue;
-      // A pick that no longer resolves drops that slot alone. One submission edits five positions
-      // at once, so failing the whole write would also discard the untouched slots it was carrying
-      // through, and a catalog that changed while the modal sat open is an ordinary race here.
+      // Drop only an unresolved pick so a catalog race on one slot does not discard the other four edits.
       if (raw.startsWith(CONFIG_FALLBACK_ENDPOINT_PREFIX)) {
         const endpointId = Number.parseInt(raw.slice(CONFIG_FALLBACK_ENDPOINT_PREFIX.length), 10);
         const endpoint = selectableEndpoints.find((candidate) => candidate.custom_endpoint_id === endpointId);
@@ -1152,9 +1151,7 @@ export const configModelOperations: ConfigModelOperations = {
       return true;
     });
 
-    // A fallback equal to the primary never survives the write. Only a pick made in this submission
-    // is worth an error; an inherited duplicate is dropped silently, or every submission would be
-    // rejected until the user found and cleared an untouched slot.
+    // Drop inherited primary duplicates silently so users are not blocked on untouched fallback slots.
     const primaryKeys = getPrimaryFallbackRefKeys(tomoriState.config.llm_id, allEndpoints);
     if ([...submittedKeys].some((key) => primaryKeys.has(key))) {
       return { status: "primary-conflict", primaryModelName: tomoriState.llm.llm_codename };
@@ -1187,8 +1184,7 @@ export const configModelOperations: ConfigModelOperations = {
   },
 
   async setImageDefaultTags({ tomoriState, serverDiscId, negative, rawInput }) {
-    // An empty submission restores the built-in defaults rather than creating a new empty state,
-    // which is the reset path the absorbed commands already offer.
+    // Empty input restores built-in defaults because clearing tags resets to defaults rather than storing blank.
     if (rawInput.trim().length === 0) {
       const defaults = negative ? [...DEFAULT_IMAGE_NEGATIVE_TAGS] : [...DEFAULT_IMAGE_POSITIVE_TAGS];
       const reset = await configRepository.updateNovelaiImagegenConfig(

@@ -57,7 +57,6 @@ export async function execute(
       return;
     }
 
-    // Defer before async work (Pattern 2)
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const tomoriState = await getCachedTomoriState(interaction.guildId);
@@ -75,7 +74,6 @@ export async function execute(
 
     const channel = interaction.options.getChannel("channel", true);
 
-    // Query existing link so we can invalidate the room-side cache too
     const existingRoomId = await serverRepository.getExistingMatrixLink(channel.id);
 
     if (!existingRoomId) {
@@ -92,7 +90,6 @@ export async function execute(
 
     await serverRepository.unlinkMatrix(channel.id);
 
-    // Invalidate both cache directions
     invalidateMatrixLinkCache(channel.id, roomId);
 
     await replyInfoEmbed(interaction, locale, {

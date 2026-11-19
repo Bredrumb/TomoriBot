@@ -340,7 +340,6 @@ describe("OpenrouterStreamAdapter.processChunk", () => {
     );
 
     expect(result.type).toBe("text");
-    // Reasoning must not surface as visible Discord text
     expect(result.content).toBe("");
     expect(result.thoughts).toBeDefined();
     expect(result.thoughts?.[0]).toMatchObject({ kind: "raw", content: "internal chain-of-thought" });
@@ -356,7 +355,6 @@ describe("OpenrouterStreamAdapter.processChunk", () => {
 
     expect(result.type).toBe("text");
     expect(result.content).toBe("Visible reply.");
-    // Reasoning must not be mixed into visible content
     expect(result.content).not.toContain("hidden thought");
     expect(result.thoughts?.[0]).toMatchObject({ kind: "raw", content: "hidden thought" });
   });

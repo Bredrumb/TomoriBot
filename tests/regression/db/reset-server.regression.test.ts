@@ -235,9 +235,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server configuration reset: regression", (
     `;
     controlServerId = controlRow.server_id;
 
-    // The control server has no config rows at all, so the reset creates them through its INSERT
-    // branch. Comparing against it exercises a different branch from the target's ON CONFLICT
-    // path, which is what makes a missing `= DEFAULT` visible.
+    // Resetting an empty control server exercises the INSERT branch so missing `= DEFAULT` clauses surface against the
+    // target's ON CONFLICT path.
     await resetRepository.resetServerConfiguration(controlServerId);
 
     await dirtyEverySingleton(targetServerId);

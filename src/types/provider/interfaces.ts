@@ -44,7 +44,7 @@ export type ProviderFeatureImplementation = string;
 
 export interface ApiKeyValidationResult {
   valid: boolean;
-  error?: ProviderError; // Detailed error info if validation failed
+  error?: ProviderError;
 }
 
 export type StreamStopReason =
@@ -86,16 +86,17 @@ export interface StreamResult {
     | "stopped_by_user"
     | "empty_response"
     | "follow_up_interrupt";
-  data?: unknown | Error; // Function call data or error details
+  data?: unknown | Error;
   providerFailureReported?: boolean;
   pendingResponse?: import("@/types/stream/pendingResponse").PendingStreamResponse;
-  accumulatedText?: string; // Text sent to Discord (for short-term memory storage)
+  // Delivered Discord text only (feeds short-term memory).
+  accumulatedText?: string;
   firstMessageId?: string;
   // Stores <details> block body with <summary> stripped rather than full tag markup, because it feeds directly into
   // STM.
   detailsContent?: string;
-  stopReason?: StreamStopReason; // Specific stop source for debugging/logging
-  thoughtLog?: ThoughtLogPayload; // Reasoning/thought text captured separately from visible output
+  stopReason?: StreamStopReason;
+  thoughtLog?: ThoughtLogPayload;
   // Keeps render-ordered repeats (one per delivered sprite) because post-turn stats attribute counts to the triggerer
   // and exclude isIdentity from sprite_emotion.
   spritesShown?: SpriteShownEntry[];
@@ -117,7 +118,7 @@ export interface ProviderConfig {
 export interface ProviderInfo {
   name: string;
   displayName: string;
-  aliases?: string[]; // Optional aliases for provider name (e.g., ["gemini"] for "google")
+  aliases?: string[];
   supportedModels: string[];
   defaultVisionModel?: string;
   requiresApiKey: boolean;
@@ -189,7 +190,7 @@ export interface LLMProvider {
     tomoriState: TomoriState,
     config: ProviderConfig,
     contextItems: StructuredContextItem[],
-    currentTurnModelParts: Array<Record<string, unknown>>, // Provider-specific parts
+    currentTurnModelParts: Array<Record<string, unknown>>,
     emojiStrings?: string[],
     functionInteractionHistory?: Array<{
       functionCall: FunctionCall;

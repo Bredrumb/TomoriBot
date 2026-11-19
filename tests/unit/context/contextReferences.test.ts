@@ -462,9 +462,7 @@ describe("message-proxy identity reference discovery", () => {
   });
 
   it("keeps a proxy identity row out of the guild-member lane", async () => {
-    // The human candidate query selects by nickname and server activity, which a
-    // member's real users row can satisfy. Reaching resolveMember would spend a
-    // fetch on a non-snowflake and log an Unknown Member error.
+    // A member's users row can match the human candidate query, so it must stay out of resolveMember's snowflake fetch.
     const memberRow: UserRow = { ...defaultUser(), user_disc_id: MEMBER_ID, user_nickname: "Mirri" };
     const resolved = await resolveWithMembers({
       content: "Mirri said so.",

@@ -94,10 +94,9 @@ async function extractFramesInternal(
     gifBuffer = gifSource;
   }
 
-  // parseGIF expects ArrayBuffer, convert Buffer to ArrayBuffer
   const uint8Array = new Uint8Array(gifBuffer);
   const gif = parseGIF(uint8Array.buffer);
-  const allFramesData = decompressFrames(gif, true); // buildPatch=true for RGBA data
+  const allFramesData = decompressFrames(gif, true);
 
   const totalFrames = allFramesData.length;
   log.info(`GIF Processor: Total frames in GIF: ${totalFrames}`);
@@ -126,10 +125,8 @@ async function extractFramesInternal(
 function calculateKeyframeIndices(totalFrames: number, interval: number, maxFrames: number): number[] {
   const indices = new Set<number>();
 
-  // Always include first frame
   indices.add(0);
 
-  // Always include last frame
   indices.add(totalFrames - 1);
 
   for (let i = interval; i < totalFrames - 1; i += interval) {
@@ -165,7 +162,6 @@ async function processFrame(
   totalSourceFrames: number,
   config: Required<GifProcessorConfig>,
 ): Promise<ProcessedGifFrame> {
-  // gifuct-js provides patch as Uint8ClampedArray with RGBA pixel data
   const { patch, dims } = frameData;
   const frameBuffer = Buffer.from(patch.buffer);
 
@@ -173,16 +169,16 @@ async function processFrame(
     raw: {
       width: dims.width,
       height: dims.height,
-      channels: 4, // RGBA
+      channels: 4,
     },
   })
     .resize(config.maxWidth, undefined, {
-      fit: "inside", // Maintain aspect ratio
-      withoutEnlargement: true, // Don't upscale small images
+      fit: "inside",
+      withoutEnlargement: true,
     })
     .jpeg({
       quality: config.jpegQuality,
-      progressive: true, // Progressive JPEG for better web performance
+      progressive: true,
     })
     .toBuffer();
 

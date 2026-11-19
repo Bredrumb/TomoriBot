@@ -81,9 +81,7 @@ function parseNvidiaJsonResponse(text: string): unknown {
 
   try {
     return JSON.parse(cleanedText);
-  } catch {
-    // Continue to fallback extraction attempts below.
-  }
+  } catch {}
 
   const fencedMatch = cleanedText.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
   if (fencedMatch?.[1]) {

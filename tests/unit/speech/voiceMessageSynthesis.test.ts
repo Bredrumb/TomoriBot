@@ -50,9 +50,8 @@ const scopedMock = createScopedModuleMocker(mock, {
   "@/providers/custom/styles/elevenLabsAdapter": realElevenLabsAdapter,
 });
 
-// The mocked specifiers are ESM namespaces, so each override is a plain own property in the factory
-// object; `createScopedModuleMocker` swaps the factory's function for the real one when the scope
-// closes, so later files in the same process still see the genuine adapters.
+// Overrides stay plain own properties on ESM namespace factories so createScopedModuleMocker can restore real
+// adapters when the scope closes.
 scopedMock.module("@/providers/custom/styles/ttsCloningAdapter", () => ({
   ...realTtsCloningAdapter,
   synthesizeSpeechViaTtsClone: cloneMock,
@@ -298,8 +297,8 @@ describe("synthesizeVoiceMessage ElevenLabs sources", () => {
 
 describe("design-shape capability", () => {
   it("is true for auto, exactly where the dedicated-endpoint predicate is false", () => {
-    // The pair of predicates that got swapped during extraction. This assertion is the reminder
-    // that they answer different questions and only one of them belongs in a dispatch guard.
+    // Dedicated-endpoint predicates exclude `auto` endpoints, so dispatch guards must check `acceptsDesignShape`
+    // instead.
     const auto = makeEndpoint({ voiceMode: "auto" });
 
     expect(resolveVoiceSourceCapabilities(auto).acceptsDesignShape).toBe(true);

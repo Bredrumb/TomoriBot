@@ -193,10 +193,8 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
     userId: userRow.user_id,
     allPersonas,
   });
-  // Reminder turns are system-initiated because the role whitelist guards against unauthorized
-  // users triggering Tomori, but reminders were authorized at creation time. The channel
-  // whitelist (is this channel allowed at all?) still applies via whitelistStatus.isTriggerAllowed,
-  // but role-based rejection that derives from the last message author is skipped.
+  // System-initiated turns (reminders, borrowed triggers) bypass last-author whitelist rejection because
+  // authorization happened when created or configured.
   const isSystemInitiatedTurn = isSystemInitiatedIncoming(incoming);
   if (accessState.rejectedByWhitelist && !isSystemInitiatedTurn) {
     return { lockedTurn, turns: [] };
@@ -461,11 +459,8 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
       )
     : new Map();
 
-  // Scene turns are a scripted persona-to-persona chain: each speaker responds to the
-  // PREVIOUS speaker, so {{user}} (which resolves to triggererName) should be that prior
-  // persona rather than the command invoker: matching how a normal self-reply queue
-  // resolves the triggerer to the last persona in the chain. Turn 0 has no prior speaker
-  // and keeps the invoker as the entity being responded to.
+  // After turn 0, resolve {{user}} (`triggererName`) to the previous scene speaker so each persona responds to
+  // the prior persona rather than the invoker.
   if (incoming.sceneTurn && incoming.sceneTurn.turnIndex > 0) {
     const previousSpeakerName = incoming.sceneTurn.sequence[incoming.sceneTurn.turnIndex - 1]?.personaName.trim();
     if (previousSpeakerName) {
@@ -706,9 +701,8 @@ export async function resolveTextCredentialPolicy(params: {
         });
       return null;
     }
-    // Checked ahead of CredentialUnavailableError because an unreadable database used to arrive
-    // here as `no_saved_config` and render "API Key Missing", telling an admin to run
-    // /config setup during a transient blip. That embed logged 41 times in one cascade.
+    // Checked ahead of CredentialUnavailableError because transient DB failures would otherwise surface as
+    // `no_saved_config` and tell admins to run /config setup.
     if (error instanceof DatabaseUnavailableError) {
       if (params.shouldSurfaceUserErrors) {
         await sendFailureNotice({
@@ -817,9 +811,8 @@ function selectPersonasForTurn(args: {
           (typeof persona.persona_id === "number" && args.allowedPersonaIds.has(persona.persona_id))),
     );
 
-  // Reminder and Natural Nudges turns are system-initiated: bypass personal spotlight and user
-  // blocks (preferences that govern which persona responds *to that user*, not system-triggered
-  // events). Only the persona-channel whitelist is still enforced so channel admins can restrict personas.
+  // System-initiated turns bypass personal spotlight and user blocks while still enforcing the channel
+  // whitelist so channel restrictions hold.
   if (isSystemInitiatedIncoming(incoming)) {
     return selectedPersona &&
       whitelistRepository.isPersonaAllowedByWhitelistStatus(args.whitelistStatus, selectedPersona.persona_id)
@@ -985,8 +978,7 @@ async function prepareTextQuota(
   const incoming = lockedTurn.admission.incoming;
   const triggerKey = incoming.textQuotaTriggerKey ?? lockedTurn.admission.message.id;
   const shouldTreatAsQuotaSharedPersonaJob = incoming.isPersonaJob && !incoming.sceneTurn;
-  // A personal route spends the user's own credentials, so it never draws on the server's quota.
-  // The server route a personal turn can still fall back to admits itself, in generationTurn.
+  // Personal routes skip server quota here because any server fallback admits itself in generationTurn.
   const shouldApply =
     textCredentialSource === "server" && shouldApplyServerTextQuota(incoming, lockedTurn.admission.isDMChannel);
 

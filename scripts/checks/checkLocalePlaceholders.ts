@@ -146,7 +146,8 @@ export async function analyzePlaceholderParity(targetLocale?: string): Promise<P
 
     for (const [key, enValue] of Object.entries(enFlat)) {
       const targetValue = targetFlat[key];
-      if (typeof targetValue !== "string") continue; // missing keys are a parity gate concern
+      // Skip non-string values because missing keys belong to the parity gate.
+      if (typeof targetValue !== "string") continue;
 
       totalKeysExamined++;
       const issue = checkKeyPlaceholderParity(key, enValue, targetValue, locale);

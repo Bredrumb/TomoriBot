@@ -20,15 +20,8 @@ import {
   resolveOpenRouterPollingUrl,
 } from "@/providers/openrouter/openrouterVideoRequest";
 
-// Bun's BoringSSL stack produces a non-standard TLS/HTTP fingerprint that Cloudflare
-// identifies and serves cached HTML to, rather than routing to the API origin.
-// Both fetch() and Bun's node:https shim share this same fingerprint.
-// We bypass this by spawning an external process for HTTP requests:
-//   - Windows: PowerShell 7 (pwsh) with Invoke-WebRequest: uses .NET's Schannel TLS
-//     and proper HTTP/2 negotiation, confirmed to bypass Cloudflare.
-//   - Linux/Docker: curl with HTTP/2 support (via nghttp2, standard on Alpine/Debian).
-//     Linux curl produces a different TLS fingerprint than Bun and negotiates HTTP/2
-//     correctly, which Cloudflare allows through.
+// Use pwsh on Windows or HTTP/2 curl on Linux because Cloudflare rejects Bun's BoringSSL TLS fingerprint with cached
+// HTML.
 
 interface ExternalHttpResponse {
   status: number;
@@ -48,8 +41,7 @@ interface ExternalRequestLimits {
 const MAX_API_RESPONSE_BYTES = 1024 * 1024;
 const CURL_HEADER_ALLOWANCE_BYTES = 64 * 1024;
 const MAX_HELPER_STDERR_BYTES = 64 * 1024;
-// Both helpers time their own request out at 120 seconds. This covers a helper that hangs before
-// or after its request, which those timeouts cannot see.
+// Exceeds the helpers' 120-second request timeouts to catch subprocess hangs before or after the HTTP call.
 const EXTERNAL_REQUEST_DEADLINE_MS = 150_000;
 const VIDEO_DOWNLOAD_TIMEOUT_MS = 120_000;
 
@@ -132,9 +124,6 @@ async function pwshHttpRequest(
 ): Promise<ExternalHttpResponse> {
   const requestEnvelope = JSON.stringify({ url, method, headers, body });
 
-  // Spawn pwsh with the inline HTTP script
-  //    -NoProfile: skip user profile loading for faster startup
-  //    -NonInteractive: no prompts: fail immediately on errors
   const proc = Bun.spawn(["pwsh", "-NoProfile", "-NonInteractive", "-Command", PWSH_HTTP_SCRIPT], {
     stdin: "pipe",
     stdout: "pipe",
@@ -210,9 +199,8 @@ async function curlHttpRequest(
     "-",
   ];
 
-  // Suppress Expect: 100-continue because curl sends this for POST bodies over ~1KB,
-  //    which inserts an intermediate "HTTP/1.1 100 Continue" block before the real response.
-  //    Our -i parser splits on the first \r\n\r\n, so 100-Continue would break parsing.
+  // Suppress Expect: 100-continue because curl emits an extra HTTP/1.1 100 header block that breaks the first
+  // \r\n\r\n split.
   args.push("-H", "Expect:");
   args.push("-i");
   args.push(url);
@@ -260,8 +248,6 @@ async function curlHttpRequest(
   return { status, headers: responseHeaders, bodyBuffer };
 }
 
-// External process transport is used because Cloudflare blocks Bun's TLS fingerprint, dispatching to pwsh on Windows
-// and HTTP/2 curl on Linux.
 async function externalHttpRequest(
   url: string,
   method: "GET" | "POST",
@@ -269,12 +255,11 @@ async function externalHttpRequest(
   limits: ExternalRequestLimits,
   body?: string,
 ): Promise<ExternalHttpResponse> {
-  // Validate URL scheme: only HTTPS allowed to prevent protocol attacks
   if (!url.startsWith("https://")) {
     throw new Error(`externalHttpRequest: URL must use HTTPS, got: ${url.slice(0, 80)}`);
   }
 
-  // Sanitize header values: strip CRLF to prevent header injection
+  // Strip CRLF to prevent HTTP header injection.
   const sanitizedHeaders: Record<string, string> = {};
   for (const [key, value] of Object.entries(headers)) {
     sanitizedHeaders[key] = value.replace(/[\r\n]/g, "");
@@ -408,9 +393,8 @@ async function generateVideo(
   const modelCapabilities = await getOrFetchOpenRouterVideoModelCapabilities(request.model);
   const normalizedOptions = normalizeOpenRouterVideoOptions(request, modelCapabilities);
   request.abortSignal?.throwIfAborted();
-  // `frame_images` preserves TomoriBot's image-to-video contract: the referenced image is
-  // the exact first frame. `input_references` is intentionally not used because the stable
-  // API defines it as loose subject/style guidance rather than frame control.
+  // Use frame_images rather than input_references because input_references gives loose guidance instead of exact
+  // first-frame control.
   const body = buildOpenRouterVideoRequestBody(request, normalizedOptions, modelCapabilities);
 
   log.info(
@@ -425,7 +409,6 @@ async function generateVideo(
   };
   const submitBodyJson = JSON.stringify(body);
 
-  // Submit the generation request via external HTTP helper (bypasses Bun's TLS fingerprint issue)
   const send = fetchOpenRouterVideoApi;
   const submitResponse = await send(OPENROUTER_VIDEO_URL, {
     method: "POST",
@@ -477,8 +460,7 @@ async function generateVideo(
     `OpenRouter video generation: job submitted, polling for completion (jobId: ${jobId}, pollingUrl: ${pollingUrl})`,
   );
 
-  // Poll for completion using the polling_url returned by the submit response.
-  //    The URL format is determined by OpenRouter and may differ from a simple ID-based path.
+  // Poll the submit response's polling_url directly because OpenRouter's polling path can differ from an ID path.
   const pollHeaders = {
     Authorization: `Bearer ${request.apiKey}`,
     Accept: "application/json",
@@ -495,9 +477,7 @@ async function generateVideo(
       const pollBodyText = pollRaw.bodyBuffer.toString("utf8");
 
       if (pollRaw.status < 200 || pollRaw.status >= 300) {
-        // Short-circuit on permanent auth errors, so retrying won't help for 401/403
-        // Note: 404 is NOT terminal here. OpenRouter's async job system may return 404 briefly
-        // after submission due to eventual consistency because the job takes a few seconds to propagate.
+        // Short-circuit only on 401/403 because OpenRouter can briefly return 404 while a newly submitted job propagates.
         if (pollRaw.status === 401 || pollRaw.status === 403) {
           return {
             done: true,
@@ -541,10 +521,7 @@ async function generateVideo(
     abortSignal: request.abortSignal,
   });
 
-  // Download the video
-  //    Use unsigned_urls if available, otherwise use the content endpoint.
-  //    The video file may not be immediately available after the poll returns "completed"
-  //    due to eventual consistency in OpenRouter's storage, so retry a few times on 404.
+  // Retry 404 downloads because OpenRouter storage is eventually consistent right after a job marks completed.
   const usageReport = { costUsd: completedJob.usage?.cost ?? undefined, providerRequestId: jobId };
   hold?.reportCost(usageReport.costUsd);
   const rawVideoUrl = completedJob.unsigned_urls?.[0] ?? `${OPENROUTER_VIDEO_URL}/${jobId}/content?index=0`;

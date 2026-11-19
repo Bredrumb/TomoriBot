@@ -9,7 +9,7 @@ export function calculateLateness(scheduledTime: Date, currentTime: Date = new D
   const diffMilliseconds = currentTime.getTime() - scheduledTime.getTime();
 
   if (diffMilliseconds <= 300000) {
-    return null; // Not late if within 5 minutes
+    return null;
   }
 
   return `${formatTimeRemaining(diffMilliseconds)} late`;

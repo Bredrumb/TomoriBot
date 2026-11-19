@@ -13,7 +13,6 @@ export async function execute(
   _userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Build GitHub URL to LICENSE file (always in root, no locale variation)
   const githubUrl = "https://github.com/Bredrumb/TomoriBot/blob/main/LICENSE";
 
   const embed = new EmbedBuilder()

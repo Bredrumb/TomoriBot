@@ -68,9 +68,7 @@ export async function respondWithPersonaChoices(
     if (!responded) {
       try {
         await interaction.respond([]);
-      } catch {
-        // Autocomplete must fail silently if respond throws
-      }
+      } catch {}
     }
   }
 }
@@ -153,11 +151,10 @@ export const handlePersonaAutocomplete: CommandAutocompleteFunction = async (
 
     await interaction.respond(choices);
   } catch (error) {
-    // Autocomplete must always answer, even on failure.
     try {
       await interaction.respond([]);
     } catch {
-      // The dispatcher still logs and attempts its own fallback answer.
+      // Ignore respond() errors here so the original failure still reaches the dispatcher.
     }
     throw error;
   }

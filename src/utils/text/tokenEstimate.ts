@@ -57,9 +57,7 @@ export function normalizeProviderUsage(raw: unknown): TokenUsage | null {
   if (typeof u.input_tokens === "number") {
     inputTokens += (cacheReadTokens ?? 0) + (cacheWriteTokens ?? 0);
   }
-  // Output: completion/output tokens, Gemini candidates count. Gemini bills
-  //    thinking tokens separately (`thoughtsTokenCount`) at the output rate, so
-  //    add them to avoid undercounting reasoning models.
+  // Add Gemini thoughtsTokenCount because reasoning tokens are billed at the output rate outside candidatesTokenCount.
   const outputTokens =
     num("completion_tokens", "completionTokens", "output_tokens", "outputTokens", "candidatesTokenCount") +
     num("thoughtsTokenCount");

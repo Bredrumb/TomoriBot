@@ -11,7 +11,7 @@ export interface CachedPresetData {
 }
 
 interface CacheEntry {
-  data: CachedPresetData | null; // null = no active preset for this server
+  data: CachedPresetData | null;
   cachedAt: number;
 }
 
@@ -35,13 +35,11 @@ export async function getCachedActivePreset(serverId: number): Promise<CachedPre
     }
   }
 
-  // Cache miss or stale , so load from DB
   cacheMisses++;
   try {
     const preset = await presetRepository.loadActivePreset(serverId);
 
     if (!preset) {
-      // No active preset , so cache the negative result to avoid repeated queries
       cache.set(serverId, { data: null, cachedAt: now });
       return null;
     }

@@ -81,7 +81,8 @@ export interface PresetExportData {
 export interface PresetExport {
   version: string;
   type: "preset";
-  exported_at: string; // ISO 8601 timestamp
+  // Format: ISO 8601 timestamp.
+  exported_at: string;
   data: PresetExportData;
 }
 
@@ -92,7 +93,7 @@ export type ExportResult =
     }
   | {
       success: false;
-      error: string; // Locale key for error message
+      error: string;
     };
 
 export type ImportResult =
@@ -108,13 +109,15 @@ export type ImportResult =
     }
   | {
       success: false;
-      error: string; // Locale key or pipe-separated error with variables
+      // Format: locale key or pipe-separated error with variables.
+      error: string;
     };
 
 export interface ValidationResult {
   valid: boolean;
   data?: PresetExportData;
-  error?: string; // Locale key or pipe-separated error
+  // Format: locale key or pipe-separated error.
+  error?: string;
 }
 
 export const presetExportDataSchema = z.object({
@@ -177,6 +180,7 @@ export function renameLegacyCharRefKey(data: unknown): unknown {
 export const presetExportSchema = z.object({
   version: z.string(),
   type: z.literal("preset"),
-  exported_at: z.string(), // ISO 8601 format
+  // Format: ISO 8601 timestamp.
+  exported_at: z.string(),
   data: z.preprocess(renameLegacyCharRefKey, presetExportDataSchema),
 });

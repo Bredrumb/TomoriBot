@@ -244,9 +244,7 @@ describe("transfer panel Components V2 limits", () => {
   });
 
   it("renders both config previews as one compact block of quoted rows", () => {
-    // Exact shape per kind: a bold lead line, then each heading immediately followed by its own quote rows. A blank
-    // line between a heading and its rows reads as a separate panel, and the marker applies per line. Both kinds
-    // share one builder, so each gets its own pinned block rather than one standing in for the other.
+    // Headings must abut their per-line quote rows with no blank line, pinned for both kinds despite sharing a builder.
     const expectedBlocks: Record<keyof typeof SECTION_NAMES, string[]> = {
       workspace_config: [
         "### Review Configuration Import",

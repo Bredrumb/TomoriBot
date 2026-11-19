@@ -1,10 +1,5 @@
-// Removes shared preset images left behind by the retired
-// `presets/{lineage}/{language}/...` storage layout. Preset art does not vary by locale, so that
-// layout stored one identical copy per authored locale; the current layout is
-// `presets/{lineage}/...`. Run this once, AFTER a startup re-seed has written the language-free
-// copies and repointed the DB rows.
-//
-// Local filesystem only. Production objects live in GCS/S3 and are not touched.
+// Prune local `presets/{lineage}/{language}/` duplicates only after startup re-seed writes language-free copies
+// (GCS/S3 untouched).
 
 import { readdir, rm, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";

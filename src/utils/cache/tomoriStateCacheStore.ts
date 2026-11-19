@@ -11,9 +11,9 @@ import {
 // Repository writers import this store instead of readers so the cache avoids a repository dependency cycle.
 
 export interface TomoriStateCacheEntry {
-  personas: TomoriState[]; // Array of all personas (main first, then alters)
-  mainPersona: TomoriState; // Quick reference to main persona (is_alter=false)
-  cachedAt: number; // Timestamp in milliseconds
+  personas: TomoriState[];
+  mainPersona: TomoriState;
+  cachedAt: number;
 }
 
 export const cache = new Map<string, TomoriStateCacheEntry>();

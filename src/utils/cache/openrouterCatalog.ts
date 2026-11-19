@@ -122,9 +122,8 @@ export function createOpenRouterCatalog<TEntry>(source: OpenRouterCatalogSource<
     try {
       const next = await fetchCatalog();
 
-      // Swapping a fully built map is what makes a mid-life refresh safe: readers either
-      // see the whole old catalog or the whole new one, and a failed fetch below leaves
-      // a working catalog untouched rather than emptying it.
+      // Swapping the built map atomically keeps readers on a complete snapshot, so a failed fetch leaves cached data
+      // intact.
       entries = next;
       ready = true;
       lastSuccessAt = Date.now();
@@ -217,10 +216,8 @@ export function createOpenRouterCatalog<TEntry>(source: OpenRouterCatalogSource<
         return cached;
       }
 
-      // A miss is the only signal we get that the boot-time snapshot predates a model,
-      // and an unready catalog means boot never completed, so both must be able to reach
-      // the network. Returning early on `!ready` is what used to strand the whole feature
-      // until a restart.
+      // Never return early on `!ready`, because both an unready catalog and a cache miss must reach the network to
+      // recover without a restart.
       await refresh();
       return entries.get(key);
     },

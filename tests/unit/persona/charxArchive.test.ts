@@ -160,9 +160,8 @@ describe("charx archive reader", () => {
   });
 
   it("accepts any JSON object and lets the converter judge its contents", async () => {
-    // The reader no longer owns recognition: an envelope without a `spec` is a
-    // root-level V2 card's normal shape, so rejecting it here would refuse cards
-    // the converter imports. What it still rejects is a body that is not an object.
+    // Root-level V2 cards omit `spec` and belong to the converter, so the reader only rejects non-object JSON
+    // payloads.
     const envelopeWithoutSpec = await buildCharx({ card: { spec_version: "3.0" } });
     expect((await readCharxCard(envelopeWithoutSpec, LIMITS)).ok).toBe(true);
 
@@ -185,8 +184,8 @@ describe("charx archive reader", () => {
     if (!result.ok) {
       return;
     }
-    // Nothing is bundled, so telling the user their media was dropped would be
-    // false. The spec's own default for a missing `assets` is exactly this icon.
+    // Remote URIs and the spec default (`ccdefault:`) bundle no archive media, so reporting dropped assets would be
+    // false.
     expect(result.ignoredAssetCount).toBe(0);
   });
 
@@ -225,14 +224,8 @@ describe("charx archive reader", () => {
   });
 
   it("refuses a huge asset list without scanning it", async () => {
-    // Each entry is one byte of JSON and fails shape validation, so a counter that
-    // only advanced on valid entries would never reach the cap and the loop would
-    // run to completion on the main thread.
-    // Sized to land between the two bounds: well over the 500-asset cap, and well
-    // under the 4 MB card cap, so only the asset bound can refuse this. A counter
-    // that advanced only on valid entries would never reach the cap, because every
-    // `null` fails shape validation, and the loop would run to completion on the
-    // main thread.
+    // Null entries exceed the 500-asset cap under the 4 MB card cap so a counter skipping invalid shapes would hang
+    // the main thread.
     const junkCount = 400_000;
     const assets = `[${"null,".repeat(junkCount - 1)}null]`;
     const rawCardJson = `{"spec":"chara_card_v3","spec_version":"3.0","data":{"name":"Mirri","assets":${assets}}}`;
@@ -251,7 +244,6 @@ describe("charx archive reader", () => {
   });
 
   it("accepts a card whose spec is absent, leaving recognition to the converter", async () => {
-    // A root-level V2 card has no `spec` at all, and the converter accepts one.
     const noSpec = { name: "Mirri", description: "An archivist.", first_mes: "Hello.", personality: "Curious." };
     const buffer = await buildCharx({ card: noSpec });
 
@@ -336,8 +328,6 @@ describe("charx archive reader", () => {
     if (!result.ok) {
       return;
     }
-    // None of the four is present in the archive, so the byte budget stays
-    // untouched, the import is not refused, and nothing is reported as dropped.
     expect(result.ignoredAssetCount).toBe(0);
   });
 });

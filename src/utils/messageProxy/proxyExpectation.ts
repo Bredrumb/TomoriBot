@@ -59,9 +59,7 @@ function parseIntegerEnv(value: string | undefined, defaultValue: number, minimu
   return Math.max(parsed, minimum);
 }
 
-// Timing envs are read lazily (per use, not at module load) so import order
-// never bakes stale values in: chat modules pull this file in transitively,
-// which would otherwise freeze defaults before test files can set overrides.
+// Read timing envs lazily because transitive chat imports otherwise freeze defaults before tests set overrides.
 export function getMessageProxyWaitMs(): number {
   return parseIntegerEnv(process.env.MESSAGE_PROXY_WAIT_MS, 2000, 0);
 }

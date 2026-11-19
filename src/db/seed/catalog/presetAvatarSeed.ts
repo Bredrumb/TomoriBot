@@ -1,12 +1,3 @@
-// Seeds official preset avatars (the image at each persona's `avatarPath`) into
-// the shared `presets/` storage prefix and records the resulting URL + content
-// hash on `persona_presets`. Pointer ALTER personas then live-resolve this
-// shared avatar by (preset_lineage_id, preset_language), and the main-avatar
-// fan-out reconciler uses the hash to gate Discord guild-avatar PATCHes.
-//
-// This is the avatar analogue of presetSpriteSeed.ts: same content-addressed,
-// upload-once, idempotent model. See docs/subsystems/persona-presets.md.
-
 import { createHash } from "node:crypto";
 import type { SQL } from "bun";
 import { resolveAvatarPath } from "@/utils/image/avatarHelper";
@@ -37,8 +28,6 @@ async function seedOneAvatar(
   persona: PersonaInput,
   uploadedThisRun: Map<string, string>,
 ): Promise<boolean> {
-  // Read + normalize the persona's avatar image to PNG. `avatarPath` is the
-  //    persona's catalog directory; resolveAvatarPath picks the first image in it.
   let pngBuffer: Buffer;
   try {
     const rawBuffer = await resolveAvatarPath(persona.avatarPath);
@@ -82,9 +71,7 @@ async function seedOneAvatar(
     return false;
   }
 
-  // Stamp the shared URL + version hash onto the preset row. The hash is the
-  //    fan-out gate: a changed avatar yields a new hash, so the reconciler
-  //    re-PATCHes only the servers that have not yet received it.
+  // preset_avatar_hash gates main-avatar fan-out so the reconciler only re-PATCHes servers with a stale hash.
   const updated = await client`
     UPDATE persona_presets
     SET

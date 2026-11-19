@@ -127,9 +127,7 @@ export async function loadConfigSwitchModelsView(
       const [assignment, providers, expandedOptionCount] = await Promise.all([
         resolveSlotAssignment(state, capability),
         loadConfigModelProviders(state.server_id, capability),
-        // Only the expanded provider's catalog is measured: the renderer needs the count to decide
-        // how many page entries it contributes, and loading every catalog to fill a field the
-        // collapsed slots never read would put the whole model table behind every repaint.
+        // Measure only the expanded provider's catalog because loading every collapsed catalog slows each repaint.
         expanded ? loadConfigModelChoices(state.server_id, capability, expanded).then((rows) => rows.length) : 0,
       ]);
       const optionCapability = providerOptionCapabilityForModelView(capability as ProviderOptionModelViewCapability);

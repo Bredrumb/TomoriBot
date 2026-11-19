@@ -117,9 +117,8 @@ async function resolveReplyTarget(
   | { channel: SendableChannel; reply: ReplyOptions | undefined; failed?: undefined }
   | { channel?: undefined; reply?: undefined; failed: ChannelUnreachableReason }
 > {
-  // The channel captured at admission is an object, so it survives cache eviction and needs no
-  // lookup. A partial entry is the one case where it cannot be sent into, and that is what falls
-  // through to the REST lookup that separates "never cached" from "deleted".
+  // Captured channel objects survive cache eviction, so only partials lacking send() fall through to REST
+  // resolution.
   const captured = context.channel;
   if (typeof (captured as { send?: unknown }).send === "function") {
     return { channel: captured as SendableChannel, reply: buildReplyReference(context, captured.id) };
@@ -224,10 +223,8 @@ export class StreamUiUpdater {
       log.info(
         `Send message limit reached: ${state.messageSentCount} messages sent (server limit: ${sendMessageLimit})`,
       );
-      // Deliberate operator config, not a failure, and never reached before the first send
-      // (messageSentCount only increments after one lands). Treating it as an error would make
-      // generationTurn retry across every fallback key and model, each burning tokens on a
-      // limit that can never pass.
+      // Request a stop rather than throwing so generationTurn does not retry across fallback arms on an operator
+      // send cap.
       this.deps.requestStop(context.channel.id, "send_message_limit");
       return null;
     }
@@ -237,10 +234,8 @@ export class StreamUiUpdater {
         `Flush limit exceeded: ${state.messageSentCount} messages sent (limit: ${STREAMING_LIMITS.MAX_FLUSH_COUNT})`,
       );
 
-      // Deterministic like the send limit above, so throwing would only buy pointless retries
-      // across every fallback key and model. The warn above is the operator-facing signal.
-      // The embed stays off during impersonation for the same reason every other notice in this
-      // subsystem does: a bot-authored embed under a user's identity breaks the disguise.
+      // Suppress the warning embed during impersonation to avoid breaking disguise, and stop instead of throwing
+      // to prevent pointless fallback retries.
       if (!context.suppressUserErrors && !strictUserImpersonation) {
         await sendStandardEmbed(context.channel, context.locale, {
           titleKey: "genai.stream.flush_limit_title",
@@ -276,13 +271,8 @@ export class StreamUiUpdater {
         Boolean(identityOverride && webhookForIdentity) || Boolean(context.webhook && context.personaUsername);
 
       if (shouldUseWebhook && webhookForIdentity) {
-        // A partial channel cannot be sent into, and the chunks after the first one send through
-        // `context.channel` regardless of which branch delivered this one. Resolving it here keeps
-        // a webhook-delivered first chunk from leaving every later chunk on an unusable object.
-        //
-        // The captured channel is the one resolved, not the reply source: this send is not a reply,
-        // so retargeting the stream to another channel to satisfy a reference that is not being
-        // built would move later chunks as well.
+        // Upgrade a partial context.channel here (not replyToMessage's channel) so later non-webhook chunks can
+        // still send without retargeting the stream.
         if (typeof (context.channel as { send?: unknown }).send !== "function") {
           try {
             const resolvedChannel = await resolveSendableChannel(context.client, context.channel.id);
@@ -293,9 +283,7 @@ export class StreamUiUpdater {
               return null;
             }
           } catch (resolveError) {
-            // A transient failure here is not a reason to drop the message: this resolution only
-            // upgrades what the later chunks can use, and the webhook below is what actually
-            // delivers this one. Killing the send would turn a rate limit into a lost reply.
+            // Ignore transient channel-resolution errors here because the webhook below still delivers this chunk.
             log.warn(
               `Stream Send: could not resolve channel ${context.channel.id} before a webhook send; continuing with the captured channel`,
               resolveError as Error,
@@ -317,16 +305,8 @@ export class StreamUiUpdater {
           }`,
         );
 
-        // Any webhook delivery forfeits Discord's native reply (webhooks cannot reply), so the
-        // standalone notice embed is the only reply indicator available: for the main persona
-        // rendering a sprite just as much as for an alter. Gating this on `is_alter` hid the
-        // notice whenever the main persona switched to a webhook for a sprite, and gating on
-        // `!identityOverride` hid it from sprite renders generally, alters included.
-        //
-        // Sprites are the persona speaking as itself, so a notice is correct; COPIED identities
-        // (impersonating a user or another persona) must stay silent, since a notice posted
-        // under the disguise would attribute the reply to the wrong speaker. `spriteRecord` is
-        // exactly what distinguishes the two.
+        // Webhooks cannot use native replies, so send a reply notice for own/sprite turns (marked by
+        // spriteRecord) while staying silent for copied identities.
         const isSpriteIdentity = Boolean(payload.spriteRecord);
         let noticePayload: Awaited<ReturnType<typeof buildWebhookReplyNoticePayload>> | undefined;
         if (
@@ -386,9 +366,8 @@ export class StreamUiUpdater {
         });
 
         sentMessage = webhookSend.result;
-        // The avatar Discord actually showed, which differs from `identity` after a fallback. The
-        // sprite record and the active render modifier keep the intended sprite, so the next line
-        // retries the edit and the model's history still names the sprite it chose.
+        // Record webhookSend.identity (actual Discord avatar after fallback) while keeping the intended sprite in
+        // activeRenderModifier for next-line retries.
         deliveredWebhookIdentity = webhookSend.identity;
         deliveredWebhookId = webhookSend.webhookId;
         deliveredSpeaker = speaker;
@@ -445,10 +424,8 @@ export class StreamUiUpdater {
       if (classifyDiscordDeliveryFailure(discordError) === "unconfirmed" && context.deliveryState)
         context.deliveryState.unconfirmed = true;
       if (context.abortSignal?.aborted || this.deps.hasStopRequest(context.channel.id)) return null;
-      // An unreachable destination is final: nothing can be posted, and neither webhook recovery
-      // nor the bot fallback can change that. Tearing the stream down quietly is the same treatment
-      // the deterministic limits above get, and it keeps one deletion from producing a burst of
-      // error rows across the orchestrator, the generation turn, and the queue.
+      // Stop quietly before webhook recovery or bot fallback when the channel is gone so deletion does not
+      // cascade error logs.
       if (isChannelGoneError(discordError)) {
         stopForUnreachableChannel(this.deps, context.channel.id, unreachableReasonFor(discordError), discordError);
         return null;
@@ -500,9 +477,8 @@ export class StreamUiUpdater {
         );
       }
 
-      // A refused send is cached so the admission gate can stop generating for this channel.
-      // Only the first refusal of an episode is logged at error level: the rest are the same
-      // fact repeated, and at error level they crowd out unrelated signal.
+      // Cache refused sends for the admission gate and track isFirstOfEpisode so repeat refusals downgrade
+      // their warning detail.
       const sendFailureReason = classifySendFailure(terminalError);
       recordChatDiagnostic({ kind: "send_failed", reason: sendFailureReason ?? "other" });
       const isFirstOfEpisode = sendFailureReason
@@ -573,10 +549,8 @@ export class StreamUiUpdater {
       );
     }
     if (payload.spriteRecord && sentMessage?.webhookId) {
-      // Track the delivered sprite label so the post-turn stat recorder can count
-      // `sprite_shown` / `sprite_emotion` (the stream layer has no internal user id;
-      // post-turn does). isIdentity rides along so identity sprites are kept out of
-      // the emotion count while still counting toward sprite_shown.
+      // Record delivered sprites with isIdentity for post-turn stats because identity sprites count toward
+      // sprite_shown without counting as emotion sprites.
       state.spritesShown.push({
         name: payload.spriteRecord.spriteName,
         isIdentity: payload.spriteRecord.isIdentity,
@@ -807,10 +781,8 @@ export class StreamUiUpdater {
       log.info("Stream Send: Successfully sent message via fallback after webhook failure");
       return { outcome: "sent", message: fallbackMessage };
     } catch (fallbackError) {
-      // This path is a retry of a send that already failed, so an unreachable channel reaches it
-      // whenever the webhook was the first thing to notice it. The "stopped" outcome makes the
-      // caller end the send quietly; treating it as "failed" would log an error and
-      // leave generation running against a channel that cannot receive anything.
+      // Return "stopped" when fallback hits a gone channel so the caller ends quietly instead of logging an
+      // error and keeping generation alive.
       if (isChannelGoneError(fallbackError)) {
         stopForUnreachableChannel(this.deps, context.channel.id, unreachableReasonFor(fallbackError), fallbackError);
         return { outcome: "stopped" };

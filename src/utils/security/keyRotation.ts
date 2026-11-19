@@ -56,7 +56,6 @@ export async function selectApiKey(
       ORDER BY COALESCE(rs.usage_count, 0) ASC, akr.rotation_key_id ASC
     `;
 
-    // If less than 2 keys, rotation is not active
     if (!rotationKeys || rotationKeys.length < 2) {
       log.info(`Key rotation not active for server ${serverId} (${rotationKeys?.length || 0} keys)`);
       return null;
@@ -71,7 +70,6 @@ export async function selectApiKey(
       }
       const key = parsed.data;
 
-      // Skip disabled keys
       if (!key.is_enabled) {
         continue;
       }
@@ -264,7 +262,6 @@ export async function addRotationKey(serverId: number, provider: string, apiKey:
       }
     }
 
-    // Encrypt and store the new rotation key, then seed runtime state
     const { encrypted, version } = await encryptApiKey(apiKey);
 
     const keyResult = await sql`

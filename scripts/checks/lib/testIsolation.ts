@@ -76,7 +76,6 @@ export function findProcessWideMutations(source: string): string[] {
   // Bun's fake clock is process-global until reset with a bare setSystemTime().
   if (/\bsetSystemTime\s*\(/.test(source)) tokens.add("setSystemTime");
 
-  // Assignments (not comparisons) and deletes on globalThis or process.env.
   for (const match of source.matchAll(
     /\bdelete\s+(globalThis|process\.env)\.([A-Za-z_$][\w$]*)|\b(globalThis|process\.env)\.([A-Za-z_$][\w$]*)\s*=[^=]/g,
   )) {

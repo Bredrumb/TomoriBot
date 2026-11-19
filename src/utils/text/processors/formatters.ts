@@ -18,13 +18,9 @@ function detectAndProtectURLs(text: string): {
 } {
   const urls: string[] = [];
 
-  // Universal URL regex: matches http(s), ftp(s) protocols
-  // Stops at whitespace and common delimiters: <>[](){} and quotes
-  // Handles trailing punctuation that's likely not part of the URL
   const urlRegex = /(https?|ftps?):\/\/[^\s<>[\](){}'"]+/g;
 
   const protectedText = text.replace(urlRegex, (match) => {
-    // Common sentence endings: period, comma, semicolon at the very end
     let url = match;
     let trailingPunct = "";
 
@@ -46,9 +42,7 @@ function restoreURLsFromPlaceholders(text: string, urls: string[]): string {
 
   for (let i = urls.length - 1; i >= 0; i--) {
     const placeholder = `__URL_${i}__`;
-    // A function replacer, not a string one: a string second argument to .replace() interprets
-    // "$&"/"$$"/"$'" patterns, so a URL that happens to contain one of those sequences would
-    // otherwise corrupt the restored text instead of being reinserted verbatim.
+    // Function replacer prevents String.replace from interpreting "$&"/"$$"/"$'" sequences inside URLs.
     restoredText = restoredText.replace(new RegExp(escapeRegExp(placeholder), "g"), () => urls[i]);
   }
 
@@ -78,26 +72,20 @@ const INTERNET_EXPRESSIONS = new Set([
   "tysm",
 ]);
 
-// Weighted rather than an even three-way split: a sentence with several commas would otherwise
-// have a good chance of picking up multiple flushes, which reads as more erratic typing than
-// the feature is meant to simulate. Flush stays the rare outcome. Remove and flush share one
-// roll, so their sum must stay at or below 1 or "keep" disappears.
+// Flush and remove share one roll (sum <= 1) weighted so flushes stay rare rather than splitting every comma.
 const COMMA_REMOVE_PROBABILITY = 0.4;
 const COMMA_FLUSH_PROBABILITY = 0.2;
 // "!"/"?" never get removed (that would blunt the tone they carry), so this is a single
 // flush-or-not roll instead of a three-way split.
 const EMPHASIS_FLUSH_PROBABILITY = 0.5;
 
-// ASCII "," "!" "?" only count as prose punctuation when whitespace or the end follows; otherwise
-// they are part of a token ("<@!123>", "!help", "a,b", "1,000", "?..."). Full-width 、，､！？ are
-// exempt because CJK prose has no spaces to require.
+// ASCII punctuation requires trailing whitespace or EOF to ignore tokens like "<@!123>", whereas CJK marks need
+// none.
 const COMMA_ROLL_REGEX = /(,(?=\s|$)|[、，､](?!\d))(\s*)/g;
 const EMPHASIS_ROLL_REGEX = /([!?]+(?=\s|$)|[!?]*[！？][!?！？]*)(\s*)/g;
 
-// A split point must be a single character absent from the text: a multi-character marker can
-// be forged by input, or formed by adjacency with text ending in a prefix of it, and any escape
-// scheme for it has to be bijective. A Private Use Area code point the text lacks has neither
-// problem, and the area has far more code points than any Discord message has characters.
+// Picks an unused Private Use Area code point so a single-character split marker cannot be forged or collide with
+// text.
 function pickFlushMarker(text: string): string {
   for (let codePoint = 0xe000; codePoint <= 0xf8ff; codePoint++) {
     const candidate = String.fromCharCode(codePoint);
@@ -106,11 +94,8 @@ function pickFlushMarker(text: string): string {
   return "";
 }
 
-// A flush landing inside a semantic unit like **bold**, a "quoted string", or a [markdown
-// link](url) would sever it into an unclosed fragment plus a trailing-delimiter fragment, both
-// rendered as broken syntax once split across two Discord messages. Protecting these spans
-// mirrors chunkMessage()'s own sentence-splitter, which already treats them as unsplittable for
-// the same reason, so a flush here behaves consistently with how periods are already handled.
+// Mirrors chunkMessage()'s span protection so flushes never sever paired markdown or quotes across Discord
+// messages.
 function protectSemanticSpans(text: string): { protectedText: string; spans: string[] } {
   const spans: string[] = [];
   let result = "";
@@ -147,7 +132,6 @@ export function humanizeString(
   text: string,
   options: { lowercase: boolean; punctuation: boolean; suppressPunctuationNoise?: boolean },
 ): string[] {
-  // First, protect all URLs from any transformations
   const { protectedText: urlProtectedText, urls } = detectAndProtectURLs(text);
 
   const codeBlocks: string[] = [];
@@ -164,16 +148,13 @@ export function humanizeString(
     return `__INLINE_CODE_${inlineCode.length - 1}__`;
   });
 
-  // Unicode-aware in step with the lowercasing below, which would otherwise lowercase a non-ASCII
-  // sender name that this protection used to leave alone only because the old rule was ASCII-only.
+  // Unicode-aware sender labels prevent lowercasing below from mutating non-ASCII speaker prefixes.
   processedText = processedText.replace(/((?:\([\p{L}\p{N}\p{M}_\s]+\)|[\p{L}\p{N}\p{M}_\s]+):)/gu, (match) => {
     senderStrings.push(match);
     return `__SENDER_${senderStrings.length - 1}__`;
   });
 
-  // Treat hyphenated forms such as "E-ew" or "D-don't" as one word so the
-  // humanizer preserves their internal punctuation. Unicode classes apply the rule to every cased
-  // script (accented Latin, Cyrillic, Greek); uncased scripts match but lowercase to themselves.
+  // Match hyphenated words like "D-don't" with Unicode classes so all cased scripts preserve internal punctuation.
   if (options.lowercase) {
     processedText = processedText.replace(
       /(?<![\p{L}\p{N}\p{M}_])(\p{L}[\p{L}\p{M}'-]*)(?![\p{L}\p{N}\p{M}_])/gu,
@@ -181,8 +162,6 @@ export function humanizeString(
         const isAcronym = /^\p{Lu}(?:[\p{Lu}'-]*\p{Lu})?$/u.test(word);
         const isInternet = INTERNET_EXPRESSIONS.has(word.toLowerCase());
         const isSingleLetter = word.length === 1 && word !== "A";
-        // If it's an acronym, internet expression, or single letter, leave it;
-        // otherwise lowercase the whole hyphenated or single word.
         return isAcronym || isInternet || isSingleLetter ? word : word.toLowerCase();
       },
     );
@@ -216,16 +195,11 @@ export function humanizeString(
     });
   }
 
-  // Split on the marker BEFORE restoring any placeholder, then restore per segment. The marker is
-  // only guaranteed absent from processedText, not from the URLs, code, and spans held aside, so
-  // splitting restored text could sever that content instead of the sentence.
+  // Split before restoring placeholders because only processedText is guaranteed not to contain flushMarker.
   const segments = (flushMarker === null ? [processedText] : processedText.split(flushMarker))
     .map((segment) => {
       let restored = segment;
-      // Function replacers throughout: a string replacer interprets "$&"/"$$"/"$'" patterns in
-      // the replacement, so restored content containing one of those sequences (a code snippet,
-      // a financial amount, a regex example) would otherwise corrupt the output instead of being
-      // reinserted verbatim.
+      // Function replacers prevent "$&"/"$$"/"$'" sequences inside restored spans or code from corrupting output.
       for (let i = spans.length - 1; i >= 0; i--) {
         restored = restored.replace(`__SPAN_${i}__`, () => spans[i]);
       }

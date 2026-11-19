@@ -14,7 +14,6 @@ import {
   formatBraveSearchResults,
   isBraveApiKeyError,
   isBraveRateLimitError,
-  // Enhanced MCP handler features
   extractImageUrls,
   addFetchCapabilityReminder,
 } from "./braveSearchService";
@@ -102,7 +101,7 @@ export async function brave_web_search(
     const serverId = getServerIdFromContext(context);
 
     const searchParams = {
-      q: args.query as string, // Already validated above
+      q: args.query as string,
       country: typeof args.country === "string" ? args.country : undefined,
       search_lang: typeof args.search_lang === "string" ? args.search_lang : undefined,
       ui_lang: typeof args.ui_lang === "string" ? args.ui_lang : undefined,
@@ -177,7 +176,7 @@ export async function brave_image_search(args: Record<string, unknown>, context?
     const serverId = getServerIdFromContext(context);
 
     const searchParams = {
-      q: args.query as string, // Already validated above
+      q: args.query as string,
       country: typeof args.country === "string" ? args.country : undefined,
       search_lang: typeof args.search_lang === "string" ? args.search_lang : undefined,
       count: typeof args.count === "number" ? args.count : undefined,
@@ -202,7 +201,6 @@ export async function brave_image_search(args: Record<string, unknown>, context?
       return createToolResult(false, "Image search failed", result.error);
     }
 
-    // Extract image URLs and process for Discord
     const allImageUrls = extractImageUrls(result.data);
     const isSupportedImageUrl = (url: string): boolean => !url.toLowerCase().includes(".avif");
     const imageUrls = allImageUrls.filter(isSupportedImageUrl);
@@ -217,7 +215,6 @@ export async function brave_image_search(args: Record<string, unknown>, context?
     }
 
     if (imageUrls.length > 0 && context?.channel) {
-      // Pre-validate URLs and create Discord attachments only for accessible images
       const attachments: import("discord.js").AttachmentBuilder[] = [];
       const failedUrls: string[] = [];
       const validatedUrls: string[] = [];
@@ -246,15 +243,12 @@ export async function brave_image_search(args: Record<string, unknown>, context?
 
           const imageBuffer = response.buffer;
 
-          // Compress with sharp - target 7MB max to leave safety margin
           const targetSize = IMAGE_COMPRESSION_TARGET_MB * 1024 * 1024;
-          let quality = 80; // Start with 80% quality
+          let quality = 80;
           let compressedBuffer: Buffer;
 
           do {
-            compressedBuffer = await sharp(imageBuffer)
-              .jpeg({ quality, mozjpeg: true }) // Use mozjpeg for better compression
-              .toBuffer();
+            compressedBuffer = await sharp(imageBuffer).jpeg({ quality, mozjpeg: true }).toBuffer();
 
             if (compressedBuffer.length <= targetSize) {
               break;
@@ -295,7 +289,6 @@ export async function brave_image_search(args: Record<string, unknown>, context?
             return { url: imageUrl, valid: false, reason: "blocked_domain" };
           }
 
-          // Aggressive 2-second timeout for network validation
           const controller = new AbortController();
           timeoutId = setTimeout(() => controller.abort(), 2000);
 
@@ -335,7 +328,6 @@ export async function brave_image_search(args: Record<string, unknown>, context?
               }
             }
 
-            // Image is valid and within size limits
             return { url: imageUrl, valid: true };
           } else {
             return {
@@ -385,7 +377,6 @@ export async function brave_image_search(args: Record<string, unknown>, context?
         }
       });
 
-      // Overall timeout that preserves any completed validations
       const timeoutPromise = new Promise<
         {
           url: string;
@@ -423,8 +414,6 @@ export async function brave_image_search(args: Record<string, unknown>, context?
         compressedBuffer?: Buffer;
       }[];
       try {
-        // Use Promise.race to ensure we never wait more than 5 seconds total
-        // But preserve any partial results that completed within the timeout
         validationResults = await Promise.race([
           Promise.allSettled(wrappedPromises).then((settledResults) =>
             settledResults.map((result, index) => {
@@ -468,7 +457,6 @@ export async function brave_image_search(args: Record<string, unknown>, context?
 
       log.info(`Parallel validation complete: ${validatedUrls.length} valid, ${failedUrls.length} invalid`);
 
-      // Create Discord attachments for validated URLs (using compressed buffers when available)
       const attachmentCompressionFlags: boolean[] = [];
       for (let i = 0; i < validatedUrls.length; i++) {
         try {
@@ -494,7 +482,6 @@ export async function brave_image_search(args: Record<string, unknown>, context?
         }
       }
 
-      // Send attachments to Discord channel (prefer webhook if available)
       if (attachments.length > 0) {
         try {
           const sentMessage = await sendToolMediaPost(context, () => ({ files: attachments }));
@@ -540,7 +527,6 @@ export async function brave_image_search(args: Record<string, unknown>, context?
           if (sendError instanceof DiscordDeliveryError) return mediaDeliveryFailure(context, sendError.outcome);
           log.error("Failed to send image attachments to Discord:", sendError as Error);
 
-          // Fall back to formatted results if Discord sending fails
           const formattedResults = formatBraveSearchResults(result.data, "image");
           return createToolResult(
             false,
@@ -557,7 +543,6 @@ export async function brave_image_search(args: Record<string, unknown>, context?
       }
     }
 
-    // Fallback: no Discord channel available or no images found - return formatted results
     if (imageUrls.length === 0) {
       const queryTerm = args.query || "images";
       return createToolResult(false, `Sorry, I couldn't find any ${queryTerm} images to show you.`, {
@@ -566,7 +551,6 @@ export async function brave_image_search(args: Record<string, unknown>, context?
       });
     }
 
-    // No Discord channel available - return formatted results
     const formattedResults = formatBraveSearchResults(result.data, "image");
     return createToolResult(true, "Image search completed", {
       results: formattedResults,
@@ -595,7 +579,7 @@ export async function brave_video_search(
     const serverId = getServerIdFromContext(context);
 
     const searchParams = {
-      q: args.query as string, // Already validated above
+      q: args.query as string,
       country: typeof args.country === "string" ? args.country : undefined,
       search_lang: typeof args.search_lang === "string" ? args.search_lang : undefined,
       ui_lang: typeof args.ui_lang === "string" ? args.ui_lang : undefined,
@@ -654,7 +638,7 @@ export async function brave_news_search(
     const serverId = getServerIdFromContext(context);
 
     const searchParams = {
-      q: args.query as string, // Already validated above
+      q: args.query as string,
       country: typeof args.country === "string" ? args.country : undefined,
       search_lang: typeof args.search_lang === "string" ? args.search_lang : undefined,
       ui_lang: typeof args.ui_lang === "string" ? args.ui_lang : undefined,

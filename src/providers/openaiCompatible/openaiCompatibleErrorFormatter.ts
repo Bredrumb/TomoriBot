@@ -55,8 +55,8 @@ export function classifyOpenAICompatibleStatus(
     return { type: "api_error", code, retryable: false };
   }
   if (statusCode === 429) {
-    // Some providers (e.g. Z.ai) use 429 for billing/plan/access denial, not just rate limiting.
-    // Detect these by checking the error message for subscription or balance keywords.
+    // Providers such as Z.ai return 429 for balance or plan denial, so match those keywords before classifying as rate
+    // limit.
     const lowerMessage = message.toLowerCase();
     const isBalanceDenial =
       lowerMessage.includes("insufficient balance") ||
@@ -206,10 +206,7 @@ export function createOpenAICompatibleErrorDescription(
       break;
   }
 
-  // A 5xx that names a request parameter is a rejection wearing an outage's status code, so a
-  // namespace may define remediation copy for exactly that case. Gating it on the upstream text
-  // is the point: asserting a parameter cause on every 5xx sends users to change settings the
-  // failing payload never carried.
+  // Gate 5xx parameter remediation copy on upstream parameter names so genuine outages do not blame user settings.
   const parameterMessage =
     (error.type === "api_error" || error.type === "provider_overloaded") &&
     errorMessageNamesRejectableParam(error.message)
@@ -226,10 +223,8 @@ export function createOpenAICompatibleErrorDescription(
     }
   } else {
     if (message === localeKey && error.type === "provider_overloaded") {
-      // A namespace with no entry for this 5xx still knows the provider is overloaded, so borrow its
-      // 503 string when it has one and otherwise the shared cross-provider string. Without the shared
-      // step, a namespace carrying no 5xx entries at all (deepseek, custom, zai) renders every
-      // overload as "An unexpected error occurred", which reads as a bug on our side.
+      // Fall back from missing 5xx keys to 503 and shared overload copy so namespaces without 5xx keys avoid generic
+      // unexpected-error copy.
       message =
         resolveLocalizedOrNull(locale, `${options.localeNamespace}.503_default_message`) ??
         resolveLocalizedOrNull(locale, "genai.stream.provider_overloaded_description") ??

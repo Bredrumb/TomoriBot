@@ -83,7 +83,6 @@ type DirectoryItem = {
   isFile: boolean;
 };
 
-// Categories that are completely restricted to guilds only
 const GUILD_ONLY_CATEGORIES: string[] = [
   "server",
   "conditioning",
@@ -95,7 +94,6 @@ const GUILD_ONLY_CATEGORIES: string[] = [
   "impersonate",
   "quota",
 ];
-// Categories that require manage permissions in guild context
 const MANAGER_ONLY_CATEGORIES = ["model", "nsfw", "server", "expressions", "matrix", "quota"];
 
 const COMMAND_LOCALIZATION_ALIASES: Record<string, string> = {
@@ -241,9 +239,6 @@ async function getCommandFiles(directory: string): Promise<string[]> {
     .map((item) => item.path);
 }
 
-// Note: Individual subcommand restrictions are no longer needed.
-// Guild-only commands are now in the "server" category which is entirely guild-restricted.
-
 function applyCommandLocalizations(
   configuredCommand: RootCommandBuilder | SlashCommandSubcommandBuilder,
   categoryName: string,
@@ -283,7 +278,6 @@ function applyCommandLocalizations(
             localizedDesc = localizeWithAliases(locale, fallbackKey);
           }
 
-          // Apply if valid translation found (not the key itself)
           if (localizedDesc && localizedDesc !== optionLocalizationKey && localizedDesc !== fallbackKey) {
             optionLocalizationsMap[locale] = localizedDesc;
           }
@@ -385,9 +379,7 @@ export function loadCommandData(): Promise<LoadCommandDataResult> {
   if (!cachedCommandDataPromise) {
     cachedCommandDataPromise = loadCommandDataUncached()
       .then((result) => {
-        // An empty execution map means the load failed catastrophically
-        //    (see the catch block in loadCommandDataUncached). Drop the cached
-        //    promise so the next caller re-attempts a full load.
+        // An empty execution map indicates a failed load, so drop the cached promise to allow a retry.
         if (result.executionMap.size === 0) {
           cachedCommandDataPromise = null;
         }
@@ -418,9 +410,8 @@ export function getCommandCatalogEntries(executionMap: CommandExecutionMap): Com
         entries.push({ commandName: category, category });
         continue;
       }
-      // Grouped subcommands use a "group.subcommand" key (exactly one dot);
-      //    flat subcommands have no dot. Replacing the first dot with a space
-      //    yields the space-joined path for both shapes.
+      // Grouped keys contain one dot ("group.subcommand") and flat keys contain none, so replacing "." with " "
+      // yields the space-joined path for both.
       entries.push({ commandName: `${category} ${subKey.replace(".", " ")}`, category });
     }
   }
@@ -436,12 +427,10 @@ async function loadCommandDataUncached(): Promise<LoadCommandDataResult> {
   const executionMap: CommandExecutionMap = new Map();
   const autocompleteMap: CommandAutocompleteMap = new Map();
   const cooldownMap: CommandCooldownMap = new Map();
-  // This will store our category builders (one per directory)
   const builders = new Map<string, RootCommandBuilder>();
   let commandCount = 0;
 
   try {
-    // Get available locales for auto-localization (exclude en-US as it's the base locale)
     const availableLocales = getRegisterableLocales().filter((locale) => locale !== "en-US");
     const commandsPath = path.join(process.cwd(), "src", "commands");
     const categoryDirs = await getCommandDirectories(commandsPath);
@@ -450,7 +439,6 @@ async function loadCommandDataUncached(): Promise<LoadCommandDataResult> {
       const categoryName = path.basename(categoryDir);
       log.info(`Processing category: ${categoryName}`);
 
-      // Get all items (files and directories) in this category
       const items = await readVisibleDirectory(categoryDir);
 
       // Leaves are collected before building the root because its description depends on which leaves survive and
@@ -490,7 +478,7 @@ async function loadCommandDataUncached(): Promise<LoadCommandDataResult> {
         const categoryDescriptionKey =
           resolveRootDescriptionKey(categoryName, leafFileNames, [...enabledLeafModules.keys()]) ||
           `commands.${categoryName}.description`;
-        const categoryDescription = localizeWithAliases("en-US", categoryDescriptionKey) || `${categoryName} commands`; // Fallback if no localization exists
+        const categoryDescription = localizeWithAliases("en-US", categoryDescriptionKey) || `${categoryName} commands`;
 
         const categoryLocalizationsMap: { [key: string]: string } = {};
         for (const locale of availableLocales) {
@@ -502,13 +490,12 @@ async function loadCommandDataUncached(): Promise<LoadCommandDataResult> {
 
         categoryBuilder = new SlashCommandBuilder().setName(categoryName).setDescription(categoryDescription);
 
-        // Apply specific settings for guild-only categories
         if (GUILD_ONLY_CATEGORIES.includes(categoryName)) {
-          categoryBuilder.setContexts(InteractionContextType.Guild); // Disallow use in DMs
+          categoryBuilder.setContexts(InteractionContextType.Guild);
           log.info(`Applied Guild Only Restriction to /${categoryName}`);
         }
         if (MANAGER_ONLY_CATEGORIES.includes(categoryName)) {
-          categoryBuilder.setDefaultMemberPermissions(PermissionsBitField.Flags.ManageGuild); // Require Manage Guild permission
+          categoryBuilder.setDefaultMemberPermissions(PermissionsBitField.Flags.ManageGuild);
           log.info(`Applied ManageGuild permission requirement to /${categoryName}`);
         }
         if (categoryName === "nsfw") {
@@ -521,15 +508,13 @@ async function loadCommandDataUncached(): Promise<LoadCommandDataResult> {
         }
 
         builders.set(categoryName, categoryBuilder);
-        executionMap.set(categoryName, new Map()); // Initialize subcommand map
-        autocompleteMap.set(categoryName, new Map()); // Initialize autocomplete map
+        executionMap.set(categoryName, new Map());
+        autocompleteMap.set(categoryName, new Map());
       }
 
-      // Process each item (file or directory)
       for (const item of items) {
         const itemPath = path.join(categoryDir, item.name);
 
-        // Handle subcommand groups (directories)
         if (item.isDirectory) {
           const groupName = item.name;
           log.info(`Processing subcommand group: ${categoryName}/${groupName}`);
@@ -537,7 +522,7 @@ async function loadCommandDataUncached(): Promise<LoadCommandDataResult> {
           try {
             const groupCommandFiles = await getCommandFiles(itemPath);
 
-            // Pre-load all command modules asynchronously to support top-level await
+            // discord.js builder callbacks are synchronous, so command modules are imported before building the group.
             const loadedModules: LoadedCommandFile[] = [];
             for (const commandFile of groupCommandFiles) {
               try {
@@ -620,7 +605,6 @@ async function loadCommandDataUncached(): Promise<LoadCommandDataResult> {
                     continue;
                   }
 
-                  // Store execute function with group.subcommand format
                   const executionKey = `${groupName}.${subcommandName}`;
                   executionMap.get(categoryName)?.set(executionKey, execute);
 
@@ -628,7 +612,6 @@ async function loadCommandDataUncached(): Promise<LoadCommandDataResult> {
                     autocompleteMap.get(categoryName)?.set(executionKey, commandModule.autocomplete);
                   }
 
-                  // Store cooldown if defined
                   if (commandModule.cooldown && typeof commandModule.cooldown === "number") {
                     cooldownMap.set(categoryName, commandModule.cooldown);
                   }
@@ -660,16 +643,13 @@ async function loadCommandDataUncached(): Promise<LoadCommandDataResult> {
             };
             await log.error(`Failed to load command group ${groupName}:`, error, context);
           }
-        }
-        // Handle flat subcommands (direct .ts files)
-        else if (item.isFile && itemPath.endsWith(".ts")) {
+        } else if (item.isFile && itemPath.endsWith(".ts")) {
           const commandFile = itemPath;
           // Already imported and gated by this category's leaf pre-pass.
           const commandModule = enabledLeafModules.get(commandFile);
           if (!commandModule) continue;
 
           try {
-            // Validate exports: must have configureSubcommand and execute
             if (!commandModule.configureSubcommand || !commandModule.execute) {
               log.warn(`Command at ${commandFile} is missing required exports (configureSubcommand or execute)`);
               continue;
@@ -677,7 +657,6 @@ async function loadCommandDataUncached(): Promise<LoadCommandDataResult> {
 
             const configureSubcommand = commandModule.configureSubcommand;
             const execute = commandModule.execute;
-            // Use a temporary variable to store the subcommand name
             let subcommandName = "";
 
             categoryBuilder.addSubcommand((subcommand: SlashCommandSubcommandBuilder) => {
@@ -696,13 +675,11 @@ async function loadCommandDataUncached(): Promise<LoadCommandDataResult> {
               continue;
             }
 
-            // Store the execute function in the map
             executionMap.get(categoryName)?.set(subcommandName, execute);
             if (commandModule.autocomplete) {
               autocompleteMap.get(categoryName)?.set(subcommandName, commandModule.autocomplete);
             }
 
-            // Store cooldown if defined (optional feature)
             if (commandModule.cooldown && typeof commandModule.cooldown === "number") {
               cooldownMap.set(categoryName, commandModule.cooldown);
             }
@@ -807,7 +784,6 @@ async function loadCommandDataUncached(): Promise<LoadCommandDataResult> {
       metadata: { stage: "initializing" },
     };
     await log.error("Error loading command data:", error, context);
-    // Return empty data in case of errors to prevent crashes
     return {
       registrationData: [],
       executionMap: new Map(),

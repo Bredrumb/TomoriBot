@@ -42,7 +42,6 @@ export function parseDatabaseSecrets(rawSecrets: unknown): DatabaseSecrets {
   return parsed;
 }
 
-// Loads only PostgreSQL connection fields so one-shot schema containers never access application keys.
 export async function loadDatabaseSecretsFromFile(secretFile: string): Promise<void> {
   const fileContent = await Bun.file(secretFile).text();
   if (!fileContent) {

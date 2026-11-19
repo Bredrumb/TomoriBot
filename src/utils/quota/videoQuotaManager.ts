@@ -35,7 +35,6 @@ async function checkUserDailyVideoQuota(
   userDiscId: string,
   config: VideoQuotaConfigRow,
 ): Promise<VideoQuotaCheckResult> {
-  // If daily user quota is 0 (unlimited), allow
   if (config.daily_user_quota === 0) {
     return { allowed: true };
   }
@@ -68,7 +67,6 @@ async function checkServerwideVideoQuota(
   serverId: number,
   config: VideoQuotaConfigRow,
 ): Promise<VideoQuotaCheckResult> {
-  // If serverwide quota is 0 (unlimited), allow
   if (config.serverwide_quota === 0) {
     return { allowed: true };
   }

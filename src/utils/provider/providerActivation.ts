@@ -85,8 +85,7 @@ export async function activateServerTextModelFromSavedConfig(params: {
   const customEndpoints = isCustomProvider(normalizedProvider)
     ? await llmProviderRepo.loadCustomEndpointsForServer(params.tomoriState.server_id)
     : [];
-  // The live chain is server-wide and may intentionally span providers. Switching the primary
-  // only removes entries that resolve to the promoted model.
+  // Keep cross-provider fallback entries intact and prune only entries resolving to the promoted primary model.
   const { fallbackModelRefs, fallbackLlmIds } = buildFallbackModelPersistence(
     params.tomoriState.config.fallback_model_refs ?? [],
     promotedLlmId,

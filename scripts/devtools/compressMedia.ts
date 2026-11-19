@@ -51,7 +51,6 @@ async function runLosslessFit(file: CompressTarget, limit: number, maxDim: numbe
   const input = Buffer.from(await Bun.file(file.path).arrayBuffer());
   const isMultiFrameExt = ext === "gif" || ext === "webp";
 
-  // Lossless at native resolution: preferred (full quality).
   const native = await encodeLossless(sharp(input, { animated: isMultiFrameExt }), ext);
   if (!native) {
     return {
@@ -86,7 +85,7 @@ async function runLosslessFit(file: CompressTarget, limit: number, maxDim: numbe
         downscaledTo = cap;
       }
       if (resized && resized.length <= limit) break;
-      cap = Math.floor(cap * 0.85); // shrink ~15% and retry
+      cap = Math.floor(cap * 0.85);
     }
   }
 
@@ -152,14 +151,13 @@ async function runReleaseCard(file: CompressTarget, quality: number, dryRun: boo
 
   let refsUpdated: string[] = [];
   if (!dryRun) {
-    writeFileSync(newPath, webp); // write the .webp ...
-    rmSync(file.path); //            ... and drop the old format
+    writeFileSync(newPath, webp);
+    rmSync(file.path);
     refsUpdated = rewriteSiblingReferences(file.path, oldName, newName, false);
   } else {
     refsUpdated = rewriteSiblingReferences(file.path, oldName, newName, true);
   }
 
-  // Derive the release tag so we can remind the user to fix the published body.
   const tag = file.path.slice(RELEASE_PREFIX.length).split("/")[0];
 
   const note = `→ webp q${quality} @native`;

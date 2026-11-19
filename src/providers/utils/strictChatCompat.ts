@@ -1,16 +1,6 @@
 import type { ContextPart, StructuredContextItem } from "@/types/misc/context";
 
-// Shared "strict chat-completion" message normalizations: message shapes some provider APIs
-// require and others merely tolerate. Three normalizations live behind this one tested seam, so a
-// custom-endpoint proxy can front strict backends such as Claude.
-//
-//   A. Prefix-completion: vendor "continue this assistant turn" extension (`prefix: true`).
-//   B. Role alternation: merge consecutive same-role turns + guarantee a leading `user` turn.
-//   C. Media relocation: assistant turns cannot carry media; peel it into a synthetic `user`
-//      turn. This one is ALWAYS-ON (universal across OpenAI/Anthropic/Gemini shaped APIs) and is
-//      never gated by a toggle.
-//
-// A and B are exposed as per-endpoint toggles, C is unconditional.
+// Shared chat-completion normalizations so custom proxies can front strict backends such as Claude.
 
 export interface NormalizableMessage {
   role: string;
@@ -49,13 +39,11 @@ export function applyAssistantPrefixCompletion(
     return;
   }
 
-  // The body must carry a non-empty messages array.
   const messages = requestBody.messages;
   if (!Array.isArray(messages) || messages.length === 0) {
     return;
   }
 
-  // The trailing message must be the assistant prefill turn...
   const lastMessage = messages.at(-1) as Record<string, unknown> | undefined;
   if (
     !lastMessage ||
@@ -98,8 +86,6 @@ export function mergeConsecutiveSameRole<T extends NormalizableMessage>(messages
 
   for (let i = 1; i < messages.length; i++) {
     const next = messages[i];
-    // Merge only same-role neighbors, and never across a tool-bearing turn (which would drop its
-    // top-level tool_calls/tool_call_id: see hasToolMetadata).
     if (current.role === next.role && !hasToolMetadata(current) && !hasToolMetadata(next)) {
       const combined = [...normalizeToParts(current.content), ...normalizeToParts(next.content)];
       const allText = combined.every((part) => part.type === "text" && part.cache_control === undefined);
@@ -118,7 +104,6 @@ export function mergeConsecutiveSameRole<T extends NormalizableMessage>(messages
 }
 
 export function ensureLeadingUserTurn<T extends NormalizableMessage>(messages: T[], leadingTurnFactory: () => T): T[] {
-  // Locate the first dialogue turn (skip leading system/tool turns).
   const firstDialogueIndex = messages.findIndex((m) => m.role === "user" || m.role === "assistant");
 
   if (firstDialogueIndex === -1 || messages[firstDialogueIndex].role !== "assistant") {
@@ -162,7 +147,6 @@ export function relocateAssistantMediaContextItems(contextItems: StructuredConte
   const result: StructuredContextItem[] = [];
 
   for (const item of contextItems) {
-    // Only model turns can carry assistant media that provider APIs reject.
     if (item.role !== "model") {
       result.push(item);
       continue;
@@ -209,7 +193,6 @@ export function relocateAssistantMediaToUserTurns(
   const result: Array<Record<string, unknown>> = [];
 
   for (const message of messages) {
-    // Only assistant turns with array content can hold relocatable media.
     if (message.role !== "assistant" || !Array.isArray(message.content)) {
       result.push(message);
       continue;
@@ -226,7 +209,6 @@ export function relocateAssistantMediaToUserTurns(
       continue;
     }
 
-    // Emit the text-only assistant turn (when there is any text) ...
     const assistantText = flattenTextParts(parts);
     if (assistantText.length > 0) {
       result.push({ role: "assistant", content: assistantText });

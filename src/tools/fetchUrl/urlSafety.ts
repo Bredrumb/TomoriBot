@@ -164,9 +164,8 @@ export async function validateFetchUrlTarget(url: string): Promise<FetchUrlSafet
   const hostname = normalizeHostname(parsedUrl.hostname);
   const allowPrivateNetwork = isPrivateNetworkFetchAllowed();
 
-  // Resolution failures refuse even when the private-network guard is relaxed: the always-on
-  // metadata denylist below cannot judge an address it never saw, and the Crawl4AI engine
-  // dispatches out of process with no second gate.
+  // Refuse resolution failures even when private networks are allowed: the metadata denylist needs an IP, and
+  // Crawl4AI dispatches out of process without a second gate.
   let resolvedAddresses: ResolvedFetchAddress[];
   try {
     resolvedAddresses = await resolveFetchAddresses(hostname);

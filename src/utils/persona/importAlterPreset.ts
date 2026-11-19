@@ -90,18 +90,13 @@ export async function importAlterPreset(params: ImportAlterPresetParams): Promis
     return { ok: false, reason: "name_conflict", name: presetData.tomori_nickname };
   }
 
-  // Gather every trigger already claimed by existing personas so the new
-  //    alter never steals an overlapping trigger word. Reserve the base words
-  //    ("tomori" etc.) too: they belong to the main persona regardless of locale,
-  //    and the loader's single-owner dedup would strip them from an alter anyway.
+  // Reserve base trigger words alongside existing alters' triggers because the loader keeps them on main.
   const claimedTriggerWords = [
     ...getAllBaseTriggerWords(),
     ...allPersonas.flatMap((persona) => persona.trigger_words ?? []),
   ];
 
-  // Filter the incoming triggers to the unique set this alter actually owns.
-  //    This is what we store and display for both custom and official-preset
-  //    (pointer) imports; the loader enforces the same ownership at read time.
+  // Persist only unclaimed triggers so custom and pointer alter imports match loader ownership at read time.
   const importTriggers = presetData.trigger_words ?? [];
   const uniqueTriggers = selectUnclaimedTriggerWords(importTriggers, claimedTriggerWords, { lowercase: false });
   const matchingOfficialPreset =
@@ -116,8 +111,7 @@ export async function importAlterPreset(params: ImportAlterPresetParams): Promis
     return { ok: false, reason: "no_main_persona" };
   }
 
-  // Resolve avatar fallbacks: a raw reference for persistence (storage URL or
-  //    bot avatar) and a public display URL for embeds/thumbnails.
+  // Keep raw paths for DB persistence because Discord embeds require resolved public URLs separately.
   const fallbackAvatarReference =
     guild?.members.me?.displayAvatarURL({ extension: "png", size: 1024, forceStatic: true }) ??
     mainPersona.webhook_avatar_url ??
@@ -162,7 +156,6 @@ export async function importAlterPreset(params: ImportAlterPresetParams): Promis
           isNsfw: presetData.is_nsfw === true,
         })) ?? undefined);
   } catch (error) {
-    // Surface a duplicate-name race as a friendly conflict; rethrow others.
     if (isUniqueViolation(error)) {
       return { ok: false, reason: "name_conflict", name: presetData.tomori_nickname };
     }
@@ -175,8 +168,7 @@ export async function importAlterPreset(params: ImportAlterPresetParams): Promis
   }
   const newTomoriId = newAlterRow.persona_id;
 
-  // Persist the alter's trigger words + optional persona prompt. Pointer rows
-  //    already carry their config from the official preset, so skip them.
+  // Skip persona config writes for pointer rows because they inherit prompts and nudges from the official preset.
   const importedPersonaPrompt = typeof presetData.persona_prompt === "string" ? presetData.persona_prompt : null;
   if (!createdAsPointer) {
     const personaConfigUpdated = await personaRepository.setPersonaConfig(
@@ -257,7 +249,6 @@ export async function importAlterPreset(params: ImportAlterPresetParams): Promis
     log.warn(`Failed to persist imported avatar for alter persona ${newTomoriId}`);
   }
 
-  // Invalidate cache so the next message rebuilds with the new alter persona.
   invalidateTomoriStateCache(serverDiscId);
 
   log.success(

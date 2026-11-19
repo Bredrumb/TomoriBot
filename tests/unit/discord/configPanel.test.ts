@@ -475,7 +475,6 @@ describe("config persona selector", () => {
       (component) => component.type === STRING_SELECT && component.options?.length === CONFIG_PERSONA_SELECT_PAGE_SIZE,
     );
     expect(personaSelect).toBeDefined();
-    // Parked on the page holding the selection rather than resetting to the first page.
     expect(personaSelect?.options?.map((option) => option.value)).toContain(String(selected.persona_id));
     expect(personaSelect?.options?.find((option) => option.default)?.value).toBe(String(selected.persona_id));
 
@@ -663,9 +662,8 @@ describe("config Persona General body", () => {
   });
 
   it("keeps collection pagination out of the identity action row when nothing is selected", () => {
-    // Both collection bodies end on their own pagination row when nothing is selected, so a merge
-    // that identifies the trailing row by position captures pagination buttons instead of the edit
-    // and remove pair, stranding a collection's page controls in the identity row above its select.
+    // Collection bodies end on a pagination row when unselected, so a positional merge captures
+    // page controls instead of edit/remove and strands them in the identity row.
     const persona = makePersona({
       persona_id: 55,
       attribute_list: Array.from({ length: 30 }, (_unused, index) => `Attribute ${index + 1}`),
@@ -802,18 +800,16 @@ describe("config Persona General collections", () => {
         }),
     );
 
-    // The ordinal is load-bearing: edit and remove routes carry the index and paging is positional,
-    // so it is how a user and the route agree on which entry is meant. The word is not, because the
-    // section heading directly above the select already says it, and a label is capped at 100.
+    // The ordinal is required because edit/remove routes and paging are positional, while the
+    // section heading supplies the type word under Discord's 100-char label cap.
     expect(attributeSelect?.options?.[1]).toMatchObject({ label: "1. Likes tea", value: "0" });
     expect(dialogueSelect?.options?.[1]?.label).toBe("1. Hello");
     expect(attributeSelect?.options?.[0]).toMatchObject({ label: "+ Add new Attribute", value: "add" });
     expect(dialogueSelect?.options?.[0]).toMatchObject({ label: "+ Add new Dialogue", value: "add" });
     expect(attributeSelect?.options?.find((option) => option.default)?.value).toBe("1");
     expect(dialogueSelect?.options?.find((option) => option.default)?.value).toBe("0");
-    // The attribute's own triple backtick must survive as guarded text, leaving only the wrapper's
-    // opening and closing delimiters. Asserting the guard's byte shape instead would pin one
-    // escaping algorithm rather than the property that keeps the fence closed.
+    // Asserting balanced triple backticks keeps the fence intact without pinning one exact escaping
+    // algorithm.
     const guardedAttribute = seen.find((component) => component.content?.includes("Uses"));
     expect(guardedAttribute?.content).toBeDefined();
     expect(guardedAttribute?.content).not.toContain("Uses ``` safely");
@@ -1387,7 +1383,6 @@ describe("config Persona Sprites page", () => {
     expect(buttonFor(payload, { action: "sprite-import-open", locale: "en-US", personaId: 55 })?.disabled).toBe(false);
     expect(buttonFor(payload, { action: "sprite-export", locale: "en-US", personaId: 55 })?.disabled).toBe(false);
 
-    // The selected-sprite block carries the stored name, usage note, and identity flag.
     const detail = seen.find((component) => component.content?.includes("> Name: Happy"));
     expect(detail?.content).toContain("> Usage: When cheerful");
     expect(detail?.content).toContain("> Identity: Identity");

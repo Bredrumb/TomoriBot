@@ -13,8 +13,8 @@ async function rotateAllKeys(): Promise<void> {
     throw new Error("Stop every bot instance and pass --bot-stopped. Restart after rotation to clear process caches.");
   }
   const manager = await loadInitializedKeyManager();
-  // Rotation moves every credential onto the current version, so that is where weak new key
-  // material would spread. Older versions keep loading for decryption.
+  // Reject weak current keys before rotating because rotation moves every row onto it while older versions only
+  // decrypt.
   if (!dryRun && !isGeneratedLengthKey(manager.getCurrentKey())) {
     console.error(
       `Current key V${manager.getCurrentVersion()} is shorter than ${MIN_GENERATED_KEY_LENGTH} characters. Generate a new version with \`openssl rand -base64 32\`, select it, and rerun.`,

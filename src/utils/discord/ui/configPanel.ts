@@ -4267,9 +4267,7 @@ export function buildConfigPanelPayload(input: ConfigPanelRenderInput): ConfigPa
     readStatus === "unavailable",
   );
 
-  // The shared helper takes one row-wide disabled flag, which no earlier panel needed to vary. A
-  // category inert for permission reasons is per-button, so it is re-applied over the row here;
-  // the helper preserves input order, which is what makes the index alignment safe.
+  // Re-apply per-button disabled flags here because the shared helper only supports one row-wide flag.
   categoryEntries.forEach((entry, index) => {
     if (entry.disabled) categoryRow.components[index].disabled = true;
   });
@@ -4587,8 +4585,6 @@ export function buildConfigPanelPayload(input: ConfigPanelRenderInput): ConfigPa
     return buildPayload(components, receipt);
   }
 
-  // Every other destination lands in a later Phase D slice. `/config` registers no slash command
-  // until that cutover, so this placeholder is unreachable rather than shipped.
   const fallbackPageKey = PAGE_LOCALE_KEYS[category]?.[page];
   if (!fallbackPageKey) {
     components.push({

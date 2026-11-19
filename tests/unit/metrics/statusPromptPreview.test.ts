@@ -65,9 +65,8 @@ describe("formatPromptPreview", () => {
     const bodyEnd = preview.indexOf("\n```\n");
     expect(bodyEnd).toBeGreaterThan(0);
     const body = preview.slice(4, bodyEnd);
-    // The fence scaffolding and the clipped notice are what keep the field inside 1,024
-    // codepoints, so the body gives up that room before the preview limit itself binds.
-    // The clipped body is the head of the input plus the truncation ellipsis.
+    // Fence scaffolding and the clipped notice share the 1,024-codepoint Discord field budget, so the body truncates
+    // before MAX_PROMPT_PREVIEW binds.
     expect(body.endsWith("...")).toBe(true);
     expect(input.startsWith(body.slice(0, -3))).toBe(true);
     expect(body.length).toBeLessThan(MAX_PROMPT_PREVIEW);

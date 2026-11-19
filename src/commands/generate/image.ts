@@ -432,7 +432,6 @@ export async function execute(
     return;
   }
 
-  // Check image generation quota BEFORE showing modal (personal-provider users bypass quota)
   if (imageCreds.source === "server") {
     let quotaCheck: QuotaCheckResult;
     try {
@@ -456,7 +455,6 @@ export async function execute(
     }
   }
 
-  // Track modal submit interaction for error handling in catch block
   let modalSubmitInteraction: ModalSubmitInteraction | undefined;
   let quotaReservation: QuotaReservation | null = null;
   let quotaConsumed = false;
@@ -533,7 +531,7 @@ export async function execute(
         modalTitleKey: "commands.generate.image.modal.title",
         components: modalComponents,
       },
-      true, // Auto-defer with public reply
+      true,
     );
 
     if (modalResult.outcome !== "submit") {
@@ -588,7 +586,7 @@ export async function execute(
         const converted = await convertAttachmentToBase64(imageAttachment);
         referenceImages.push(converted);
         if (!referenceImageUrl) {
-          referenceImageUrl = imageAttachment.url; // Use first reference for thumbnail
+          referenceImageUrl = imageAttachment.url;
         }
       } catch (error) {
         log.warn(`Failed to process attachment ${imageAttachment.id}:`, error as Error);
@@ -770,7 +768,7 @@ export async function execute(
     const filename = `generated_${Date.now()}.${preparedImage.extension}`;
     const attachment = new AttachmentBuilder(preparedImage.buffer, { name: filename }).setSpoiler(spoiler);
 
-    // Settled before delivery so a failed send still counts, matching the old increment point.
+    // Settled before Discord delivery so a failed send does not refund an already-generated image.
     quotaConsumed = true;
     // Record canonical generation telemetry; quota tables enforce limits only.
     if (userData.user_id) {
@@ -779,9 +777,7 @@ export async function execute(
         userId: userData.user_id,
         lineageId: tomoriState.persona_lineage_id ?? 0,
         metric: "image_generated",
-        // Key by model codename so the read layer can break generations down by
-        // model (the total stays SUM(count) over keys); this dimension can't be
-        // reconstructed after the fact.
+        // Keyed by model codename for per-model breakdown because this dimension cannot be reconstructed later.
         metricKey: modelCodename,
       });
     }
@@ -881,7 +877,6 @@ export async function execute(
       metadata: { credentialSource: imageCreds.source },
     });
 
-    // Use modalSubmitInteraction if available (error after modal), otherwise interaction (error during modal)
     const replyTarget = modalSubmitInteraction ?? interaction;
 
     const isPersonalImage = imageCreds?.source === "personal";

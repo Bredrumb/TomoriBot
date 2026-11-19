@@ -50,12 +50,10 @@ export async function resolvePresenceIntentEnabled(environment: AppEnvironment):
     return legacyDefault;
   }
 
-  // Ask Discord which privileged gateway intents this application is approved for.
   try {
     const rest = new REST().setToken(token);
     const application = (await rest.get(Routes.currentApplication())) as { flags?: number };
     const flags = application.flags ?? 0;
-    // Either flag indicates the Presence Intent is enabled/approved for this bot.
     const presenceApproved =
       (flags & ApplicationFlags.GatewayPresence) !== 0 || (flags & ApplicationFlags.GatewayPresenceLimited) !== 0;
     log.info(
@@ -86,8 +84,7 @@ export function createDiscordClient(
     GatewayIntentBits.GuildExpressions,
   ];
 
-  // GuildPresences is privileged, so request it only when Discord has approved it
-  // (or it is force-enabled). See resolvePresenceIntentEnabled.
+  // GuildPresences is privileged, so request it only when approved by Discord or force-enabled.
   if (includePresences) {
     intents.push(GatewayIntentBits.GuildPresences);
   }
@@ -98,7 +95,7 @@ export function createDiscordClient(
     intents,
     partials: [Partials.Channel, Partials.Message],
     rest: { rejectOnRateLimit: shouldRejectWebhookRateLimit },
-    // 50 keeps recent reply targets cached in busy channels (each miss is a REST call for any reply the bot sees); any value is safe because readers fall back to fetch, so tune it from `discord_messages` samples.
+    // Cache 50 messages per channel so recent reply targets avoid REST fetches; readers fall back to fetch on miss.
     makeCache: Options.cacheWithLimits({
       ...Options.DefaultMakeCacheSettings,
       MessageManager: 50,
@@ -109,12 +106,13 @@ export function createDiscordClient(
       },
     }),
     sweepers: {
+      // Intervals and lifetimes in discord.js sweepers are in seconds.
       messages: {
-        interval: 3600, // Run sweep every 1 hour (in seconds)
-        lifetime: 1800, // Keep messages for 30 minutes (in seconds)
+        interval: 3600,
+        lifetime: 1800,
       },
-      // Never sweep the client's own member: discord.js resolves permissions through it.
-      // Voice paths read members synchronously with no fetch fallback.
+      // Never sweep the client's own member (used for permission resolution) or voice-connected members (read
+      // synchronously).
       guildMembers: {
         interval: 3600,
         filter: () => (member) => member.id !== member.client.user.id && !member.voice.channelId,
@@ -131,11 +129,8 @@ export function createDiscordClient(
           return (user) => user.id !== client.user?.id && !memberIds.has(user.id);
         },
       },
-      // Presence data is gateway-only with no REST fetch, so a swept entry stays missing until
-      // that user's next presence change. Offline-with-no-activity is the only safe set to drop:
-      // getUserPresenceDetails renders a cached offline presence as "Offline" and a missing one as
-      // "Offline or status unknown", so the information lost is nil. Widening this filter to
-      // idle/dnd or to entries carrying activities would silently degrade what Tomori can see.
+      // Presences have no REST fallback, so only sweep offline entries with no activities (rendered identically when
+      // absent).
       presences: {
         interval: 3600,
         filter: () => (presence) => presence.status === "offline" && presence.activities.length === 0,
@@ -149,21 +144,15 @@ export function createDiscordClient(
     log.error("Discord client error occurred", error);
   });
 
-  // A reconnect is transport maintenance, not an application defect. Logging every failed attempt
-  // at error level fills `error_logs` with identical rows during one gateway incident, which is
-  // what buries unrelated failures in the same Grafana view, so only the first attempt reports at
-  // error level and the rest stay visible at a level that does not write a row.
+  // Rate-limit gateway errors per outage so repeated reconnect failures stay at warn level instead of flooding
+  // error_logs.
   const gatewayErrorReporter = createGatewayErrorReporter();
   client.on("shardError", (error, shardId) => {
     gatewayErrorReporter(error, shardId);
   });
 
-  // Session lifecycle is the other half of a connection failure: without these, a resumed session
-  // and a fresh identify are indistinguishable in the logs, and an event gap is invisible.
-  //
-  // The reporter is cleared only where a session is actually established. Clearing it on a
-  // disconnect would re-arm error level for the next attempt of the same outage, which is the
-  // repetition the reporter exists to absorb.
+  // Reset the error reporter only when a session connects (shardReady/shardResume), because resetting on disconnect
+  // would re-arm errors mid-outage.
   client.on("shardReady", (shardId) => {
     setHistoryWindowGatewayConnected(shardId, true);
     gatewayErrorReporter.reset(shardId);

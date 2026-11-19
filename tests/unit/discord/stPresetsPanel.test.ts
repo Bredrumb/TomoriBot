@@ -669,7 +669,6 @@ describe("ST Presets panel rendering", () => {
   });
 
   it("enforces selector ceiling of 23 presets and renders range controls only beyond it", () => {
-    // Exactly 23 presets: 1 page, no range buttons
     const presets23 = Array.from({ length: 23 }, (_, i) => makePreset(i + 1));
     const payload23 = buildStPresetsPanelPayload({
       locale: "en-US",
@@ -683,7 +682,6 @@ describe("ST Presets panel rendering", () => {
     const serialized23 = JSON.stringify(payload23);
     expect(serialized23).not.toContain("config:v2:st-presets-range");
 
-    // 24 presets: 2 pages, range controls present
     const presets24 = Array.from({ length: 24 }, (_, i) => makePreset(i + 1));
     const payload24 = buildStPresetsPanelPayload({
       locale: "en-US",
@@ -697,7 +695,7 @@ describe("ST Presets panel rendering", () => {
     });
     const serialized24 = JSON.stringify(payload24);
     expect(serialized24).toContain("config:v2:st-presets-range:en-US:1");
-    expect(serialized24).toContain('"disabled":true'); // Previous disabled at page 0
+    expect(serialized24).toContain('"disabled":true');
 
     const getPaginationButtons = (payload: ReturnType<typeof buildStPresetsPanelPayload>) => {
       const container = payload.components.find((component) => component.type === ComponentType.Container) as {
@@ -781,7 +779,6 @@ describe("ST Presets panel rendering", () => {
   });
 
   it("renders None page in a single state with no action button regardless of active preset", () => {
-    // State 1: No active preset
     const noActivePayload = buildStPresetsPanelPayload({
       locale: "en-US",
       scope: "guild",
@@ -797,7 +794,6 @@ describe("ST Presets panel rendering", () => {
     expect(serializedNoActive).not.toContain("Disable Presets");
     expect(serializedNoActive).not.toContain("config:v2:st-presets-disable");
 
-    // State 2: Active preset exists (still renders single state, no button)
     const activePayload = buildStPresetsPanelPayload({
       locale: "en-US",
       scope: "guild",
@@ -832,7 +828,6 @@ describe("ST Presets panel rendering", () => {
       return selectRow?.components[0]?.options ?? [];
     }
 
-    // None page with active preset (reproduces the reported crash condition)
     const noneWithActive = buildStPresetsPanelPayload({
       locale: "en-US",
       scope: "guild",
@@ -846,7 +841,6 @@ describe("ST Presets panel rendering", () => {
     expect(defaultsNoneActive).toHaveLength(1);
     expect(defaultsNoneActive[0].value).toBe("none");
 
-    // None page with nothing active
     const noneNoActive = buildStPresetsPanelPayload({
       locale: "en-US",
       scope: "guild",
@@ -860,7 +854,6 @@ describe("ST Presets panel rendering", () => {
     expect(defaultsNoneNoActive).toHaveLength(1);
     expect(defaultsNoneNoActive[0].value).toBe("none");
 
-    // Preset page on visible range
     const presetPage = buildStPresetsPanelPayload({
       locale: "en-US",
       scope: "guild",
@@ -874,7 +867,7 @@ describe("ST Presets panel rendering", () => {
     expect(defaultsPreset).toHaveLength(1);
     expect(defaultsPreset[0].value).toBe("2");
 
-    // Preset page whose preset is off the current range page (yields 0 defaults, valid in Discord)
+    // Discord allows zero default options when the selected preset sits off the current range page.
     const presetOffRange = buildStPresetsPanelPayload({
       locale: "en-US",
       scope: "guild",
@@ -890,7 +883,6 @@ describe("ST Presets panel rendering", () => {
   });
 
   it("renders preset page without ### heading and with bold node counts for active preset", () => {
-    // Active preset with node counts: bold line with counts, no ### heading
     const activePayload = buildStPresetsPanelPayload({
       locale: "en-US",
       scope: "guild",
@@ -906,7 +898,6 @@ describe("ST Presets panel rendering", () => {
     expect(serializedActive).toContain("**🟢 This preset is selected and activated with 47 out of 54 nodes**");
     expect(serializedActive).toContain("> A test description");
 
-    // Non-active preset display falls back to plain marker without node counts
     const nonActivePayload = buildStPresetsPanelPayload({
       locale: "en-US",
       scope: "guild",
@@ -925,7 +916,6 @@ describe("ST Presets panel rendering", () => {
     expect(serializedNonActive).toContain("🟢 Currently active preset");
     expect(serializedNonActive).not.toContain("47 out of 54");
 
-    // Active preset without node counts provided falls back to plain marker
     const noCountsPayload = buildStPresetsPanelPayload({
       locale: "en-US",
       scope: "guild",
@@ -1118,7 +1108,7 @@ describe("Modal builders and raw modal transport", () => {
 
     expect(modal.custom_id).toBe("config:v2:st-presets-nodes-submit:en-US:1:nonce456");
     expect(modal.title).toBe("Preset Celia");
-    expect(modal.components).toHaveLength(3); // 10 + 10 + 5 = 3 groups
+    expect(modal.components).toHaveLength(3);
 
     const group0 = modal.components[0];
     expect(group0?.label).toBe("Nodes 1-10");

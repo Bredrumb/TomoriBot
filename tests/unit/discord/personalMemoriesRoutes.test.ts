@@ -365,7 +365,6 @@ describe("personal-memories panel route catalog", () => {
       makePersona(index + 1, 1000 + index, `Persona ${index + 1}`),
     );
 
-    // Global main with memories (produces category, select, edit-open, remove-prompt, stm-clear)
     harvestCustomIds(
       buildPersonalMemoriesPanelPayload({
         locale: "en-US",
@@ -380,7 +379,6 @@ describe("personal-memories panel route catalog", () => {
       }),
     );
 
-    // Persona selector overflow (produces the fresh persona-page action).
     harvestCustomIds(
       buildPersonalMemoriesPanelPayload({
         locale: "en-US",
@@ -395,7 +393,6 @@ describe("personal-memories panel route catalog", () => {
       }),
     );
 
-    // Global main with multi-page memories (produces the range row)
     harvestCustomIds(
       buildPersonalMemoriesPanelPayload({
         locale: "en-US",
@@ -410,7 +407,6 @@ describe("personal-memories panel route catalog", () => {
       }),
     );
 
-    // Remove page (produces remove-confirm, remove-cancel)
     harvestCustomIds(
       buildPersonalMemoriesPanelPayload({
         locale: "en-US",
@@ -425,7 +421,6 @@ describe("personal-memories panel route catalog", () => {
       }),
     );
 
-    // Persona main (produces persona-select, select, edit-open, remove-prompt)
     harvestCustomIds(
       buildPersonalMemoriesPanelPayload({
         locale: "en-US",
@@ -440,7 +435,6 @@ describe("personal-memories panel route catalog", () => {
       }),
     );
 
-    // Persona multi-page (produces the range row)
     harvestCustomIds(
       buildPersonalMemoriesPanelPayload({
         locale: "en-US",
@@ -455,7 +449,6 @@ describe("personal-memories panel route catalog", () => {
       }),
     );
 
-    // Unavailable status (produces retry)
     harvestCustomIds(
       buildPersonalMemoriesPanelPayload({
         locale: "en-US",
@@ -470,7 +463,6 @@ describe("personal-memories panel route catalog", () => {
       }),
     );
 
-    // Stale status (produces retry)
     harvestCustomIds(
       buildPersonalMemoriesPanelPayload({
         locale: "en-US",
@@ -485,10 +477,8 @@ describe("personal-memories panel route catalog", () => {
       }),
     );
 
-    // Add modal (produces add-submit)
     harvestCustomIds(buildAddPersonalMemoryModal("en-US", "global", 0, "12345678"));
 
-    // Edit modal (produces edit-submit)
     harvestCustomIds(buildEditPersonalMemoryModal("en-US", "global", 0, 1, "content", [], "12345678"));
 
     const producedActions = new Set<string>();
@@ -580,7 +570,6 @@ describe("personal-memories panel route catalog", () => {
       }),
     ).toBeNull();
 
-    // Segment count bounds
     expect(
       parsePersonalMemoriesPanelRoute({
         namespace: PERSONAL_MEMORIES_ROUTE_NAMESPACE,
@@ -750,7 +739,6 @@ describe("personal-memories panel route catalog", () => {
       }),
     ).toBeNull();
 
-    // Value validations
     expect(
       parsePersonalMemoriesPanelRoute({
         namespace: PERSONAL_MEMORIES_ROUTE_NAMESPACE,
@@ -993,7 +981,6 @@ describe("owner scoping invariant", () => {
 
     expect(deferred).toBeTrue();
     expect(editReplyCalled).toBeTrue();
-    // Non-existent memory 999 was not edited, so no telemetry was recorded
     expect(telemetry).toBeEmpty();
     expect(calls.filter((c) => c.startsWith("edit:"))).toEqual(["edit:999"]);
   });
@@ -1179,7 +1166,6 @@ describe("telemetry & acknowledgement invariants", () => {
 
     const route = createPersonalMemoriesInteractionRoute(dependencies);
 
-    // Test add-submit
     const nonce = "nonce1234567";
     const addInteraction = {
       id: "add-int",
@@ -1216,7 +1202,6 @@ describe("telemetry & acknowledgement invariants", () => {
     expect(addAcknowledged).toBeTrue();
     expect(telemetry).toContain("personal-memories.personal.memory.add");
 
-    // Test edit-submit
     const editInteraction = {
       id: "edit-int",
       customId: buildPersonalMemoriesRouteId({
@@ -1253,7 +1238,6 @@ describe("telemetry & acknowledgement invariants", () => {
     expect(editAcknowledged).toBeTrue();
     expect(telemetry).toContain("personal-memories.personal.memory.edit");
 
-    // Test remove-confirm
     const removeInteraction = {
       id: "remove-int",
       customId: buildPersonalMemoriesRouteId({
@@ -1283,7 +1267,6 @@ describe("telemetry & acknowledgement invariants", () => {
     expect(removeAcknowledged).toBeTrue();
     expect(telemetry).toContain("personal-memories.personal.memory.remove");
 
-    // Test stm-clear
     const stmInteraction = {
       id: "stm-int",
       customId: buildPersonalMemoriesRouteId({
@@ -1340,7 +1323,6 @@ describe("memory selector pagination & 25-option ceiling", () => {
     expect(selectActionRow).toBeDefined();
     const selectMenu = selectActionRow?.components[0];
     if (selectMenu?.type !== ComponentType.StringSelect) throw new Error("Expected a String Select action row");
-    // 1 Add option + 24 memories = exactly 25 options
     expect(selectMenu.options.length).toBe(25);
     expect(selectMenu.options[0]?.value).toBe("action:add");
     expect(selectMenu.options[1]?.value).toBe("1");
@@ -1403,8 +1385,8 @@ describe("persona selector lineage identity", () => {
   }
 
   it("emits one option per lineage when two personas share one", () => {
-    // A preset-derived persona keeps its ancestor's lineage, so two personas in one guild can share
-    // a memory scope. Discord rejects the whole payload if that repeats an option value.
+    // Two personas can share an ancestor lineage, so emitting one option per lineage avoids duplicate values
+    // Discord rejects.
     const payload = buildPersonaPage([
       makePersona(51, 1770, "Timori", true),
       makePersona(55, 1770, "Aphel"),
@@ -1636,17 +1618,13 @@ describe("router wiring & outdated version fallback", () => {
     const handled = await dispatchGlobalInteraction({} as Client, staleInteraction as unknown as ButtonInteraction);
     expect(handled).toBeTrue();
     expect(replyPayload).toBeDefined();
-    // The stub assigns inside a callback, which control flow analysis cannot see, so read the
-    // captured reply through its declared type.
     expect(collectTextDisplays(replyPayload).join("\n")).toMatch(
       localizedProse("en-US", "commands.personal.memories.outdated_panel", { command: "/personal memories" }),
     );
   });
 });
 
-// The suite above drives the route layer against a mocked `operations` object that reimplements the
-// guards, so it would pass unchanged if the real ones were deleted. These exercise the exported
-// singleton itself, which is where owner scoping and the privacy asymmetry actually live.
+// Drives the exported singleton directly because the route suite mocks operations and bypasses its real guards.
 describe("personalMemoriesOperations enforces its own guards", () => {
   it("requests manual protection for single adds, batches, and every unprotected edit-form save", async () => {
     const row = makeMemory(7, { content: "stored", persona_lineage_id: 100, tags: [], manually_written: false });
@@ -1753,21 +1731,15 @@ describe("personalMemoriesOperations enforces its own guards", () => {
   });
 });
 
-// `receipt()` composes its locale keys as `${key}_heading` / `${key}_detail`, which the
-// `check-locales` scanner cannot see because it only matches literal dot-notation strings. A
-// missing half therefore renders the raw key to the user with every gate green, which is exactly
-// how `privacy_blocked_error_heading` shipped absent. Re-derive the keys from source instead of
-// listing them here, so a key added later is covered without anyone remembering to update this.
+// Keys are derived from source because receipt() composes `${key}_heading`/`${key}_detail` dynamically,
+// bypassing check-locales.
 describe("receipt locale keys resolve", () => {
   it("has a heading and a detail for every key passed to receipt()", async () => {
     const source = await Bun.file("src/utils/discord/interactions/personalMemoriesRoutes.ts").text();
     const keys = new Set([
-      // Keys passed to receipt() as literals.
       ...[...source.matchAll(/receipt\(\s*(?:route\.)?locale\s*,\s*"([a-z0-9_]+)"/g)].map((m) => m[1] as string),
-      // Keys reached only through a receiptByStatus lookup, which is where the shipped gap was.
       ...[...source.matchAll(/^\s*"[a-z-]+":\s*"([a-z0-9_]+)",$/gm)].map((m) => m[1] as string),
-      // Keys enumerated for tone selection, scoped to that declaration so unrelated string
-      // literals elsewhere in the file are not mistaken for receipt keys.
+      // Scoped to ERROR_RECEIPT_KEYS so unrelated string literals are not matched.
       ...[
         ...(source.match(/ERROR_RECEIPT_KEYS = new Set\(\[([\s\S]*?)\]\)/)?.[1] ?? "").matchAll(/"([a-z0-9_]+)"/g),
       ].map((m) => m[1] as string),
@@ -1785,9 +1757,8 @@ describe("receipt locale keys resolve", () => {
   });
 });
 
-// The batch path exists so that dissolving `memory personal add` does not remove the ability to
-// author many memories in a text editor and upload them. Import reads a JSON export, so it
-// is round-trip transfer rather than authoring and does not replace this.
+// Batch upload preserves plain-text authoring after `memory personal add` was dissolved, which JSON import
+// cannot replace.
 describe("Add Memory batch upload", () => {
   function makeAddInteraction(nonce: string, typedContent: string) {
     return {
@@ -1866,8 +1837,8 @@ describe("Add Memory batch upload", () => {
     ) as { component: { type: number; required: boolean; min_values: number; max_values: number } } | undefined;
 
     expect(fileWrapper).toBeDefined();
-    // 19 is FileUpload. 22 is CheckboxGroup and 3 is StringSelect, and Discord renders any of them
-    // without complaint, so pinning the number is the only thing that catches a wrong one.
+    // Type 19 is Discord's FileUpload, which must be pinned because Discord also renders wrong types like
+    // 22 or 3 without error.
     expect(fileWrapper?.component.type).toBe(19);
     expect(fileWrapper?.component.required).toBeFalse();
     expect(fileWrapper?.component.min_values).toBe(0);

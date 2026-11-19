@@ -1,11 +1,6 @@
 import type { LocaleCode } from "@/constants/locales";
 
-// Input types for the human-authored seed catalogs (`*.ts`).
-//
-// These are deliberately *narrower* than the DB row schemas in
-// `src/types/db/schema.ts`: boolean flags are optional and default to `false`,
-// so an author only ever writes the flags that are `true`. The catalog seeders
-// expand these into INSERT … ON CONFLICT upserts and seed them at startup.
+// Catalog input types omit required DB defaults so optional boolean flags default to false during seeding.
 
 export interface CatalogSection<T> {
   comment: string | string[];

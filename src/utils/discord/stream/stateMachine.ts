@@ -173,10 +173,8 @@ export class StreamOrchestrator implements IStreamOrchestrator {
         if (processedChunk.type === "done" && processedChunk.metadata) {
           terminalDoneMetadata = processedChunk.metadata;
         }
-        // Capture real provider usage from whichever chunk carries it: not only
-        // the terminal `done`. OpenAI `include_usage` emits usage on a separate
-        // trailing chunk and Anthropic clobbers its done metadata, so relying on
-        // terminalDoneMetadata alone would miss both. Latest non-null wins.
+        // Capture usage from any chunk (latest non-null wins) because OpenAI trailing chunks and Anthropic
+        // metadata can drop it from terminal done.
         if (processedChunk.metadata?.usage) {
           const normalizedUsage = normalizeProviderUsage(processedChunk.metadata.usage);
           if (normalizedUsage) {
@@ -199,9 +197,7 @@ export class StreamOrchestrator implements IStreamOrchestrator {
           return result;
         }
 
-        // Delivery-side stops (send/flush limit) are raised while this chunk was written out.
-        // Resolving them here rather than on the next iteration avoids awaiting one more chunk
-        // that the provider would keep generating tokens for.
+        // Check delivery stops immediately after each chunk so we avoid awaiting one more provider chunk.
         const deliveryStopResult = await this.tryResolveLoopStop(state, config, context, textConfig, metrics);
         if (deliveryStopResult) {
           return deliveryStopResult;
@@ -296,11 +292,8 @@ export class StreamOrchestrator implements IStreamOrchestrator {
     log.info(`Stream loop breaking due to stop request for channel ${context.channel.id}.`);
     const stopRequest = peekStopRequest(context.channel.id);
     const stopReason = getStopReason(stopRequest);
-    // A stop raised by the delivery layer has no reason to flush at all, and flushing is not
-    // harmless: the clear below runs first, so by the time the flush reaches the send path there is
-    // no stop left to consult and the text goes to Discord as a real call. For a destination the
-    // bot cannot post into that means a second rejected send and a re-registered stop that outlives
-    // the stream. The two caps below already skip for the same reason.
+    // Skip flushing on internal delivery stops because clearStopRequest runs first and a subsequent flush would
+    // issue a rejected send that re-registers a sticky stop.
     const shouldSkipBufferFlush =
       context.holdResponseText ||
       ((stopRequest?.requesterId === "flush_limit" ||
@@ -337,9 +330,8 @@ export class StreamOrchestrator implements IStreamOrchestrator {
     // streaming would already have sent before stopping.
     const completesHeldPrefix =
       context.holdResponseText && (stopReason === "speaker_guard" || stopReason === "pending_response_limit");
-    // Carry the same payload `completeStreamAfterProviderEnd` assembles. A stop is an early return
-    // out of the loop, so without this the turn's delivered text, usage, thoughts and sprite records
-    // never reach short-term memory, stat recording, or the thought log.
+    // Return the full post-turn payload here because early loop exits otherwise drop delivered text, usage, and
+    // sprite stats.
     return {
       status: completesHeldPrefix ? "completed" : "stopped_by_user",
       pendingResponse: completesHeldPrefix
@@ -489,10 +481,8 @@ export class StreamOrchestrator implements IStreamOrchestrator {
     terminalDoneMetadata: Record<string, unknown> | undefined,
   ): Promise<StreamResult & { messageSentCount?: number }> {
     await this.bufferFlusher.flushFinalBuffer(state, textConfig, typingConfig, context);
-    // The final flush can itself trip a delivery cap, and this path returns "completed", which no
-    // downstream consumer treats as a stop. An uncleared internal request would survive the turn
-    // and abort the next stream at its pre-stream check. `clearStopRequest` preserves any request
-    // carrying a stopContext, so a real user stop awaiting its follow-up is untouched.
+    // Clear internal stop IDs tripped by flushFinalBuffer so they cannot abort the next stream while preserving
+    // user stops with stopContext.
     if (INTERNAL_STOP_REQUESTER_IDS.has(peekStopRequest(context.channel.id)?.requesterId ?? "")) {
       clearStopRequest(context.channel.id);
     }

@@ -40,9 +40,7 @@ export async function buildConversationContext(
       );
     }
 
-    // Components V2 notices (memory-learning, scheduled-task) carry no embeds,
-    // so their text has to be reconstructed from the component tree or they are
-    // silently dropped from the compaction summary.
+    // Components V2 notices carry no embeds, so text is rebuilt from the component tree or dropped from compaction.
     const notice = extractNoticeTextFromComponents(msg.components);
     if (notice) {
       messageContent = appendEmbedContent(messageContent, {

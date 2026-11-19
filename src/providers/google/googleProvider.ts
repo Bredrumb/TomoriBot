@@ -426,13 +426,11 @@ export class GoogleProvider
         allowedToolNames: streamingContext?.deliberateToolAllowedNames,
       }));
 
-      // Use the enhanced tool adapter to get all tools (built-in + MCP)
-      // Pass the pre-filtered MCP function names to ensure centralized filtering
       const googleAdapter = getGoogleToolAdapter();
       const allToolsConfig = await googleAdapter.getAllToolsInGoogleFormat(
         finalBuiltInTools,
         tomoriState.server_id,
-        finalMcpFunctionNames, // Pass filtered MCP functions from centralized filtering
+        finalMcpFunctionNames,
       );
 
       log.info(
@@ -518,8 +516,6 @@ export class GoogleProvider
         ...(temperature !== undefined && {
           temperature,
         }),
-        // Only include topK/topP if user has configured non-neutral values
-        // Neutral: topK=0 (disabled) and topP=1.0 (full probability distribution)
         ...(!topKDisabled &&
           tomoriState.config.llm_top_k > 0 && {
             topK: tomoriState.config.llm_top_k,
@@ -528,8 +524,6 @@ export class GoogleProvider
           tomoriState.config.llm_top_p < 1.0 && {
             topP: tomoriState.config.llm_top_p,
           }),
-        // Only include penalty params if user has configured non-neutral values
-        // Neutral: frequencyPenalty=0.0, presencePenalty=0.0
         ...(frequencyPenalty !== undefined && {
           frequencyPenalty,
         }),
@@ -541,8 +535,7 @@ export class GoogleProvider
       }),
     };
 
-    // Only attach tools for models that explicitly support function calling.
-    // This prevents Google API 400 errors on models like gemma-3-27b-it.
+    // Omit tools when unsupported because models such as gemma-3-27b-it return HTTP 400.
     if (resolveToolsEnabled(tomoriState, tomoriState.llm.has_tools)) {
       config.tools = await this.getTools(tomoriState);
     }

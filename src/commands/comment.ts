@@ -47,7 +47,6 @@ export async function execute(
 
   const channel = interaction.channel;
 
-  // Defer reply ephemerally while processing
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const commentContent = interaction.options.getString("content", true);

@@ -66,8 +66,7 @@ async function validateMp4(buffer: Buffer): Promise<void> {
     const [exitCode, details] = await Promise.all([process.exited, new Response(process.stderr).text()]);
     const videoLines = details.split("\n").filter((line) => line.includes("Video:"));
     const audioLines = details.split("\n").filter((line) => line.includes("Audio:"));
-    // Discord clients support AVC with 8-bit 4:2:0 pixels and optional AAC audio.
-    // Other encodings require a separate conversion feature before this ceiling can change.
+    // Enforce AVC 8-bit 4:2:0 with optional AAC because Discord requires those codecs unless conversion is added.
     const inputVideo = videoLines[0];
     if (
       exitCode !== 0 ||

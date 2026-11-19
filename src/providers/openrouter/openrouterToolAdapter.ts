@@ -64,7 +64,6 @@ export class OpenrouterToolAdapter implements MCPCapableToolAdapter {
 
   convertResult(result: ToolResult): Record<string, unknown> {
     try {
-      // OpenAI expects text content in tool responses
       if (result.success) {
         let resultText = result.message || "Tool executed successfully";
 
@@ -142,14 +141,12 @@ export class OpenrouterToolAdapter implements MCPCapableToolAdapter {
     try {
       const allTools: Record<string, unknown>[] = [];
 
-      // Brave-key dance removed: unified web_search is gated centrally.
       if (builtInTools.length > 0) {
         const builtInToolsFormatted = this.convertToolsArray(builtInTools);
         allTools.push(...builtInToolsFormatted);
         log.info(`Converted ${builtInTools.length} built-in tools to OpenAI format`);
       }
 
-      // Add guild MCP tools (per-guild remote servers)
       if (serverId && allowedMCPFunctions) {
         try {
           const guildMcpManager = getGuildMcpManager();
@@ -200,7 +197,6 @@ export class OpenrouterToolAdapter implements MCPCapableToolAdapter {
 
   validateToolCompatibility(tool: Tool): boolean {
     try {
-      // Basic validation: check required fields
       if (!tool.name || !tool.description || !tool.parameters) {
         log.warn(
           `Tool validation failed: missing required fields (name: ${!!tool.name}, description: ${!!tool.description}, parameters: ${!!tool.parameters})`,

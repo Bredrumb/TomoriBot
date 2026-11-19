@@ -450,11 +450,6 @@ export function renderPersonalCard(data: PersonalCardData): VNode {
                 marginBottom: -scaled(24),
               }}
             >
-              {/* Three-layer stacked-card silhouette floating on the card background
-                  (no panel/border), each square the same size as the avatar and
-                  staggered up-left: accent back → secondary-accent mid → avatar front.
-                  Personal-only (it replaces PersonalHeroDecor here), so the Server card
-                  (which still uses the shared decor) is unaffected. */}
               <div
                 style={{
                   display: "flex",
@@ -550,7 +545,6 @@ export function renderPersonalCard(data: PersonalCardData): VNode {
             {data.favoriteModelName ?? t.noData}
           </div>
         </div>
-        {/* Spacer pushes the aggregate totals + signature to the card bottom. */}
         <div style={{ display: "flex", flex: 1, minHeight: scaled(20) }} />
         <div
           style={{
@@ -1430,7 +1424,6 @@ export function renderServerCard(data: ServerCardData): VNode {
         fontFamily: CARD_THEME.fontFamily,
       }}
     >
-      {/* 1. Header row: server icon + name + timeframe subtitle. */}
       <div
         style={{
           display: "flex",
@@ -1468,7 +1461,6 @@ export function renderServerCard(data: ServerCardData): VNode {
 
       {hasData ? (
         <>
-          {/* 2. Top Personas: horizontal bars (tokens | cost inside, avatar + name at tip). */}
           <ServerBlockTitle title={t.topPersonas} palette={palette} />
           {personas.length > 0 ? (
             personas.map((entry) => (
@@ -1492,7 +1484,6 @@ export function renderServerCard(data: ServerCardData): VNode {
             <div style={{ display: "flex", color: palette.muted, fontSize: scaled(28) }}>{t.empty}</div>
           )}
 
-          {/* 3. Most Active Members: triggers inside, avatar + name at tip. */}
           <ServerBlockTitle title={t.mostActiveMembers} palette={palette} />
           {members.length > 0 ? (
             members.map((entry) => (
@@ -1516,7 +1507,6 @@ export function renderServerCard(data: ServerCardData): VNode {
             <div style={{ display: "flex", color: palette.muted, fontSize: scaled(28) }}>{t.empty}</div>
           )}
 
-          {/* 4. Top Models: tokens | cost inside, model name at tip (no avatar). */}
           <ServerBlockTitle title={t.topModels} palette={palette} />
           {models.length > 0 ? (
             models.map((entry) => (
@@ -1546,7 +1536,6 @@ export function renderServerCard(data: ServerCardData): VNode {
             <div style={{ display: "flex", color: palette.muted, fontSize: scaled(28) }}>{t.empty}</div>
           )}
 
-          {/* Spacer pushes the server totals + signature to the card bottom. */}
           <div style={{ display: "flex", flex: 1, minHeight: scaled(16) }} />
 
           <div

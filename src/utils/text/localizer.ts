@@ -29,16 +29,15 @@ Reflect.set(globalThis, LOCALIZER_RUNTIME_STATE, localizerState);
 const locales = localizerState.locales;
 
 function dedent(str: string): string {
-  // If string is empty or has only one line, return it as is
   if (!str?.includes("\n")) return str;
 
   const lines = str.split("\n");
 
   const firstNonEmptyLine = lines.find((line) => line.trim().length > 0);
-  if (!firstNonEmptyLine) return str; // All lines are empty
+  if (!firstNonEmptyLine) return str;
 
   const match = firstNonEmptyLine.match(/^[ \t]+/);
-  if (!match) return str; // No common indent
+  if (!match) return str;
 
   const indent = match[0];
   const indentRegex = new RegExp(`^${indent}`);
@@ -65,7 +64,7 @@ async function initializeLocalizerUncached(): Promise<void> {
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
 
-      const locale = entry.name; // e.g., "en-US", "ja"
+      const locale = entry.name;
       if (!isDiscordLocaleCode(locale) || Object.hasOwn(LOCALE_ALIASES, locale)) {
         log.error(`Skipping unsupported or aliased locale directory: ${locale}`);
         continue;
@@ -292,7 +291,6 @@ export function getLocaleSubKeys(locale: string, path: string): string[] {
 
   if (typeof obj !== "object" || obj === null) return [];
 
-  // Return only keys whose values are objects (sub-namespaces), not leaf strings
   return Object.entries(obj as Record<string, unknown>)
     .filter(([, v]) => typeof v === "object" && v !== null && !Array.isArray(v))
     .map(([k]) => k);

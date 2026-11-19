@@ -324,7 +324,6 @@ class GuildMcpManager {
             );
           }
         } catch (embedError) {
-          // Non-critical, so don't block execution if the embed fails
           log.warn(`[GuildMcpManager] Failed to send MCP tool embed for ${functionName}:`, embedError);
         }
       }
@@ -397,7 +396,8 @@ class GuildMcpManager {
     }
 
     const MAX_VALUE_LENGTH = 200;
-    const MAX_TOTAL_LENGTH = 900; // Stay under Discord's 1024 field limit with header
+    // Stay at 900 characters because the header and code fences must fit within Discord's 1,024-character field limit.
+    const MAX_TOTAL_LENGTH = 900;
     const lines = entries.map(([key, value]) => {
       const stringValue = typeof value === "string" ? value : JSON.stringify(value);
       const truncated =
@@ -426,8 +426,6 @@ class GuildMcpManager {
       };
     };
     try {
-      // Connection testing uses the same guarded transports as runtime discovery.
-      // Returns the fresh client from whichever transport succeeded.
       const discovered = await this.connectAndDiscover(
         "tomoribot-test",
         url,
@@ -536,10 +534,7 @@ class GuildMcpManager {
     // An expired grant needs a human rather than a disable, so it never enters the failure streak.
     if (config.oauth_status === "needs_reauthorization") return null;
 
-    // Circuit breaker: skip servers that recently failed to connect until their
-    // cooldown elapses. Without this, one unreachable server re-pays the full
-    // connect timeout on EVERY generation (and every fallback-model attempt),
-    // blowing the stream inactivity budget and stalling chat for that guild.
+    // Skip quarantined servers during cooldown because re-paying connect timeouts on every turn stalls chat.
     const failure = this.connectFailures.get(key);
     if (failure && Date.now() < failure.retryAt) return null;
 
@@ -565,7 +560,6 @@ class GuildMcpManager {
         privateFailure,
       );
 
-      // Create CallableTool via mcpToTool (same as global MCP servers)
       const callableTool = mcpToTool(client);
 
       const conn: GuildMCPConnection = {
@@ -589,8 +583,7 @@ class GuildMcpManager {
           transport.sessionId &&
           this.pool.get(key) === conn
         ) {
-          // A session-scoped 404 requires a fresh handshake. A late error from this client
-          // must not retire a replacement that has already connected under the same key.
+          // Session-scoped 404s force re-handshake, while pool identity prevents stale errors dropping newer clients.
           this.pool.delete(key);
           void this.safeCloseClient(client);
         }
@@ -725,9 +718,7 @@ class GuildMcpManager {
       throw new Error(urlValidation.details ?? `Guild MCP URL failed runtime validation for '${label}'.`);
     }
 
-    // Every transport attempt below uses its OWN fresh MCP client. The SDK's Client
-    // throws "Already connected to a transport" if the same instance is reused after
-    // a failed/timed-out connect, which previously broke the SSE fallback outright.
+    // Create a fresh MCPClient per transport attempt because the SDK throws if a failed instance is reused.
     const errors: string[] = [];
     let authRejected = false;
 
@@ -748,7 +739,6 @@ class GuildMcpManager {
       redirect: "error" as const,
     };
 
-    // Try StreamableHTTP (modern MCP transport)
     {
       const client = this.newMcpClient(clientName);
       try {

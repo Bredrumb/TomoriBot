@@ -324,8 +324,7 @@ export const configSpriteOperations: ConfigSpriteOperations = {
     });
     if (!archive.ok) return { status: "invalid-archive", reason: archive.reason };
 
-    // Every name and image is validated before any storage or database write, so a bad entry aborts
-    // the whole import cleanly. Two entries can normalize to one key, and the map keeps the last.
+    // Every name and image is validated before any storage write so a bad entry aborts the import cleanly.
     const preparedByKey = new Map<
       string,
       { displayName: string; spriteKey: string; usageInstructions: string; isIdentity: boolean; pngBuffer: Buffer }

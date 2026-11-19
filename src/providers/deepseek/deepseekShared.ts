@@ -1,7 +1,4 @@
-// Deprecated catalog codenames that DeepSeek serves as deepseek-flash. The llms rows stay so
-// existing server configs keep their FK, but the wire name must be current: DeepSeek 400s on
-// deepseek-v4-flash-vision (never a first-party ID) and retired deepseek-chat and deepseek-reasoner
-// outright. Those two were Flash's non-thinking and thinking modes, which `thinking_level` now selects.
+// Map legacy llms FK rows to deepseek-flash because DeepSeek rejects or retired those codenames.
 const DEEPSEEK_API_MODEL_ALIASES: Readonly<Record<string, string>> = {
   "deepseek-chat": "deepseek-flash",
   "deepseek-reasoner": "deepseek-flash",

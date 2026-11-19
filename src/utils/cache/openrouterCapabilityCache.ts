@@ -4,7 +4,7 @@ interface OpenRouterModel {
   id: string;
   name: string;
   description?: string;
-  context_length?: number; // Total context window size (input + output tokens)
+  context_length?: number;
   supported_parameters?: string[];
   pricing?: {
     prompt?: string | number;
@@ -16,20 +16,21 @@ interface OpenRouterModel {
     instruct_type?: string;
   };
   top_provider?: {
-    max_completion_tokens?: number; // Maximum output tokens the provider supports
+    max_completion_tokens?: number;
   };
 }
 
 export interface ModelCapabilities {
-  hasTools: boolean; // Function calling support
-  seesImages: boolean; // Vision/image input support
-  seesVideos: boolean; // Video input support
-  supportsStructuredOutput: boolean; // JSON mode / structured output support
+  hasTools: boolean;
+  seesImages: boolean;
+  seesVideos: boolean;
+  supportsStructuredOutput: boolean;
 }
 
 export interface ModelTokenLimits {
-  contextLength: number; // Total context window (input + output)
-  maxCompletionTokens: number | undefined; // Max output tokens, undefined if not reported
+  // Combined input and output tokens (OpenRouter context_length counts both).
+  contextLength: number;
+  maxCompletionTokens: number | undefined;
 }
 
 // Values are normalized to USD per million tokens because the field names omit the currency unit.
@@ -58,8 +59,6 @@ function detectToolSupport(model: OpenRouterModel): boolean {
     }
   }
 
-  // OpenRouter metadata is occasionally contradictory: the model description can
-  // advertise native function/tool calling even when supported_parameters omits `tools`.
   const normalizedDescription = model.description?.toLowerCase() ?? "";
   return normalizedDescription.includes("function calling") || normalizedDescription.includes("tool calling");
 }

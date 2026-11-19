@@ -8,7 +8,6 @@ const FETCH_PAGE_TRACKER_MAX_SIZE = 500;
 
 function trimFetchPageTracker(): void {
   if (fetchPageTracker.size <= FETCH_PAGE_TRACKER_MAX_SIZE) return;
-  // Map preserves insertion order, so the first entries are the oldest
   const excess = fetchPageTracker.size - FETCH_PAGE_TRACKER_MAX_SIZE;
   let i = 0;
   for (const key of fetchPageTracker.keys()) {

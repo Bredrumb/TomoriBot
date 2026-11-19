@@ -42,7 +42,6 @@ async function fetchForwardOrigin(message: Message, channelId: string, messageId
 }
 
 export async function resolveForwardChain(message: Message): Promise<ResolvedForwardChain> {
-  // Snapshots exist only on forwards, so anything without them has nothing to resolve.
   if (message.messageSnapshots.size === 0) {
     return { snapshots: [], extraHops: 0, unresolved: false };
   }
@@ -51,9 +50,6 @@ export async function resolveForwardChain(message: Message): Promise<ResolvedFor
   let reference = message.reference;
   let extraHops = 0;
 
-  // An empty snapshot means the thing forwarded was itself a forward. The wrapper's
-  //    reference still points at that intermediate message, whose own snapshots hold
-  //    the next level down, so chase it until content appears or the budget runs out.
   while (snapshots.every(isEmptyForwardSnapshot)) {
     if (
       extraHops >= FORWARD_CHAIN_MAX_DEPTH ||

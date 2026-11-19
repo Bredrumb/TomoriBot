@@ -47,7 +47,6 @@ export async function callZaiStructuredJSON<T>(
 ): Promise<StructuredOutputResult<T>> {
   const apiModel = toZaiApiModelName(request.model);
 
-  // Only glm-4.6v supports image inputs
   const images = request.images ?? [];
   if (images.length > 0 && apiModel !== ZAI_VISION_MODEL) {
     return {
@@ -89,7 +88,7 @@ export async function callZaiStructuredJSON<T>(
 
     const thinking = request.thinkingLevel === undefined ? undefined : buildZaiThinkingRequest(request.thinkingLevel);
     if (thinking?.thinking) body.thinking = thinking.thinking;
-    // Skip temperature for reasoning models
+    // Omit temperature because Z.ai reasoning models reject it.
     if (!ZAI_REASONING_MODELS.includes(apiModel) && !thinking?.omitSampling) {
       body.temperature = request.temperature ?? 1.0;
     }

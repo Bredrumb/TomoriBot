@@ -20,8 +20,7 @@ function isEngineRefusal(data: unknown): boolean {
   return REFUSAL_FAILURES.has(failure) || (status !== undefined && REFUSAL_STATUSES.has(status));
 }
 
-// Singleton chain : engines are stateless so a single instance is reusable
-//    across all tool invocations.
+// Engines are stateless, so one shared chain instance is safely reused across all tool invocations.
 const ENGINE_CHAIN: readonly WebSearchEngine[] = [
   new BraveEngine(),
   new SearxngEngine(),
@@ -41,7 +40,6 @@ export async function executeWebSearchWithFallback(
 
   for (const engine of ENGINE_CHAIN) {
     if (context.abortSignal?.aborted) break;
-    // Filter: must support the category and be available right now.
     if (!engine.supportsCategory(category)) continue;
     if (!(await engine.available(context))) continue;
     if (context.abortSignal?.aborted) break;
@@ -85,9 +83,6 @@ export async function executeWebSearchWithFallback(
     });
   }
 
-  // All engines exhausted , so return a localized "category unavailable" message.
-  //    For text, this means the entire chain is down; for image/video/news, this
-  //    is the typical "no provider supports this category" path.
   const description = localizer(context.locale, "tools.search.category_unavailable_description", {
     category: getSearchCategoryLabel(context.locale, category),
   });

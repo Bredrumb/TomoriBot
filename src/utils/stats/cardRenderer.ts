@@ -10,7 +10,6 @@ const FONT_NAME = "Noto Sans JP";
 const FONT_REGULAR_PATH = resolve("assets/fonts/NotoSansJP-Regular.ttf");
 const FONT_BOLD_PATH = resolve("assets/fonts/NotoSansJP-Bold.ttf");
 
-// Module-level buffer cache: loaded synchronously on first renderCardToPng call.
 let cachedRegular: Buffer | null = null;
 let cachedBold: Buffer | null = null;
 
@@ -32,10 +31,7 @@ export async function renderCardToPng(node: VNode, width: number, height: number
     ],
   });
 
-  // @resvg/resvg-js: SVG → PNG (uses the same font buffers for rasterization).
-  // fontBuffers is the runtime API for passing Buffer[] directly but is absent
-  // from the v2.6.2 type declarations. Assigning to a variable first avoids
-  // TypeScript's excess-property literal check while keeping runtime behavior.
+  // fontBuffers is missing from @resvg/resvg-js v2.6.2 types, so assigning a variable avoids excess-property checks.
   const resvgFontOpts = { fontBuffers: [regular, bold], loadSystemFonts: false, defaultFontFamily: FONT_NAME };
   const resvg = new Resvg(svg, { font: resvgFontOpts });
 

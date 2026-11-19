@@ -35,7 +35,8 @@ export interface RemoteUrlValidationResult {
 }
 
 const PRIVATE_NETWORK_ENV = "ALLOW_PRIVATE_NETWORK";
-// The port is required because a bare host would admit every service on it; the host is a bracketed IPv6 literal or has no URL delimiters.
+// Port is required because a bare host would admit every service on it; the host is a bracketed IPv6 literal or has
+// no URL delimiters.
 const PRIVATE_ORIGIN_PATTERN = /^(\[[0-9a-f:.]+\]|[^\s:/?#@[\]]+):(\d{1,5})$/i;
 const MAX_PORT = 65_535;
 
@@ -56,7 +57,8 @@ function parsePrivateOrigin(entry: string): string | null {
   const match = PRIVATE_ORIGIN_PATTERN.exec(entry);
   const port = Number(match?.[2]);
   if (!match?.[1] || !Number.isInteger(port) || port < 1 || port > MAX_PORT) return null;
-  // Parsed like a request URL so both keys match, because the URL parser canonicalizes hosts (`127.1` becomes `127.0.0.1`).
+  // Parsed like a request URL so both keys match, because the URL parser canonicalizes hosts (`127.1` becomes
+  // `127.0.0.1`).
   const host = URL.parse(`http://${match[1]}/`)?.hostname;
   return host ? toPrivateOriginKey(host, String(port)) : null;
 }
@@ -427,10 +429,8 @@ export async function validateRemoteUrl(
     };
   }
 
-  // Always-on floor: cloud-metadata / link-local addresses are never valid
-  // targets, even when the general blocklist is relaxed (development, or a
-  // production private-network opt-in). They are the primary SSRF credential-
-  // theft target, so this check runs independently of `privateNetworkAllowed`.
+  // Cloud-metadata and link-local targets stay blocked independently of `privateNetworkAllowed` because they are
+  // primary SSRF credential-theft targets.
   const metadataAddress = resolvedAddresses.find((entry) => isCloudMetadataAddress(entry.address));
   if (metadataAddress) {
     return {

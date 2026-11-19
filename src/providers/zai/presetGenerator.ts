@@ -77,7 +77,7 @@ export async function generatePresetFromPromptZai(
       stream: false,
     };
 
-    // Skip temperature for reasoning models (they don't support it)
+    // Omit temperature because Z.ai reasoning models reject it.
     if (!ZAI_REASONING_MODELS.includes(apiModel)) {
       body.temperature = options.temperature ?? 1.0;
     }

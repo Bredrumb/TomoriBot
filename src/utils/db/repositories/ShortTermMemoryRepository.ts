@@ -41,8 +41,6 @@ type ShortTermMemoryExportShape = {
 };
 
 class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExportShape> {
-  // ── cache-delegating reads ─────────────────────────────────────────────────
-
   getForUser(userId: string): ShortTermMemoryEntry[] {
     return getShortTermMemoriesForUser(userId);
   }
@@ -64,8 +62,6 @@ class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExportShap
   ): ReturnType<typeof getShortTermMemoryForUserChannel> {
     return getShortTermMemoryForUserChannel(...args);
   }
-
-  // ── cache-delegating writes ────────────────────────────────────────────────
 
   store(...args: Parameters<typeof storeShortTermMemory>): ReturnType<typeof storeShortTermMemory> {
     return storeShortTermMemory(...args);
@@ -98,8 +94,6 @@ class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExportShap
   resetTurnCounter(...args: Parameters<typeof resetStmTurnCounter>): ReturnType<typeof resetStmTurnCounter> {
     return resetStmTurnCounter(...args);
   }
-
-  // ── cache-delegating invalidation ─────────────────────────────────────────
 
   invalidate(...args: Parameters<typeof invalidateShortTermMemory>): void {
     invalidateShortTermMemory(...args);
@@ -291,7 +285,6 @@ class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExportShap
     try {
       const serverDiscId = String(ownerId);
 
-      // Resolve internal server_id from Discord snowflake
       const [serverRow] = await withTransientDbRetry(
         async () => await sql`SELECT server_id FROM servers WHERE server_disc_id = ${serverDiscId}`,
         "resolve server for short-term memory export",

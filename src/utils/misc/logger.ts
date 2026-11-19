@@ -12,14 +12,14 @@ function isErrorDbLoggingEnabled(): boolean {
 }
 
 export enum ColorCode {
-  INFO = "#3498DB", // Cyan color
-  SUCCESS = "#2ECC71", // Green color
-  MEMORY_UPDATE = "#25d4da", // Aqua color
-  WARN = "#F1C40F", // Yellow color
-  ERROR = "#E74C3C", // Red color
-  SECTION = "#E066FF", // Purple color
-  AFFECTION = "#ff10cb", // Pink color
-  RATE_LIMIT = "#FFA500", // Orange color
+  INFO = "#3498DB",
+  SUCCESS = "#2ECC71",
+  MEMORY_UPDATE = "#25d4da",
+  WARN = "#F1C40F",
+  ERROR = "#E74C3C",
+  SECTION = "#E066FF",
+  AFFECTION = "#ff10cb",
+  RATE_LIMIT = "#FFA500",
 }
 
 const isProduction = process.env.RUN_ENV === "production";
@@ -95,7 +95,7 @@ export const buildLogStreams = (
   if (!filePath) return undefined;
 
   // "trace" lets every record through each sink; level filtering stays on the
-  //    logger itself so both outputs always carry identical lines
+  // logger itself so both outputs always carry identical lines
   return [
     { stream: stdoutStream, level: "trace" },
     { stream: createFileStream(filePath), level: "trace" },
@@ -109,12 +109,11 @@ const pinoLogger = pino(
   {
     level: resolveLogLevel(process.env.LOG_LEVEL, shouldHideLogs),
     customLevels: {
-      success: 35, // Between info (30) and warn (40)
-      section: 31, // Just above info (30)
-      // Below info so a severity range query (`level >= 40`) never counts a sample as a problem.
-      // `metricLogger` sets its own level through `resolveMetricLevel`, which decides where samples print.
+      success: 35,
+      section: 31,
+      // Below Pino info (30) so severity queries (level >= 40) exclude samples, while metricLogger selects visibility.
       metric: 25,
-      rateLimit: 55, // Between error (50) and fatal (60)
+      rateLimit: 55,
     },
     redact: {
       paths: LOG_REDACTION_PATHS,
@@ -174,10 +173,7 @@ function normalizeSensitiveKey(key: string): string {
 
 const SENSITIVE_NORMALIZED_KEYS = new Set(SENSITIVE_LOG_KEYS.map(normalizeSensitiveKey));
 
-// Base64 data URIs can reach over 100 KB (e.g. avatar uploads) and split Docker json-file
-// driver log lines past 16 KB. Collapsing base64 payloads keeps logs intact while avoiding
-// blunt truncation of normal prompts, memories, or stack traces.
-// LOG_MAX_STRING_LENGTH is optional; when unset, text strings are never truncated.
+// Optional cap on logged strings because base64 URIs are already collapsed in redactLogString without truncating prose.
 function getLogMaxStringLength(): number | undefined {
   const envVal = process.env.LOG_MAX_STRING_LENGTH;
   if (!envVal) return undefined;
@@ -387,9 +383,8 @@ export const log = {
 
     const dbPayload = buildErrorLogPayload(sanitizedPlainMsg, sanitizedError, sanitizedContext);
 
-    // insertErrorLog never throws and reports a skip separately from a failure. Neither is
-    // logged here: the record above already reached the durable host file, and emitting a
-    // second error line per failed insert is what turns a database outage into a log storm.
+    // Skips and DB insert failures stay unlogged because the host file already captured the error and extra logs
+    // cause storms during outages.
     try {
       await errorLogRepository.insertErrorLog(dbPayload);
     } catch (dbError) {

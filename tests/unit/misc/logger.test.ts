@@ -117,7 +117,6 @@ const createProductionLikeLogger = (streams: pino.StreamEntry[]) => {
 
 describe("buildLogStreams", () => {
   test("returns undefined when no log file is configured", () => {
-    // Preserves pino's default single-stream stdout construction
     expect(buildLogStreams(undefined)).toBeUndefined();
   });
 
@@ -143,20 +142,16 @@ describe("buildLogStreams", () => {
 
     const { logger, metricLogger } = createProductionLikeLogger(streams);
 
-    // Error record with nested err/context shapes, as produced by log.error()
     logger.error({ err: { name: "TypeError", message: "boom" }, context: { commandName: "chat" } }, "Chat turn failed");
     // The metric level sits below info, so only the child's pinned level lets it through
     // biome-ignore lint/suspicious/noExplicitAny: Custom Pino level added at runtime
     (metricLogger as any).metric({ metric: "cache_sizes" }, "metric:cache_sizes");
-    // Below the production "error" level, so must be filtered from BOTH sinks
     logger.info("hidden in production");
     logger.warn("hidden in production");
 
-    // Both sinks received byte-identical newline-delimited records
     expect(stdoutSink.lines).toEqual(fileSink.lines);
     expect(stdoutSink.lines).toHaveLength(2);
 
-    // Every nonempty line is one valid JSON object with the expected fields
     const [errorRecord, metricRecord] = stdoutSink.lines.map((line) => JSON.parse(line) as Record<string, unknown>);
     expect(errorRecord?.level).toBe(50);
     expect(errorRecord?.msg).toBe("Chat turn failed");
@@ -320,9 +315,8 @@ describe("buildLogStreams", () => {
   });
 
   test("the custom level methods are registered on the live logger", () => {
-    // `log` exposes success, section, metric, and rateLimit through one typed cast over the pino
-    // instance. A name pino was never given would throw instead of logging, so calling each one is
-    // the regression guard for that boundary. Output routing is covered by buildLogStreams above.
+    // `log` exposes custom levels via one typed cast over pino, so calling each method guards against an
+    // unregistered level throwing at runtime.
     expect(() => log.section("section probe")).not.toThrow();
     expect(() => log.success("success probe")).not.toThrow();
     expect(() => log.metric("metric_probe", { value: 7 })).not.toThrow();

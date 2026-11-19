@@ -326,10 +326,7 @@ class AnchorMessageController implements PersonaWorkflowMessageController {
   #deleted = false;
   #fatalError?: PersonaWorkflowUpdateError;
   #fatalLogged = false;
-  // Collapse-at-open edit that is in flight while a modal is open (constraint C).
-  // Stored fire-and-forget; every terminal edit settles it first so the final
-  // state deterministically lands last, and it is `.catch()`ed at storage so a
-  // rejected collapse can never convert a real submit into an error.
+  // In-flight modal collapse edit, settled before terminal edits and caught so rejections never break submits.
   #pendingCollapse?: Promise<unknown>;
 
   public constructor(
@@ -675,13 +672,8 @@ async function openRawWorkflowModal(
     };
   }
 
-  // Collapse-at-open: as the modal opens, replace the anchor message's live
-  // controls (provider picker, modal-ready button, or range selector) with an
-  // inert notice. Fire-and-forget relative to the modal await below, because Discord
-  // emits no modal-dismiss event, so this is the only thing that keeps a dismissed
-  // modal from leaving clickable-but-dead buttons until the 10-minute timeout.
-  // The edit uses the root token because `button` is consumed by showModal; every
-  // terminal edit calls `settlePendingCollapse()` so this lands before the result.
+  // Collapse controls via the root token because Discord emits no modal-dismiss event and showModal consumes
+  // `button`; terminal edits call settlePendingCollapse so results always land last.
   controller.collapseAtOpen(
     noticePayload(
       locale,

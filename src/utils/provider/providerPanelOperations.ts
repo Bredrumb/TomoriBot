@@ -650,10 +650,7 @@ function buildEndpointCapabilities(
 
   return CAPABILITIES.map((capability) => {
     const capabilityConnections = connections.filter((connection) => connection.capability === capability);
-    // `addCustomEndpointConnection` creates a connection for every capability the chosen API style
-    // supports, so a missing one means this endpoint cannot host that capability at all:
-    // `registerEndpointModel` answers `not-found` for it. Reporting it unavailable keeps the panel
-    // from offering a model modal that can only fail.
+    // Missing capability connections cannot host models (registerEndpointModel rejects them), so mark unavailable.
     if (capabilityConnections.length === 0 || (context.scope.kind === "personal" && capability === "decision")) {
       return { capability, availability: "unavailable", models: [] };
     }
@@ -1090,8 +1087,7 @@ async function addCuratedProvider(
   try {
     providerInstance = await dependencies.getProvider(provider);
   } catch (error) {
-    // Reported to the actor as an unsupported provider, which is only true for the guard above.
-    // Reaching here means construction or loading failed, so the real cause has to be recorded.
+    // Log construction failures because the server actor receives unsupported-provider.
     log.error("Provider could not be constructed while adding a server provider", error as Error, {
       errorType: "ProviderPanelOperationFailed",
       metadata: { operation: "addCuratedProvider", provider },
@@ -1195,8 +1191,7 @@ async function addPersonalProvider(
   try {
     instance = await ProviderFactory.getProviderByName(provider);
   } catch (error) {
-    // Same confusion as the server path: the actor is told the provider is unsupported when the
-    // truth is that loading or constructing it threw.
+    // Log load failures here because personal callers only see unsupported-provider.
     log.error("Provider could not be constructed while adding a personal provider", error as Error, {
       errorType: "ProviderPanelOperationFailed",
       metadata: { operation: "addPersonalProvider", provider },
@@ -1328,9 +1323,7 @@ export async function addCustomEndpointConnection(
       if (!upserted) throw new Error("Custom endpoint credential snapshot could not be saved");
     }
   } catch (error) {
-    // The rollback below can succeed, so this return is the only surviving evidence that anything
-    // went wrong. Binding the error and recording it is what keeps a rolled-back endpoint addition
-    // distinguishable from an ordinary validation refusal.
+    // Log before rolling back connections so a failed write stays distinguishable from a validation refusal.
     log.error("Custom endpoint connection could not be saved; rolled back created connections", error, {
       errorType: "CustomEndpointWriteFailed",
       metadata: {

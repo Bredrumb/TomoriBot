@@ -443,7 +443,6 @@ describe("ST Presets interaction routes", () => {
     let editReplyPayload: unknown = null;
     const route = createStPresetsInteractionRoute(makeDependencies(calls));
 
-    // Legacy disable button
     const disableInteraction = makeButtonInteraction("config:v2:st-presets-disable:en-US", calls, {
       editReply: async (opts: unknown) => {
         calls.push("editReply");
@@ -460,7 +459,6 @@ describe("ST Presets interaction routes", () => {
     expect(calls).toEqual(["deferUpdate", "resolveScope", "deactivateAll", "resolveScope-fresh", "editReply"]);
     expect(JSON.stringify(editReplyPayload)).toContain(localizedCopy("en-US", "commands.st-presets.disabled_receipt"));
 
-    // Legacy none route action
     calls.length = 0;
     editReplyPayload = null;
     const noneInteraction = makeButtonInteraction("config:v2:st-presets-none:en-US", calls, {
@@ -529,7 +527,6 @@ describe("ST Presets interaction routes", () => {
     const calls: string[] = [];
     let editReplyPayload: unknown = null;
 
-    // Case 1: Preset 99 selected (not found), but Preset 1 is active -> lands on Preset 1 page with changed receipt
     const route = createStPresetsInteractionRoute(makeDependencies(calls));
     const selectMissingInteraction = makeSelectInteraction("config:v2:st-presets-select:en-US", ["99"], calls, {
       editReply: async (opts: unknown) => {
@@ -549,7 +546,6 @@ describe("ST Presets interaction routes", () => {
     expect(serialized).toContain(localizedCopy("en-US", "commands.st-presets.changed_receipt"));
     expect(serialized).toContain("Preset 1");
 
-    // Case 2: Preset 99 selected (not found), and nothing is active -> lands on None page with changed receipt
     calls.length = 0;
     editReplyPayload = null;
     const routeNoActive = createStPresetsInteractionRoute(
@@ -926,7 +922,6 @@ describe("ST Presets interaction routes", () => {
     const calls: string[] = [];
     const route = createStPresetsInteractionRoute(makeDependencies(calls));
 
-    // Cancel
     const cancelInteraction = makeButtonInteraction("config:v2:st-presets-delete-cancel:en-US:1", calls);
 
     await route.execute({} as Client, cancelInteraction, {
@@ -937,7 +932,6 @@ describe("ST Presets interaction routes", () => {
 
     expect(calls).toEqual(["deferUpdate", "resolveScope", "editReply"]);
 
-    // Confirm
     calls.length = 0;
     const confirmInteraction = makeButtonInteraction("config:v2:st-presets-delete-confirm:en-US:1", calls);
 
@@ -1002,7 +996,6 @@ describe("ST Presets interaction routes", () => {
       },
     };
 
-    // add-open denied
     calls.length = 0;
     const addOpenBtn = makeButtonInteraction("config:v2:st-presets-add-open:en-US", calls, nonManagerOverrides);
     await route.execute({} as Client, addOpenBtn, {
@@ -1013,7 +1006,6 @@ describe("ST Presets interaction routes", () => {
     expect(calls).toEqual(["reply-denied"]);
     expect(JSON.stringify(replyPayload)).toContain("Manage Server");
 
-    // select "add" denied
     calls.length = 0;
     const selectAdd = makeSelectInteraction("config:v2:st-presets-select:en-US", ["add"], calls, nonManagerOverrides);
     await route.execute({} as Client, selectAdd, {
@@ -1023,7 +1015,6 @@ describe("ST Presets interaction routes", () => {
     });
     expect(calls).toEqual(["reply-denied"]);
 
-    // nodes-open denied
     calls.length = 0;
     const nodesOpen = makeButtonInteraction("config:v2:st-presets-nodes-open:en-US:1", calls, nonManagerOverrides);
     await route.execute({} as Client, nodesOpen, {
@@ -1033,7 +1024,6 @@ describe("ST Presets interaction routes", () => {
     });
     expect(calls).toEqual(["reply-denied"]);
 
-    // select activation denied without write
     calls.length = 0;
     const selectPreset = makeSelectInteraction("config:v2:st-presets-select:en-US", ["2"], calls, nonManagerOverrides);
     await route.execute({} as Client, selectPreset, {
@@ -1045,7 +1035,6 @@ describe("ST Presets interaction routes", () => {
     expect(JSON.stringify(editReplyPayload)).toContain("Manage Server");
     expect(calls).not.toContain("activate:2");
 
-    // disable denied without write
     calls.length = 0;
     const disableBtn = makeButtonInteraction("config:v2:st-presets-disable:en-US", calls, nonManagerOverrides);
     await route.execute({} as Client, disableBtn, {
@@ -1056,7 +1045,6 @@ describe("ST Presets interaction routes", () => {
     expect(calls).toEqual(["deferUpdate", "editReply-denied"]);
     expect(calls).not.toContain("deactivateAll");
 
-    // delete-confirm denied without write
     calls.length = 0;
     const deleteBtn = makeButtonInteraction("config:v2:st-presets-delete-confirm:en-US:1", calls, nonManagerOverrides);
     await route.execute({} as Client, deleteBtn, {
@@ -1092,7 +1080,6 @@ describe("ST Presets interaction routes", () => {
       recorded.push(`${input.action}:${input.serverId}:${input.userDiscId}`);
     };
 
-    // Activate preset via select
     const activateRoute = createStPresetsInteractionRoute(makeDependencies([], { recordAction }));
     const activateInteraction = makeSelectInteraction("config:v2:st-presets-select:en-US", ["2"], []);
     await activateRoute.execute({} as Client, activateInteraction, {
@@ -1102,7 +1089,6 @@ describe("ST Presets interaction routes", () => {
     });
     expect(recorded).toContain("st-presets.workspace.preset.activate:1:100");
 
-    // Deactivate via select none
     const deactivateSelectRoute = createStPresetsInteractionRoute(makeDependencies([], { recordAction }));
     const deactivateSelectInteraction = makeSelectInteraction("config:v2:st-presets-select:en-US", ["none"], []);
     await deactivateSelectRoute.execute({} as Client, deactivateSelectInteraction, {
@@ -1112,7 +1098,6 @@ describe("ST Presets interaction routes", () => {
     });
     expect(recorded).toContain("st-presets.workspace.preset.deactivate:1:100");
 
-    // Deactivate via disable button
     const disableButtonRoute = createStPresetsInteractionRoute(makeDependencies([], { recordAction }));
     const disableButtonInteraction = makeButtonInteraction("config:v2:st-presets-disable:en-US", []);
     await disableButtonRoute.execute({} as Client, disableButtonInteraction, {
@@ -1122,7 +1107,6 @@ describe("ST Presets interaction routes", () => {
     });
     expect(recorded).toContain("st-presets.workspace.preset.deactivate:1:100");
 
-    // Import preset (add-submit)
     const addRoute = createStPresetsInteractionRoute(makeDependencies([], { recordAction }));
     const addInteraction = {
       id: "submit-add",
@@ -1144,7 +1128,6 @@ describe("ST Presets interaction routes", () => {
     });
     expect(recorded).toContain("st-presets.workspace.preset.add:1:100");
 
-    // Update nodes (nodes-submit)
     const nodesRoute = createStPresetsInteractionRoute(makeDependencies([], { recordAction }));
     const nodesInteraction = {
       id: "submit-nodes",
@@ -1165,7 +1148,6 @@ describe("ST Presets interaction routes", () => {
     });
     expect(recorded).toContain("st-presets.workspace.nodes.save:1:100");
 
-    // Delete preset (delete-confirm)
     const deleteRoute = createStPresetsInteractionRoute(makeDependencies([], { recordAction }));
     const deleteInteraction = makeButtonInteraction("config:v2:st-presets-delete-confirm:en-US:1", []);
     await deleteRoute.execute({} as Client, deleteInteraction, {

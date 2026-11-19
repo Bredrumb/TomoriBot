@@ -100,7 +100,6 @@ describe("MemoriesPanel Limits & Boundary Sweeps", () => {
     for (const locale of RUNTIME_LOCALES) {
       for (const receipt of receipts) {
         for (const readStatus of readStatuses) {
-          // Sweep Memories category across memory collection sizes and page kinds
           for (const size of memorySizes) {
             const memories = Array.from({ length: size }, (_, i) => makeMemory(i + 1));
             const personas = [createPersona({ persona_nickname: "Main Persona" })];
@@ -154,7 +153,6 @@ describe("MemoriesPanel Limits & Boundary Sweeps", () => {
             }
           }
 
-          // Sweep personas collection sizes
           for (const pSize of personaSizes) {
             const personas = Array.from({ length: pSize }, (_, i) =>
               createPersona({ persona_id: i + 1, persona_lineage_id: 100 + i, persona_nickname: `Persona ${i + 1}` }),
@@ -175,7 +173,6 @@ describe("MemoriesPanel Limits & Boundary Sweeps", () => {
             );
           }
 
-          // Sweep Documents category
           for (const docSize of documentSizes) {
             const docs = Array.from({ length: docSize }, (_, i) => makeDocument(i + 1));
             const personas = [createPersona({ persona_nickname: "Main Persona" })];
@@ -264,7 +261,6 @@ describe("MemoriesPanel Limits & Boundary Sweeps", () => {
             }
           }
 
-          // Sweep STM category
           for (const stmSize of stmSizes) {
             const stmEntries = Array.from({ length: stmSize }, (_, i) => ({
               personaName: `Persona ${i + 1}`,
@@ -412,7 +408,6 @@ describe("MemoriesPanel Limits & Boundary Sweeps", () => {
     }
 
     for (const len of [4000, 20000, 100000]) {
-      // 🌟 is \uD83C\uDF1F (2 UTF-16 units, 1 codepoint)
       const content = "🌟".repeat(len);
 
       expectSafePanelPayload(memoryPayload(content, { kind: "main" }), `server memories astral emoji (len ${len})`);

@@ -34,12 +34,8 @@ describe("wrapWithWordBoundary", () => {
   });
 
   it("builds under the u flag for every character escapeRegExp escapes", () => {
-    // The "u" flag turns an unrecognized identity escape from a tolerated literal into a
-    // SyntaxError, and trigger words reach these patterns straight from user input, so an
-    // escape gap throws on every message in the offending server rather than just mismatching.
-    // Scoped to the escape set plus the shapes "u" mode rejects on its own (lone surrogate,
-    // astral pair, combining mark); a full code point sweep costs 3s of compile time for a
-    // property these cases already pin.
+    // Trigger words build "u"-flag regexes that throw on identity escapes, so these cases pin the escape set and
+    // edge shapes without a slow full-Unicode sweep.
     const characters = [
       ".",
       "*",

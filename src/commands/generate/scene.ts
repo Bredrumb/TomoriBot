@@ -360,10 +360,8 @@ export async function execute(
         },
       ],
     },
-    // Do not auto-defer the modal submission: the success path replies with a
-    // *non-ephemeral* embed so it becomes a real channel message the context
-    // builder can re-read as a [System: ...] scene directive. All post-submit
-    // work below is synchronous, so we still acknowledge within the 3s window.
+    // Skips auto-defer so the non-ephemeral reply enters channel context, which stays safe because post-submit work
+    // is synchronous within Discord's 3s window.
   );
 
   if (modalResult.outcome !== "submit" || !modalResult.interaction) {
@@ -437,8 +435,6 @@ export async function execute(
     );
   }
 
-  // Footer shows who triggered the scene, mirroring the executor identity pattern
-  //    in /impersonate user (guild member avatar, falling back to the global user avatar).
   const executorAvatarUrl = invokingMember
     ? invokingMember.displayAvatarURL({ size: 64, extension: "png", forceStatic: true })
     : interaction.user.displayAvatarURL({ size: 64, extension: "png", forceStatic: true });

@@ -68,16 +68,13 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Repositories — delegation & cache regres
 
   describe("UserRepository.register (cache side-effect)", () => {
     it("creates a new row and invalidates the cache without explicit invalidation call", async () => {
-      // Pre-warm the cache with null (simulates a prior miss).
-      // The repository's register() must invalidate so the next read goes to DB.
       clearUserCache();
-      await getCachedUserRow(REPO_USER_ID); // populates cache as null/miss
+      await getCachedUserRow(REPO_USER_ID);
 
       const user = await userRepository.register(REPO_USER_ID, "_rt_repo_name", "en");
       expect(user).not.toBeNull();
       expect(user?.user_disc_id).toBe(REPO_USER_ID);
 
-      // No explicit invalidation here: the repository must have done it.
       const fresh = await getCachedUserRow(REPO_USER_ID);
       expect(fresh).not.toBeNull();
       expect(fresh?.user_disc_id).toBe(REPO_USER_ID);
@@ -101,7 +98,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Repositories — delegation & cache regres
       const updated = await userRepository.setPrivacyLevel(REPO_USER_ID, PrivacyLevel.PARTIAL);
       expect(updated?.privacy_level).toBe(PrivacyLevel.PARTIAL);
 
-      // No manual invalidation: repository must flush it.
       const cached = await getCachedUserRow(REPO_USER_ID);
       expect(cached?.privacy_level).toBe(PrivacyLevel.PARTIAL);
     });
@@ -112,12 +108,11 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Repositories — delegation & cache regres
       const row = await userRepository.loadByDiscordId(REPO_USER_ID);
       if (!row || row.user_id === undefined) throw new Error("Expected REPO_USER_ID to exist after register()");
 
-      await getCachedUserRow(REPO_USER_ID); // warm cache
+      await getCachedUserRow(REPO_USER_ID);
 
       const updated = await userRepository.update(row.user_id, { user_nickname: "_rt_repo_renamed" });
       expect(updated?.user_nickname).toBe("_rt_repo_renamed");
 
-      // Cache must reflect the new nickname without explicit invalidation.
       const cached = await getCachedUserRow(REPO_USER_ID);
       expect(cached?.user_nickname).toBe("_rt_repo_renamed");
     });
@@ -153,14 +148,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Repositories — delegation & cache regres
     });
   });
 
-  // Each test asserts that the repository returns the same data as the direct
-  // repository SQL call, proving delegation is correct rather than silent no-ops.
-
-  // `llms.input_price_per_million` / `output_price_per_million` are Postgres NUMERIC, which the driver
-  // returns as strings on a raw SELECT (e.g. "0.1"). The repository parses rows through `llmSchema`, whose
-  // `z.coerce.number()` turns those columns into real numbers so `/tool estimate cost` can do price math.
-  // Normalize the raw rows the same way before comparing, so this parity check tracks data rather than the
-  // driver's NUMERIC-as-string serialization.
+  // Bun SQL returns Postgres NUMERIC columns as strings on raw SELECT, so raw rows must be coerced like llmSchema.
   const coerceLlmPriceColumns = <T extends Record<string, unknown>>(row: T): T => ({
     ...row,
     input_price_per_million:
@@ -238,10 +226,10 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Repositories — delegation & cache regres
     // To prove: remove the `invalidateUserCache` call from UserRepository.register()
     // and confirm the cache-side-effect test above fails.
     clearUserCache();
-    await getCachedUserRow(REPO_USER_ID); // warm as null
+    await getCachedUserRow(REPO_USER_ID);
     await userRepository.register(REPO_USER_ID, "_rt_probe", "en");
     const fresh = await getCachedUserRow(REPO_USER_ID);
-    expect(fresh).not.toBeNull(); // Would fail if invalidation is missing
+    expect(fresh).not.toBeNull();
   });
 
   it.skip("[REGRESSION PROBE] wrong delegation in loadAvailableLlms() would fail parity test", async () => {
@@ -249,6 +237,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Repositories — delegation & cache regres
     // and confirm the parity test above fails.
     const direct = await llmModelRepo.loadAvailableLlms();
     const via = await llmModelRepo.loadAvailableLlms();
-    expect(via).toEqual(direct); // Would fail if delegation were a no-op
+    expect(via).toEqual(direct);
   });
 });

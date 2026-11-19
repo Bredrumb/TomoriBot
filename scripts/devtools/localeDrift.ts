@@ -143,14 +143,8 @@ export function createGitDriftSource(cwd = process.cwd()): DriftGitSource {
     },
 
     blameFile(path: string): LineProvenance[] {
-      // Blame is pinned to HEAD rather than left to default to the working tree. Every value the
-      // report prints is read from HEAD, so blaming the working tree would let an uncommitted edit
-      // renumber these lines and move a key's baseline while the report shows the committed string.
-      //
-      // `--porcelain` without `--line-porcelain` emits the commit header once per run of lines that
-      // share a commit and `\t`-prefixed content lines, which is all this needs and several times
-      // smaller to parse. `raw` keeps the header fields byte-stable: the human format aligns them
-      // with padding, which would break the trailing-field parse below.
+      // Use --porcelain --raw on HEAD to match readBlobs' committed line numbers and keep header fields unpadded without
+      // --line-porcelain overhead.
       const provenance: LineProvenance[] = [];
       let revision = "";
       let committedAt = 0;
@@ -162,9 +156,7 @@ export function createGitDriftSource(cwd = process.cwd()): DriftGitSource {
           continue;
         }
 
-        // A header is `<sha> <origLine> <finalLine> [<groupSize>]`, and a shallow boundary prefixes
-        // the sha with `^`. Without that prefix in the pattern a truncated checkout parses as zero
-        // baselines and reports every key as clean, which is the opposite of the truth.
+        // Match optional `^` on blame headers so shallow-clone boundary commits do not parse as zero baselines.
         const header = /^\^?([0-9a-f]{40}) \d+ (\d+)(?: \d+)?$/.exec(line);
         if (header) {
           revision = header[1];
@@ -239,12 +231,7 @@ function walkLocaleObject<T>(
         continue;
       }
 
-      // Arrays are locale-specific by design (`general.defaults.base_trigger_words`), so they are a
-      // leaf here the same way they are for the identical-value check.
-      //
-      // The end line matters as much as the start: a wrapped value can have its closing lines
-      // changed by a later commit than the one that opened it, and blaming only the first line
-      // would attribute the whole value to the older commit.
+      // Stop at arrays as leaves (e.g. base_trigger_words) and track endLine because wrapped strings span commits.
       const startLine = sourceFile.getLineAndCharacterOfPosition(initializer.getStart(sourceFile)).line + 1;
       const endLine = sourceFile.getLineAndCharacterOfPosition(initializer.getEnd()).line + 1;
       results.push(map(path, startLine, endLine));

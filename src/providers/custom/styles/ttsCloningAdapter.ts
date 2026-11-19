@@ -145,15 +145,12 @@ export async function synthesizeSpeechViaTtsCloneBuffer(request: TtsCloneBufferR
   const supportsInstruct = Boolean(endpoint.extra_config.supports_instruct);
   const preserveUnicodeEmojis = scriptMarkup === "emoji" || isIrodoriTtsEndpoint(endpoint);
 
-  // Prepare script: strip all bracket tags for "plain" endpoints and
-  //    standard Chatterbox, because only Turbo handles bracket descriptors.
-  //    Turbo gets a conservative whitelist so unsupported bracket text is not spoken aloud.
-  //    For other bracket-tags/emoji endpoints, strip only for the caption text.
+  // Strip bracket tags except on Chatterbox Turbo (whitelisted) and bracket-tag/emoji engines, so unsupported tags are
+  // not spoken aloud.
   let processedScript: string;
   let captionText: string;
-  // Callers attach the persona's Chatterbox settings to every clone request, with Turbo defaulting
-  // on, so applying them unconditionally would strip Fish S2 Pro's free-form expression tags down
-  // to Turbo's whitelist.
+  // Gate tag rules by endpoint because callers attach default-on Chatterbox settings to non-Chatterbox engines like
+  // Fish S2 Pro.
   const chatterboxTagRules = isChatterboxEndpoint(endpoint) ? chatterbox : undefined;
   const shouldStripBracketTagsForTts = scriptMarkup === "plain" || chatterboxTagRules?.turboEnabled === false;
   if (shouldStripBracketTagsForTts) {

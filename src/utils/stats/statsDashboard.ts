@@ -43,10 +43,12 @@ export function resolveWindowFrom(timeframe: Timeframe): string | undefined {
     case "today":
       break;
     case "week":
-      floor.setUTCDate(floor.getUTCDate() - 6); // last 7 days incl. today
+      // Subtract 6 days so the inclusive 7-day window includes today.
+      floor.setUTCDate(floor.getUTCDate() - 6);
       break;
     case "month":
-      floor.setUTCDate(floor.getUTCDate() - 29); // last 30 days incl. today
+      // Subtract 29 days so the inclusive 30-day window includes today.
+      floor.setUTCDate(floor.getUTCDate() - 29);
       break;
     case "year":
       floor.setUTCFullYear(floor.getUTCFullYear() - 1);
@@ -340,8 +342,7 @@ export async function buildPersonalTabs(args: {
   subtitle: string;
   timezoneOffset?: number | null;
 }): Promise<StatsTab[]> {
-  // Dashboards are low-frequency reads. Drain telemetry first so the rendered
-  // snapshot includes any successfully buffered work from the current process.
+  // Drain buffered telemetry before dashboard reads so recent current-process activity appears in the snapshot.
   await statRepository.flush();
   const { locale, userId, from, scopeServerId, subtitle, timeframe } = args;
   const isAllTime = timeframe === "all_time";
@@ -639,8 +640,6 @@ export async function buildPersonaTabs(args: {
   const unitRewards = localizer(locale, "commands.stats.units.rewards");
   const unitPunishments = localizer(locale, "commands.stats.units.punishments");
 
-  // ── Overview (mirrors the personal/server core: messages, cost, memories,
-  //    rewards/punishments; raw token volume lives in the Models tab). ──
   const overviewFields: StatField[] = [
     statField("commands.stats.fields.messages_persona", fmtInt(messages, locale)),
     sepField(),
@@ -811,8 +810,8 @@ export async function buildServerTabs(args: {
     [conditioning, memorableMembers, serverMemoryCount, memberMemoryCount] = await Promise.all([
       statRepository.getConditioningTotals({ serverId }),
       statRepository.getTopUsersByMemory({ serverId, limit: 5 }),
-      // Server-scoped shared facts (exact) vs. members' personal memories (approximate,
-      // cross-server); kept as separate rows since they are different kinds of memory.
+      // Server memories are exact and server-scoped while member memories are cross-server estimates, so keep them
+      // separate.
       statRepository.getServerMemoryCount({ serverId }),
       statRepository.getMemberMemoryCount({ serverId }),
     ]);
@@ -827,9 +826,6 @@ export async function buildServerTabs(args: {
     : localizer(locale, "commands.stats.empty");
   const mostPopularModel = modelCost[0] ? modelCost[0].model : localizer(locale, "commands.stats.empty");
 
-  // ── Overview (shared core; Images/Videos are deliberately omitted on the
-  // persona view to keep this card focused on conversational affinity). ──
-  // Group 1: trigger count + top persona + top model.
   const overviewFields: StatField[] = [
     statField("commands.stats.fields.messages", fmtInt(messages, locale)),
     statField("commands.stats.fields.most_popular_persona", mostPopularPersonaName),

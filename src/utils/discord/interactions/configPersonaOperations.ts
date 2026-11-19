@@ -568,8 +568,7 @@ export const configPersonaOperations: ConfigPersonaOperations = {
       return { status: "trigger-write-failed", oldNickname, newNickname: trimmed };
     }
 
-    // Only the main persona speaks through the bot account, so only its rename touches the guild
-    // nickname. The sync is non-fatal: a missing Change Nickname permission must not fail the write.
+    // Only the main persona speaks through the bot, so only its rename syncs the guild nickname non-fatally.
     let guildNicknameSynced = false;
     if (guildIdentity && persona.is_alter !== true) {
       guildNicknameSynced = await guildIdentity.setNickname(trimmed);
@@ -1106,9 +1105,7 @@ export const configPersonaOperations: ConfigPersonaOperations = {
       const swap = await personaRepository.swapPersona(mainPersona.persona_id, alterPersona.persona_id);
       if (swap === "failed") return { status: "write-failed" };
 
-      // Evicted before the slow Discord calls below, not only at the end: a concurrent panel click
-      // reads this cache, and until it is evicted it still sees the pre-swap roles. The final
-      // eviction further down stays because the avatar rows change after this point.
+      // Invalidate before slow Discord calls so concurrent clicks see the swap; the later call covers avatars.
       invalidateTomoriStateCache(serverDiscId);
       if (swap === "roles-changed") return { status: "not-alter" };
 
@@ -1211,10 +1208,7 @@ export const configPersonaOperations: ConfigPersonaOperations = {
       return { status: "success" };
     }
 
-    // Summary and clear update the cache synchronously and let their durable write float, while
-    // the categories writer is genuinely async. The panel repaints from that cache, so awaiting
-    // these two would buy nothing and would put the STM tool's hot path behind two database round
-    // trips, which is what the absorbed command already avoids.
+    // Summary and clear update the cache synchronously so panel repaints avoid awaiting extra database round trips.
     if (summary?.trim()) {
       shortTermMemoryRepository.updateSummary(
         userDiscId,

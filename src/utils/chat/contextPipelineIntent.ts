@@ -56,9 +56,8 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
 
   const context = await buildBaseChatTurnContext(carriedTurn);
 
-  // `endTurnAfterTools` is only the pre-context carrier here. Preserve an STM
-  // end-turn request if the caller genuinely supplied one, otherwise remove our
-  // temporary marker before tool execution.
+  // `endTurnAfterTools` is only a pre-context carrier here, so strip our temporary marker before tool execution
+  // unless the caller supplied it.
   if (!originalEndTurnAfterTools.includes(SHORT_TERM_MEMORY_TOOL_NAME)) {
     const remainingEndTurnAfterTools = context.streamingContext.endTurnAfterTools?.filter(
       (toolName) => toolName !== SHORT_TERM_MEMORY_TOOL_NAME,

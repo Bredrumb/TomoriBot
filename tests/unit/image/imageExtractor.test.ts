@@ -90,8 +90,8 @@ describe("collectImageUrlsFromMessage", () => {
   });
 
   test("discovers an image referenced only inside a Components V2 media gallery", async () => {
-    // Regression: bot-generated images live in a Media Gallery component, not in
-    // top-level attachments/embeds. Discovery must still find them.
+    // Bot-generated images live in Media Gallery components, so discovery must scan components rather
+    // than only attachments.
     const message = makeMessage({
       attachments: [],
       components: [
@@ -132,9 +132,7 @@ describe("collectImageUrlsFromMessage", () => {
   });
 
   test("discovers images inside forwarded message snapshots", async () => {
-    // Regression: a forward wrapper has EMPTY top-level content/attachments: all
-    // media lives in messageSnapshots. Discovery must scan the snapshots, or every
-    // media-ID tool (image analysis, reference images) fails on forwarded images.
+    // Discord forward wrappers leave top-level attachments empty, so discovery must scan `messageSnapshots`.
     const message = makeMessage({
       snapshots: [
         makeMessage({
@@ -159,9 +157,7 @@ describe("collectImageUrlsFromMessage", () => {
   });
 
   test("does not double-count media present as both an attachment and a component reference", async () => {
-    // A Components V2 message uploads the file (attachment) AND references it in a
-    // gallery. The component scanner resolves the candidate back to the same
-    // attachment URL, so dedup must keep it to a single entry.
+    // Components V2 messages both attach the file and reference it in a gallery, so dedup must yield one entry.
     const sharedUrl = "https://cdn.discordapp.com/attachments/1/2/generated_123.png";
     const message = makeMessage({
       attachments: [

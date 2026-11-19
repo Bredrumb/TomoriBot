@@ -66,9 +66,8 @@ export async function safeDownload(url: string, options: SafeDownloadOptions): P
   }
 
   if (url.startsWith("data:")) {
-    // Early rejection: base64 is ~1.33x the size of the raw data.
-    // Using 0.75x of string length gives a safe lower-bound estimate of the byte size.
-    // If the estimate itself exceeds the max, it's definitively too large.
+    // Base64 expands raw bytes by ~1.33x, so 0.75x of URI length is a lower bound that safely rejects oversized data
+    // URIs before decoding.
     const estimatedSizeBytes = url.length * 0.75;
     if (estimatedSizeBytes > maxSizeBytes) {
       log.warn(
@@ -212,9 +211,7 @@ export async function safeDownload(url: string, options: SafeDownloadOptions): P
     }
 
     if (error instanceof RemoteUrlPolicyError) {
-      // Logged at warn, not error: an unreachable-by-policy URL (a plain-HTTP
-      // image host, a redirect to a private address) is an expected outcome of
-      // user-supplied content, not an incident.
+      // Warn rather than error because policy-blocked URLs are expected from untrusted user links, not incidents.
       log.warn("Download blocked by URL policy", {
         errorType: "download_blocked_by_policy",
         metadata: {

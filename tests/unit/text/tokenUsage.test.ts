@@ -130,10 +130,7 @@ describe("sumTurnUsage", () => {
   });
 
   it("ignores segments without usage but still sums the ones that have it", () => {
-    const segments: { usage?: TokenUsage }[] = [
-      { usage: { inputTokens: 500, outputTokens: 30 } },
-      {}, // e.g. a function_call segment that surfaced no usage
-    ];
+    const segments: { usage?: TokenUsage }[] = [{ usage: { inputTokens: 500, outputTokens: 30 } }, {}];
     expect(sumTurnUsage(segments)).toEqual({ inputTokens: 500, outputTokens: 30 });
   });
 

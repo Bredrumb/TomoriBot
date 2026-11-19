@@ -50,9 +50,7 @@ export async function embedWithBatchFallback(
     return embeddings;
   }
 
-  // A short count on a multi-input request means the model ignored the batch rather than
-  //    failing, so retry one input at a time instead of surfacing a mismatch the caller
-  //    cannot act on. Remember the model so later batches skip straight to step 1.
+  // A short count means the model dropped batch items, so cache it and retry sequentially instead of failing.
   if (inputs.length > 1) {
     log.warn(
       `Embedding model ${modelKey} returned ${embeddings.length} embeddings for ${inputs.length} inputs; ` +

@@ -23,8 +23,7 @@ const ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_API_VERSION = "2023-06-01";
 const ANTHROPIC_MAX_BASE64_IMAGE_BYTES = 10_000_000;
 
-// The output format grammar rejects these keywords with a 400. Dropping them only loosens decoding:
-// the caller's Zod schema still enforces every one of them on the parsed reply.
+// Anthropic rejects these keywords with HTTP 400 during decoding, while the caller's Zod schema still enforces them.
 const UNSUPPORTED_OUTPUT_SCHEMA_KEYWORDS = new Set([
   "minLength",
   "maxLength",

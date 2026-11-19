@@ -1,10 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { chunkMessage, createSentenceSplitRegex, maskInlineCodeAndUrls } from "@/utils/text/processors/chunkProcessor";
 
-// The regex is a negative-lookbehind split: it matches sentence-ending periods
-// that do NOT follow abbreviations, numbers, or acronyms. Tests verify both
-// the "splits here" and "does NOT split here" cases, which are equally load-bearing.
-
 describe("createSentenceSplitRegex", () => {
   let regex: RegExp;
 
@@ -88,10 +84,8 @@ describe("createSentenceSplitRegex", () => {
   });
 
   describe("acronym trailing-period behavior (known limitation)", () => {
-    // The lookbehind guards mid-sequence dots (e.g. the dot between U and S in U.S.)
-    // but the character immediately before the *final* trailing period is always a letter,
-    // not a dot so the acronym guard does not fire on the trailing dot.
-    // "U.S. is large" → the period after S IS matched and consumed by the split.
+    // The lookbehind only checks one character before the dot, so an acronym's final letter-preceded period still
+    // splits.
     it("splits trailing period of 'U.S.' (lookbehind does not cover the final dot)", () => {
       regex = getRegex();
       const text = "The U.S. is large";
@@ -161,10 +155,8 @@ describe("chunkMessage hard breaks", () => {
 });
 
 describe("chunkMessage HEAVY protected spans", () => {
-  // The semantic-block pass merges protected spans into plain text blocks so surrounding prose
-  // stays in one message. The HEAVY branch used to re-split that block at every newline and
-  // sentence period, which cut spans in half and left each message with one half of the pair as
-  // literal syntax.
+  // Protected spans merge into plain text blocks so surrounding prose stays together, meaning HEAVY mode must not
+  // re-split inside them.
   it("keeps a span with an internal newline in one message", () => {
     const text = "*...but if you're asking the answer's more than zero\ndon't make me say a number.*";
 
@@ -279,7 +271,6 @@ describe("chunkMessage HEAVY protected spans", () => {
     // The rejected face opener is skipped, so the real aside after it is still protected: without
     // that protection the "sure." period would split this into two messages.
     expect(chunkMessage("hmm :( (really. sure.) ok", "sentences")).toEqual(["hmm :( (really. sure.) ok"]);
-    // A real aside keeps its protection, including the one whose closer follows a colon.
     expect(chunkMessage("sure (ok. fine) whatever", "sentences")).toEqual(["sure (ok. fine) whatever"]);
     expect(chunkMessage("(see note: it. is fine) ok", "sentences")).toEqual(["(see note: it. is fine) ok"]);
   });

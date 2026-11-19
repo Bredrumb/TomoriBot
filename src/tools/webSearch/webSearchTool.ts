@@ -101,7 +101,6 @@ export class WebSearchTool extends BaseTool {
 
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     try {
-      // Feature flag gate : mirrors the previous BraveSearchTool behavior.
       if (!this.isEnabled(context)) {
         return {
           success: false,
@@ -123,16 +122,14 @@ export class WebSearchTool extends BaseTool {
         ? (rawCategory as SearchCategory)
         : "text";
 
-      // Normalize count : must be a positive integer, otherwise omit.
       const rawCount = typeof args.count === "number" && args.count > 0 ? Math.floor(args.count) : undefined;
 
       log.info(
         `web_search invoked: category=${category} query="${args.query}"${rawCount !== undefined ? ` count=${rawCount}` : ""}`,
       );
 
-      // The dispatcher emits the per-engine Discord notice through the engine's underlying
-      // tool wrapper: BraveEngine reuses the Internal*Tool classes that already call
-      // sendToolNotice, while the SearXNG and DuckDuckGo engines send it themselves.
+      // Notice emission is delegated to each engine (Brave via Internal*Tool; SearXNG and DuckDuckGo directly) rather
+      // than sent here.
       return await executeWebSearchWithFallback(args.query as string, category, context, rawCount);
     } catch (error) {
       log.error("Error in web_search tool:", error as Error);

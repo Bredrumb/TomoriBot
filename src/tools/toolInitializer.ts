@@ -23,11 +23,7 @@ export async function initializeTools(): Promise<void> {
       totalDiscovered += discovered;
     }
 
-    // Auto-discover unified webSearch tool(s).
-    //    The webSearch/ folder contains a single LLM-visible class (WebSearchTool)
-    //    plus engine-internal modules. We scan only `webSearchTool.ts` to keep
-    //    the engine modules (which export instances, not BaseTool subclasses)
-    //    out of registration.
+    // Scan only webSearchTool.ts so internal engine modules are not registered as LLM-visible tools.
     const webSearchPath = path.join(process.cwd(), "src", "tools", "webSearch");
     const webSearchFiles = (await getAllFiles(webSearchPath)).filter((file) => file.endsWith("webSearchTool.ts"));
 
@@ -38,8 +34,7 @@ export async function initializeTools(): Promise<void> {
       totalDiscovered += discovered;
     }
 
-    // Auto-discover unified fetchUrl tool(s). As with webSearch, scan only
-    //    the public BaseTool file and keep engine modules internal.
+    // Scan only fetchUrlTool.ts so internal fetch engine modules stay excluded from tool registration.
     const fetchUrlPath = path.join(process.cwd(), "src", "tools", "fetchUrl");
     const fetchUrlFiles = (await getAllFiles(fetchUrlPath)).filter((file) => file.endsWith("fetchUrlTool.ts"));
 

@@ -40,8 +40,6 @@ export class DeepseekStreamAdapter extends OpenAICompatibleStreamAdapter {
           delete requestBody.presence_penalty;
           delete requestBody.frequency_penalty;
         }
-        // Assistant prefix-completion is applied by the shared seam in
-        // OpenAICompatibleStreamAdapter (providerRequiresPrefixCompletion → "deepseek").
       },
     });
   }

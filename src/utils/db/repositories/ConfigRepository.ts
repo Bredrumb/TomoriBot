@@ -288,9 +288,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     | "user_byok_mode"
   > | null> {
     try {
-      // Join the three split tables that own capability-selection columns.
-      //    server_model_configs anchors (always present post-E0 backfill);
-      //    the other two are LEFT JOINs for migration-window safety.
+      // LEFT JOIN secondary config tables so servers missing optional split rows still resolve.
       const [row] = await sql`
         SELECT
           smc.llm_id,
@@ -349,7 +347,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     );
     const llm_disabled_params = enableNovelAIPresetSamplers(saved.llm_disabled_params);
 
-    // Write sampling params across their owning split tables in parallel.
     const [modelOk, chatOk, naiOk, savedOk] = await Promise.all([
       this.updateModelConfig(serverId, { llm_temperature, llm_disabled_params }),
       this.updateChatConfig(serverId, { llm_top_p, llm_top_k, llm_min_p }),
@@ -398,7 +395,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
         return parsed.success ? parsed.data : null;
       }
 
-      // Threshold mode; read current state, compute next, write back atomically.
       const updatedRuntime = await sql.transaction(async (tx) => {
         const [currentRuntime] = await tx`
           SELECT *
@@ -687,7 +683,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
           );
         }
 
-        // Replace junction rows atomically (DELETE + INSERT to handle removals).
         if (hasOverrides) {
           await tx`DELETE FROM server_auto_trigger_persona_overrides WHERE server_id = ${serverId}`;
           for (const override of overrides) {
@@ -750,9 +745,8 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   // survive reset.
   async resetAllServerConfigs(serverId: number, txClient?: SQL): Promise<void> {
     if (txClient) {
-      // Bun SQL transactions operate over a single dedicated database connection.
-      // Issuing concurrent statements via Promise.all on one transaction connection
-      // can interleave or corrupt protocol frames, so queries must run sequentially.
+      // Run queries sequentially on txClient because Bun SQL transactions share one connection and concurrent
+      // Promise.all calls can interleave protocol frames.
       await txClient`DELETE FROM server_model_configs WHERE server_id = ${serverId}`;
       await txClient`DELETE FROM server_chat_configs WHERE server_id = ${serverId}`;
       await txClient`DELETE FROM server_member_permissions_configs WHERE server_id = ${serverId}`;
@@ -846,9 +840,8 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
       values.push(serverId);
       const serverIdIndex = values.length;
 
-      // sql.unsafe is intentional: tableName is dynamic (13 split-config tables) and cannot
-      // be expressed as a typed sql`` identifier; sql(patch) for SET also requires a static
-      // template tag so mixing both with a dynamic table name forces sql.unsafe here.
+      // sql.unsafe is required because tableName is dynamic across split-config tables and Bun's sql(patch) helper
+      // cannot mix with a dynamic table identifier.
       const result = await sqlClient.unsafe(
         `UPDATE ${tableName} SET ${setClause} WHERE server_id = $${serverIdIndex} RETURNING server_id`,
         values,
@@ -1158,7 +1151,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   private async setFallbackModelRefRows(serverId: number, refs: FallbackModelRef[]): Promise<boolean> {
     try {
       const legacyIds = refs.filter((ref) => ref.type === "llm").map((ref) => ref.id);
-      // Write refs to server_chat_configs and sync legacy integer-ID list in server_model_configs in parallel.
+      // Sync fallback_llm_ids so legacy readers keep working.
       const [refsOk, idsOk] = await Promise.all([
         this.updateChatConfig(serverId, { fallback_model_refs: refs }),
         this.updateModelConfig(serverId, { fallback_llm_ids: legacyIds }),

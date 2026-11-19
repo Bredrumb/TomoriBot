@@ -34,7 +34,7 @@ describe("/setup registration", () => {
     expect(setupCommand).toBeDefined();
     if (!setupCommand) return;
 
-    expect(setupCommand.contexts).toBeUndefined(); // DM-capable
+    expect(setupCommand.contexts).toBeUndefined();
     expect(setupCommand.default_member_permissions).toBe(String(PermissionsBitField.Flags.ManageGuild));
     const languageOption = setupCommand.options?.find((option) => option.name === "language");
     expect(languageOption?.required).toBe(true);

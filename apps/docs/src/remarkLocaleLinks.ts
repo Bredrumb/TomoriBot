@@ -54,7 +54,6 @@ export function remarkLocaleLinks(docsRoot: string): RemarkPlugin {
       .map((entry) => entry.name),
   );
 
-  // A path names either a page or a directory index, and the URL alone does not say which.
   const pageExists = (locale: string, pageId: string): boolean =>
     findEntryFile(docsRoot, locale, pageId) !== undefined ||
     findEntryFile(docsRoot, locale, `${pageId}/index`) !== undefined;

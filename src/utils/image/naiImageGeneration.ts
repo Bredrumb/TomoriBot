@@ -95,8 +95,7 @@ export function classifyNaiImageError(error: unknown): NaiImageErrorKind {
 const MAX_NAI_ZIP_BYTES = 32 * 1024 * 1024;
 const MAX_NAI_ZIP_ENTRIES = 8;
 const MAX_NAI_ERROR_BODY_BYTES = 4096;
-// Generation queues for seconds, not minutes. A body that trickles past this is abandoned rather
-// than holding the tool, its sockets and its buffers until the outer tool timeout gives up on it.
+// Generation queues for seconds, so trickle bodies abort here instead of holding sockets until the outer tool timeout.
 const NAI_IMAGE_REQUEST_TIMEOUT_MS = 180_000;
 
 export function naiImageRequestSignal(abortSignal?: AbortSignal): AbortSignal {

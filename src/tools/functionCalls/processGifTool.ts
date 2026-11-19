@@ -43,7 +43,6 @@ export class ProcessGifTool extends BaseTool {
   }
 
   isAvailableForContext(provider: string, context?: ToolContext): boolean {
-    // Base provider and environment check
     if (!this.isAvailableFor(provider)) {
       return false;
     }
@@ -53,7 +52,6 @@ export class ProcessGifTool extends BaseTool {
       return false;
     }
 
-    // Check if model has vision capabilities (GIFs require vision)
     const hasVision = context.tomoriState.llm.sees_images;
 
     if (!hasVision) {
@@ -87,7 +85,6 @@ export class ProcessGifTool extends BaseTool {
     log.info(`ProcessGifTool: Starting GIF processing for message ${messageId} - Reason: ${reason}`);
 
     try {
-      // Fetch recent messages from the channel (last 100)
       log.info(`ProcessGifTool: Fetching recent messages from channel ${context.channel.id}`);
       const recentMessages = await context.channel.messages.fetch({
         limit: 100,
@@ -108,7 +105,6 @@ export class ProcessGifTool extends BaseTool {
         };
       }
 
-      // Extract GIF attachment from message
       log.info(
         `ProcessGifTool: Found message ${messageId}, checking for GIF attachments (${targetMessage.attachments.size} total attachments)`,
       );
@@ -147,7 +143,6 @@ export class ProcessGifTool extends BaseTool {
         };
       }
 
-      // Validate GIF size (reject if > MAX_GIF_SIZE_MB)
       const maxSizeBytes = MEDIA_LIMITS.MAX_GIF_SIZE_MB * 1024 * 1024;
       if (gifAttachment.size > maxSizeBytes) {
         const sizeMB = (gifAttachment.size / (1024 * 1024)).toFixed(2);
@@ -165,7 +160,6 @@ export class ProcessGifTool extends BaseTool {
         };
       }
 
-      // Process GIF using extractGifKeyframes() utility
       await sendToolProgressNotice(
         context,
         "gif_processing",
@@ -204,7 +198,6 @@ export class ProcessGifTool extends BaseTool {
         text: `[System: Animated GIF from message ${messageId}; ${processedFrames.length} keyframes extracted from ${processedFrames[0].totalFrames} total frames.]`,
       });
 
-      // Add each keyframe with a label (matching googleStreamAdapter pattern)
       for (const frame of processedFrames) {
         frameParts.push({
           type: "text",
@@ -224,7 +217,7 @@ export class ProcessGifTool extends BaseTool {
 
       const enhancedContextItem: StructuredContextItem = {
         role: "user",
-        metadataTag: ContextItemTag.DIALOGUE_HISTORY, // Inject into conversation, not system instruction
+        metadataTag: ContextItemTag.DIALOGUE_HISTORY,
         parts: frameParts,
       };
 
@@ -264,7 +257,6 @@ export class ProcessGifTool extends BaseTool {
           errorMessage = "Failed to parse the GIF file. The file might be corrupted or in an unsupported format.";
           errorStatus = "parse_failed";
         } else {
-          // Include error message for debugging
           errorMessage = `Failed to process GIF: ${error.message}`;
         }
       }

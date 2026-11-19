@@ -38,18 +38,15 @@ export const onRequest = defineRouteMiddleware((context) => {
   const locale = starlightRoute.locale ?? localeFromEntryId(entry.id) ?? DEFAULT_DOCS_LOCALE_ID;
   const budgetLocale = starlightRoute.isFallback ? DEFAULT_DOCS_LOCALE_ID : locale;
 
-  // Keep internal wiki pages out of search indexes. Same for untranslated fallback pages: they
-  // serve the default locale's content verbatim, so indexing one creates duplicate-content
-  // competition with the page it copies. A fallback becomes indexable automatically once its
-  // translation lands, because the route stops being a fallback.
+  // Noindex internal wiki pages and untranslated fallback routes because fallbacks duplicate default-locale content until
+  // translated.
   const isWiki = baseId === "wiki" || baseId.startsWith("wiki/");
   if (isWiki || starlightRoute.isFallback) {
     head.push({ tag: "meta", attrs: { name: "robots", content: "noindex" } });
   }
 
-  // Starlight emits an alternate for every configured locale regardless of whether that locale has
-  // a source file, which would advertise a fallback route as a translation. Rebuild the set from
-  // the files on disk instead of trying to suppress individual tags.
+  // Rebuild hreflang alternates from disk because Starlight emits tags for every configured locale, advertising
+  // fallbacks as translations.
   const alternates = buildHreflangAlternates(docsRoot, baseId, {
     isFallback: starlightRoute.isFallback,
     site: context.site ?? DOCS_BASE_URL,
@@ -58,16 +55,13 @@ export const onRequest = defineRouteMiddleware((context) => {
   head.length = 0;
   head.push(...headWithoutAlternates, ...alternates);
 
-  // Frontmatter description present → Starlight already emitted the tags.
   if (entry.data.description) return;
 
   const maxLength = getDocsLocaleConfig(budgetLocale)?.descriptionMaxLength ?? 160;
   const description = deriveDescription(entry.body ?? "", maxLength);
   if (!description) return;
 
-  // Starlight falls back to the site-wide `description` config for pages without one, so the head
-  // already contains generic description tags. Overwrite those in place, since pushing would emit
-  // duplicate meta tags.
+  // Overwrite Starlight's site-wide fallback description tags in place because pushing new tags would emit duplicates.
   for (const tag of head) {
     if (tag.tag !== "meta") continue;
     if (tag.attrs?.name === "description" || tag.attrs?.property === "og:description") {

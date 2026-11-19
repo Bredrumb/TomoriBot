@@ -613,7 +613,7 @@ class ImportRepository {
 
     values.push(tablePatch.id);
     const idPlaceholder = `$${values.length}`;
-    // Identifiers come from fixed section definitions. Values remain bound parameters so a portable field cannot alter the statement.
+    // tableName and idColumn come from fixed section definitions and values stay bound, so portable data cannot alter SQL.
     const result = await tx.unsafe(
       `UPDATE ${tablePatch.tableName} SET ${setParts.join(", ")} WHERE ${tablePatch.idColumn} = ${idPlaceholder} RETURNING ${tablePatch.idColumn}`,
       values,
@@ -948,7 +948,6 @@ class ImportRepository {
 
       invalidateUserCache(userDiscId);
 
-      // Count imported fields (base 2 + optional impersonation/image/behavioral fields)
       let fieldsCount = 2;
       if (impersonationPrompt) fieldsCount++;
       if (physicalAppearanceTags.length > 0) fieldsCount++;
@@ -984,10 +983,8 @@ class ImportRepository {
       if (!(await validateDraftingImportReferences(serverId, config)))
         return { success: false, error: "commands.config.drafting.import_unavailable" };
 
-      // STM customization travels as nested keys (stm_config / stm_categories) that are
-      // restored via shortTermMemoryRepository.fromExportShape, NOT the dynamic flat-config
-      // SQL writer: so exclude them from the column-name allowlist validation below.
-      // humanizer_degree is legacy input that resolveImportedHumanizer maps onto the toggle columns, not a column name.
+      // Exclude nested STM keys (restored via shortTermMemoryRepository) and legacy humanizer_degree (mapped by
+      // resolveImportedHumanizer) because they are not columns in the flat-config allowlist.
       const configFields = Object.keys(config).filter(
         (f) => f !== "stm_config" && f !== "stm_categories" && f !== "humanizer_degree",
       );
@@ -1090,8 +1087,7 @@ class ImportRepository {
         user_info_updates_enabled: config.user_info_updates_enabled,
       };
 
-      // server_notice_embeds_configs: tool notice key suppressions
-      // ToolNoticeKey union type is satisfied by the validated string values from the export schema.
+      // Export schema validates each tool notice key string, so the union cast is safe.
       const noticeEmbedsPatch: Partial<ServerNoticeEmbedsConfigRow> = {
         tool_notice_hidden_keys:
           config.tool_notice_hidden_keys as ServerNoticeEmbedsConfigRow["tool_notice_hidden_keys"],
@@ -1240,8 +1236,6 @@ class ImportRepository {
           ? configRepository.updateWelcomeConfig(serverId, { welcome_prompt: config.welcome_prompt })
           : Promise.resolve(true),
 
-        // STM customization (config + categories) restores via the repository's export
-        // shape, which upserts server_stm_configs and replace-alls stm_categories.
         config.stm_config !== undefined || config.stm_categories !== undefined
           ? shortTermMemoryRepository.fromExportShape(serverDiscId, {
               stm_config: config.stm_config ?? null,

@@ -64,11 +64,8 @@ const STREAM_FIRST_TOKEN_TIMEOUT_MS = Math.max(
   STREAM_SDK_CALL_TIMEOUT_MS,
   DISCORD_STREAMING_CONSTANTS.FIRST_TOKEN_TIMEOUT_MS,
 );
-// After the SDK-call watchdog aborts a stalled stream, how long to wait for the abandoned
-// `streamToDiscord` promise to actually settle before returning. `Promise.race` does not cancel the
-// loser and `abort()` only tears down the HTTP request, so a Discord send it already dispatched can
-// still be in flight; waiting for it lands that send in the settled `accumulatedText` before the
-// fallback attempt builds its continuation prefill and starts sending its own messages.
+// Bounded wait after watchdog abort so in-flight Discord sends land in `accumulatedText` before fallback builds a
+// continuation prefill.
 const STREAM_ABANDONED_SETTLE_TIMEOUT_MS = 5000;
 const TOOL_EXECUTION_TIMEOUT_MS = parseIntegerEnvFlag(process.env.TOOL_EXECUTION_TIMEOUT_MS, 300000, 10000);
 const TOOLS_SUPPRESS_FOLLOWUP_AFTER_PRETOOL_TEXT = new Set(["update_short_term_memory"]);
@@ -259,8 +256,8 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
     }
 
     if (review) {
-      // Stopping at the held ceiling ends the stream before providers send trailing usage. Ordinary
-      // turns fall back to the same estimates, so the cut pass is not recorded as free.
+      // Stopping at the held ceiling skips trailing provider usage, so estimate it here instead of recording the
+      // cut pass as free.
       const usage =
         streamResult.usage ??
         (streamResult.pendingResponse?.truncation
@@ -309,10 +306,8 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
           if (completed) return completed;
           continue;
         }
-        // The turn-level retry regenerates the whole reply, so after delivered text it posts a second
-        // reply under the first. It is skipped only when the empty follow-up is the model having
-        // nothing to add; a lookup result still waiting to be presented, or a failure the retry
-        // handles specifically, keeps it.
+        // After delivered text, skip the turn-level retry only when the empty follow-up means nothing remains to
+        // add (avoiding a duplicate reply).
         const deliveredText = streamResults.findLast((result) => result.accumulatedText?.trim())?.accumulatedText;
         if (
           (deliveredText || toolResponseDelivered) &&
@@ -417,9 +412,7 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
         functionHistory.push(toolOutcome.historyEntry);
         lastToolName = toolOutcome.functionName;
         toolResponseDelivered ||= toolOutcome.responseDelivered;
-        // Visible text emitted before the tool call now lives on that history
-        // entry's assistant tool-call turn. Remove the same buffered parts from
-        // the trailing prefill so providers do not receive it a second time.
+        // Clear buffered parts already saved on the history entry so providers do not receive pre-tool text twice.
         accumulatedModelParts.length = 0;
         if (toolOutcome.success) {
           consecutiveToolErrors = 0;
@@ -580,8 +573,7 @@ async function streamOnce(
     : undefined;
   let timeoutId: NodeJS.Timeout | null = null;
 
-  // Unified kill: aborts the HTTP request AND rejects the Promise.race.
-  // Stored on the lock entry so /kill and stale-lock release can trigger it externally.
+  // Aborts the HTTP request and rejects Promise.race so /kill and stale-lock release stop stalled streams externally.
   let killStream: ((reason: Error) => void) | null = null;
 
   const armTimeout = (budgetMs: number) => {
@@ -607,9 +599,6 @@ async function streamOnce(
     ? params.context.message
     : undefined;
 
-  // Keep a handle to the provider call so the timeout branch can await it settling. Under
-  // Promise.race the loser is otherwise abandoned (never awaited); its rejection is still observed
-  // by race's internal handlers, so holding this reference does not create an unhandled rejection.
   const correction = params.context.responseReview && responseRevisionInstruction(params.context.responseReview);
   const preToolNarration = functionHistory.some((entry) => entry.preToolCallTextParts?.length)
     ? {
@@ -647,6 +636,7 @@ async function streamOnce(
     params.tomoriState.persona_id,
   );
   recordFirstChunk = recordChatProviderDispatch(params.tomoriState.llm.llm_provider);
+  // Hold `streamPromise` so timeout recovery can await its settle; Promise.race still observes any rejection.
   const streamPromise = params.provider.streamToDiscord(
     params.context.channel as Parameters<LLMProvider["streamToDiscord"]>[0],
     params.context.client,
@@ -685,9 +675,8 @@ async function streamOnce(
     return result;
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("SDK_CALL_TIMEOUT:")) {
-      // A pending stop request (e.g. /kill) makes this a terminal stop; no fallback runs, so
-      // nothing continues from in-flight sends. Return immediately; settling here would just make
-      // the kill wait out the abandoned stream for no benefit.
+      // Return immediately on a pending stop (such as /kill) because no fallback runs to continue in-flight
+      // sends.
       if (StreamOrchestrator.hasStopRequest(channelId)) {
         const settled = params.context.responseReview ? await settleAbandonedStream(streamPromise) : undefined;
         return { status: "stopped_by_user", usage: settled?.usage };
@@ -848,9 +837,6 @@ async function executeToolCall(
     isExecutionCancelled: params.context.responseReview ? () => responseReviewCancelled(params.context) : undefined,
   };
 
-  // Deliberate-tool-mode allowlist enforcement. When mode is active and
-  // the model attempts a tool that wasn't exposed for this turn, short-circuit
-  // with a synthetic failure response (visible to the model) so it can adapt.
   const families: Record<string, string> = {};
   const requestedNames = params.context.streamingContext.deliberateToolAllowedNames;
   if (
@@ -870,15 +856,10 @@ async function executeToolCall(
   const isBlockedByDeliberateAllowlist =
     params.context.deliberateToolModeActive && deliberateAllowedSet !== null && !deliberateAllowedSet.has(functionName);
 
-  // A truncated argument payload recovered by the adapter holds only the keys that arrived
-  // whole. Dispatching with that subset is worse than not dispatching at all: a tool whose
-  // arguments replace stored state (a category map, for instance) would write the surviving
-  // keys and silently drop the rest. No tool's semantics survive a partial call, so the
-  // model gets a synthetic failure instead and can retry with a complete one.
+  // Never dispatch truncated args because partial subsets on state-replacing tools silently drop omitted keys.
   if (functionCall.argumentsTruncated) {
-    // `log.error` rather than `log.warn`, which is filtered out whenever RUN_ENV=production,
-    // the only environment this truncation happens in. The error sink is also how the
-    // incident that prompted this path was found.
+    // Log at error level because `log.warn` is suppressed when RUN_ENV=production, where argument truncation
+    // occurs.
     await log.error(
       `Tool call "${functionName}" was not dispatched: the provider truncated its argument payload`,
       undefined,
@@ -1091,20 +1072,15 @@ async function executeToolCall(
   }
   log.info(`Function call completed: ${functionName} (${Date.now() - startedAt}ms)`);
 
-  // Record tool usage at the single tool-dispatch chokepoint (covers every
-  // built-in / REST / MCP tool). metric_key is the tool name, so per-tool
-  // breakdowns (web search, sticker, memory, reminder, …) fall out for free.
-  // Only successful, non-blocked calls count. Fire-and-forget so stat tracking
-  // never adds latency; DMs are skipped (server_id is a NOT NULL FK).
+  // Record tool_used fire-and-forget here for all built-in/REST/MCP tools, skipping DMs because
+  // stat_counters.server_id is NOT NULL.
   if (toolResult.success && !isBlockedByDeliberateAllowlist && !params.context.isDMChannel) {
     const serverId = params.tomoriState.server_id;
     const userId = params.context.triggererUserId;
     if (serverId && userId) {
       const lineageId = params.context.currentPersona.persona_lineage_id ?? params.tomoriState.persona_lineage_id ?? 0;
-      // userId is carried on the context (resolved once at turn planning), so no
-      // per-tool-call DB lookup: recordStat just buffers in memory.
-      // `sticker_used` is not recorded here: a successful call can be a repeat that sent
-      // nothing, so the per-sticker count belongs to `deliverExpression` at Discord acceptance.
+      // `sticker_used` is recorded in `deliverExpression` at Discord acceptance rather than here because a repeat
+      // call can send nothing.
       try {
         statRepository.recordStat({
           serverId,
@@ -1119,7 +1095,6 @@ async function executeToolCall(
     }
   }
 
-  // When a tool call fails, surface a hidden thought-log notice explaining why.
   if (!toolResult.success) {
     await emitFailedToolCallThoughtLog(
       toolContext,
@@ -1129,8 +1104,6 @@ async function executeToolCall(
     );
   }
 
-  // When deliberate-tool-mode admitted the tool via a specific trigger,
-  // post a hidden notice (thought-log only) explaining why it fired.
   const deliberateToolTriggerMatch = params.context.deliberateToolTriggerMatchByToolName.get(functionName);
   if (params.context.deliberateToolModeActive && deliberateToolTriggerMatch && !isBlockedByDeliberateAllowlist) {
     const safeTrigger = deliberateToolTriggerMatch.trigger.replace(/`/g, "'");
@@ -1183,7 +1156,6 @@ async function executeToolCall(
         },
       };
 
-  // Preserve pre-tool narration for continuity. Collection keeps it pending until review.
   const preToolCallTextParts = buildPreToolCallTextParts(streamResult);
   if (preToolCallTextParts) {
     log.info(

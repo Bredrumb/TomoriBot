@@ -42,8 +42,7 @@ type SupportedChannel =
   | AnyThreadChannel
   | BaseGuildVoiceChannel;
 
-// Default character count above which the "Expand" button is attached. Matches
-// the truncation applied by the task embed callers.
+// Matches the truncation threshold used by task embed callers so Expand attaches whenever previews truncate.
 const DEFAULT_TRUNCATION_THRESHOLD = 200;
 // Both notice types offer their expand button for a day: long enough that the button
 // outlives the message it was attached to in the channel's scrollback.
@@ -190,8 +189,6 @@ async function sendEmbedWithExpand(
   // A Minimal card shows none of the content, so there is no truncated tail for a button to reveal.
   const shouldAttachExpandButton = thresholdPreview.truncated && !embedOptions.minimal;
 
-  // Teardown reuses the complete Components V2 tree with only the button
-  // disabled, keeping the message in one rendering mode.
   const activeComponents = buildNoticeComponents(locale, embedOptions, config, shouldAttachExpandButton);
   const disabledComponents = shouldAttachExpandButton
     ? buildNoticeComponents(locale, embedOptions, config, true, true)
@@ -208,14 +205,11 @@ async function sendEmbedWithExpand(
   } = await deliverNoticeComponents(channel, activeComponents, webhookContext, locale);
   const webhook = webhookContext?.webhook;
 
-  // Short content was not truncated, so there is no collector to wire.
   if (!noticeMessage || !shouldAttachExpandButton) {
     return noticeMessage;
   }
 
-  // Wire the button collector. Any non-bot user may click, so the full content
-  //    is already shown to everyone in the channel (truncated), so ephemeral
-  //    expansion is not a privacy escalation.
+  // Any non-bot user may click because the channel already shows the truncated preview, avoiding a privacy escalation.
   const collector = noticeMessage.createMessageComponentCollector({
     componentType: ComponentType.Button,
     time: config.timeoutMs,

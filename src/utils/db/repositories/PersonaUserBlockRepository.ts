@@ -64,8 +64,7 @@ class PersonaUserBlockRepository {
       );
       return parsePersonaUserBlockRows(rows as unknown[]);
     } catch (error) {
-      // An empty list is indistinguishable from "no blocks apply", so returning it here lifted
-      // every persona-level block for the duration of a pool cascade. Fail closed instead.
+      // Fail closed by throwing because returning [] looks like "no blocks apply" and lifts blocks during DB outages.
       log.error(`Error loading persona user blocks for user ${userDiscId} in server ${serverId}:`, error);
       throw new DatabaseUnavailableError(`Failed to read persona blocks for user ${userDiscId}`);
     }

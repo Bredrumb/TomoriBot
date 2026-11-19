@@ -85,7 +85,6 @@ class CryptoKeyManager {
       log.info("Using CRYPTO_SECRET as version 1 (backward compatibility mode)");
     }
 
-    // Validation: At least one key must be available
     if (this.keys.size === 0) {
       throw new Error(
         "No encryption keys found in environment! " +

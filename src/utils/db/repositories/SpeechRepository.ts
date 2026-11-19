@@ -710,12 +710,8 @@ export async function countPersonaVoiceSampleRefs(serverId: number, sampleId: nu
 }
 
 async function clearPersonaVoiceSampleRefs(serverId: number, sampleId: number): Promise<void> {
-  // speech_voice_name must clear with the sample id: every provider reads it as the active voice
-  // name, so leaving it set makes a persona report a voice that no longer exists. The surviving
-  // design prompt is the only remaining name source, and a surviving speech_voice_id is
-  // deliberately left nameless rather than inheriting the deleted sample's name.
-  // The regex tests for any non-whitespace character, which is what the JS `.trim()` truthiness
-  // check in the voice-assign clear ladder resolves to, and it leaves a NULL prompt NULL.
+  // Clear speech_voice_name alongside the deleted sample unless a non-whitespace design prompt remains (the POSIX class
+  // matches JS .trim() and leaves NULL prompts NULL).
   await sql`
     UPDATE persona_voice_configs pvc
     SET speech_voice_sample_id = NULL,

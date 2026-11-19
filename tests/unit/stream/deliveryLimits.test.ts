@@ -168,8 +168,6 @@ describe("delivery caps resolve as stops, never as throws", () => {
 
     await updater.sendSinglePayload({ content: "first" }, "first", context, state);
 
-    // The message goes out and the counter advances to the cap, so the cap only ever blocks
-    // what comes after it, never the run-up to it.
     expect(stopCalls).toEqual([]);
     expect(channelSends).toHaveLength(1);
     expect(state.messageSentCount).toBe(1);

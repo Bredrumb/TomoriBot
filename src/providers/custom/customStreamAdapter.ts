@@ -33,9 +33,7 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
       localeNamespace: ["genai", "custom"].join("."),
       errorMessagePrefix: "Custom endpoint error",
       placeholderApiKey: CUSTOM_PROVIDER_PLACEHOLDER_API_KEY,
-      // Some custom/Ollama-style endpoints validly emit "\n{persona}:" immediately
-      // after a closed <think>...</think> block, so the request-level stop string
-      // is too aggressive here. Keep the local fallback speaker guard instead.
+      // Some endpoints emit "\n{persona}:" right after </think>, so omit the request stop string for the local guard.
       includePersonaSpeakerStop: false,
       resolveApiUrl: (config) => normalizeCustomApiUrl(config.endpointUrl),
       shouldRetryWithoutStop: (statusCode, errorText) => {
@@ -54,9 +52,7 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
 
         return mentionsStop && indicatesUnsupportedParam;
       },
-      // Chatmock (used as a local proxy for Codex CLI) silently strips
-      // system-role turns before forwarding to the underlying model.
-      // Detect it by URL so the adapter falls back to an in-band user turn.
+      // Chatmock silently strips system-role turns before Codex CLI, so match by URL and inject a user turn.
       supportsSystemRole: (apiUrl) => !isChatmockEndpoint(apiUrl),
       mutateHeaders: ({ headers, config, context }) => {
         const sessionId = resolveOpenCodeSessionId((config as CustomStreamConfig).endpointUrl, {
@@ -67,15 +63,10 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
           headers["x-opencode-session"] = sessionId;
         }
       },
-      // Inject Ollama-style options.num_ctx when the user has configured a
-      // context window override. This travels outside the messages array so it
-      // is unaffected by the context window it controls.
       mutateRequestBody: ({ requestBody, config, context }) => {
         const customConfig = config as CustomStreamConfig;
         if (customConfig.numCtx != null) {
-          // Ollama reads options.num_ctx; KoboldCPP reads top-level max_context_length.
-          // Both are injected; strict servers may reject the unused field, which the
-          // pre-commit parameter degradation path then drops on a targeted retry.
+          // Send both options.num_ctx and max_context_length because degradation drops whichever a server rejects.
           requestBody.options = {
             ...((requestBody.options as Record<string, unknown>) ?? {}),
             num_ctx: customConfig.numCtx,
@@ -107,9 +98,7 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
     config: StreamConfig,
     context: StreamContext,
   ): AsyncGenerator<RawStreamChunk, void, unknown> {
-    // Held for the whole stream, and taken per tool round, so a ComfyUI job never unloads the model
-    // mid-reply. The `finally` also runs when the consumer returns early on a function call, which
-    // releases the lease before that tool (possibly the ComfyUI job itself) executes.
+    // Hold the lease per stream round so early function-call returns release it before a ComfyUI tool runs.
     const releaseModel = await acquireTextModelLease(
       (config as CustomStreamConfig).customConnectionId,
       context.abortSignal,
@@ -169,7 +158,6 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
       return { ...base, thoughts: allThoughts };
     }
 
-    // Non-text chunks (errors, native delta.tool_calls) pass through untouched.
     if (base.type !== "text" || typeof base.content !== "string" || base.content.length === 0) {
       return base;
     }
@@ -249,7 +237,6 @@ function isChatmockEndpoint(apiUrl: string): boolean {
     const isLoopback = hostname === "127.0.0.1" || hostname === "localhost" || hostname === "::1";
     return isLoopback && port === CHATMOCK_PORT;
   } catch {
-    // Malformed URL, so don't assume ChatMock
     return false;
   }
 }

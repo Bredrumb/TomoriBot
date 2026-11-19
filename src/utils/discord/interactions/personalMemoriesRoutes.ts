@@ -188,8 +188,6 @@ export interface PersonalMemoriesRouteDependencies {
     nonce: string,
   ): Promise<void>;
   takeFileUpload(interactionId: string, nonce: string): APIAttachment | undefined;
-  // Injected because it performs network I/O, which is the same reason every other external effect
-  // on this interface is injected.
   readUploadedText(attachment: APIAttachment): Promise<TxtUploadReadResult>;
 }
 
@@ -275,7 +273,7 @@ export const personalMemoriesOperations: PersonalMemoriesOperations = {
     if (!validation.isValid) {
       return { status: "content-too-long" };
     }
-    // Owner scoping check: confirm memoryId belongs to current user & lineage
+    // Scope check: prevent cross-user or cross-lineage memory edits via forged IDs.
     const freshlyLoaded = await personalMemoryRepository.loadForUserLineage(userId, personaLineageId, false);
     const target = freshlyLoaded.find((m) => m.personal_memory_id === memoryId);
     if (!target) {
@@ -295,7 +293,7 @@ export const personalMemoriesOperations: PersonalMemoriesOperations = {
   },
 
   async remove({ userId, userDiscId, personaLineageId, memoryId }) {
-    // Owner scoping check: confirm memoryId belongs to current user & lineage
+    // Scope guard: ensure memoryId belongs to this user and lineage before deleting.
     const freshlyLoaded = await personalMemoryRepository.loadForUserLineage(userId, personaLineageId, false);
     const target = freshlyLoaded.find((m) => m.personal_memory_id === memoryId);
     if (!target) {
@@ -386,9 +384,7 @@ async function getStmCount(userDiscId: string): Promise<number> {
   return getShortTermMemoriesForUser(userDiscId).length;
 }
 
-// Enumerated rather than substring-matched: an inferred tone silently renders the wrong accent
-// colour for any key whose name happens to omit the sentinel words, which is how "empty_content"
-// once shipped a green success bar on a rejected submission.
+// Enumerate error keys rather than substring-matching because inferred tones miscolor keys like "empty_content".
 const ERROR_RECEIPT_KEYS = new Set([
   "privacy_blocked_error",
   "empty_content",
@@ -606,7 +602,7 @@ export function createPersonalMemoriesInteractionRoute(
       const route = parsePersonalMemoriesPanelRoute(parsed);
       if (!route) throw new Error(`Malformed personal memories panel route: ${interaction.customId}`);
 
-      // Modals and modal-opening select choices handle their own acknowledgement
+      // Select routes skip pre-deferral because adding a memory acknowledges via showModal.
       if (route.action === "select") {
         if (!interaction.isStringSelectMenu()) {
           throw new Error("Personal memories select route requires StringSelectMenu interaction");
@@ -776,7 +772,7 @@ export function createPersonalMemoriesInteractionRoute(
         try {
           content = modal.fields.getTextInputValue(buildPersonalMemoryModalFieldId("content", route.nonce));
         } catch {
-          // Optional once the file field can supply the memories instead.
+          // Optional because the file upload field can supply memories instead.
         }
         let tagsRaw = "";
         try {

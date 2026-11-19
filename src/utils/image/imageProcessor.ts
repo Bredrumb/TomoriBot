@@ -1,5 +1,3 @@
-// sharp v0.35 moved to ESM-style types, so `Metadata` is a named type export
-//    rather than a member of a merged `sharp` namespace.
 import sharp from "sharp";
 import { recordChatTurnFetch } from "@/utils/chat/turnLatency";
 import { log } from "../misc/logger";
@@ -156,8 +154,7 @@ async function fetchImage(url: string): Promise<FetchedImage> {
 
   const buffer = downloadResult.buffer;
   const rawSize = buffer.byteLength;
-  // Discord filenames and remote headers can disagree with the payload bytes. Provider APIs use
-  // the data-URI MIME label while decoding, so prefer recognizable file signatures.
+  // Prefer payload signatures over filenames or headers because Discord can mislabel formats providers decode strictly.
   const finalMimeType = detectImageMimeType(buffer);
   const contentType = normalizeMimeType(downloadResult.contentType);
 
@@ -179,7 +176,7 @@ async function fetchImage(url: string): Promise<FetchedImage> {
       .resize({
         width: IMAGE_CONTEXT_MAX_DIMENSION,
         height: IMAGE_CONTEXT_MAX_DIMENSION,
-        fit: "inside", // Maintains aspect ratio, fits within the box
+        fit: "inside",
         withoutEnlargement: true,
       })
       .jpeg({ quality: IMAGE_CONTEXT_JPEG_QUALITY })
@@ -190,8 +187,6 @@ async function fetchImage(url: string): Promise<FetchedImage> {
       mimeType: "image/jpeg",
     };
   } catch (sharpError) {
-    // Sharp failed (corrupt image, unsupported format, etc.), so fall back to raw data
-    // so the provider can still attempt to process it
     log.warn(
       `Image optimization failed, sending raw (${(rawSize / 1024 / 1024).toFixed(1)} MB): ${sharpError instanceof Error ? sharpError.message : String(sharpError)}`,
     );
@@ -265,8 +260,6 @@ export async function centerCropToSquare(buffer: Buffer): Promise<Buffer> {
 
     const squareSize = Math.min(metadata.width, metadata.height);
 
-    // Calculate the extraction position to center the crop
-    // For a 1920x1080 image, we want to extract a 1080x1080 square from the center
     const left = Math.floor((metadata.width - squareSize) / 2);
     const top = Math.floor((metadata.height - squareSize) / 2);
 
@@ -277,7 +270,7 @@ export async function centerCropToSquare(buffer: Buffer): Promise<Buffer> {
         width: squareSize,
         height: squareSize,
       })
-      .png() // Convert to PNG format for consistency
+      .png()
       .toBuffer();
 
     return croppedBuffer;

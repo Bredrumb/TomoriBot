@@ -13,13 +13,11 @@ export class NvidiaStreamAdapter extends OpenAICompatibleStreamAdapter {
       adapterName: "NvidiaStreamAdapter",
       localeNamespace: ["genai", "nvidia"].join("."),
       errorMessagePrefix: "NVIDIA API error",
-      // NIM answers "I do not support this input" with an opaque mid-SSE 500 rather than a
-      // parameter rejection, so without this the ladder queues no retry at all. Gated on a
-      // generic message, so a descriptive NVIDIA outage still fails fast into key/model fallback.
+      // NIM returns an opaque mid-SSE 500 on unsupported input, so degrade only on that generic message to fail outages
+      // fast.
       degradeOnOpaque5xx: true,
-      // Both thinking keys are droppable: losing them falls back to the model's own thinking
-      // default, which beats failing the reply, and NIM needs no reasoning_content replay that a
-      // mid-tool-loop change in thinking could break.
+      // Both thinking keys can drop safely because falling back beats failing and NIM needs no reasoning_content
+      // replay.
       degradationPriorityKeys: ["reasoning_effort", "chat_template_kwargs"],
       resolveApiUrl: (config) => {
         if (!config.endpointUrl) {

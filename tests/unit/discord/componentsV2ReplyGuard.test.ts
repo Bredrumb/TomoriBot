@@ -105,7 +105,6 @@ describe("Components V2 reply guard", () => {
     expect(calls).toHaveLength(1);
     const call = calls[0];
     expect(call.method).toBe("editReply");
-    // Legacy path carries embeds and an empty components array, never IsComponentsV2.
     expect(Array.isArray(call.payload.embeds)).toBe(true);
     expect(call.payload.flags).toBeUndefined();
   });
@@ -120,11 +119,10 @@ describe("Components V2 reply guard", () => {
     expect(calls).toHaveLength(1);
     const call = calls[0];
     expect(call.method).toBe("editReply");
-    // The payload is a V2 component container.
     expect(call.payload.flags).toBe(MessageFlags.IsComponentsV2);
     expect(Array.isArray(call.payload.components)).toBe(true);
     expect((call.payload.components as unknown[]).length).toBeGreaterThan(0);
-    // It MUST NOT carry legacy embeds, so Discord rejects those on a V2 message.
+    // Discord rejects legacy embeds on a V2 message, so the embeds property must be omitted.
     expect("embeds" in call.payload).toBe(false);
   });
 
@@ -408,7 +406,7 @@ describe("deliverGuardedPanel budget enforcement and redaction", () => {
             components: [
               {
                 type: ComponentType.TextDisplay,
-                content: `${SECRET_SENTINEL} - `.repeat(150), // > 4000 chars
+                content: `${SECRET_SENTINEL} - `.repeat(150),
               },
             ],
           },
@@ -421,24 +419,19 @@ describe("deliverGuardedPanel budget enforcement and redaction", () => {
         panel: "config:plugins:response-drafting",
       });
 
-      // Does not throw in production mode
       expect(result).toBeDefined();
 
-      // Interaction received fallback payload
       expect(calls).toHaveLength(1);
       const receivedPayload = calls[0].payload as ComponentsV2MessagePayload;
       expect(receivedPayload.flags).toBe(MessageFlags.IsComponentsV2);
       expect(hasComponentsV2Reply(interaction)).toBe(true);
 
-      // Verify log was called with redacted metadata
       expect(loggedErrors.length).toBeGreaterThan(0);
       const loggedEntry = loggedErrors[0];
       const serializedLog = JSON.stringify(loggedEntry);
 
-      // Log must NOT contain the sensitive prompt string
       expect(serializedLog).not.toContain(SECRET_SENTINEL);
 
-      // Log MUST contain structured violation metadata
       const context = loggedEntry.context as {
         metadata?: { panel?: string; violations?: Array<{ code: string; limit: number; observed: number }> };
       };
@@ -465,11 +458,9 @@ describe("after-write invariant preservation", () => {
       let writeCommitted = false;
       const { interaction, calls } = makeGuardedInteraction({ canUpdate: true });
 
-      // Simulate performPanelAction lifecycle: write -> reload -> repaint
       const performAction = async () => {
         writeCommitted = true;
 
-        // Builder generates an over-budget payload
         const overBudgetRepaintPayload = {
           flags: MessageFlags.IsComponentsV2,
           components: [
@@ -485,7 +476,6 @@ describe("after-write invariant preservation", () => {
           ],
         };
 
-        // Repaint uses deliverGuardedPanel
         await deliverGuardedPanel(interaction, overBudgetRepaintPayload, {
           method: "update",
           locale: "en-US",

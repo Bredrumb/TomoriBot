@@ -202,8 +202,8 @@ describe("help dashboard", () => {
     const container = getContainer("en-US", "setup", "custom-endpoints", "comfyui");
     const serialized = JSON.stringify(container);
 
-    // The select's closed value is the section name, so no display may repeat it as a heading. The
-    // variant heading stays: the subsection select sits below the body rather than heading it.
+    // The closed section select already displays the section name, while the variant heading
+    // stays above the body because the subsection select sits below it.
     expect(serialized).toContain(pageTitle);
     expect(textDisplays(container).some((content) => content.startsWith(`## ${pageTitle}`))).toBe(false);
 
@@ -468,9 +468,8 @@ describe("help provider picker", () => {
     expect(footer?.type).toBe(ComponentType.TextDisplay);
     const footerContent = footer && "content" in footer ? footer.content : "";
 
-    // Resolving the key with the variant's own variables and requiring the result to match is what
-    // makes this assertion able to fail: the footer's node declares `setup`, so rendering it with
-    // the page's variables instead would leave the token literal and disagree here.
+    // Resolving with the variant's own variables ensures this assertion can fail, because
+    // using the page's variables leaves the footer's `setup` token literal.
     const variant = HELP_CATEGORIES.find((c) => c.id === "setup")
       ?.pages.find((p) => p.id === "getting-started")
       ?.variants?.find((v) => v.id === "get-api-key");

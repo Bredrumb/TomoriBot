@@ -244,8 +244,6 @@ export function noChangesReceipt(locale: string): PanelReceipt {
   };
 }
 
-// The positional signature placed dependencies at position 8, which forced call sites
-// targeting later presentation fields to pad preceding positions with undefined.
 export interface PersonalConfigRepaintOptions {
   locale: string;
   scope: PersonalConfigScope;
@@ -374,8 +372,7 @@ export async function repaint(
     }
   }
 
-  // The Server Model Fallback section states the behavior that setting buys. A server that requires
-  // member-provided providers never delivers it, and the section has to say so where it is read.
+  // Pass server BYOK status because the fallback notice must reflect when the guild requires personal keys.
   let serverModelAccess: { userByokMode: boolean } | null = null;
   if (category === "models" && page === "fallbacks" && scope.guildId) {
     try {
@@ -475,8 +472,7 @@ export interface PersonalConfigPostDeferContext {
   interaction: GlobalRoutableInteraction;
   route: PersonalConfigPanelRoute;
   dependencies: PersonalConfigRouteDependencies;
-  // An accessor pair rather than a plain field: 22 post-defer write sites reassign the scope a
-  // refreshed read returned, then repaint from it, so every handler must observe the same live value.
+  // Accessor pair required because post-defer writes reassign scope and handlers must observe the refreshed value.
   get scope(): PersonalConfigScope;
   set scope(value: PersonalConfigScope);
 }

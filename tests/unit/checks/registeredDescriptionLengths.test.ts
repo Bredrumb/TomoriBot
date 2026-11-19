@@ -74,9 +74,8 @@ describe("extractRegisteredDescriptionKeys", () => {
   it("skips embed descriptions, which take the runtime locale and cap at 4096 rather than 100", async () => {
     const traced = await extractRegisteredDescriptionKeys();
 
-    // Re-derives the false-positive class instead of naming examples of it: any key a command
-    // file only ever passes with a runtime `locale` variable is embed prose, not registered
-    // metadata, and must not be measured against the 100-character command cap.
+    // Keys passed only with a runtime locale variable are embed prose (4096 cap), so re-derive that class
+    // instead of hardcoding examples.
     const runtimeLocaleKeys = new Set<string>();
     const glob = new Glob("**/*.ts");
     for await (const file of glob.scan(COMMANDS_PATH)) {

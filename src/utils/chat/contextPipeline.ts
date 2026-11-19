@@ -326,20 +326,14 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   streamingContext.deliveryMode = incoming.isUserImpersonation ? "user_impersonation" : "persona";
   streamingContext.deliveryReceipts = [];
 
-  // Initialize reply notice state for any queued turn so the "Replying to..." embed can fire
-  // before the first webhook chunk is sent. Deliberately NOT gated on `is_alter`: the main
-  // persona also switches to a webhook whenever a sprite renders, and webhooks cannot use
-  // Discord's native reply, so it needs the standalone notice for exactly the same reason.
-  // Whether a sprite fires is only known at delivery time, so the state is allocated up front
-  // and the uiUpdater gates the actual send on real webhook delivery, leaving this an inert
-  // no-op for queued turns that end up replying natively.
+  // Allocate reply notice state for all queued turns (not just alters) because main personas switch to webhooks
+  // on sprites and uiUpdater gates the send on real webhook delivery.
   if (incoming.isFromQueue) {
     streamingContext.replyNoticeState = { attempted: false, sent: false };
   }
 
-  // The streamed text already answers the queued message as the active persona. A tool reply
-  // would replace it (`endTurn`) through a second delivery route, which is how a persona-job turn
-  // once posted one persona's words under another's identity.
+  // Disable recent-message reply tool on queued replies so a second delivery route cannot overwrite the active
+  // persona's streamed text or mix persona identities.
   if (isQueuedReplyTurn(incoming)) {
     streamingContext.disableRecentMessageReplyTool = true;
   }
@@ -361,9 +355,8 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     impersonatedUserNickname = identity.displayName;
   }
 
-  // Resolve deliberate tool mode + intent allowlist for this turn. MUST run before
-  // buildContext() so any has_tools override flows into context synthesis
-  // (has_tools gates the STM tool affordance text there).
+  // Resolve deliberate tool mode before buildContext() because `has_tools` gates STM tool affordances during
+  // context synthesis.
   const deliberateToolModeActive = resolveTurnDeliberateToolMode(turn);
   const reminderData = incoming.reminderData;
   const reminderRecipientID = incoming.reminderRecipientID;
@@ -435,9 +428,8 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     deliberateToolTriggerMatches.push(...recentTriggeredToolIntentResult.matches);
   }
 
-  // Reminder-driven adjustments: voice/audio reminders should auto-expose
-  // generate_voice_message, and create_task is suppressed during reminder
-  // execution (we don't want the bot to schedule a nested reminder).
+  // Auto-expose voice generation on audio reminders and suppress `create_task` so reminders cannot schedule
+  // nested reminders.
   if (reminderData && (reminderRecipientID || reminderData.self_reminder)) {
     if (
       /\b(voice|audio|speech|say\s+(?:it|this)\s+out\s+loud|spoken)\b/i.test(reminderData.reminder_purpose) ||
@@ -494,10 +486,8 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     );
   }
 
-  // Derive an effective persona for this turn, applying two overrides in sequence. An RP
-  // channel zeroes the emoji/sticker flags so context builders skip their DB fallback and the
-  // sticker tool is not registered (it gates on these flags). `disableAllTools` then sets
-  // has_tools=false as the universal kill switch for every provider's tool-list builder.
+  // Zero RP emoji/sticker flags before `has_tools=false` so context builders skip DB fallbacks and the sticker
+  // tool stays unregistered.
   const rpBasePersona = assets.isRpChannel
     ? {
         ...turn.persona,
@@ -549,22 +539,18 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     streamingContext.impersonatedSpeakerLabel = impersonatedUserNickname;
   }
 
-  // Resolve any per-channel system prompt override (append/replace). Negative results
-  // are cached, so DM channels (which can never have an override) cost one cheap lookup.
+  // Negative prompt overrides are cached, so DM lookups stay cheap without an `isDMChannel` branch.
   const channelPromptOverride = effectivePersona.server_id
     ? await getCachedChannelPrompt(effectivePersona.server_id, channel.id)
     : null;
 
-  // Resolve any per-channel context note. Additive alongside the persona-scoped note;
-  // global note is only used when neither is set.
+  // Channel context note adds alongside persona notes; the global note applies only when neither is set.
   const channelContextNote = effectivePersona.server_id
     ? await getCachedChannelContextNote(effectivePersona.server_id, channel.id)
     : null;
 
-  // Reunion state is deliberately cross-server: the lineage is the persona's
-  // cross-server identity anchor, so a successful delivery in one channel or
-  // server consumes the same one-shot return everywhere that lineage appears.
-  // A verified proxied speaker carries its own clock, so scope it to that identity.
+  // Reunion state keys on persona lineage (cross-server) and verified proxy identity so one delivery consumes
+  // the greeting everywhere.
   const proxiedIdentity = resolveProxiedIdentity(message);
   const proxiedSpeakerName = proxiedIdentity.userDiscId
     ? (await getCachedUserRow(proxiedIdentity.userDiscId))?.user_nickname?.trim() || proxiedIdentity.name
@@ -628,10 +614,8 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     }),
   );
 
-  // Mirror buildPersonaSpriteContextItem's own gating so the queued-reply directive only
-  // offers the "Persona (sprite):" opening on turns where the sprite prompt was actually
-  // injected. Any disagreement between the two would put the model back in the bind of
-  // having to violate one instruction to satisfy the other.
+  // Mirror buildPersonaSpriteContextItem gating so queued-reply directives offer sprite openings only when the
+  // sprite prompt was injected.
   const allowSpriteLabel =
     !incoming.isUserImpersonation &&
     typeof effectivePersona.persona_id === "number" &&
@@ -879,15 +863,14 @@ async function buildSimplifiedHistory(
     turn.allPersonas,
   );
 
-  // A proxy may be confirmed before the original deletion lands, so a history
-  // fetch can contain both. Keeping both would duplicate one authored message.
+  // Drop superseded proxy originals because a confirmed repost can appear alongside its pending deletion in
+  // history.
   const supersededOriginalIds = getSupersededMessageProxyOriginalMessageIds(channel.id);
   if (supersededOriginalIds.size > 0) {
     messages = messages.filter((message) => !supersededOriginalIds.has(message.id));
   }
 
-  // Find the most recent reset or compact_refresh embed and slice history at that point.
-  // "reset" starts after the marker; "compact_refresh" starts at the marker (it's included).
+  // "compact_refresh" retains its summary embed at index, whereas "reset" slices strictly after the marker.
   let resetIndex = -1;
   let resetType: "reset" | "compact_refresh" | null = null;
   let resetMessageId: string | undefined;
@@ -917,9 +900,8 @@ async function buildSimplifiedHistory(
   );
 
   const activeUserBlocks = await loadActivePersonaUserBlocks(turn);
-  // Map each 'block'-type target to its row so the simplify loop can render a
-  // notice that includes the remaining block duration (from expires_at). 'mute'
-  // blocks are excluded here ; they affect triggering, not dialogue context.
+  // Index only 'block' rows for notice rendering, because 'mute' blocks suppress triggering rather than dialogue
+  // context.
   const blockedContextBlocksById = new Map<string, PersonaUserBlockRow>();
   for (const block of activeUserBlocks) {
     if (block.block_type === "block") {
@@ -937,18 +919,15 @@ async function buildSimplifiedHistory(
         }),
       );
   const hiddenAuthorIds = new Set([...blockedContextUserIds, ...blacklistedAuthorIds]);
-  // visibleRawMessages excludes hidden authors entirely so they cannot leak into
-  // tool-intent scanning, voice transcription, or sprite priming. Persona-blocked
-  // messages are still surfaced as `[System: ...]` notices in the simplify loop
-  // below, which iterates the full (unfiltered) `messages` list instead.
+  // Exclude hidden authors from `visibleRawMessages` (preventing STT/tool/sprite leaks) while the simplify
+  // loop still renders block notices from `messages`.
   const visibleRawMessages =
     hiddenAuthorIds.size > 0
       ? messages.filter((msg) => !hiddenAuthorIds.has(getBlockComparableAuthorId(msg)))
       : messages;
 
-  // Pre-populate the voice transcript cache for historical audio messages (Fix #5).
-  // Runs STT before the main loop so cache lookups inside simplifyMessage() are synchronous.
-  // Skipped in chat mode (transcripts are already posted as text messages in that mode).
+  // Warm historical STT transcripts before simplifyMessage() when chat mode is off so context lookups stay
+  // synchronous.
   if (!(turn.persona.config.voice_transcript_chat_mode ?? false)) {
     for (const msg of visibleRawMessages) {
       if (msg.author.bot || msg.webhookId) continue;
@@ -1010,14 +989,10 @@ async function buildSimplifiedHistory(
   );
   const reactedMessages: Message[] = [];
 
-  // Tracks whether the most recently pushed entry came from a "$:" debug message.
-  // A debug message and a normal message from the same user share an authorId, so
-  // this guard keeps them as separate turns (mirrors main's prevWasDebugMessage).
+  // Separate `$:` debug messages from normal messages by the same authorId so they never merge into one turn.
   let previousEntryWasDebug = false;
-  // Tracks the blocked author of the most recently pushed `[System: ...]` block
-  // notice. Consecutive messages from the same blocked user collapse into a single
-  // notice so a spamming blocked user does not flood context with duplicates.
-  // Reset to null whenever a normal (non-notice) entry is appended.
+  // Collapse consecutive messages from the same blocked author into one notice (reset on normal entries) so
+  // blocked spam cannot flood context.
   let previousBlockNoticeAuthorId: string | null = null;
   // Iterate the full message list (not visibleRawMessages): blocked authors are
   // rendered as notices here rather than dropped.
@@ -1028,15 +1003,12 @@ async function buildSimplifiedHistory(
     }
 
     const blockComparableId = getBlockComparableAuthorId(msg);
-    // A server-blacklisted author is dropped without a notice, like a FULL privacy opt-out:
-    // the persona did not impose the restriction and cannot lift it, so a notice gives it
-    // nothing to act on.
+    // Drop blacklisted authors silently without a notice because the persona did not impose and cannot lift
+    // server blacklists.
     if (blacklistedAuthorIds.has(blockComparableId)) {
       continue;
     }
 
-    // Blocked-author short-circuit: replace this user's live message with a
-    //    single system notice instead of running the full simplify pipeline.
     const activeContextBlock = blockedContextBlocksById.get(blockComparableId);
     if (activeContextBlock) {
       if (previousBlockNoticeAuthorId === blockComparableId) {
@@ -1098,12 +1070,8 @@ async function buildSimplifiedHistory(
       previousEntryWasDebug = false;
     }
 
-    // Decide whether this message collapses into the previous turn.
-    //    Consecutive messages from the same effective author merge into one turn,
-    //    but only when BOTH sides are pure text : if either side carries media we
-    //    keep separate turns so per-message media IDs stay unambiguous for
-    //    media-targeted tools. A debug/normal boundary also forces a split even
-    //    when the authorId matches.
+    // Merge consecutive same-author turns only when both sides lack media so per-message media IDs stay
+    // unambiguous for media tools.
     const previousEntry = simplifiedMessages[simplifiedMessages.length - 1];
     const currentHasMedia =
       simplified.imageAttachments.length > 0 ||
@@ -1147,9 +1115,8 @@ async function buildSimplifiedHistory(
       !shouldKeepSeparateMediaTurn &&
       !crossesTimeAwarenessDayBoundary
     ) {
-      // Merge: lazily promote the previous entry into a combined entry, then
-      //    append. The combined* tracking fields let reveal_message_metadata still
-      //    expose one ref_N + timestamp per original message (see contextAnnotations).
+      // Preserve per-message `combined*` arrays on merged turns so reveal_message_metadata still emits one
+      // ref_N per original message.
       if (!previousEntry.combinedMessageIds) {
         previousEntry.combinedMessageIds = [previousEntry.id];
         previousEntry.individualContents = [previousEntry.content ?? ""];
@@ -1370,10 +1337,8 @@ async function simplifyMessage(
         authorId = messageProxyIdentity.userDiscId;
         const identityUser = await getCachedUserRow(authorId);
         authorName = identityUser?.user_nickname?.trim() || messageProxyIdentity.displayName;
-        // Deliberately not registered in syntheticUsers: a stable proxy identity
-        // owns a real users row, and participant discovery keys any synthetic
-        // entry as a webhook, which would strip its memories, aliases, and
-        // system/host identity lines.
+        // Omit stable proxy identities from syntheticUsers because participant discovery treats synthetic entries
+        // as webhooks and strips memories and aliases.
         messageProxyUsers.set(authorId, {
           serviceId: messageProxyIdentity.serviceId,
           displayName: authorName,
@@ -1501,11 +1466,11 @@ async function simplifyMessage(
       completionContent,
       ...(hasProcessedEmbed || isJoin ? { completionSpeaker: false as const } : {}),
       createdAt: msg.createdTimestamp,
+      // Dedupe `msg.id` against `mediaSourceMessageIds` because forwarded media also registers the wrapper ID.
       mediaSourceMessageIds:
         imageAttachments.length > 0 || videoAttachments.length > 0
           ? hasLocalMedia
-            ? // Forwarded media registers the wrapper id (= msg.id), so dedupe
-              [...new Set([msg.id, ...mediaSourceMessageIds])]
+            ? [...new Set([msg.id, ...mediaSourceMessageIds])]
             : mediaSourceMessageIds.length > 0
               ? mediaSourceMessageIds
               : undefined
@@ -1560,7 +1525,8 @@ async function withReplyContext(
   const referenceMessageId = getReplyContextReferenceMessageId(msg);
   if (!referenceMessageId || fetchedMessagesById.get(referenceMessageId) === null) return { content };
   try {
-    // The fetched window comes first because the capped message cache evicts the newest messages of a large history fetch.
+    // Check the fetched window before the capped message cache because large fetches evict the newest cached
+    // messages.
     let referenced = fetchedMessagesById.get(referenceMessageId) ?? msg.channel.messages.cache.get(referenceMessageId);
     if (!referenced) {
       recordChatTurnFetch("reply");
@@ -1568,10 +1534,8 @@ async function withReplyContext(
         ? msg.fetchReference()
         : msg.channel.messages.fetch(referenceMessageId));
     }
-    // A reference can sit outside the fetched history window, so resolve its verified proxy
-    // attribution through the same bounded index read the history loop used. This is what lets
-    // the annotation name a proxied member instead of the webhook veneer, and it also brings an
-    // out-of-window sender under the persona's active block below.
+    // Hydrate proxy attribution on out-of-window references so annotations name the member and active persona
+    // blocks still apply.
     await verifyMessageWebhook(referenced);
     await ensureMessageProxyMessageIdentity(referenced, messageProxyIdentitiesByMessageId);
     if (blockedContextUserIds.has(getBlockComparableAuthorId(referenced, messageProxyIdentitiesByMessageId))) {
@@ -1722,9 +1686,8 @@ function appendTailDirectives(args: {
     }
   }
 
-  // Resolve the queued reply target name. When the triggering message was sent
-  // by the bot itself or one of its webhook personas, use the configured persona
-  // nickname instead of the raw Discord username (e.g. "Tomori(α)").
+  // Use the configured persona nickname rather than the raw Discord or webhook username (such as "Tomori(α)")
+  // for queued reply targets.
   let queuedReplyTargetName = args.proxiedSpeakerName ?? args.turn.triggererName;
   if (incoming.isFromQueue) {
     const queuedMessage = args.turn.lockedTurn.admission.message;

@@ -78,9 +78,7 @@ describe("import dropped-field reporting", () => {
   });
 
   it("does not report a depth prompt that carries settings but no text", () => {
-    // SillyTavern writes exactly this shape into its default export, so reporting
-    // it would put noise at the front of every log line for cards where the user
-    // set nothing.
+    // SillyTavern writes this empty shape into its default export, so reporting it would spam card logs.
     expect(
       describeUnmappedCardFields({
         spec: "chara_card_v3",

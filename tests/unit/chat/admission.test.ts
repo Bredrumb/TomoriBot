@@ -766,9 +766,6 @@ describe("evaluateChatAdmission message-proxy lookup failure", () => {
 
       const admission = await evaluateChatAdmission(incoming);
 
-      // The stalled lookup could not attest the repost, so this stays an ordinary
-      // webhook: the transport failure is counted truthfully, no identity or proxy
-      // record is written, and the message cannot claim a trigger.
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(getMessageProxyRouteMetricsSnapshot()).toMatchObject({ timeout_or_error: 1, unmatched: 0 });
       expect(getMessageProxyMessageRecord(webhookMessageId)).toBeNull();

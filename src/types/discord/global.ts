@@ -15,10 +15,7 @@ import type {
   Sticker,
 } from "discord.js";
 import type {} from "../db/schema";
-export type EventFunction = (
-  client: Client,
-  ...args: EventArg[] // Use rest parameters for flexibility across different events
-) => Promise<void>;
+export type EventFunction = (client: Client, ...args: EventArg[]) => Promise<void>;
 
 export type EventArg =
   | Collection<string, Message | PartialMessage>

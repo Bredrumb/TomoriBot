@@ -105,10 +105,8 @@ export async function synthesizeSpeechViaTtsVoiceDesign(request: TtsVoiceDesignR
     : cleanedDesignPrompt;
   const body: Record<string, unknown> = {
     text: processedScript,
-    // VoiceDesign requests deliberately omit ref_audio/ref_text. Some FastAPI
-    // wrappers type those fields as optional strings but still reject explicit
-    // JSON null, and omitting unused clone fields makes the request shape the
-    // server's auto mode can reliably distinguish from voice cloning.
+    // Omit ref_audio and ref_text because FastAPI wrappers can reject null strings and rely on their absence for auto
+    // mode.
     instruct,
   };
 

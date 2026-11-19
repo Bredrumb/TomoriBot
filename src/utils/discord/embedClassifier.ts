@@ -50,7 +50,6 @@ function extractEmbedTextParts(embed: Pick<Embed, "author" | "title" | "descript
 export function processLinkEmbed(embed: Embed): LinkPreviewResult {
   if (classifyProtocolEmbed(embed) === "unshared_dice_roll")
     return { isLinkPreview: false, textContent: null, imageInfo: null, thumbnailInfo: null };
-  // Skip entirely empty embeds
   const hasContent = embed.url || embed.title || embed.description || embed.author?.name || embed.fields.length > 0;
   if (!hasContent) {
     return { isLinkPreview: false, textContent: null, imageInfo: null, thumbnailInfo: null };
@@ -79,7 +78,6 @@ export function processLinkEmbed(embed: Embed): LinkPreviewResult {
   const textContent =
     contentParts.length > 0 ? `[System: Link preview embed content: ${contentParts.join(" - ")}]` : "";
 
-  // Derive image info from embed.image (preferred) or embed.thumbnail (fallback)
   const imageInfo = embed.image?.url ? deriveEmbedImageInfo(embed.image.url, embed.image.proxyURL ?? null) : null;
   const thumbnailInfo =
     !imageInfo && embed.thumbnail?.url
@@ -98,7 +96,6 @@ function deriveEmbedImageInfo(rawUrl: string, proxyUrl: string | null): LinkPrev
   try {
     const parsed = new URL(rawUrl);
     let filename = parsed.pathname.split("/").pop() || "embed_image";
-    // Strip social-media size suffixes (":large", ":medium", ":small", ":orig")
     filename = filename.replace(/:(large|medium|small|orig)$/, "");
 
     let mimeType = "image/jpeg";

@@ -28,7 +28,6 @@ export async function generateVoiceMessageMetadata(
       return null;
     }
 
-    // Decode to raw mono PCM via the ffmpeg-static bundled binary
     if (!ffmpegPath) {
       log.warn("[VoiceWaveform] ffmpeg-static binary not available");
       return null;
@@ -41,14 +40,14 @@ export async function generateVoiceMessageMetadata(
         "-loglevel",
         "error",
         "-i",
-        "pipe:0", // read audio from stdin
+        "pipe:0",
         "-f",
-        "s16le", // signed 16-bit little-endian PCM
+        "s16le",
         "-ac",
-        "1", // downmix to mono
+        "1",
         "-ar",
-        "8000", // 8 kHz is sufficient for visualization
-        "pipe:1", // write PCM to stdout
+        "8000",
+        "pipe:1",
       ],
       {
         stdin: new Blob([new Uint8Array(audioBuffer)]),
@@ -73,9 +72,7 @@ export async function generateVoiceMessageMetadata(
       return null;
     }
 
-    // Compute 100 amplitude samples by splitting PCM into equal chunks
-    //    and taking the peak absolute value in each chunk, normalized 0-255.
-    const sampleCount = Math.floor(pcmBuffer.length / 2); // 16-bit = 2 bytes
+    const sampleCount = Math.floor(pcmBuffer.length / 2);
     const chunkSize = Math.max(1, Math.floor(sampleCount / WAVEFORM_SAMPLES));
     const waveformBytes = new Uint8Array(WAVEFORM_SAMPLES);
 
@@ -87,7 +84,6 @@ export async function generateVoiceMessageMetadata(
         const amplitude = Math.abs(pcmBuffer.readInt16LE(j * 2));
         if (amplitude > peak) peak = amplitude;
       }
-      // Normalize 0-32767 → 0-255
       waveformBytes[i] = Math.round((peak / 32767) * 255);
     }
 

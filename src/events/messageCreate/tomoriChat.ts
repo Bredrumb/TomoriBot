@@ -58,9 +58,8 @@ export async function tomoriChat(input: TomoriChatInput): Promise<ChatAdmissionD
     () => runWithChatDiagnostic(incoming, () => runAdmittedChatTurn(incoming, latencyInvocation)),
   );
 
-  // User impersonation owns its user-facing error UI at the slash interaction. Waiting here keeps
-  // returned error/timeout statuses and queued turns attached to that interaction instead of letting
-  // a non-throwing tomoriChat() result be mistaken for successful generation.
+  // Wait for impersonation completion so non-throwing error/timeout dispositions and queued turns remain attached to
+  // the slash interaction.
   if (userImpersonationCompletion) {
     await userImpersonationCompletion;
   }
@@ -82,9 +81,8 @@ async function runAdmittedChatTurn(
     // The queue only advances when a lock is released, so a rejected nudge turn would strand the rest.
     if (isNudgeTurn) clearQueuedNudgeWork(incoming.message.channelId);
     await handleChatDisposition(admission);
-    // A queued turn is still live work: its callbacks are copied into QueuedMessage and fire when
-    // that turn eventually runs (or is genuinely discarded). Treating "queued" as a discard here
-    // detaches command callers from the real generation outcome.
+    // Queued turns copy callbacks into QueuedMessage and settle later, so only non-queued rejections fire
+    // onQueueDiscard.
     if (admission.disposition !== "queued") {
       await incoming.onQueueDiscard?.("admission_rejected");
     }
@@ -217,9 +215,8 @@ async function runAdmittedChatTurn(
 }
 
 export default async function messageCreateHandler(client: Client, message: Message): Promise<void> {
-  // Discord emits pin notifications as ChannelPinnedMessage system messages with
-  // a message reference to the pinned message. That reference is context metadata,
-  // not an intentional conversational reply, so it must never enter the trigger path.
+  // Discord's ChannelPinnedMessage carries a context messageReference rather than a conversational reply, so skip it
+  // before triggering.
   if (message.type === MessageType.ChannelPinnedMessage) {
     return;
   }

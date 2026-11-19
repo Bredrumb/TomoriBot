@@ -46,9 +46,7 @@ export function startHealthServer(port: number): void {
       const healthStatus = healthTracker.getHealthStatus();
       const statusCode = healthStatus.healthy ? 200 : 503;
 
-      // `eventLoop` is reported but deliberately excluded from the verdict: the Compose healthcheck
-      // runs `curl -f`, so letting staleness produce a 503 would mark the container unhealthy on a
-      // threshold nobody has calibrated yet.
+      // Exclude eventLoop from the 503 verdict because Compose curl -f healthchecks lack a calibrated lag threshold.
       res.writeHead(statusCode, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({

@@ -745,10 +745,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       }
       return parsed.data;
     } catch (error) {
-      // `null` here is read downstream as "no row", which becomes CredentialUnavailableError
-      // with reason `no_saved_config` and renders an "API Key Missing" embed telling an admin
-      // to run /config setup during a transient blip. The caller has to be able to tell the
-      // two apart, so an unreadable database must not answer with the absence sentinel.
+      // Throw instead of returning null so transient DB outages do not render a false "API Key Missing" embed downstream.
       log.error(`Error loading saved provider config for server ${serverId}, provider ${provider}:`, error);
       throw new DatabaseUnavailableError(`Failed to read the saved provider config for server ${serverId}`);
     }
@@ -2283,8 +2280,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       supportsAssistantPrefill?: boolean;
       verbatimToolCalling?: boolean;
       isDefault?: boolean;
-      // When set, update that exact row (edit path) instead of inserting. This lets an edit change
-      // model_name without colliding with sibling models under the same label+capability.
+      // Updates that exact row instead of inserting so edits can rename model_name under the same label and capability.
       customEndpointId?: number | null;
     },
     options: LlmProviderCacheOptions = {},
@@ -2729,11 +2725,8 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
   }): Promise<OpenRouterModelRegistrationRow | null> {
     const { serverId = null, userId = null, llmId } = params;
 
-    // Every scoped_model_registrations arbiter here repeats the `<column> IS NOT NULL` half of its
-    // partial index predicate. Postgres infers a partial unique index only when the statement's WHERE
-    // implies the index's, so dropping that conjunct as redundant makes the upsert fail at runtime with
-    // 42P10, "no unique or exclusion constraint matching the ON CONFLICT specification". The same
-    // applies to the embedding, diffusion, and video registrations below.
+    // Arbiter WHERE clauses restate `<col> IS NOT NULL` across all scoped registration upserts so Postgres partial-index
+    // inference does not fail with 42P10.
     try {
       const rows = await withTransientDbRetry(
         () =>

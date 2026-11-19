@@ -24,8 +24,8 @@ const catalog = new URL("../../../src/db/seed/catalog/models.ts", import.meta.ur
 const catalogSnapshot: Record<ModelTable, { provider: string; codename: string }[]> = await Bun.file(
   new URL("../../fixtures/modelDriftCatalog.json", import.meta.url),
 ).json();
-// The source fixture is frozen, so candidates are computed against the catalog as it stood when the
-// fixture was taken. The live catalog absorbs these models once a drift PR merges.
+// Diff against the frozen catalog snapshot because the live catalog absorbs these models once a drift PR
+// merges.
 const frozenCatalog: CatalogLookup = (table) => catalogSnapshot[table];
 
 describe("model drift", () => {
@@ -144,7 +144,6 @@ describe("model drift", () => {
     const declinedKeys = new Set(seen.filter((entry) => entry.table === "decisionSections").map(seenKey));
     for (const row of uncarried) expect(declinedKeys.has(seenKey(row))).toBe(true);
     expect(findCandidates(source, seen).candidates.some((row) => row.table === "decisionSections")).toBe(false);
-    // Use a synthetic model ID: Jev 1.14 is now in the curated catalog.
     const freshModel = "typesafe/jev-fixture-new";
     source["openrouter-decisions"].models[freshModel] = {
       ...source["openrouter-decisions"].models["typesafe/jev-1.13"],

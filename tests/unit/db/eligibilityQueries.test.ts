@@ -7,9 +7,7 @@ import {
 } from "@/utils/cache/personaSpriteCacheStore";
 import { createScopedModuleMocker } from "../../helpers/mockSurface";
 
-// Captured query text + queued row results for the mocked `sql` tag. Each query
-// method issues exactly one `sql` call, so the queue stays in lockstep with the
-// method under test.
+// Each query method issues one `sql` call, so `rowQueue` stays in lockstep with `sqlCalls`.
 interface SqlCall {
   text: string;
   values: unknown[];
@@ -23,9 +21,7 @@ function sqlTag(strings: TemplateStringsArray, ...values: unknown[]): Promise<un
   return response instanceof Error ? Promise.reject(response) : Promise.resolve(response);
 }
 
-// Stub the FULL runtime export surface of db/client. Bun's mock.module is
-// process-wide for the test run, so a partial mock would break the module
-// linking of any later test file that imports one of these names.
+// Stub the full db/client export surface because Bun's mock.module is process-wide and partial mocks break later files.
 const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/db/client": realClient,
 });

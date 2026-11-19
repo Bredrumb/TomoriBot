@@ -126,7 +126,6 @@ function collectImageUrlsFromSource(
   addImageUrl: (info: ImageUrlInfo) => void,
   labelPrefix = "",
 ): void {
-  // Direct attachments
   const imageAttachments = source.attachments.filter((attachment) => isLikelyImageAttachment(attachment));
 
   for (const attachment of imageAttachments.values()) {
@@ -138,7 +137,6 @@ function collectImageUrlsFromSource(
     });
   }
 
-  // Embed images and thumbnails
   for (const embed of source.embeds) {
     if (embed.image?.url) {
       addImageUrl({
@@ -159,7 +157,6 @@ function collectImageUrlsFromSource(
     }
   }
 
-  // Discord stickers
   if (source.stickers.size > 0) {
     for (const sticker of source.stickers.values()) {
       addImageUrl({
@@ -176,9 +173,7 @@ function collectImageUrlsFromSource(
     }
   }
 
-  // Components V2 media (Media Gallery / Thumbnail / File). Reuses the same
-  //    component-walking + attachment-resolution logic the context pipeline uses
-  //    so bot-generated images (referenced only inside a component) are found.
+  // Walk Components V2 nodes with the context helper so bot-generated images inside components are found.
   const componentImages: SimplifiedMessageForContext["imageAttachments"] = [];
   const componentVideosIgnored: SimplifiedMessageForContext["videoAttachments"] = [];
   appendComponentMediaFromMessage(source, componentImages, componentVideosIgnored);
@@ -195,9 +190,7 @@ function collectImageUrlsFromSource(
 
 export async function collectImageUrlsFromMessage(message: Message): Promise<ImageUrlInfo[]> {
   const imageUrls: ImageUrlInfo[] = [];
-  // Track URLs already added so the same media discovered via two paths
-  // (e.g. a Components V2 attachment also listed as a candidate) is
-  // only downloaded once.
+  // Deduplicate URLs across discovery paths so Components V2 attachments are downloaded only once.
   const seenUrls = new Set<string>();
 
   const addImageUrl = (info: ImageUrlInfo): void => {
@@ -209,9 +202,7 @@ export async function collectImageUrlsFromMessage(message: Message): Promise<Ima
 
   collectImageUrlsFromSource(message, addImageUrl);
 
-  // Forwarded messages: resolve any nested-forward chain first, then scan each
-  // snapshot with the same source walk. An unresolved chain yields no snapshots,
-  // so the caller reports "no images found" rather than silently returning empty.
+  // Unresolved forward chains yield empty snapshots so callers report no images found.
   const chain = await resolveForwardChain(message);
   for (const snapshot of chain.snapshots) {
     collectImageUrlsFromSource(snapshot, addImageUrl, "forwarded ");
@@ -300,7 +291,6 @@ export async function extractImagesFromMessage(messageId: string, context: ToolC
     }
   }
 
-  // Ensure at least one image was successfully processed
   if (results.length === 0) {
     throw new Error(`Failed to process any images from message ${messageId}`);
   }

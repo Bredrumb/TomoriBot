@@ -258,11 +258,8 @@ export function buildDegradationAttempts(
     addAttempt("probe_drop_cache_control", cloneWithoutKeys(probeBaseline, ["cache_control"]));
   }
 
-  // Declared injected keys are probed before the user's samplers. Each rung drops one key from the
-  // same baseline and the ladder stops at the first success, so ordering is pure latency: whichever
-  // rung wins ships the identical payload either way. Probing an adapter-injected key first reaches
-  // that rung in two requests instead of eight, and it is the better first hypothesis anyway
-  // because the user never asked for the key.
+  // Probe adapter-injected priority keys before user samplers because the user never asked for them and reaching that
+  // rung sooner cuts retries.
   const probeRank = (key: string): number => {
     const priorityIdx = priorityKeys.indexOf(key);
     if (priorityIdx !== -1) return priorityIdx;

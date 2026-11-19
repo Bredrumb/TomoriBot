@@ -106,19 +106,13 @@ export class ReasoningContentSpillGuard {
       return core.length < MAX_PENDING_CONTENT_CHARS ? { type: "hold" } : { type: "emit", content: candidate };
     }
 
-    // An odd number of backticks before the boundary means it sits inside an inline-code
-    // span (or a still-open one mid-stream), so a dotted code identifier (`obj.Method`,
-    // `variable.Name` is intentional, not a spill. Leave it alone. (Code at the very
-    // start of content is already preserved by the lowercase-start gate above, since a
-    // leading backtick is not lowercase.)
+    // Odd backticks place the boundary inside an inline-code span, so keep dotted code identifiers intact.
     const backticksBeforeBoundary = (core.slice(0, firstBoundaryIndex).match(/`/g) ?? []).length;
     if (backticksBeforeBoundary % 2 === 1) {
       return { type: "emit", content: candidate };
     }
 
-    // Consume a run of trailing sentence punctuation (ellipsis, "?!", "。！") so the
-    // remainder begins at the next real character rather than mid-"...", otherwise
-    // `wait...Hello` would strip `wait.` and leak the stray `..` into the answer.
+    // Consume trailing punctuation runs together so ellipsis boundaries like wait...Hello do not leak stray dots.
     let sentenceEnd = firstBoundaryIndex + 1;
     while (sentenceEnd < core.length && /[.!?。！？]/u.test(core[sentenceEnd] ?? "")) {
       sentenceEnd++;
@@ -134,14 +128,8 @@ export class ReasoningContentSpillGuard {
       return { type: "hold" };
     }
 
-    // A *glued* boundary, sentence punctuation with no following whitespace, is a reasoning seam:
-    // a backend concatenating its reasoning-tail onto the content-head leaves `wait.Actually`,
-    // where `wait. Actually` is the model writing two sentences and is emitted untouched. The
-    // outer gates (first visible content, reasoning seen first, lowercase start) make the glue
-    // signal sufficient, so no vocabulary list is needed. Strip when the text after the boundary
-    // starts like an answer (uppercase, emoji, quote, CJK) or when the fragment before it is a
-    // multi-word clause, which catches a lowercase reply glued to a reasoning tail. A single word
-    // glued to a lowercase continuation is left alone, so dotted identifiers and domains survive.
+    // Treat punctuation with no following space as a reasoning seam when followed by an answer start or preceded by a
+    // multi-word clause, leaving single-word dotted identifiers untouched.
     const isGluedBoundary = remainder.length === trimmedRemainder.length;
     const fragmentIsMultiWordClause = /\s/u.test(firstSentence.trim());
     if (isGluedBoundary && (looksLikeAnswerStart(trimmedRemainder) || fragmentIsMultiWordClause)) {
@@ -156,14 +144,14 @@ export class ReasoningContentSpillGuard {
   }
 }
 
-// Non-Latin caseless letters count as answer starts, while lowercase Latin, digits, and bare punctuation do not so
-// glued boundaries stay intact.
+// Uppercase, titlecase, and caseless-script letters (CJK, Hangul, Kana) count as answer starts, while lowercase
+// Latin, digits, and bare punctuation do not so glued boundaries stay intact.
 function looksLikeAnswerStart(text: string): boolean {
   if (!text) return false;
   if (/^[*_([{"'“”‘’「『（]/u.test(text)) return true;
-  if (/^\p{Lu}/u.test(text)) return true; // uppercase letter (Latin, Cyrillic, etc.)
-  if (/^[\p{Lo}\p{Lt}]/u.test(text)) return true; // caseless/titlecase letters (CJK, Hangul, Kana…)
-  if (/^\p{Extended_Pictographic}/u.test(text)) return true; // emoji / pictographs
+  if (/^\p{Lu}/u.test(text)) return true;
+  if (/^[\p{Lo}\p{Lt}]/u.test(text)) return true;
+  if (/^\p{Extended_Pictographic}/u.test(text)) return true;
   return false;
 }
 

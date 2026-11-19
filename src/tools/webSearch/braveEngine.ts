@@ -17,7 +17,6 @@ export class BraveEngine implements WebSearchEngine {
   private readonly newsTool = new InternalBraveNewsSearchTool();
 
   async available(context: ToolContext): Promise<boolean> {
-    // Brave needs an API key (global env var OR per-server OptApiKey).
     return await isBraveSearchAvailable(context.tomoriState?.server_id);
   }
 

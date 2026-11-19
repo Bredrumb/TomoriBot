@@ -76,11 +76,6 @@ import { readOpenRouterLimitError } from "@/providers/openrouter/openrouterLimit
 import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAttribution";
 import { fetchWithProviderRequest } from "@/utils/provider/providerRequestHook";
 
-// Char-per-token ratios and the primitive estimators live in @/utils/text/tokenEstimate
-// so this command and the post-turn stat recorder share one source of truth. The
-// higher-level, cost-specific helpers below stay here because only this command
-// needs them.
-
 // Per-message wrapper overhead is included because chat-format role markers and separators add up across ~80 history
 // messages.
 const TOKENS_PER_CHAT_MESSAGE_OVERHEAD = 4;
@@ -94,16 +89,13 @@ const AVG_SPEAKER_PREFIX_CHARS = 12;
 const DEFAULT_SYSTEM_PROMPT_CHARS_EST = DEFAULT_SYSTEM_PROMPT.length;
 const MENTION_PING_RULE_CHARS_EST = 300;
 const EMOJI_USAGE_RULES_CHARS_EST = 340;
-const STICKER_USAGE_RULES_CHARS_EST = 270; // header + footer, excluding per-sticker lines
+// Header and footer chars only, excluding per-sticker lines.
+const STICKER_USAGE_RULES_CHARS_EST = 270;
 
 // Measured in tokens rather than characters because these constants define the output bands reported side by side.
 const EST_OUTPUT_SHORT = 80;
 const EST_OUTPUT_TYPICAL = 220;
 const EST_OUTPUT_LONG = 500;
-
-// First-party pricing is read from the `llms` catalog columns, so a model with no
-// catalog price reports "pricing unavailable" instead of billing against a
-// provider-wide guess (see resolveModelPricing in @/utils/provider/modelPricing).
 
 const YOUTUBE_URL_PATTERNS = [
   /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/i,
@@ -140,20 +132,20 @@ interface ZaiFamilyProviderConfig {
 interface ScenarioEstimate {
   name: string;
   components: {
-    systemPersonality: number; // Attributes + humanizer instruction
-    serverInfo: number; // Server name, description
-    serverEmojis: number; // Up to 10 emojis
-    serverStickers: number; // Sticker list (if enabled)
-    serverMemories: number; // Server-wide memories
-    userMemories: number; // Personal memories for all users
-    userStatus: number; // Presence info for all users
-    reminders: number; // Pending reminders
-    currentContext: number; // Time, channel info
-    toolSchemas: number; // Function/tool schemas (if tool calling is enabled)
-    sampleDialogues: number; // Example conversations
-    conversationHistory: number; // Recent messages
+    systemPersonality: number;
+    serverInfo: number;
+    serverEmojis: number;
+    serverStickers: number;
+    serverMemories: number;
+    userMemories: number;
+    userStatus: number;
+    reminders: number;
+    currentContext: number;
+    toolSchemas: number;
+    sampleDialogues: number;
+    conversationHistory: number;
   };
-  outputTokens: number; // Expected response length
+  outputTokens: number;
 }
 
 interface LiveCostMeasurement {
@@ -291,62 +283,44 @@ function buildScenarioEstimates(): {
   const baseToolSchemaTokens = estimateToolSchemaTokens();
   const avgMemoryChars = Math.round(limits.maxMemoryLength * 0.5);
 
-  // Minimum Scenario (Light usage)
-  // - 1 user with 0 memories
-  // - Minimal persona (single short description)
-  // - 80 messages in history (short messages)
-  // - 10 emojis (constant)
   const minimum: ScenarioEstimate = {
     name: "Minimum",
     components: {
-      systemPersonality: charsToTokensText(450 + DEFAULT_SYSTEM_PROMPT_CHARS_EST + MENTION_PING_RULE_CHARS_EST), // Short description + default system prompt + mention rule
-      serverInfo: charsToTokensText(220), // Basic server info
-      serverEmojis: charsToTokensText(EMOJI_USAGE_RULES_CHARS_EST + 60 + 10 * 34), // Rules + header + 10 emoji codes
+      systemPersonality: charsToTokensText(450 + DEFAULT_SYSTEM_PROMPT_CHARS_EST + MENTION_PING_RULE_CHARS_EST),
+      serverInfo: charsToTokensText(220),
+      serverEmojis: charsToTokensText(EMOJI_USAGE_RULES_CHARS_EST + 60 + 10 * 34),
       serverStickers: 0,
       serverMemories: 0,
       userMemories: 0,
-      userStatus: charsToTokensText(220), // 1 user status block (heading + presence line)
+      userStatus: charsToTokensText(220),
       reminders: 0,
-      currentContext: charsToTokensText(200), // Time + channel
+      currentContext: charsToTokensText(200),
       toolSchemas: baseToolSchemaTokens,
       sampleDialogues: 0,
       conversationHistory: estimateChatHistoryTokens(80, 40),
     },
-    outputTokens: EST_OUTPUT_SHORT, // Short response (1-2 short paragraphs)
+    outputTokens: EST_OUTPUT_SHORT,
   };
 
-  // Average Scenario (Moderate usage)
-  // - 3 users with 10 memories each (~128 chars avg per memory)
-  // - 10 server memories (~128 chars avg each)
-  // - Typical persona + a few sample dialogues
-  // - 80 messages in history (1-2 sentences per message)
-  // - 10 emojis (constant)
   const average: ScenarioEstimate = {
     name: "Average",
     components: {
-      // Persona attributes (commonly 6 items) + fixed system prompt blocks.
       systemPersonality: charsToTokensText(6 * 700 + DEFAULT_SYSTEM_PROMPT_CHARS_EST + MENTION_PING_RULE_CHARS_EST),
       serverInfo: charsToTokensText(260),
       serverEmojis: charsToTokensText(EMOJI_USAGE_RULES_CHARS_EST + 60 + 10 * 34),
       serverStickers: charsToTokensText(STICKER_USAGE_RULES_CHARS_EST + 8 * 70),
-      serverMemories: charsToTokensText(10 * avgMemoryChars + 80), // + heading/formatting
-      userMemories: charsToTokensText(3 * 10 * avgMemoryChars + 3 * 90), // + per-user headings
+      serverMemories: charsToTokensText(10 * avgMemoryChars + 80),
+      userMemories: charsToTokensText(3 * 10 * avgMemoryChars + 3 * 90),
       userStatus: charsToTokensText(3 * 220),
-      reminders: charsToTokensText(3 * (80 + 1 * 140)), // 1 reminder per user on average
+      reminders: charsToTokensText(3 * (80 + 1 * 140)),
       currentContext: charsToTokensText(200),
       toolSchemas: baseToolSchemaTokens,
       sampleDialogues: estimateChatHistoryTokens(10, 160),
       conversationHistory: estimateChatHistoryTokens(80, 140),
     },
-    outputTokens: EST_OUTPUT_TYPICAL, // Typical response (a few paragraphs / short explanation)
+    outputTokens: EST_OUTPUT_TYPICAL,
   };
 
-  // Maximum Scenario (Heavy usage)
-  // - 5 users, each holding a full personal memory allowance at max memory length
-  // - A full server memory allowance at max memory length
-  // - Maxed persona + maxed sample dialogues
-  // - 80 messages in history (multi-paragraph messages)
-  // - 10 emojis (constant)
   const maximum: ScenarioEstimate = {
     name: "Maximum",
     components: {
@@ -355,19 +329,19 @@ function buildScenarioEstimates(): {
           DEFAULT_SYSTEM_PROMPT_CHARS_EST +
           MENTION_PING_RULE_CHARS_EST,
       ),
-      serverInfo: charsToTokensText(450), // Detailed description
+      serverInfo: charsToTokensText(450),
       serverEmojis: charsToTokensText(EMOJI_USAGE_RULES_CHARS_EST + 60 + 10 * 34),
       serverStickers: charsToTokensText(STICKER_USAGE_RULES_CHARS_EST + 25 * 90),
       serverMemories: charsToTokensText(limits.maxServerMemories * limits.maxMemoryLength),
       userMemories: charsToTokensText(5 * limits.maxPersonalMemories * limits.maxMemoryLength),
-      userStatus: charsToTokensText(5 * 300), // activities can bloat presence strings
-      reminders: charsToTokensText(5 * (100 + 3 * 160)), // 3 reminders per user
+      userStatus: charsToTokensText(5 * 300),
+      reminders: charsToTokensText(5 * (100 + 3 * 160)),
       currentContext: charsToTokensText(240),
       toolSchemas: Math.round(baseToolSchemaTokens * 1.25),
       sampleDialogues: estimateChatHistoryTokens(limits.maxSampleDialogues * 2, limits.maxSampleDialogueLength),
       conversationHistory: estimateChatHistoryTokens(80, 350),
     },
-    outputTokens: EST_OUTPUT_LONG, // Detailed response (multi-paragraph explanation)
+    outputTokens: EST_OUTPUT_LONG,
   };
 
   return { minimum, average, maximum };
@@ -631,10 +605,8 @@ async function buildRuntimeParityContext(
     const mediaSourceMessageIds =
       hasLocalMedia && (imageAttachments.length > 0 || videoAttachments.length > 0) ? [message.id] : undefined;
 
-    // Merge consecutive same-author messages, mirroring the real context path
-    // (buildSimplifiedHistory): collapsing here is only correct while both sides are
-    // pure text, because a merged turn would leave the two messages' media
-    // indistinguishable.
+    // Consecutive same-author turns merge only when both are text-only so media attachments stay attributable to their
+    // source message, matching buildSimplifiedHistory.
     const previousMessage = simplifiedMessages[simplifiedMessages.length - 1];
     const currentHasMedia =
       imageAttachments.length > 0 || videoAttachments.length > 0 || (mediaSourceMessageIds?.length ?? 0) > 0;
@@ -683,8 +655,6 @@ async function buildRuntimeParityContext(
   const serverName = isDMChannel ? "Direct Message" : interaction.guild?.name || "Unknown Server";
   const serverDescription = isDMChannel ? null : interaction.guild?.description || null;
 
-  // Resolve per-channel system prompt override so the estimate stays in parity with
-  // what the live pipeline would actually inject for this channel (append/replace).
   const channelPromptOverride = tomoriState.server_id
     ? await getCachedChannelPrompt(tomoriState.server_id, interaction.channelId)
     : null;
@@ -775,8 +745,7 @@ async function measureGoogleInputTokens(
   const inBandPrelude: typeof tokenCountContents = [];
 
   if (payload.systemInstruction) {
-    // Gemini API countTokens rejects request-level systemInstruction.
-    // Mirror adapter fallback behavior by injecting instructions in-band.
+    // Gemini countTokens rejects request-level systemInstruction, so instructions are injected in-band like the adapter.
     inBandPrelude.push({
       role: "user",
       parts: [
@@ -789,8 +758,7 @@ async function measureGoogleInputTokens(
     });
   }
   if (providerConfig.tools && providerConfig.tools.length > 0) {
-    // Gemini API countTokens rejects request-level tools in Gemini API mode.
-    // Inject schemas in-band so measured prompt tokens include tool payload size.
+    // Gemini countTokens rejects request-level tools, so schemas are injected in-band to include their token weight.
     inBandPrelude.push({
       role: "user",
       parts: [
@@ -816,7 +784,7 @@ async function measureGoogleInputTokens(
     throw new Error("Google countTokens did not return totalTokens");
   }
 
-  // First-party providers carry their price on the catalog row; no env fallback remains.
+  // First-party rates live solely on the llms catalog row, so missing pricing errors instead of guessing.
   const pricing = resolveModelPricing(tomoriState);
   if (!pricing) {
     throw new Error(`No catalog price for Google model ${providerConfig.model}`);
@@ -838,7 +806,6 @@ async function measureVertexInputTokens(
   apiKey: string,
   contextItems: StructuredContextItem[],
 ): Promise<LiveCostMeasurement> {
-  // Build the same provider config the streaming path would use (model + tools).
   const provider = new VertexProvider();
   const providerConfig = (await provider.createConfig(tomoriState, apiKey)) as VertexProviderConfig;
   const adapter = new VertexStreamAdapter();
@@ -846,8 +813,7 @@ async function measureVertexInputTokens(
   const tokenCountContents = [...payload.contents];
   const inBandPrelude: typeof tokenCountContents = [];
 
-  // countTokens does not accept request-level systemInstruction, so inject in-band
-  //    so the instruction's tokens are still counted (mirrors the Google path).
+  // Mirrors Google's in-band systemInstruction injection because Vertex countTokens also rejects it request-level.
   if (payload.systemInstruction) {
     inBandPrelude.push({
       role: "user",
@@ -1000,10 +966,8 @@ export async function measureOpenRouterInputTokens(
     throw new Error("OpenRouter model pricing unavailable for other-model");
   }
 
-  // The live OpenRouter cache wins because it tracks OpenRouter's rate changes; the DB price
-  // is only the fallback, seeded from the catalog or mirrored from the live rates at startup
-  // by syncOpenrouterCatalogPricing. Do not invert this order: a stale catalog row would
-  // silently under- or over-report the cost users see.
+  // Live OpenRouter pricing takes precedence over the DB catalog fallback so rate changes are not shadowed by stale
+  // startup rows.
   const livePricing = getOpenRouterPricing(providerConfig.model);
   const pricing = livePricing
     ? { input: livePricing.promptPricePerMillion, output: livePricing.completionPricePerMillion }
@@ -1235,8 +1199,6 @@ const liveTokenCounters: Record<
 async function sendLiveEstimateEmbed(
   interaction: ChatInputCommandInteraction,
   locale: string,
-  // Accept the structural shape (omit `provider`) so Track A's character estimate, which has
-  // no LiveProvider, so can reuse this embed alongside live LiveCostMeasurement objects.
   measurement: Omit<LiveCostMeasurement, "provider">,
   sampleOutputTokens: number | null,
   isCharacterEstimate = false,
@@ -1248,8 +1210,6 @@ async function sendLiveEstimateEmbed(
     measurement.outputPricePerMillion,
   );
 
-  // Track A (character estimate) swaps in copy that makes the approximation explicit, so users
-  // never mistake a chars/token guess for a provider-measured exact count.
   const inputTitleKey = isCharacterEstimate
     ? "commands.tool.estimate.cost.current_input_estimated_title"
     : "commands.tool.estimate.cost.current_input_title";
@@ -1334,8 +1294,6 @@ async function sendLegacyEstimateEmbed(
   showFallbackNotice: boolean,
 ): Promise<void> {
   const scenarios = buildScenarioEstimates();
-  // This embed is purely illustrative (no server/key context), so it borrows the catalog price of the
-  // Google default model as a representative example rather than any per-server rate.
   const { input: inputPrice, output: outputPrice } = getLegacyExampleGooglePricing();
   const exampleProvider = "Google Gemini";
 
@@ -1483,7 +1441,6 @@ async function sendCharacterEstimateFallbackEmbed(
     return;
   }
 
-  // Assemble the same context the live pipeline would (no live provider → no truncator).
   let contextItems: StructuredContextItem[];
   let personaReplyCharLengths: number[] = [];
   try {
@@ -1500,7 +1457,6 @@ async function sendCharacterEstimateFallbackEmbed(
     return;
   }
 
-  // Approximate input tokens from character counts (no provider counting API available).
   const estimatedInputTokens = estimateContextItemsTokens(contextItems);
   const sampleOutputTokens = resolveSampleOutputTokens(tomoriState, personaReplyCharLengths);
 

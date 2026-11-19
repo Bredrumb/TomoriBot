@@ -335,8 +335,7 @@ describe("setupPanel Components V2 layout and limits", () => {
   });
 
   it("holds text and component budgets when catalog names reach their option-label maximum", () => {
-    // Discord caps a modal select option label at 100 characters. The panel renders that stored
-    // identity in full and relies on runtime wrapping rather than applying a second display cap.
+    // Discord caps select option labels at 100 chars, so the panel renders them in full and relies on runtime wrapping.
     const maxPersonaName = "p".repeat(100);
     const maxPromptName = "r".repeat(100);
     const catalogs = {

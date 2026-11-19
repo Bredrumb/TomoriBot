@@ -128,12 +128,10 @@ describe("setup wizard draft schemas and invariants", () => {
     const validSettings = makeStartingSettings();
     expect(setupDraftStartingSettingsSchema.safeParse(validSettings).success).toBe(true);
 
-    // Humanizer must be an integer in 0-3.
     expect(setupDraftStartingSettingsSchema.safeParse(makeStartingSettings({ humanizer: -1 })).success).toBe(false);
     expect(setupDraftStartingSettingsSchema.safeParse(makeStartingSettings({ humanizer: 4 })).success).toBe(false);
     expect(setupDraftStartingSettingsSchema.safeParse(makeStartingSettings({ humanizer: 1.5 })).success).toBe(false);
 
-    // Timezone offset must be a quarter hour in -12..14.
     expect(setupDraftStartingSettingsSchema.safeParse(makeStartingSettings({ timezoneOffset: -13 })).success).toBe(
       false,
     );
@@ -173,7 +171,6 @@ describe("setup wizard draft schemas and invariants", () => {
     const byokAccess: SetupDraftUserByokAccess = { mode: "user-byok" };
     expect(isSetupDraftProviderAccessComplete(byokAccess)).toBe(true);
 
-    // Custom endpoint must be incomplete without both connection and textModel.
     const emptyEndpoint: SetupDraftCustomEndpointAccess = {
       mode: "custom-endpoint",
       connection: null,
@@ -222,7 +219,6 @@ describe("setup wizard draft schemas and invariants", () => {
     };
     const startingSettings = makeStartingSettings();
 
-    // Incomplete when providerAccess is null or incomplete.
     expect(
       isSetupDraftComplete(
         makeDraftRecord({
@@ -234,7 +230,6 @@ describe("setup wizard draft schemas and invariants", () => {
       ),
     ).toBe(false);
 
-    // Incomplete when startingSettings is null.
     expect(
       isSetupDraftComplete(
         makeDraftRecord({
@@ -246,7 +241,6 @@ describe("setup wizard draft schemas and invariants", () => {
       ),
     ).toBe(false);
 
-    // When requiresPolicies is false, policiesAccepted is ignored.
     expect(
       isSetupDraftComplete(
         makeDraftRecord({
@@ -268,7 +262,6 @@ describe("setup wizard draft schemas and invariants", () => {
       ),
     ).toBe(true);
 
-    // When requiresPolicies is true, policiesAccepted must be true.
     expect(
       isSetupDraftComplete(
         makeDraftRecord({

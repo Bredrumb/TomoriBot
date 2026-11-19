@@ -13,7 +13,6 @@ const REPLACEMENTS: [RegExp, string][] = [
   [/tomori_id/g, "persona_id"],
 ];
 
-// Normalized posix paths relative to project root
 const EXCLUDED = new Set(["src/types/preset/presetExport.ts", "src/types/db/schema.ts"]);
 
 function normalizePath(p: string): string {

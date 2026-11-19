@@ -112,8 +112,6 @@ export class CustomProvider
   }
 
   async validateApiKey(_apiKey: string): Promise<ApiKeyValidationResult> {
-    // For custom provider, we're lenient - always return valid
-    // The actual validation happens when we try to use the endpoint
     log.info("Custom provider: Skipping strict API key validation (endpoint health checked on first use)");
     return { valid: true };
   }
@@ -176,7 +174,6 @@ export class CustomProvider
     tomoriState: TomoriState,
     streamingContext?: StreamingContext,
   ): Promise<Array<Record<string, unknown>>> {
-    // Only return tools if the model supports them (user-declared capability)
     if (!resolveToolsEnabled(tomoriState, tomoriState.llm.has_tools)) {
       log.info(
         `Custom provider: Tools unavailable (tool_use_enabled=${tomoriState.config.tool_use_enabled}, has_tools=${tomoriState.llm.has_tools})`,
@@ -408,8 +405,8 @@ export class CustomProvider
 
     const samplingParams = buildActiveSamplingParams(tomoriState.config);
     const config: CustomProviderConfig = {
-      model: modelName, // Use custom_model_name if set, otherwise llm_codename
-      apiKey: apiKey, // May be used for Bearer auth if endpoint requires it
+      model: modelName,
+      apiKey: apiKey,
       temperature: tomoriState.config.llm_temperature,
       disabledParams: tomoriState.config.llm_disabled_params ?? [],
       maxOutputTokens: resolveChatMaxOutputTokens({

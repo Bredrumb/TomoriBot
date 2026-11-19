@@ -477,9 +477,8 @@ export class UpdateTaskTool extends BaseTool {
       context.personaUsername || tomoriState.persona_nickname || context.client.user?.username || "TomoriBot";
     const reminderPurposeText = truncateReminderPurpose(parsedArgs.newPurpose);
 
-    // Show both clocks when the target user has a personal timezone (/personal config)
-    // differing from the server's, so lets the user spot a mislabeled/misconverted time.
-    // Self tasks target the bot, which has no personal timezone.
+    // Self tasks target the bot (no personal timezone), while user tasks show both clocks when personal and server
+    // offsets differ so misconverted times stand out.
     let targetPersonalOffset: number | null = null;
     if (!existingReminder.self_reminder) {
       const targetUserRow = await userRepository.loadByDiscordId(existingReminder.user_discord_id);

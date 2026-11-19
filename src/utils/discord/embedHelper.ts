@@ -43,7 +43,6 @@ export function truncateForEmbedDescription(value: string, reservedChars = 0): s
   if (value.length <= available) {
     return value;
   }
-  // Reserve 3 characters for the ellipsis; if there is not even room for that, hard-cut.
   return available <= 3 ? value.substring(0, available) : `${value.substring(0, available - 3)}...`;
 }
 
@@ -55,7 +54,6 @@ function truncateFieldValue(value: string): string {
   if (value.length <= MAX_FIELD_VALUE_LENGTH) {
     return value;
   }
-  // Reserve 3 characters for ellipsis
   return `${value.substring(0, MAX_FIELD_VALUE_LENGTH - 3)}...`;
 }
 
@@ -78,7 +76,6 @@ export function createStandardEmbed(locale: string, options: StandardEmbedOption
     return new EmbedBuilder().setColor(color).setTitle(withStatusCircle(localizer(locale, titleKey, titleVars), color));
   }
 
-  // Use raw description if provided, otherwise use descriptionKey with localization
   const descriptionText = description
     ? description
     : descriptionKey
@@ -109,7 +106,6 @@ function createTipText(
   tipKeys: string[],
   tipVars: Record<string, string | number | boolean> = {},
 ): string | null {
-  // Localize every tip item and drop any that resolve to empty text (e.g. an unset optional key).
   const items = tipKeys
     .filter((key) => key !== SUPPORT_SERVER_TIP_KEY)
     .map((key) => localizer(locale, key, tipVars).trim())
@@ -142,7 +138,6 @@ export function createSummaryEmbed(locale: string, options: SummaryEmbedOptions)
     fields,
   } = options;
 
-  // Use raw description if provided, otherwise use descriptionKey with localization
   const descriptionText = description
     ? description
     : descriptionKey
@@ -154,30 +149,19 @@ export function createSummaryEmbed(locale: string, options: SummaryEmbedOptions)
     .setTitle(withStatusCircle(localizer(locale, titleKey, titleVars), color))
     .setDescription(descriptionText)
     .addFields(
-      // Map over the fields provided in options
-      fields.map(
-        // Define the transformation for each field
-        (field): APIEmbedField => {
-          // Determine the field name: Use localized nameKey if present, otherwise use direct name, fallback to empty string
-          const name = field.nameKey
-            ? localizer(locale, field.nameKey, field.nameVars) // Use nameVars for name
-            : (field.name ?? "");
+      fields.map((field): APIEmbedField => {
+        const name = field.nameKey ? localizer(locale, field.nameKey, field.nameVars) : (field.name ?? "");
 
-          // Determine the field value: Use localized valueKey if present, otherwise use direct value
-          const rawValue = field.valueKey
-            ? localizer(locale, field.valueKey, field.valueVars) // Localize valueKey using valueVars
-            : (field.value ?? ""); // Otherwise, use the value directly
+        const rawValue = field.valueKey ? localizer(locale, field.valueKey, field.valueVars) : (field.value ?? "");
 
-          // Truncate value to Discord's maximum field value length (1024 chars)
-          const value = truncateFieldValue(rawValue);
+        const value = truncateFieldValue(rawValue);
 
-          return {
-            name,
-            value,
-            inline: field.inline ?? false,
-          };
-        },
-      ),
+        return {
+          name,
+          value,
+          inline: field.inline ?? false,
+        };
+      }),
     );
 
   if (footerKey) {

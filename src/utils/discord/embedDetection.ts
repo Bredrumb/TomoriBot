@@ -19,7 +19,6 @@ export function sliceMessagesAtResetMarker<T extends Pick<Message, "embeds">>(
   let resetIndex = -1;
   let markerType: "reset" | "compact_refresh" | null = null;
 
-  // Walk from newest to oldest to find the most recent marker
   for (let i = messages.length - 1; i >= 0; i--) {
     for (const embed of messages[i].embeds) {
       const classified = classifyRefreshMarkerEmbed(embed);
@@ -32,7 +31,6 @@ export function sliceMessagesAtResetMarker<T extends Pick<Message, "embeds">>(
     if (resetIndex !== -1) break;
   }
 
-  // Compute startIndex based on marker type (or 0 if no marker)
   const startIndex = resetIndex === -1 ? 0 : markerType === "compact_refresh" ? resetIndex : resetIndex + 1;
   return {
     sliced: messages.slice(startIndex),

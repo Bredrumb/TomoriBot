@@ -82,7 +82,6 @@ describe("resolveFallbackPersona", () => {
   });
 
   it("falls through when the last speaker is no longer eligible for this actor", async () => {
-    // ALTER_B spoke last but is excluded by whitelist or spotlight, so it must not be revived here.
     lastActiveSpy = spyOn(personaTurnDetection, "findLastActivePersona").mockReturnValue(ALTER_B);
 
     const result = await resolveFallbackPersona({

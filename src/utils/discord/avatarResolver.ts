@@ -301,15 +301,11 @@ async function resolvePersonaAvatar(
 
   if (persona.is_alter) {
     avatarUrl = resolvePersonaAvatarPublicUrl(persona.webhook_avatar_url) ?? null;
-    // For local-path avatars (non-production without a public base URL), fall back to loading
-    // the stored file as a data URI so downstream callers can still use the image.
     if (!avatarUrl && persona.webhook_avatar_url && isLocalPersonaAvatarPath(persona.webhook_avatar_url)) {
       avatarUrl = (await loadStoredPersonaAvatarDataUri(persona.webhook_avatar_url)) ?? null;
     }
   } else {
-    // Use the bot's guild-specific member avatar (custom per-server avatar if set, else global).
-    // guild.members.me is the bot's GuildMember object, whose displayAvatarURL() already
-    // prefers the server avatar over the global one.
+    // Prefer guild.members.me because discord.js displayAvatarURL() resolves the per-server avatar before global.
     const guild = context.client.guilds.cache.get(guildId);
     const botMember = guild?.members.me;
     avatarUrl =

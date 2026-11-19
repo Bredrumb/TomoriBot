@@ -1,10 +1,5 @@
-// Upload-once bookkeeping shared by the preset avatar and preset sprite seeders.
-//
-// Every locale variant of a preset resolves the same image bytes to the same storage key, so
-// without this an art change re-uploads identical bytes once per authored locale. Both seeders keep
-// one map per run and reuse the first upload's reference. Only the identifier each asset type is
-// addressed by differs: sprites carry a sprite key, avatars do not. That key stays with the caller,
-// so this module never merges the two identity rules.
+// Reuses the first uploaded reference per content-addressed key because every locale variant of a preset shares the
+// same image bytes, while callers supply their own asset-specific key shape.
 
 type SharedPresetUploadLogger = (error?: unknown) => void;
 

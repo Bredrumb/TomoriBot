@@ -36,7 +36,7 @@ export async function getServerAvatar(guild: Guild | null, client: Client): Prom
         avatarUrl = botMember.displayAvatarURL({
           size: 1024,
           extension: "png",
-          forceStatic: true, // Always get static PNG, not animated
+          forceStatic: true,
         });
 
         log.info(
@@ -76,8 +76,7 @@ export async function getServerAvatar(guild: Guild | null, client: Client): Prom
 
     if (!isPNGFormat(imageBuffer)) {
       log.warn("Downloaded avatar is not in PNG format, attempting conversion");
-      // Note: Discord should always return PNG when we request it with extension: 'png'
-      // But if somehow it doesn't, we'll just use it as-is and let PNG metadata functions handle it
+      // Pass non-PNG responses through so downstream PNG metadata helpers handle format differences.
     }
 
     log.success(`Successfully downloaded avatar (${imageBuffer.length} bytes)`);
@@ -207,7 +206,6 @@ export async function initializePresetAvatarCache(presets: TomoriPresetRow[]): P
   try {
     log.info("Initializing preset avatar cache...");
 
-    // Clear existing cache
     presetAvatarCache.clear();
 
     for (const preset of presets) {
@@ -229,13 +227,11 @@ export async function initializePresetAvatarCache(presets: TomoriPresetRow[]): P
         const base64 = imageBuffer.toString("base64");
         const dataUri = `data:image/png;base64,${base64}`;
 
-        // Cache it
         presetAvatarCache.set(preset.persona_preset_id, dataUri);
         log.success(
           `Cached avatar for preset "${preset.persona_preset_name}" (${(imageBuffer.length / 1024).toFixed(2)} KB)`,
         );
       } catch (error) {
-        // File doesn't exist or can't be read - cache as null
         log.warn(
           `Could not load avatar for preset "${preset.persona_preset_name}": ${error instanceof Error ? error.message : "Unknown error"}`,
         );
@@ -246,7 +242,7 @@ export async function initializePresetAvatarCache(presets: TomoriPresetRow[]): P
     log.success(`Preset avatar cache initialized with ${presetAvatarCache.size} presets`);
   } catch (error) {
     log.error("Failed to initialize preset avatar cache:", error as Error);
-    // Don't throw - bot should still work without cached avatars
+    // Swallowed so startup continues without cached preset avatars.
   }
 }
 

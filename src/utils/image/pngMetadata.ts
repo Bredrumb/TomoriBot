@@ -4,10 +4,10 @@ import { log } from "../misc/logger";
 
 const PNG_SIGNATURE = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
 
-const TEXT_CHUNK_TYPE = "tEXt"; // Uncompressed text chunk
-const COMPRESSED_TEXT_CHUNK_TYPE = "zTXt"; // Compressed text chunk
-const INTERNATIONAL_TEXT_CHUNK_TYPE = "iTXt"; // International text chunk
-const IEND_CHUNK_TYPE = "IEND"; // End of PNG datastream marker
+const TEXT_CHUNK_TYPE = "tEXt";
+const COMPRESSED_TEXT_CHUNK_TYPE = "zTXt";
+const INTERNATIONAL_TEXT_CHUNK_TYPE = "iTXt";
+const IEND_CHUNK_TYPE = "IEND";
 
 const METADATA_KEY = "TomoriPreset";
 const SILLY_TAVERN_METADATA_KEYS = new Set(["chara", "char"]);
@@ -222,8 +222,8 @@ function extractAllTextChunksFromPNGData(data: Uint8Array): PngTextChunk[] {
       chunks.push(parsedChunk);
     }
 
-    offset += length; // Skip chunk data
-    offset += 4; // Skip CRC
+    offset += length;
+    offset += 4;
 
     if (chunkType === IEND_CHUNK_TYPE) {
       break;
@@ -341,8 +341,7 @@ function appendTextChunkToPNG(pngBuffer: Buffer, key: string, value: string, typ
       throw new Error("Invalid PNG signature");
     }
 
-    // Find the IEND chunk position
-    // We need to insert our metadata chunk BEFORE IEND
+    // Metadata chunks must precede IEND because PNG decoders ignore trailing data.
     let offset = PNG_SIGNATURE.length;
     let iendOffset = -1;
 
@@ -353,13 +352,13 @@ function appendTextChunkToPNG(pngBuffer: Buffer, key: string, value: string, typ
       const chunkType = String.fromCharCode(data[offset], data[offset + 1], data[offset + 2], data[offset + 3]);
 
       if (chunkType === IEND_CHUNK_TYPE) {
-        iendOffset = offset - 4; // Store position before IEND chunk
+        iendOffset = offset - 4;
         break;
       }
 
-      offset += 4; // Skip chunk type
-      offset += length; // Skip chunk data
-      offset += 4; // Skip CRC
+      offset += 4;
+      offset += length;
+      offset += 4;
     }
 
     if (iendOffset === -1) {
@@ -378,8 +377,7 @@ function appendTextChunkToPNG(pngBuffer: Buffer, key: string, value: string, typ
 
     const chunkLength = chunkData.length;
 
-    // Calculate the new PNG size
-    // Original size + chunk header (4 bytes length + 4 bytes type) + chunk data + CRC (4 bytes)
+    // 12 framing bytes: 4 length, 4 type, and 4 CRC.
     const newPngSize = data.length + 12 + chunkLength;
     const newPngData = new Uint8Array(newPngSize);
 
@@ -397,8 +395,7 @@ function appendTextChunkToPNG(pngBuffer: Buffer, key: string, value: string, typ
     newPngData.set(chunkData, writeOffset);
     writeOffset += chunkLength;
 
-    // Calculate and write CRC for the chunk
-    // CRC is calculated over chunk type + chunk data
+    // Exclude the length field because PNG chunk CRCs cover only chunk type and chunk data.
     const crcData = new Uint8Array(4 + chunkLength);
     crcData.set(typeBytes);
     crcData.set(chunkData, 4);

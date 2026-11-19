@@ -71,8 +71,7 @@ const FPS_INPUT_ID = "fps_input";
 // Conservative 25 MB ceiling because Discord caps file uploads at 25 MB on non-boosted servers.
 const DISCORD_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
 
-// Duration/FPS bounds for the modal inputs. Kept env-configurable so operators can tune
-// limits without code changes; providers still normalize values to their own supported ranges.
+// Modal input bounds only: providers normalize submitted values to their own supported ranges.
 const DEFAULT_VIDEO_DURATION_SECONDS = parsePositiveIntegerEnv(process.env.VIDEO_GEN_DEFAULT_DURATION_SECONDS) ?? 5;
 const MAX_VIDEO_DURATION_SECONDS = parsePositiveIntegerEnv(process.env.VIDEO_GEN_MAX_DURATION_SECONDS) ?? 20;
 const MAX_VIDEO_FPS = parsePositiveIntegerEnv(process.env.VIDEO_GEN_MAX_FPS) ?? 60;
@@ -374,7 +373,6 @@ export async function execute(
   let apiKey = videoCreds.apiKey;
   const executionProvider = videoCreds.provider;
 
-  // Check video quota before showing modal (personal-provider users bypass quota)
   if (videoCreds.source === "server") {
     let quotaCheck: VideoQuotaCheckResult;
     try {
@@ -440,7 +438,6 @@ export async function execute(
         placeholder: "commands.generate.video.modal.duration_placeholder",
         required: true,
         style: TextInputStyle.Short,
-        // Prefill the default so the required field is one keystroke away from valid.
         value: String(DEFAULT_VIDEO_DURATION_SECONDS),
         maxLength: 3,
       },
@@ -455,7 +452,6 @@ export async function execute(
       },
     ];
 
-    // Show modal and wait for submission (auto-defer with public reply)
     const modalResult = await promptWithRawModal(
       interaction,
       locale,
@@ -489,9 +485,6 @@ export async function execute(
       return;
     }
 
-    // Parse and validate duration (required) and FPS (optional).
-    //     Providers normalize these to their own supported ranges, so we only guard
-    //     against clearly invalid entries here (non-numeric or out of configured bounds).
     const durationResult = parseModalInteger(modalResult.values?.[DURATION_INPUT_ID], 1, MAX_VIDEO_DURATION_SECONDS);
     if (durationResult.error || durationResult.value === undefined) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {

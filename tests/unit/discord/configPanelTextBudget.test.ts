@@ -466,14 +466,10 @@ function makeVoicesView(samples: readonly VoiceSampleRow[], totalSampleCount: nu
   };
 }
 
-// Tightness tolerances at stored maxima:
-// When dynamic content is truncated, rendered message Text Display total should be tight to the limit.
-// For character-cut bounded text previews (markdown fenced blocks, text prompts), cutting stops within 3 characters
-// of available budget.
+// Character-cut previews stop within 3 characters of the available budget when truncated.
 const PREVIEW_TIGHTNESS_TOLERANCE = 3;
-// For collection-row lists (e.g. channel lists), trimming is whole-row discrete units (channel mentions + newlines +
-// hidden notices), where a single channel row is ~25 characters. Multi-section pages (e.g. Channels Rules with 3
-// sections) compound this waste across independent truncations plus a floor division remainder of up to 2 characters.
+// Multi-section channel pages trim whole ~25-char rows independently across three sections
+// plus up to 2 remainder characters from floor division.
 const COLLECTION_ROW_TIGHTNESS_TOLERANCE = 80;
 // An Auto-Trigger row also carries the escaped persona nickname, which costs 112 characters in this fixture.
 const AUTO_TRIGGER_ROW_TIGHTNESS_TOLERANCE = 112;
@@ -1134,10 +1130,8 @@ describe("NovelAI preset Parameters budgeting", () => {
   }
 
   it("renders the oversized profile to the same total in every locale", () => {
-    // An oversized preset name is truncated into a fixed codepoint budget, and this panel's
-    // translations preserve key length, so every locale fills that budget exactly. Asserting the
-    // equality is what lets the profile sweep above run on one locale: if a translation ever
-    // changes that, this fails instead of silently narrowing the sweep.
+    // Every locale fills the fixed oversized-name budget equally, so asserting equality catches
+    // translation changes that would silently invalidate the single-locale sweep above.
     const presets = makeNaiPresetCatalog(24, 3, true);
     const totals = RUNTIME_LOCALES.map((locale) =>
       getPayloadTextTotal(buildNaiParametersPayload(locale, "fresh", true, ["novelai", "google"], presets, 0)),
@@ -2305,8 +2299,8 @@ describe("bounded preview unicode and truncation boundary assertions", () => {
     expect(attgDisplay?.match(/```/g)).toHaveLength(8);
   });
 
-  // Three backticks are the one run length a literal triple-backtick replacement handles. Five and
-  // eight survive it, and survive applying it twice, so the run length is the discriminator here.
+  // Run lengths of five and eight survive literal triple-backtick replacement even when applied
+  // twice, so sweeping lengths 2-12 prevents a naive replacement from passing.
   it.each([2, 3, 4, 5, 6, 7, 8, 9, 12])("contains a backtick run of %i inside the fence", (runLength) => {
     const run = "`".repeat(runLength);
     const payload = buildConfigPanelPayload({

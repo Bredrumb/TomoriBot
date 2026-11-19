@@ -544,9 +544,8 @@ export async function execute(
   let effectiveEndpoint = defaultEndpoint ?? null;
   let speechEndpoint = defaultSource?.shape === "design" ? targets.design : targets.clone;
 
-  // Keyed off the resolved candidate, not off the endpoint: a persona whose only voice is an
-  // ElevenLabs id on a server with no speech endpoint is indistinguishable from a `tts-clone`
-  // server by endpoint alone, and its voice id is precisely what the source table falls back to.
+  // Keyed off the resolved candidate rather than the endpoint because a legacy ElevenLabs persona can lack a speech
+  // endpoint while still falling back to its ElevenLabs voice ID.
   if (defaultSource?.id === "elevenlabs" && !elevenLabsApiKey) {
     log.warn(`[/generate voice-message] ElevenLabs API key missing for voice message generation`, undefined, {
       userId: userData.user_id,
@@ -585,9 +584,8 @@ export async function execute(
       locale,
       candidates,
       scriptMarkup: effectiveEndpoint?.extra_config.script_markup as string | undefined,
-      // A design-shaped source, not merely a design-capable endpoint: on an `auto` endpoint whose
-      // only candidates are clone-shaped, a Delivery Direction field would render and then be
-      // dropped by the dispatcher.
+      // Requires a design-shaped candidate rather than a design-capable endpoint, because an auto endpoint with only
+      // clone candidates would render Delivery Direction only for the dispatcher to drop it.
       designShapeAvailable: anyDesignShape,
       cloneInstructionsAvailable,
       uploadShapeSelected: defaultSource?.id === "upload",
@@ -598,9 +596,8 @@ export async function execute(
       },
     });
   } catch (error) {
-    // The builder's component-cap assertion is a programming guard, but it runs before anything
-    // has been acknowledged, so an escaped throw would surface as "The application did not
-    // respond" rather than anything a user or a log reader could act on.
+    // Caught because the builder runs before interaction acknowledgement, where an uncaught throw triggers Discord's
+    // generic timeout instead of an error reply.
     log.error("[/generate voice-message] Failed to build the modal components", error as Error);
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",

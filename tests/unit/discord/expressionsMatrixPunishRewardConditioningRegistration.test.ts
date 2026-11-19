@@ -48,10 +48,8 @@ describe("/expressions, /matrix, /punish, /reward, /conditioning registration re
     expect(rewardCommand).toBeDefined();
     if (!punishCommand || !rewardCommand) return;
 
-    // contexts: [0] means InteractionContextType.Guild
     expect(punishCommand.contexts).toEqual([0]);
     expect(rewardCommand.contexts).toEqual([0]);
-    // NO manager default on /punish and /reward
     expect(punishCommand.default_member_permissions).toBeUndefined();
     expect(rewardCommand.default_member_permissions).toBeUndefined();
   });

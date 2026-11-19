@@ -4,7 +4,8 @@ import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 
 const LOWERCASE_LATIN_START = /^(?=\p{Script=Latin})\p{Ll}/u;
 const EMOJI_EDGE = /\p{Extended_Pictographic}|\p{Emoji_Presentation}|\p{Emoji_Modifier}|\uFE0F|\u20E3/u;
-// Face detection covers symbol-bearing kaomoji and common ASCII faces with linear scans; extend it when chat samples expose another shape.
+// Face detection covers symbol-bearing kaomoji and common ASCII faces with linear scans; extend it when chat samples
+// expose another shape.
 const FACE_END =
   /(?:¯\\_\([^\n()]+\)_\/¯|[:;=8][-^']?[)(DPp/]|[\^>Tt;][-_.oO][\^<Tt;]|[^\s\p{Script=Latin}]_[^\s\p{Script=Latin}])$/u;
 const BRACKETED_FACE_END = /[)）](?:づ|ノ|ง|[\\/¯_])*$/u;

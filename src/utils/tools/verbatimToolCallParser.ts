@@ -30,9 +30,7 @@ export interface VerbatimToolCallFlushResult {
 }
 
 const CODE_OPENER_SUFFIX = /`{1,3}[A-Za-z0-9_-]*\s*$/;
-// A fence-language word (e.g. "json") only follows a *triple* backtick + newline;
-// an inline span is just backticks. Matching them separately stops the language
-// token from greedily swallowing the tool name in `` `tool_name(...)` ``.
+// Match triple-backtick fence languages separately from inline backticks so the language tag cannot eat the tool name.
 const CODE_OPENER_PREFIX = /^\s*(?:```[A-Za-z0-9_-]*\r?\n|`{1,3})\s*/;
 const CODE_CLOSER_PREFIX = /^\s*`{1,3}\s*/;
 
@@ -103,9 +101,7 @@ export class VerbatimToolCallParser {
 
     if (match) {
       const anchorIndex = match.index;
-      // Pull a wrapper opener (e.g. "```json\n" or "`") immediately before
-      //    the tool name back into the accumulation buffer so it is preserved
-      //    if parsing later fails, rather than leaking as a stray prose char.
+      // Include any preceding wrapper opener in the buffer so failed parses emit raw text intact without stray ticks.
       const beforeAnchor = this.buffer.slice(0, anchorIndex);
       const openerMatch = beforeAnchor.match(CODE_OPENER_SUFFIX);
       const splitAt = openerMatch ? anchorIndex - openerMatch[0].length : anchorIndex;
@@ -121,7 +117,7 @@ export class VerbatimToolCallParser {
     }
 
     // No anchor: emit the safe prefix, holding back only a tail that could be
-    //    the start of a wrapper opener or a partial tool name on the next chunk.
+    // the start of a wrapper opener or a partial tool name on the next chunk.
     const holdback = this.computeHoldback(this.buffer);
     const visibleText = this.buffer.slice(0, this.buffer.length - holdback.length);
     this.buffer = holdback;
@@ -139,7 +135,6 @@ export class VerbatimToolCallParser {
 
     const closeParenIndex = findBalancedCallEnd(afterOpener, openParenIndex);
     if (closeParenIndex === -1) {
-      // Parens not yet balanced, so keep accumulating subsequent chunks.
       return { visibleText: "", functionCall: null };
     }
 
@@ -151,7 +146,6 @@ export class VerbatimToolCallParser {
       return this.drainBuffer();
     }
 
-    // Keep any trailing text (minus a wrapper closer) for continued scanning.
     this.buffer = afterOpener.slice(closeParenIndex + 1).replace(CODE_CLOSER_PREFIX, "");
     this.mode = "scanning";
     log.info(`VerbatimToolCallParser: Parsed verbatim tool call "${functionCall.name}"`);
@@ -159,10 +153,7 @@ export class VerbatimToolCallParser {
   }
 
   private computeHoldback(buffer: string): string {
-    // Longest suffix that is a prefix of some exposed tool name. The full
-    //    name is included (len up to name.length): a complete name whose "("
-    //    has not streamed in yet must still be withheld, or the anchor can never
-    //    match once the parenthesis finally arrives in the next chunk.
+    // Include full tool names up to name.length in the holdback because the opening "(" may arrive in the next chunk.
     let namePart = "";
     for (const name of this.toolNames) {
       for (let len = Math.min(buffer.length, name.length); len > namePart.length; len--) {
@@ -174,7 +165,7 @@ export class VerbatimToolCallParser {
     }
 
     // A full tool name followed only by trailing whitespace: the anchor
-    //    permits `name\s*(`, so the "(" may still arrive on the next chunk.
+    // permits `name\s*(`, so the "(" may still arrive on the next chunk.
     if (!namePart) {
       const trailingWhitespace = buffer.match(/\s+$/)?.[0] ?? "";
       if (trailingWhitespace) {
@@ -189,7 +180,7 @@ export class VerbatimToolCallParser {
     }
 
     // A wrapper opener directly before the partial name (or at the very end)
-    //    might be wrapping a call still arriving on the next chunk.
+    // might be wrapping a call still arriving on the next chunk.
     const beforeName = buffer.slice(0, buffer.length - namePart.length);
     const opener = beforeName.match(CODE_OPENER_SUFFIX)?.[0] ?? "";
     return opener + namePart;
@@ -312,7 +303,7 @@ function findBalancedCallEnd(text: string, openParenIndex: number): number {
 
     if (inString) {
       if (char === "\\") {
-        i++; // skip the escaped character
+        i++;
         continue;
       }
       if (char === '"') {

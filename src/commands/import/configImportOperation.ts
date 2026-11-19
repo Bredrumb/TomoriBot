@@ -124,7 +124,6 @@ export async function startConfigImport(
 
     const presentedSections = getPresentedConfigSections(kind, parseResult.detectedSections);
     if (presentedSections.length === 0) {
-      // No snapshot is stored, so no routed action can exist for a file that has nothing to apply.
       await dependencies.replyInfoEmbed(interaction, locale, {
         titleKey: "commands.transfer.config_no_importable_sections_title",
         descriptionKey: "commands.transfer.config_no_importable_sections_description",

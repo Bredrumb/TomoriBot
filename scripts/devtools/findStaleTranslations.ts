@@ -95,9 +95,9 @@ export function flatten(obj: unknown, prefix = ""): Record<string, string> {
 
 export function countScriptLetters(value: string, script: ExpectedScript): { latinCount: number; targetCount: number } {
   const stripped = value
-    .replace(/\{[^}]+\}/g, "") // remove {placeholders}
-    .replace(/https?:\/\/\S+/g, "") // remove URLs
-    .replace(/[\p{Extended_Pictographic}\u{1F000}-\u{1FFFF}]/gu, "") // remove emoji
+    .replace(/\{[^}]+\}/g, "")
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/[\p{Extended_Pictographic}\u{1F000}-\u{1FFFF}]/gu, "")
     .trim();
 
   const latinCount = (stripped.match(/\p{Script=Latin}/gu) ?? []).length;
@@ -139,10 +139,10 @@ export function looksLikeEnglish(value: string, expectedScript: ExpectedScript):
 
 export function isIntentionallySharedTranslation(key: string, value: string): boolean {
   const stripped = value
-    .replace(/\{[^}]+\}/g, "") // remove {placeholders}
-    .replace(/https?:\/\/\S+/g, "") // remove URLs
-    .replace(/[\p{Extended_Pictographic}\u{1F000}-\u{1FFFF}]/gu, "") // remove emoji
-    .replace(/[^\p{L}]/gu, "") // keep only letters across any Unicode script
+    .replace(/\{[^}]+\}/g, "")
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/[\p{Extended_Pictographic}\u{1F000}-\u{1FFFF}]/gu, "")
+    .replace(/[^\p{L}]/gu, "")
     .trim();
 
   if (stripped.length === 0) {
@@ -313,9 +313,7 @@ export async function findDriftedTranslations(targetLocale?: string, repoRoot = 
     locales = authoredLocales.filter((locale): locale is LocaleCode => isDiscordLocaleCode(locale));
   }
 
-  // A shallow checkout cannot answer this question, and it fails in the worst possible direction.
-  // `git blame` attributes every line to the grafted root, whose English file is the newest one the
-  // clone holds, so the comparison finds nothing and the report reads as clean. Refuse instead.
+  // Refuse shallow clones because git blame pins every line to the grafted root, making drifted keys appear clean.
   if (source.isShallow()) {
     throw new DriftHistoryError("this checkout is shallow, so translation baselines are missing");
   }
@@ -416,9 +414,9 @@ export async function findStaleTranslations(targetLocale?: string): Promise<Stal
 
     for (const [key, enValue] of Object.entries(enFlat)) {
       const targetValue = targetFlat[key];
-      if (!targetValue) continue; // missing keys are a parity issue, not a staleness issue
+      // Skip missing keys because they are a parity issue rather than staleness.
+      if (!targetValue) continue;
 
-      // Intentionally shared strings bypass both identical and likely-English checks
       if (isIntentionallySharedTranslation(key, targetValue)) {
         continue;
       }
@@ -554,9 +552,7 @@ async function main(): Promise<void> {
     console.log(`\n${"=".repeat(80)}`);
     console.log("Run with --export to write stale-translations.json for batch translation.");
   } else {
-    // Drifted entries keep their own shape rather than being flattened into the value-comparison
-    // one. A batch translator needs the superseded English to judge whether a re-read is warranted,
-    // and dropping that field would leave a bare list of keys that look translated already.
+    // Keep drifted entries unflattened so batch translators still receive the superseded English baseline.
     const drifted: DriftedStaleEntry[] = (drift?.entries ?? []).map((entry) => ({ ...entry, reason: "drifted" }));
     const exported: AnyStaleEntry[] = [...identical, ...likelyEnglish, ...drifted, ...unfollowedExport, ...docs];
     const outputPath = join(process.cwd(), "scripts", "maintenance", "stale-translations.json");

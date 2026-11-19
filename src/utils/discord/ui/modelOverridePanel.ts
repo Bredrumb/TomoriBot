@@ -85,9 +85,7 @@ export function buildModelOverrideRemoveModal(
         required: false,
         options: chunk.map((entry, indexInChunk) => {
           const positionalIndex = String(offset + indexInChunk);
-          // Each row names its target and prints only the effective model. Scope stays in the
-          // group label above the rows, so identical models never make same-scope targets
-          // indistinguishable and the option description never repeats the editor destination.
+          // Keep scope in the group heading above so each option stays concise and avoids repeating the destination.
           if (entry.scope === "channel") {
             const channel = guild?.channels.cache.get(entry.channelDiscId);
             const unknownTarget = localizer(locale, "commands.model.override.remove.channel_unknown");

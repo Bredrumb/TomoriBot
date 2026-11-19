@@ -37,8 +37,6 @@ async function patchGuildAvatar(guildDiscId: string, avatarDataUri: string): Pro
 // long.
 export async function reconcilePresetMainAvatars(client: Client): Promise<void> {
   if (!hasShardLeaseOwnership()) return;
-  // Operational kill switch. Default-on; an operator can disable the fan-out
-  // entirely (e.g. during an incident) without a code change.
   if (!SYNC_ENABLED) {
     log.info("[Preset Avatar Fanout] Disabled via PRESET_AVATAR_SYNC_ENABLED=false; skipping run");
     return;
@@ -74,13 +72,11 @@ export async function reconcilePresetMainAvatars(client: Client): Promise<void> 
       break;
     }
 
-    // Only touch guilds the bot is actually in (and that are cached).
     const guild = client.guilds.cache.get(target.server_disc_id);
     if (!guild) {
       continue;
     }
 
-    // Resolve the shared avatar bytes to a PNG data URI (cached per URL).
     let avatarDataUri = dataUriByUrl.get(target.preset_avatar_shared_url);
     if (avatarDataUri === undefined) {
       const buffer = await loadStoredPersonaAvatarBuffer(target.preset_avatar_shared_url);
@@ -94,14 +90,12 @@ export async function reconcilePresetMainAvatars(client: Client): Promise<void> 
       continue;
     }
 
-    // Pace each PATCH to stay under the bot-wide global rate limit.
     if (processed > 0) {
       await sleep(DELAY_MS);
     }
     processed++;
 
-    // Prevent race condition: check if the user customized the avatar (materializing the pointer)
-    // while this server was waiting in the reconciler queue.
+    // Re-check pointer status after pacing delays because a user may have customized the avatar while queued.
     try {
       const isPointer = await personaRepository.isPersonaPointer(target.persona_id);
       if (!isPointer) {

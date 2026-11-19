@@ -166,9 +166,8 @@ describe("setPersonalCapabilityEnabled", () => {
   });
 
   it("reports success when disabling a capability no provider serves", async () => {
-    // The quick-toggle modal submits all six capabilities and ANDs the results, so an
-    // unconfigured capability returning false turned an unrelated successful write into
-    // "Operation Failed".
+    // The quick-toggle modal submits all six capabilities and ANDs the results, so disabling an unconfigured
+    // capability must return true.
     const state = stubRepo(makeAccount());
 
     expect(await setPersonalCapabilityEnabled(1, "video", false)).toBe(true);

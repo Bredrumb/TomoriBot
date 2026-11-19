@@ -426,8 +426,8 @@ describe("message-proxy attestation router", () => {
         ),
       ).toEqual({ status: "timeout_or_error" });
 
-      // The lookup pauses this channel's wait timers. A failed lookup must resume them,
-      // or every original in the channel is held until its TTL expires.
+      // Lookups pause the channel's wait timers, so a failed lookup must resume them rather than holding messages
+      // until their TTL expires.
       const waitResult = await Promise.race([
         originalWait,
         new Promise<"stuck">((resolve) => setTimeout(() => resolve("stuck"), 1000)),

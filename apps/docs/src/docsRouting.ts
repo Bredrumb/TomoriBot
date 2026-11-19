@@ -154,16 +154,16 @@ export function deriveDescription(body: string, maxLength: number): string | und
     }
 
     const isNonProse =
-      line.startsWith("#") || // headings
-      line.startsWith("import ") || // MDX imports
-      line.startsWith("export ") || // MDX exports
-      line.startsWith(":::") || // asides/admonitions
-      line.startsWith("!") || // standalone images
-      line.startsWith("|") || // tables
-      line.startsWith(">") || // blockquotes
-      line.startsWith("<") || // JSX/HTML blocks
-      /^[-*+]\s/.test(line) || // unordered lists
-      /^\d+\.\s/.test(line); // ordered lists
+      line.startsWith("#") ||
+      line.startsWith("import ") ||
+      line.startsWith("export ") ||
+      line.startsWith(":::") ||
+      line.startsWith("!") ||
+      line.startsWith("|") ||
+      line.startsWith(">") ||
+      line.startsWith("<") ||
+      /^[-*+]\s/.test(line) ||
+      /^\d+\.\s/.test(line);
     if (isNonProse) {
       if (paragraph.length > 0) break;
       continue;
@@ -176,20 +176,19 @@ export function deriveDescription(body: string, maxLength: number): string | und
 
   const text = paragraph
     .join(" ")
-    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1") // images → alt text
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1") // links → link text
-    .replace(/`([^`]+)`/g, "$1") // inline code
-    .replace(/(\*\*|__)(.*?)\1/g, "$2") // bold
-    .replace(/(\*|_)(.*?)\1/g, "$2") // italic
-    .replace(/<[^>]+>/g, "") // stray inline HTML/JSX
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/(\*\*|__)(.*?)\1/g, "$2")
+    .replace(/(\*|_)(.*?)\1/g, "$2")
+    .replace(/<[^>]+>/g, "")
     .replace(/\s+/g, " ")
     .trim();
 
   if (text.length === 0) return undefined;
   if (text.length <= maxLength) return text;
 
-  // Truncate at the last word boundary that fits, then add an ellipsis. Scripts
-  // written without spaces have no boundary to find, so the hard cut is theirs.
+  // Fall back to maxLength when a space-less script (such as CJK) has no word boundary to break on.
   const clipped = text.slice(0, maxLength);
   const lastSpace = clipped.lastIndexOf(" ");
   return `${clipped.slice(0, lastSpace > 0 ? lastSpace : maxLength)}…`;

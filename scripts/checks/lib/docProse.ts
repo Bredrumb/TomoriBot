@@ -23,8 +23,7 @@ const ENGINE_RULE_IDS: Record<string, number | undefined> = {
   contrast_pair: 7,
 };
 
-// The engine's word list is not configurable. `lint-prose` rule 12 allows these where the term is
-// literal, and every calibration hit on them was literal ("the DB test harness").
+// Allow literal uses like "the DB test harness" here because slop-guard's built-in word list cannot be configured.
 const ALLOWED_ENGINE_WORDS = new Set(["harness"]);
 
 // Local patterns enforce lint-prose rules 6, 11, and 20 because the external engine omits these plain-word and filler

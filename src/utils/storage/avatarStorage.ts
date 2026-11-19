@@ -38,7 +38,6 @@ function getAvatarStorageConfig(): AvatarStorageConfig | null {
     return null;
   }
 
-  // GCS takes priority when AVATAR_GCS_BUCKET is set
   const gcsBucket = process.env.AVATAR_GCS_BUCKET?.trim();
   if (gcsBucket) {
     const prefix = (process.env.AVATAR_GCS_PREFIX || process.env.AVATAR_S3_PREFIX || "avatars")
@@ -48,7 +47,6 @@ function getAvatarStorageConfig(): AvatarStorageConfig | null {
     return { backend: "gcs", bucket: gcsBucket, prefix, publicBaseUrl };
   }
 
-  // S3 fallback
   const s3Bucket = process.env.AVATAR_S3_BUCKET?.trim();
   if (!s3Bucket) {
     log.warn(
@@ -280,7 +278,6 @@ export async function uploadPersonaAvatarToStorage(options: AvatarUploadOptions)
       }
     }
 
-    // S3 path
     try {
       await getS3Client(config.region, config.endpoint).send(
         new PutObjectCommand({
@@ -303,10 +300,7 @@ export async function uploadPersonaAvatarToStorage(options: AvatarUploadOptions)
     }
   }
 
-  // Non-production: store under data/avatars/ and return the normalized local path.
-  // Callers store this path in webhook_avatar_url; downstream code resolves it to
-  // a public URL (if AVATAR_PUBLIC_BASE_URL is set) or loads the buffer directly
-  // to mutate the shared webhook avatar before each send.
+  // Store normalized data/avatars/ paths in non-production so downstream senders resolve URLs or read local buffers.
   const storedPath = buildLocalStoredPath(options);
   const absolutePath = resolveLocalAvatarPath(storedPath);
   if (!absolutePath) {
@@ -499,9 +493,7 @@ export async function deletePersonaAvatarFromStorage(reference: string): Promise
     return false;
   }
 
-  // Shared preset assets are immutable and referenced by many servers' pointer
-  // personas. A per-persona delete (sprite replace/remove, re-default reset)
-  // must never remove them or it would break every other server. Skip silently.
+  // Shared preset assets are immutable across pointer servers, so per-persona delete paths skip them silently.
   if (isSharedPresetAssetReference(target)) {
     log.info(`[Avatar Storage] Skipping delete of shared preset asset ${target}`);
     return false;
@@ -536,7 +528,6 @@ export async function deletePersonaAvatarFromStorage(reference: string): Promise
       }
     }
 
-    // S3 path
     try {
       await getS3Client(config.region, config.endpoint).send(
         new DeleteObjectCommand({

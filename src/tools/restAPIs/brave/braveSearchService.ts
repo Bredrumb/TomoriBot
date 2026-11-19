@@ -21,12 +21,12 @@ const BRAVE_API_BASE_URL = "https://api.search.brave.com/res/v1";
 const SERVICE_NAME = "brave-search";
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
-const REQUEST_TIMEOUT = 15000; // 15 seconds
+const REQUEST_TIMEOUT = 15000;
 
 // Brave Search API expects non-standard language codes such as "jp" instead of ISO 639-1 "ja", so this map translates
 // before sending queries.
 const BRAVE_LANGUAGE_CODE_MAP: Record<string, string> = {
-  ja: "jp", // Japanese: ISO 639-1 "ja" → Brave "jp"
+  ja: "jp",
 };
 
 function normalizeBraveLangCode(langCode: string | undefined): string | undefined {
@@ -60,9 +60,7 @@ export function extractImageUrls(response: ImageSearchApiResponse): string[] {
   for (const result of response.results) {
     if (result.properties?.url) {
       imageUrls.push(result.properties.url);
-    }
-    // Fallback to thumbnail URL if available
-    else if (result.thumbnail?.src) {
+    } else if (result.thumbnail?.src) {
       imageUrls.push(result.thumbnail.src);
     }
   }
@@ -120,7 +118,6 @@ async function getBraveApiKey(
     }
   }
 
-  // Fallback to environment variable
   const envApiKey = process.env.BRAVE_API_KEY;
   if (envApiKey) {
     log.info("Using environment variable Brave API key");
@@ -238,12 +235,12 @@ export async function braveWebSearch(
     country: params.country || "US",
     search_lang: normalizeBraveLangCode(params.search_lang) || "en",
     ui_lang: params.ui_lang || "en-US",
-    count: 20, // Always 20 for optimal performance
+    count: 20,
     offset: Math.min(Number(params.offset) || 0, 9),
-    safesearch: params.safesearch || "off", // Default to "off" if not specified
+    safesearch: params.safesearch || "off",
     spellcheck: params.spellcheck !== false,
     text_decorations: params.text_decorations !== false,
-    summary: true, // Always enabled for better results
+    summary: true,
     ...(params.freshness ? { freshness: params.freshness } : {}),
     ...(params.result_filter ? { result_filter: params.result_filter } : {}),
     ...(params.units ? { units: params.units } : {}),
@@ -260,8 +257,8 @@ export async function braveImageSearch(
     q: params.q,
     country: params.country || "US",
     search_lang: normalizeBraveLangCode(params.search_lang) || "en",
-    count: Math.min(Number(params.count) || 3, 10), // Max 10 for images, default 3
-    safesearch: params.safesearch || "off", // Default to "off" if not specified
+    count: Math.min(Number(params.count) || 3, 10),
+    safesearch: params.safesearch || "off",
     spellcheck: params.spellcheck !== false,
   };
   return makeBraveApiRequest<ImageSearchApiResponse>("/images/search", searchParams, config);
@@ -276,11 +273,10 @@ export async function braveVideoSearch(
     country: params.country || "US",
     search_lang: normalizeBraveLangCode(params.search_lang) || "en",
     ui_lang: params.ui_lang || "en-US",
-    count: Math.min(Number(params.count) || 5, 10), // Max 10 for videos, default 5
+    count: Math.min(Number(params.count) || 5, 10),
     offset: Math.min(Number(params.offset) || 0, 9),
-    safesearch: params.safesearch || "off", // Default to "off" if not specified
+    safesearch: params.safesearch || "off",
     spellcheck: params.spellcheck !== false,
-    // Only include freshness if specified
     ...(params.freshness ? { freshness: params.freshness } : {}),
   };
 
@@ -296,11 +292,10 @@ export async function braveNewsSearch(
     country: params.country || "US",
     search_lang: normalizeBraveLangCode(params.search_lang) || "en",
     ui_lang: params.ui_lang || "en-US",
-    count: Math.min(Number(params.count) || 10, 20), // Max 20 for news, default 10
+    count: Math.min(Number(params.count) || 10, 20),
     offset: Math.min(Number(params.offset) || 0, 9),
-    safesearch: params.safesearch || "off", // Default to "off" if not specified
+    safesearch: params.safesearch || "off",
     spellcheck: params.spellcheck !== false,
-    // Only include freshness if specified
     ...(params.freshness ? { freshness: params.freshness } : {}),
   };
 

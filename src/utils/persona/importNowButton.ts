@@ -119,8 +119,7 @@ export function attachImportNowCollector(params: ImportNowCollectorParams): void
   });
 
   collector.on("collect", async (interaction: ButtonInteraction) => {
-    // Manager-only gate. The message is public, so the restriction must be
-    //    enforced here rather than relying on who can see the button.
+    // Enforce ManageGuild here because the button message is public and anyone can click it.
     const hasPermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
     if (!hasPermission) {
       await interaction
@@ -164,7 +163,6 @@ export function attachImportNowCollector(params: ImportNowCollectorParams): void
       return;
     }
 
-    // Run the shared alter-import core (always alter, identity preserved).
     const result = await importAlterPreset({
       client,
       guild,
@@ -196,7 +194,6 @@ export function attachImportNowCollector(params: ImportNowCollectorParams): void
       log.warn("Import Now: failed to disable button after import", error as Error);
     }
 
-    // Confirm privately to the manager who imported.
     const followUpColor = result.hasNoTriggers || result.usedMainAvatarFallback ? ColorCode.WARN : ColorCode.SUCCESS;
     await interaction
       .followUp({
@@ -222,11 +219,8 @@ export function attachImportNowCollector(params: ImportNowCollectorParams): void
   });
 
   collector.on("end", async (_collected, reason) => {
-    // Success already disabled the button; nothing to do.
     if (reason === "imported") return;
 
-    // Best-effort: grey out the button on timeout. Edits the original reply via
-    // the source interaction token, which is still valid given the <15m timeout.
     try {
       await sourceInteraction.editReply(
         validateAndFallbackPanelPayload(

@@ -182,8 +182,7 @@ describe("openAI-compatible provider error formatting", () => {
   });
 
   it("does not blame a parameter on an opaque NVIDIA 500", () => {
-    // A user acted on the old unconditional copy and changed a setting the payload never carried.
-    // Wrong copy is worse than no copy, so the remediation is gated on NVIDIA naming a parameter.
+    // Remediation copy is gated on NVIDIA naming a parameter so opaque 500s do not blame an unrelated setting.
     const description = createOpenAICompatibleErrorDescription(
       {
         type: "provider_overloaded",

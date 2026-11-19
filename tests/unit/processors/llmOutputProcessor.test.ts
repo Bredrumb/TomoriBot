@@ -109,8 +109,6 @@ describe("cleanLLMOutput", () => {
 });
 
 describe("stripLeakedOwnNameLabels", () => {
-  // Branch A: the model opened its turn with its own label: real speech. The starter is dropped
-  // and any *later* self-labels are collapsed at their turn boundary, PRESERVING preceding text.
   describe("opened with own label (real turn — keep preceding, collapse later labels)", () => {
     it("removes the starter label", () => {
       expect(stripLeakedOwnNameLabels("Tomori: hello there", "Tomori").trim()).toBe("hello there");
@@ -152,8 +150,6 @@ describe("stripLeakedOwnNameLabels", () => {
     });
 
     it("collapses a self-label space-separated from a preceding emoji tag", () => {
-      // Mirrors the post-conversion form: the emoji shortcode→tag step inserts a space, so the leak
-      // arrives as "<:Emoji:id> Tsukushi:" rather than glued.
       expect(
         stripLeakedOwnNameLabels(
           "Tsukushi: <:NagatoroSmug:1382568815900098660> Tsukushi: Staying up late. How devoted.",
@@ -163,8 +159,6 @@ describe("stripLeakedOwnNameLabels", () => {
     });
   });
 
-  // Branch B: the model did NOT open with its own label: content before the first leak-shaped
-  // label is a leaked "thought" and is dropped, keeping only the real response.
   describe("did not open with own label (leaked thought — cut the preamble)", () => {
     it("cuts a thought glued to the re-introduction label", () => {
       expect(stripLeakedOwnNameLabels("the answer is 30Bella: I think the answer is 30!", "Bella")).toBe(
@@ -228,9 +222,8 @@ describe("stripLeakedOwnNameLabels", () => {
     });
   });
 
-  // Identity-macro labels: the model sometimes labels its own turn with the template syntax
-  // ("{bot}:") instead of the resolved name. Stripped only at the opening; mid-text macros are
-  // legitimate content whenever the persona is drafting a preset or system prompt for a user.
+  // Strip identity-macro labels ("{bot}:") only at the opening because mid-text macros are valid content when
+  // drafting a preset.
   describe("identity-macro opening labels", () => {
     it("peels a leading {bot} label", () => {
       expect(stripLeakedOwnNameLabels("{bot}: hello there", "Tomori").trim()).toBe("hello there");
@@ -360,8 +353,7 @@ describe("stripLeakedOwnNameLabels", () => {
     });
 
     it("does not mangle an emoji named exactly like the persona", () => {
-      // "<:Tomori:id>" contains "Tomori:" preceded by a colon, so excluded from the glued char so the
-      // emoji is preserved, while the genuinely leaked label after ">" is still collapsed.
+      // Excludes ":" as a glued-char prefix so "<:Name:id>" emoji syntax is preserved instead of stripped as a label.
       expect(stripLeakedOwnNameLabels("Tomori: hi <:Tomori:123456789012345678> there", "Tomori").trim()).toBe(
         "hi <:Tomori:123456789012345678> there",
       );

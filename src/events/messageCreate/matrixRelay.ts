@@ -23,11 +23,11 @@ const BYTES_PER_MIB = 1024 * 1024;
 
 function stripDiscordMarkdown(text: string): string {
   return text
-    .replace(/\*\*(.+?)\*\*/g, "$1") // **bold**
-    .replace(/__(.+?)__/g, "$1") // __underline__
-    .replace(/~~(.+?)~~/g, "$1") // ~~strikethrough~~
-    .replace(/\*(.+?)\*/g, "$1") // *italic*
-    .replace(/`(.+?)`/g, "$1") // `code`
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/__(.+?)__/g, "$1")
+    .replace(/~~(.+?)~~/g, "$1")
+    .replace(/\*(.+?)\*/g, "$1")
+    .replace(/`(.+?)`/g, "$1")
     .trim();
 }
 
@@ -129,7 +129,6 @@ function resolveDiscordTextForMatrix(
   // Matches both Discord snowflakes (<@id>, <@!id>) and internal @{name} placeholders
   const pattern = /<@!?(\d+)>|@\{([^}]+)\}/g;
 
-  // Fast path: skip expensive processing when no mention patterns are present
   if (!pattern.test(text)) {
     return { body: text, formattedBody: undefined, mentionedIds: [] };
   }
@@ -138,8 +137,6 @@ function resolveDiscordTextForMatrix(
   const mentionedIds: string[] = [];
   let hasMatrixMentions = false;
 
-  // Build body (plain text) and htmlParts (formatted_body) in a single pass
-  // so we traverse the string once regardless of the number of patterns found
   const bodyParts: string[] = [];
   const htmlParts: string[] = [];
   let lastIndex = 0;
@@ -164,7 +161,6 @@ function resolveDiscordTextForMatrix(
         bodyParts.push(matrixId);
         htmlParts.push(`<a href="https://matrix.to/#/${matrixId}">${escapeHtml(displayName)}</a>`);
       } else {
-        // Discord-only user, so strip <@id>, keep their display name
         bodyParts.push(displayName);
         htmlParts.push(escapeHtml(displayName));
       }
@@ -177,7 +173,6 @@ function resolveDiscordTextForMatrix(
         bodyParts.push(matrixId);
         htmlParts.push(`<a href="https://matrix.to/#/${matrixId}">${escapeHtml(internalName)}</a>`);
       } else {
-        // Discord-only or unknown user, so strip @{} wrapper, keep name
         bodyParts.push(internalName);
         htmlParts.push(escapeHtml(internalName));
       }
@@ -190,8 +185,7 @@ function resolveDiscordTextForMatrix(
 
   return {
     body: bodyParts.join(""),
-    // Only include formatted_body when at least one Matrix mention anchor was produced;
-    // plain name substitutions (Discord-only users) don't require HTML rendering
+    // Matrix plain-name substitutions need no HTML formatted_body unless a mention anchor was produced.
     formattedBody: hasMatrixMentions ? htmlParts.join("") : undefined,
     mentionedIds,
   };
@@ -208,14 +202,10 @@ function embedToMatrixTextChunks(embed: Embed): string[] {
 }
 
 const handler = async (client: Client, message: Message): Promise<void> => {
-  // Fast exit: skip if Matrix bridge is not configured (common case)
   if (!isMatrixConfigured()) return;
 
-  // Only process guild messages (Matrix bridge is server-scoped)
   if (!message.guild) return;
 
-  // Only relay messages that originate from TomoriBot itself
-  //    (main persona bot account OR alter persona webhook messages)
   const allPersonas: TomoriState[] = await getCachedAllPersonas(message.guild.id);
   await verifyMessageWebhook(message);
   if (!isSelfTriggerMessage(message, allPersonas)) return;
@@ -224,19 +214,14 @@ const handler = async (client: Client, message: Message): Promise<void> => {
   if (!roomId) return;
   if (!(await ensureRoomRelayable(roomId, client))) return;
 
-  // Identify which persona sent this message and retrieve its avatar URL.
-  //    The persona's virtual Matrix user will be provisioned with this identity.
   let persona: TomoriState | undefined;
   let avatarUrl: string | null;
 
   if (message.author.id === client.user?.id) {
     persona = allPersonas.find((p) => !p.is_alter);
 
-    // The main persona sends as the bot account, not a webhook, so webhook_avatar_url
-    // is not set. Prefer the guild member avatar (set via /server avatar or persona swap),
-    // which is per-server and overrides the global Developer Portal avatar.
-    // GuildMember.displayAvatarURL() handles the priority chain automatically:
-    // guild avatar → global avatar.
+    // Main persona sends as the bot account (no webhook_avatar_url), so displayAvatarURL resolves the guild avatar
+    // before the global one.
     avatarUrl =
       message.guild?.members.me?.displayAvatarURL({
         size: 256,
@@ -262,9 +247,8 @@ const handler = async (client: Client, message: Message): Promise<void> => {
 
   const personaName = persona?.persona_nickname ?? message.author.username;
 
-  // Identity is conveyed by the virtual Matrix user, so no bold prefix needed.
-  // @{name} placeholders are transformed to proper Matrix mention links so
-  // Matrix clients highlight and notify the mentioned user (MSC3952).
+  // Virtual Matrix users carry persona identity without a prefix, and @{name} placeholders become MSC3952 mention
+  // links.
   const rawText = message.content.trim();
   if (rawText) {
     const { body, formattedBody, mentionedIds } = resolveDiscordTextForMatrix(rawText, message);
@@ -322,9 +306,7 @@ const handler = async (client: Client, message: Message): Promise<void> => {
     }
   }
 
-  // Relay all embeds by serializing visible content (title/description/fields/urls)
-  //    into plain text Matrix messages. This avoids per-embed whitelists and prevents
-  //    silent drops when new embed shapes are introduced.
+  // Serialize all embeds as plain text rather than whitelisting shapes so new embed types never drop silently.
   for (const embed of message.embeds) {
     const chunks = embedToMatrixTextChunks(embed);
     if (chunks.length === 0) continue;

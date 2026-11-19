@@ -41,7 +41,6 @@ export async function execute(
   const message = interaction.options.getString("message", true);
 
   if (Number.isNaN(personaId)) {
-    // Failsafe if user bypasses autocomplete and types junk
     return;
   }
 

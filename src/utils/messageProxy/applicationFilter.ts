@@ -10,7 +10,7 @@ export interface ApplicationIdFilter {
   record(message: Message, instance: MessageProxyInstanceContext): void;
 }
 
-// Learned, not configured: each custom instance runs its own bot. Only a service-confirmed message may teach the ID.
+// Learned only from service-confirmed messages rather than configured because each custom instance runs its own bot.
 export function createApplicationIdFilter(): ApplicationIdFilter {
   const learned = new Map<string, { applicationId: string; verifiedAt: number }>();
   const keyOf = (instance: MessageProxyInstanceContext) => `${instance.instanceId}\0${instance.origin}`;

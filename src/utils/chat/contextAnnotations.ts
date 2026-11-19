@@ -81,9 +81,8 @@ export function buildRevealedMessageMetadataTailDirective(): string {
   return (
     "Recent message metadata has been revealed in the visible conversation turns. " +
     "Each annotated message now includes a `ref_N` handle, sent timestamp, and who reacted to it when it has reactions. " +
-    // The system prompt still documents `reveal_message_metadata` (macros expand
-    // once at context-build time, before the reveal), so without this line the
-    // model re-requests a reveal it has already been given.
+    // Without this line the model re-requests `reveal_message_metadata` because the system prompt expands before
+    // the reveal.
     "That reveal is already complete, so do not call `reveal_message_metadata` again for the rest of this turn: use the `ref_N` handles shown above. " +
     "`manage_message` can pin any recent message if Discord permissions allow it, and can edit or delete recent messages you or another character owns. " +
     "`interact_with_recent_message` can react to a recent message with an emoji or send a short reply/backtrack comment about it; replies targeting a known persona message use that persona identity when possible."
@@ -224,14 +223,10 @@ export function annotateRecentMessageMetadataInContext(params: {
   reactionUsersByMessageId: ReadonlyMap<string, string>;
 }): { annotatedCount: number; patchedReplyReferenceCount: number } {
   const metadataByMessageId = new Map<string, { inline: string; annotation: string }>();
-  // Maps a dialogue turn's representative message ID (the entry's own `id`, which is
-  // what context items carry) to the ordered list of original message IDs folded
-  // into that turn. Merged turns expand to all constituents; plain turns map to one.
+  // Maps each turn's representative `id` (carried by context items) to the ordered constituent message IDs folded
+  // into it.
   const constituentIdsByEntryId = new Map<string, string[]>();
   for (const message of params.simplifiedMessages) {
-    // Resolve the original messages folded into this entry. Merged entries carry
-    //    combinedMessageIds + combinedCreatedAts (parallel arrays); plain entries
-    //    fall back to their own id + createdAt.
     const isMerged = !!message.combinedMessageIds && message.combinedMessageIds.length > 0;
     const ids = isMerged ? (message.combinedMessageIds as string[]) : [message.id];
     const createdAts = isMerged
@@ -279,9 +274,8 @@ export function annotateRecentMessageMetadataInContext(params: {
     if (textParts.some((part) => part.text.includes("[System: Message metadata: ref="))) {
       continue;
     }
-    // Emit one metadata line per constituent message (in message order) so each
-    //    original message in a merged turn still exposes its own ref_N handle and
-    //    sent timestamp for manage_message / interact_with_recent_message.
+    // Emit one metadata line per constituent in message order so merged turns expose every ref_N handle for
+    // message tools.
     const annotationBlock = constituentIds
       .map((id) => metadataByMessageId.get(id)?.annotation)
       .filter((annotation): annotation is string => annotation !== undefined)
@@ -492,11 +486,8 @@ async function resolveMessageAuthorDisplayName(params: {
     return params.botDisplayName || "Bot";
   }
 
-  // A verified, indexed proxy message carries a stable member identity, so it is named from the
-  // same source ordinary history uses. The webhook name is the service's configurable veneer
-  // (PluralKit's name_format can add system tags or drop the member name), so it is never
-  // treated as the member label. Deliberately not gated on personalization: a member name is
-  // identity rather than a saved user nickname, matching how history and participants use it.
+  // Indexed proxy messages use the member's own identity (never the configurable webhook veneer) and stay
+  // ungated by personalization because member names are identity.
   const messageProxyIdentity = params.messageProxyIdentitiesByMessageId?.get(params.message.id);
   if (messageProxyIdentity) {
     const identityRow = await getCachedUserRow(messageProxyIdentity.userDiscId);
@@ -575,13 +566,8 @@ export function formatInlineSystemContent(content: string | null | undefined): s
   return content?.replace(/\s+/g, " ").trim() || "[System: No text content was included]";
 }
 
-// Turn-ephemeral `[System: …]` annotations the context builder injects into message
-// text. They carry per-turn `ref_N` handles and message/channel IDs that are minted
-// fresh each turn (see buildReplyReferenceContextAnnotation / buildRecentMessageMetadataAnnotation
-// / buildReactionContextAnnotation and the provider media notices). Persisting them
-// verbatim into durable stores (e.g. short-term memory) leaves stale handles that a
-// later turn re-renders against a different messageIdMap: risking mis-targeted
-// manage_message / interact_with_recent_message actions. Strip them before storing.
+// Per-turn `[System: ...]` annotations must be stripped before durable storage so fresh `ref_N` handles never
+// mis-target later turns.
 const INJECTED_CONTEXT_ANNOTATION_PATTERNS: RegExp[] = [
   /^\[System: This message \(ID: [^)]*\) by .* is referring to a previous message \(ID: [^)]*\) by .* saying: .*\]$/gm,
   // Media/GIF notices: "[System: This message (ID: …) …]"
@@ -599,7 +585,6 @@ export function stripInjectedContextAnnotations(content: string): string {
   for (const pattern of INJECTED_CONTEXT_ANNOTATION_PATTERNS) {
     cleaned = cleaned.replace(pattern, "");
   }
-  // Collapse trailing whitespace and blank lines left behind by removed annotations.
   return cleaned
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{2,}/g, "\n")

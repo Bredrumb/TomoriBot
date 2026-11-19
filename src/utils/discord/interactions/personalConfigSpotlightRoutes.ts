@@ -353,8 +353,7 @@ export async function handlePersonalConfigSpotlightRoutes(context: PersonalConfi
       });
       return true;
     }
-    // The channel arrives from the custom ID, so the select menu that produced it is not a guard.
-    // A spotlight belongs to one guild text channel, and the write is keyed on the raw snowflake.
+    // Re-resolve the guild channel because channelId comes from the customId rather than a fresh menu selection.
     const confirmChannel = interaction.guild?.channels.cache.get(route.channelId);
     if (!confirmChannel || confirmChannel.type !== ChannelType.GuildText) {
       await repaint(interaction, {

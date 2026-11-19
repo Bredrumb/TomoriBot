@@ -7,10 +7,8 @@ async function run() {
   const writes = violations.filter((v) => v.kind === "WRITE");
   const reads = violations.filter((v) => v.kind === "READ");
 
-  // Listings are proportional to findings: empty sections print nothing, and the
-  // exemption list is detail a reader only needs when deciding whether a violation is
-  // already covered, so a clean run reports its counts and stops. `--verbose` restores it
-  // for the times the exemption inventory is itself the question being asked.
+  // Omit exemption details on a clean quiet run because readers only need them when investigating violations or under
+  // --verbose.
   if (writes.length > 0) {
     console.log("=== WRITES ===");
     for (const w of writes) console.log(`${normalizePath(w.file)}:${w.line}`);

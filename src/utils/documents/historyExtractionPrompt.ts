@@ -81,7 +81,6 @@ export function composeInCharacterSystemPrompt(params: {
   }
   sections.push(identityLines.join("\n"));
 
-  // Existing memories block: what the persona already knows, so it can avoid duplicating.
   if (existingMemoryLines.length > 0) {
     const memoryBlock = [
       "\n---",

@@ -37,9 +37,7 @@ describe("/refresh registration", () => {
   });
 
   it("keeps the reset-marker title defined in every locale", () => {
-    // `embedProtocol` builds its title table per locale and skips a missing key, so a locale without
-    // this title silently stops recognizing its own reset embeds. `localizer` would fall back to
-    // en-US and hide the gap, hence `hasLocaleKey`.
+    // Uses `hasLocaleKey` because `localizer` falls back to en-US while `embedProtocol` silently skips missing titles.
     expectForEveryLocale((locale) => {
       expect(hasLocaleKey(locale, "commands.refresh.title")).toBe(true);
       expect(localizer(locale, "commands.refresh.title").length).toBeGreaterThan(0);

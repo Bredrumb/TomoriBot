@@ -123,7 +123,6 @@ export function collectCacheMetricsSnapshot(client: Client): MetricFields {
     // Shard IDs use ascending comma-separated decimal integers because metric fields are scalar.
     shard_ids: ownedShardIds.join(","),
     shard_count: totalShardCount,
-    // Tomori application-level caches
     shortTermMemory: stm.size,
     tomoriState: tomoriState.cacheSize,
     userCache: user.cacheSize,
@@ -145,7 +144,7 @@ export function collectCacheMetricsSnapshot(client: Client): MetricFields {
     openrouterVideoCatalog: getOpenRouterVideoModelCacheSize(),
     novelaiSubscription: getNovelaiSubscriptionCacheSize(),
 
-    // Webhook manager (no TTL, watch for unbounded growth)
+    // Webhook caches have no TTL, so track them for unbounded growth.
     webhookChannel: webhook.webhookChannel,
     webhookManagedSlots: webhook.webhookManagedSlots,
     webhookMutationLocks: webhook.webhookMutationLocks,
@@ -154,26 +153,21 @@ export function collectCacheMetricsSnapshot(client: Client): MetricFields {
     webhookFailure: webhook.webhookFailure,
     webhookIdentity: getWebhookIdentityCacheSize(),
 
-    // Discord.js client caches
     ...collectDiscordCacheSizes(client),
 
-    // Process memory (correlate cache growth with observed RSS drift)
     rss_mb: Math.round(memCheck.rssUsedMB * 100) / 100,
     rss_pct: Math.round(memCheck.percentUsed * 10000) / 100,
     rss_limit_mb: memCheck.memoryLimitMB,
 
-    // Native allocations (decoded bitmaps, buffers) live in `external`/`arrayBuffers`, not in
-    // the JS heap and not in any cache counted above, so entry counts alone cannot explain a
-    // memory spike. RSS also understates the total once the kernel swaps part of the heap out.
+    // Native buffers live in external/arrayBuffers rather than the JS heap, so cache counts alone cannot explain spikes
+    // when the kernel swaps.
     heap_used_mb: processMemory.heapUsedMb,
     heap_total_mb: processMemory.heapTotalMb,
     external_mb: processMemory.externalMb,
     array_buffers_mb: processMemory.arrayBuffersMb,
 
-    // Worst timer lag across the whole interval rather than the instant of the sample, since a
-    // stall lasting seconds would almost never coincide with a 5-minute sample. This is the only
-    // series that distinguishes a starved event loop from a healthy one, because Discord readiness
-    // and WebSocket ping both stay green through it.
+    // Peak interval lag is recorded because stalls between 5-minute ticks starve the event loop while Discord ping
+    // stays green.
     event_loop_peak_lag_ms: eventLoopMonitor.takeIntervalPeakLagMs(),
   };
 }
@@ -201,9 +195,8 @@ async function emitHostSnapshot(): Promise<void> {
     const snapshot = await collectHostMemorySnapshot();
     if (!snapshot) return;
 
-    // The detector reads this same snapshot rather than taking its own. `swap_in_per_s` is
-    // differenced against the previous call, so a second read would measure a near-zero interval
-    // and report a rate of roughly zero no matter what the host is doing.
+    // Reuse this snapshot for evaluatePressure because collectHostMemorySnapshot differences swap_in_per_s against
+    // the previous call.
     const now = Date.now();
     const { state, verdict } = evaluatePressure(
       pressureState,
@@ -220,9 +213,7 @@ async function emitHostSnapshot(): Promise<void> {
       );
     }
 
-    // Pool retirements ride this sample rather than a series of their own so a cascade can be
-    // read against swap, PSI and event-loop lag on one time axis. Cross-tabbing those by hand
-    // from separate sources is what turned the last diagnosis into an afternoon.
+    // Include pool retirements on host_memory so cascades align with swap and PSI on one time axis.
     await metricSampleRepository.recordSample("host_memory", {
       ...snapshot,
       ...pressureVerdictFields(verdict, armed),
@@ -248,7 +239,6 @@ export function initializeCacheMetricsLogger(client: Client, intervalMs?: number
     return;
   }
 
-  // Resolve interval from explicit argument, env var, or fallback default
   const resolved = intervalMs ?? Number.parseInt(process.env.CACHE_METRICS_INTERVAL_MS || "", 10);
   const finalInterval = Number.isFinite(resolved) && resolved > 0 ? resolved : DEFAULT_INTERVAL_MS;
 

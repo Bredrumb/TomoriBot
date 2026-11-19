@@ -24,9 +24,8 @@ describe("fallback receipt slot", () => {
   });
 
   it("names the route's lead rather than a slot for a model outside the fallback list", () => {
-    // The server route answers with its own lead after the personal route failed. It holds no slot
-    // in the server's fallback list, and reporting the failure count here named a slot the reader
-    // could not find in the receipt.
+    // When the server lead answers after a personal fallback fails, it holds no slot in the
+    // server fallback list, so reporting the failure count would name a nonexistent receipt slot.
     const context = makeContext([makeLlm(2, "server-fallback")]);
 
     expect(resolveFallbackSlot(context, makeLlm(1, "server-primary"))).toBe(1);

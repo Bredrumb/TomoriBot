@@ -76,7 +76,6 @@ import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
 async function getDefaultOpenrouterModel(): Promise<string> {
   const providerName = "openrouter";
 
-  // Try to get default from cache (fastest, no DB query)
   if (isLLMCacheReady()) {
     const cachedDefault = getCachedDefaultLLM(providerName);
     if (cachedDefault) {
@@ -119,18 +118,16 @@ function extractOpenRouterEmbeddings(response: unknown): number[][] {
     .filter((values) => values.length > 0);
 }
 
-// OpenRouter-specific configuration extending the base ProviderConfig
 export interface OpenrouterProviderConfig extends ProviderConfig {
-  // OpenRouter uses OpenAI-compatible API, simple configuration
-  seesImages?: boolean; // Whether the model supports image inputs
+  seesImages?: boolean;
   seesYoutube?: boolean;
-  seesVideos?: boolean; // Whether the model supports video inputs
-  topP?: number; // Nucleus sampling (0.0-1.0)
-  topK?: number; // Top-k sampling
-  frequencyPenalty?: number; // Penalize frequent tokens (-2.0 to 2.0)
-  presencePenalty?: number; // Penalize repeated topics (-2.0 to 2.0)
-  repetitionPenalty?: number; // Penalize token repetition (0.0-2.0)
-  minP?: number; // Minimum probability threshold (0.0=disabled)
+  seesVideos?: boolean;
+  topP?: number;
+  topK?: number;
+  frequencyPenalty?: number;
+  presencePenalty?: number;
+  repetitionPenalty?: number;
+  minP?: number;
 }
 
 export class OpenrouterProvider
@@ -163,11 +160,7 @@ export class OpenrouterProvider
     try {
       log.info("Validating OpenRouter API key...");
 
-      // Use OpenRouter's dedicated auth endpoint to validate the key
-      // This is more reliable than making a test chat request because:
-      // It doesn't depend on a specific model being available
-      // It doesn't consume credits
-      // It's faster and more accurate
+      // Probe /auth/key instead of chat completions so validation needs no model and spends no credits.
       const response = await fetch("https://openrouter.ai/api/v1/auth/key", {
         method: "GET",
         headers: {
@@ -245,8 +238,6 @@ export class OpenrouterProvider
       log.success("API key validation successful");
       return { valid: true };
     } catch (error) {
-      // Network errors or other exceptions - use stream adapter for these
-      // since they're not API-specific
       const openrouterAdapter = new OpenrouterStreamAdapter();
       const providerError = openrouterAdapter.handleProviderError(error);
 
@@ -302,8 +293,7 @@ export class OpenrouterProvider
       if (usage) request.onUsage?.(usage);
       return extractOpenRouterEmbeddings(response);
     } catch (error: unknown) {
-      // OpenRouter sometimes returns 200 OK with an error body, which trips up the SDK's validation.
-      // If this happens, the SDK throws a ResponseValidationError with the raw body in rawValue.
+      // OpenRouter can return 200 OK with an error body, causing the SDK to throw ResponseValidationError with rawValue.
       // biome-ignore lint/suspicious/noExplicitAny: SDK-specific error structure (ResponseValidationError) contains rawValue
       const err = error as any;
       const limit =
@@ -536,14 +526,10 @@ export class OpenrouterProvider
   }
 
   async createConfig(tomoriState: TomoriState, apiKey: string): Promise<OpenrouterProviderConfig> {
-    // Override capabilities with OpenRouter API data
-    // This prevents routing errors caused by incorrect database flags
     let effectiveHasTools = tomoriState.llm.has_tools;
     let effectiveSeesImages = tomoriState.llm.sees_images;
     let effectiveSeesVideos = tomoriState.llm.sees_videos;
 
-    // Special case: other-model uses a user-configured OpenRouter model codename
-    // stored in other_model_codename, with real capabilities in other_model_capabilities.
     if (tomoriState.llm.llm_codename === "other-model") {
       const storedCapabilities = tomoriState.config.other_model_capabilities;
       const fetchedAt = tomoriState.config.other_model_capabilities_fetched_at;
@@ -558,7 +544,6 @@ export class OpenrouterProvider
         effectiveSeesImages = storedCapabilities.seesImages;
         effectiveSeesVideos = storedCapabilities.seesVideos;
       } else {
-        // Cache is missing or stale, so re-fetch using stored model name
         const otherModelCodename = tomoriState.config.other_model_codename;
 
         if (!otherModelCodename) {
@@ -578,7 +563,6 @@ export class OpenrouterProvider
                   `tools=${capabilities.hasTools}, images=${capabilities.seesImages}, videos=${capabilities.seesVideos}`,
               );
 
-              // Store refreshed capabilities in database
               const now = new Date();
               await configRepository.updateModelConfig(tomoriState.server_id, {
                 other_model_capabilities: capabilities,
@@ -646,8 +630,7 @@ export class OpenrouterProvider
     // accounts with low daily credit limits.
     const resolvedMaxOutputTokens = await resolveRequestMaxOutputTokens(tomoriState);
     const config: OpenrouterProviderConfig = {
-      // For other-model, use the user-configured model codename (e.g., "openrouter/free")
-      // rather than the placeholder codename "other-model" which OpenRouter rejects
+      // Substitute other_model_codename because OpenRouter rejects the placeholder "other-model".
       model:
         tomoriState.llm.llm_codename === "other-model" && tomoriState.config.other_model_codename
           ? tomoriState.config.other_model_codename
@@ -656,10 +639,10 @@ export class OpenrouterProvider
       temperature: tomoriState.config.llm_temperature,
       disabledParams: tomoriState.config.llm_disabled_params ?? [],
       maxOutputTokens: resolvedMaxOutputTokens,
-      seesImages: effectiveSeesImages, // Use effective value (may be overridden)
+      seesImages: effectiveSeesImages,
       seesYoutube: resolveEffectiveOpenRouterSeesYouTube(tomoriState),
-      seesVideos: effectiveSeesVideos, // Wire through video capability flag
-      // repetitionPenalty is hardcoded as a general token repetition dampener
+      seesVideos: effectiveSeesVideos,
+      // Default repetitionPenalty to 1.1 so unconfigured models still dampen token repetition.
       repetitionPenalty: 1.1,
       ...buildActiveSamplingParams(tomoriState.config),
     };
@@ -668,9 +651,7 @@ export class OpenrouterProvider
       config.logitBias = runtimeLogitBias;
     }
 
-    // The catalog override above can raise effectiveHasTools above the flag the pipeline
-    // narrowed, which is how the Tool Use master toggle and the deliberate-tool kill switch
-    // both used to leak tools on this provider alone.
+    // Re-apply resolveToolsEnabled after catalog overrides because effectiveHasTools can re-enable disabled tools.
     if (resolveToolsEnabled(tomoriState, effectiveHasTools)) config.tools = await this.getTools(tomoriState);
 
     return config;
@@ -716,14 +697,12 @@ export class OpenrouterProvider
         minVisibleTypingDurationMs: DISCORD_STREAMING_CONSTANTS.MIN_VISIBLE_TYPING_DURATION_MS,
         humanizer: pickHumanizerSettings(tomoriState.config),
         emojiUsageEnabled: tomoriState.config.emoji_usage_enabled,
-        // Preserve createConfig capability overrides (don't revert to DB flags here)
         seesImages: openrouterConfig.seesImages,
         forceReason: streamingContext?.forceReason,
         isManuallyTriggered: streamingContext?.isManuallyTriggered,
       };
 
-      // Override tools with context-aware tools when streaming context is provided
-      // BUT only if tools were enabled in createConfig (after API capability overrides)
+      // Reload context-aware tools only when createConfig left tools enabled after capability overrides.
       const modelSupportsToolsAfterOverride = Array.isArray(openrouterConfig.tools);
       if (streamingContext && modelSupportsToolsAfterOverride) {
         log.info("OpenrouterProvider: Reloading tools with streaming context for context-aware availability");

@@ -221,8 +221,8 @@ describe("panel failure Postgres sink", () => {
       });
       await settle();
 
-      // A stringified value binds as text and ::jsonb makes it a scalar string, which nulls every
-      // fields->>'...' read in Grafana. See migration 064.
+      // A stringified value casts through ::jsonb as a scalar string, which would null every
+      // fields->>'...' read in Grafana (migration 064).
       expect(typeof captured).toBe("object");
       expect(typeof captured).not.toBe("string");
     } finally {
@@ -323,8 +323,8 @@ describe("setup wizard terminal notice receipts", () => {
         receipt: setupNoticeReceipt("en-US", "expired"),
       });
 
-      // A failed commit is a genuine incident the actor must rerun, and it previously emitted
-      // nothing at all; an expired session is routine drift.
+      // A failed commit is an actionable error that requires a rerun, whereas an expired session
+      // is routine drift.
       expect(metrics.map((entry) => entry.fields.reason)).toEqual(["setup_commit_failed", "setup_session_expired"]);
       expect(metrics.map((entry) => entry.fields.tone)).toEqual(["error", "warning"]);
       expect(metrics[0]?.fields.namespace).toBe("setup");
@@ -362,9 +362,8 @@ describe("panel action correlation key", () => {
         },
       });
 
-      // Identical to the key `recordPanelActionStat` writes on success, so
-      // `stat_counters.metric_key = fields->>'action'` joins failures to the successes of the same
-      // control rather than only to its surface.
+      // Uses the same key as recordPanelActionStat on success so
+      // `stat_counters.metric_key = fields->>'action'` joins failures to control successes.
       expect(metrics[0]?.fields.action).toBe("moderation.workspace.whitelist-channel.remove");
     } finally {
       restore();

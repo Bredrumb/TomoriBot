@@ -34,7 +34,8 @@ interface StatBufferEntry {
   lineageId: number;
   metric: StatMetric;
   metricKey: string;
-  bucket: string; // YYYY-MM-DD
+  // Format: YYYY-MM-DD
+  bucket: string;
   delta: number;
   firstAt: Date;
   lastAt: Date;
@@ -190,8 +191,7 @@ class StatRepository implements IRepository<null> {
     if (!STAT_TRACKING_ENABLED) return;
 
     const { serverId, userId, metric } = input;
-    // Guard required scope: server + user are NOT NULL FKs. A missing id
-    //    (e.g. a DM command with no server) is silently skipped, not an error.
+    // Skip non-integer scope IDs (e.g., DM contexts without a server) because server_id and user_id are NOT NULL FKs.
     if (!Number.isInteger(serverId) || !Number.isInteger(userId)) return;
 
     const delta = input.delta ?? 1;
@@ -203,7 +203,6 @@ class StatRepository implements IRepository<null> {
     const bucket = currentBucketDate();
     const now = new Date();
 
-    // Accumulate into the existing buffer entry, or create a new one.
     const key = this.bufferKey({ serverId, userId, lineageId, metric, metricKey, bucket });
     const existing = this.buffer.get(key);
     if (existing) {
@@ -223,7 +222,6 @@ class StatRepository implements IRepository<null> {
       });
     }
 
-    // Flush triggers: size cap (fire-and-forget) or arm the interval timer.
     if (this.buffer.size >= FLUSH_MAX_BUFFER) {
       void this.flush();
     } else {
@@ -260,8 +258,7 @@ class StatRepository implements IRepository<null> {
       .then(() => this.flushSnapshot())
       .finally(() => {
         if (this.flushPromise === promise) this.flushPromise = null;
-        // A size-cap flush can start before an interval exists. If new entries
-        // arrived while it ran, make sure they still receive a periodic flush.
+        // Re-arm the periodic timer after size-cap flushes if new entries arrived while the drain ran.
         if (this.buffer.size === 0) this.clearFlushTimer();
         else this.ensureFlushTimer();
       });
@@ -270,14 +267,11 @@ class StatRepository implements IRepository<null> {
   }
 
   private async flushSnapshot(): Promise<boolean> {
-    // Atomically take ownership of the current buffer contents.
     const draining = this.buffer;
     this.buffer = new Map();
     const entries = Array.from(draining.values());
 
     try {
-      // One transaction and one multi-row additive UPSERT. The buffer already
-      // collapsed same-tuple increments, so this is the minimum round-trip count.
       const rows: StatUpsertRow[] = entries.map((entry) => ({
         server_id: entry.serverId,
         user_id: entry.userId,
@@ -317,8 +311,7 @@ class StatRepository implements IRepository<null> {
       let badUserId: number | null = null;
       let badLineageId: number | null = null;
 
-      // A nuked server drops the servers row before this flush can execute.
-      // Dropping the resulting foreign key violation prevents the entire batch from retry-looping.
+      // Drop entries targeting deleted servers or users on FK 23503 so one nuked row never retry-loops the whole batch.
       if (
         pgError &&
         typeof pgError === "object" &&
@@ -355,7 +348,6 @@ class StatRepository implements IRepository<null> {
       }
 
       let droppedCount = 0;
-      // Exclude permanently failed entries before returning the batch to the live buffer.
       for (const e of entries) {
         if (
           (badServerId !== null && e.serverId === badServerId) ||
@@ -451,10 +443,7 @@ class StatRepository implements IRepository<null> {
     }
   }
 
-  // NOTE: reads hit the DB directly (no read cache in Phase 1). Dashboard and
-  // infographic entry points await flush() before these reads, so user-facing
-  // snapshots include every successfully buffered increment. All windowing is
-  // `bucket >= from` + SUM, never finer.
+  // Reads query Postgres directly at daily bucket granularity, so callers needing buffered increments must await flush().
 
   // Today's rows stay out of the gap timestamp so one-shot reunion delivery preserves the absence, and UTC buckets
   // can differ from user midnight.
@@ -587,15 +576,13 @@ class StatRepository implements IRepository<null> {
       const names = rows.map((row) => row.command_name);
 
       await sql.begin(async (tx: SQL) => {
-        // Upsert current commands. first_seen_at is set on insert only; ON
-        //    CONFLICT refreshes the mutable columns without touching it.
+        // ON CONFLICT omits first_seen_at so only mutable columns refresh on re-sync.
         await tx`
           INSERT INTO command_catalog ${tx(rows, "command_name", "category")}
           ON CONFLICT (command_name) DO UPDATE SET
             category       = EXCLUDED.category,
             last_synced_at = now()
         `;
-        // Prune commands that no longer exist in the codebase.
         await tx`
           DELETE FROM command_catalog
           WHERE NOT (command_name = ANY(${sql.array(names, "text")}))
@@ -716,7 +703,6 @@ class StatRepository implements IRepository<null> {
   async getActivityHeatmap(
     args: { userId: number; serverId?: number; offsetHours?: number | null } & StatWindow,
   ): Promise<ActivityHeatmap> {
-    // Pre-populate a full 7×24 grid of zeros so every cell is always present.
     const grid: ActivityHeatmap = {};
     for (let dow = 0; dow < 7; dow++) {
       grid[dow] = {};
@@ -726,8 +712,6 @@ class StatRepository implements IRepository<null> {
     try {
       const from = windowFloor(args.from);
       const serverId = args.serverId ?? null;
-      // Raw joint aggregate in server wall-clock: weekday from the bucket date,
-      //    hour from metric_key, summed per (weekday, hour) cell.
       const rows = await sql<{ dow: number | string; hour: string; total: number | string }[]>`
         SELECT EXTRACT(DOW FROM bucket)::int AS dow, metric_key AS hour, SUM(count) AS total
         FROM stat_counters
@@ -743,13 +727,10 @@ class StatRepository implements IRepository<null> {
       for (const r of rows) {
         const dow = Number(r.dow);
         const hour = Number.parseInt(String(r.hour), 10);
-        // Skip malformed hour keys (active_hour is always 0-23, but be safe).
         if (!Number.isInteger(dow) || !Number.isInteger(hour) || hour < 0 || hour > 23) continue;
         const total = Number(r.total);
 
-        // Rotate the (weekday, hour) pair TOGETHER via the week-hour index so a
-        //    midnight-crossing offset moves the weekday correctly. The rotation is a
-        //    bijection on 0-167, so no two raw cells collide into one shifted cell.
+        // Rotate (dow, hour) together modulo 168 so midnight-crossing offsets shift weekdays without collisions.
         const wh = dow * 24 + hour;
         const shifted = (((wh + offset) % 168) + 168) % 168;
         const newDow = Math.floor(shifted / 24);
@@ -782,7 +763,6 @@ class StatRepository implements IRepository<null> {
       const DAY_MS = 86_400_000;
       const lastActiveDate = new Date(days[0]).toISOString().split("T")[0];
 
-      // Longest streak: walk descending dates, counting consecutive days.
       let longest = 1;
       let run = 1;
       for (let i = 1; i < days.length; i++) {
@@ -795,7 +775,6 @@ class StatRepository implements IRepository<null> {
         }
       }
 
-      // Current streak: only counts if the most recent day is today/yesterday.
       const todayMs = new Date(`${currentBucketDate()}T00:00:00Z`).getTime();
       let current = 0;
       if (todayMs - days[0] <= DAY_MS) {

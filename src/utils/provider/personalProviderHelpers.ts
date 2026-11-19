@@ -229,12 +229,8 @@ export async function setPersonalCapabilityEnabled(
   const rows = await llmProviderRepo.loadUserSavedProviderConfigs(userId);
 
   if (!enabled) {
-    // Disabling needs no target row: a capability no provider serves is already off, so the
-    // request is satisfied. The quick-toggle modal submits all six capabilities at once and
-    // ANDs the results, so treating an unconfigured capability as a failure reported
-    // "Operation Failed" over the successful write the user actually asked for.
-    // Disabling also never reassigns, so every row keeps its assignment and only the on/off
-    // state is cleared.
+    // Disabling clears only enabled_capabilities without reassigning and succeeds on unconfigured slots because the
+    // quick-toggle modal ANDs all six results.
     for (const row of rows) {
       if (!row.enabled_capabilities.includes(capability)) {
         continue;

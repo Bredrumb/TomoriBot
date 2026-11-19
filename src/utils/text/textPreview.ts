@@ -34,15 +34,12 @@ export function buildTextPreview(
     return { text: "", truncated: false, shownChars: 0, totalChars: 0 };
   }
 
-  // Guard the fence first so the guard's expansion counts against the budget instead of being
-  // appended past it. A guarded run never contains two adjacent backticks, so slicing it can at
-  // worst leave a single trailing backtick, which cannot re-open a fence.
+  // Interleaved guards leave at most one trailing backtick when truncated, so slicing never re-opens a fence.
   const guardedFull = neutralizeFenceRuns(source);
   const truncated = getDiscordTextLength(guardedFull) > budget;
   const guarded = truncated ? truncateDiscordText(guardedFull, budget, "") : guardedFull;
 
-  // Report shownChars in original terms by dropping the zero-width guards,
-  //    so "Showing the first X of Y" stays honest even after fence expansion.
+  // Drop zero-width guards from shownChars so truncation counts match the user's original text.
   return {
     text: guarded,
     truncated,

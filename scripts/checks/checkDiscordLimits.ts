@@ -36,8 +36,6 @@ function getLineNumber(content: string, matchIndex: number): number {
 function checkStringLengthLimits(content: string, file: string): Violation[] {
   const violations: Violation[] = [];
 
-  // Pattern 1: TextInputBuilder - find the complete builder chain
-  // Match from 'new TextInputBuilder()' to the statement terminator (semicolon or ActionRowBuilder)
   const textInputPattern =
     /new\s+TextInputBuilder\s*\(\s*\)([\s\S]*?)(?=;|new\s+ActionRowBuilder|\.addComponents\(textInput\)|\.addComponents\(fallbackInput\))/g;
 
@@ -78,7 +76,6 @@ function checkStringLengthLimits(content: string, file: string): Violation[] {
   while (match !== null) {
     const optionBlock = match[0];
     if (!optionBlock.includes("setMaxLength") && !optionBlock.includes("setAutocomplete(true)")) {
-      // Only flag if it's not just an autocomplete field
       if (optionBlock.includes("setRequired(true)") || optionBlock.includes("setDescription")) {
         violations.push({
           file,
@@ -90,9 +87,6 @@ function checkStringLengthLimits(content: string, file: string): Violation[] {
     }
     match = stringOptionPattern.exec(content);
   }
-
-  // Pattern 4: SlashCommandStringOption with maxLength > 256
-  // (reuse textInputExcessPattern since it's the same method name)
 
   return violations;
 }
@@ -217,15 +211,12 @@ function displayResults(results: AnalysisResult): void {
   const verboseOutput = isVerboseOutput();
   const violations = results.violations;
 
-  // A clean run gets one line. The banner, the summary block, and the closing
-  // encouragement are all scaffolding around "no violations", which is the whole report.
   if (violations.length === 0) {
     console.log(`✅ Discord API limits OK (${results.filesScanned} files scanned, 0 violations)`);
     return;
   }
 
-  // This gate runs in CI, where nobody can add a flag after the fact, so everything a
-  // failing run needs prints unconditionally. Only the banner framing it is optional.
+  // Print violation details unconditionally because CI cannot re-run with --verbose; only the banner is optional.
   if (verboseOutput) {
     console.log(`\n${"=".repeat(80)}`);
     console.log("🔍 DISCORD API LIMITS ANALYSIS RESULTS");

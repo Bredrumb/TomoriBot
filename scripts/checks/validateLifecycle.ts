@@ -489,8 +489,7 @@ function writeValidationEnv(databaseUrl: string, baseUrl: URL): void {
       `POSTGRES_PASSWORD=${postgresPassword}`,
       `POSTGRES_DB=${tempDatabaseName}`,
       `CRYPTO_SECRET=${lifecycleCryptoSecret}`,
-      // Maintenance scripts load the full secret set, which requires a Discord token even though
-      // they never connect. Local runs hide this because Bun auto-loads the repo .env; CI has none.
+      // Provide a dummy token for CI runs without .env because maintenance scripts load the full secret schema.
       "DISCORD_TOKEN=lifecycle_validation_placeholder_token",
       "RUN_ENV=development",
       "",

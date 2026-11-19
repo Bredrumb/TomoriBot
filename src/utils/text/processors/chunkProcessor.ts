@@ -23,14 +23,9 @@ function shouldMergeEmojiRun(previousEmojiTag: string | null, nextEmojiTag: stri
   return previousPrefix === nextPrefix;
 }
 
-// List markers we treat as a "this line labels the emoji" prefix.
-// Requires whitespace after the marker so things like "1.5" or "v2.0" don't match.
+// Requires trailing whitespace so numbered list markers never match decimals or versions like "1.5" or "v2.0".
 const LIST_MARKER_REGEX = /^\s*(?:\d+[.)]|[-*•])\s+/;
-// Used to strip other custom-emoji tags out of the surrounding text when
-// deciding whether the current emoji is actually flanked by *prose*.
 const EMOJI_TAG_GLOBAL_REGEX = /<a?:[^:]+:[^>]+>/g;
-// Sentence-terminating punctuation in EN + JA. If the text immediately before
-// the emoji ends in one of these, the emoji isn't really "mid-sentence".
 const TERMINAL_PUNCTUATION_REGEX = /[.!?。！？]$/;
 
 function shouldEmojiStayInline(sourceText: string, emojiStart: number, emojiLength: number): boolean {
@@ -47,7 +42,6 @@ function shouldEmojiStayInline(sourceText: string, emojiStart: number, emojiLeng
   const beforeStripped = beforeOnLine.replace(EMOJI_TAG_GLOBAL_REGEX, "").trimEnd();
   const afterStripped = afterOnLine.replace(EMOJI_TAG_GLOBAL_REGEX, "").trim();
 
-  // Both sides must contain non-whitespace, non-emoji content
   if (beforeStripped.length === 0 || afterStripped.length === 0) return false;
   // The preceding fragment must not be a completed sentence ("Wow! :Smile:")
   if (TERMINAL_PUNCTUATION_REGEX.test(beforeStripped)) return false;
@@ -346,9 +340,8 @@ const EMPHASIS_WHITESPACE_REGEX = /\s/u;
 // Han, kana, and Hangul write without spaces between words, so the ja and zh-TW locales place
 // emphasis markers directly against letters.
 const SPACELESS_SCRIPT_REGEX = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
-// Emoticons use bare parens as facial features, so a candidate whose opener is glued to one is not
-// an aside: "ugh :( that sucks. anyway. glad you're back :)" would otherwise hold the whole stretch
-// between the two faces in one message.
+// Emoticon openers like ":(" would otherwise pair with a later ":)" and hold the entire intervening stretch
+// together.
 const EMOTICON_GLUE_REGEX = /[:;=8']/;
 const URL_PATTERN_SOURCE = String.raw`(?<!\]\()(https?|ftps?):\/\/[^\s<>[\](){}'"]+`;
 const INLINE_CODE_PATTERN = /`[^`\n]*`/g;
@@ -816,8 +809,6 @@ export function chunkMessage(inputText: string, splitMode: MessageSplitMode, chu
         });
       }
       const emojiAbsStart = block.start + emojiMatch.index;
-      // Classify: "emoji_inline" gets folded into adjacent text in Pass 3;
-      //    plain "emoji" keeps the existing isolate-into-emoji-run behavior in Pass 4.
       const isInline = shouldEmojiStayInline(inputText, emojiAbsStart, emojiMatch[0].length);
       processedBlocks.push({
         content: emojiMatch[0],
@@ -850,17 +841,13 @@ export function chunkMessage(inputText: string, splitMode: MessageSplitMode, chu
       currentBlock.type === "markdown_strikethrough" ||
       currentBlock.type === "markdown_inline_code" ||
       currentBlock.type === "markdown_link" ||
-      // Inline emojis (mid-sentence or list-item) merge with neighboring text
-      // so e.g. "I like :Soup:, you?" stays as one chunk, and "1. :Soup:"
-      // keeps the list marker attached to its emoji.
+      // Inline emojis stay merged with adjacent text so mid-sentence tags and list items do not split apart.
       currentBlock.type === "emoji_inline";
 
     if (isSemanticBlock) {
       let mergedContent = "";
 
-      // Pop the previous block iff it's already a text block, so this is true both for
-      // raw text and for prior semantic blocks (they get pushed AS text, see below).
-      // Chaining works: text → quoted → emoji_inline → bold → text all flows into one chunk.
+      // Popping prior text blocks chains consecutive semantic spans (quotes, inline emojis, bold) into one chunk.
       if (mergedBlocks.length > 0 && mergedBlocks[mergedBlocks.length - 1].type === "text") {
         const prevBlock = mergedBlocks.pop();
         if (prevBlock) mergedContent += prevBlock.content;
@@ -947,9 +934,7 @@ export function chunkMessage(inputText: string, splitMode: MessageSplitMode, chu
       case "text": {
         let textToAdd = block.content.trim();
         if (prevBlockWasEmoji) {
-          // Strip leading sentence-ending punctuation orphaned by the emoji split. An
-          // intentionally isolated trailing emoji (not "emoji_inline") leaves the following
-          // text fragment starting with an orphan "!".
+          // Drop orphaned leading punctuation left when an isolated trailing emoji splits off.
           textToAdd = textToAdd.replace(/^[.!?。]+(?=\s|$)/, "");
         }
         prevBlockWasEmoji = false;
@@ -995,9 +980,8 @@ export function chunkMessage(inputText: string, splitMode: MessageSplitMode, chu
                 chunkedMessages.push(currentChunk);
                 currentChunk = "";
               }
-              // A restored span reaches this point whole, so it can exceed the chunk limit the
-              // sentence split never checked; splitByNewlines brings it back to the requested
-              // length before it reaches Discord.
+              // Restored spans bypass sentence-length limits, so re-split oversized results before sending to
+              // Discord.
               if (processedSentence.length > chunkLength) {
                 chunkedMessages.push(...splitByNewlines(processedSentence, chunkLength));
               } else {
@@ -1014,7 +998,6 @@ export function chunkMessage(inputText: string, splitMode: MessageSplitMode, chu
   if (emojiRun.length > 0) chunkedMessages.push(emojiRun);
   if (currentChunk.length > 0) chunkedMessages.push(currentChunk);
 
-  // Fallback: if input was non-empty but nothing chunked, split by length
   if (chunkedMessages.length === 0 && inputText.length > 0) {
     let remainingInput = inputText;
     while (remainingInput.length > 0) {

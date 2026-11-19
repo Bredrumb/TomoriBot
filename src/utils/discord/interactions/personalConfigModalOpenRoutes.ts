@@ -237,9 +237,6 @@ export async function handlePersonalConfigModalOpen(
     return "handled";
   }
 
-  // Choosing a provider opens its fallback modal directly when options fit in a single modal.
-  // When options exceed PERSONAL_FALLBACK_PAGE_SIZE, it defers and repaints the selector with one
-  // entry per page of that provider's options.
   if (route.action === "fallbacks-provider-select") {
     const selectMenu = interaction as StringSelectMenuInteraction;
     const chosenValue = selectMenu.values[0];

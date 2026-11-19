@@ -456,8 +456,7 @@ describe("audit block signals", () => {
   });
 
   it("matches the same sentence reflowed onto different line breaks", () => {
-    // The two files carry the same sentence, wrapped at different columns. Line breaks are a
-    // function of the surrounding indent, so treating them as content would miss the pair.
+    // Wrap the same sentence at different columns because line breaks depend on indent and must normalize away.
     const findings = inspectAuditCorpusSources(
       new Map([
         [
@@ -827,9 +826,7 @@ describe("audit command line", () => {
   });
 
   it("falls back to the calibrated limits when an override is malformed", async () => {
-    // `12words` and `5.5` would both pass a bare `parseInt` (`5.5` becomes 5), so a typo would
-    // silently become a threshold nobody chose. The fixture is 11 rendered lines, so the
-    // calibrated default reports it while a parsed `5` would not.
+    // Fixture is 11 lines so a bare `parseInt("5.5") === 5` bug would hide the warning.
     const malformed = await runChecker(["--audit", "--verbose"], {
       COMMENT_AUDIT_DUPLICATE_MIN_WORDS: "12words",
       COMMENT_AUDIT_LONG_BLOCK_LINES: "5.5",

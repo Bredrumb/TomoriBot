@@ -111,7 +111,7 @@ export async function sendFallbackModelUsageNotice({
     const buttonRow = buildTextDisplayModalButton(FALLBACK_DETAILS_BUTTON_ID, buttonLabel);
     const disabledButtonRow = buildTextDisplayModalButton(FALLBACK_DETAILS_BUTTON_ID, buttonLabel, true);
 
-    // Resolve thread ID: webhooks targeting a parent channel need it to post into a thread.
+    // Webhooks target the parent channel, so threadId is required when editing a notice inside a thread.
     const threadId =
       "isThread" in context.channel && typeof context.channel.isThread === "function" && context.channel.isThread()
         ? context.channel.id

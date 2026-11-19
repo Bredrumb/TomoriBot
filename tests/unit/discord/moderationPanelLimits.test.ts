@@ -239,7 +239,6 @@ describe("Moderation panel Components V2 limits", () => {
       );
     }
 
-    // Explicitly test a full page of 10 rows all having 20,000-codepoint persona names across locales and receipts
     const fullPagePersonaChannels = Array.from({ length: MODERATION_PANEL_RANGE_SIZE }, (_, i) =>
       makePersonaChannel(i + 1),
     );

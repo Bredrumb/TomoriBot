@@ -36,9 +36,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
     if (!altUser || altUser.user_id === undefined) throw new Error("Failed to register alt test user");
     altUserId = altUser.user_id;
     lineageA = refs.personaLineageId;
-    lineageB = refs.personaLineageId + 1000; // distinct lineage (no FK on persona_lineage_id)
+    lineageB = refs.personaLineageId + 1000;
 
-    // Test model with known pricing for the cost-estimate read.
     await testSql`
       INSERT INTO llms (llm_provider, llm_codename, input_price_per_million, output_price_per_million)
       VALUES ('_rt_provider', ${TEST_MODEL}, 10, 20)
@@ -331,8 +330,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
     await statRepository.flush();
     expect(await readCount("tokens_in", TEST_MODEL, lineageA, refs.userId)).toBe(1_000_000);
     expect(await readCount("tokens_out", TEST_MODEL, lineageA, refs.userId)).toBe(1_000_000);
-    // Exact per-direction pricing (not averaged): input 10/M + output 20/M
-    // → 1,000,000 input ($10) + 1,000,000 output ($20) = $30.
+    // Expect $30 because input ($10/M) and output ($20/M) are priced per direction, not averaged.
     const cost = await statRepository.getEstimatedCost({ serverId: refs.serverId });
     expect(cost).toBeCloseTo(30, 5);
   });
@@ -381,10 +379,9 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
       lineageId: lineageA,
       metric: "message_sent",
     });
-    // No flush → buffered only; a hard crash here would lose exactly this delta.
     expect(statRepository.bufferedEntryCount).toBe(1);
     expect(await readCount("message_sent", "", lineageA, refs.userId)).toBe(0);
-    await statRepository.flush(); // tidy up for the next test
+    await statRepository.flush();
   });
 
   it("recordStat skips when the server id is missing (NOT NULL FK guard)", () => {
@@ -508,7 +505,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
     expect(top[0]).toEqual({ command: "config", count: 2 });
     expect(top[1]).toEqual({ command: "memory", count: 1 });
 
-    // "persona" never ran → must surface from the registry list, not the table.
     const unused = await statRepository.getUnusedCommands(["config", "memory", "persona"], { serverId: refs.serverId });
     expect(unused).toEqual(["persona"]);
   });
@@ -548,7 +544,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
       userId: refs.userId,
       lineageId: lineageA,
       metric: "sprite_shown",
-      metricKey: "yuki", // identity sprite: present in the leaderboard, absent from emotions
+      metricKey: "yuki",
     });
     statRepository.recordStat({
       serverId: refs.serverId,
@@ -568,7 +564,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
 
     const emotions = await statRepository.getEmotionBreakdown({ serverId: refs.serverId });
     expect(emotions.find((e) => e.emotion === "happy")?.count).toBe(2);
-    // The identity sprite never produced a sprite_emotion row, so it is not an emotion.
     expect(emotions.find((e) => e.emotion === "yuki")).toBeUndefined();
 
     const sprites = await statRepository.getMetricKeyBreakdown({ metric: "sprite_shown", serverId: refs.serverId });
@@ -605,14 +600,12 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
     const hist = await statRepository.getActivityHistogram({ userId: refs.userId });
     expect(hist.byHour[14]).toBe(5);
     expect(hist.byHour[9]).toBe(1);
-    // Weekday totals sum the same rows; total across weekdays must equal 6.
     const weekdayTotal = Object.values(hist.byWeekday).reduce((a, b) => a + b, 0);
     expect(weekdayTotal).toBe(6);
   });
 
   it("getActivityHeatmap returns the correct 2-D joint weekday×hour grid", async () => {
-    // Fixed calendar dates with known weekdays (EXTRACT(DOW): 0=Sun..6=Sat):
-    //   2024-01-01 = Monday (dow 1), 2024-01-08 = Monday (dow 1), 2024-01-02 = Tuesday (dow 2).
+    // 2024-01-01 and 2024-01-08 are Monday (EXTRACT(DOW) = 1); 2024-01-02 is Tuesday (2).
     await testSql`
       INSERT INTO stat_counters (server_id, user_id, persona_lineage_id, metric, metric_key, bucket, count)
       VALUES
@@ -630,17 +623,14 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
   });
 
   it("getActivityHeatmap timezone offset crossing midnight rolls into the previous weekday's cell", async () => {
-    // Seed Tuesday (2024-01-02 = dow 2) at 01:00 UTC. With a UTC-2 personal offset
-    // the local time is 23:00 MONDAY, so the hour roll must move the weekday too.
+    // 2024-01-02 01:00 UTC (Tue) is 23:00 Mon at UTC-2, so the offset must roll back the weekday too.
     await testSql`
       INSERT INTO stat_counters (server_id, user_id, persona_lineage_id, metric, metric_key, bucket, count)
       VALUES
         (${refs.serverId}, ${refs.userId}, ${lineageA}, 'active_hour', '1', '2024-01-02'::date, 4)
     `;
     const grid = await statRepository.getActivityHeatmap({ userId: refs.userId, offsetHours: -2 });
-    // wh = 2*24 + 1 = 49; (49 - 2) mod 168 = 47 → dow 1 (Mon), hour 23.
     expect(grid[1][23]).toBe(4);
-    // The original server-wall-clock cell (Tue 01:00) is now empty.
     expect(grid[2][1]).toBe(0);
   });
 
@@ -653,7 +643,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
         (${refs.serverId}, ${refs.userId}, ${lineageA}, 'active_hour', '0', '2024-01-07'::date, 7)
     `;
     const grid = await statRepository.getActivityHeatmap({ userId: refs.userId, offsetHours: -1 });
-    // wh = 0; (0 - 1 + 168) mod 168 = 167 → dow 6 (Sat), hour 23.
     expect(grid[6][23]).toBe(7);
     expect(grid[0][0]).toBe(0);
   });

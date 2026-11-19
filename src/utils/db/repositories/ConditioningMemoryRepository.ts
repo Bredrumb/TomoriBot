@@ -383,7 +383,7 @@ class ConditioningMemoryRepository implements IRepository<ConditioningExportShap
 
   async toExportShape(ownerId: string | number): Promise<ConditioningExportShape | null> {
     const personaLineageId = Number(ownerId);
-    // serverId=0 is a placeholder; Phase 6 #16.7 will refine the owner key shape.
+    // Sentinel serverId 0 avoids matching real servers because IRepository passes only a single ownerId.
     const groups = await this.sqlLoadConditioningGroupsForPersona(0, personaLineageId);
     if (!groups.length) return null;
     return { persona_lineage_id: personaLineageId, groups };

@@ -15,11 +15,11 @@ import {
 export { releaseImageQuotaUnits as releaseImageQuota } from "@/utils/db/repositories/QuotaRepository";
 
 export interface QuotaCheckResult {
-  allowed: boolean; // Whether user can generate image
-  reason?: "user_quota_exceeded" | "serverwide_quota_exceeded" | "disabled"; // Reason if denied
-  userRemaining?: number; // User's remaining quota for the day
-  serverwideRemaining?: number; // Server's remaining quota for the period
-  resetTime?: Date; // When the quota resets (for error messages)
+  allowed: boolean;
+  reason?: "user_quota_exceeded" | "serverwide_quota_exceeded" | "disabled";
+  userRemaining?: number;
+  serverwideRemaining?: number;
+  resetTime?: Date;
 }
 
 export interface ImageQuotaClaim extends QuotaCheckResult {
@@ -35,7 +35,6 @@ async function checkUserDailyQuota(
   userDiscId: string,
   config: ImageQuotaConfigRow,
 ): Promise<QuotaCheckResult> {
-  // If daily user quota is 0 (unlimited), allow
   if (config.daily_user_quota === 0) {
     return { allowed: true };
   }
@@ -48,7 +47,7 @@ async function checkUserDailyQuota(
 
   if (remaining <= 0) {
     const resetTime = new Date();
-    resetTime.setHours(24, 0, 0, 0); // Next midnight
+    resetTime.setHours(24, 0, 0, 0);
 
     return {
       allowed: false,
@@ -65,7 +64,6 @@ async function checkUserDailyQuota(
 }
 
 async function checkServerwideQuota(serverId: number, config: ImageQuotaConfigRow): Promise<QuotaCheckResult> {
-  // If serverwide quota is 0 (unlimited), allow
   if (config.serverwide_quota === 0) {
     return { allowed: true };
   }
@@ -158,7 +156,7 @@ export async function reserveImageQuota(serverId: number, userDiscId: string): P
 
   if (outcome.status === "user_quota_exceeded") {
     const resetTime = new Date();
-    resetTime.setHours(24, 0, 0, 0); // Next midnight
+    resetTime.setHours(24, 0, 0, 0);
     return { allowed: false, reason: "user_quota_exceeded", userRemaining: 0, resetTime, reservation: null };
   }
 

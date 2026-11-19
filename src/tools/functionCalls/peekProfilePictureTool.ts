@@ -68,7 +68,6 @@ export class PeekProfilePictureTool extends BaseTool {
   }
 
   isAvailableForContext(provider: string, context?: ToolContext): boolean {
-    // Base provider check
     if (!this.isAvailableFor(provider)) {
       return false;
     }
@@ -172,9 +171,7 @@ export class PeekProfilePictureTool extends BaseTool {
       const targetTypeLabel =
         avatarData.sourceType === "persona" ? "persona" : avatarData.sourceType === "webhook" ? "webhook" : "user";
 
-      // Non-vision redirect path: if the primary model cannot see images but a dedicated
-      // vision model is configured, call the vision model directly with the avatar image
-      // and return a text description. The primary model then responds to that description.
+      // Non-vision primary models cannot consume injected images, so redirect to vision_llm for a text description.
       if (!context.tomoriState.llm.sees_images && context.tomoriState.vision_llm) {
         return await this.redirectToVisionModel(
           preparedImages,
@@ -186,9 +183,6 @@ export class PeekProfilePictureTool extends BaseTool {
         );
       }
 
-      // Enhanced context restart path: inject the raw image into the context so the
-      // vision-capable primary model can see it directly on the next iteration.
-      // Check if this is the bot's own profile picture (Discord user identity only)
       const isBotSelf =
         targetIdentity.toLowerCase() === "self" ||
         (avatarData.sourceType === "user" &&
@@ -227,7 +221,7 @@ export class PeekProfilePictureTool extends BaseTool {
               },
               isProfilePicture: image.kind === "avatar",
               isProfileBanner: image.kind === "banner",
-              enhancedContext: true, // Special marker for processing
+              enhancedContext: true,
             } as EnhancedImageContent,
           ]),
         ],
@@ -249,7 +243,6 @@ export class PeekProfilePictureTool extends BaseTool {
           banner_url: avatarData.bannerUrl ?? null,
           avatar_source: avatarData.sourceType,
           reason: reason,
-          // Clean metadata only - no base64 data anywhere in response
           image_processed: true,
           banner_included: hasBanner,
           status: "completed",
@@ -355,7 +348,6 @@ export class PeekProfilePictureTool extends BaseTool {
 
     const apiKey = creds.apiKey;
 
-    // Resolve API model name and provider from the vision LLM row
     const provider = visionLlm.llm_provider.toLowerCase();
     const apiModelName = resolveVisionApiModelName(provider, visionLlm.llm_codename);
 
@@ -366,7 +358,6 @@ export class PeekProfilePictureTool extends BaseTool {
       `PeekProfilePictureTool: Redirecting avatar analysis to vision model ${provider}/${apiModelName} (primary model is non-vision)`,
     );
 
-    // Route to the appropriate API based on provider family
     let analysisResult: string;
 
     if (provider === "google") {

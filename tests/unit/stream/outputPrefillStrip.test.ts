@@ -81,8 +81,6 @@ describe("output prefill display", () => {
     expect(sent.join("")).toContain("And then more.");
   });
 
-  // Regression: an echo matched across several lines, diverged later, and was reposted with its
-  // withheld lines run together.
   it("keeps line breaks between withheld lines when a multi-line echo diverges", async () => {
     const sent = await deliver(
       ["I leave for five minutes.", "Anyway, it's Saturday.", "A few thoughts on the tracks."],

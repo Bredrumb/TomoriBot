@@ -131,8 +131,7 @@ export async function generatePresetFromPromptOpenrouter(
     if (toolsEnabled) {
       body.tools = tools;
 
-      // OpenRouter defaults tool_choice to automatic selection when omitted.
-      // Only send it when the model explicitly advertises support.
+      // Send tool_choice only when advertised because OpenRouter defaults to auto when omitted.
       const supportedParameters =
         options.model !== "other-model" ? getOpenRouterSupportedParameters(options.model) : undefined;
       if (supportedParameters?.has("tool_choice")) {

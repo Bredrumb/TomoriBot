@@ -96,8 +96,8 @@ describe("vision chat-completions transport coverage", () => {
   });
 
   test("never falls back to an OpenAI URL for a foreign provider", () => {
-    // The previous tool-level map had no nvidia entry and fell through to an OpenAI default,
-    // which would have sent a foreign bearer key to the wrong host.
+    // Unknown providers must never fall back to an OpenAI URL because that would send a foreign bearer key to the
+    // wrong host.
     expect(resolveChatCompletionsUrl("nvidia")).toBe("https://integrate.api.nvidia.com/v1/chat/completions");
     expect(resolveChatCompletionsUrl("nonexistent-provider")).toBeNull();
   });
@@ -115,7 +115,6 @@ describe("vision chat-completions transport coverage", () => {
       "http://127.0.0.1:5001/v1/chat/completions",
     );
     expect(resolveChatCompletionsUrl("custom:17", "   ")).toBeNull();
-    // The canonical name alone has no connection to resolve an endpoint from.
     expect(resolveChatCompletionsUrl("custom", "http://127.0.0.1:5001/v1")).toBeNull();
   });
 });

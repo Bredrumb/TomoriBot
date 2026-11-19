@@ -8,10 +8,8 @@ interface Issue {
 
 const issueList: Issue[] = [];
 
-// Intentional export exclusions: these tables hold resettable telemetry/counters,
-// not portable server/persona configuration. stat_counters is the same class of
-// high-frequency runtime telemetry (it omits the `_runtime_state` suffix only
-// because it is a per-day counter table, not a single-row state row).
+// Exclude resettable runtime telemetry tables from portable export; stat_counters omits `_runtime_state` as a per-day
+// counter table.
 const RUNTIME_STATE_EXPORT_EXCLUDED_TABLES = new Set([
   "api_key_rotation_runtime_state",
   "persona_autoch_runtime_state",
@@ -529,11 +527,8 @@ function checkInsertCounts(dbWrite: string, tableName: string): void {
   });
 }
 
-// Export keys that are produced as nested objects/arrays by a dedicated repository
-// (ShortTermMemoryRepository.toExportShape) rather than flat SQL column SELECTs and a
-// per-table column export schema. They are still emitted by ExportRepository and
-// restored by ImportRepository (both verified below), so only the flat-column SELECT
-// alias and per-table composition rules are exempted for them.
+// Exempt nested repository-sourced exports from flat-column SELECT alias and per-table schema checks; emit and restore
+// still run below.
 const REPOSITORY_SOURCED_EXPORT_KEYS = new Set(["stm_config", "stm_categories"]);
 
 // Legacy degrees are import-only input, so only the import-restore rule applies.

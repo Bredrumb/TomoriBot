@@ -175,8 +175,8 @@ describe("message-proxy identity persistence orchestration", () => {
       deps.value,
     );
 
-    // The seed decision belongs to the identity transaction, which alone knows whether this
-    // attestation created the identity. This layer must not drop or rewrite the value.
+    // Only the identity transaction knows whether this attestation created the identity, so this layer must pass
+    // pronouns through verbatim.
     expect(deps.persistIdentity).toHaveBeenCalledWith(
       expect.objectContaining({ input: expect.objectContaining({ pronouns: "she/her" }) }),
     );

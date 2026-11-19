@@ -27,8 +27,7 @@ import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/p
 import { resolveStructuredOutputCapability } from "@/utils/provider/providerCapabilityResolver";
 import { getEffectiveLlmModelName } from "@/utils/provider/modelDisplay";
 
-// Consecutive no-progress iteration cap before aborting, so an erroring or non-matching model never loops forever;
-// preserve this invariant on exit changes.
+// Consecutive no-progress cap so an erroring or non-matching model never loops forever.
 const EXPRESSION_INIT_MAX_CHUNK_RETRIES = 3;
 
 // Batch delay so consecutive requests stay within provider rate limits.
@@ -119,12 +118,9 @@ export async function execute(
     return;
   }
 
-  // Defer reply early (this operation may take time)
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  // Overlay the invoking user's personal (BYOK) provider so the expression
-  //     generation runs on their personal model/key when configured. Done after
-  //     deferReply since it performs DB reads (keeps the 3s ack window safe).
+  // BYOK overlay runs after deferReply because its DB reads could otherwise miss Discord's 3s ack window.
   let { tomoriState } = await applyPersonalProviderSelectionsToTomoriState(baseTomoriState, userData.user_id ?? null);
 
   const overwrite = interaction.options.getBoolean("overwrite") ?? false;
@@ -150,8 +146,6 @@ export async function execute(
 
     log.info(`[Initialize Expressions] Sync complete for guild ${interaction.guild.name}`);
 
-    // Resolve effective LLM for expression initialization
-    // Primary model is preferred; vision model used as fallback when primary lacks vision
     const llm = tomoriState.llm;
     let effectiveLlm = llm;
 
@@ -280,8 +274,6 @@ export async function execute(
       return;
     }
 
-    // Resolve the provider and its per-batch image cap once. These are constant
-    //    across every loop iteration, so there is no need to recompute them per batch.
     const provider = effectiveLlm.llm_provider.toLowerCase();
     const structuredOutputCapability = await resolveStructuredOutputCapability(provider);
     const expressionBatchSize = structuredOutputCapability?.getExpressionInitializationBatchSize?.() ?? null;
@@ -333,11 +325,10 @@ export async function execute(
     const temperature = 1.0;
 
     let batchNumber = 0;
-    let chunkRetries = 0; // consecutive no-progress iterations on the current chunk
-    let previousRemaining = -1; // backlog size observed at the start of the previous iteration
+    let chunkRetries = 0;
+    let previousRemaining = -1;
 
     while (true) {
-      // Re-query the backlog each iteration so prior batches' DB writes shrink it
       const { pendingEmojis, pendingStickers } = await loadPending();
       const remaining = pendingEmojis.length + pendingStickers.length;
 
@@ -345,7 +336,6 @@ export async function execute(
         break;
       }
 
-      // Loop-safety: detect a chunk that is not shrinking and cap its retries
       if (remaining === previousRemaining) {
         chunkRetries++;
         log.warn(
@@ -382,7 +372,6 @@ export async function execute(
         batchTargets.push({ type: "sticker", discId: sticker.sticker_disc_id });
       }
 
-      // Apply provider batch size limit (different token/cost constraints per provider)
       if (expressionBatchSize && items.length > expressionBatchSize) {
         images.splice(expressionBatchSize);
         items.splice(expressionBatchSize);
@@ -456,7 +445,6 @@ export async function execute(
         return;
       }
 
-      // On a provider error, log and let the loop retry this chunk (capped by maxChunkRetries)
       if (!result.success) {
         log.error("LLM structured output failed", new Error(result.error), {
           errorType: "LLMStructuredOutputError",
@@ -503,8 +491,6 @@ export async function execute(
       for (const id of emojiDiscIds) classifiedEmojiIds.add(id);
       for (const id of stickerDiscIds) classifiedStickerIds.add(id);
 
-      // Brief pause between batches to stay within provider rate limits, skipped
-      //     when this batch drained the remaining backlog (no further iteration needed)
       if (EXPRESSION_INIT_BATCH_DELAY_MS > 0 && remaining - (emojiDiscIds.length + stickerDiscIds.length) > 0) {
         await new Promise((resolve) => setTimeout(resolve, EXPRESSION_INIT_BATCH_DELAY_MS));
       }

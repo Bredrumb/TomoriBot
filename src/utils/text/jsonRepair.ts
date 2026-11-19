@@ -214,10 +214,7 @@ function scanTruncatedJson(input: string): RepairScan {
         markInvalid(i);
         return stop();
       }
-      // A closer only fits where an entry may end: an object takes one after a complete
-      // value, or instead of a first key; an array takes one after a value, or at the
-      // separator following one. Anywhere else (say `{"a": }` or `[,1]`) the payload is
-      // malformed rather than truncated, so the repair refuses it.
+      // Reject mid-entry closers like `{"a": }` or `[,1]` because those payloads are malformed rather than truncated.
       const closesEntry = frame.isObject
         ? frame.state === "key" || frame.state === "colon" || frame.state === "separator"
         : frame.state === "value" || frame.state === "separator";
@@ -226,8 +223,7 @@ function scanTruncatedJson(input: string): RepairScan {
         return stop();
       }
       frames.pop();
-      // A closer consumes the entry before it, so that entry ended where the value did. The
-      // closer's own position then completes the parent entry carrying this container.
+      // Settle this frame's trailing entry before recording the closed container as a value in its parent frame.
       settleEntry(frame);
       recordValue(i + 1);
       observesStructuralCharacter();
@@ -318,18 +314,14 @@ function closeOpenContainers(input: string, scan: RepairScan, passes: number): s
     return null;
   }
 
-  // A payload that reached its end is truncated, whether it ran out of tokens exactly or
-  // stopped partway through a value. Anything else is a token that cannot follow, and no
-  // amount of closing can supply the value the payload never produced.
+  // Bail out unless scanning hit EOF or a partial value, because closing brackets cannot fix earlier syntax errors.
   const truncated = scan.scanComplete || scan.stoppedInValue;
   if (!truncated) {
     return null;
   }
 
-  // A number at the very end of the payload cannot be told apart from a number the provider
-  // cut short, and its digits read as exact. Its frame goes back to waiting for a value, so
-  // the walk below drops the entry that carried it exactly as it drops a key whose value
-  // never arrived, while the entries before it stay in the frame.
+  // Revert a trailing number's frame to pending because a cut-off number cannot be distinguished from a complete
+  // one, so the walk drops that entry.
   if (scan.trailingNumberEnd !== null) {
     for (const frame of scan.frames) {
       if (frame.completeEnd !== scan.trailingNumberEnd) {
@@ -342,12 +334,7 @@ function closeOpenContainers(input: string, scan: RepairScan, passes: number): s
     }
   }
 
-  // Walk outward until the frame can be closed without inventing anything. A frame with a
-  // finished value that nothing is waiting on is clean, and so is one whose last entry can
-  // simply be dropped: either it never started (an object holding only its opening brace)
-  // or it finished earlier entries this frame can still close at. A pending *container* is
-  // the one case that has to go, because closing it at its opening delimiter is what would
-  // put half a list into someone's memory.
+  // Walk outward past incomplete nested containers so an unclosed child is dropped instead of committed half-empty.
   let closingFrom = scan.frames.length;
   while (closingFrom > 0) {
     const frame = scan.frames[closingFrom - 1];
@@ -361,9 +348,8 @@ function closeOpenContainers(input: string, scan: RepairScan, passes: number): s
   }
 
   if (closingFrom === 0) {
-    // Nothing finished inside any frame, so an empty container is all the payload can close.
-    // A truncated payload nested one level down held no value at all, which makes an empty
-    // read a worse answer than reporting that the repair could not help.
+    // Return null when dropping a nested trailing number leaves no completed entries, instead of fabricating an
+    // empty root container.
     if (scan.trailingNumberEnd !== null && scan.frames.length > 1) {
       return null;
     }
@@ -372,8 +358,7 @@ function closeOpenContainers(input: string, scan: RepairScan, passes: number): s
   }
 
   const anchor = scan.frames[closingFrom - 1];
-  // A pending entry is dropped whole, so the offset is the last entry that finished before
-  // it. A fresh empty object has none, and closes at its opening brace instead.
+  // Drop any pending entry back to the previous finished entry, or to the opening delimiter when empty.
   const resumeOffset = emptyFrameResumeOffset(anchor);
 
   return finishRepair(input, scan, closingFrom, resumeOffset, passes);
@@ -406,8 +391,8 @@ function finishRepair(
   if (passes + 1 >= MAX_REPAIR_PASSES) {
     return null;
   }
-  // A dangling separator or key can still survive the first cut, so the next pass resumes
-  // from the previous entry. Each retry moves `end` earlier, so the recursion terminates.
+  // Retry from the earlier breakOffset when a dangling key or separator remains, shrinking `end` each pass so
+  // recursion terminates.
   return closeOpenContainers(input, { ...scan, breakOffset: end, stoppedInValue: false }, passes + 1);
 }
 

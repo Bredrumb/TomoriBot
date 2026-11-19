@@ -41,9 +41,8 @@ describe("test isolation hygiene", () => {
       .filter(([, source]) => reachesTestDatabase(source))
       .map(([file]) => file);
 
-    // A DB test under tests/unit/ joins the unit lane, which runs at the same time
-    // as the DB lane, so both would hit the same disposable database and its fixed-id
-    // fixtures. Move it to tests/regression/db/, where files run serially.
+    // Unit-lane tests run concurrently with the DB lane, so DB tests must live in serial tests/regression/db/
+    // instead of sharing fixed-id fixtures.
     expect(offenders).toEqual([]);
   });
 
@@ -53,17 +52,15 @@ describe("test isolation hygiene", () => {
       .filter(([, unrestored]) => unrestored.length > 0)
       .map(([file, unrestored]) => `${file} -> ${unrestored.join(", ")}`);
 
-    // These persist for the life of the process, so an unrestored mutation silently
-    // changes behaviour for every other file batched alongside this one and the
-    // failure surfaces in THAT file, not this one. Restore it in afterEach/afterAll.
+    // Process-wide mutations persist across batched files, so any unrestored one silently breaks sibling tests
+    // unless undone in afterEach/afterAll.
     expect(offenders).toEqual([]);
   });
 });
 
 describe("testIsolation detectors", () => {
-  // Markers are assembled from fragments so this file never contains a literal
-  // occurrence: the scanners above read test sources, and a bare marker here
-  // would make the suite flag its own fixtures.
+  // Assemble markers from fragments so this file contains no literal occurrence for the test-source scanners
+  // above to flag.
   const MOCK_CALL = `mock${"."}module("@/x", () => ({}))`;
   const SCOPED_MOCK_CALL = `createScopedModuleMocker(mock, { "@/x": realX })`;
   const DB_IMPORT = `import { testSql } from "./setup${"/"}testDb"`;
@@ -151,9 +148,8 @@ describe("testIsolation detectors", () => {
   });
 
   it("exempts files that already run in their own process", () => {
-    // Mock users get a private process, so nothing they mutate can reach another
-    // file: this is why tests/unit/chat/toolLoop.test.ts may set process.env at
-    // module scope without restoring it.
+    // Mock users run in private processes, so module-scope mutations like toolLoop.test.ts's process.env
+    // writes cannot reach sibling files.
     const source = `${MOCK_CALL}\nprocess.env.BOT_MAX_ITERATIONS = "10";`;
     expect(findUnrestoredMutations(source)).toEqual([]);
   });

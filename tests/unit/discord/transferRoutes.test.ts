@@ -1042,8 +1042,8 @@ describe("transfer interaction routes", () => {
     const route = createTransferInteractionRoute({
       applyWorkspaceMemoryImport: async (input) => {
         applied.push(input);
-        // One duplicate click lands while this write is still awaiting its transaction. The nested dispatch is not
-        // repeated further, so a missing guard shows up as a second write rather than as unbounded recursion.
+        // Dispatches one nested duplicate click mid-write so an unguarded path records a second write
+        // without recursing forever.
         if (nestedDispatchStarted) return { success: true, itemsImported: { memoriesInserted: 2 } };
         nestedDispatchStarted = true;
         const duplicate = makeInteraction({
@@ -1721,8 +1721,7 @@ describe("transfer interaction routes", () => {
 
       await createTransferInteractionRoute().execute({} as Client, interaction, parsed);
 
-      // The placeholder is the marker for a surface a later slice still owed. Every control the preview renders has
-      // to reach a real destination, whether by replying with a refusal or by rendering the next surface.
+      // Rejects placeholder stubs so every rendered preview control reaches either a refusal or a real next surface.
       const reachedText = `${collectRenderedText(replySpy.mock.calls[0]?.[0])}\n${collectRenderedText(updateSpy.mock.calls[0]?.[0])}`;
       expect({ route: renderedRoute, placeholder: reachedText.includes(placeholderText()) }).toEqual({
         route: renderedRoute,

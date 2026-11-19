@@ -167,17 +167,13 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
   for (const msg of messagesChron) {
     if (SKIPPED_MESSAGE_TYPES.has(msg.type as number)) continue;
 
-    // Determine whether this message is from the bot/persona or a human user.
-    // Webhook messages from the bot account (alter personas) share the bot's author ID.
+    // Alter-persona webhooks share the bot's author ID, so checking botDiscordId counts them as persona turns.
     const isBotMessage = msg.author.bot && msg.author.id === botDiscordId;
 
     const authorId = msg.author.id;
     const authorName = stripBridgePrefix(msg.member?.displayName ?? msg.author.id);
 
-    // Skip image attachments because the hidden agent only needs text context to plan the
-    // image prompt. Including images would cause the provider to base64-encode and
-    // upload them all inline, producing a multi-MB payload that overwhelms the model.
-
+    // Omit images from history so the provider does not base64-inline megabytes of attachments into the planning turn.
     simplifiedMessages.push({
       id: msg.id,
       authorId,
@@ -186,8 +182,8 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
       personaName: isBotMessage ? tomoriState.persona_nickname : null,
       content: msg.cleanContent || msg.content || null,
       createdAt: msg.createdTimestamp,
-      imageAttachments: [], // Skip (see comment above)
-      videoAttachments: [], // Skip video processing for the hidden agent
+      imageAttachments: [],
+      videoAttachments: [],
     });
 
     if (!msg.author.bot && !msg.webhookId) {
@@ -195,7 +191,6 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     }
   }
 
-  // Always include the bot's own Discord ID in the user list.
   if (botDiscordId) {
     userListSet.add(botDiscordId);
   }
@@ -309,8 +304,8 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     disableYouTubeProcessing: true,
     disableProfilePictureProcessing: true,
     disableGifProcessing: true,
-    disableShortTermMemoryUpdate: true, // Do not pollute STM from a hidden agent turn
-    suppressTextOutput: true, // No visible text: only the image
+    disableShortTermMemoryUpdate: true,
+    suppressTextOutput: true,
     suppressUserErrors: true,
     isManuallyTriggered: true,
     // End the turn as soon as either image tool succeeds, so both are listed so the
@@ -356,9 +351,6 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     }).error,
   });
 
-  // Run the simplified tool loop.
-  //    We mimic the structure of tomoriChat's streaming loop but stripped down to
-  //    only what a hidden image agent needs: stream → execute tool → check endTurn.
   const functionInteractionHistory: Array<{
     functionCall: FunctionCall;
     functionResponse: Record<string, unknown>;
@@ -377,9 +369,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     provider: provider.getInfo().name,
     streamContext: streamingContext,
     usageContext,
-    suppressProgressNotices: true, // Keep the hidden turn quiet
-    // Persona identity for webhook-based image posting (set by /generate image Auto mode).
-    // When absent, the image tool falls back to a direct bot message.
+    suppressProgressNotices: true,
     webhook,
     personaUsername,
     personaAvatarUrl,
@@ -394,9 +384,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
   for (let i = 0; i < BOT_GENERATE_IMAGE_AGENT_MAX_ITERATIONS; i++) {
     log.info(`[Hidden Image Agent] Iteration ${i + 1}/${BOT_GENERATE_IMAGE_AGENT_MAX_ITERATIONS}`);
 
-    // Stream one LLM turn.
-    // No per-stream timeout because normal chat (tomoriChat.ts) also has none.
-    // Protection against infinite loops comes from BOT_GENERATE_IMAGE_AGENT_MAX_ITERATIONS.
+    // Omit per-stream timeouts because tomoriChat has none and BOT_GENERATE_IMAGE_AGENT_MAX_ITERATIONS bounds loops.
     let streamResult: Awaited<ReturnType<typeof provider.streamToDiscord>>;
     try {
       streamResult = await withProviderUsageContext(usageContext, async () =>
@@ -406,11 +394,11 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
           tomoriState,
           providerConfig,
           contextItems,
-          [], // currentTurnModelParts: empty for first iteration, accumulate on retries
-          undefined, // emojiStrings
+          [],
+          undefined,
           functionInteractionHistory.length > 0 ? functionInteractionHistory : undefined,
-          undefined, // initialInteraction
-          undefined, // replyToMessage
+          undefined,
+          undefined,
           streamingContext,
           locale,
         ),

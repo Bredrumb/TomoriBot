@@ -149,7 +149,8 @@ export function formatTimeWithOffset(
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-    timeZone: "UTC", // Use UTC since we already applied offset
+    // Use UTC because the offset was already applied to offsetTime.
+    timeZone: "UTC",
     ...options,
   };
 
@@ -161,18 +162,18 @@ export function parseTimeWithOffset(timeStr: string, offsetHours: number): Date 
   const match = timeStr.match(timePattern);
 
   if (!match) {
-    return null; // Invalid format
+    return null;
   }
 
   const [, yearStr, monthStr, dayStr, hourStr, minuteStr] = match;
   const year = Number.parseInt(yearStr, 10);
-  const month = Number.parseInt(monthStr, 10) - 1; // Months are 0-indexed
+  const month = Number.parseInt(monthStr, 10) - 1;
   const day = Number.parseInt(dayStr, 10);
   const hour = Number.parseInt(hourStr, 10);
   const minute = Number.parseInt(minuteStr, 10);
 
   if (month < 0 || month > 11 || day < 1 || day > 31 || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
-    return null; // Invalid values
+    return null;
   }
 
   const localDate = Date.UTC(year, month, day, hour, minute, 0, 0);

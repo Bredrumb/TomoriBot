@@ -51,7 +51,6 @@ function resolveDatabaseUrl(): string {
     process.exit(1);
   }
 
-  // URL-encode the password to safely handle special characters (@, /, #, etc.)
   return `postgresql://${user}:${encodeURIComponent(password)}@${host}:${port}/${database}`;
 }
 

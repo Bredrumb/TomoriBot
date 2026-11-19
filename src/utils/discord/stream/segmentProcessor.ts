@@ -165,11 +165,8 @@ export class StreamSegmentProcessor {
         state.activeRenderModifier = undefined;
       }
     } else if (!isUserImpersonation && state.activeRenderModifier) {
-      // Code-block content is still this speaker's turn, so the active identity carries into it;
-      // only label parsing is vetoed there. The flusher sends a closing-fence or overflow segment
-      // before clearing isInsideCodeBlock, so gating the carry on it drops the sprite and moves
-      // a main persona off its webhook onto the bot user for that segment.
-      // The label itself is left in place: cleanLLMOutput strips it like any opening own-name label.
+      // Carry activeRenderModifier into code blocks because closing-fence segments flush before isInsideCodeBlock
+      // clears, so gating on canUseRenderModifier would drop the active sprite.
       if (canUseRenderModifier && opensLine && hasLeadingPlainOwnNameLabel(workingSegment, renderModifierSourceNames)) {
         state.activeRenderModifier = this.resolveBaseAppearanceRevert(state.activeRenderModifier, context, textConfig);
       }
@@ -182,20 +179,14 @@ export class StreamSegmentProcessor {
       }
     }
 
-    // Opening-label leak guard: a response that OPENS with a speaker label the render-modifier
-    // parse refused (e.g. "Chris (smug): ...": a user name in the persona's decorated-label
-    // grammar) would otherwise reach Discord verbatim, because the generic speaker guard
-    // exempts the opening line and stripLeakedOwnNameLabels only covers the active persona.
-    // Runs regardless of llm_stop_speaker_pattern_enabled: the shapes it fires on are
-    // unambiguous leaks, unlike the broader mid-text guard.
+    // Opening-label leaks run regardless of llm_stop_speaker_pattern_enabled because mid-text speaker guards
+    // exempt line 0 and own-label stripping skips foreign names.
     if (!renderModifierMatch && !bareSprite && canUseRenderModifier && !hasStreamedResponseText(state)) {
       const leak = await this.matchLeadingSpeakerLeak(workingSegment, context, renderModifierSourceNames);
       if (leak) {
         const retryCount = context.emptyResponseRetryCount ?? 0;
         if (retryCount < MAX_EMPTY_RESPONSE_RETRIES) {
-          // Budget remains: discard the whole attempt. The speaker_guard stop with nothing
-          //    sent classifies the turn as empty_response, and maybeScheduleEmptyResponseRetry
-          //    regenerates with the "reply only as {persona}" directive injected.
+          // Stopping with nothing sent classifies the turn as empty_response so the retry pass regenerates.
           if (!context.holdResponseText)
             log.warn(
               `Stream opening-label leak guard: discarding response opening with "${leak.matchedPrefix.trim()}" (retry ${retryCount + 1}/${MAX_EMPTY_RESPONSE_RETRIES} will be scheduled)`,
@@ -203,8 +194,7 @@ export class StreamSegmentProcessor {
           this.deps.requestStop(context.channel.id, "speaker_guard");
           return;
         }
-        // Budget exhausted: better a stripped reply than silence, so drop the leaked label
-        //    and deliver the body as the active persona.
+        // Once the retry budget is exhausted, strip the leaked label so the body still delivers instead of silence.
         if (!context.holdResponseText)
           log.warn(
             `Stream opening-label leak guard: retry budget exhausted, stripping leaked label "${leak.matchedPrefix.trim()}" and delivering body`,
@@ -282,16 +272,8 @@ export class StreamSegmentProcessor {
       return;
     }
 
-    // Copied identities (impersonating a user / another persona) expire at the end
-    // of their line so the bot reverts to itself on the next line. Persona sprites
-    // instead persist across newlines until a *different* sprite/identity label
-    // appears, because an expression is a sustained visual state: e.g.
-    //   "Touko (mad): ARGGHHH!\nFine... I'll do it"
-    // keeps the "mad" sprite for the second line, and switching only happens when
-    // a new "Touko (regret):" label is declared, or a plain "Touko:" label returns
-    // to the base persona. Sprites (including is_identity ones) are distinguished by
-    // carrying a spriteRecord; copied identities don't. The neutral appearance has
-    // no spriteRecord either but is the persona itself, so it persists like a sprite.
+    // Copied identities expire at newlines while sprites (with spriteRecord) and neutral appearances persist as
+    // sustained persona states until the next label.
     const shouldClearActiveRenderModifier =
       Boolean(deliveryOptions?.identityOverride) &&
       !deliveryOptions?.spriteRecord &&
@@ -438,7 +420,6 @@ export class StreamSegmentProcessor {
     renderModifierChainSourceNames: readonly string[];
   }): void {
     if (args.context.holdResponseText) return;
-    // Only interesting when the strict parser declined text that still looks like a label.
     if (args.renderModifierMatch) return;
     const labelHead = args.workingSegment.slice(0, RENDER_MODIFIER_DIAGNOSTIC_HEAD_CHARS);
     if (!SUSPECTED_RENDER_MODIFIER_LABEL_RE.test(labelHead)) return;
@@ -468,7 +449,7 @@ export class StreamSegmentProcessor {
     if (context.holdResponseText) return;
     const personaId = context.tomoriState.persona_id;
     // Read back the sprite roster actually visible to the lookup; a cache miss here is
-    //    itself a finding, so failures degrade to an explicit marker rather than throwing.
+    // itself a finding, so failures degrade to an explicit marker rather than throwing.
     let availableSpriteKeys: string[] | "lookup_failed" = "lookup_failed";
     if (typeof personaId === "number") {
       availableSpriteKeys = await getCachedPersonaSprites(personaId)
@@ -536,13 +517,12 @@ export class StreamSegmentProcessor {
     if (!match) return null;
 
     // A decorated label with an allowed source name is upstream's business (the render-modifier
-    //    parse consumes it, including failed sprite resolutions), so never treat it as a leak here.
+    // parse consumes it, including failed sprite resolutions), so never treat it as a leak here.
     if (matchesRenderModifierName(match.sourceName, allowedSourceNames)) return null;
 
-    // Decorated + disallowed name: unambiguous leak.
     if (match.modifier) return match;
 
-    // Plain label: only a leak when the name belongs to a known conversation participant.
+    // Plain labels only count as leaks for known participants so prose colons like "Note:" do not trigger stops.
     const knownNames = await collectKnownSpeakerNames(context);
     return matchesRenderModifierName(match.sourceName, knownNames) ? match : null;
   }

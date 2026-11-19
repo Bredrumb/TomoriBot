@@ -452,9 +452,7 @@ function isComfyUiZoomOutPrompt(prompt: string): boolean {
 function resolveComfyUiOutpaintStrategy(options: ComfyUiGenerationOptions): ComfyUiOutpaintStrategy {
   const explicitStrategy = normalizeComfyUiOutpaintStrategy(options.outpaintStrategy);
   if (explicitStrategy) {
-    // The current Anima workflow exposes LanPaint full-canvas stages for every
-    // direction. Keep accepting older strategy names from the tool API, but route
-    // them through the maintained branch instead of the old CropAndStitch path.
+    // Anima exposes LanPaint full-canvas stages for all directions, so older strategy names route to full_canvas.
     return explicitStrategy === "edge_extend" || explicitStrategy === "zoom_out" ? "full_canvas" : explicitStrategy;
   }
 
@@ -891,8 +889,7 @@ function buildComfyUiOutpaintStagePositivePrompt(
   direction: "horizontal" | "top" | "bottom",
 ): string {
   const stagePrompt = resolveComfyUiOutpaintStagePrompt(options, direction);
-  // Directional LanPaint stages get their own prompt. Keep this compact so the
-  // user prompt and optional edge prompt stay more important than our guardrails.
+  // Keep shared directional guardrails compact so the user and optional edge prompts stay primary.
   const shared = [
     stagePrompt,
     "continue visible edge content into the new canvas",
@@ -1409,9 +1406,6 @@ function resolveComfyUiVideoDurationSeconds(durationSeconds: number | undefined)
 }
 
 function resolveComfyUiVideoFps(requestedFps: number | undefined): number {
-  // Honor a user-supplied FPS (from the /generate video modal) when valid,
-  //    mirroring how resolveComfyUiVideoDurationSeconds() prioritizes the request.
-  // Otherwise fall back through the operator env overrides to the built-in default.
   const requested =
     typeof requestedFps === "number" && Number.isFinite(requestedFps) && requestedFps > 0
       ? requestedFps
@@ -2713,7 +2707,7 @@ function describeComfyUiNodeErrors(nodeErrors: unknown): string[] {
     const errors = isRecord(nodeError) && Array.isArray(nodeError.errors) ? nodeError.errors : [];
     const reasons = errors.filter(isRecord).map((error) => {
       const rejected = describeRejectedComfyUiInput(error);
-      // ComfyUI's `details` for a rejected value lists every installed file, so naming the input and value keeps the cause from being buried.
+      // ComfyUI's details for a rejected value list every installed file, so surface inputName and value directly.
       const details = rejected ? `${rejected.inputName} '${rejected.value}'` : error.details;
       return [error.message, details].filter((part) => typeof part === "string" && part).join(": ");
     });
@@ -2787,8 +2781,7 @@ async function generateWithComfyUi(
     throw new Error("ComfyUI generation was cancelled.");
   }
   const workflowPath = resolveComfyUiRuntimeWorkflowPath(endpoint);
-  // A workflow uploaded with the endpoint is its configuration of record. Static paths remain
-  // available for legacy endpoints that have no uploaded workflow.
+  // Uploaded workflows are the configuration of record, while static paths remain only for legacy endpoints.
   const savedWorkflow =
     endpoint.extra_config.workflow ?? (workflowPath ? loadComfyUiWorkflowFromPath(workflowPath) : null);
   if (!savedWorkflow || typeof savedWorkflow !== "object") {

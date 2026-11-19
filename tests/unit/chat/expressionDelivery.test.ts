@@ -269,7 +269,6 @@ describe("expression delivery at tool invocation", () => {
       });
       expect(metricKeys("custom_expression_used")).toEqual([row.custom_expression_id]);
       expect(metricKeys("sticker_used")).toEqual([]);
-      // The model never learns the transport or the stored identity.
       const visible = JSON.stringify(buildExpressionToolResult(outcome as never, row.name));
       expect(visible).not.toContain(row.custom_expression_id);
       expect(visible).not.toContain(row.original_link ?? "");
@@ -345,7 +344,6 @@ describe("expression delivery at tool invocation", () => {
         Object.assign(context.channel, { isThread: () => true });
         context.currentPersona.is_alter = true;
         context.responseTarget = { webhook: makeWebhook(), personaUsername: "Juno" };
-        // The channel's last delivery: this turn's sprite line, or an earlier turn's other speaker.
         recordChannelDeliveredWebhookIdentity(
           context.channel.id,
           { username: "Mirri (joy)" },
@@ -534,7 +532,6 @@ describe("expression delivery at tool invocation", () => {
 
       expect([first.status, retry.status]).toEqual(["unconfirmed", "unconfirmed"]);
       expect(webhookPosts.posts).toHaveLength(1);
-      // An unconfirmed webhook send must not fall back to a second transport either.
       expect(sendCalls(context)).toBe(0);
       expect(metricKeys("sticker_used")).toEqual([]);
     } finally {

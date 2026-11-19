@@ -205,13 +205,12 @@ export class GenerateVideoTool extends BaseTool {
         log.info(`Using image from replied-to message ${sourceMessageId} for image-to-video reference ${messageId}`);
       }
 
-      // Return the URL directly, so embedding large images as base64 in the request body
-      // can exceed provider body size limits. Providers fetch the URL themselves.
+      // Leave data empty and pass the URL so large images do not exceed provider request size limits.
       return {
         url: image.proxyUrl || image.url,
         ...(image.proxyUrl && image.proxyUrl !== image.url ? { fallbackUrl: image.url } : {}),
         mimeType: image.mimeType,
-        data: "", // Empty: providers that need base64 must fetch the url themselves
+        data: "",
       };
     } catch (error) {
       log.error(`Failed to extract reference image from message ${messageId}`, error as Error);
@@ -220,7 +219,6 @@ export class GenerateVideoTool extends BaseTool {
   }
 
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
-    // Capture generation start time for the "Generated in Xs" caption (mirrors image tool)
     const startedAtMs = Date.now();
 
     const validation = this.validateParameters(args);
@@ -275,7 +273,6 @@ export class GenerateVideoTool extends BaseTool {
       };
     }
 
-    // Default to allowed; overwritten below for server-credential users
     let quotaCheck: VideoQuotaClaim = { allowed: true, reservation: null };
     let usageContext: ProviderUsageContext | undefined;
     let failureProvider: string | undefined;
@@ -359,7 +356,6 @@ export class GenerateVideoTool extends BaseTool {
       const executionProvider = creds.provider;
       failureProvider = executionProvider;
 
-      // Send progress notice, so video generation takes 1-3 minutes
       const baseNoticeDescription = localizer(
         context.locale,
         usesReference ? "tools.video.generating_with_references_description" : "tools.video.generating_description",

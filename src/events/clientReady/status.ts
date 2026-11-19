@@ -6,11 +6,10 @@ import { isPrimaryProcess } from "@/utils/cluster/shardLeases";
 import { getShardTopology } from "@/utils/discord/shardOwnership";
 import { metricSampleRepository } from "@/utils/db/repositories/MetricSampleRepository";
 
-// Cycle delay in milliseconds (1 minute)
 const CYCLE_DELAY = 60000;
 
-// Tomori's birthday (May 11)
-const BIRTHDAY_MONTH = 4; // 0-indexed (April = 3, May = 4)
+// Tomori's character birthday is May 11 (Date.getMonth is 0-indexed).
+const BIRTHDAY_MONTH = 4;
 const BIRTHDAY_DAY = 11;
 
 function isTomoriBirthday(): boolean {
@@ -64,7 +63,8 @@ const handler = async (client: Client): Promise<void> => {
   const birthdayStatus: ActivityOptions = {
     name: "Celebrating my birthday!",
     type: ActivityType.Streaming,
-    url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", // Required for Streaming type
+    // Discord requires a YouTube or Twitch URL for ActivityType.Streaming.
+    url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
   };
 
   let topggPosted = false;
@@ -112,7 +112,7 @@ const handler = async (client: Client): Promise<void> => {
   await updateStatus();
 
   setInterval(() => {
-    void updateStatus(); // Use void to indicate intentional fire-and-forget
+    void updateStatus();
   }, CYCLE_DELAY);
 };
 

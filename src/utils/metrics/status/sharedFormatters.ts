@@ -13,11 +13,11 @@ import { getThinkingLevelLocalizerKey } from "@/utils/provider/thinkingControl";
 import { getDiscordTextLength, neutralizeFenceRuns, truncateDiscordText } from "@/utils/text/discordTextLimits";
 import { localizer } from "@/utils/text/localizer";
 
-export const MAX_ITEMS_DISPLAY = 5; // Max channel/member items before switching to count-only
-export const MEMORY_TRUNCATE_LENGTH = 100; // Max chars per memory snippet
-export const ATTRIBUTE_TRUNCATE_LENGTH = 200; // Max chars per attribute snippet
-export const DIALOGUE_TRUNCATE_LENGTH = 140; // Max chars per sample dialogue side
-export const MAX_PROMPT_PREVIEW = 3800; // Max chars shown for system/persona prompts
+export const MAX_ITEMS_DISPLAY = 5;
+export const MEMORY_TRUNCATE_LENGTH = 100;
+export const ATTRIBUTE_TRUNCATE_LENGTH = 200;
+export const DIALOGUE_TRUNCATE_LENGTH = 140;
+export const MAX_PROMPT_PREVIEW = 3800;
 
 export function formatPromptPreview(rawText: string, locale: string): string {
   const neutralized = neutralizeFenceRuns(rawText);

@@ -28,8 +28,8 @@ function extractImageUrl(text: string): string | null {
 
 function cleanReleaseNotes(body: string, locale: string, htmlUrl: string): string {
   let cleaned = body
-    .replace(/!\[.*?\]\([^)]*\)/g, "") // Strip markdown image syntax
-    .replace(/\n{3,}/g, "\n\n") // Collapse consecutive blank lines
+    .replace(/!\[.*?\]\([^)]*\)/g, "")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 
   if (cleaned.length > EMBED_DESCRIPTION_LIMIT) {
@@ -51,14 +51,12 @@ export async function execute(
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
-    // Fetch the latest release from GitHub's public REST API (no auth required)
     const apiUrl = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
     const response = await fetch(apiUrl, {
       headers: { Accept: "application/vnd.github.v3+json" },
       signal: AbortSignal.timeout(GITHUB_API_TIMEOUT_MS),
     });
 
-    // Surface API errors (404 = no releases yet, 429 = rate limited, etc.)
     if (!response.ok) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.update.fetch_error_title",
@@ -70,15 +68,13 @@ export async function execute(
 
     const release = (await response.json()) as GitHubRelease;
 
-    // Extract image URL from the release notes before stripping image markdown.
-    //    Release images are referenced inline as ![alt](url) by the release workflow.
+    // Extracted before cleanReleaseNotes strips inline ![alt](url) release markdown.
     const imageUrl = release.body ? extractImageUrl(release.body) : null;
 
     const description = release.body
       ? cleanReleaseNotes(release.body, locale, release.html_url)
       : localizer(locale, "commands.update.no_notes");
 
-    // Build embed: matches the structure posted by the CI/CD webhook notification
     const embed = new EmbedBuilder()
       .setDescription(description)
       .setColor(ColorCode.SUCCESS)
@@ -108,7 +104,6 @@ export async function execute(
     };
     await log.error("Error executing /update command", error as Error, context);
 
-    // replyInfoEmbed detects the deferred state and uses editReply automatically
     try {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.unknown_error_title",

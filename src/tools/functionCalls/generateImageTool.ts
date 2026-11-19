@@ -183,11 +183,9 @@ function buildImagePromptDescription(capabilities: ImageToolCapabilities): strin
   description += capabilities.imageToImage
     ? " For known users/personas, add them to references and describe only the scene, pose, and expression; their reference carries their look, so skip their name and outfit unless the outfit changes. With two characters, say in a few words who is on the left and who is on the right."
     : " Include relevant Physical Appearance context for known users/personas.";
-  // Only mention inpaint guidance when the backend can inpaint
   if (capabilities.inpaint) {
     description += " For inpaint, describe only the local replacement.";
   }
-  // Only mention outpaint guidance when the backend can outpaint
   if (capabilities.outpaint) {
     description += " For outpaint, describe what should continue into the new canvas.";
   }
@@ -289,8 +287,7 @@ export class GenerateImageTool extends BaseTool {
   category = "utility" as const;
   requiresFeatureFlag = "image_gen";
 
-  // Keep these schema descriptions short. Long tool descriptions get injected into
-  // every model call and were starting to drown out the user's actual request.
+  // Keep schema descriptions concise because every model call injects them and long ones crowd out the user prompt.
   parameters: ToolParameterSchema = {
     type: "object",
     properties: {
@@ -904,7 +901,6 @@ export class GenerateImageTool extends BaseTool {
       };
     }
 
-    // Default to allowed; overwritten below for server-credential users
     let quotaCheck: ImageQuotaClaim = { allowed: true, reservation: null };
     let usageContext: ProviderUsageContext | undefined;
     let quotaReservation: QuotaReservation | null = null;
@@ -1001,8 +997,6 @@ export class GenerateImageTool extends BaseTool {
         : undefined;
 
       const referenceImages: ImageReference[] = [];
-      // Resolved avatar metadata, in request order, for every identity that was
-      // successfully fetched. Used to surface referenced users in the notice/embed.
       const avatarReferences: Array<{ avatar: ResolvedAvatarData; usedCharacterReference: boolean }> = [];
 
       // Inpainting a media_id image skips other references, so that image alone defines the layout being edited.
@@ -1054,8 +1048,6 @@ export class GenerateImageTool extends BaseTool {
         }
       }
 
-      // Only fail outright when every reference source came up empty; otherwise
-      // continue with whatever references resolved.
       if (failedIdentities.length > 0) {
         if (referenceImages.length === 0) {
           return {
@@ -1339,7 +1331,6 @@ export class GenerateImageTool extends BaseTool {
         );
         generatedImageData = result.imageData;
       } else if (imageGenerationImplementation === "openrouter") {
-        // Use OpenRouter API
         const result = await withProviderUsageContext(usageContext, async () =>
           generateOpenRouterImage({
             apiKey,
@@ -1353,7 +1344,6 @@ export class GenerateImageTool extends BaseTool {
         reportProviderUsage(usageContext, { modelCodename, costUsd: result.costUsd });
         generatedImageData = result.imageData;
       } else if (imageGenerationImplementation === "google") {
-        // Use Google Gemini API
         const ai = new GoogleGenAI({ apiKey });
         const chat = ai.chats.create({
           model: modelCodename,
@@ -1383,7 +1373,6 @@ export class GenerateImageTool extends BaseTool {
           }
         }
       } else if (imageGenerationImplementation === "zai") {
-        // Use Z.ai native image generation API
         if (providerReferenceImages.length > 0) {
           referenceImagesUsed = false;
           referenceImagesIgnoredReason =
@@ -1405,7 +1394,6 @@ export class GenerateImageTool extends BaseTool {
         );
         generatedImageData = result.imageData;
       } else if (imageGenerationImplementation === "nvidia") {
-        // Use NVIDIA native image generation API
         if (providerReferenceImages.length > 0) {
           referenceImagesUsed = false;
           referenceImagesIgnoredReason =
@@ -1478,10 +1466,6 @@ export class GenerateImageTool extends BaseTool {
         });
       }
 
-      // Generated images omit imageMetadata: Discord CDN URLs are protected and cannot be
-      // fetched by external servers such as OpenRouter. The model needs only confirmation
-      // that generation succeeded, and the text message carries the Discord message ID.
-
       let successMessage = `Successfully generated and sent image to Discord (message ID: ${sentMessage.id}). The image has been created based on your prompt${
         referenceImagesUsed ? " and the reference image(s)" : ""
       }.`;
@@ -1500,8 +1484,7 @@ export class GenerateImageTool extends BaseTool {
         success: true,
         message: successMessage,
         data: generationSource,
-        // imageMetadata intentionally omitted to avoid 403 errors when OpenRouter tries to fetch Discord CDN URLs
-        // End the LLM turn immediately when this tool is the target of a hidden agent turn
+        // Omit imageMetadata because Discord CDN URLs return 403 when external providers such as OpenRouter fetch them.
         endTurn: context.streamContext?.endTurnAfterTools?.includes(this.name) ?? false,
       };
     } catch (error) {
@@ -1589,9 +1572,7 @@ export class GenerateImageTool extends BaseTool {
     referenceImages: ImageReference[],
     options?: { keepAtLeastOne?: boolean },
   ): Promise<ImageReference[]> {
-    // Provider payload limits are easier to hit with Discord images than with
-    // generated references. Downscale instead of failing when a user posts a
-    // high-resolution source image, especially for inpaint/outpaint.
+    // Downscale Discord source images instead of failing because user uploads easily exceed provider payload limits.
     const normalized: ImageReference[] = [];
     let totalBytes = 0;
     const capped = referenceImages.slice(0, IMAGE_REFERENCE_MAX_COUNT);

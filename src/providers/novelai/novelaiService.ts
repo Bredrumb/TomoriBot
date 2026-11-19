@@ -7,7 +7,7 @@ import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 const NOVELAI_API_BASE_URL = "https://text.novelai.net";
 const REQUEST_TIMEOUT = Number.parseInt(process.env.NOVELAI_REQUEST_TIMEOUT_MS || "60000", 10);
 
-// Per-read inactivity timeout prevents indefinite hangs when NovelAI stops sending chunks mid-stream without closing.
+// Per-read inactivity timeout prevents hangs when NovelAI stops sending chunks mid-stream without closing.
 const STREAM_READ_TIMEOUT_MS = Number.parseInt(process.env.NOVELAI_STREAM_READ_TIMEOUT_MS || "30000", 10);
 
 // Unfinished stream readers must be cancelled rather than released with releaseLock because releaseLock leaves the
@@ -141,7 +141,6 @@ export interface ApiRequestConfig {
   signal?: AbortSignal;
 }
 
-// Use https://novelai.net/tokenizer to find stop sequences
 function convertTemperatureToNovelAI(temperature: number, _model: string): number {
   return temperature;
 }
@@ -158,14 +157,10 @@ export function getParametersForModel(
 ): NovelAIParameters {
   const params = getNovelAIProfile(model).parameters();
 
-  // Merge NAI-specific preset fields (order, TFS, phrase_rep_pen, mirostat, etc.)
-  //    These override the hardcoded defaults but are themselves overridden by DB schema values.
   if (presetOverrides && Object.keys(presetOverrides).length > 0) {
     Object.assign(params, presetOverrides);
   }
 
-  // Apply DB schema overrides (highest priority: always win if non-neutral)
-  // Override temperature if provided (convert from Gemini scale to NovelAI scale)
   if (temperature !== undefined) {
     params.temperature = convertTemperatureToNovelAI(temperature, model);
   }
@@ -202,7 +197,6 @@ export function convertToOpenAIParams(
     frequency_penalty: naiParams.repetition_penalty_frequency,
     presence_penalty: naiParams.repetition_penalty_presence,
     repetition_penalty: naiParams.repetition_penalty,
-    // Specialized GLM stop strings are resolved centrally in providers/utils/stopStrings.ts.
     stop: mergedStops,
   };
 }
@@ -267,11 +261,11 @@ async function* novelaiGenerateStreamOpenAI(
 
     for await (const line of readNovelAISseLines(response.body)) {
       if (!line.trim() || line.startsWith(":")) {
-        continue; // Skip empty lines and comments
+        continue;
       }
 
       if (line.startsWith("data: ")) {
-        const data = line.slice(6); // Remove 'data: ' prefix
+        const data = line.slice(6);
 
         if (data === "[DONE]") {
           yield { final: true, termination: "stop" };
@@ -324,9 +318,7 @@ async function* novelaiGenerateStreamOpenAI(
         timeoutError.statusCode = 504;
         throw timeoutError;
       } else if (error.message.includes("stream read timed out")) {
-        // Per-read inactivity timeout because NAI stopped sending data mid-stream.
-        // Yield a final chunk so the stream adapter can flush any buffered text
-        // (e.g., incomplete sentence trailing buffer) and terminate cleanly.
+        // Yield a final chunk on inactivity timeout so the stream adapter flushes any trailing sentence buffer.
         log.warn(`NovelAI OpenAI: ${error.message}; yielding final chunk to flush buffers`);
         yield { final: true, termination: "inactivity" };
       } else {
@@ -391,7 +383,7 @@ async function* novelaiGenerateStreamNative(
       }
 
       if (line.startsWith("data: ")) {
-        const data = line.slice(6); // Remove "data: " prefix
+        const data = line.slice(6);
         if (data === "[DONE]") {
           yield { final: true, termination: "stop" };
           return;
@@ -432,7 +424,6 @@ async function* novelaiGenerateStreamNative(
         timeoutError.statusCode = 504;
         throw timeoutError;
       } else if (error.message.includes("stream read timed out")) {
-        // Per-read inactivity timeout because NAI stopped sending data mid-stream
         log.warn(`NovelAI Native: ${error.message}; yielding final chunk to flush buffers`);
         yield { final: true, termination: "inactivity" };
       } else {
@@ -486,11 +477,8 @@ export async function validateNovelAIApiKey(apiKey: string): Promise<boolean> {
       return true;
     }
 
-    // Non-OK response: key is invalid or something else went wrong.
-    // Carry the response body into the error message: NovelaiStreamAdapter
-    // classifies some failures by matching the body text (e.g. trial-account
-    // recaptcha 400s), and it is what makes host/endpoint migrations
-    // self-diagnosing rather than surfacing as a bare "Bad Request".
+    // Include the response body in the error because NovelaiStreamAdapter matches body text such as trial recaptcha
+    // 400s.
     const errorText = redactLogString(
       (await response.text().catch(() => "Unknown error")).replaceAll(apiKey, "[REDACTED]"),
     );

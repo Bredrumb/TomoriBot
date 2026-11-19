@@ -259,9 +259,7 @@ export function buildHelpDashboardPayload(
   const { category, page, variant } = resolveHelpSelection(categoryId, pageId, variantId);
   const activeVariant = variant ?? page.variants?.[0];
   const pageVariables = page.variables?.(locale) ?? {};
-  // The picker footer belongs to whichever node declares the picker, so it needs that node's
-  // variables rather than the page's: a variant scoped to one subsection would otherwise render the
-  // page's tokens and leave its own unresolved.
+  // Merge node-level variables last so subsection pickers do not leave variant-scoped tokens unresolved.
   const variantVariables = { ...pageVariables, ...activeVariant?.variables?.(locale) };
   const content: ComponentInContainerData[] = [
     buildCategoryRow(locale, category.id),

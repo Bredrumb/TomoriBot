@@ -4,7 +4,7 @@ import { DB_TESTS_AVAILABLE, setupTestDb } from "./setup/testDb";
 
 describe.skipIf(!DB_TESTS_AVAILABLE)("LLM — regression", () => {
   beforeAll(async () => {
-    await setupTestDb(); // Seed data is applied here: LLMs are seeded from the catalog by initializeDatabase
+    await setupTestDb();
   });
 
   it("loadAvailableLlms returns at least one non-deprecated model", async () => {
@@ -67,7 +67,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("LLM — regression", () => {
 
     const provider = providers[0];
     const smartest = await llmModelRepo.loadSmartestModel(provider);
-    // May be null if no is_smartest=true row exists for this provider. that is valid
+    // Nullable because a provider may have no is_smartest=true row.
     if (smartest !== null) {
       expect(smartest.llm_provider).toBe(provider);
     }
@@ -76,7 +76,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("LLM — regression", () => {
   it("loadUniqueProviders returns distinct provider names", async () => {
     const providers = await llmModelRepo.loadUniqueProviders();
     if (!providers) throw new Error("loadUniqueProviders returned null");
-    // Unique constraint: no duplicates
     const unique = [...new Set(providers)];
     expect(unique.length).toBe(providers.length);
   });

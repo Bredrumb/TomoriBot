@@ -98,9 +98,8 @@ export async function runGenerationTurn(
 
     return await runGenerationAttempts(context, responseSink);
   } finally {
-    // emitGenerationError rethrows for user impersonation, so the error handler in
-    // runGenerationAttempts can itself throw and never reach finalize. Without this the
-    // turn's temporary webhook would survive in the channel.
+    // Temporary impersonation webhooks must clean up in finally because emitGenerationError rethrows and can skip
+    // finalize.
     await responseSink.cleanup?.();
   }
 }
@@ -123,8 +122,8 @@ async function runGenerationAttempts(
     context.streamingContext.deliveredMessageRefs ??= [];
     const carried: DeliveredTurnOutput = { text: "", details: "", streamResults: [] };
     let supersededResult: GenerationTurnResult | undefined;
-    // Index the server route's attempts start at, null until that route contributes any. Only the
-    // receipt needs it: a success on the server route of a personal turn has an opt-out to name.
+    // Starting index of the server fallback route (null until used) so the receipt knows when to offer personal
+    // fallback opt-out.
     let serverRouteStartIndex: number | null = null;
     let streamInterruptionRetried = false;
 
@@ -153,7 +152,6 @@ async function runGenerationAttempts(
         sendsTools: (attempt.providerConfig.tools?.length ?? 0) > 0,
       });
 
-      // Key rotation inner loop: try multiple keys for this attempt before giving up.
       let rotationKeyId = attempt.rotationKeyId;
       const excludedKeyIds = new Set<number>();
       let result!: GenerationTurnResult;
@@ -274,11 +272,8 @@ async function runGenerationAttempts(
         keyAttempts: keyAttemptCount,
       });
 
-      // A destination the bot cannot post into fails for every key and every model alike, whether
-      // the channel was deleted or access to it was revoked. Retrying would burn a full generation
-      // per fallback arm and then discard it at the same send, so this attempt is terminal: the
-      // status it returns is a stop, which `isRetryableStatus` below already excludes, and this
-      // break keeps the model fallback loop from picking it up.
+      // Unreachable destinations fail identically for every key and model, so break here rather than burning fallback
+      // attempts.
       if (isUnreachableDestinationResult(result)) {
         log.warn(`Abandoning ${attempt.label}: the destination channel cannot receive messages.`);
         break;
@@ -293,8 +288,8 @@ async function runGenerationAttempts(
       const isRetryableStatus =
         (result.status === "error" || result.status === "timeout") && !isUnreachableDestinationResult(result);
 
-      // The planned route is exhausted. Extend once with the server route, which admits itself and
-      // may refuse, so this is also the point a fallback the server does not owe the user stops.
+      // Extend once with the self-admitting server route when planned attempts fail, stopping here if the server
+      // refuses.
       if (isRetryableStatus && index === attempts.length - 1 && plan.extendWithServerRoute) {
         const extendWithServerRoute = plan.extendWithServerRoute;
         plan.extendWithServerRoute = null;
@@ -323,10 +318,8 @@ async function runGenerationAttempts(
         context.streamingContext.forceModelFallback = false;
         context.streamingContext.retryStreamInterruption = false;
 
-        // A timeout notice is normally sent while its attempt is still running, and it is held back
-        // when a later model may still answer. If the server route then contributed nothing, this is
-        // the only place left to report it: no error result carries a timeout, so the branch below
-        // would leave the user with silence.
+        // Flush any withheld timeout notice here because error emission ignores timeouts and no later model remains
+        // to answer.
         if (result.status === "timeout") {
           await sendDeferredTimeoutNoticeIfPending(context);
         }
@@ -402,10 +395,8 @@ async function resolveServerRouteExtension(
     );
     return null;
   }
-  // Only an explicit opt-out withholds the route. The column is NOT NULL DEFAULT true and the
-  // projection reports that default for an account with no personalization row yet, so an account
-  // that never touched the setting keeps the fallback it already had.
-  // A borrowed-trigger turn bills someone other than the anchor message's author, so the opt-out is theirs.
+  // Only an explicit opt-out disables server fallback (default true for missing rows), checked against
+  // `personalRoutingUserId` when a borrowed trigger bills another user.
   const routingUserId = context.personalRoutingUserId;
   const fallbackEnabled =
     routingUserId == null || routingUserId === context.turn.userRow.user_id
@@ -426,13 +417,10 @@ async function buildPlannedRouteAttempts(context: ChatTurnContext): Promise<Gene
 
   const pool: FallbackEntry[] = [{ kind: "llm", model: primaryState.llm }, ...fallbackEntries];
 
-  // Model randomizer: when enabled, splice a random pool member to the front so a different model
-  // leads each turn. When disabled, the pool order is unchanged from the legacy behavior.
   applyModelRandomizer(pool, primaryState.config.model_randomizer_enabled);
 
-  // Materialize attempts from the (possibly reordered) pool. Reusing createFallbackAttempt for the
-  //    primary's own llm entry yields a state equivalent to primaryState (provider matches, no config
-  //    swap), so index 0 stays semantically identical to the old dedicated "primary" attempt.
+  // Reusing createFallbackAttempt on the primary entry keeps index 0 equivalent to primaryState when the pool is not
+  // reordered.
   const attempts: GenerationAttempt[] = [];
   for (const [index, entry] of pool.entries()) {
     try {
@@ -445,15 +433,11 @@ async function buildPlannedRouteAttempts(context: ChatTurnContext): Promise<Gene
         context.textCredentialSource,
       );
       if (!attempt) {
-        // An unusable custom endpoint, or an llm whose provider has no key in the
-        // applicable scope, resolves to null. The primary's own llm entry shares
-        // the primary's provider and so never re-credentials, which is what
-        // guarantees at least one valid attempt survives however the pool is
-        // ordered.
+        // Pool entries without usable endpoints or scoped keys return null, while the primary entry shares
+        // primaryState's provider so at least one attempt always survives.
         continue;
       }
-      // Keep logs readable: the lead is always labelled "primary" regardless of the random draw.
-      //    The true model still surfaces via successModel for log verification.
+      // Label index 0 "primary" for log consistency because `successModel` still records the actual drawn model.
       if (index === 0) {
         attempt.label = "primary";
       }
@@ -657,9 +641,8 @@ async function sendDeferredTimeoutNoticeIfPending(context: ChatTurnContext): Pro
     return;
   }
   context.streamingContext.deferredTimeoutNotice = undefined;
-  // The tool loop also defers on turns that suppress errors on purpose, such as auto-chat and
-  // random triggers nobody addressed directly, and a bot-authored embed breaks an impersonation.
-  // Those turns stayed silent before deferral existed and must stay silent here.
+  // Suppressed turns (such as auto-chat or impersonation) defer silently in the tool loop and must stay silent
+  // here too.
   if (context.isUserImpersonation || !context.shouldSurfaceUserErrors) {
     return;
   }
@@ -914,19 +897,12 @@ async function prepareProviderContextItems(args: {
     contextItems = contextItems.filter((item) => !item.requiresToolCalling);
   }
 
-  // Verbatim prompt scaffolding is decided once, against the primary model, but every attempt
-  // carries its own provider and parser. Adapt the shared base per attempt so a fallback in either
-  // direction gets the shape its own adapter understands. `filter` and the spread helpers below
-  // produce new arrays, leaving the shared base intact for the other attempts.
-  //
-  // Each half is checked and applied independently: the schema dump is dropped when no tools resolve
-  // (or resolution throws), so a context can carry the nudge without it. Keying the whole decision on
-  // the dump alone would then leave the nudge on a native attempt, or inject a second copy of it.
+  // Adapt verbatim schemas and nudge independently into new arrays per fallback attempt, because contexts can carry
+  // the nudge even when no tool schemas resolve.
   const attemptNeedsVerbatim = shouldInjectVerbatimToolCallingNudge(args.tomoriState);
   if (attemptNeedsVerbatim) {
-    // A verbatim attempt needs both halves. The native-primary -> custom-fallback case reaches here
-    // with neither: without them the custom model receives no tool schemas and no calling-format
-    // instructions, so every tool (voice messages included) fails.
+    // Native-to-custom fallback arrives without verbatim halves, so inject both tool schemas and calling-format nudge
+    // or custom tool calls fail.
     if (!contextItems.some((item) => item.metadataTag === ContextItemTag.KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS)) {
       const toolItem = await buildVerbatimToolDefinitionsContextItem({
         tomoriState: args.tomoriState,
@@ -942,9 +918,8 @@ async function prepareProviderContextItems(args: {
       contextItems = injectVerbatimNudgeItem(contextItems);
     }
   } else if (contextItems.some(isAnyVerbatimItem)) {
-    // Verbatim-primary -> native-fallback. Both halves must go: the schema dump alone would leave
-    // conflicting text-form instructions beside the native tool payload, and this provider has no
-    // verbatim parser to execute whatever the model then writes into chat.
+    // Custom-to-native fallback must strip both verbatim halves because native providers lack a verbatim parser and
+    // conflict with text-form tool instructions.
     contextItems = stripAllVerbatimItems(contextItems);
   }
   return contextItems;

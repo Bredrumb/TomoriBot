@@ -397,8 +397,7 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
 
   if (!("messages" in textChannel)) return null;
 
-  // Resolve effective LLM (persona override > channel override > global) and swap in the override
-  // provider's saved key and samplers when it crosses providers. Mirrors generationTurn.ts.
+  // Mirrors generationTurn.ts override precedence so cross-provider overrides swap in saved keys and samplers.
   const channelLlmOverride = await getCachedChannelLlm(
     selectedPersona.server_id,
     textChannel.id,
@@ -464,7 +463,6 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
   );
 
   for (const message of messagesArray) {
-    // Skip fully-private and server-blacklisted users (same gates as real context building)
     if (!message.webhookId) {
       const privacyLevel = await getCachedPrivacyLevel(message.author.id);
       if (privacyLevel === PrivacyLevel.FULL) continue;
@@ -529,13 +527,7 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
       }
     }
 
-    // Process embeds to match tomoriChat.ts conversion rules:
-    //   a) System-produced embeds (memory_learning, reminder_set, system_injection,
-    //      compact_summary/refresh, reward, punish) are wrapped as `[System: ...]`
-    //      blocks and appended to message content, so this applies to ALL messages.
-    //   b) Link-preview embeds (Twitter/YouTube/articles) are extracted as
-    //      `[System: Link preview embed content: ...]` and their images are added
-    //      to imageAttachments, so ONLY for non-Tomori-authored messages.
+    // Mirrors tomoriChat.ts: target system embeds apply to all messages while link previews skip bot-authored ones.
     const botNickname = mainPersona.persona_nickname ?? tomoriState.persona_nickname ?? null;
     const isTomoriAuthored = message.author.id === client.user?.id;
     const embedTextSegments: string[] = [];
@@ -624,10 +616,7 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
       });
     }
 
-    // Merge consecutive same-author messages, mirroring the real context path
-    // (buildSimplifiedHistory): collapse only when both sides are pure text if
-    // either side carries media, keep separate turns so per-message media IDs stay
-    // unambiguous.
+    // Mirrors buildSimplifiedHistory so media-bearing turns stay separate and per-message media IDs remain distinct.
     const prevMsg = simplifiedMessages[simplifiedMessages.length - 1];
     const currentHasMedia =
       imageAttachments.length > 0 ||
@@ -770,12 +759,7 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
       : contextBuild.contextItems),
   ];
 
-  // Apply tail directives in the same order as the live chat pipeline so the
-  //      snapshot reflects the full prompt the LLM would actually see:
-  //        Lower-priority tails (STM "create" prompt, emoji penalty) inserted
-  //           before the latest dialogue pair so they don't displace recent turns.
-  //        Normal tails (e.g. impersonation directive) appended to the end.
-  //        Uncensor directive appended last (isolated, strongest recency signal).
+  // Mirrors live pipeline tail ordering (lower-priority before latest pair, normal tails, uncensor last).
   const lowerPriorityTailDirectives = [...contextBuild.lowerPriorityTailDirectives];
   const emojiPenaltyDirective = getEmojiPenaltyDirective(
     contextItems,

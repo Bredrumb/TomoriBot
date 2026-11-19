@@ -64,7 +64,6 @@ function serializeToTypeScript(obj: unknown, indent = 0): string {
     if (entries.length === 0) return "{}";
 
     const lines = entries.map(([k, v]) => {
-      // Quote keys with non-identifier chars (e.g. "400_default_message", "st-preset")
       const needsQuoting = /[^a-zA-Z0-9_]/.test(k) || /^[0-9]/.test(k);
       const key = needsQuoting ? `"${k}"` : k;
       return `${padInner}${key}: ${serializeToTypeScript(v, indent + 1)},`;
@@ -98,9 +97,8 @@ async function loadLocaleSlices(): Promise<LocaleSlice[]> {
     const obj = structuredClone(module.default) as Record<string, unknown>;
 
     const relPath = relative(localesPath, filePath).replace(/\\/g, "/");
-    const segments = relPath.split("/"); // ["en-US", "commands", "bot.ts"] or ["en-US", "general.ts"]
+    const segments = relPath.split("/");
 
-    // segments[0] = locale name; if length > 2 there's a subdirectory at segments[1]
     const keyPrefix = segments.length > 2 ? segments[1] : "";
 
     slices.push({ filePath, relPath, keyPrefix, obj });
@@ -141,7 +139,6 @@ async function main(): Promise<void> {
     log.info("DRY RUN — no files will be written");
   }
 
-  // Identify unused keys via the same analysis used by check-locales
   log.info("Running locale analysis to identify unused keys…");
   const results = await analyzeLocalizationKeys();
   const allowlist = await loadAllowlist();
@@ -161,9 +158,6 @@ async function main(): Promise<void> {
   const slices = await loadLocaleSlices();
   log.info(`Loaded ${slices.length} leaf slice files`);
 
-  // A key like "commands.tool.prompt.snapshot.description" maps to sub-path "tool.prompt.snapshot.description"
-  // in the slice whose keyPrefix is "commands". A key like "general.defaults.bot_name" maps to sub-path
-  // "general.defaults.bot_name" in the top-level slice with keyPrefix "".
   const modifiedSlices = new Set<number>();
 
   for (const key of unusedKeys) {
@@ -195,7 +189,6 @@ async function main(): Promise<void> {
     pruneEmptyObjects(slices[i].obj);
   }
 
-  // Write back only the modified files
   for (const i of modifiedSlices) {
     const slice = slices[i];
     const serialized = `// locales/${slice.relPath}\n\nexport default ${serializeToTypeScript(slice.obj)};\n`;

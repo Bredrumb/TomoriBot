@@ -26,7 +26,8 @@ import {
 
 type TagLabel = {
   title: string;
-  hint: string; // Slash-command reference like `/memories`, or the literal "system-managed"
+  // Expected format: slash-command reference such as `/memories`, or the literal "system-managed".
+  hint: string;
   subsections?: Array<{ title: string; hint: string }>;
 };
 
@@ -128,7 +129,6 @@ export function buildTextSnapshot(
       if (part.type === "text") {
         lines.push(part.text);
       } else if (part.type === "image") {
-        // Estimate byte size from data URI length (base64 overhead ~1.33×)
         const byteEstimate = part.uri.startsWith("data:")
           ? Math.round(((part.uri.length - part.uri.indexOf(",") - 1) * 3) / 4)
           : 0;
@@ -198,7 +198,6 @@ export async function buildJsonSnapshot(
     const adapter = googleSnapshotAdapterFactory();
     const payload = await adapter.buildTokenCountPayload(contextItems, modelName);
 
-    // Sanitize: replace inlineData.data (base64) with placeholder (mirrors logSanitizedRequest)
     const sanitizedContents = payload.contents.map((content) => ({
       ...content,
       // biome-ignore lint/suspicious/noExplicitAny: Google Part type lacks index signature; cast needed for sanitization
@@ -225,7 +224,6 @@ export async function buildJsonSnapshot(
       resolveEffectiveOpenRouterSeesYouTube({ ...persona, llm: activeLlm }),
     );
 
-    // Sanitize: replace data-URI image_url values (mirrors logSanitizedRequest)
     const sanitized = messages.map((msg: Record<string, unknown>) => {
       if (!Array.isArray(msg.content)) return msg;
       return {
@@ -247,7 +245,6 @@ export async function buildJsonSnapshot(
     const adapter = new AnthropicStreamAdapter();
     const { system, messages } = await adapter.buildProbeMessages(contextItems, seesImages);
 
-    // Sanitize: replace base64 image source.data (mirrors logSanitizedRequest)
     const sanitizedMessages = messages.map((msg: Record<string, unknown>) => {
       const content = msg.content;
       if (typeof content === "string") return msg;
@@ -266,10 +263,8 @@ export async function buildJsonSnapshot(
 
     requestData = { model: modelName, system, messages: sanitizedMessages };
   } else {
-    // OpenAI-compatible APIs accept only one leading `role: "system"` message, so the
-    //    system blocks (personality, rules, knowledge) are flattened into a single entry
-    //    by joining their text parts. A second system message would be rejected or, worse,
-    //    silently dropped by the endpoint.
+    // Flatten system blocks into one leading entry because OpenAI-compatible endpoints reject or drop extra system
+    // messages.
     const systemTextChunks: string[] = [];
     const nonSystemItems: StructuredContextItem[] = [];
     for (const item of contextItems) {
@@ -320,17 +315,12 @@ export async function buildJsonSnapshot(
     requestData = { model: modelName, messages: messagesList };
   }
 
-  // requestConfig is already provider-shaped: Google/Vertex nest samplers under
-  //    `generation_config`, `safety_settings`, and friends, while Anthropic and
-  //    OpenAI-compatible providers use root-level keys. Copying at the top level keeps
-  //    that shape and cannot overwrite a key the adapter already set. It is placed right
-  //    after `model` so the short config is the first thing a reader sees, ahead of the
-  //    long message list.
+  // Put non-colliding requestConfig keys right after model so adapter keys win and config precedes long message
+  // arrays.
   const { model, ...payload } = requestData;
   const config = Object.fromEntries(Object.entries(requestConfig).filter(([key]) => !(key in requestData)));
 
-  // Provider-formatted tools are included even as an empty list, because per-turn
-  //    filtering can deliberately suppress every tool.
+  // Include provider-formatted tools even when empty because per-turn filtering can suppress all tools.
   return { model, ...config, ...payload, ...(toolsData ? { tools: toolsData } : {}) };
 }
 
@@ -358,7 +348,7 @@ export function buildRequestConfig(
     providerInfo?.supportedParams.some((supportedParam) => supportedParam === param) ?? true;
 
   if (providerFamily === "google-genai") {
-    // Google/Vertex family: show raw configured values (unfiltered, mirrors provider config)
+    // Google/Vertex keeps raw configured values in generation_config because live adapters skip disabledParams there.
     const out: Record<string, unknown> = {
       generation_config: {
         temperature: config.llm_temperature,
@@ -409,8 +399,6 @@ export function buildRequestConfig(
     return out;
   }
 
-  // OpenAI-compatible (openrouter, deepseek, zai, zaicoding, nvidia, custom, novelai):
-  //    translate active sampling params to snake_case and include stop + max_tokens.
   const active = buildActiveSamplingParams(config);
   const stopStrings = buildProviderStopStrings({
     providerName,
@@ -481,7 +469,7 @@ export function buildRequestConfig(
   };
   requestConfigMutators[providerKey]?.();
 
-  // Acknowledge has_tools flag is mirrored from adapter runtime: informational
+  // Informational flag only: mirrors activeLlm.has_tools from the adapter runtime.
   if (!activeLlm.has_tools) out.tools_disabled = true;
 
   return out;

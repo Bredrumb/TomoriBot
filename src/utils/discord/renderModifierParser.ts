@@ -101,8 +101,8 @@ export function parseLeadingRenderModifier(
 ): LeadingRenderModifierMatch | null {
   if (!text.trim() || text.trimStart().startsWith("```")) return null;
 
-  // Models sometimes copy the prompt's code-span example or emphasize the label. Consume only a
-  // balanced wrapper around the label, so ordinary Markdown at the start stays in the message.
+  // Consume only a balanced emphasis or code-span wrapper around the label so ordinary leading Markdown stays
+  // intact.
   const opening = /^(\s*)(`|\*\*|\*|__|_)/u.exec(text);
   const wrapper = opening?.[2] ?? "";
   const prefixLength = wrapper ? (opening?.[0].length ?? 0) : 0;
@@ -208,9 +208,7 @@ export function parseLeadingImpersonationSpriteModifier(
   };
 }
 
-// Rejects label candidates that are really markdown structure: list items ("- Name", "1. Name"),
-// blockquotes ("> Name"), and headings ("# Name"). Mirrors parseLeadingRenderModifier, which never
-// matches these because its pattern is anchored directly after leading whitespace.
+// Reject markdown list, blockquote, and heading prefixes because parseLeadingRenderModifier never matches them.
 const MARKDOWN_MARKER_NAME_RE = /^(?:[-*+>#]\s|\d{1,9}[.)]\s)/;
 
 export function parseLeadingGenericSpeakerLabel(text: string): LeadingGenericSpeakerLabelMatch | null {
@@ -230,7 +228,6 @@ export function parseLeadingGenericSpeakerLabel(text: string): LeadingGenericSpe
     return null;
   }
 
-  // Plain shape ("Name:").
   const plain = new RegExp(`^\\s*([^\\n\\r():：]{1,${WEBHOOK_USERNAME_LIMIT}}?)\\s*[:：][ \\t]*`, "u").exec(text);
   const plainName = plain?.[1]?.trim();
   if (plain && plainName && isPlausibleSpeakerLabelName(plainName)) {

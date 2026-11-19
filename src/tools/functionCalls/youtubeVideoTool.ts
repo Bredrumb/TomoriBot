@@ -42,12 +42,10 @@ export class YouTubeVideoTool extends BaseTool {
   ];
 
   isAvailableFor(_provider: string): boolean {
-    // Provider-agnostic, but requires vision capability check in isAvailableForContext
     return true;
   }
 
   isAvailableForContext(provider: string, context?: ToolContext): boolean {
-    // Base provider check
     if (!this.isAvailableFor(provider)) {
       return false;
     }
@@ -157,7 +155,7 @@ export class YouTubeVideoTool extends BaseTool {
             uri: youtubeUrl,
             mimeType: "video/youtube",
             isYouTubeLink: true,
-            enhancedContext: true, // Special marker for processing
+            enhancedContext: true,
           } as EnhancedVideoContent,
         ],
       };

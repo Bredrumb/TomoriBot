@@ -23,7 +23,5 @@ describe("/personal registration", () => {
     ]);
   }, 30000);
 
-  // `/memory` is dissolved outright: its transfer leaves moved to /export and /import, leaving no
-  // enabled subcommand behind. Dissolution is asserted by root in configRegistration's DISSOLVED_ROOTS,
-  // so this file does not restate it.
+  // `/memory` dissolution is omitted here because configRegistration asserts it in DISSOLVED_ROOTS.
 });

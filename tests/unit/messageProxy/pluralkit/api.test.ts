@@ -69,8 +69,7 @@ function jsonResponse(status: number, body: unknown, headers?: Record<string, st
   return new Response(JSON.stringify(payload), { status, headers });
 }
 
-// Two cases below exhaust the real retry budget rather than faking timers, so they need
-// headroom over the 5s per-test default.
+// Real retry and backoff sleeps push these cases near Bun's 5s default timeout, so they need extra headroom.
 const RETRY_EXHAUSTION_TIMEOUT_MS = 20_000;
 
 describe("pkApi.fetchMessage", () => {
@@ -182,8 +181,6 @@ describe("pkApi.fetchMessage", () => {
     );
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    // PK answered, but not with anything trustworthy: that is a transport failure,
-    // never a confirmed miss, and the untrustworthy answer must not be cached.
     await expect(fetchMessage(officialInstance, "msg-invalid-payload")).rejects.toThrow(
       PluralKitLookupUnavailableError,
     );
@@ -257,9 +254,8 @@ describe("pkApi.fetchMessage", () => {
 
     expect(calls).toBe(2);
     expect(result?.sender).toBe(snowflake("888"));
-    // A zero header must NOT mean an instant retry against a rate-limited
-    // endpoint; the ~800ms first backoff step applies instead. PluralKit's
-    // rate limiter is known to send 0 accidentally.
+    // PluralKit's rate limiter can send Retry-After: 0 accidentally, so the ~800ms first backoff step must still
+    // apply instead of an instant retry.
     expect(Date.now() - start).toBeGreaterThanOrEqual(750);
   });
 
@@ -298,9 +294,8 @@ describe("pkApi.fetchMessage", () => {
 
         expect(calls).toBe(2);
         expect(result?.sender).toBe(snowflake("stall-sender"));
-        // The stalled attempt is cut at half the 3000ms budget (1500ms), which is what
-        // leaves the ~800ms backoff step and the retry inside the same deadline. A
-        // whole-budget attempt would have ended here with no answer at all.
+        // Each stalled attempt is capped at half the 3000ms budget (1500ms) so the ~800ms backoff step and retry fit
+        // inside the same deadline.
         expect(elapsed).toBeGreaterThanOrEqual(1500);
         expect(elapsed).toBeLessThan(3000);
       });
@@ -383,9 +378,8 @@ describe("pkApi.fetchMessage", () => {
           PluralKitLookupUnavailableError,
         );
 
-        // Honoring the header would leave this 2000ms budget no usable attempt, so the
-        // lookup reports the rate limit now rather than retrying before the server
-        // allows or holding this admission for two seconds.
+        // When Retry-After leaves no usable attempt inside the 2000ms budget, the lookup fails immediately instead of
+        // sleeping or retrying before the server allows.
         expect(fetchMock).toHaveBeenCalledTimes(1);
         expect(Date.now() - start).toBeLessThan(500);
         clearPluralKitApiStateForTests();
@@ -401,9 +395,6 @@ describe("pkApi.fetchMessage", () => {
 
       const result = await fetchMessage(officialInstance, "msg-exhausted");
 
-      // Every answer was a 404, so PK's last word stands: the message is unknown, not
-      // a transport failure. Real backoff sleeps dominate this test, putting it near
-      // the 5s default and flaking whenever the shared lane runs under load.
       expect(result).toBeNull();
       expect(fetchMock.mock.calls.length).toBeGreaterThan(0);
     },
@@ -444,8 +435,6 @@ describe("pkApi.fetchMessage", () => {
     );
     globalThis.fetch = succeedingFetch as unknown as typeof fetch;
 
-    // The rejected lookup must leave no in-flight or cached entry behind, or every
-    // later attempt for this message would fail without touching the network.
     expect((await fetchMessage(officialInstance, "msg-recovers-after-error"))?.sender).toBe(snowflake("233"));
     expect(succeedingFetch).toHaveBeenCalledTimes(1);
   });

@@ -44,13 +44,9 @@ const MODEL_ERROR_PATTERNS: RegExp[] = [
   /\bno\s+such\s+model\b/i,
   /\bmodel_not_found\b/i,
   /\bmodel_not_supported\b/i,
-  // A deprecated/retired model is a model-availability problem (e.g. OpenRouter 404
-  // "Grok 4.1 Fast is deprecated"), so present it as a model error and steer the user to
-  // pick a different model rather than showing the generic API-error copy.
+  // Retired-model errors (such as OpenRouter 404 "deprecated") map to model guidance instead of generic API errors.
   /\bdeprecated\b/i,
-  // NVIDIA NIM answers a retired model with 410 "has reached its end of life" and a model the
-  // account cannot reach with 404 "Function '<uuid>': Not found for account"; neither names the
-  // model in a shape the patterns above match, so both fell through to API-key advice.
+  // NVIDIA NIM uses 410 end-of-life and 404 account-function phrasing, so generic model patterns otherwise miss them.
   /\breached\s+its\s+end\s+of\s+life\b/i,
   /\bnot\s+found\s+for\s+account\b/i,
   // Google words a retired model, a malformed model ID, and a missing model feature this way, so
@@ -68,9 +64,6 @@ export function isProviderModelError(error: ProviderError): boolean {
   return collectProviderErrorMessages(error).some(isProviderModelErrorMessage);
 }
 
-// A prompt whose input + reserved output exceeds the model's hard context window.
-// Example (OpenRouter 400): "This endpoint's maximum context length is 16384 tokens.
-// However, you requested about 22581 tokens ... use the context-compression plugin".
 const CONTEXT_LENGTH_ERROR_PATTERNS: RegExp[] = [
   /\bmaximum\s+context\s+length\b/i,
   /\bcontext\s+length\s+(?:is|of|exceeded)\b/i,
@@ -80,10 +73,7 @@ const CONTEXT_LENGTH_ERROR_PATTERNS: RegExp[] = [
   /\btoo\s+much\s+context\b/i,
 ];
 
-// The account cannot afford the request at the requested max_tokens: a credit
-// ceiling, not a context-window ceiling. Example (OpenRouter 402): "This request
-// requires more credits, or fewer max_tokens. You requested up to 16384 tokens,
-// but can only afford 7783."
+// OpenRouter 402 affordability limits differ from context limits because lowering max_tokens can resolve them.
 const CREDIT_AFFORDABILITY_ERROR_PATTERNS: RegExp[] = [
   /\brequires\s+more\s+credits\b/i,
   /\bcan\s+only\s+afford\b/i,
@@ -91,10 +81,7 @@ const CREDIT_AFFORDABILITY_ERROR_PATTERNS: RegExp[] = [
   /\binsufficient\s+credits\b/i,
 ];
 
-// The account has no spendable balance at all, so no request of any size can succeed.
-// Separate from the affordability ceiling above, where a smaller max_tokens still fits the
-// remaining credit. Matching these against the affordability patterns would hand the user a
-// `reduce_output_tokens` tip that cannot possibly work.
+// Zero-balance patterns stay separate from affordability above so callers never suggest reducing max_tokens when empty.
 const ACCOUNT_BALANCE_EXHAUSTED_PATTERNS: RegExp[] = [
   /\binsufficient\s+balance\b/i,
   /\bbalance\s+is\s+insufficient\b/i,
@@ -198,11 +185,7 @@ const NON_INCIDENT_PROVIDER_CODES = new Set([
   "continuation_exhausted",
 ]);
 
-// Google answers a bad key and a billing problem with a plain 400, and some providers report a
-// moderation refusal the same way, so these are only distinguishable by message. Bun's fetch words
-// its connection failures without the errno text the adapters look for ("Unable to connect", "The
-// socket connection was closed unexpectedly"), so those arrive as `unknown` and would file every
-// message to a server's dead custom endpoint as an incident.
+// Google/moderation 400s and Bun fetch errors lack status or errno codes, so message matching avoids false incidents.
 const NON_INCIDENT_MESSAGE_PATTERNS: RegExp[] = [
   /\bunable\s+to\s+connect\b/i,
   /\bconnection\s+refused\b/i,
@@ -298,8 +281,7 @@ export function getProviderErrorDetail(error: ProviderError): string | null {
 }
 
 function collectProviderErrorMessages(error: ProviderError): string[] {
-  // The raw provider message and original payload come first because they name the actual cause
-  // (e.g. "Unsupported model X. Supported IDs: ...") for the operator reading the log.
+  // Raw provider message and original error precede userMessage because logs need the upstream model-error cause.
   const messages: string[] = [];
   appendMessage(messages, error.message);
   appendMessage(messages, extractUnknownErrorMessage(error.originalError));

@@ -111,10 +111,8 @@ for (const file of collectTextFiles(distRoot)) {
   }
 }
 
-// Agent-facing text sets stay English-only. `starlight-llms-txt` selects the default locale's
-// entries, so a translated page appearing here means that assumption broke and every locale would
-// now be duplicated into the files an agent reads. Matching the site URL rather than a bare `/ja/`
-// keeps a documented repository path such as `src/locales/ja/` from tripping the check.
+// Match the full site URL instead of a bare `/${locale}/` so documented repo paths like `src/locales/ja/` do not trip
+// this English-only check.
 for (const file of collectTextFiles(distRoot)) {
   const content = readFileSync(file, "utf8");
   const leakedLocale = translatedLocales.find((locale) =>
@@ -175,8 +173,7 @@ for (const locale of translatedLocales) {
     if (!isTranslation) continue;
 
     checkedPairs += 1;
-    // One alternate per locale that really has the page, in the published locale order, plus
-    // x-default. A third tree changes both lists, so neither can be hardcoded to the current pair.
+    // Computed dynamically from published locales rather than hardcoded pairs so adding a third locale tree works.
     const expected = [
       ...publishedLocales.filter((candidate) => localeHasPage(candidate, pageId)),
       "x-default",
@@ -201,8 +198,7 @@ if (!/<meta[^>]+name="robots"[^>]+content="noindex"/i.test(wikiHtml)) {
   throw new Error("English wiki pages must include a noindex robots directive");
 }
 
-// The product site owns language discovery, so the docs root must send readers to the default locale.
-// Cloudflare uses `_redirects`; Astro's generated page preserves the behavior on other static hosts.
+// Check both `_redirects` (Cloudflare) and `index.html` (other static hosts) because the product site owns discovery.
 const rootHtml = readRequired("index.html");
 if (!/<meta[^>]+http-equiv="refresh"[^>]+url=\/en\/introduction\//i.test(rootHtml)) {
   throw new Error("The documentation root must redirect to the default-locale introduction");
@@ -212,9 +208,8 @@ if (!/^\/ \/en\/introduction\/ 301$/m.test(redirectRules)) {
   throw new Error("The Cloudflare redirect file must permanently redirect the docs root to English");
 }
 
-// `robots.txt` advertises the sitemap unconditionally, so a build that omits one publishes a dead
-// reference to every crawler. @astrojs/sitemap reports a rejected option as a warning and then skips
-// generation for the whole site, which leaves an exit code of 0 and no sitemap.
+// Verify sitemap files exist because @astrojs/sitemap only warns on a rejected option and exits 0 without generating
+// them, leaving robots.txt broken.
 readRequired("sitemap-index.xml");
 const sitemapUrlset = readRequired("sitemap-0.xml");
 const annotatedLocales = new Set(Array.from(sitemapUrlset.matchAll(/hreflang="([^"]+)"/g), (match) => match[1]));

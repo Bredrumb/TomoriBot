@@ -49,13 +49,11 @@ class PersonaSpriteRepository {
   // as an empty sprite set.
   async listForPersona(personaId: number): Promise<PersonaSpriteRow[]> {
     try {
-      // Live preset pointers resolve the shared official sprite set.
       const pointer = await this.resolvePointerPreset(personaId);
       if (pointer) {
         return await this.listForPreset(personaId, pointer.lineageId, pointer.language);
       }
 
-      // Otherwise read the persona's own sprite rows.
       const rows = await sql<PersonaSpriteRow[]>`
         SELECT sprite_id, persona_id, sprite_name, sprite_key, avatar_url, usage_instructions, is_identity, created_at, updated_at
         FROM persona_sprites
@@ -286,8 +284,7 @@ class PersonaSpriteRepository {
         WHERE persona_id = ${personaId}
         RETURNING sprite_id, persona_id, sprite_name, sprite_key, avatar_url, usage_instructions, is_identity, created_at, updated_at
       `;
-      // A successful DELETE with no matching rows still establishes that the cache is not
-      // authoritative for this reset. Invalidation follows the completed write, never before it.
+      // Unconditionally invalidate after DELETE commits so even a 0-row reset clears stale cached sprites.
       invalidatePersonaSpriteCache(personaId);
       return this.parseRowsStrict(rows, `persona ${personaId} sprite reset`);
     } catch (error) {

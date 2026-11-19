@@ -79,8 +79,8 @@ async function collectRawChunks(adapter: OpenAICompatibleStreamAdapter): Promise
 
 describe("OpenAICompatibleStreamAdapter usage capture", () => {
   it("surfaces usage from a trailing chunk that has empty choices (include_usage)", () => {
-    // With stream_options.include_usage, the final chunk carries usage but no
-    // choices. This previously early-returned and dropped the usage entirely.
+    // With stream_options.include_usage, the final chunk carries usage with empty choices so the parser cannot skip
+    // choices.length === 0.
     const adapter = makeAdapter();
     const result = adapter.processChunk(
       makeChunk({ choices: [], usage: { prompt_tokens: 1200, completion_tokens: 88, total_tokens: 1288 } }),
@@ -120,10 +120,8 @@ function makeNvidiaLikeAdapter(): OpenAICompatibleStreamAdapter {
 
 describe("OpenAICompatibleStreamAdapter parameter degradation", () => {
   it("recovers from an opaque mid-SSE 500 caused by an injected parameter", async () => {
-    // The NVIDIA outage, end to end: NIM on the vLLM V2 runner answers `reasoning_budget` with a
-    // 200 followed by a content-free mid-SSE 500, naming nothing. Recovery needs the opaque-5xx
-    // classifier (to queue any retry at all) and the priority-key declaration (so the injected key
-    // is probed instead of sorting into the unknown tail) working together.
+    // NIM can follow a 200 with an opaque SSE 500 on reasoning_budget, so recovery requires both opaque-5xx retries
+    // and priority-key probing.
     const requestBodies: Array<Record<string, unknown>> = [];
     globalThis.fetch = (async (_input, init) => {
       const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
@@ -138,9 +136,8 @@ describe("OpenAICompatibleStreamAdapter parameter degradation", () => {
 
     const chunks = await collectRawChunks(makeNvidiaLikeAdapter());
 
-    // default, no_stream_options, then the injected key. Asserted because the count is the whole
-    // user-visible cost of this path: every rung is a full chat completion the user waits through,
-    // and the ladder is deliberately not cached, so it is paid again on the next message.
+    // Expected rungs (default, no_stream_options, injected key) are uncached, so this count bounds per-message
+    // latency.
     expect(requestBodies).toHaveLength(3);
 
     const successfulBody = requestBodies[requestBodies.length - 1];
@@ -151,8 +148,8 @@ describe("OpenAICompatibleStreamAdapter parameter degradation", () => {
   });
 
   it("fails fast on a descriptive 5xx instead of walking the ladder", async () => {
-    // A real outage says so, and every rung would fail identically. Burning the ladder here only
-    // delays the key-rotation and model-fallback paths that can actually recover the turn.
+    // Descriptive outages fail identically on every rung, so skipping the ladder avoids delaying key rotation or
+    // model fallback.
     let fetchCalls = 0;
     globalThis.fetch = (async (_input: string | URL | Request, _init?: RequestInit) => {
       fetchCalls += 1;

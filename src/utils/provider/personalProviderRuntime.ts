@@ -31,9 +31,7 @@ function collectActiveConfigs(
     "speech_clone",
     "transcription",
   ] as const) {
-    // The model check keeps this in step with what the commands call active. Without
-    // it an enabled row whose model pointer went NULL would swap its credential in
-    // under the server's model, while the UI still reported the server default.
+    // Require a configured model so an enabled row with a NULL pointer never swaps its key under the server's model.
     const matches = rows.filter(
       (row) => row.enabled_capabilities.includes(capability) && hasConfiguredPersonalModel(row, capability),
     );
@@ -130,7 +128,6 @@ export async function applyPersonalProviderSelectionsToTomoriState(
     nextConfig.model_randomizer_enabled = fallbackSettings.model_randomizer_enabled;
     const personalFallbackIds = fallbackSettings.fallback_model_refs.filter((r) => r.type === "llm").map((r) => r.id);
     nextConfig.fallback_llm_ids = personalFallbackIds;
-    // custom_endpoint_url/name/ctx are no longer on user saved configs; resolved from custom_endpoints at runtime
   }
 
   if (activeConfigs.embedding?.embedding_model_id) {

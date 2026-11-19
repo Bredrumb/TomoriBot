@@ -271,8 +271,6 @@ function addReceipt(locale: string, result: AddServerProviderResult, scopeKind: 
       locale,
       result.status === "novelai-unavailable" ? result.descriptionKey : detailKey[result.status],
     ),
-    // The operation status is already the machine-readable cause, so the metric key can name it
-    // exactly instead of falling back to the route namespace.
     reason: `provider_add_${result.status}`,
     action: resolveProviderPanelAction(scopeKind, "provider.add"),
   };
@@ -857,9 +855,7 @@ export function createProvidersInteractionRoute(
         if (!selection) {
           throw new Error("Malformed provider model selection");
         }
-        // The modal is this interaction's acknowledgement, so the scope read must be the cached one
-        // Edit Endpoint already relies on. The selector is disabled unless the panel is fresh, so a
-        // stale read here means the panel outlived its data.
+        // Read the cached scope here because showModal is the acknowledgement and stale panels stay disabled.
         const modelScope = await dependencies.resolveScope(interaction, false);
         const entry = modelScope?.data.entries.find(
           (candidate) => candidate.id === `${route.entryKind}:${route.entryKey}`,

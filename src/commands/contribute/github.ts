@@ -14,7 +14,6 @@ export async function execute(
   _userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Defer the interaction before async file I/O to prevent timeout
   await interaction.deferReply();
 
   const bannerFile = Bun.file("assets/img/gitbanner.png");

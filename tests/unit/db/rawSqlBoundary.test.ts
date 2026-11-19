@@ -49,12 +49,10 @@ describe("scanFileForSqlQueries — false-positive guards", () => {
   });
 
   it("ignores a plain string that merely contains SQL text", () => {
-    // Not a tagged template: just a string. Must not be flagged.
     expect(scanFileForSqlQueries('const note = "SELECT * FROM users";')).toEqual([]);
   });
 
   it("ignores identifiers that merely end in sql/tx", () => {
-    // Word-boundary guard: `mysql`/`someSql`/`htx` are not the `sql`/`tx` tag.
     expect(scanFileForSqlQueries("const c = mysql`SELECT 1`;")).toEqual([]);
     expect(scanFileForSqlQueries("const c = someSql`SELECT 1`;")).toEqual([]);
   });
@@ -66,7 +64,6 @@ describe("classifyQuery", () => {
   });
 
   it("does not misread a column that merely contains a keyword (updated_at)", () => {
-    // `updated_at` contains "UPDATE" as a substring, so must still classify as READ.
     expect(classifyQuery("SELECT MAX(updated_at) AS last_updated FROM server_emojis")).toBe("READ");
   });
 
@@ -74,7 +71,6 @@ describe("classifyQuery", () => {
     expect(classifyQuery("INSERT INTO t (a) VALUES (1)")).toBe("WRITE");
     expect(classifyQuery("UPDATE t SET a = 1")).toBe("WRITE");
     expect(classifyQuery("DELETE FROM t")).toBe("WRITE");
-    // A CTE that selects then writes is a WRITE.
     expect(classifyQuery("WITH x AS (SELECT 1) UPDATE t SET a = 1")).toBe("WRITE");
   });
 });
@@ -82,7 +78,6 @@ describe("classifyQuery", () => {
 describe("raw-SQL boundary (real source tree)", () => {
   it("has zero raw SQL outside the repository layer", async () => {
     const { violations } = await auditRawSqlBoundary();
-    // Surface the offending locations in the failure message for fast triage.
     const detail = violations.map((v) => `${v.file}:${v.line} (${v.kind})`).join("\n");
     expect(violations, `Raw SQL found outside src/utils/db/repositories/:\n${detail}`).toEqual([]);
   });

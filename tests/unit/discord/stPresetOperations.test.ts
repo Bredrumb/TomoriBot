@@ -502,7 +502,6 @@ describe("stPresetOperations domain delegation", () => {
         },
         deactivateAllPresets: async () => true,
         deletePreset: async (presetId) => {
-          // Preset 2 fails deletion, Active Preset succeeds deletion
           if (presetId === 2) return false;
           return true;
         },
@@ -514,7 +513,6 @@ describe("stPresetOperations domain delegation", () => {
         {
           serverId: 10,
           allPresets,
-          // Request to remove preset 2 and active preset 3
           presetIdsToRemove: [2, 3],
         },
         deps,
@@ -523,7 +521,7 @@ describe("stPresetOperations domain delegation", () => {
       expect(result.successCount).toBe(1);
       expect(result.failedNames).toEqual(["Preset 2"]);
       expect(result.removedNames).toEqual(["Active Preset"]);
-      // Preset 2 failed deletion, so it survives and is newer than Preset 1 (last in created_at order)
+      // Preset 2 failed deletion, so it survives and is newer than Preset 1 (last in created_at order).
       expect(result.promotedPreset?.preset_id).toBe(2);
       expect(activatedPresetId).toBe(2);
     });

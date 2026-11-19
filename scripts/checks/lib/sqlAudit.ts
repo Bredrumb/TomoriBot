@@ -62,9 +62,7 @@ function toRepoRelative(absolutePath: string): string {
 
 export function classifyQuery(query: string): QueryKind {
   const upper = query.toUpperCase();
-  // Whole-word match so column/identifier names that merely CONTAIN a keyword
-  // (e.g. `updated_at` containing "UPDATE", `selected` containing "SELECT") do
-  // not flip the classification.
+  // Whole-word match prevents column names containing keywords (like updated_at or selected) from flipping READ/WRITE.
   const hasKeyword = (keyword: string): boolean => new RegExp(`\\b${keyword}\\b`).test(upper);
   return hasKeyword("SELECT") && !hasKeyword("INSERT") && !hasKeyword("UPDATE") && !hasKeyword("DELETE")
     ? "READ"
@@ -109,12 +107,8 @@ export function scanFileForSqlQueries(content: string): Array<{ line: number; qu
     }
 
     if (!inQuery) {
-      // Detect the start of a `sql`/`tx` tagged template (optional `<T>` and
-      //    `await`). The leading `\b` requires a word boundary so identifiers that
-      //    merely END in "sql"/"tx" (e.g. `mysql`, `someSql`) are not false-flagged.
-      //    The generic group uses `[^`]` (not `[^>]`) so NESTED generics such as
-      //    `sql<Array<{ id: number }>>` are matched up to the backtick instead of
-      //    stopping at the first inner `>`.
+      // Require \b before sql/tx so names like someSql do not match, and match generics with [^`]+ so nested > pairs
+      // still reach the backtick.
       const matchRegex = /(?:await\s+)?\b(?:sql|tx)(?:<[^`]+>)?\s*`/;
       const match = line.match(matchRegex);
       if (match) {

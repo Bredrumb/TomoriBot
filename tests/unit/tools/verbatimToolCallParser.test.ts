@@ -182,9 +182,7 @@ describe("VerbatimToolCallParser", () => {
   });
 
   it("parses a bare call streamed character-by-character with prose on both sides", () => {
-    // Regression: the full tool name can stream in before its "(" arrives. The
-    // holdback must withhold the complete name, or the anchor never matches once
-    // the parenthesis lands on a later chunk (the real Custom-endpoint path).
+    // Streaming can deliver a tool name before its "(", so the parser must hold back the name until "(" arrives.
     const message =
       'She sighs.\n\nFine. But only because I am bored.\n\ngenerate_image({"prompt": "a gray cat", "mode": "txt2img"})\n\nThere. Now you owe me.';
     const { visible, calls } = run([...message]);

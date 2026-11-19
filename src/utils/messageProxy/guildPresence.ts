@@ -43,8 +43,7 @@ export async function isMessageProxyInstanceBotPresent(
       return false;
     }
 
-    // Presence is only an optimization gate. A transient Discord failure must not disable
-    // message-proxy handling, because the selected bot may still be installed.
+    // Treat transient Discord errors as present so a lookup outage never disables proxy handling for an installed bot.
     return true;
   }
 }

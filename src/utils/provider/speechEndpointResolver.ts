@@ -96,12 +96,10 @@ async function resolveActiveEndpointByCapability(
       return null;
     }
 
-    // Endpoints that don't require auth (local servers) need no key lookup.
     if (!endpoint.requires_auth) {
       return { endpoint, apiKey: "" };
     }
 
-    // Credentials are stored in saved_provider_configs keyed by the internal provider name via repository
     const providerName = buildCustomProviderName(endpoint.connection_id);
     const configRow = await loadEndpointCredentials(serverId, providerName);
 
