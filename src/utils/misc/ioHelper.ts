@@ -1,10 +1,6 @@
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 
-/**
- * Gets all files (or directories) in a directory, non-recursively.
- *
- */
 export default async function getAllFiles(directory: string, getDirs = false): Promise<string[]> {
   try {
     const items = await readdir(directory, { withFileTypes: true });

@@ -83,14 +83,8 @@ export function resolveAvailablePersonaName(
   return null;
 }
 
-/**
- * Names a preset alter after a word it still answers to. The default bot name and the shared first
- * trigger usually belong to the main persona, so naming the alter after them leaves it unable to be
- * called by its own name, and `{bot}` in the preset prompt would render that borrowed name. Falls back
- * to {@link resolveAvailablePersonaName} when every candidate trigger is already claimed.
- *
- * @param answeredTriggers - The alter's triggers after dropping those other personas own
- */
+// Alters prefer a trigger they still answer to because the main persona usually owns the default name and `{bot}` in
+// the prompt renders the chosen name.
 export function resolveAlterPersonaName(
   defaultName: string,
   presetTriggerWords: string[],
@@ -135,7 +129,8 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
     subcommand.setName("default").setDescription(localizer("en-US", "commands.persona.default.description")),
   );
 
-/** One builder for both default routes, because the `/nsfw` route's option locale aliases assume identical option names. */
+// Both default routes share this builder because the `/nsfw` route's option locale aliases assume identical option
+// names.
 export const addPresetTargetTypeOption = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.addStringOption((option) =>
     option
@@ -154,16 +149,6 @@ export const addPresetTargetTypeOption = (subcommand: SlashCommandSubcommandBuil
       ),
   );
 
-/**
- * Applies a preset personality configuration to Tomori.
- * - type=default: updates the main persona.
- * - type=alter: creates an alter persona from the selected preset.
- *
- * Preset trigger words come from persona_presets.preset_trigger_words,
- * with locale base-trigger fallback for backward compatibility.
- * Persona naming prefers the locale default bot name, then falls back to
- * preset trigger words in order if the preferred name is already taken.
- */
 export async function execute(
   client: Client,
   interaction: ChatInputCommandInteraction,
@@ -173,10 +158,6 @@ export async function execute(
   await applyPresetDefault(client, interaction, userData, locale, { nsfw: false });
 }
 
-/**
- * Shared body of `/persona default` and `/nsfw persona default`; `nsfw` decides which presets the
- * picker lists and which submitted values it accepts.
- */
 export async function applyPresetDefault(
   _client: Client,
   interaction: ChatInputCommandInteraction,

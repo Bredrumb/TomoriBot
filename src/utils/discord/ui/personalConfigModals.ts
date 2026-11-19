@@ -868,16 +868,8 @@ export function buildImpersonationModal(
   };
 }
 
-/**
- * Channel and duration take their own step so the persona modal that follows gets all five of
- * Discord's modal components as checkbox groups. A modal submit cannot open another modal, so the
- * persona step is reached through the message in between rather than directly from here.
- */
-/**
- * Splits items into checkbox groups of at most ten. Sizes are balanced rather than greedy because a
- * greedy split leaves a remainder group of one, and Discord rejects a modal choice component holding
- * fewer than two options.
- */
+// Checkbox groups balance sizes rather than greedily chunking by 10 because a remainder of 1 fails Discord's minimum
+// of 2 options per choice component.
 function chunkForCheckboxGroups<T>(items: readonly T[], maxGroups: number): T[][] {
   const groupCount = Math.min(maxGroups, Math.max(1, Math.ceil(items.length / 10)));
   const base = Math.floor(items.length / groupCount);
@@ -894,6 +886,8 @@ function chunkForCheckboxGroups<T>(items: readonly T[], maxGroups: number): T[][
   return groups;
 }
 
+// Spotlight splits channel/duration from personas via an intermediate message because modals cap at 5 components and
+// a modal submit cannot open another modal.
 export function buildSpotlightStep1Modal(
   locale: string,
   nonce: string,

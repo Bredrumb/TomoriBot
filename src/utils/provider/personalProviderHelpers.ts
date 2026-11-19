@@ -56,13 +56,8 @@ export function getActivePersonalProviderForCapability(
   );
 }
 
-/**
- * The provider row that owns `capability`, whether or not it is switched on.
- *
- * This is what a disable must preserve: without it the owner had to be re-derived,
- * and the only available ordering was alphabetical, which silently moved a user's
- * route to whichever provider happened to sort first.
- */
+// Capability ownership stays intact even when disabled, because re-deriving without it falls back to alphabetical
+// order and silently moves user routes.
 export function getAssignedPersonalProviderForCapability(
   rows: UserSavedProviderConfigRow[],
   capability: PersonalProviderCapability,
@@ -70,14 +65,8 @@ export function getAssignedPersonalProviderForCapability(
   return sortProviderRows(rows).find((row) => row.assigned_capabilities.includes(capability)) ?? null;
 }
 
-/**
- * A provider row that could serve `capability` when none has been assigned one.
- *
- * Only reachable for a user who configured models before migration 060 backfilled
- * ownership, or who has never routed this capability personally. Picking the first
- * row by provider name is arbitrary, which is exactly why it must not be consulted
- * once an assignment exists.
- */
+// Alphabetical fallback for pre-migration-060 or unassigned users only, because consulting it after an assignment
+// exists overrides the user's chosen route.
 export function getStoredPersonalProviderForCapability(
   rows: UserSavedProviderConfigRow[],
   capability: PersonalProviderCapability,
@@ -91,12 +80,8 @@ export function getStoredPersonalProviderForCapability(
 
 type FallbackIdentityEndpoint = Pick<CustomEndpointRow, "custom_endpoint_id" | "model_ref_id">;
 
-/**
- * Removes every entry that resolves to `primaryLlmId` from the user's personal fallback chain.
- *
- * A fallback identical to the primary can never run, and leaving it there makes personal fallback
- * configuration reject every later edit, since untouched slots resubmit the stale ref.
- */
+// Primary-matching fallback entries must be pruned because untouched modal slots resubmit stale refs and would reject
+// every later fallback edit.
 export async function prunePersonalFallbackChain(
   userId: number,
   primaryLlmId: number | null,
@@ -108,7 +93,6 @@ export async function prunePersonalFallbackChain(
   return await llmProviderRepo.updatePersonalFallbackModelRefs(userId, pruned);
 }
 
-/** Makes `llmId` the personal text primary on `provider`, then prunes it from the fallback chain. */
 export async function setPersonalTextPrimary(
   userId: number,
   provider: string,
@@ -133,13 +117,8 @@ export async function setPersonalTextPrimary(
   return assigned && (await prunePersonalFallbackChain(userId, llmId, endpoints));
 }
 
-/**
- * Switches `capability` on or off for `row` without disturbing who owns it.
- *
- * Enabling implies ownership, so it writes both arrays. Disabling deliberately
- * touches only `enabled_capabilities`: dropping the assignment too is what erased
- * the user's provider choice and let a later read re-derive the wrong one.
- */
+// Enabling writes both arrays while disabling clears only enabled_capabilities, because dropping
+// assigned_capabilities erases the user's provider choice.
 export function withCapabilityEnabled(
   row: UserSavedProviderConfigRow,
   capability: PersonalProviderCapability,
@@ -156,7 +135,6 @@ export function withCapabilityEnabled(
   };
 }
 
-/** Removes both the on/off state and the ownership of `capability` from `row`. */
 export function withCapabilityUnassigned(
   row: UserSavedProviderConfigRow,
   capability: PersonalProviderCapability,
@@ -168,20 +146,12 @@ export function withCapabilityUnassigned(
   };
 }
 
-/** Whether `row` holds either the on/off state or the ownership of `capability`. */
 function claimsCapability(row: UserSavedProviderConfigRow, capability: PersonalProviderCapability): boolean {
   return row.enabled_capabilities.includes(capability) || row.assigned_capabilities.includes(capability);
 }
 
-/**
- * Clears `capability` from one non-target row, covering the assignment as well as the on/off state.
- *
- * Ownership is exclusive, so the losing rows give up the assignment too; otherwise two rows would
- * claim the same capability. A row that is already the target, or that never claimed the
- * capability, needs no write.
- *
- * @returns `false` when the release write failed, leaving ownership partly transferred
- */
+// Ownership is exclusive so losing rows drop assigned_capabilities too, and returning false means the release write
+// failed with ownership partly transferred.
 async function releaseCapabilityFromProvider(
   userId: number,
   row: UserSavedProviderConfigRow,
@@ -251,15 +221,6 @@ export async function assignPersonalCapabilityToProvider(
   return updated;
 }
 
-/**
- * Switches `capability` on or off, keeping it on the provider the user assigned.
- *
- * Re-enabling resolves the target through the stored assignment, so it returns to
- * the provider that was serving the capability before it was switched off.
- *
- * @returns `false` only when the request could not be satisfied: a failed upsert, or an
- *   enable with no provider able to serve `capability`.
- */
 export async function setPersonalCapabilityEnabled(
   userId: number,
   capability: PersonalProviderCapability,

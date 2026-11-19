@@ -24,9 +24,6 @@ type OpenrouterMessage =
   | { role: "system"; content: string }
   | { role: "user"; content: string | OpenrouterContentPart[] };
 
-/**
- * Call OpenRouter with structured output using a generic JSON schema.
- */
 export async function callOpenrouterStructuredJSON<T>(
   request: GenericStructuredOutputRequest,
   responseSchema: Record<string, unknown>,

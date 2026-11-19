@@ -13,14 +13,8 @@ export type RemoteUrlPolicyFailureCode =
   | "REDIRECT_CREDENTIALS_WITHHELD"
   | "ADDRESS_NOT_PINNABLE";
 
-/**
- * A user-supplied URL was refused by the SSRF gate, either before the first
- * request or at a redirect hop.
- *
- * Thrown instead of a bare Error so callers can tell a deliberate refusal from a
- * transport failure: no socket was opened, so these must not be reported as
- * network errors, retried, or alerted on as connectivity problems.
- */
+// Signals an SSRF gate refusal before any socket opens, so callers must not retry it or report it as a transport or
+// connectivity error.
 export class RemoteUrlPolicyError extends Error {
   readonly failureCode: RemoteUrlPolicyFailureCode | undefined;
   readonly hostname: string;
@@ -33,7 +27,6 @@ export class RemoteUrlPolicyError extends Error {
   }
 }
 
-/** True when the host's private-network setting refused the endpoint, as opposed to any other policy refusal. */
 export function isPrivateNetworkRefusal(error: unknown): error is RemoteUrlPolicyError {
   return (
     error instanceof RemoteUrlPolicyError &&
@@ -108,14 +101,8 @@ async function normalizeRequestInput(
   };
 }
 
-/**
- * Build a Bun-native request pinned to an already validated IP address.
- *
- * The URL uses the literal IP so the transport performs no second DNS lookup,
- * while Host and TLS SNI retain the validated origin hostname. Bun's native fetch
- * is used because npm Undici response bodies can stall under Bun for lengthless or
- * compressed streaming responses.
- */
+// Pins the URL to the validated IP (keeping Host/SNI as the hostname) to prevent DNS rebinding, using Bun native
+// fetch because npm Undici stalls on streaming.
 export function createPinnedFetchRequest(url: URL, requestInit: RequestInit, address: string): PinnedFetchRequest {
   const addressFamily = isIP(address);
   if (addressFamily !== 4 && addressFamily !== 6) {
@@ -151,11 +138,8 @@ function isConnectionRefusedTransportError(error: unknown): boolean {
   return isConnectionRefusedTransportError(record.cause);
 }
 
-/**
- * Headers that carry no credential and may follow a redirect to another origin. Every other header
- * is dropped at an origin change, because callers attach provider keys under custom names
- * (`x-api-key`, `x-goog-api-key`) and a denylist would forward the next one somebody adds.
- */
+// Allowlist of non-credential headers that may survive cross-origin redirects, because callers pass custom key
+// headers that a denylist could miss.
 const CROSS_ORIGIN_REDIRECT_HEADERS = new Set([
   "accept",
   "accept-language",
@@ -164,7 +148,6 @@ const CROSS_ORIGIN_REDIRECT_HEADERS = new Set([
   "user-agent",
 ]);
 
-/** Statuses that mean the redirected origin wanted the credential this fetcher withheld. */
 const CREDENTIAL_CHALLENGE_STATUSES = new Set([401, 403, 407]);
 
 function hasUrlCredentials(url: URL): boolean {
@@ -214,15 +197,8 @@ function credentialsWithheldError(url: URL, reason: string): RemoteUrlPolicyErro
   );
 }
 
-/**
- * Refuses a cross-origin hop that cannot be made anonymous, before anything is sent to it.
- *
- * Origin equality (scheme, hostname, effective port) is the trust unit: the operator configured
- * one origin, and a redirect response cannot extend that trust. Other cross-origin hops continue
- * anonymously so signed asset URLs still download.
- *
- * @returns Whether the hop drops credentials the request carried.
- */
+// Origin equality is the trust boundary so redirects cannot extend credentials, while anonymous cross-origin hops
+// still proceed so signed asset URLs download.
 export function checkCrossOriginRedirect(currentUrl: URL, nextUrl: URL, requestInit: RequestInit): boolean {
   if (hasUrlCredentials(nextUrl)) {
     throw credentialsWithheldError(nextUrl, "the redirect target embeds a username or password");
@@ -255,7 +231,8 @@ export async function resolveValidatedUserRedirect(
 interface RedirectState {
   redirectCount: number;
   policy: FetchUserRemoteUrlOptions;
-  /** Set once a hop dropped credentials; they are never reattached, even if a later hop returns. */
+  // Sticky once a cross-origin hop drops credentials, because credentials must never be reattached even if a later
+  // redirect returns to the original origin.
   credentialsWithheld: boolean;
 }
 

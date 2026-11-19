@@ -1,18 +1,3 @@
-/**
- * Google-specific streaming adapter for Gemini API
- *
- * This adapter implements the StreamProvider interface for Google's Gemini API,
- * containing all the Google-specific logic extracted from the original
- * streamGeminiToDiscord function.
- *
- * Key responsibilities:
- * - Initialize Google AI client and configure streaming
- * - Convert context items to Google's Part format
- * - Handle Google-specific API responses and errors
- * - Extract function calls from Google's response format
- * - Convert Google chunks to normalized ProcessedChunk format
- */
-
 import { mapWithConcurrency } from "@/utils/async/bounded";
 import {
   BlockedReason,
@@ -76,7 +61,6 @@ const GOOGLE_RATE_LIMIT_MESSAGE_PATTERN = /\brate[-\s]?limit|\bquota/i;
 // it arrives in a single read, so one split across reads ends the body with this and its status lost.
 const GENAI_INCOMPLETE_STREAM_MESSAGE = "Incomplete JSON segment at the end";
 
-/** Classifies the SDK's incomplete-stream failure as an interrupted stream, or returns null for any other error. */
 export function classifyGenAIStreamInterruption(error: unknown): ProviderError | null {
   const errorMessage = error instanceof Error ? error.message : String(error);
   if (errorMessage !== GENAI_INCOMPLETE_STREAM_MESSAGE) return null;
@@ -89,10 +73,8 @@ export function classifyGenAIStreamInterruption(error: unknown): ProviderError |
   };
 }
 
-/**
- * Localized headline for a Gemini or Vertex API error. Upstream text stays in the operator log
- * (see StreamErrorUi), so `userMessage` and `message` only steer which key is chosen.
- */
+// Upstream provider text stays in operator logs only, so error message fields only select the localized key rather
+// than leaking raw text.
 export function createGoogleApiErrorDescription(error: ProviderError, locale: string): string {
   const errorCode = formatProviderErrorCodeForDisplay(error.code);
   let messageKey: string;
@@ -125,9 +107,6 @@ export function createGoogleApiErrorDescription(error: ProviderError, locale: st
   return `Error Code ${errorCode}: ${message}`;
 }
 
-/**
- * Google-specific stream configuration extending the base StreamConfig
- */
 export interface GoogleStreamConfig extends StreamConfig {
   safetySettings?: Array<Record<string, unknown>>;
   generationConfig?: Record<string, unknown>;
@@ -155,14 +134,6 @@ interface GoogleStreamChunk {
   error?: unknown;
 }
 
-/**
- * Google Gemini streaming adapter implementation
- *
- * Supports thought signatures for enhanced multi-turn conversations:
- * - Configure via GoogleStreamConfig.thinkingConfig
- * - Thought signatures and summaries are included in ProcessedChunk.metadata
- * - Enables the model to maintain reasoning context across function calls
- */
 export class GoogleStreamAdapter extends BaseStreamAdapter {
   private static readonly SPEAKER_GUARD_HOLDBACK_CHARS = 32;
   private static readonly STREAM_TEXT_TAIL_CHARS = 4096;
@@ -171,11 +142,8 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
   private streamedTextTail = "";
   private speakerGuardEnabled = false;
   private speakerGuardAllowedSourceNames: string[] = [];
-  /**
-   * Latest `usageMetadata` seen on a raw Gemini stream chunk (kept in its native
-   * shape; the orchestrator normalizes it). Gemini reports cumulative usage and
-   * the authoritative totals on the final chunk, so latest-wins is correct.
-   */
+  // Gemini streams report cumulative usage with authoritative totals on the final chunk, so overwriting with the
+  // latest metadata is required.
   private pendingUsage: Record<string, unknown> | undefined;
 
   constructor() {
@@ -186,11 +154,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
     });
   }
 
-  /**
-   * Build a Gemini payload for token counting (or other non-stream requests)
-   * using the exact same context transformation and system-instruction fallback
-   * logic as streaming.
-   */
   public async buildTokenCountPayload(
     contextItems: StructuredContextItem[],
     model?: string,
@@ -219,9 +182,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
     };
   }
 
-  /**
-   * Start streaming from Google's Gemini API
-   */
   async *startStream(config: StreamConfig, context: StreamContext): AsyncGenerator<RawStreamChunk, void, unknown> {
     log.info("GoogleStreamAdapter: Initializing Gemini streaming");
 
@@ -528,9 +488,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
     }
   }
 
-  /**
-   * Normalize raw Google streaming data into a simplified chunk shape.
-   */
   private normalizeGoogleStreamChunk(rawChunk: unknown): GoogleStreamChunk {
     const chunk = rawChunk as GoogleStreamChunk;
     const functionCalls = this.extractFunctionCallsFromChunk(chunk);
@@ -758,9 +715,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
     };
   }
 
-  /**
-   * Process a raw Google chunk into normalized format
-   */
   processChunk(chunk: RawStreamChunk): ProcessedChunk {
     const googleChunk = chunk.data as GoogleStreamChunk;
     const thoughts: ThoughtLogEntry[] = [];
@@ -877,9 +831,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
     };
   }
 
-  /**
-   * Handle Google-specific errors using official error codes and localized messages
-   */
   handleProviderError(error: unknown): ProviderError {
     const interruption = classifyGenAIStreamInterruption(error);
     if (interruption) return interruption;
@@ -1010,17 +961,10 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
     return providerError;
   }
 
-  /**
-   * Formats errors as "Error Code {code}: {Google message}"
-   */
   createErrorDescription(error: ProviderError, locale: string): string | null {
     return createGoogleApiErrorDescription(error, locale);
   }
 
-  /**
-   * Assemble context items into Google's expected format
-   * Extracted from the original streamGeminiToDiscord function (lines 218-390)
-   */
   private async assembleGoogleContext(
     contextItems: StructuredContextItem[],
     _currentTurnModelParts: Array<Record<string, unknown>>,
@@ -1238,9 +1182,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
     return { systemInstruction, dialogueContents };
   }
 
-  /**
-   * Extract a thought signature from a Google stream chunk.
-   */
   private extractThoughtSignature(googleChunk: GoogleStreamChunk): string | undefined {
     const directSignature = this.normalizeThoughtSignature(googleChunk.thoughtSignature);
     if (directSignature) {
@@ -1259,9 +1200,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
     return this.normalizeThoughtSignature(partSignature);
   }
 
-  /**
-   * Normalize a thought signature to base64 string if needed.
-   */
   private normalizeThoughtSignature(signature?: string | Uint8Array): string | undefined {
     if (!signature) {
       return undefined;
@@ -1272,10 +1210,8 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
     return Buffer.from(signature).toString("base64");
   }
 
-  /**
-   * Older Gemma variants reject request-level developer instructions
-   * (`systemInstruction`), but Gemma 4 introduces native `system` role support.
-   */
+  // Gemma versions below 4 return false because older variants reject request-level systemInstruction, unlike Gemma
+  // 4.
   private supportsDeveloperInstruction(model?: string): boolean {
     if (!model) return true;
     const normalizedModel = model.toLowerCase();
@@ -1289,10 +1225,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
     return !normalizedModel.includes("gemma");
   }
 
-  /**
-   * Fallback for models without developer-instruction support:
-   * inject instructions as the first in-band content item.
-   */
   private createInBandSystemInstructionContent(systemInstruction: string): Content {
     return {
       role: "user",
@@ -1306,9 +1238,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
     };
   }
 
-  /**
-   * Convert Google function call to our generic format
-   */
   private convertGoogleFunctionCall(googleFunctionCall: GoogleFunctionCall): FunctionCall {
     return {
       id: typeof googleFunctionCall.id === "string" ? googleFunctionCall.id : undefined,
@@ -1317,9 +1246,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
     };
   }
 
-  /**
-   * Check if a finish reason indicates blocking/stopping
-   */
   private isBlockingFinishReason(finishReason: FinishReason): boolean {
     return [
       FinishReason.SAFETY,

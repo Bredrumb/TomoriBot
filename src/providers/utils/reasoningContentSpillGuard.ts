@@ -8,12 +8,8 @@ export interface ReasoningContentSpillResult {
   changed: boolean;
 }
 
-/**
- * Guards the transition from provider-side reasoning fields to visible content.
- * Some OpenAI-compatible backends move the last fragment of reasoning into the
- * first content delta. The common shape is a short lowercase/meta sentence
- * immediately glued to the real answer, e.g. `the reveal.Wrrrf...`.
- */
+// Some OpenAI-compatible backends spill trailing reasoning into the first content delta glued to the answer, so this
+// guard isolates that transition.
 export class ReasoningContentSpillGuard {
   private sawReasoningBeforeVisible = false;
   private visibleContentStarted = false;
@@ -160,13 +156,8 @@ export class ReasoningContentSpillGuard {
   }
 }
 
-/**
- * True when `text` begins like the start of a real answer rather than the continuation
- * of a lowercase prose fragment. Treats markdown/quote/bracket openers, uppercase or
- * caseless letters (so CJK and other non-Latin scripts qualify), and emoji as
- * answer-like. Lowercase Latin letters, digits, and bare punctuation are NOT answer
- * starts, so a glued boundary before them is left intact.
- */
+// Non-Latin caseless letters count as answer starts, while lowercase Latin, digits, and bare punctuation do not so
+// glued boundaries stay intact.
 function looksLikeAnswerStart(text: string): boolean {
   if (!text) return false;
   if (/^[*_([{"'“”‘’「『（]/u.test(text)) return true;

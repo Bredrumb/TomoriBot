@@ -94,10 +94,6 @@ test("retains redacted provider warning diagnostics in production stdout and JSO
   }
 });
 
-/**
- * Minimal in-memory sink implementing pino's DestinationStream contract.
- * Collects newline-delimited records for assertion.
- */
 class MemorySink implements pino.DestinationStream {
   readonly lines: string[] = [];
 
@@ -107,11 +103,6 @@ class MemorySink implements pino.DestinationStream {
   }
 }
 
-/**
- * Mirrors the production logger construction from logger.ts:
- * JSON mode (no transport), level "error", same custom levels, multistream output, and the
- * metric child logger whose level comes from `resolveMetricLevel`.
- */
 const createProductionLikeLogger = (streams: pino.StreamEntry[]) => {
   const logger = pino(
     {

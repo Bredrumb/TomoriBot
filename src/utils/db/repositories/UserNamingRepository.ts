@@ -11,11 +11,7 @@ import {
 import { sql, withTransientDbRetry } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 
-/**
- * Caps the containment scan in {@link UserNamingRepository.findComposedNameCandidates}.
- * Rows are ordered longest-nickname-first, so the cap drops the least specific
- * containment hits rather than an arbitrary slice.
- */
+// Containment scan cap applies after longest-first ordering, so truncation drops the least specific hits.
 const COMPOSED_NAME_CANDIDATE_LIMIT = 50;
 
 interface NamedUserMatch {
@@ -23,11 +19,8 @@ interface NamedUserMatch {
   userDiscId: string;
 }
 
-/**
- * One account whose stored nickname appears inside the requested name, carrying
- * every naming layer unresolved so the caller can rebuild the composed label with
- * `resolveEffectiveUserNaming` instead of duplicating the layering rules in SQL.
- */
+// Fields stay unresolved here so callers rebuild labels with resolveEffectiveUserNaming instead of duplicating
+// layering rules in SQL.
 interface ComposedNameCandidate extends NamedUserMatch {
   globalNickname: string | null;
   globalPrefixOverride: string | null;
@@ -244,11 +237,8 @@ class UserNamingRepository {
     return configs;
   }
 
-  /**
-   * Matches a persona-scoped nickname the way the participant context renders it.
-   * Scoped by lineage rather than `persona_id` so a forked persona keeps the names
-   * its users configured before the fork.
-   */
+  // Lookup uses persona_lineage_id rather than persona_id so forked personas retain nicknames configured before the
+  // fork.
   async findByPersonaNickname(normalizedNickname: string, personaLineageId: number): Promise<NamedUserMatch[]> {
     const nickname = normalizeLookupValue(normalizedNickname);
     if (!nickname || !isTargetableLineage(personaLineageId)) return [];
@@ -273,13 +263,8 @@ class UserNamingRepository {
     }
   }
 
-  /**
-   * Narrows the accounts worth rebuilding to those whose stored nickname appears
-   * somewhere inside the requested name, which is the only part of a composed label
-   * ("Master Mirri") that survives an unknown affix. Verification belongs to the
-   * caller: the join rules for affixes live in `formatUserName`, and reimplementing
-   * them here would let the two drift apart silently.
-   */
+  // Query narrows only by stored nickname so affix verification stays in formatUserName without duplicating join
+  // rules.
   async findComposedNameCandidates(
     normalizedInput: string,
     personaLineageId: number,

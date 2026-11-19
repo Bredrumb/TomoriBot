@@ -1,19 +1,3 @@
-/**
- * Vertex AI streaming adapter
- *
- * Fork of GoogleStreamAdapter with one key difference: client construction
- * uses Vertex AI (ADC) instead of an API key.
- *
- * Everything else: context assembly, chunk normalisation, function-call
- * extraction, speaker guard, thought signatures, so is identical because
- * Vertex exposes the same Gemini wire format.
- *
- * Key changes from GoogleStreamAdapter:
- *   - startStream() constructs GoogleGenAI with vertexai:true via createVertexClient()
- *   - Provider name is "vertex" instead of "google"
- *   - buildTokenCountPayload() is not supported in v1 (throws)
- */
-
 import { mapWithConcurrency } from "@/utils/async/bounded";
 import {
   BlockedReason,
@@ -65,9 +49,6 @@ const VIDEO_CONTEXT_MAX_INLINE_MB = Math.max(
   Number.parseInt(process.env.VIDEO_CONTEXT_MAX_INLINE_MB ?? "20", 10) || 20,
 );
 
-/**
- * Vertex-specific stream configuration extending the base StreamConfig
- */
 export interface VertexStreamConfig extends StreamConfig {
   safetySettings?: Array<Record<string, unknown>>;
   generationConfig?: Record<string, unknown>;
@@ -80,9 +61,6 @@ export interface VertexStreamAdapterOptions {
   clientFactory?: (apiKey: string) => GoogleGenAI;
 }
 
-/**
- * Raw chunk from Google/Vertex streaming API (same wire format)
- */
 interface VertexStreamChunk {
   text?: string;
   functionCalls?: GoogleFunctionCall[];
@@ -98,12 +76,6 @@ interface VertexStreamChunk {
   error?: unknown;
 }
 
-/**
- * Vertex AI streaming adapter implementation
- *
- * Shares the same speaker-guard, deduplication, and thought-signature
- * logic as GoogleStreamAdapter because the response format is identical.
- */
 export class VertexStreamAdapter extends BaseStreamAdapter {
   private static readonly SPEAKER_GUARD_HOLDBACK_CHARS = 32;
   private static readonly STREAM_TEXT_TAIL_CHARS = 4096;
@@ -112,10 +84,8 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
   private streamedTextTail = "";
   private speakerGuardEnabled = false;
   private speakerGuardAllowedSourceNames: string[] = [];
-  /**
-   * Latest `usageMetadata` seen on a raw Gemini stream chunk (native shape; the
-   * orchestrator normalizes it). Latest-wins matches Gemini's cumulative usage.
-   */
+  // Overwritten per chunk rather than summed because Gemini emits cumulative usageMetadata on stream chunks before
+  // the orchestrator normalizes it.
   private pendingUsage: Record<string, unknown> | undefined;
   protected readonly providerName: string;
   private readonly clientFactory: (apiKey: string) => GoogleGenAI;
@@ -136,14 +106,6 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
       });
   }
 
-  /**
-   * Build a Gemini payload for token counting (or other non-stream requests)
-   * using the exact same context transformation and system-instruction fallback
-   * logic as streaming.
-   *
-   * NOTE: v1 does not support live token counting. This method is provided for
-   * future v2 compatibility and for the validation test call.
-   */
   public async buildTokenCountPayload(
     contextItems: StructuredContextItem[],
     model?: string,
@@ -691,9 +653,6 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
     };
   }
 
-  /**
-   * Process a raw Vertex chunk into normalised format
-   */
   processChunk(chunk: RawStreamChunk): ProcessedChunk {
     const vertexChunk = chunk.data as VertexStreamChunk;
     const thoughts: ThoughtLogEntry[] = [];

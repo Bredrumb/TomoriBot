@@ -39,10 +39,6 @@ const context = {
   },
 } as StreamContext;
 
-/**
- * The real updater with only the send intercepted: the delivery calls nothing else on it, so the
- * recorded calls are exactly what production would have handed to Discord.
- */
 function makeDelivery(onPayload: (payload: StreamSendPayload, textForState: string) => void): StreamMessageDelivery {
   const uiUpdater = new StreamUiUpdater({
     hasStopRequest: () => false,

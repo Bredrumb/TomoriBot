@@ -21,10 +21,6 @@ import { createPersona } from "../../helpers/fixtures";
 
 beforeAll(async () => initializeLocalizer());
 
-/**
- * What the declared producers return: Discord's own option types, whose `components` admit raw API
- * JSON and builders and whose `flags` differ between the create and edit variants.
- */
 interface ProducerComponentsV2Payload {
   components?: BaseMessageOptions["components"];
   flags?: unknown;

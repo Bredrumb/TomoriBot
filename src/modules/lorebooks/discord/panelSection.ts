@@ -45,7 +45,7 @@ import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { localizer } from "@/utils/text/localizer";
 import { groupPersonasByLineage, personaRepresentativeForLineage } from "@/utils/persona/lineage";
 
-/** Three fixed add, import, and export options leave 22 entry slots under Discord's 25-option select cap. */
+// Discord caps select menus at 25 options, so three fixed add, import, and export options leave 22 entry slots.
 export const LOREBOOK_ENTRY_PAGE_SIZE = 22;
 const LOREBOOK_COLLECTION_PAGE_SIZE = 23;
 
@@ -106,7 +106,6 @@ export function parseLorebookSelectiveLogic(raw: string | undefined): 0 | 1 | 2 
   return null;
 }
 
-/** Returns null unless the whole submitted text is a safe integer inside the inclusive range. */
 export function parseLorebookInteger(raw: string, min: number, max: number): number | null {
   const trimmed = raw.trim();
   if (!/^-?\d+$/.test(trimmed)) return null;

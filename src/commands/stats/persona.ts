@@ -20,10 +20,6 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { resolveSelectedPersona } from "@/utils/persona/personaOptionValue";
 import * as statsDashboard from "@/utils/stats/statsDashboard";
 
-/**
- * Configures the /stats persona subcommand: select a persona via autocomplete, then view
- * that persona's usage stats on this server for the chosen timeframe.
- */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("persona")
@@ -50,10 +46,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 
 export const autocomplete = handleServerPersonaAutocomplete;
 
-/**
- * Executes the /stats persona command: validates the selected persona, loads telemetry,
- * and renders the public stats dashboard.
- */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,

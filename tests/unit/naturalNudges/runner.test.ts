@@ -149,7 +149,6 @@ afterEach(() => {
   setSystemTime();
 });
 
-/** The gateway still reports `RECORDED_ID` as the newest message, as it does after that message is deleted. */
 function attemptWithHistory(latest: () => Promise<Message[]>): {
   attempt: IdleNudgeAttempt;
   sent: string[];

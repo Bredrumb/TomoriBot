@@ -37,21 +37,16 @@ export interface PingUserTarget {
   userId: number;
   userDiscId: string;
   displayName: string;
-  /** Planner channels the target can read; a ping in any other would reach someone who cannot answer. */
   channelIds: string[];
-  /** Empty when the target's privacy level or the persona's settings keep memories out of prompts. */
   recentMemories: string[];
-  /** Null when presence is unavailable, private, or the target is not doing anything. */
   activity: string | null;
 }
 
-/** A recent memory or any live short-term memory proves a relationship; activity alone never does. */
 export function isRelationshipEligible(recentMemories: number, stmChannels: number): boolean {
   return recentMemories > 0 || stmChannels > 0;
 }
 
 export interface PingUserScoreInput {
-  /** This member's turns with this persona in this server inside the interaction window. */
   localTurns: number;
   stmChannels: number;
   active: boolean;
@@ -59,10 +54,8 @@ export interface PingUserScoreInput {
   firedByAnyPersona: boolean;
 }
 
-/**
- * Closeness is scored only from this server, because memories carry no server and a pointer persona
- * shares them across every server that installed its preset.
- */
+// Closeness is scored only from server-local signals, because memories carry no server and pointer personas share
+// them across servers.
 export function pingUserTickets(input: PingUserScoreInput): number {
   const score =
     PING_USER_POINTS_PER_TURN * Math.min(input.localTurns, PING_USER_TURN_CAP) +
@@ -73,7 +66,8 @@ export function pingUserTickets(input: PingUserScoreInput): number {
   return Math.max(score, PING_USER_MIN_TICKETS);
 }
 
-/** Presence reaches prompts only at minimal privacy, matching what a normal turn shows about the user. */
+// Presence is restricted to `PrivacyLevel.MINIMAL` so idle nudges never leak more activity data to prompts than a
+// normal turn shows.
 function currentActivity(client: Client, guild: Guild, candidate: PingUserCandidate): string | null {
   if (candidate.privacy_level !== PrivacyLevel.MINIMAL) return null;
   if (!client.options.intents.has(GatewayIntentBits.GuildPresences)) return null;
@@ -119,11 +113,8 @@ function canView(member: GuildMember, channel: GuildTextBasedChannel): boolean {
   return channel.permissionsFor(member)?.has(PermissionFlagsBits.ViewChannel) ?? false;
 }
 
-/**
- * A weighted lottery rather than the closest user, so one close friend does not receive every ping.
- * A winner who left, is a bot, or can read none of the channels is dropped and the lottery redrawn,
- * because the stats that nominated them cannot tell any of that.
- */
+// Targets are drawn by weighted lottery (not argmax) so one friend does not get every ping, redrawing when Discord
+// state disqualifies a winner.
 export async function drawPingUserTarget(args: {
   client: Client;
   guild: Guild;

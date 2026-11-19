@@ -1,44 +1,22 @@
-/**
- * Fake interaction for route and route-dispatch tests.
- *
- * Route suites each grew their own factory with the same surface: a component interaction whose
- * `deferUpdate`/`editReply` a test observes, parameterized by kind, workspace, manager rights, modal
- * field values, and select values. They differed only in which array they recorded into, so this
- * factory returns the recording arrays and accepts the rest as options.
- *
- * The returned object is cast at the call site (`as unknown as ChatInputCommandInteraction`) because
- * discord.js models a class whose constructor is not worth driving here; the type below is the
- * contract the routes actually read.
- */
-
 import type { FakeCall } from "./fakeInteraction";
 import { Collection, type Attachment } from "discord.js";
 
-/** Which component kind the route should think it received. */
 type RouteInteractionKind = "button" | "string-select" | "channel-select" | "modal";
 
-/** One method call the fake recorded, widened with the payload the caller passed. */
 interface RouteInteractionCall extends FakeCall {
-  /** First argument of the call, when the caller passed one. */
   payload?: unknown;
 }
 
-/** Fields the fake guild cache reports for a channel; these routes read only these two. */
 export interface RouteGuildChannel {
   name: string;
   type: number;
 }
 
-/** Fields a raw modal submit reports; `fields.has` answers presence, not emptiness. */
 interface RouteModalFields {
   fields: Map<string, boolean>;
   getTextInputValue: (fieldId: string) => string;
 }
 
-/**
- * The interaction surface the config and personal routes read. Every assertion a route suite makes
- * (`deferred`, `replied`, `edits`, select `values`, modal `fields`) is observable here.
- */
 export interface RouteInteraction {
   id: string;
   customId: string;
@@ -61,11 +39,8 @@ export interface RouteInteraction {
   fields: RouteModalFields;
   deferred: boolean;
   replied: boolean;
-  /** Payloads passed to `editReply`, in call order. */
   edits: unknown[];
-  /** Payloads passed to `reply` and `followUp`, in call order. */
   replies: unknown[];
-  /** Every recorded call in order, for assertions on acknowledgement sequencing. */
   calls: RouteInteractionCall[];
   isButton: () => boolean;
   isStringSelectMenu: () => boolean;
@@ -83,34 +58,21 @@ export interface RouteInteraction {
   webhook: { send: (payload?: unknown) => Promise<unknown> };
 }
 
-/** Options accepted by {@link createRouteInteraction}. */
 export interface RouteInteractionOptions {
-  /** Route custom ID the dispatcher parses. Defaults to a plain button ID. */
   customId?: string;
   kind?: RouteInteractionKind;
-  /** `null` models a DM workspace; the default is a guild workspace. */
+  // `null` selects a DM workspace because omitting `guildId` defaults to a guild workspace.
   guildId?: string | null;
-  /**
-   * Defaults to true. `ManageGuild` is the only permission the fake can grant: every other flag is
-   * denied either way, so a route that checks a second permission needs its own fake.
-   */
+  // This fake grants only `ManageGuild` (defaulting to true) because every other permission flag is denied, so routes
+  // checking another flag need their own fake.
   isManager?: boolean;
-  /** Select values the route reads off `interaction.values`. */
   values?: string[];
   attachmentSizeLimit?: number;
   messageAttachments?: ReadonlyArray<Pick<Attachment, "id" | "name" | "size">>;
   onEditReply?: (payload: unknown) => Promise<unknown>;
-  /** Raw modal field values keyed by field ID. */
   fields?: Record<string, string>;
-  /** Overrides `guild.channels.fetch`, for routes that resolve channels by ID. */
   fetch?: (channelId: string) => Promise<unknown>;
-  /**
-   * Channels the guild cache holds, keyed by channel ID. Routes that resolve a selected channel
-   * (`guild.channels.cache.get`) reject anything else, so a suite testing a confirmed channel
-   * declares it here rather than replacing the whole guild object.
-   */
   channelCache?: ReadonlyMap<string, RouteGuildChannel>;
-  /** Identity fields a suite needs to distinguish; any other key is rejected. */
   overrides?: Partial<Pick<RouteInteraction, "id" | "user">>;
 }
 
@@ -134,22 +96,13 @@ const OPTION_KEYS = new Set<string>([
   "overrides",
 ] satisfies (keyof RouteInteractionOptions)[]);
 
-/** Channel type 0 is `ChannelType.GuildText`, the only kind these routes accept. */
 const GUILD_TEXT = 0;
 
-/**
- * `PermissionsBitField.Flags.ManageGuild`, as the bigint discord.js resolves and as the bare string
- * name some routes compare against instead. Both spellings mean the same permission to production.
- */
+// `32n` is `PermissionsBitField.Flags.ManageGuild` and both bigint and string forms are kept because different routes
+// check either spelling.
 const MANAGE_GUILD_FLAG = 32n;
 const MANAGE_GUILD_NAME = "ManageGuild";
 
-/**
- * Builds a fake interaction for one route dispatch.
- *
- * `deferUpdate` and `deferReply` mark the interaction deferred, and `reply` marks it replied, so a
- * suite can assert acknowledgement ordering without inspecting the call list.
- */
 export function createRouteInteraction(options: RouteInteractionOptions = {}): RouteInteraction {
   for (const key of Object.keys(options)) {
     if (!OPTION_KEYS.has(key)) {
@@ -303,10 +256,6 @@ export function createRouteInteraction(options: RouteInteractionOptions = {}): R
   return interaction;
 }
 
-/**
- * Keeps every interaction a harness builds and exposes their recordings in dispatch order, because
- * several tests dispatch more than once and then read the whole recording.
- */
 export function createInteractionRecorder() {
   const recorded: RouteInteraction[] = [];
   return {

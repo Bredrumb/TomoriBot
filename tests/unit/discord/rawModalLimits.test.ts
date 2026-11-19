@@ -1,12 +1,3 @@
-/**
- * Structural limit tests for the raw modal payloads the `/config` panel sends.
- *
- * Discord validates a modal as a whole: one out-of-range control rejects the entire payload with
- * a 400, so the button appears to do nothing. The builders that map an unbounded collection onto
- * a String Select or Checkbox Group are the ones that can drift past a limit as a workspace grows.
- * These cases drive builders across all runtime locales, roster sizes, and catalog-growth boundaries.
- */
-
 import { beforeAll, describe, expect, it } from "bun:test";
 import type { TomoriState } from "@/types/db/schema";
 import type { RawModalPayload } from "@/utils/discord/ui/configModals";
@@ -47,7 +38,6 @@ const LABEL = 18;
 const RADIO_GROUP = 21;
 const CHECKBOX_GROUP = 22;
 
-/** Server 9, the id-derived nickname, and "only the first entry is a main persona" are this suite's defaults. */
 function makePersona(personaId: number, nickname = `Persona ${personaId}`): TomoriState {
   return createPersona({
     server_id: 9,
@@ -69,7 +59,6 @@ function makeNoticeDefinitions(count: number): ToolNoticeDefinition[] {
   }));
 }
 
-/** Roster sizes spanning both sides of the 25-option ceiling, including its exact boundary. */
 const ROSTER_SIZES = [1, 2, 23, 24, 25, 26, 60, 200];
 
 describe("raw config modal limits", () => {

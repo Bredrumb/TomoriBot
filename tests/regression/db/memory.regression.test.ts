@@ -1,12 +1,3 @@
-/**
- * Regression harness: Memory repositories domain.
- *
- * Covers: ServerMemoryRepository (addServerMemoryByTomori),
- * PersonalMemoryRepository (addPersonalMemoryByTomori, loadPersonalMemoriesForUserLineage),
- * ConditioningMemoryRepository.
- *
- * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md)
- */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import {
   personalMemoryRepository,
@@ -52,12 +43,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Memory — regression", () => {
     expect(hasMemory).toBe(true);
   });
 
-  /**
-   * A count query passes every mocked unit test and still fails in production, which is why the
-   * sibling `PersonalMemoryRepository.memoryCountsByLineage` carries a case here too. The panel
-   * renders this number as authoritative, so an omitted lineage must stay omitted rather than
-   * inviting the caller to substitute a guess.
-   */
   it("memoryCountsByLineage agrees with the scoped loader and omits lineages with no memories", async () => {
     const [alter] = await testSql<Array<{ persona_id: number; persona_lineage_id: string | number }>>`
       INSERT INTO personas (server_id, persona_nickname, is_alter)

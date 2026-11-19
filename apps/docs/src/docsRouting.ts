@@ -9,16 +9,8 @@ import {
   type DocsLocaleId,
 } from "../../../src/constants/docsLocales";
 
-/**
- * Route-level behavior for every docs locale: which locale a content entry belongs to, whether its
- * page exists in another locale, what the head tags should advertise, and which review notice the
- * page carries.
- *
- * Split out of `routeData.ts` because everything here is a pure function of the entry id, the
- * published locale table, and the files on disk under `docs/`. That makes the routing and fallback
- * rules testable without booting Astro, while `routeData.ts` keeps only the Starlight middleware
- * wiring.
- */
+// Pure routing logic is isolated from Astro imports so unit tests can exercise fallback and head rules without
+// booting Astro or Starlight.
 
 interface DocsLinkTag {
   tag: "link";
@@ -30,29 +22,20 @@ interface DocsMetaTag {
   attrs: Record<string, string>;
 }
 
-/** Astro's head entries, narrowed to the two shapes this module produces. */
 export type DocsHeadTag = DocsLinkTag | DocsMetaTag;
 
 const LOCALE_IDS: readonly string[] = DOCS_LOCALES.map((locale) => locale.id);
 
-/** The locale segment at the front of a content entry id, or undefined for an unprefixed id. */
 export function localeFromEntryId(entryId: string): string | undefined {
   const [segment] = entryId.split("/");
   return LOCALE_IDS.includes(segment) ? segment : undefined;
 }
 
-/** Strips the locale segment, giving the id both locales share (`features/knowledge/memory`). */
 export function stripLocaleFromEntryId(entryId: string): string {
   const locale = localeFromEntryId(entryId);
   return locale ? entryId.slice(locale.length).replace(/^\//, "") : entryId;
 }
 
-/**
- * Source filenames that produce an entry id, in the order Starlight would pick them.
- *
- * A directory index has four possible sources, while a normal page is always `<id>.md` or
- * `<id>.mdx`, so the two cases cannot share one filename list.
- */
 export function entryFileCandidates(baseId: string): string[] {
   if (baseId === "index") return ["README.md", "README.mdx", "index.md", "index.mdx"];
   if (baseId.endsWith("/index")) {
@@ -62,7 +45,6 @@ export function entryFileCandidates(baseId: string): string[] {
   return [`${baseId}.md`, `${baseId}.mdx`];
 }
 
-/** Resolves a locale-less entry id to its source file under the docs content root. */
 export function findEntryFile(docsRoot: string, locale: string, baseId: string): string | undefined {
   for (const candidate of entryFileCandidates(baseId)) {
     const filePath = join(docsRoot, locale, candidate);
@@ -71,35 +53,21 @@ export function findEntryFile(docsRoot: string, locale: string, baseId: string):
   return undefined;
 }
 
-/**
- * Whether the locale has a real source file for this entry.
- *
- * This is the guard that keeps a locale-fallback route from being advertised as a translation: a
- * `/ja/x/` route serving English content is a fallback, and telling Google it is the Japanese
- * version competes the same English text against itself.
- */
 function entryExists(docsRoot: string, locale: string, baseId: string): boolean {
   return findEntryFile(docsRoot, locale, baseId) !== undefined;
 }
 
-/** Locales with a real source file for this entry, in the published locale order. */
 export function localesWithEntry(docsRoot: string, baseId: string): DocsLocaleId[] {
   return PUBLISHED_DOCS_LOCALES.filter((locale) => entryExists(docsRoot, locale, baseId));
 }
 
-/** Site-absolute path for an entry id within a locale, matching the directory-format routes. */
 export function entryRoute(locale: string, baseId: string): string {
   const slug = baseId.replace(/(^|\/)index$/, "").replace(/\/+$/, "");
   return `/${locale}/${slug ? `${slug}/` : ""}`;
 }
 
-/**
- * hreflang alternates for an entry.
- *
- * Returns an empty list for a fallback route, because a fallback is not a translation of anything.
- * A locale with no source file for the entry is skipped, so a partially translated tree advertises
- * only the pairs that are genuinely different documents.
- */
+// Fallback routes return no hreflang alternates because they duplicate default locale content rather than serving
+// distinct translations.
 export function buildHreflangAlternates(
   docsRoot: string,
   baseId: string,
@@ -131,27 +99,16 @@ export function buildHreflangAlternates(
   ];
 }
 
-/** Removes every hreflang alternate from a head array, including the ones Starlight emits. */
 export function withoutHreflangAlternates<T extends { tag: string; attrs?: Record<string, unknown> }>(
   head: T[],
 ): T[] {
   return head.filter((tag) => !(tag.tag === "link" && tag.attrs?.rel === "alternate"));
 }
 
-/**
- * Which review notice a page carries.
- *
- * - `none`: the page is not marked `aiGenerated: true`, so it carries no notice.
- * - `translated`: the translated file is marked AI-generated but its English source is not.
- * - `drafts`: substantively unreviewed content, in the locale's own wording.
- */
 export type TranslationNoticeMode = "none" | "translated" | "drafts";
 
-/**
- * Reads the `aiGenerated` frontmatter flag directly instead of through the content layer, because
- * the source locale's flag is a different collection entry and loading it mid-render would add a
- * second content lookup to every translated page.
- */
+// Raw frontmatter is parsed directly because querying the source locale via Astro's content layer would add a second
+// lookup to every translated page.
 export function sourceIsAiGenerated(source: string): boolean {
   const frontmatter = source.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? "";
   return /^aiGenerated:\s*true\s*$/m.test(frontmatter);
@@ -162,7 +119,6 @@ export function resolveTranslationNoticeMode(options: {
   entryId: string;
   locale: string;
   aiGenerated: boolean;
-  /** True when the route serves the default locale's page, so it has no translation of its own. */
   isFallback?: boolean;
 }): TranslationNoticeMode {
   if (!options.aiGenerated) return "none";
@@ -176,13 +132,6 @@ export function resolveTranslationNoticeMode(options: {
   return sourceIsAiGenerated(readFileSync(sourceFile, "utf8")) ? "drafts" : "translated";
 }
 
-/**
- * Derives a plain-text meta description from the first prose paragraph of a Markdown/MDX body.
- *
- * Skips frontmatter-adjacent noise (imports, headings, code fences, asides, images, tables, lists,
- * JSX/HTML blocks) until it finds real prose, then strips inline Markdown syntax and truncates at a
- * word boundary.
- */
 export function deriveDescription(body: string, maxLength: number): string | undefined {
   // Strip HTML comments up front because they can span multiple lines, so the
   // line-based filtering below cannot reliably skip their continuations.

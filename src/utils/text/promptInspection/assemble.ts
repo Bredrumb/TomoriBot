@@ -257,12 +257,6 @@ async function resolveSnapshotAnsweringState(params: {
   }
 }
 
-/**
- * Resolves the tool adapter matching the given provider. Non-OpenAI providers
- * (google/vertex/vertexexpress/anthropic) have dedicated adapters; OpenAI-compatible providers
- * share the openrouter-style adapter via subclasses.
- * Unknown providers fall back to the OpenRouter adapter for OpenAI-compat shape.
- */
 function selectToolAdapter(providerName: string): MCPCapableToolAdapter {
   const adapterFactories: Record<string, () => MCPCapableToolAdapter> = {
     google: getGoogleToolAdapter,
@@ -280,13 +274,6 @@ function selectToolAdapter(providerName: string): MCPCapableToolAdapter {
   return (adapterFactories[providerKey] ?? getOpenrouterToolAdapter)();
 }
 
-/**
- * Mirrors the tool-list assembly that `<Provider>Provider.getTools` does at
- * runtime, including the deliberate-mode per-turn allowlist when it can be
- * reconstructed from the latest visible user message. Returns the provider's
- * native tool JSON (OpenAI function spec for OpenAI-compat, Gemini schema for
- * Google, etc.).
- */
 async function fetchProviderTools(
   persona: TomoriState,
   providerName: string,
@@ -366,10 +353,6 @@ async function fetchProviderTools(
   return adapter.getAllToolsInProviderFormat(builtInTools, persona.server_id, mcpFunctionNames);
 }
 
-/**
- * Picks the persona a prompt inspection targets: the autocomplete choice when one was given, else
- * the main persona. Returns null when a given choice no longer resolves on this server.
- */
 export function resolveInspectedPersona(
   personas: readonly TomoriState[],
   rawPersonaOption: string | null,
@@ -385,12 +368,11 @@ export interface PromptInspectionRequest {
   guild: Guild;
   channel: TextBasedChannel;
   user: User;
-  /** The invoker's row, which unlocks their short-term memory in the built context. */
   userData: UserRow;
   tomoriState: TomoriState;
   personas: TomoriState[];
   selectedPersona: TomoriState;
-  /** Tool schemas are fetched only on request because building them reaches MCP servers. */
+  // Tool schemas are fetched only on request because building them reaches MCP servers.
   includeTools: boolean;
 }
 
@@ -403,7 +385,6 @@ export interface PromptInspection {
   channelName: string;
   presetName: string | null;
   capturedAt: string;
-  /** Media-resolved and truncated to the provider budget, as the provider would receive them. */
   contextItems: StructuredContextItem[];
   toolsData: Array<Record<string, unknown>> | null;
   budget: ContextBudget | null;
@@ -411,13 +392,6 @@ export interface PromptInspection {
   historyPairsDropped: number;
 }
 
-/**
- * Rebuilds the prompt the live pipeline would send for a persona in this channel right now.
- *
- * Mirrors `tomoriChat.ts` and `generationTurn.ts` step for step (model routing, history slicing,
- * participant preparation, tail directives, media resolution, provider truncation), so every
- * consumer reports what the model actually sees. Returns null when the channel has no history.
- */
 export async function assemblePromptInspection(request: PromptInspectionRequest): Promise<PromptInspection | null> {
   const { client, guild, channel: textChannel, user, userData, tomoriState, personas, selectedPersona } = request;
 

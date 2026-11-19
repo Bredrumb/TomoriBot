@@ -6,9 +6,6 @@ import { sendTranslationEmbed } from "../../utils/discord/embedHelper";
 import type { BingResponse, GoogleResponse } from "../../types/misc/translation";
 import { TranslationProvider } from "../../types/discord/embed";
 
-/**
- * Automatically translates Japanese messages to English using multiple providers.
- */
 const handler = async (_client: Client, message: Message): Promise<void> => {
   try {
     // Skip if message has translation flag or is from a bot

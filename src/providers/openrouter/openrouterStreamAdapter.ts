@@ -1,19 +1,3 @@
-/**
- * OpenRouter-specific streaming adapter
- *
- * This adapter implements the StreamProvider interface for OpenRouter's API,
- * which uses OpenAI-compatible streaming format with Server-Sent Events (SSE).
- *
- * Key responsibilities:
- * - Initialize OpenRouter client and configure streaming
- * - Convert context items to OpenAI message format
- * - Handle OpenRouter-specific API responses and errors
- * - Extract function calls from OpenRouter's response format
- * - Convert OpenRouter chunks to normalized ProcessedChunk format
- * - Handle ": OPENROUTER PROCESSING" SSE comments (keepalive)
- * - Handle mid-stream errors with unified error format
- */
-
 import { createHash } from "node:crypto";
 import {
   applyAnthropicCacheBreakpoints,
@@ -95,9 +79,6 @@ import type {
   StreamContext,
 } from "../../types/stream/interfaces";
 
-/**
- * OpenRouter-specific stream configuration extending the base StreamConfig
- */
 export interface OpenrouterStreamConfig extends StreamConfig {
   // OpenRouter uses OpenAI-compatible config, simple structure
   seesImages?: boolean; // Whether the model supports image inputs
@@ -113,9 +94,6 @@ export interface OpenrouterStreamConfig extends StreamConfig {
   logitBias?: Record<string, number>; // OpenAI-style token-ID bias map
 }
 
-/**
- * Raw chunk from OpenRouter's streaming API (OpenAI-compatible format)
- */
 interface OpenrouterStreamChunk {
   id?: string;
   object?: string;
@@ -182,9 +160,6 @@ interface OpenrouterStreamChunk {
     | ProviderError;
 }
 
-/**
- * Accumulated tool call data across streaming chunks
- */
 interface AccumulatedToolCall {
   id?: string;
   type?: string;
@@ -200,17 +175,12 @@ interface AccumulatedToolCall {
 // registered, because the hook may account for the request body this output would expose.
 const OPENROUTER_VERBOSE_FETCH = (process.env.OPENROUTER_VERBOSE_FETCH ?? "false").trim().toLowerCase() === "true";
 
-/**
- * Share of the context window still free after the estimated input that a reply may claim.
- * The remainder absorbs the estimate's error, since a request that overshoots the window is
- * rejected outright rather than trimmed.
- */
+// The 10% margin absorbs token-estimate error because OpenRouter rejects window-overshooting requests outright
+// instead of trimming.
 const OPENROUTER_OUTPUT_SAFETY_FACTOR = 0.9;
 
-/**
- * Floor for the safety cap above, so a nearly full window still leaves a usable reply instead
- * of clamping to a token or two. Applied only when the remaining context can actually fit it.
- */
+// Floor for the output safety cap so a nearly full window still permits a usable reply (when remaining context fits)
+// rather than clamping to a few tokens.
 const OPENROUTER_MIN_OUTPUT_TOKENS = 256;
 
 export class OpenrouterStreamAdapter extends BaseStreamAdapter {
@@ -245,11 +215,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     });
   }
 
-  /**
-   * Build OpenRouter chat messages from structured context.
-   * Exposed so non-streaming callers (for example, token probes) can reuse
-   * the exact same payload conversion path as runtime streaming.
-   */
   public async buildProbeMessages(
     contextItems: StructuredContextItem[],
     seesImages = true,
@@ -279,25 +244,12 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     return supportedParameters.has(param) || aliases.some((alias) => supportedParameters.has(alias));
   }
 
-  /**
-   * Strips image content from messages for fallback requests
-   * Used when auto-routers select models that don't support vision
-   *
-   * Delegates to the shared notice-injecting helper: each affected message
-   * keeps a text notice in place of its removed image blocks so the model
-   * stays aware an image was attached instead of silently losing it.
-   */
   private stripImagesFromMessages(messages: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
     return stripImageBlocksWithNotice(messages);
   }
 
-  /**
-   * Estimate input tokens for context-window safety capping.
-   *
-   * This intentionally ignores inline base64 data-URI payloads (for image_url
-   * parts) because their serialized character length does not map to text token
-   * usage in multimodal models.
-   */
+  // Inline base64 data-URI image payloads are excluded because their serialized length does not map to multimodal
+  // token usage.
   private estimateInputTokensForSafetyCap(messages: Array<Record<string, unknown>>): number {
     const estimatedChars = messages.reduce((total, message) => total + this.estimateValueCharsForSafetyCap(message), 0);
     return Math.ceil(estimatedChars / 4);
@@ -344,7 +296,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     return totalChars;
   }
 
-  /** Reset every mutable field that can be touched before an SSE attempt commits. */
   private resetPerAttemptState(personaSpeakerLabelRegex: RegExp | null): void {
     this.toolCallAccumulator.clear();
     this.reasoningDetailsAccumulator = [];
@@ -365,7 +316,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     };
   }
 
-  /** Text, reasoning, tool-call deltas, and usage are the stream commitment point. */
   private isMeaningfulCommitmentChunk(chunk: OpenrouterStreamChunk): boolean {
     if (chunk.usage) return true;
     const delta = chunk.choices?.[0]?.delta;
@@ -1270,17 +1220,8 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     }
   }
 
-  /**
-   * Strip `<think>...</think>` blocks that leak into `delta.content` (some OpenRouter
-   * backends emit reasoning here instead of `delta.reasoning`). Captured thought text
-   * is appended to the chunk's `delta.reasoning` so `processChunk` surfaces it as a
-   * ThoughtLogEntry rather than visible prose.
-   *
-   * Includes the same two safeguards as the OpenAI-compatible adapter:
-   *   - Stray `</think>` with no opener routes preceding text to thoughts (not content).
-   *   - Persona speaker label (e.g. "Nerine:") at a line boundary acts as an implicit
-   *      `</think>` when the model fails to close cleanly.
-   */
+  // Some backends leak <think> into delta.content, so this routes it to delta.reasoning using stray </think> or
+  // line-start persona labels as implicit closers.
   private stripThinkBlocksFromChunkContent(chunk: OpenrouterStreamChunk): OpenrouterStreamChunk {
     const firstChoice = chunk.choices?.[0];
     const content = firstChoice?.delta?.content;
@@ -1589,10 +1530,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     return Boolean(finishReason);
   }
 
-  /**
-   * Normalize raw OpenRouter streaming data into the expected chunk format
-   * Handles both SDK-style camelCase and raw OpenAI-style snake_case fields.
-   */
   private normalizeOpenrouterChunk(raw: unknown): OpenrouterStreamChunk | null {
     if (!raw || typeof raw !== "object") return null;
 
@@ -1767,9 +1704,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     return normalizedChunk;
   }
 
-  /**
-   * Process a raw OpenRouter chunk into normalized format
-   */
   processChunk(chunk: RawStreamChunk): ProcessedChunk {
     const openrouterChunk = chunk.data as OpenrouterStreamChunk;
 
@@ -2194,11 +2128,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     );
   }
 
-  /**
-   * Map a resolved error code and message to a ProviderError type and retryable flag.
-   * Used by both handleProviderError (thrown exceptions) and processChunk (SSE-injected errors)
-   * so both paths stay in sync.
-   */
   private mapErrorCodeToType(
     finalCode: string,
     finalMessage: string,
@@ -2235,9 +2164,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     return { type: "unknown", retryable: false };
   }
 
-  /**
-   * Handle OpenRouter-specific errors using official error codes
-   */
   handleProviderError(error: unknown): ProviderError {
     const errorMessage = error instanceof Error ? error.message : String(error);
 
@@ -2355,9 +2281,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     };
   }
 
-  /**
-   * Create a user-friendly error description from a ProviderError
-   */
   createErrorDescription(error: ProviderError, locale: string): string | null {
     // Special case: Privacy policy error - use localized message
     if (
@@ -2406,9 +2329,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     return `Error Code ${errorCode}: ${openrouterMessage}`;
   }
 
-  /**
-   * Assemble context items into OpenAI message format
-   */
   private async assembleOpenrouterContext(
     contextItems: StructuredContextItem[],
     currentTurnModelParts: Array<Record<string, unknown>>,
@@ -2878,9 +2798,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     return messages;
   }
 
-  /**
-   * Log full request for debugging (hides base64 image data)
-   */
   private logSanitizedRequest(messages: Array<Record<string, unknown>>): void {
     // Deep clone and sanitize image data
     const sanitized = messages.map((msg) => {

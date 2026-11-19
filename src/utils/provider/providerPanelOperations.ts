@@ -290,7 +290,8 @@ type EditEndpointInput = ProviderPanelOwner & {
   label: string;
   endpointUrl: string;
   authToken: string;
-  /** Undefined when the modal did not offer the option, which leaves the stored value untouched. */
+  // Left undefined when the modal omits this option, so the stored value remains untouched instead of overwriting to
+  // false.
   unloadDuringComfyUi?: boolean;
 };
 
@@ -401,7 +402,8 @@ interface PanelModelContext {
   state: TomoriState | null;
   activeTextId: number | null;
   activeImageId: number | null;
-  /** NovelAI image models live in their own slot, so NovelAI rows are marked against this instead. */
+  // NovelAI image models live in their own slot, so NovelAI rows are marked against this instead of the shared image
+  // slot.
   activeNaiImageId: number | null;
   activeEmbeddingId: number | null;
   activeVideoId: number | null;
@@ -1626,11 +1628,8 @@ async function registerSharedProviderModel(
   return { status: "success", entryId: `provider:${provider}`, codeName };
 }
 
-/**
- * Rejects only a codename the provider's own catalog confirmed it does not serve, so a provider
- * without a lookup, a scope without a saved key, an unreachable catalog, or a failure while
- * preparing the lookup all leave registration unchecked.
- */
+// Fails open unless the provider catalog affirmatively rejects the codename, so missing lookups, missing keys, or
+// fetch errors pass.
 async function isModelRejectedByCatalog(
   input: SaveProviderModelInput,
   capability: "text" | "image",
@@ -2141,14 +2140,8 @@ const defaultActivateEndpointDependencies: ActivateWorkspaceEndpointDependencies
   refresh: (discordId) => invalidateTomoriStateCache(discordId),
 };
 
-/**
- * Activates one speech or transcription endpoint for the workspace.
- *
- * The submitted id is never trusted: `loadEndpoints` is already scoped to this server, so an id
- * belonging to another workspace or to a different capability simply is not in the list and answers
- * `not-found` rather than reaching the write. A changed `api_style` means voices stored against the
- * previous source no longer resolve, which is why the caller must say so in its receipt.
- */
+// Server-scoped loadEndpoints prevents foreign endpoint writes, and sourceChanged flags api_style shifts because
+// stored voices break.
 async function activateWorkspaceEndpoint(
   input: ActivateWorkspaceEndpointInput,
   dependencies: ActivateWorkspaceEndpointDependencies = defaultActivateEndpointDependencies,

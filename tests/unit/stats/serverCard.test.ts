@@ -1,4 +1,3 @@
-/** Unit tests for the portrait Server Leaderboard infographic. */
 import { beforeAll, describe, expect, it } from "bun:test";
 import { renderCardToPng } from "@/utils/stats/cardRenderer";
 import type { ServerCardData } from "@/utils/stats/statsInfographic";

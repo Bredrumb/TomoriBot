@@ -12,21 +12,17 @@ import {
 } from "@/providers/utils/strictChatCompat";
 import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
 
-/** Shared by the `/respond` prefill field and the server prefill modal. */
 export const ASSISTANT_PREFILL_MAX_LENGTH = 2000;
 
-/** `continuation` is text a failed attempt of this turn already posted, so it is model output, not a template. */
+// `continuation` holds already-posted model output from a failed attempt, so callers must not expand it as a
+// template.
 export type PrefillSource = "manual" | "server" | "continuation";
 export type PrefillMode = "native" | "instruction" | "skip";
 
-/**
- * Why an attempt's model cannot continue a trailing assistant turn: `model` when the backend
- * rejects or ignores one outright, `thinking` when it continues only with thinking off, `tools`
- * when the backend rejects a prefill in a request that also offers tools.
- */
 export type PrefillBlocker = "model" | "thinking" | "tools";
 
-/** Tool macros stay unexpanded here: they resolve per provider, and each attempt may differ. */
+// Tool macros in text stay unexpanded here because they resolve per provider and fallback attempts may switch
+// providers.
 export interface TurnPrefill {
   text: string;
   source: PrefillSource;
@@ -40,11 +36,8 @@ interface PrefillCapabilityState {
   config: Pick<TomoriState["config"], "thinking_level" | "tool_use_enabled">;
 }
 
-/**
- * Picks the prefill steering this turn. A `/respond` prefill replaces the server one rather than
- * concatenating, and the server prefill sits out turns whose reply is not the persona answering
- * the conversation (the system prompt is skipped for user impersonation for the same reason).
- */
+// Server prefill skips non-persona turns (just as system prompt skips impersonation), because those replies are not
+// the persona answering chat.
 export function selectTurnPrefillText(
   incoming: Pick<
     ChatIncoming,
@@ -76,16 +69,8 @@ export function selectTurnPrefillText(
   return { text: server, source: "server" };
 }
 
-/**
- * Decides before the request whether the model continues a prefill, so an unlisted model never
- * receives one: there is no rejection to catch. NovelAI is text completion and prefix-completion
- * backends need the trailing turn by contract, so both continue by construction.
- *
- * Gemini emits no thought parts while a prefill is present, so any thinking budget above off or
- * minimal surfaces as visible text after the continuation. The gate reuses the provider's own
- * thinking builder so it cannot drift from what the request actually sends. The tools gate reuses
- * the providers' own tool gate for the same reason.
- */
+// Pre-gated because unlisted models silently ignore prefill and Gemini leaks non-minimal thinking as visible text
+// when a prefill is present.
 export function resolvePrefillBlocker(state: PrefillCapabilityState, forceReason?: boolean): PrefillBlocker | null {
   const { llm } = state;
   if (llm.llm_provider === "novelai") return null;
@@ -103,10 +88,6 @@ export function resolvePrefillBlocker(state: PrefillCapabilityState, forceReason
   return null;
 }
 
-/**
- * A blocked `/respond` prefill or continuation degrades to a written instruction; a blocked server
- * prefill is dropped.
- */
 export function resolvePrefillMode(source: PrefillSource, blocker: PrefillBlocker | null): PrefillMode {
   if (!blocker) return "native";
   return source === "server" ? "skip" : "instruction";
@@ -115,19 +96,8 @@ export function resolvePrefillMode(source: PrefillSource, blocker: PrefillBlocke
 const TRAILING_OWN_MESSAGE_DIRECTIVE =
   "Your own message above is the latest one in the chat and has already been sent. Write your next message without repeating it.";
 
-/**
- * Applies the turn prefill to one attempt's context. Runs per attempt because a fallback model can
- * differ from the primary: a prefill baked into the shared base would 400 when a model that
- * continues one falls back to a model that rejects one.
- *
- * `outputPrefill` is the exact `{bot}: {text}` string the trailing turn carries. The segment
- * processor strips an echo of it, and the prefix-completion adapters only stamp `prefix: true`
- * when the trailing assistant content equals it.
- *
- * A context that still ends on the persona's own delivered message gets a trailing user directive,
- * because no chat backend accepts that turn as intended: Gemini rejects it, DeepSeek rejects it
- * without `prefix: true`, and a backend that continues it splices onto text already in the channel.
- */
+// Must run per attempt because fallback models differ on prefill support, and adapters rely on exact outputPrefill
+// equality for prefix:true and echo stripping.
 export async function applyAssistantPrefill(args: {
   contextItems: StructuredContextItem[];
   prefill: TurnPrefill | null;
@@ -216,10 +186,8 @@ function endsWithNativePrefill(contextItems: StructuredContextItem[], outputPref
   return Boolean(outputPrefill) && trailing?.role === "model" && trailingText === outputPrefill;
 }
 
-/**
- * Adds a request-only item ahead of a native prefill, which must stay the last item so strict
- * backends still treat it as a continuation and `foldPrefillIntoToolHistory` still recognizes it.
- */
+// Native prefill must remain the final context item, so strict backends treat it as a continuation and
+// foldPrefillIntoToolHistory still finds it.
 export function insertBeforeNativePrefill(
   contextItems: StructuredContextItem[],
   outputPrefill: string | undefined,
@@ -230,14 +198,8 @@ export function insertBeforeNativePrefill(
     : [...contextItems, item];
 }
 
-/**
- * Moves a native prefill out of the trailing assistant turn and into the first tool call's
- * assistant turn once a tool continuation begins. Left trailing, the prefill would precede the
- * tool-call turn as a second consecutive assistant turn, which Gemini and other strict-alternation
- * backends reject. Every adapter joins `preToolCallTextParts` with no separator, so the folded turn
- * reads exactly as the model continued it. Returns new arrays because the key-rotation retry reruns
- * the tool loop on the same context, which must still end with the prefill.
- */
+// Must return new arrays so key-rotation retries keep the trailing prefill, because folding avoids consecutive
+// assistant turns that Gemini rejects.
 export function foldPrefillIntoToolHistory(
   contextItems: StructuredContextItem[],
   outputPrefill: string | undefined,

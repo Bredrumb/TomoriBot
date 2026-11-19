@@ -785,10 +785,6 @@ describe("evaluateChatAdmission message-proxy lookup failure", () => {
 describe("evaluateChatAdmission verified proxy follow-ups", () => {
   const channelId = "proxy-follow-up-thread";
 
-  /**
-   * Stubs every read between a PluralKit repost and the queue gate. The host selected PluralKit, and
-   * the identity write succeeds without a local user ID so no bio seed reaches the database.
-   */
   function stubVerifiedPluralKitRepost(args: {
     hostDiscId: string;
     originalMessageId: string;
@@ -841,7 +837,6 @@ describe("evaluateChatAdmission verified proxy follow-ups", () => {
     };
   }
 
-  /** The host's original is still held by its speedbump, as it is while PluralKit reposts it. */
   function holdOriginal(hostDiscId: string, originalMessageId: string) {
     return createMessageProxyExpectation({
       instance: { serviceId: "pluralkit", instanceId: "pluralkit:official", origin: "https://api.pluralkit.me" },

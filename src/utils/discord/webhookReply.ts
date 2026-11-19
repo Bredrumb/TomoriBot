@@ -3,14 +3,8 @@ import { stripBridgePrefix } from "@/utils/bridges";
 import { localizer } from "@/utils/text/localizer";
 import { verifyMessageWebhook, isManagedWebhookMessage } from "@/utils/chat/webhookIdentity";
 
-/**
- * Resolves the author label for a historic message in the reply-context embed.
- *
- * Main personas and alters carry identity through different Discord primitives, so this
- * function has to branch on send mechanism. See
- * `docs/ai/multi-persona.md` → "Identity Resolution for Historic Messages" for the full
- * rationale and the resolution order.
- */
+// Send-mechanism branching is required because main personas and alters encode identity through different Discord
+// primitives.
 export function getReplyContextAuthorName(message: Message, botUserId?: string, botName?: string): string {
   // Webhook-delivered messages: the per-message `username` override captures the
   //    persona identity at send time.

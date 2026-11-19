@@ -29,54 +29,21 @@ export interface VerbatimToolCallFlushResult {
   functionCall: FunctionCall | null;
 }
 
-/**
- * Matches a markdown code-span opener: one-to-three backticks, an optional
- * fence-language word, and trailing whitespace. Used both to *exclude* an
- * opener from emitted prose and to *strip* it before parsing the call body, so
- * a verbatim call works wrapped (`` `tool()` ``, ```` ```json\ntool()\n``` ````)
- * or completely bare.
- */
 const CODE_OPENER_SUFFIX = /`{1,3}[A-Za-z0-9_-]*\s*$/;
 // A fence-language word (e.g. "json") only follows a *triple* backtick + newline;
 // an inline span is just backticks. Matching them separately stops the language
 // token from greedily swallowing the tool name in `` `tool_name(...)` ``.
 const CODE_OPENER_PREFIX = /^\s*(?:```[A-Za-z0-9_-]*\r?\n|`{1,3})\s*/;
-/** Leading code-span closer (whitespace + backtick run) trailing a parsed call. */
 const CODE_CLOSER_PREFIX = /^\s*`{1,3}\s*/;
 
-/**
- * Streaming parser that recovers a single verbatim tool call from model output
- * when native function calling is unavailable (the `verbatim_tool_calling`
- * workaround). Unlike the original whole-message-only matcher, this scanner is
- * deliberately *accommodating*: chat models almost always narrate before they
- * act, and weaker local models routinely drop the requested backtick wrapper.
- *
- * Recovery strategy (mirrors {@link GemmaToolCallParser}'s anchor approach):
- * 1. Scan buffered text for an anchor `<knownToolName>\s*\(`. Only names from
- *    the exposed tool set trigger, so a stray `foo(...)` in prose is ignored.
- * 2. Emit any text *before* the anchor (and any wrapper opener) as visible
- *    prose, then accumulate from the tool name until the parentheses balance
- *    (quote-aware, so `)` inside a JSON string does not close early).
- * 3. Parse the completed `name(...)` body. Invalid args (non-JSON, wrong arity)
- *    are rejected and the raw text is emitted instead, so this parse validation
- *    is the real guard against false positives, so the name anchor can be loose.
- *
- * Prose and the function call are never returned from the same `feed()` call:
- * the stream adapter discards `visibleText` whenever a `functionCall` is
- * present, so prose is always emitted first (fc=null) and the call resolves on
- * a later feed or at {@link flush}.
- */
+// Prose and a functionCall are never returned in the same feed() result because the stream adapter discards
+// visibleText whenever functionCall is set.
 export class VerbatimToolCallParser {
   private readonly toolSpecs: Map<string, VerbatimToolSpec>;
   private readonly anchorRegex: RegExp | null;
   private readonly toolNames: string[];
   private readonly maxBufferChars: number;
   private buffer = "";
-  /**
-   * `scanning`: searching buffered text for a tool-name anchor.
-   * `accumulating`: anchor found; buffer starts at the (optionally wrapped)
-   * tool name and we await the call's balancing close paren.
-   */
   private mode: "scanning" | "accumulating" = "scanning";
 
   constructor(options: VerbatimToolCallParserOptions) {
@@ -129,12 +96,6 @@ export class VerbatimToolCallParser {
     this.mode = "scanning";
   }
 
-  /**
-   * Search the buffer for the earliest tool-name anchor. Text (and any wrapper
-   * opener) before it is emitted as prose; the rest transitions to
-   * accumulation. When no prose precedes the anchor, the call is parsed
-   * immediately so a single-chunk call resolves without an extra round-trip.
-   */
   private scanForAnchor(): VerbatimToolCallFeedResult {
     const regex = this.anchorRegex as RegExp;
     regex.lastIndex = 0;
@@ -167,11 +128,6 @@ export class VerbatimToolCallParser {
     return { visibleText, functionCall: null };
   }
 
-  /**
-   * In accumulation mode the buffer starts at the (optionally wrapped) tool
-   * name. Strip any opener, find the balanced close paren, and parse. Returns
-   * an empty result while the call is still streaming in.
-   */
   private tryCompleteCall(): VerbatimToolCallFeedResult {
     const opener = this.buffer.match(CODE_OPENER_PREFIX)?.[0] ?? "";
     const afterOpener = this.buffer.slice(opener.length);
@@ -202,11 +158,6 @@ export class VerbatimToolCallParser {
     return { visibleText: "", functionCall };
   }
 
-  /**
-   * Returns the longest buffer suffix that must be withheld from emission
-   * because it could still grow into a tool-call anchor: a partial tool name,
-   * optionally preceded by a wrapper opener (backticks + fence language).
-   */
   private computeHoldback(buffer: string): string {
     // Longest suffix that is a prefix of some exposed tool name. The full
     //    name is included (len up to name.length): a complete name whose "("
@@ -244,7 +195,6 @@ export class VerbatimToolCallParser {
     return opener + namePart;
   }
 
-  /** Emit the entire buffer as visible text and return to scanning. */
   private drainBuffer(): VerbatimToolCallFeedResult {
     const visibleText = this.buffer;
     this.buffer = "";
@@ -332,24 +282,12 @@ function buildToolSpecMap(tools: Array<Record<string, unknown>>): Map<string, Ve
   return specs;
 }
 
-/**
- * Ceiling on the text this parser holds while it waits for a tool call to resolve.
- *
- * A call that never completes would otherwise buffer a whole runaway reply, so past this
- * length the held text is emitted as visible prose and the call is abandoned.
- */
 const VERBATIM_TOOL_CALL_MAX_BUFFER_CHARS = 8192;
 
 export function getVerbatimToolCallMaxBufferChars(): number {
   return VERBATIM_TOOL_CALL_MAX_BUFFER_CHARS;
 }
 
-/**
- * Builds the anchor regex `\b(name1|name2|...)\s*\(` from the exposed tool
- * names. Names are sorted longest-first so alternation prefers the most
- * specific match, and regex-escaped defensively even though tool names are
- * restricted to identifier characters. Returns null when there are no tools.
- */
 function buildAnchorRegex(names: string[]): RegExp | null {
   if (names.length === 0) {
     return null;
@@ -365,12 +303,6 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/**
- * Returns the index of the parenthesis that balances the one at `openParenIndex`,
- * or -1 if the closing parenthesis has not arrived yet. Parentheses inside
- * double-quoted JSON strings are ignored so `generate_image({"prompt":"a (cat)"})`
- * does not close early; backslash escapes inside strings are skipped.
- */
 function findBalancedCallEnd(text: string, openParenIndex: number): number {
   let depth = 0;
   let inString = false;

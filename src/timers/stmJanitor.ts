@@ -1,17 +1,3 @@
-/**
- * STM Janitor
- *
- * Periodically purges durable `short_term_memories` rows whose `updated_at`
- * timestamp is older than `STM_JANITOR_RETENTION_DAYS` (default 90 days).
- * This prevents unbounded table growth from abandoned channels while leaving
- * recently-touched rows fully intact. Each run also deletes expired and consumed
- * `oauth_states` rows, which are useless once their sign-in has finished or timed out.
- *
- * The janitor is intentionally lightweight: one DELETE per table per run, triggered by
- * a setInterval on the existing timer infrastructure. It does NOT touch the
- * in-process cache: those entries expire via the normal TTL path.
- */
-
 import { oauthStateRepository } from "@/utils/db/repositories/OAuthStateRepository";
 import { shortTermMemoryRepository } from "@/utils/db/repositories/ShortTermMemoryRepository";
 import { log } from "@/utils/misc/logger";
@@ -19,15 +5,10 @@ import { isPrimaryProcess } from "@/utils/cluster/shardLeases";
 
 const STM_JANITOR_RETENTION_DAYS = Number.parseInt(process.env.STM_JANITOR_RETENTION_DAYS || "90", 10);
 
-/** Default run interval: once per day. */
 const DEFAULT_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 let intervalId: NodeJS.Timeout | null = null;
 
-/**
- * Runs one janitor cycle, logging the outcome.
- * Errors are caught so a failed purge never kills the interval.
- */
 async function tick(): Promise<void> {
   if (!isPrimaryProcess()) return;
   try {
@@ -49,12 +30,6 @@ async function tick(): Promise<void> {
   }
 }
 
-/**
- * Starts the STM janitor interval. Safe to call multiple times: subsequent
- * calls are no-ops if already running.
- *
- * @param intervalMs - Optional override; defaults to once per day.
- */
 export function initializeStmJanitor(intervalMs?: number): void {
   if (intervalId !== null) {
     log.warn("[STM janitor] Already initialized");

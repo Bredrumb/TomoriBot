@@ -10,11 +10,8 @@ import {
 } from "./textUtils";
 import type { DeclarationSite, Fallback, ScanResult, SourceFile } from "./types";
 
-/**
- * Scans a POSIX shell script. A name the script assigns itself is a script variable, so it counts
- * as an environment read only through a default operator (`NAME="${NAME:-value}"`), which is the
- * idiom for an overridable setting. Single-quoted text is skipped because the shell never expands it.
- */
+// Single-quoted text is blanked because shell never expands it, and assigned names need a default operator
+// (${NAME:-v}) to count as overridable env reads.
 export function scanShell(file: SourceFile): ScanResult {
   const result = emptyScanResult();
   const text = blankHashComments(file.text, { tripleQuotes: false, hashNeedsSpace: true }).replace(
@@ -49,7 +46,6 @@ export function scanShell(file: SourceFile): ScanResult {
   return result;
 }
 
-/** Scans `$env:NAME` reads, including the `if ($env:X) { $env:X } else { "default" }` idiom. */
 export function scanPowerShell(file: SourceFile): ScanResult {
   const result = emptyScanResult();
   const role = roleForPath(file.path, "powershell");
@@ -103,10 +99,6 @@ export function scanPowerShell(file: SourceFile): ScanResult {
   return result;
 }
 
-/**
- * Scans `ENV` and `ARG` declarations plus `$NAME` expansions in every other instruction.
- * Continuation lines are joined first so a multi-line `RUN` reports the instruction's first line.
- */
 export function scanDockerfile(file: SourceFile): ScanResult {
   const result = emptyScanResult();
   const lines = file.text.split(/\r?\n/);

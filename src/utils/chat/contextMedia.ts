@@ -314,7 +314,8 @@ export function appendComponentMediaFromMessage(
   return { imageCount, videoCount };
 }
 
-/** Anything that is not image, video, or audio media falls to `read_file`, which rejects what it cannot parse. */
+// All non-media files intentionally pass as document attachments instead of using a MIME allowlist, because read_file
+// rejects unparseable formats itself.
 function isDocumentAttachment(attachment: Attachment): boolean {
   const effectiveContentType = getEffectiveAttachmentContentType(attachment);
   return (
@@ -363,14 +364,6 @@ type ForwardedMessageSnapshot = {
   member: Message["member"] | null;
 };
 
-/**
- * Render a forwarded message into context text and harvest its media.
- *
- * Resolves nested forwards first (see {@link resolveForwardChain}), so a forward of a
- * forward still yields the original's text and attachments instead of an empty block.
- *
- * @param args - Wrapper message, in-progress context content, and media collectors
- */
 export async function buildForwardContext(args: {
   message: Message;
   content: string;

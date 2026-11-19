@@ -16,10 +16,6 @@ import { MEDIA_GENERATION_TOOL_NAMES } from "@/utils/tools/deliberateToolMode";
 export const configureCommand = (command: SlashCommandBuilder) =>
   command.setName("kill").setDescription(localizer("en-US", "commands.kill.description"));
 
-/**
- * Execute the kill command for this channel.
- * Stops the active stream if one exists and clears any queued responses.
- */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,

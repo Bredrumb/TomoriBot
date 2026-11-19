@@ -19,9 +19,6 @@ export const ATTRIBUTE_TRUNCATE_LENGTH = 200; // Max chars per attribute snippet
 export const DIALOGUE_TRUNCATE_LENGTH = 140; // Max chars per sample dialogue side
 export const MAX_PROMPT_PREVIEW = 3800; // Max chars shown for system/persona prompts
 
-/**
- * Formats a fenced code-block preview for a prompt, guaranteeing the output stays within 1,024 codepoints.
- */
 export function formatPromptPreview(rawText: string, locale: string): string {
   const neutralized = neutralizeFenceRuns(rawText);
   const notice = localizer(locale, "commands.status.field_preview_clipped");
@@ -39,9 +36,6 @@ export function formatPromptPreview(rawText: string, locale: string): string {
   return `\`\`\`\n${clipped}\n\`\`\`\n${notice}`;
 }
 
-/**
- * Returns a user-friendly label for a privacy level.
- */
 export function getPrivacyLevelLabel(locale: string, level: PrivacyLevel): string {
   switch (level) {
     case PrivacyLevel.MINIMAL:
@@ -55,10 +49,6 @@ export function getPrivacyLevelLabel(locale: string, level: PrivacyLevel): strin
   }
 }
 
-/**
- * Returns a localized label for a CooldownType value.
- * Reuses the choice labels defined in commands.server.cooldown.
- */
 export function getCooldownTypeLabel(locale: string, type: CooldownType): string {
   switch (type) {
     case CooldownType.OFF:
@@ -100,12 +90,6 @@ export function formatOmittedSamplingParams(
   return omittedParams.map((param) => `\`${localizer(locale, SUPPORTED_PARAM_STATUS_FIELD_KEYS[param])}\``).join(", ");
 }
 
-/**
- * Clips the list and appends a clipped notice when the total formatted length exceeds maxTotalLength.
- * @param truncateLength - Max chars per item before truncation
- * @param maxTotalLength - Max total chars for the entire list before clipping
- * @returns Localized "None" if empty
- */
 export function formatNumberedList(
   items: string[],
   locale: string,
@@ -130,12 +114,6 @@ export function formatNumberedList(
   return `${truncateDiscordText(fullText, budget)}\n${notice}`;
 }
 
-/**
- * Clips the list and appends a clipped notice when the total formatted length exceeds maxTotalLength.
- * @param truncateLength - Max chars per item before truncation
- * @param maxTotalLength - Max total chars for the entire list before clipping
- * @returns Localized "None" if empty
- */
 export function formatBulletList(
   items: string[],
   locale: string,
@@ -160,13 +138,6 @@ export function formatBulletList(
   return `${truncateDiscordText(fullText, budget)}\n${notice}`;
 }
 
-/**
- * Formats sample dialogue pairs as a numbered list with truncation on each side.
- * If the total formatted length exceeds maxTotalLength, clips the list and appends a clipped notice.
- * @param truncateLength - Max chars per dialogue side before truncation
- * @param maxTotalLength - Max total chars for the entire list before clipping
- * @returns Formatted list, or localized "None" if empty
- */
 export function formatSampleDialogues(
   dialoguesIn: string[],
   dialoguesOut: string[],
@@ -225,11 +196,7 @@ export function formatFallbackChain(
     .join("\n");
 }
 
-/**
- * Formats the list of server or user custom endpoints as a numbered list.
- * URL is never shown per privacy rules; shows label, capability, api_style, and auth status.
- * @returns Formatted list, or localized "None" if empty
- */
+// Endpoint URLs are omitted from status output because custom endpoint addresses are treated as private.
 export function formatCustomEndpoints(endpoints: CustomEndpointRow[], locale: string): string {
   if (endpoints.length === 0) {
     return localizer(locale, "commands.choices.none");

@@ -34,10 +34,8 @@ interface PersonaRow {
 }
 
 interface PersonaManifestEntry {
-  /** Import-compatible file: upload this via /persona import. */
   filename: string;
   format: "png" | "json";
-  /** Companion file with extras (meta + memories) not consumed by /persona import. */
   meta_filename: string;
   nickname: string;
   persona_id: number;
@@ -59,7 +57,6 @@ interface BundleManifest {
   servers: ServerManifest[];
 }
 
-/** Retrieve all registered servers. */
 async function getAllServers(): Promise<ServerRow[]> {
   return await sql<ServerRow[]>`
     SELECT server_id, server_disc_id
@@ -68,7 +65,6 @@ async function getAllServers(): Promise<ServerRow[]> {
   `;
 }
 
-/** Retrieve all personas (main first, then alters) for a server. */
 async function getPersonasForServer(serverId: number): Promise<PersonaRow[]> {
   return await sql<PersonaRow[]>`
     SELECT
@@ -86,7 +82,6 @@ async function getPersonasForServer(serverId: number): Promise<PersonaRow[]> {
   `;
 }
 
-/** Retrieve server-scoped memories for a persona lineage. */
 async function getMemoriesForPersona(serverId: number, lineageId: number): Promise<string[]> {
   const rows = await sql<{ content: string }[]>`
     SELECT content

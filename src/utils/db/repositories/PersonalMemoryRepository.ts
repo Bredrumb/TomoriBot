@@ -1,15 +1,6 @@
 import { memoryDecayRepository, type MemorySaveResult } from "@/utils/db/repositories/MemoryDecayRepository";
 import { MEMORY_DORMANT_DAYS, isMemoryDecayEnabled } from "@/utils/memory/memoryDecay";
 import { isRagAvailable } from "@/utils/db/ragAvailability";
-/**
- * PersonalMemoryRepository: manages the `personal_memories` table.
- *
- * Personal memories are long-term facts Tomori learns about a specific user,
- * scoped to a persona lineage (or lineage 0 for global cross-persona memories).
- *
- * Export contract: toExportShape / fromExportShape are required by IRepository
- * and consumed by the Phase 6 (#16.7) export pipeline composition.
- */
 import type { ErrorContext, PersonalMemoryRow } from "@/types/db/schema";
 import { personalMemorySchema } from "@/types/db/schema";
 import { sql } from "@/utils/db/client";
@@ -17,14 +8,12 @@ import { type MemoryValidationResult, getMemoryLimits, validateMemoryContent } f
 import { log } from "@/utils/misc/logger";
 import type { IRepository } from "./IRepository";
 
-/** Portable personal memory export shape (expanded in Phase 6 #16.7). */
 type PersonalMemoryExportShape = {
   user_disc_id: string;
   memories: Array<{ content: string; tags: string[]; persona_lineage_id: number }>;
 };
 
 class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape> {
-  /** Returns validated newest-first rows with decay inputs, including lineage zero when requested. */
   async loadForUserLineage(
     userId: number,
     personaLineageId: number,
@@ -68,15 +57,8 @@ class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape>
     }
   }
 
-  /**
-   * Personal memory counts per persona lineage, for the `/personal memories` persona selector.
-   *
-   * Grouped rather than one count per persona: the selector renders up to 25 lineages, and the
-   * sibling eligibility query above exists for the same reason.
-   *
-   * Lineage `0` is excluded to match `loadForUserLineage(userId, lineageId, false)`, so a count
-   * always equals what selecting that persona will list.
-   */
+  // Lineage 0 is excluded so counts match loadForUserLineage with includeGlobalMemories false, and grouping fits the
+  // 25-option Discord selector.
   async memoryCountsByLineage(userId: number): Promise<Map<number, number>> {
     try {
       const rows = await sql<Array<{ persona_lineage_id: number | string; count: string | number }>>`
@@ -93,18 +75,8 @@ class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape>
     }
   }
 
-  /**
-   * Destination candidates for a personal memory import: every non-zero lineage holding a memory, with the
-   * nickname the account most recently used for that lineage.
-   *
-   * The nickname join is deliberately unscoped by server. A personal lineage is account-global and may match
-   * personas in workspaces the account has left, so there is no single authoritative server to scope to; the label
-   * is untrusted display data and nothing keys off it. Lineage `0` is excluded because it is not a persona: the
-   * caller offers it as its own account-wide destination.
-   *
-   * @param userId - Internal user DB ID
-   * @returns Destination lineages in ascending order, each with a nickname or null when no persona row matches.
-   */
+  // The nickname join stays unscoped by server because lineages are account-global untrusted display labels, and
+  // callers offer lineage 0 separately.
   async destinationLineages(userId: number): Promise<Array<{ lineageId: number; nickname: string | null }>> {
     try {
       const rows = await sql<Array<{ persona_lineage_id: number | string; persona_nickname: string | null }>>`
@@ -131,12 +103,6 @@ class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape>
     }
   }
 
-  /**
-   * Returns the total count of personal memories for a user across all personas and global scope.
-   *
-   * @param userId - Internal user DB ID
-   * @returns Total count of personal memories
-   */
   async countAllForUser(userId: number): Promise<number> {
     try {
       const rows = await sql<Array<{ count: string | number }>>`
@@ -151,7 +117,6 @@ class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape>
     }
   }
 
-  /** Edits preserve decay state and remove every vector family atomically on content changes when optional vector storage exists. */
   async edit(
     personalMemoryId: number,
     content: string,
@@ -199,15 +164,6 @@ class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape>
     }
   }
 
-  /**
-   * Delete a personal memory scoped to user + persona lineage.
-   * Used by the updateLongTermMemoryTool function call handler.
-   *
-   * @param memoryId         - Primary key of the personal memory
-   * @param userId           - Internal user DB ID
-   * @param personaLineageId - Persona lineage scope guard; lineage 0 also matches
-   * @returns Row with personal_memory_id and content, or null when not found
-   */
   async removeByIdForUserAndLineage(
     memoryId: number,
     userId: number,
@@ -231,7 +187,6 @@ class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape>
       : null;
   }
 
-  /** User and lineage guarded edits preserve decay state and remove every vector family atomically when content changes. */
   async updateByIdForUserAndLineage(
     memoryId: number,
     content: string,
@@ -269,17 +224,6 @@ class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape>
     });
   }
 
-  /**
-   * Batch-inserts multiple personal memories for a user in a single transaction.
-   * All rows share the same userId, personaLineageId, and tags.
-   * Rolls back all inserts if any row fails (atomicity guarantee).
-   *
-   * @param userId           - Internal user DB ID
-   * @param personaLineageId - Persona lineage scope for all memories
-   * @param memories         - Array of content strings to insert
-   * @param tags             - Optional classification tags applied to all memories
-   * @returns true on full success, false if the transaction was rolled back
-   */
   async addBatch(
     userId: number,
     personaLineageId: number,
@@ -318,17 +262,8 @@ class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape>
     }
   }
 
-  /**
-   * Inserts a new personal memory for a user.
-   * Personal memories have no associated server-level cache to invalidate;
-   * they are loaded fresh per context build via loadForUserLineage.
-   *
-   * @param userId           - Internal user DB ID
-   * @param personaLineageId - Persona lineage this memory belongs to
-   * @param content          - Memory content string
-   * @param tags             - Optional classification tags
-   * @returns Inserted PersonalMemoryRow or null on failure
-   */
+  // Personal memories skip cache invalidation on write because they have no server-level cache and load fresh per
+  // context build.
   async add(
     userId: number,
     personaLineageId: number,
@@ -409,14 +344,6 @@ class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape>
     }
   }
 
-  /**
-   * Check if a user has reached their personal memory limit.
-   *
-   * @param userId              - Internal user DB ID
-   * @param personaLineageId    - Persona lineage scope (0 = global)
-   * @param includeGlobalMemories - Whether to count lineage-0 memories too
-   * @returns MemoryValidationResult indicating whether the limit is exceeded
-   */
   async checkPersonalMemoryLimit(
     userId: number,
     personaLineageId = 0,
@@ -461,24 +388,19 @@ class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape>
     }
   }
 
-  /**
-   * Personal memory export is handled by ImportExportRepository.
-   * Stub satisfies IRepository contract pending Phase 6 #16.7.
-   *
-   * @param _ownerId - Discord user snowflake (unused until Phase 6)
-   */
+  // This stub returns null because ImportExportRepository owns personal memory export and this method only satisfies
+  // IRepository.
   async toExportShape(_ownerId: string | number): Promise<PersonalMemoryExportShape | null> {
     return null;
   }
 
-  /**
-   * Personal memory import is handled by ImportExportRepository.
-   * Stub satisfies IRepository contract pending Phase 6 #16.7.
-   */
+  // This stub returns false because ImportExportRepository owns personal memory import and this method only satisfies
+  // IRepository.
   async fromExportShape(_ownerId: string | number, _data: PersonalMemoryExportShape): Promise<boolean> {
     return false;
   }
-  /** Serializes model saves on the owner row, rechecks the cap including shared personal rows, and atomically evicts only the least reinforced dormant unprotected memory when the global switch is on. */
+  // Owner row locking via FOR UPDATE is required because concurrent model saves must serialize before rechecking the
+  // cap and evicting a memory.
   async addWithEviction(
     userId: number,
     personaLineageId: number,
@@ -520,5 +442,4 @@ class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape>
   }
 }
 
-/** Singleton instance: import this in callers. */
 export const personalMemoryRepository = new PersonalMemoryRepository();

@@ -1,13 +1,6 @@
 import type { HumanizerSettings } from "@/constants/humanizer";
 import type { ProviderUsageContext } from "@/utils/provider/providerUsage";
 import type { PersonaDeliveryMode, PersonaDeliveryReceipt } from "@/utils/discord/webhook/personaPost";
-/**
- * Streaming interfaces for modular LLM provider architecture
- *
- * This module defines the core interfaces that enable separation of concerns between:
- * - Universal Discord integration logic (StreamOrchestrator)
- * - Provider-specific streaming logic (StreamProvider implementations)
- */
 
 import type {
   BaseGuildTextChannel,
@@ -33,17 +26,14 @@ import type { DeliveredStreamMessage } from "../tool/interfaces";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
 import { recordProviderErrorStat } from "@/utils/provider/providerErrorMetrics";
 
-/**
- * Normalized chunk format that all providers convert their raw chunks to
- * This provides a consistent interface for the StreamOrchestrator
- */
 export interface ProcessedChunk {
   type: "text" | "function_call" | "error" | "done";
   content?: string;
   functionCall?: FunctionCall;
   error?: ProviderError;
   thoughts?: ThoughtLogEntry[];
-  /** OpenRouter-only: the upstream backend that served this chunk (e.g. "minimax-cn"). */
+  // OpenRouter-only: identifies the upstream backend (such as "minimax-cn") because only OpenRouter routes across
+  // third-party backends.
   servingProvider?: string;
   metadata?: Record<string, unknown>;
 }
@@ -58,10 +48,6 @@ export interface ProviderError {
   userMessage?: string; // User-friendly error message from provider
 }
 
-/**
- * Configuration for streaming operations
- * Extends the base ProviderConfig with streaming-specific options
- */
 export interface StreamConfig extends ProviderConfig {
   maxMessageLength: number;
   flushBufferSize: number;
@@ -80,10 +66,6 @@ export interface StreamConfig extends ProviderConfig {
   isManuallyTriggered?: boolean;
 }
 
-/**
- * Context passed to streaming operations
- * Contains all the Discord and application context needed for streaming
- */
 export interface StreamContext {
   videoRequestDiagnostics?: {
     model: string;
@@ -138,17 +120,19 @@ export interface StreamContext {
     functionCall: FunctionCall;
     functionResponse: Record<string, unknown>;
     imageMetadata?: FunctionResponseImageMetadata;
-    /** Text parts the model generated before the function call (prevents repetition on continuation) */
+    // Preserved across tool-call turns because re-sending pre-tool-call text parts prevents the model from repeating
+    // them on continuation.
     preToolCallTextParts?: Array<Record<string, unknown>>;
   }>;
 
   provider: string;
   locale: string;
   suppressUserErrors?: boolean; // Suppress user-facing error embeds during retries or non-deliberate chat turns
-  /** Whose credentials answered this turn; selects server- or personal-scoped provider error tips. */
+  // Identifies whose credentials answered the turn so error formatting selects server- or personal-scoped provider
+  // tips.
   textCredentialSource?: "server" | "personal";
   rotationKeyRetriesUsed?: boolean; // True if one or more rotation-key retries were attempted
-  /** The generation turn will retry an interrupted stream on the same key, so its error stays unsurfaced. */
+  // Suppresses surfacing stream interruption errors because the generation turn will retry on the same key.
   retryStreamInterruption?: boolean;
   replyNoticeState?: { attempted: boolean; sent: boolean }; // Tracks the standalone alter reply notice across tool-call stream retries
 
@@ -164,10 +148,10 @@ export interface StreamContext {
     handle: string;
     userId: string;
   }>;
-  /** When set, delivered text may ping only these users: no roles, no everyone, nobody else. */
+  // When set, delivered text may ping only these user IDs: no roles, no everyone mentions, and nobody else.
   mentionableUserIds?: readonly string[];
 
-  /** The attempt's `{bot}: {text}` prefill: stripped when the model echoes it, never shown. */
+  // Holds the attempt's `{bot}: {text}` prefill so echoed prefixes are stripped and never shown.
   outputPrefill?: string;
   triggerMessageId?: string;
 
@@ -185,7 +169,7 @@ export interface StreamContext {
 
   messageIdMap?: MessageIdMap;
 
-  /** Internal `users` FK of the turn's triggerer; scopes provider-failure telemetry. */
+  // Internal `users` table foreign key (not a Discord ID) because provider-failure telemetry scopes by database user.
   triggererUserId?: number;
   triggererDiscId?: string;
 
@@ -194,50 +178,22 @@ export interface StreamContext {
   deliveredMessageRefs?: DeliveredStreamMessage[];
 }
 
-/**
- * Raw chunk from provider's streaming API
- * This is the provider-specific format that gets converted to ProcessedChunk
- */
 export interface RawStreamChunk {
   data: unknown;
   provider: string;
   metadata?: Record<string, unknown>;
 }
 
-/**
- * Interface that provider-specific stream adapters must implement
- * This separates provider API logic from universal Discord logic
- */
 export interface StreamProvider {
-  /**
-   * Initialize and start the streaming process with the provider's API
-   * @param config - Provider-specific configuration
-   */
   startStream(config: StreamConfig, context: StreamContext): AsyncGenerator<RawStreamChunk, void, unknown>;
 
-  /**
-   * Convert a raw provider chunk into normalized ProcessedChunk format
-   * @param chunk - Raw chunk from the provider's streaming API
-   */
   processChunk(chunk: RawStreamChunk): ProcessedChunk;
 
-  /**
-   * Convert provider-specific errors into normalized ProviderError format
-   * @param error - Raw error from the provider's API
-   * @returns Normalized error with consistent structure
-   */
   handleProviderError(error: unknown): ProviderError;
 
-  /**
-   * Create provider-specific error description for display in embeds
-   * @param error - The normalized provider error
-   * @returns Provider-specific error description string or null for fallback
-   */
+  // Sentinel return: `null` instructs the caller to fall back to the default embed error description.
   createErrorDescription(error: ProviderError, locale: string): string | null;
 
-  /**
-   * Get provider-specific information for logging and debugging
-   */
   getProviderInfo(): {
     name: string;
     version: string;
@@ -246,9 +202,6 @@ export interface StreamProvider {
   };
 }
 
-/**
- * Static identity and capability metadata shared by all stream adapters.
- */
 export interface StreamAdapterInfo {
   name: string;
   version: string;
@@ -256,11 +209,6 @@ export interface StreamAdapterInfo {
   supportsFunctionCalling: boolean;
 }
 
-/**
- * Provider subclasses still own request construction, provider-native parsing,
- * and error normalization. The base class centralizes adapter lifecycle identity
- * and small lifecycle hooks/wrappers used when handing work to StreamOrchestrator.
- */
 export abstract class BaseStreamAdapter implements StreamProvider {
   protected constructor(private readonly adapterInfo: StreamAdapterInfo) {}
 
@@ -274,13 +222,8 @@ export abstract class BaseStreamAdapter implements StreamProvider {
 
   protected onRawChunk(_chunk: RawStreamChunk): void {}
 
-  /**
-   * Fired once per terminal provider failure, before the error chunk is yielded.
-   *
-   * The base implementation records the `provider_error` counter, which is the only aggregate
-   * record of provider failures that exists: `error_logs` is dead by decision, so a subclass that
-   * overrides this must call `super.onProviderError(...)` or that provider goes dark.
-   */
+  // Subclasses overriding this hook must call `super.onProviderError()` before yielding the error chunk because
+  // `provider_error` is the only failure metric.
   protected onProviderError(_error: unknown, providerError: ProviderError, context?: StreamContext): void {
     recordProviderErrorStat(this.adapterInfo.name, providerError, context);
   }
@@ -316,10 +259,8 @@ export abstract class BaseStreamAdapter implements StreamProvider {
     return chunk;
   }
 
-  /**
-   * @param context - The failing stream's context; omit only where none is in scope. Without it
-   *                  the failure cannot be scoped to a server and goes unrecorded.
-   */
+  // Passing `context` is required whenever one is in scope because omitting it leaves the failure unscoped and
+  // unrecorded.
   protected createProviderErrorChunk(
     error: unknown,
     context?: StreamContext,
@@ -341,17 +282,6 @@ export abstract class BaseStreamAdapter implements StreamProvider {
   }
 }
 
-/**
- * Interface for the universal Discord streaming orchestrator
- * This handles all Discord-specific logic that's common across providers
- */
 export interface StreamOrchestrator {
-  /**
-   * Stream an LLM response to Discord using a provider-specific adapter
-   * This is the main entry point that replaces the massive streamGeminiToDiscord function
-   *
-   * @param provider - Provider-specific streaming adapter
-   * @param config - Streaming configuration
-   */
   streamToDiscord(provider: StreamProvider, config: StreamConfig, context: StreamContext): Promise<StreamResult>;
 }

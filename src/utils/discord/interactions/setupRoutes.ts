@@ -125,7 +125,6 @@ function parseNumCtxField(value: string | undefined): number | null {
 export const SETUP_ROUTE_NAMESPACE = "setup";
 export const SETUP_ROUTE_VERSION = "v1";
 
-/** What a workspace's current rows say about whether setup may start. */
 type SetupHealthStatus = "ready" | "already-setup" | "broken";
 
 export type SetupWizardAction =
@@ -259,10 +258,6 @@ export function buildSetupFinishRouteId(input: { locale: string; nonce: string }
   return buildSetupRouteId({ action: "finish", locale: input.locale, nonce: input.nonce });
 }
 
-/**
- * Names the rejection a settings submission earned, so an out-of-range hour count is told the bound
- * rather than being described as a non-number.
- */
 function describeSetupSettingsRejection(rawTimezone: string | undefined, timezoneOffset: number | null): string {
   if (timezoneOffset === null) {
     const typedHours = Number.parseFloat(rawTimezone?.trim() ?? "");
@@ -274,18 +269,8 @@ function describeSetupSettingsRejection(rawTimezone: string | undefined, timezon
   return "commands.setup.wizard.settings_persona_stale";
 }
 
-/**
- * Reads a workspace's setup health from its persona and config rows.
- *
- * The three states are not a boolean because a missing main persona is recoverable in place while a
- * missing config row is not: a workspace whose main persona row exists but whose state does not load
- * has to be told to repair that model reference rather than being walked into a second setup.
- *
- * The persona test is the cheap row check rather than a cached-persona read, because that reader
- * answers a database failure with whatever it last held: a fresh workspace whose persona query failed
- * would come back as an empty list and read here as "ready to set up", which is the one answer this
- * guard exists to prevent.
- */
+// Main-persona checks bypass the cached reader because DB-failure fallback returns stale empty data and would
+// misreport an existing workspace as `ready`.
 async function readSetupHealth(workspaceKey: string): Promise<SetupHealthStatus> {
   const serverId = await serverRepository.loadServerIdByDiscId(workspaceKey);
   if (!serverId) return "ready";
@@ -293,13 +278,6 @@ async function readSetupHealth(workspaceKey: string): Promise<SetupHealthStatus>
   return (await personaRepository.loadState(workspaceKey)) ? "already-setup" : "broken";
 }
 
-/**
- * The long-form refusal a healthy workspace's owner sees, preserved from the pre-wizard command.
- *
- * It is a summary embed rather than the wizard's one-line notice because the command exists to get a
- * workspace set up, and an already-configured one is better served by its current state and the
- * commands that change it than by a sentence saying no.
- */
 async function replyWorkspaceAlreadySetup(
   interaction: ChatInputCommandInteraction | ButtonInteraction,
   locale: string,
@@ -354,12 +332,8 @@ async function replyWorkspaceAlreadySetup(
   });
 }
 
-/**
- * The repair guidance for a workspace that has a main persona but no loadable state.
- *
- * Setup deliberately does not clear this state, because the alters on the workspace may be healthy
- * and only the config row or the model it points at is gone.
- */
+// Broken setup state refuses without clearing data because workspace alters may still be healthy when only the config
+// row or its model reference is missing.
 async function replyWorkspaceBroken(
   interaction: ChatInputCommandInteraction | ButtonInteraction,
   locale: string,
@@ -377,13 +351,8 @@ async function replyWorkspaceBroken(
   });
 }
 
-/**
- * The live rows the Starting Settings summary resolves its stored identities against.
- *
- * `undefined` is "there is nothing stored to resolve" and skips both reads, which is the whole of the
- * first pass through the wizard. `null` is a read that failed, which the panel deliberately treats
- * differently from a catalog that resolved and does not contain the stored row.
- */
+// Sentinel `undefined` skips reads because no settings are stored yet, whereas `null` signals a failed catalog read
+// rather than a missing row.
 async function readSetupSettingsCatalogs(
   draft: SetupDraftRecord,
   locale: string,
@@ -392,7 +361,6 @@ async function readSetupSettingsCatalogs(
   return loadSetupSettingsCatalogs(locale);
 }
 
-/** The same read for a path that needs the catalogs themselves rather than a drift verdict. */
 async function loadSetupSettingsCatalogs(locale: string): Promise<SetupSettingsCatalogs | null> {
   const [personaPresets, promptPresets] = await Promise.all([
     configRepository.loadPresetRowsByLocale(locale, { nsfw: false }),
@@ -401,12 +369,6 @@ async function loadSetupSettingsCatalogs(locale: string): Promise<SetupSettingsC
   return toSetupSettingsCatalogs(personaPresets, promptPresets, locale);
 }
 
-/**
- * Repaints the wizard from catalogs the caller already holds.
- *
- * It exists so that a save path which just resolved those catalogs does not read them a second time,
- * while still keeping the payload builder out of the individual action arms.
- */
 async function deliverSetupWizard(
   interaction: ChatInputCommandInteraction | GlobalRoutableInteraction,
   draft: SetupDraftRecord,
@@ -466,13 +428,8 @@ async function resolveSetupProviderOptionRender(
   return render;
 }
 
-/**
- * Repaints the wizard, resolving the stored starting settings against the live catalogs first.
- *
- * Every repaint goes through here or through {@link deliverSetupWizard} rather than calling the
- * payload builder directly, because a repaint that skipped the catalog read would show a completed
- * step for a persona or prompt row that no longer exists.
- */
+// Repaints must route through here or `deliverSetupWizard` instead of `buildSetupWizardPayload` directly so deleted
+// persona or prompt rows are not shown as valid.
 async function repaintSetupWizard(
   interaction: ChatInputCommandInteraction | GlobalRoutableInteraction,
   draft: SetupDraftRecord,
@@ -592,16 +549,8 @@ function customEndpointProbeFailureReceipt(
   );
 }
 
-/**
- * Repaints after a save, answering whatever the write returned.
- *
- * Every arm that saves a draft step used to discard what the store returned and re-read the record
- * immediately afterwards. A read succeeds whatever the write did, so an arm that wrote nothing still
- * repainted a panel, and a save refused because the draft was mid-commit looked like a save that
- * landed. Reading the write's result is also what makes the in-flight and expired refusals reachable
- * here, and every one of them has to answer: these arms run behind an already-acknowledged modal, so
- * returning without a response leaves the actor with a spinner and no explanation.
- */
+// Write results drive the reply instead of re-reading (which masks in-flight refusals), and every arm must respond
+// because modal submits are already acknowledged.
 async function applySetupDraftWrite(
   interaction: ChatInputCommandInteraction | GlobalRoutableInteraction,
   write: SetupDraftReadResult,
@@ -630,14 +579,8 @@ async function applySetupDraftWrite(
   }
 }
 
-/**
- * Which draft field a failed revalidation invalidates, or `none` when the workspace itself moved.
- *
- * `provider` and `settings` clear one step each and keep the other's stored values, because a
- * provider whose catalog row was removed says nothing about the persona the actor chose. `none`
- * consumes the draft, either because a configured workspace must not be walked into a second setup
- * or because the environment no longer matches the step set this draft was built for.
- */
+// Drift scope `provider` or `settings` clears only that step, whereas `none` means the whole workspace or environment
+// drifted, so the entire draft is consumed.
 type SetupDriftScope = "provider" | "settings" | "none";
 
 interface SetupRevalidation {
@@ -645,19 +588,13 @@ interface SetupRevalidation {
   scope: SetupDriftScope;
 }
 
-/** The provider catalog row a catalog-mode draft was built from, re-read at the moment of commit. */
 function isCatalogProviderCurrent(access: SetupDraftProviderAccess): boolean {
   if (access.mode !== "catalog") return false;
   return getSetupCatalogProviderChoices().some((choice) => choice.value === access.provider);
 }
 
-/**
- * Rechecks every guard and every catalog-backed identity before the commit transaction runs.
- *
- * `null` is "still valid". The wizard's own gates were read when the draft was created or last
- * saved, and each of them can have moved since: a stored persona row can be deleted while the panel
- * sits open, and the panel's catalog-aware ready state protects the button but not this path.
- */
+// Sentinel `null` means still valid; commit must recheck all gates because catalog rows or workspace state can change
+// after panel creation.
 async function revalidateSetupCommit(draft: SetupDraftRecord, locale: string): Promise<SetupRevalidation | null> {
   if (isHostedPolicyEnvironment() !== draft.requiresPolicies) {
     return { notice: localizer(locale, "commands.setup.wizard.env_mismatch"), scope: "none" };
@@ -715,7 +652,6 @@ async function revalidateSetupCommit(draft: SetupDraftRecord, locale: string): P
   return null;
 }
 
-/** The draft's provider access as the repository write input, which owns its own discriminated union. */
 function toSetupProviderAccess(access: SetupDraftProviderAccess): SetupProviderAccess {
   if (access.mode === "catalog") {
     return {
@@ -750,23 +686,16 @@ function toSetupProviderAccess(access: SetupDraftProviderAccess): SetupProviderA
   };
 }
 
-/**
- * The resolved catalog text of a stored preset selection, or null for the built-in default.
- *
- * The prompt is read again here rather than stored in the draft: a preset edited between the save
- * and the commit must be written in its current form, and the built-in default deliberately writes
- * NULL so `DEFAULT_SYSTEM_PROMPT` keeps evolving at read time.
- */
+// Built-in default writes `null` so `DEFAULT_SYSTEM_PROMPT` evolves at read time, and presets are re-read from the
+// catalog at commit to reflect edits.
 function resolveSystemPromptText(draft: SetupDraftRecord, catalogs: SetupSettingsCatalogs): string | null {
   const prompt = draft.startingSettings?.systemPrompt;
   if (!prompt || prompt.kind === "built-in") return null;
   return catalogs.promptTexts.get(prompt.presetName) ?? null;
 }
 
-/**
- * Whether the bot can chat in the setup channel, which setup cannot prove by succeeding because
- * Discord serves interaction-token replies regardless of channel permissions.
- */
+// Explicit permission check is needed because Discord serves interaction-token replies even when the bot lacks
+// channel send permissions.
 function canChatInSetupChannel(interaction: ChatInputCommandInteraction | GlobalRoutableInteraction): boolean {
   const sendFlag = interaction.channel?.isThread()
     ? PermissionsBitField.Flags.SendMessagesInThreads
@@ -778,7 +707,6 @@ function canChatInSetupChannel(interaction: ChatInputCommandInteraction | Global
   ]);
 }
 
-/** The `A Few Things to Note` entries that apply to a committed setup. */
 function buildSetupReceiptNotes(
   locale: string,
   access: SetupDraftProviderAccess,
@@ -838,7 +766,6 @@ async function syncGuildExpressionsAfterSetup(guild: Guild | null, workspaceKey:
   }
 }
 
-/** Applies the starting persona's avatar to the bot's guild member record. */
 async function applySetupPresetAvatar(
   guild: Guild | null,
   presetRow: TomoriPresetRow | null,
@@ -875,17 +802,8 @@ async function applySetupPresetAvatar(
   }
 }
 
-/**
- * Everything that runs after the setup transaction has committed.
- *
- * The non-critical steps are not allowed to fail the setup: each reports into the receipt instead,
- * which is why the avatar result drives a footer rather than throwing and the expression sync
- * swallows its own errors. The receipt delivery is the exception and it is returned rather than
- * caught, because a caller that treated a failed delivery as a non-critical adjustment would leave
- * the actor looking at a wizard for a workspace that is already configured.
- *
- * @returns whether the receipt reached the actor.
- */
+// Non-critical steps report into the receipt without throwing, whereas the boolean return reflects receipt delivery
+// so callers know if the wizard UI stayed live.
 async function runSetupPostCommitEffects(input: {
   interaction: ChatInputCommandInteraction | GlobalRoutableInteraction;
   draft: SetupDraftRecord;
@@ -956,23 +874,14 @@ async function runSetupPostCommitEffects(input: {
   return true;
 }
 
-/** What the finish action did, which its caller and tests both read. */
 type SetupCommitOutcome =
   | { status: "committed" }
   | { status: "in-flight" }
   | { status: "drift"; notice: string; scope: SetupDriftScope }
   | { status: "failed" };
 
-/**
- * Commits a complete draft through the setup transaction exactly once.
- *
- * The order is the contract. The interaction is acknowledged before the claim, because everything
- * after it is a database round trip, a set of catalog reads, and a Discord REST call, and an
- * unacknowledged component interaction is dropped at three seconds. The claim then runs before the
- * first awaited revalidation so two confirmations cannot both reach the transaction. Tomori state is
- * invalidated only after the transaction returns. The `finally` owns the draft, so no exception on
- * any path can leave a claimed draft holding an encrypted credential.
- */
+// Strict sequence: defer within 3s before claiming, claim before awaits to block double commits, invalidate caches
+// post-commit, and clear credentials in `finally`.
 async function finishSetupWizardDraft(
   interaction: ChatInputCommandInteraction | GlobalRoutableInteraction,
   draft: SetupDraftRecord,
@@ -1254,7 +1163,6 @@ export interface SetupWizardDependencies {
   createNonce: () => string;
   isHostedPolicyEnvironment: () => boolean;
   storeSetupDraft: typeof storeSetupDraft;
-  /** Locale selected when the setup command starts the wizard. */
   locale?: string;
 }
 

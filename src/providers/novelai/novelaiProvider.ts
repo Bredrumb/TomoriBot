@@ -1,13 +1,3 @@
-/**
- * NovelAI provider implementation
- * Implements the LLMProvider interface for NovelAI's text generation models
- *
- * NovelAI is a roleplay-focused provider that:
- * - Uses flat text prompts (no structured messages)
- * - Does not support images or videos
- * - Specializes in creative storytelling and roleplay
- */
-
 import { pickHumanizerSettings } from "@/constants/humanizer";
 import { getNovelAIProfile } from "@/providers/novelai/modelProfiles";
 import type {
@@ -43,14 +33,6 @@ import { validateNovelAIApiKey } from "./novelaiService";
 import { novelaiProviderInfo } from "./providerInfo";
 import { getActiveTemperature } from "@/utils/provider/samplingControl";
 
-/**
- * Gets the default NovelAI model with a robust fallback chain:
- * 1. First checks the cached is_default LLM from the database
- * 2. Falls back to database query for is_default model if cache is not ready
- * 3. Falls back to first non-deprecated model from database
- * 4. Throws error if no models are available
- * @returns Promise<string> - The default model codename
- */
 async function getDefaultNovelAIModel(): Promise<string> {
   const providerName = "novelai";
 
@@ -88,27 +70,16 @@ async function getDefaultNovelAIModel(): Promise<string> {
   throw new Error(`No default model found for provider: ${providerName}. Please configure models in the database.`);
 }
 
-/**
- * NovelAI-specific configuration extending the base ProviderConfig
- * NovelAI has minimal configuration compared to other providers
- */
 export interface NovelaiProviderConfig extends ProviderConfig {
   // NovelAI uses flat parameters in the service layer
   // No provider-specific config needed here
 }
 
 export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
-  /**
-   * Get provider information and capabilities
-   */
   getInfo(): ProviderInfo {
     return novelaiProviderInfo;
   }
 
-  /**
-   * Validate a NovelAI API key by making a test request
-   * @returns Promise<ApiKeyValidationResult> - Validation result with detailed error info if failed
-   */
   async validateApiKey(apiKey: string): Promise<ApiKeyValidationResult> {
     if (!apiKey || apiKey.trim().length < 10) {
       log.warn("NovelAI API key is too short or empty");
@@ -155,17 +126,10 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
     return [];
   }
 
-  /**
-   * Uses the robust fallback chain: cache > database
-   * @returns Promise<string> - The default model codename
-   */
   async getDefaultModel(): Promise<string> {
     return await getDefaultNovelAIModel();
   }
 
-  /**
-   * Convert provider-specific configuration from TomoriState
-   */
   async createConfig(tomoriState: TomoriState, apiKey: string): Promise<NovelaiProviderConfig> {
     const tools = await this.getTools();
 
@@ -180,10 +144,6 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
     };
   }
 
-  /**
-   * Stream LLM response directly to a Discord channel
-   * Uses the modular streaming architecture with StreamOrchestrator and NovelAIStreamAdapter
-   */
   async streamToDiscord(
     channel: BaseGuildTextChannel | BaseGuildVoiceChannel | DMChannel | AnyThreadChannel,
     client: Client,

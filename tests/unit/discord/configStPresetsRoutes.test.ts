@@ -56,10 +56,6 @@ function makeScope(): ConfigScope {
   };
 }
 
-/**
- * The shared factory owns the interaction surface and the recording; this only narrows the kind and
- * names the interaction each call site models.
- */
 function makeInteraction(
   customId: string,
   kind: "button" | "modal",

@@ -58,7 +58,8 @@ export interface EmergencyCacheClearOptions {
   includeShortTermMemory?: boolean;
   clearDiscordVolatileCaches?: boolean;
   source?: string;
-  /** Collect before measuring the result. Disable only in tests that assert on entry counts. */
+  // Forced GC runs before measuring so memory deltas stay accurate; disable this only in tests that assert on entry
+  // counts.
   collectBeforeMeasuring?: boolean;
 }
 

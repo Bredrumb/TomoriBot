@@ -61,20 +61,12 @@ import {
 
 const AVATAR_DOWNLOAD_TIMEOUT_MS = 15000;
 
-/**
- * Servers with a promotion running. The guild avatar PATCH is rate limited and can stall for a
- * minute, so without this a second click would start a concurrent sync that interleaves its
- * avatar uploads and deletes with the first one's.
- */
+// Servers with an active promotion are tracked here because Discord's guild avatar PATCH can stall for a minute and
+// concurrent clicks would interleave edits.
 const promotionsInFlight = new Set<string>();
 
 type ConfigAvatarAttachment = Attachment | APIAttachment;
 
-/**
- * The Discord-side effects identity operations need. Guild nickname and guild avatar are
- * REST writes rather than repository writes, so they arrive as a port: the operation stays testable
- * and the route layer owns the transport.
- */
 export interface GuildIdentityPort {
   setNickname(nickname: string): Promise<boolean>;
   setAvatar(avatarDataUri: string | null): Promise<{ ok: boolean; rateLimited: boolean; details?: string }>;

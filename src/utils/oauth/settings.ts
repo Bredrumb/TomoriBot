@@ -2,13 +2,8 @@ export const OAUTH_CALLBACK_PATH = "/oauth/callback";
 
 const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "localhost"]);
 
-/**
- * Resolves the origin that receives OAuth callbacks, or `undefined` when sign-in flows are unavailable.
- * There is deliberately no default: a self-hosted bot that fell back to the official host would send
- * every callback to a bot that cannot verify its state.
- *
- * @throws When `TOMORI_PUBLIC_BASE_URL` is set but is not a bare HTTPS origin or a loopback HTTP origin with a port.
- */
+// No default origin is used, because a self-hosted bot falling back to the official host would send callbacks to a
+// bot that cannot verify state.
 export function getOAuthPublicBaseUrl(value = process.env.TOMORI_PUBLIC_BASE_URL): string | undefined {
   const configured = value?.trim();
   if (!configured) return undefined;

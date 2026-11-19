@@ -11,12 +11,8 @@ interface PricedModelRow {
   output_price_per_million?: number | null;
 }
 
-/**
- * Per-million input and output prices from a catalog row, seeded from the typed catalog
- * (`src/db/seed/catalog/models.ts`). OpenRouter rows are refreshed from the live rates at startup.
- * A model with no catalog price resolves to null, so callers report pricing as unavailable instead
- * of guessing a rate.
- */
+// Missing catalog prices resolve to null so callers report pricing as unavailable rather than guessing or defaulting
+// to zero.
 export function resolveRowPricing(row: PricedModelRow): ModelPricing | null {
   const input = row.input_price_per_million;
   const output = row.output_price_per_million;
@@ -36,10 +32,8 @@ export function formatUsdRate(value: number): string {
   return `$${value.toFixed(2)}`;
 }
 
-/**
- * Token and character units are priced per million; the rest per single unit.
- * @public Release-only `src/modules/supporter-billing/discord/modelCosts.ts` imports this.
- */
+// Token and character units are priced per million: other units are priced per single unit.
+/** @public Release-only `src/modules/supporter-billing/discord/modelCosts.ts` imports this. */
 export type MediaPriceUnit = "image" | "image_token" | "video_second" | "video_token" | "character" | "audio_second";
 
 export interface MediaRate {
@@ -75,10 +69,8 @@ export function formatModelPricing(locale: string, pricing: ChoicePricing): stri
   });
 }
 
-/**
- * NVIDIA and custom free endpoints also set is_free, so the labels are scoped to Gemini AI, where an
- * unpriced free row is Gemma and has no paid tier.
- */
+// Scoped to Gemini AI because NVIDIA and custom free endpoints also set is_free, whereas Gemini unpriced free rows
+// are Gemma with no paid tier.
 export function freeModelPriceLabel(
   locale: string,
   provider: string,

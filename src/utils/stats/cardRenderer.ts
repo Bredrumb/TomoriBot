@@ -1,15 +1,5 @@
-/**
- * cardRenderer.ts: production rasterizer for the `/stats generate` infographic.
- *
- * Graduates the font-loading + render pipeline from the Chunk 1 spike into real
- * module-level code. Font buffers are loaded ONCE (readFileSync at first call,
- * then module-cached) and reused for every card render so the 5.5 MB per-weight
- * read cost is paid exactly once per process lifetime.
- *
- * Pipeline: VNode → satori (SVG) → @resvg/resvg-js (PNG buffer).
- * Both stages receive the SAME font buffers directly, so no host fontconfig
- * dependency (required for Alpine prod image which ships no fonts).
- */
+// Both satori and resvg receive cached font buffers directly so rendering has no host fontconfig dependency on the
+// fontless Alpine prod image.
 import { Resvg } from "@resvg/resvg-js";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -24,26 +14,12 @@ const FONT_BOLD_PATH = resolve("assets/fonts/NotoSansJP-Bold.ttf");
 let cachedRegular: Buffer | null = null;
 let cachedBold: Buffer | null = null;
 
-/**
- * Returns the two static font weight buffers, loading them from disk on first call
- * and returning the cached copy on all subsequent calls.
- */
 function ensureFonts(): { regular: Buffer; bold: Buffer } {
   if (!cachedRegular) cachedRegular = readFileSync(FONT_REGULAR_PATH);
   if (!cachedBold) cachedBold = readFileSync(FONT_BOLD_PATH);
   return { regular: cachedRegular, bold: cachedBold };
 }
 
-/**
- * Rasterizes a satori VNode to a PNG buffer.
- *
- * 1. Ensures both font weight buffers are in memory.
- * 2. Runs satori (JSX → SVG) with both weights registered.
- * 3. Runs @resvg/resvg-js (SVG → PNG) with the same font buffers.
- *
- * @param width  - Output image width in pixels.
- * @param height - Output image height in pixels.
- */
 export async function renderCardToPng(node: VNode, width: number, height: number): Promise<Buffer> {
   const { regular, bold } = ensureFonts();
 

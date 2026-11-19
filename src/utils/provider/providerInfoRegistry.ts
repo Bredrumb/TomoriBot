@@ -153,16 +153,10 @@ export function supportsVisionCapability(providerName: string): boolean {
   return getStaticProviderInfo(providerName)?.supportsImages === true;
 }
 
-/**
- * Returns all providers as Discord slash-command choice objects.
- */
 export function getAllProviderChoices(): Array<{ name: string; value: string }> {
   return providerInfos.map((info) => ({ name: info.displayName, value: info.name.toLowerCase() }));
 }
 
-/**
- * Returns the shared provider-picker description key, when one is available.
- */
 export function getProviderAddChoiceDescriptionKey(providerName: string): string | undefined {
   return providerAddChoiceDescriptionKeys[normalizeProviderName(providerName)];
 }

@@ -1,16 +1,3 @@
-/**
- * Asserts that the four migrated roots (/expressions, /matrix, /punish, /reward)
- * carry the restrictions they inherited from their old categories, and that the
- * old paths are gone from /conditioning.
- *
- * Note: setContexts establishes a hard platform boundary (where Discord shows the command),
- * while setDefaultMemberPermissions is an admin-overridable authorization default.
- * These assertions test what is REGISTERED, not what is strictly enforced.
- *
- * The former /server check here (expressions/matrix not leaking into it) is gone: /server is listed in
- * configRegistration.test.ts's DISSOLVED_ROOTS, which asserts it is absent from both the execution map
- * and the registration data.
- */
 import { beforeAll, describe, expect, it } from "bun:test";
 import { loadCommandData } from "@/utils/discord/commandLoader";
 import { initializeLocalizer } from "@/utils/text/localizer";

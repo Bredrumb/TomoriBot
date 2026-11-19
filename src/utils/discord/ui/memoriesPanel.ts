@@ -57,13 +57,8 @@ export const MAX_SERVER_MEMORY_PAGE_SIZE = 24;
 export const MAX_DOCUMENT_PAGE_SIZE = 24;
 export const MAX_STM_OPTIONS_PER_GROUP = 10;
 const MAX_STM_GROUPS = 5;
-/**
- * Ceiling on entries one removal modal can present.
- *
- * The submit handler derives its clear set from the rows it presented, so a route reading a
- * different group count than the modal built would see nothing checked and clear every entry.
- * Both sides read this instead of repeating the product.
- */
+// Shared ceiling for modal builder and submit handler because the submit route derives cleared entries from presented
+// rows and a mismatch would wipe unshown entries.
 export const MAX_STM_MANAGEABLE_ENTRIES = MAX_STM_OPTIONS_PER_GROUP * MAX_STM_GROUPS;
 const PERSONA_SELECT_MAX_OPTIONS = 25;
 

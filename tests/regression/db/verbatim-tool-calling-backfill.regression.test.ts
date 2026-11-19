@@ -1,12 +1,5 @@
-/**
- * Regression coverage for migration 083's backfill.
- *
- * `custom_endpoints.model_ref_id` is chosen by the connection's capability, so it holds an `llm_id`
- * only for text connections and an id from a different table for every other capability. The
- * backfill reads it as an `llm_id`, so without a capability filter a non-text endpoint's id can
- * match an unrelated `llms` row, including another server's model. These ids are small serial
- * integers, so the collision is ordinary rather than exotic.
- */
+// custom_endpoints.model_ref_id holds an llm_id only for text capability, so without a capability filter non-text
+// serial IDs collide with unrelated llms rows.
 
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";

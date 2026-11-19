@@ -1,12 +1,3 @@
-/**
- * Regression harness: Minimal notice references.
- *
- * A Minimal memory or task notice shows only its title in Discord, so the model would re-save what
- * it already saved. The reference must resolve against the live row on every context build and stop
- * resolving once that row is deleted, because the body is never stored a second time.
- *
- * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md)
- */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { minimalNoticeRefRepository } from "@/utils/db/repositories/MinimalNoticeRefRepository";
 import { formatMinimalNoticeBody } from "@/utils/discord/minimalNoticeBodies";

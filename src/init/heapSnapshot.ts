@@ -1,32 +1,14 @@
 import { log } from "@/utils/misc/logger";
 import { lstatSync, mkdirSync, writeFileSync } from "node:fs";
 
-/**
- * Serializes the live heap in Chrome DevTools format.
- *
- * The "v8" format returns a string that can go straight to disk. The default JSC shape
- * is an object needing a JSON.stringify pass, which would hold the graph and its
- * serialization at the same time and double peak memory.
- */
+// "v8" format is passed because it returns a string directly, whereas Bun's default object shape requires
+// JSON.stringify and doubles peak memory.
 type SnapshotGenerator = () => string;
 
 const generateSnapshot: SnapshotGenerator = () => Bun.generateHeapSnapshot("v8");
 
-/**
- * Registers a `SIGUSR2` handler that writes a heap snapshot to `HEAP_SNAPSHOT_DIR`.
- *
- * Opt-in by design. A snapshot serializes to a large fraction of the live heap as a
- * single string, so on a memory-constrained host taking one is itself a pressure event.
- * Leaving the handler unregistered unless a directory is configured makes that cost
- * impossible to trigger by accident.
- *
- * @param dir - Destination directory; defaults to `HEAP_SNAPSHOT_DIR`. Must be a
- *   writable mount, since the container root filesystem is read-only in production.
- * @param generate - Serializer seam. Generating a real snapshot is a stop-the-world
- *   pause proportional to heap size, which in a shared test process runs to seconds and
- *   starves unrelated suites of their timers and sockets. Tests pass a stub so they
- *   exercise this module's own behavior rather than the runtime's serializer.
- */
+// Handler stays opt-in for writable mounts because snapshots spike memory, and generate is injectable so tests avoid
+// multi-second stop-the-world pauses.
 export function registerHeapSnapshotHandler(
   dir = process.env.HEAP_SNAPSHOT_DIR,
   generate: SnapshotGenerator = generateSnapshot,
@@ -64,13 +46,7 @@ export function registerHeapSnapshotHandler(
   log.info(`Heap snapshot handler armed: SIGUSR2 writes to ${dir}`);
 }
 
-/**
- * Serializes the heap to `dir` and records the cost as a metric.
- *
- * Emitted through `log.metric` rather than `log.info` because production discards
- * everything below level 50, and the memory cost of the snapshot is the main thing
- * worth knowing afterwards.
- */
+// Snapshot cost uses log.metric rather than log.info because production discards logs below level 50.
 async function writeHeapSnapshot(dir: string, generate: SnapshotGenerator): Promise<void> {
   const startedAt = Date.now();
   const heapBeforeMb = process.memoryUsage().heapUsed / 1048576;

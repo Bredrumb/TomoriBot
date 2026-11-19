@@ -64,11 +64,6 @@ const typingConfig: TypingSimulationConfig = {
 
 type Sent = { text: string; options?: StreamDeliveryOptions };
 
-/**
- * Runs segments through the real processor against a delivery stub that records what would reach
- * Discord. Each send is reported to the channel continuity the way recordSuccessfulSend reports it,
- * with a fresh snowflake, so the sprite group alternation sees real adjacency.
- */
 function makeHarness(options: { isAlter: boolean; guildId?: string; personaMentionMap?: Map<string, string> }) {
   const channel = {
     id: "1382235263668846612",

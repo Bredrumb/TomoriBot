@@ -1,10 +1,7 @@
 import type { ParsedInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
 
-/**
- * Nodes one toggle modal presents, and node ranges one selector offers. The route handler that
- * slices nodes and the panel that labels the ranges must divide by the same size, or a range option
- * names a span the modal does not open.
- */
+// MAX_NODES_PER_MODAL_PAGE must match the route handler's slice size, because changing one without the other
+// desynchronizes range labels from modal pages.
 export const MAX_NODES_PER_MODAL_PAGE = 50;
 export const NODE_RANGE_OPTIONS_PER_PAGE = 25;
 
@@ -20,10 +17,6 @@ export type StPresetsPanelRoute =
 
 export type StPresetsAction = StPresetsPanelRoute["action"];
 
-/**
- * Host-neutral route input used by the panel renderer. Hosts provide the namespace, version, and
- * codec implementation while the panel keeps one semantic action set for every surface.
- */
 type StPresetsPanelRouteInput = StPresetsPanelRoute;
 
 export interface StPresetsPanelRouteAdapter {

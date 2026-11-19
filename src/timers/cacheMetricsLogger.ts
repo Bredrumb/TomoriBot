@@ -1,19 +1,5 @@
-/**
- * Cache Metrics Logger
- *
- * Periodically records the size of every in-memory cache plus process memory, to two sinks:
- * a structured `log.metric()` line and a row in `metric_samples`.
- *
- * All fields land at the top level of a single flat record, so a log query can graph them
- * together and Grafana can read them as `(fields->>'heap_used_mb')::float`.
- *
- * Both sinks are kept because they fail at different times. The log line reaches the host
- * JSONL, which survives container recreate, VM reboot, and the bot stalling deep in swap, and
- * is what incident triage greps. The database row is the one Grafana can graph, and it stops
- * exactly when the bot cannot reach Postgres.
- *
- * This is diagnostic-only. It does not mutate caches or trigger cleanup.
- */
+// Fields stay flat at the top level because log queries and Grafana extract them via
+// (fields->>'heap_used_mb')::float.
 
 import type { Client } from "discord.js";
 import { getVoiceTranscriptCacheSize } from "@/utils/audio/voiceTranscriptCache";
@@ -57,28 +43,17 @@ import { getMarkdownTableCacheSize } from "@/utils/text/markdownTableCache";
 import { getPersonaSpriteCacheSize } from "@/utils/cache/personaSpriteCacheStore";
 import { getPersonaSpriteMessageCacheSize } from "@/utils/cache/personaSpriteMessageCache";
 
-/**
- * Default sampling cadence when CACHE_METRICS_INTERVAL_MS is not set.
- * 5 minutes balances CloudWatch log volume against the ability to correlate
- * cache growth with the observed 50%→80% RSS drift.
- */
+// Default interval is 5 minutes because it balances CloudWatch log volume against correlating cache growth with
+// observed 50% to 80% RSS drift.
 const DEFAULT_INTERVAL_MS = 5 * 60 * 1000;
 
 let intervalId: NodeJS.Timeout | null = null;
 
-/**
- * Detector state is carried across intervals because dwell and rate limiting are defined over a
- * sequence, not a sample. It resets with the process, which is correct: a container recreate is
- * exactly the recovery the detector would have recommended.
- */
+// Detector state stays in memory across intervals because dwell and rate limiting span a sequence, and resetting on
+// process restart matches container recovery.
 let pressureState: PressureState = initialPressureState();
 const processStartMs = Date.now();
 
-/**
- * Collects Discord.js client cache sizes. Iterates `client.guilds.cache` once
- * for nested caches (members/channels/messages/threads/emojis) so all values
- * come from a single consistent snapshot.
- */
 function collectDiscordCacheSizes(client: Client): Record<string, number> {
   let members = 0;
   let channels = 0;
@@ -125,10 +100,6 @@ function collectDiscordCacheSizes(client: Client): Record<string, number> {
   };
 }
 
-/**
- * Build a flat metric payload from every cache plus process RSS.
- * Exported so a future slash command or HTTP endpoint could call it on-demand.
- */
 export function collectCacheMetricsSnapshot(client: Client): MetricFields {
   const topology = getShardTopology();
   if (Array.isArray(client.options.shards) && client.options.shardCount !== undefined) {
@@ -207,15 +178,8 @@ export function collectCacheMetricsSnapshot(client: Client): MetricFields {
   };
 }
 
-/**
- * Emit one cache metrics snapshot to the logger and to the Postgres sink.
- * Errors are caught and logged so a failed snapshot never kills the interval.
- *
- * Both sinks are kept rather than one: the host JSONL survives container recreate, VM reboot,
- * and the bot stalling deep in swap, and it is what the runbook greps during an incident. The
- * Postgres row is what Grafana can graph. The insert is fire-and-forget because a sample is
- * worth less than the interval that produces it.
- */
+// Both sinks stay because JSONL survives outages for triage while Postgres feeds Grafana, and the insert stays
+// unawaited so DB stalls never block the interval.
 function emitSnapshot(client: Client): void {
   try {
     const snapshot = collectCacheMetricsSnapshot(client);
@@ -230,16 +194,8 @@ function emitSnapshot(client: Client): void {
   void emitHostSnapshot();
 }
 
-/**
- * Emit one host memory and pressure sample to the Postgres sink.
- *
- * Unlike `cache_sizes` this deliberately has no `log.metric()` twin. The two-sink rule exists
- * because the JSONL survives conditions the database does not, but `tomoribot-oom-observer`
- * already writes these same host counters to disk every 15 s, so a 5-minute copy would duplicate
- * a finer-grained record while adding to that file's unbounded growth. The database row is the
- * part that did not exist: removing the AzureMonitorLinuxAgent left host memory with no
- * queryable series at all.
- */
+// This omits log.metric() because tomoribot-oom-observer already writes host counters to disk every 15s, so only the
+// queryable Postgres series is missing.
 async function emitHostSnapshot(): Promise<void> {
   try {
     const snapshot = await collectHostMemorySnapshot();
@@ -280,14 +236,7 @@ async function emitHostSnapshot(): Promise<void> {
   }
 }
 
-/**
- * Start the cache metrics interval. Only runs in production, these logs are
- * intended for CloudWatch Logs Insights and are not useful in local dev.
- * Safe to call multiple times, so a subsequent call is a no-op if already running.
- *
- * @param intervalMs - Optional override; defaults to CACHE_METRICS_INTERVAL_MS env or 5 min
- * @public Dynamically loaded by `src/init/timers.ts` on main and release.
- */
+/** @public Dynamically loaded by `src/init/timers.ts` on main and release. */
 export function initializeCacheMetricsLogger(client: Client, intervalMs?: number): void {
   // Skip in non-production, so these snapshots are for CloudWatch, not local dev
   if (process.env.RUN_ENV !== "production") {
@@ -313,10 +262,7 @@ export function initializeCacheMetricsLogger(client: Client, intervalMs?: number
   log.success(`Cache metrics logger started (interval: ${finalInterval / 1000}s)`);
 }
 
-/**
- * Stop the cache metrics interval. No-op if not running.
- * @public Dynamically loaded by `src/init/timers.ts` on main and release.
- */
+/** @public Dynamically loaded by `src/init/timers.ts` on main and release. */
 export function stopCacheMetricsLogger(): void {
   if (intervalId !== null) {
     clearInterval(intervalId);

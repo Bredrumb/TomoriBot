@@ -1,11 +1,3 @@
-/**
- * Conversation compaction for the DeepSeek provider.
- *
- * - Plain-text conversation summaries via a direct POST to the DeepSeek
- *   chat-completions endpoint.
- * - Roleplay structured summaries delegated to callDeepseekStructuredJSON,
- *   which handles json_object mode + Zod validation.
- */
 import { log } from "@/utils/misc/logger";
 import { toDeepseekApiModelName } from "@/providers/deepseek/deepseekShared";
 import type {
@@ -58,9 +50,6 @@ async function buildDeepseekUserContent(
   return parts;
 }
 
-/**
- * Generate a plain-text conversation summary using the DeepSeek API.
- */
 export async function generateConversationSummaryDeepseek(
   request: ProviderCompactSummaryRequest,
 ): Promise<CompactConversationResult> {
@@ -130,12 +119,6 @@ export async function generateConversationSummaryDeepseek(
   }
 }
 
-/**
- * Generate a structured roleplay summary using the DeepSeek API.
- *
- * Delegates to callDeepseekStructuredJSON, which uses json_object mode
- * with schema/example injected into the system prompt and Zod validation.
- */
 export async function generateRoleplaySummaryDeepseek(
   request: ProviderCompactSummaryRequest,
 ): Promise<CompactRoleplayResult> {

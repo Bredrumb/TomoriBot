@@ -6,13 +6,6 @@ import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode } from "@/utils/misc/logger";
 import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
 
-/**
- * Sends a cooldown notification to the user via DM, with fallback to ephemeral channel reply
- * @param locale - User's locale for localization
- * @param footerKey - Optional localization key for embed footer
- * @param interaction - Optional interaction for ephemeral fallback (slash commands only)
- * @param ephemeralFlags - Optional MessageFlags for ephemeral replies
- */
 export async function sendCooldownDM(
   user: User,
   locale: string,

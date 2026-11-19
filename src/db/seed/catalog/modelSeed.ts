@@ -26,10 +26,9 @@ import type {
   VideoInput,
 } from "./types";
 
-/** Providers exempt from the default/smartest invariants (bootstrap placeholders). */
+// Custom stays exempt from default and smartest model invariants because it is only a bootstrap placeholder.
 const INVARIANT_EXEMPT = new Set<string>(["custom"]);
 
-/** Minimal shape the renderer/validator needs from every catalog row. */
 interface RowLike {
   provider: string;
   codename: string;
@@ -46,15 +45,10 @@ function localizedDescriptions(row: RowLike): Record<string, string> {
 
 interface TableSpec<T extends RowLike> {
   table: string;
-  /** Column list inside `INSERT INTO <table> (...)`, in tuple order. */
   columns: string;
-  /** Positional value tuple for one row, without the surrounding parentheses. */
   tuple: (m: T) => string;
-  /** `ON CONFLICT ...` block (no trailing semicolon: executed via client.unsafe). */
   onConflict: string;
-  /** Whether this table has an is_smartest column (only `llms`). */
   hasSmartest: boolean;
-  /** Key whose rows share one is_default; defaults to the provider. */
   defaultGroup?: (m: T) => string;
   sections: ModelSection<T>[];
 }
@@ -294,7 +288,6 @@ export function collectSmartestInvariantViolations(
   return [`${table}/${provider}: expected exactly one non-deprecated is_smartest, found ${activeSmartest.length}`];
 }
 
-/** Collect every per-provider/uniqueness violation for one table. */
 function validateSpec<T extends RowLike>(spec: TableSpec<T>, errors: string[]): void {
   const all = rowsOf(spec);
 
@@ -337,14 +330,8 @@ export const REQUIRED_ALTERNATION_PROVIDERS = new Set<string>(["anthropic"]);
 export const REQUIRED_PREFIX_PROVIDERS = new Set<string>(["deepseek", "zai", "zaicoding"]);
 export const MODEL_DRIFT_TODO = "MODEL_DRIFT_TODO";
 
-/**
- * Enforce that every llms row whose provider requires a strict chat-completion normalization has
- * the corresponding flag set. Because the runtime resolves the flag from the active model's column
- * (D4), a single un-flagged model would silently emit an invalid body for that backend.
- *
- * Pure and exported so the invariant can be unit-tested with crafted rows.
- * @returns A list of violation messages (empty when valid).
- */
+// Runtime reads strictRoleAlternation from the model row rather than the provider, so missing the flag silently sends
+// an invalid request body.
 export function collectStrictChatFlagViolations(rows: LlmInput[]): string[] {
   const errors: string[] = [];
   for (const row of rows) {
@@ -382,18 +369,8 @@ const METERED_FIRST_PARTY_PROVIDERS = new Set<string>([
 // until its official rate lands in models.ts or the row is deprecated.
 const PRICING_PENDING_CODENAMES = new Set<string>();
 
-/**
- * Enforce that every billable first-party llms row carries explicit per-million input/output prices.
- * With the env price fallback gone, an unpriced active row would surface "pricing unavailable" in
- * `/tool estimate cost`, so this invariant catches the next added model that forgets its catalog price.
- *
- * Excluded: deprecated rows (may predate verified pricing), Gemma codenames (open model, no first-party
- * paid tier), and {@link PRICING_PENDING_CODENAMES} (provider has not published a rate yet). A free-tier
- * row of a metered provider keeps its paid rates for cost reads, so is_free does not exempt it.
- *
- * Pure and exported so the invariant can be unit-tested with crafted rows.
- * @returns A list of violation messages (empty when valid).
- */
+// Unpriced rows surface "pricing unavailable" in /tool estimate cost, and is_free does not exempt metered-provider
+// rows because cost reads use their paid rates.
 function collectMeteredPriceViolations(rows: LlmInput[]): string[] {
   const errors: string[] = [];
   for (const row of rows) {
@@ -437,14 +414,6 @@ const OUTPUT_CEILING_UNPUBLISHED = new Set<string>([
   "zai/glm-4.6v-flash",
 ]);
 
-/**
- * Enforce that every active first-party llms row carries its official token limits.
- * Deprecated rows are excluded because they may predate verified limits, and
- * {@link OUTPUT_CEILING_UNPUBLISHED} rows owe only the window.
- *
- * Pure and exported so the invariant can be unit-tested with crafted rows.
- * @returns A list of violation messages (empty when valid).
- */
 export function collectTokenLimitViolations(rows: LlmInput[]): string[] {
   const errors: string[] = [];
   for (const row of rows) {
@@ -461,10 +430,6 @@ export function collectTokenLimitViolations(rows: LlmInput[]): string[] {
   return errors;
 }
 
-/**
- * Validate every model table against the per-provider invariants.
- * @returns A list of human-readable violation messages (empty when valid).
- */
 export function validateModels(): string[] {
   const errors: string[] = [];
   validateSpec(llmSpec, errors);
@@ -495,19 +460,12 @@ export function validateModels(): string[] {
   return errors;
 }
 
-/**
- * Discord caps a String Select at 25 options. Twenty curated rows leave room for the user's scoped
- * registrations and a None entry, so a provider's whole catalog fits one select without paging.
- */
+// Capped at 20 because Discord limits String Selects to 25 options, leaving room for user registrations and a None
+// entry without paging.
 export const MAX_ACTIVE_ROWS_PER_PROVIDER = 20;
 
-/**
- * Find catalog work a model drift review must finish: placeholder descriptions and providers grown
- * past {@link MAX_ACTIVE_ROWS_PER_PROVIDER}.
- * Kept out of {@link validateModels} because both are unfinished review, not malformed rows: seeding
- * must still succeed on a drift PR so lifecycle and tests can prove the drafted rows work.
- * @returns One violation per unfinished row or over-limit provider table.
- */
+// Kept separate from validateModels because drift-review todos and over-limit counts must not block seeding while a
+// drift PR is still in progress.
 export function validateModelDriftReview(): string[] {
   return [llmSpec, imageSpec, videoSpec, decisionSpec].flatMap((spec) => [
     ...collectModelDriftTodoViolations(spec.table, rowsOf(spec)),
@@ -546,10 +504,6 @@ function renderStatement<T extends RowLike>(spec: TableSpec<T>): string {
   return `INSERT INTO ${spec.table} (${spec.columns})\nVALUES\n${values}\n${spec.onConflict}`;
 }
 
-/**
- * Build one `INSERT … ON CONFLICT` statement per model table from the catalog.
- * Exposed for tests / inspection; runtime seeding uses {@link seedModelsFromCatalog}.
- */
 export function buildModelSeedStatements(): string[] {
   return [
     renderStatement(llmSpec),
@@ -562,11 +516,6 @@ export function buildModelSeedStatements(): string[] {
   ];
 }
 
-/**
- * Seed all model tables from the typed catalog. Validates invariants first and
- * throws before touching the database if the catalog is malformed, then runs the
- * idempotent upsert for each table.
- */
 export async function seedModelsFromCatalog(client: SQL): Promise<void> {
   const violations = validateModels();
   if (violations.length > 0) {

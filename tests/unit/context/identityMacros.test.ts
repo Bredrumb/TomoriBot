@@ -120,7 +120,6 @@ function makeTomoriState(): TomoriState {
   });
 }
 
-/** Runs the real convertMentions through the dialogue-history builder for a single message. */
 async function buildHistoryText(
   msg: SimplifiedMessageForContext,
   naming?: Pick<

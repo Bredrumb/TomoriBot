@@ -1,18 +1,3 @@
-/**
- * Regression harness: server scoping of context-reference eligibility evidence.
- *
- * The alias resolver drops a name outright once two participants answer to it, so
- * every extra eligible owner of a common name costs that name for everyone. This
- * suite pins the scope of the evidence the eligibility policy reads: memories and
- * reminders earned in another server must not make a silent lurker here eligible,
- * while the lineage-0 global branch must keep counting because it renders in every
- * server.
- *
- * Mocked SQL cannot catch a scoping regression, so this runs the real repository
- * against a disposable Postgres fixture.
- *
- * Requires: a local Postgres connection (see docs/guides/testing-db-changes.md).
- */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { userRepository } from "@/utils/db/repositories";
 import type { ContextReferenceEligibilityEvidence } from "@/utils/db/repositories/UserRepository";
@@ -40,7 +25,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Context reference eligibility — server s
   let foreignLineageId: number;
   let foreignServerId: number;
 
-  /** Evidence the repository reports for a candidate, keyed by Discord ID. */
   async function evidenceFor(userDiscId: string): Promise<ContextReferenceEligibilityEvidence> {
     const candidates = await userRepository.loadContextReferenceCandidates({
       serverDiscId: FIXTURE_IDS.serverDiscId,

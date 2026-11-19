@@ -172,11 +172,6 @@ describe("short-term memory panel", () => {
 });
 
 describe("memories panel route catalog", () => {
-  /**
-   * Pins the memories v1 wire contract: a row is [literal custom ID, exact route it must decode to].
-   * Encoding and decoding through one shared codec cannot catch a field reordering, because both
-   * sides move together and a round trip still succeeds; only literal bytes can.
-   */
   const WIRE_CONTRACT_V1: ReadonlyArray<readonly [string, MemoriesPanelRoute]> = [
     ["memories:v1:category:en-US:memories", { action: "category", locale: "en-US", category: "memories" }],
     ["memories:v1:category:en-US:documents", { action: "category", locale: "en-US", category: "documents" }],
@@ -434,11 +429,6 @@ describe("memories panel route catalog", () => {
     expect(parseMemoriesPanelRoute(parsed)).toEqual(expectedRoute);
   });
 
-  /**
-   * Routes whose shorter legal form omits a field the longer form carries. A row is
-   * [field the parser must leave out, what the case is, custom ID carrying the shorter form], so a
-   * parser that fabricates the field names it.
-   */
   const ABSENT_OPTIONAL_FIELDS: ReadonlyArray<readonly [string, string, string]> = [
     ["rangeIndex", "a select route without a range", "memories:v1:select:en-US:1770"],
     ["lineageId", "a retry route without a lineage", "memories:v1:retry:en-US:documents"],
@@ -469,10 +459,6 @@ describe("memories panel route catalog", () => {
     expect(customId.length).toBeLessThanOrEqual(100);
   });
 
-  /**
-   * Route envelopes the parser must refuse before it reads a segment. A row is
-   * [what the envelope gets wrong, parsed envelope handed straight to the decoder].
-   */
   const REJECTED_ROUTE_ENVELOPES: ReadonlyArray<readonly [string, ParsedInteractionRoute]> = [
     ["foreign namespace", { namespace: "other", version: "v1", segments: ["category", "en-US", "memories"] }],
     ["retired version", { namespace: "memories", version: "v99", segments: ["category", "en-US", "memories"] }],
@@ -1505,11 +1491,6 @@ describe("memories permissions and scoping", () => {
     }
   });
 
-  /**
-   * The document-scope row for one panel state, as the serverwide and persona buttons in render
-   * order. The count is asserted here rather than assumed: a panel that dropped a scope button would
-   * otherwise read as the wrong kind of state instead of failing.
-   */
   function documentScopeRow(input: {
     selectedLineageId: number;
     selectedDocumentPersonaId: number;
@@ -2027,12 +2008,6 @@ describe("memories permissions and scoping", () => {
     expect(memberTexts.some((text) => text.includes("only the memories you taught"))).toBe(true);
   });
 
-  /**
-   * A refusal used to arrive as a second ephemeral message, which reads as an unrelated error
-   * rather than as this panel's answer. Ordering is the subtle half: these branches sit above
-   * `beginPanelInteraction` precisely because they may open a modal, so a refusal has to
-   * acknowledge for itself.
-   */
   it("answers a refused modal branch by repainting the panel, never by a separate reply", async () => {
     const { dependencies, calls } = createTestDependencies({
       resolveScope: async (interaction) => ({
@@ -2816,11 +2791,6 @@ describe("memories teaching gate on edit and remove", () => {
       for (const spy of [add, batch, edit, load, contents, limit, invalidate]) spy.mockRestore();
     }
   });
-  /**
-   * Server memory edit and remove operations independently gate on `server_memteaching_enabled`
-   * and on the server blacklist, not just memory addition. The two guards are asserted separately
-   * rather than assumed to travel together.
-   */
   it("refuses edit and remove for a non-manager when teaching is disabled", async () => {
     const editSpy = spyOn(serverMemoryRepository, "edit").mockImplementation(async () => true);
     const removeSpy = spyOn(serverMemoryRepository, "remove").mockImplementation(async () => true);
@@ -2999,11 +2969,6 @@ describe("memories document operation ordering", () => {
     }
   });
 
-  /**
-   * Every repository and provider read one document write makes, so a case only states the write it
-   * runs and the invalidation it expects. Returns the spies a case asserts on plus a restore for its
-   * finally block.
-   */
   function stubDocumentWriteDependencies() {
     // Keyed rather than positional: a case names the four spies it asserts on instead of an index,
     // and restore walks every stub this helper installed.

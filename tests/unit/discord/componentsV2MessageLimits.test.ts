@@ -1,12 +1,3 @@
-/**
- * Exact-boundary controls and adversarial tests for Discord Components V2 message limits.
- *
- * Enforces Discord's documented message component contract:
- * - at most 40 total nested components across the entire serialized tree
- * - at most 4,000 Unicode codepoints across all Text Display components
- * - Action Row and Section grammar, component cardinality, field limits, and uniqueness
- */
-
 import { describe, expect, it } from "bun:test";
 import {
   ButtonStyle,

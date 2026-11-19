@@ -1,14 +1,3 @@
-/**
- * Anthropic tool adapter for converting TomoriBot's generic tool definitions
- * to Anthropic's tool-use format and handling MCP tool integration.
- *
- * Key difference from OpenAI-compatible format:
- * - Anthropic uses {name, description, input_schema} instead of
- *   {type: "function", function: {name, description, parameters}}
- * - Tool results are sent as {type: "tool_result", tool_use_id, content}
- *   wrapped inside a user message, not as a separate role
- */
-
 import type { MCPCapableToolAdapter, Tool, ToolResult } from "@/types/tool/interfaces";
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
 import { log } from "@/utils/misc/logger";
@@ -29,11 +18,6 @@ export class AnthropicToolAdapter implements MCPCapableToolAdapter {
     return "anthropic";
   }
 
-  /**
-   * Convert a single tool to Anthropic's tool definition format.
-   * Anthropic uses `input_schema` instead of `parameters` and has no
-   * `type: "function"` wrapper.
-   */
   convertTool(tool: Tool): Record<string, unknown> {
     try {
       const anthropicTool: Record<string, unknown> = {
@@ -50,11 +34,8 @@ export class AnthropicToolAdapter implements MCPCapableToolAdapter {
     }
   }
 
-  /**
-   * Convert tool result to Anthropic's tool_result content block format.
-   * Note: The caller must wrap this in a user message with the appropriate
-   * tool_use_id.
-   */
+  // Anthropic rejects bare tool_result blocks, so callers must attach tool_use_id and wrap this block in a user
+  // message.
   convertResult(result: ToolResult): Record<string, unknown> {
     try {
       if (result.success) {
@@ -101,9 +82,6 @@ export class AnthropicToolAdapter implements MCPCapableToolAdapter {
     }
   }
 
-  /**
-   * Convert an array of tools to Anthropic format (flat array, no wrapper)
-   */
   convertToolsArray(tools: Tool[]): Array<Record<string, unknown>> {
     if (tools.length === 0) {
       return [];
@@ -117,10 +95,6 @@ export class AnthropicToolAdapter implements MCPCapableToolAdapter {
     }
   }
 
-  /**
-   * Get all available tools (built-in + guild MCP) in Anthropic format.
-   * Follows the same filtering pattern as OpenAICompatibleToolAdapter.
-   */
   async getAllToolsInProviderFormat(
     builtInTools: Tool[],
     serverId?: number,
@@ -195,9 +169,6 @@ export class AnthropicToolAdapter implements MCPCapableToolAdapter {
     }
   }
 
-  /**
-   * Validate that a tool has the required fields for Anthropic format
-   */
   validateToolCompatibility(tool: Tool): boolean {
     try {
       if (!tool.name || !tool.description || !tool.parameters) {

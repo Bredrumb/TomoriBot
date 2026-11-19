@@ -1,15 +1,8 @@
-/**
- * Guards the `vl` per-file test reporter.
- *
- * Bun's JUnit reporter emits `name` and `file` using the host platform's path
- * separator. A parser that normalizes only one of the two matches nothing on
- * Windows, silently falls back to console parsing, and reports a near-empty
- * board on a green run which is exactly what shipped before these tests.
- */
+// Bun's JUnit reporter uses host path separators in both name and file, so normalizing only one fails on Windows and
+// silently falls back to console parsing.
 import { describe, expect, it } from "bun:test";
 import { parseJUnitSuites } from "../../../scripts/checks/vl";
 
-/** Builds a single-file JUnit document using the given path separator. */
 function junitXml(separator: string): string {
   const file = ["tests", "unit", "chat", "admission.test.ts"].join(separator);
   return `<?xml version="1.0" encoding="UTF-8"?>

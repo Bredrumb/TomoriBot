@@ -83,9 +83,9 @@ import { log } from "@/utils/misc/logger";
 import { runWithErrorContext } from "@/utils/misc/errorContextStore";
 import type { WhitelistCheckResult } from "@/types/misc/channelWhitelist";
 
-/** Waking hours move over days, so re-reading the histogram every minute would only cost queries. */
+// Waking hours shift over days, so re-reading the histogram every minute would only waste queries.
 const METER_CACHE_TTL_MS = 15 * 60 * 1000;
-/** A pending verdict needs a Discord read, so it is checked at most this often per server. */
+// Pending verdicts require a Discord read, so each server is checked at most once per interval.
 const VERDICT_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 const PRUNE_INTERVAL_MS = HOUR_MS;
 
@@ -188,7 +188,6 @@ export class NaturalNudgeProcessor {
     return meters;
   }
 
-  /** An abort leaves the idle nudge due; the next try waits a fresh lull roll from now. */
   private deferRetry(serverId: number, now: Date): void {
     const hours = rollLullHours();
     this.lullHours.set(serverId, hours);
@@ -322,7 +321,8 @@ export class NaturalNudgeProcessor {
       .finally(() => releaseNudgeServer(serverId));
   }
 
-  /** The persona raffle runs before the shortlist, so identity never depends on the planner's preferred activity. */
+  // Persona selection runs before building the shortlist, so persona identity never depends on the planner's
+  // preferred activity.
   private async drawAttempt(
     server: EnabledIdleNudgeServer,
     config: ServerNaturalNudgeConfig,
@@ -555,10 +555,8 @@ export class NaturalNudgeProcessor {
     };
   }
 
-  /**
-   * Up to three channels for the planner to choose from. A private channel is offered alone, because
-   * its content may only feed a nudge in that same channel.
-   */
+  // Private channels are offered alone to the planner, because their history may only inform a nudge in that same
+  // channel.
   private async choosePlannerChannels(
     pool: readonly NudgeChannel[],
     persona: TomoriState,

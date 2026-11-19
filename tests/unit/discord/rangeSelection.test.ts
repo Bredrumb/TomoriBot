@@ -11,7 +11,6 @@ const testRouteSegments: PaginationRouteSegments = {
   page: (rangeIndex) => ["items", "page", String(rangeIndex)],
 };
 
-/** `ButtonComponentData` also covers the link variant, which carries no custom ID. */
 function buttonCustomId(button: ButtonComponentData | undefined): string {
   return button && "customId" in button ? button.customId : "";
 }

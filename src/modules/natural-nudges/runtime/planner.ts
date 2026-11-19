@@ -17,12 +17,11 @@ import { log } from "@/utils/misc/logger";
 import type { TokenUsage } from "@/utils/text/tokenEstimate";
 import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 
-/** A planner that hangs past this would plan for a moment that has already passed. */
 const PLANNER_TIMEOUT_MS = 90_000;
 const TARGET_MEMORY_MAX_CHARS = 300;
 const PLANNER_ATTRIBUTE_MAX_CHARS = 450;
 const PLANNER_CHARACTER_ATTRIBUTE_MAX_CHARS = 1_800;
-/** The opener is a hook; anything the persona should pursue afterward belongs in the agenda. */
+// Capped at 200 chars because the opener is only a hook, while follow-up goals belong in the agenda.
 const OPENER_DIRECTION_MAX = 200;
 
 interface PlannerChannel {
@@ -31,7 +30,6 @@ interface PlannerChannel {
   transcript: string;
 }
 
-/** Another persona in a Play Scene; speaker numbers follow this order after the lead. */
 export interface ScenePartner {
   persona: TomoriState;
   interests: readonly NaturalNudgeInterest[];
@@ -52,9 +50,8 @@ export interface PlannerInput {
 export interface PlannerCandidate {
   idleNudge: IdleNudgeDefinition;
   channelIndices: readonly number[];
-  /** Scene candidates share one cast for the attempt, so the planner can read its profiles once. */
+  // All scene candidates in an attempt must share one cast, because the planner renders those partner profiles once.
   partners: readonly ScenePartner[];
-  /** Drawn once per attempt, so the planner writes a script of the length the draw allows. */
   sceneTurns: SceneTurnRange;
 }
 
@@ -88,10 +85,8 @@ export function buildPlannerJsonSchema(candidates: readonly PlannerCandidate[]) 
   return z.toJSONSchema(plannerResultSchema(candidates), { target: "openapi-3.0" });
 }
 
-/**
- * The script rules the provider schema does not carry, worded for the format retry note. Speaker 1 is
- * the lead and partners follow in order.
- */
+// Returned messages go straight into the model's format retry prompt, because the provider schema cannot enforce
+// these script rules.
 export function sceneScriptIssues(
   script: readonly number[],
   partnerAgendas: number,
@@ -113,10 +108,8 @@ export function sceneScriptIssues(
   return issues;
 }
 
-/**
- * Providers still receive the strict schema; this only decides what is accepted back. A decline
- * carries no other meaning, so stray keys on it are dropped instead of voiding the answer.
- */
+// Providers still receive the strict schema; this relaxes only response parsing so stray keys on a decline do not
+// void it.
 export function buildAcceptedResult(candidates: readonly PlannerCandidate[]) {
   const dropDeclineExtras = (value: unknown) => {
     if (!value || typeof value !== "object" || Array.isArray(value)) return value;
@@ -151,7 +144,7 @@ export interface IdleNudgePlan {
   topic: string;
   openerDirection: string;
   agenda: string;
-  /** Play Scene only: speaker numbers in turn order (1 is the lead), and each partner's goal. */
+  // Speaker convention: `script` holds 1-based speaker numbers (`1` is the lead, followed by partners in order).
   scene: { script: number[]; partnerAgendas: string[] } | null;
 }
 
@@ -170,10 +163,8 @@ function partnerNames(candidate: PlannerCandidate): string {
   return candidate.partners.map((partner) => partner.persona.persona_nickname).join(" and ") || "another character";
 }
 
-/**
- * The target's name and activity are member-written text, so they stay inside the `<target>` data block
- * and the instructions refer to them rather than quoting them.
- */
+// Target names and activities are member-written text, so `{target}` stays a reference to `<target>` instead of
+// quoting them in instructions.
 function fillPlaceholders(text: string, input: PlannerInput, candidate: PlannerCandidate): string {
   return text
     .replaceAll("{persona}", input.persona.persona_nickname)
@@ -246,7 +237,6 @@ function buildTargetBlock(target: PingUserTarget): string {
   return lines.filter(Boolean).join("\n");
 }
 
-/** A scene numbers every character so the script can name them; a single speaker needs no number. */
 function buildCharacterBlocks(
   persona: TomoriState,
   interests: readonly NaturalNudgeInterest[],
@@ -308,10 +298,6 @@ function buildUserPrompt(input: PlannerInput): string {
     .join("\n\n");
 }
 
-/**
- * Phase B: one structured call to the server's Natural Nudges model, with a single format retry
- * when the reply is malformed. Transport errors, refusals, and timeouts are not retried.
- */
 export async function planIdleNudge(input: PlannerInput): Promise<PlannerOutcome> {
   const failureContext = { serverId: input.persona.server_id, personaId: input.persona.persona_id };
   const resolution = await resolveNudgeModel(input.persona, input.plannerModel, failureContext);

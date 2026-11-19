@@ -1,46 +1,21 @@
-/**
- * Character Card V3 (`.charx`) container reader.
- *
- * A `.charx` file is a zip holding the card as `card.json` at the root plus an
- * `assets/` tree. Only the card is read here: the asset tree can carry audio,
- * video, Live2D, 3D, model and code payloads, so this reader never decompresses
- * an asset entry. Their declared sizes are still summed, because a card that
- * announces a huge asset tree says so in `card.json` and that number is free to
- * check against the zip's central directory.
- *
- * Storage-agnostic by design: the caller supplies the already-downloaded bytes
- * and owns quota, replies and persona writes. This module owns the zip shape
- * and the decompression guards.
- */
-
 import JSZip from "jszip";
 import { z } from "zod";
 import { log } from "@/utils/misc/logger";
 import { getDeclaredUncompressedSize, resolveZipEntryFile } from "@/utils/zip/zipEntryGuards";
 
-/** Card payload filename inside a `.charx` archive. */
 const CHARX_CARD_NAME = "card.json";
-/** Prefix marking an asset stored inside the archive rather than fetched remotely. */
 const CHARX_EMBEDDED_URI_PREFIX = "embeded://";
 
-/**
- * The card's `spec` value. Recognition is by prefix rather than equality so a V2
- * card shipped in a `.charx` container still converts, matching how the
- * SillyTavern converter already recognizes cards.
- */
+// Prefix matching is used instead of equality so a V2 card in a .charx container still converts, matching the
+// SillyTavern converter.
 const CHARX_SPEC_PREFIX = "chara_card";
 
-/** Limits enforced while reading an untrusted archive. */
 export type CharxReadLimits = {
-  /** Reject a `card.json` whose decompressed size exceeds this. */
   maxCardBytes: number;
-  /** Reject a card declaring more assets than this. */
   maxAssets: number;
-  /** Reject when the declared total size of embedded assets exceeds this. */
   maxTotalAssetBytes: number;
 };
 
-/** Why a `.charx` archive could not be reduced to a character card. */
 export type CharxReadFailureReason =
   | "invalid_zip"
   | "missing_card"
@@ -52,15 +27,9 @@ export type CharxReadFailureReason =
 export type CharxReadResult =
   | {
       ok: true;
-      /** The parsed card object, ready for the existing SillyTavern converter. */
       card: unknown;
-      /**
-       * Assets the archive actually carries but the import does not read.
-       *
-       * Only entries present in the archive count: a remote URL or the spec's
-       * `ccdefault:` default is a reference, not bundled media, and reporting it
-       * as dropped would describe a card that shipped nothing but its own text.
-       */
+      // Only bundled archive entries are counted (excluding remote URLs and `ccdefault:` references), because
+      // references carry no media to drop.
       ignoredAssetCount: number;
     }
   | {
@@ -68,17 +37,8 @@ export type CharxReadResult =
       reason: CharxReadFailureReason;
     };
 
-/**
- * Envelope for the fields read before the card is trusted. Unknown keys pass
- * through, since the V3 spec requires ignoring fields an application does not
- * know and the text converter tolerates every shape it can read.
- *
- * `spec` is optional because the converter, not this reader, owns card
- * recognition: it accepts a root-level V2 card with no `spec` at all, and a
- * container that refused one would be stricter than the format it carries.
- * The `spec` check below therefore only rejects a card that names a different
- * format, and never rejects on absence.
- */
+// Unknown keys pass through and `spec` is optional because V3 requires ignoring unknown fields and V2 cards may omit
+// `spec`.
 const charxEnvelopeSchema = z
   .object({
     spec: z.string().optional(),
@@ -94,18 +54,6 @@ const charxAssetSchema = z
   })
   .loose();
 
-/**
- * Parses an untrusted `.charx` buffer down to its character card.
- *
- * The declared-size check below is the load-bearing zip-bomb guard, not a
- * best-effort optimization: an archive that honestly declares a huge card is
- * refused before anything is decompressed. The post-read check that follows
- * only covers an entry declaring a size smaller than it delivers, and that case
- * jszip already refuses on its own consistency check.
- *
- * @param charxBuffer - Raw archive bytes (already size-capped by the downloader)
- * @returns The parsed card plus the ignored asset count, or a typed failure reason
- */
 export async function readCharxCard(charxBuffer: Buffer, limits: CharxReadLimits): Promise<CharxReadResult> {
   let zip: JSZip;
   try {
@@ -166,18 +114,6 @@ export async function readCharxCard(charxBuffer: Buffer, limits: CharxReadLimits
   return { ok: true, card: cardJson, ignoredAssetCount: assets.ignoredAssetCount };
 }
 
-/**
- * Bounds the card's declared asset list and reports how much of it the archive
- * actually carries.
- *
- * Two separate counts, because they answer different questions. The budget must
- * count every declared entry, malformed ones included, or an attacker fills the
- * list with junk that fails validation and the cap never trips. The reported
- * count only includes assets present in the archive, because a remote URL or the
- * spec's `ccdefault:` default is a reference rather than bundled media.
- *
- * Nothing here decompresses an asset: sizes come from the zip central directory.
- */
 function inspectDeclaredAssets(
   zip: JSZip,
   cardJson: unknown,
@@ -230,13 +166,6 @@ function inspectDeclaredAssets(
   return { ok: true, ignoredAssetCount };
 }
 
-/**
- * Resolves an `embeded://` URI to its archive entry.
- *
- * A path that escapes the archive root is not resolvable, and a URI naming an
- * entry the archive does not contain is a dangling reference: neither is an
- * error, because the asset tree is never read either way.
- */
 function resolveEmbeddedAssetEntry(zip: JSZip, embeddedPath: string): JSZip.JSZipObject | null {
   if (!embeddedPath || embeddedPath.includes("..") || embeddedPath.startsWith("/") || embeddedPath.includes("\\")) {
     return null;

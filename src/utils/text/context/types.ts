@@ -17,10 +17,6 @@ export type MessageProxyConversationUser = {
   senderDiscId: string;
 };
 
-/**
- * Simplified message structure received from tomoriChat.ts.
- * This is an internal representation before converting to StructuredContextItem.
- */
 export type SimplifiedMessageForContext = {
   id: string;
   authorId: string;
@@ -38,9 +34,8 @@ export type SimplifiedMessageForContext = {
   remoteMediaSourceKind?: "reply" | "forwarded";
   combinedMessageIds?: string[];
   individualContents?: string[];
-  /** Per-constituent send timestamps, parallel to `combinedMessageIds`. Lets
-   * reveal_message_metadata surface an accurate sent time for each original
-   * message folded into a merged turn. */
+  // Timestamps parallel to combinedMessageIds so reveal_message_metadata reports accurate send times for each message
+  // folded into a merged turn.
   combinedCreatedAts?: number[];
   imageAttachments: Array<{
     url: string;
@@ -48,7 +43,6 @@ export type SimplifiedMessageForContext = {
     mimeType: string | null;
     filename: string;
     isEmoji?: boolean;
-    /** Discord message that media-reference tools should fetch for this attachment. */
     sourceMessageId?: string;
   }>;
   videoAttachments: Array<{
@@ -57,17 +51,12 @@ export type SimplifiedMessageForContext = {
     mimeType: string | null;
     filename: string;
     isYouTubeLink: boolean;
-    /** Discord message that media-reference tools should fetch for this attachment. */
     sourceMessageId?: string;
   }>;
-  /**
-   * Text-readable file attachments. Kept structured rather than as hint text in `content`
-   * because the `read_file` hint must follow the turn's tool list, which is decided after
-   * history is simplified.
-   */
+  // Kept structured rather than baked into content because the read_file hint depends on the turn's tool list, which
+  // is resolved after history simplification.
   documentAttachments?: Array<{
     filename: string;
-    /** Discord message that `read_file` should fetch for this attachment. */
     sourceMessageId?: string;
   }>;
 };
@@ -79,7 +68,6 @@ export type PublicPersonaProfile = {
   imageAppearanceTags: string[];
 };
 
-/** Shared parameter type for both the routing wrapper and native context builder. */
 export interface BuildContextParams {
   guildId: string;
   serverName: string;
@@ -89,7 +77,8 @@ export interface BuildContextParams {
   channelDesc: string | null;
   channelName: string;
   channelId: string;
-  /** Parent channel ID when `channelId` is a thread: used for private/RP channel inheritance. */
+  // Thread parent channel ID only (never a category ID), because channelScopeCandidates uses it for private and RP
+  // channel inheritance.
   parentChannelId?: string | null;
   client: Client;
   triggererName: string;
@@ -102,21 +91,12 @@ export interface BuildContextParams {
   tomoriNickname: string;
   tomoriAttributes: string[];
   tomoriConfig: AssembledServerConfig;
-  /**
-   * Per-channel system prompt override resolved at the call site (null when none).
-   * `append` injects the prompt as a distinct SYSTEM_CHANNEL_PROMPT block after the
-   * server system prompt; `replace` substitutes the channel prompt for the server
-   * system prompt's content. Persona prompt and persona attributes are never affected.
-   */
+  // Mode "append" adds a block after the server system prompt while "replace" swaps only the server prompt, so
+  // persona prompt and attributes stay intact.
   channelPromptOverride?: { prompt: string; mode: import("@/types/db/schema").ChannelPromptMode } | null;
-  /**
-   * Per-channel context note resolved at the call site (null when none).
-   * Injected into the dialogue history at the given depth alongside any active
-   * persona-scoped note (additive). The global note from server_chat_configs is
-   * only used when neither persona nor channel has one set.
-   */
+  // Additive with any persona note: both inject at their depths, whereas the global server note runs only when
+  // neither persona nor channel defines one.
   channelContextNote?: { note: string; depth: number } | null;
-  /** Precomputed one-shot reunion note body. Null disables injection. */
   reunionNote?: string | null;
   personaPrompt?: string | null;
   personaLineageId?: number;
@@ -127,27 +107,21 @@ export interface BuildContextParams {
   preloadedCustomExpressions?: CustomExpressionRow[] | null;
   isUserImpersonation?: boolean;
   impersonatedUserId?: string;
-  /** Whose short-term memory to read when it is not the trigger message's author, such as a Ping User target. */
   shortTermMemoryUserId?: string;
   impersonatedUserNickname?: string;
   impersonatedUserPrompt?: string | null;
-  /** Active persona-scoped user mutes/blocks for the responding persona. */
   personaUserBlocks?: PersonaUserBlockRow[];
   includeTimestamps?: boolean;
   explicitLongTermMemoryIntent?: boolean;
-  /** Per-turn tool names retained by Deliberate Tool Mode; undefined means no scoped filtering. */
+  // Sentinel value: undefined or null disables scoped filtering, whereas an empty array blocks all Deliberate Tool
+  // Mode tools.
   deliberateToolAllowedNames?: readonly string[] | null;
-  /**
-   * Set by the routing wrapper while a SillyTavern preset is active: the stored server
-   * `system_prompt` and the `DEFAULT_SYSTEM_PROMPT` fallback are both skipped, so the preset
-   * fully controls the system prompt. A replace-mode channel prompt still fills the slot.
-   */
+  // Active presets skip server system_prompt and DEFAULT_SYSTEM_PROMPT so the preset owns the system prompt, while a
+  // replace-mode channel prompt still wins.
   presetOwnsSystemPrompt?: boolean;
-  /** Opaque message ID map: caller creates, context builder populates. */
   messageIdMap?: MessageIdMap;
 }
 
-/** Return type for both buildContext variants. */
 export type BuildContextResult = {
   memoryRecall?: import("@/utils/text/context/memoryRecall").MemoryRecallOutcome;
   nativeContextItems?: StructuredContextItem[];
@@ -155,17 +129,13 @@ export type BuildContextResult = {
   tailDirectives: string[];
   lowerPriorityTailDirectives: string[];
   uncensorDirective?: string;
-  /** Unified STM nudge, injected positionally by the pipeline at `nudgeInjectionDepth`. */
   nudgeItem?: StructuredContextItem;
-  /** Dialogue depth at which to inject `nudgeItem` (0 = tail). */
+  // Depth from the end of dialogue history for `nudgeItem` injection: `0` inserts at the tail.
   nudgeInjectionDepth?: number;
-  /**
-   * STM content block deferred for positional injection (only when the server's
-   * content depth is >= 0; otherwise the block is already inline in `contextItems`).
-   */
+  // Deferred STM block used only when server content depth is >= 0, since negative depths inline it in
+  // `contextItems`.
   memoryInjectionItems?: StructuredContextItem[];
-  /** Dialogue depth at which to inject `memoryInjectionItems` (0 = tail). */
+  // Depth from the end of dialogue history for `memoryInjectionItems` injection: `0` inserts at the tail.
   memoryInjectionDepth?: number;
-  /** Populated map of opaque keys -> real Discord message IDs. */
   messageIdMap: MessageIdMap;
 };

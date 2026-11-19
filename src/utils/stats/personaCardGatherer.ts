@@ -1,8 +1,3 @@
-/**
- * Gatherer for the per-invoker Persona Affinity infographic. Rendering remains
- * pure in statsInfographic.tsx; this module owns all DB, cache, and Discord
- * asset access.
- */
 import type { Guild } from "discord.js";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { statRepository } from "@/utils/db/repositories";

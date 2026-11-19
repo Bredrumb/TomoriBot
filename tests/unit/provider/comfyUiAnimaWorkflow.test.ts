@@ -36,7 +36,6 @@ async function loadEndpoint(file: string): Promise<CustomEndpointRow> {
   } as unknown as CustomEndpointRow;
 }
 
-/** Submits one request and returns the workflow TomoriBot posted to `/prompt`, after folding and pruning. */
 async function submitWorkflow(
   endpoint: CustomEndpointRow,
   request: Partial<Parameters<typeof generateComfyUiImageViaEndpoint>[0]>,

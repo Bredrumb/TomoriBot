@@ -51,11 +51,8 @@ function makeResolveArgs(userId: number, userDiscId = HOST_DISC_ID) {
   };
 }
 
-/**
- * One shared Discord account, several internal users rows: the host plus one synthetic row
- * per proxied identity, as identity persistence leaves them. The clock a caller observes is
- * therefore whichever row the resolver scoped the turn to.
- */
+// One Discord account maps to multiple users rows (host plus synthetic proxy rows), so observed presence depends on
+// which row the resolver scoped.
 function makePresenceStore(overrides: Partial<ReunionPresenceStore> = {}) {
   const rowsByDiscId = new Map<string, UserRow>([
     [HOST_DISC_ID, { user_id: HOST_USER_ID, timezone_offset: 0 } as UserRow],
@@ -74,11 +71,6 @@ function makePresenceStore(overrides: Partial<ReunionPresenceStore> = {}) {
   return { store };
 }
 
-/**
- * Per-user clock state, shaped like `StatRepository.recordPresenceSeen`, so a test can prove
- * which member's timeline advanced and that the host's did not. `writtenUserIds` records
- * every commit this clock received, which is also the proof that no other clock moved.
- */
 function makePerUserClockState() {
   const lastSeenByUserId = new Map<number, { lastPreviousDayAt: Date | null; seenToday: boolean }>();
   const writtenUserIds: number[] = [];
@@ -91,7 +83,6 @@ function makePerUserClockState() {
       return true;
     },
     writtenUserIds,
-    /** A day already on record, as a previously successful turn would leave it. */
     seedHistory(userId: number, lastPreviousDayAt: Date) {
       lastSeenByUserId.set(userId, { lastPreviousDayAt, seenToday: false });
     },

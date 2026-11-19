@@ -122,7 +122,6 @@ export interface ParticipantExposurePolicy {
   exposePersonalMemories: boolean;
 }
 
-/** A present namespace, rendered once rather than repeated for every identity. */
 export interface MessageProxyNamespaceNote {
   serviceId: string;
   namespaceKey: string;
@@ -370,10 +369,6 @@ interface MessageProxyParticipant {
   presentation: ProxyServicePresentation | null;
 }
 
-/**
- * Host accounts that may speak for this identity, preferring the account that
- * actually proxied it in this history window over other linked accounts.
- */
 function messageProxyHostDiscIds(
   context: MessageProxyIdentityContext | null,
   proxyingHostDiscId?: string | null,
@@ -387,10 +382,8 @@ function messageProxyHostDiscIds(
   return [...ordered];
 }
 
-/**
- * A proxy identity is not an independent Discord account, so host privacy and
- * blacklist state must govern it as well as its synthetic row.
- */
+// A proxy identity is not an independent Discord account, so host privacy and blacklist state must govern it
+// alongside its synthetic row.
 async function applyMessageProxyHostAuthorization(
   hostDiscIds: readonly string[],
   current: { blacklisted: boolean; privacyLevel: PrivacyLevel },
@@ -598,13 +591,8 @@ function applyPersonaRelativeNaming(
   };
 }
 
-/**
- * Names the affixes separately from the nickname, so an affix stays removable.
- * Without it the model only ever sees the joined name and reads "stop calling me
- * Master Mirri" as a nickname rewrite that re-composes to the same string. The
- * parenthetical uses the tool's own field words so the mapping to a change is
- * direct.
- */
+// Affixes are listed separately with tool field names, because otherwise the model only sees the joined name and
+// cannot rewrite or remove an affix.
 function enrichNamingField(base: HydratedDiscordUserBase, params: ParticipantHydrationParams): ParticipantProfileField {
   const naming = base.naming;
   const lines: string[] = [];
@@ -799,7 +787,7 @@ function enrichMessageProxyIdentityField(base: HydratedDiscordUserBase): Partici
   );
 }
 
-/** Host IDs stay unresolved until namespace dedup, so they are labeled once. */
+// Host IDs stay unresolved until namespace deduplication, so each host is labeled only once.
 interface MessageProxyNamespaceNoteSeed {
   context: MessageProxyIdentityContext;
   presentation: ProxyServicePresentation;

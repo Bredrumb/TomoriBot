@@ -1,12 +1,5 @@
-/**
- * AI-Powered Preset Generation for the Anthropic provider.
- *
- * Offers a `preset_export_data` tool whose input_schema matches the preset response schema and
- * leaves `tool_choice` at auto, because Sonnet 5.5, Opus 5.5 and Fable 5.1 reject a forced choice.
- * A reply that skips the tool is parsed from its text instead.
- *
- * Includes a tool-calling loop for models with web-search tools enabled.
- */
+// Sonnet 5.5, Opus 5.5, and Fable 5.1 reject a forced tool_choice, so preset generation leaves tool_choice at auto
+// and parses text fallback.
 
 import { log } from "@/utils/misc/logger";
 import { executeTool } from "@/tools/toolRegistry";
@@ -35,9 +28,6 @@ interface AnthropicPresetGenerationOptions {
   maxToolRounds?: number;
 }
 
-/**
- * Injects the response schema so the model knows the expected output shape.
- */
 function buildAnthropicPresetSystemPrompt(): string {
   const schema = buildPresetResponseSchema();
   return [
@@ -49,9 +39,6 @@ function buildAnthropicPresetSystemPrompt(): string {
   ].join("\n\n");
 }
 
-/**
- * Anthropic tool call format from streaming response
- */
 interface AnthropicToolCallBlock {
   type: "tool_use";
   id: string;
@@ -59,9 +46,6 @@ interface AnthropicToolCallBlock {
   input: Record<string, unknown>;
 }
 
-/**
- * Generate preset data from user prompts using the Anthropic Messages API.
- */
 export async function generatePresetFromPromptAnthropic(
   apiKey: string,
   params: GeneratePresetParams,

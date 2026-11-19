@@ -1,12 +1,3 @@
-/**
- * /matrix link
- * Links a Discord channel to a Matrix room for bidirectional message relay.
- * Uses upsert semantics so re-linking replaces any existing mapping.
- *
- * Interaction pattern: Pattern 2 (defer before async work)
- * Permission required: ManageGuild
- */
-
 import {
   ChannelType,
   MessageFlags,
@@ -30,9 +21,6 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { UserRow, ErrorContext } from "@/types/db/schema";
 
-/**
- * Configure the /matrix link subcommand builder.
- */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("link")
@@ -51,11 +39,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
         .setRequired(true),
     );
 
-/**
- * Execute the /matrix link command.
- * Links the chosen Discord channel to the given Matrix room ID.
- *
- */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,

@@ -7,11 +7,10 @@ import {
   fetchPosts,
 } from "@/tools/restAPIs/danbooru/danbooruService";
 
-/** Anonymous searches allow 2 tags, and negations and `order:` count toward it, so filtering happens locally. */
+// Danbooru caps anonymous queries at 2 tags including negations and order: terms, so queries avoid extra modifiers.
 export const MAX_POST_SEARCH_TAGS = 2;
 export const MAX_POSTED_IMAGES = 4;
 const POST_SEARCH_LIMIT = 20;
-/** Keeps random picks among posts other users have upvoted. */
 const MIN_POST_SCORE = 3;
 
 // Discord's Community Guidelines keep nudity in age-restricted channels, so q and e stay out of every other channel.
@@ -46,7 +45,6 @@ export interface PostSearchResult {
   images: PostableImage[];
 }
 
-/** DMs are never age-restricted, and a thread takes its parent's setting. */
 export function isAgeRestrictedChannel(channel: Pick<BaseChannel, "isDMBased" | "isThread">): boolean {
   if (channel.isDMBased()) return false;
   const rated = channel.isThread() ? channel.parent : channel;
@@ -57,7 +55,7 @@ export function allowedRatingsFor(ageRestricted: boolean): readonly DanbooruRati
   return ageRestricted ? DANBOORU_ALL_RATINGS : DANBOORU_PUBLIC_RATINGS;
 }
 
-/** Checked on the returned tags rather than negated in the query, because negations count toward the 2-tag limit. */
+// Blocked tags are filtered locally after fetch because Danbooru counts query negations toward the 2-tag limit.
 export function hasBlockedTag(post: DanbooruPost): boolean {
   if (post.rating === "g") return false;
   return post.tag_string_general.split(" ").some((tag) => DANBOORU_BLOCKED_TAGS.has(tag));
@@ -67,7 +65,6 @@ export function danbooruPostUrl(id: number): string {
   return `${DANBOORU_ORIGIN}/posts/${id}`;
 }
 
-/** A bare post ID, or a link whose host is exactly danbooru.donmai.us and whose path is `/posts/{id}`. */
 export function parseDanbooruPostReference(input: string): number | null {
   const trimmed = input.trim().replace(/^<(.*)>$/, "$1");
   if (/^\d{1,12}$/.test(trimmed)) return Number(trimmed) || null;
@@ -84,7 +81,8 @@ export function parseDanbooruPostReference(input: string): number | null {
   return match ? Number(match[1]) || null : null;
 }
 
-/** The tags plus the rating scope, score floor, and deleted-post filter, which Danbooru does not count as tags. */
+// Danbooru excludes rating:, score:, and -status:deleted from the 2-tag query limit, so appending them alongside 2
+// tags stays valid.
 function buildPostSearchQuery(tags: readonly string[], ratings: readonly DanbooruRating[]): string {
   return [...tags, `rating:${ratings.join(",")}`, `score:>=${MIN_POST_SCORE}`, "-status:deleted"].join(" ");
 }
@@ -98,7 +96,6 @@ function postableImageUrl(post: DanbooruPost, ratings: readonly DanbooruRating[]
   return imageUrl;
 }
 
-/** Up to `count` random posts that pass every image, rating, and blocklist check. */
 export function selectPostableImages(
   posts: readonly DanbooruPost[],
   ratings: readonly DanbooruRating[],
@@ -115,7 +112,8 @@ export function selectPostableImages(
   return candidates.slice(0, count);
 }
 
-/** Searches with Danbooru-form tags already within MAX_POST_SEARCH_TAGS and ratings already cleared for the channel. */
+// Callers must pass Danbooru-form tags within MAX_POST_SEARCH_TAGS and channel-cleared ratings because neither is
+// revalidated here.
 export async function searchDanbooruPosts(
   tags: readonly string[],
   ratings: readonly DanbooruRating[],

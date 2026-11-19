@@ -1,6 +1,3 @@
-/**
- * Response type for Bing Translate API
- */
 export interface BingResponse {
   translation: string;
   language: {
@@ -9,9 +6,6 @@ export interface BingResponse {
   };
 }
 
-/**
- * Response type for Google Translate API
- */
 export interface GoogleResponse {
   text: string;
   from: {

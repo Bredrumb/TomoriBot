@@ -1,6 +1,3 @@
-/**
- * Maps server config columns to the feature flags that tools declare through `requiresFeatureFlag`.
- */
 export function configToFeatureFlags(config: {
   sticker_usage_enabled: boolean;
   web_search_enabled: boolean;

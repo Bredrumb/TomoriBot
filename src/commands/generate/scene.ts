@@ -45,10 +45,7 @@ const CYCLES_INPUT_ID = "generate_scene_cycles";
 const INSTRUCTIONS_INPUT_ID = "generate_scene_instructions";
 const MAX_PERSONA_SELECT_OPTIONS = 25;
 
-/**
- * Round-trip ceiling for `/generate scene`: each cycle replays every selected speaker once.
- * Kept low because a cycle costs one LLM turn per speaker and they all post to the channel.
- */
+// Kept low at 10 because each cycle runs one LLM turn per selected speaker and posts every turn to the channel.
 const GENERATE_SCENE_MAX_CYCLES = 10;
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
@@ -58,10 +55,8 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
   );
 export const autocomplete = createGenerationModelAutocomplete("text");
 
-/**
- * Discord rejects the whole modal past 25 options, which only installs raising `MAX_PERSONAS_PER_SERVER`
- * above 25 reach; personas past the cut then cannot be cast in a scene.
- */
+// Capped at 25 because Discord rejects modals past 25 select options, leaving personas beyond that limit uncastable
+// if MAX_PERSONAS_PER_SERVER exceeds 25.
 function getPersonaOptions(personas: TomoriState[], locale: string) {
   return personas
     .filter((persona) => typeof persona.persona_id === "number")

@@ -153,12 +153,8 @@ function getCapabilityModelId(
   }
 }
 
-/**
- * Reads the active model id for a capability from live server config columns.
- *
- * Used to tell the custom-endpoint resolver which specific model is active (server scope), so the
- * correct endpoint row is chosen when a label hosts several models of the same capability.
- */
+// Custom-endpoint resolution needs the active model id because one connection can host multiple models of the same
+// capability.
 function capabilityModelIdFromColumns(config: CapabilityConfigColumns | null, capability: Capability): number | null {
   if (!config) {
     return null;

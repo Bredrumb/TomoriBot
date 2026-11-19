@@ -27,7 +27,6 @@ afterEach(() => {
   for (const spy of spies.splice(0)) spy.mockRestore();
 });
 
-/** Plans a member's queued message that interrupted a Natural Nudges scene whose next speaker was Bau. */
 async function planInterruption(content: string, personalDtm: "off" | "on" = "off"): Promise<number[]> {
   const personas = [MIRRI, BAU, JUNO];
   const member = createUserRow({ user_id: 77, user_disc_id: "100000000000000077", personal_dtm: personalDtm });

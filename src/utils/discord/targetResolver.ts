@@ -120,7 +120,6 @@ type AmbiguousChannelTarget = {
     channelName: string;
     channelId: string;
   }>;
-  /** Total matches found before capping candidates at 3 */
   totalCount: number;
 };
 
@@ -282,11 +281,6 @@ function dedupeChannelCandidates(
   return deduped;
 }
 
-/**
- * Scan conversation context items for inline-code channel references that include a Discord ID.
- * Matches patterns like: the channel named `name (ID: 12345)` or `name (ID: 12345)`
- * Returns all IDs whose normalized channel name matches the given input.
- */
 function extractContextChannelIds(normalizedInput: string, contextItems: StructuredContextItem[]): string[] {
   const pattern = /`([^`]+?)\s*\(ID:\s*(\d{17,20})\)`/g;
   const ids = new Set<string>();
@@ -466,16 +460,8 @@ function resolveGuildMemberStage(
   };
 }
 
-/**
- * The Discord id of whoever caused this turn, for tools keying a write or a
- * permission check on the triggerer rather than on a named target.
- *
- * `context.userId` is the identity admission already resolved through the
- * Message-proxy, Matrix relay, manual-trigger, and self-reply-chain paths, so
- * it outranks the message author. The author is a fallback for tool contexts
- * built outside a chat turn, and never used for a webhook message: a proxied
- * turn authors as the webhook, whose snowflake matches no user row.
- */
+// context.userId outranks message.author because it holds resolved proxy or relay identities, while a webhook author
+// id matches no user row.
 export function resolveTriggererDiscordId(context: ToolContext): string | undefined {
   if (context.userId) return context.userId;
   return context.message?.webhookId ? undefined : context.message?.author?.id;
@@ -536,11 +522,6 @@ function affixVariants(values: Partial<Record<AddressingStyle, string>>): string
   return [...unique].sort((left, right) => right.length - left.length);
 }
 
-/**
- * Peels one persona-configured prefix and suffix off a requested name. Every
- * addressing variant is tried because the target's own style is known only once the
- * account resolves, which is what this strip exists to make possible.
- */
 function stripNamingAffixes(rawInput: string, namingConfig: PersonaNamingConfig | undefined): string | null {
   if (!namingConfig) {
     return null;
@@ -905,8 +886,6 @@ export async function resolveChannelTarget(input: string, context: ToolContext):
     };
   }
 
-  /** Resolve a raw channel ID. Tries client cache, guild fetch, then active threads:
-   *  because guild.channels.fetch() does not return threads. */
   const resolveById = async (id: string): Promise<GuildTextBasedChannel | null> => {
     const fromClient = await context.client.channels.fetch(id).catch(() => null);
     const fromGuild = fromClient ?? (await guild.channels.fetch(id).catch(() => null));

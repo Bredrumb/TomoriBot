@@ -1,12 +1,3 @@
-/**
- * Locks in the `/generate image` consolidation surface. The contextual image flow used to live at
- * `/tool visualize`; after consolidation it must be absent there and exposed through one required,
- * localized mode selector on `/generate image`.
- *
- * Checking the registered payload, rather than only locale keys, catches a subtle failure where the
- * English builder text ships unchanged because commandLoader has no matching option/choice key to
- * attach Japanese localizations to.
- */
 import { beforeAll, describe, expect, it } from "bun:test";
 import { ApplicationCommandOptionType } from "discord.js";
 import { loadCommandData } from "@/utils/discord/commandLoader";

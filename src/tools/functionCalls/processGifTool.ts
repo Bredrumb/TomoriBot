@@ -1,9 +1,3 @@
-/**
- * GIF Processing Tool (Development Only)
- * Allows the AI to selectively process GIF attachments on-demand by extracting keyframes
- * This is disabled in production to prevent memory exhaustion (100-130 MB per GIF)
- */
-
 import { log, ColorCode } from "@/utils/misc/logger";
 import { GUARDS_ENABLED, MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { extractGifKeyframes } from "@/utils/media/gifProcessor";
@@ -12,13 +6,6 @@ import { stashEnhancedContextItem } from "@/utils/chat/pendingEnhancedContext";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "@/types/tool/interfaces";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 
-/**
- * Tool for processing GIF attachments on-demand in development environments
- * Extracts keyframes from GIFs and injects them into conversation context
- *
- * IMPORTANT: This tool is ONLY available in development (when GUARDS_ENABLED = false)
- * Production environments use text placeholders instead to prevent OOM crashes
- */
 export class ProcessGifTool extends BaseTool {
   name = "process_gif";
   description =
@@ -45,14 +32,6 @@ export class ProcessGifTool extends BaseTool {
     required: ["media_id"],
   };
 
-  /**
-   * Check if GIF processing tool is available for the given provider.
-   * Only available in development (GUARDS_ENABLED = false).
-   * Model vision support is handled by `requiredModelCapabilities` and
-   * `isAvailableForContext()`.
-   *
-   * @returns True only if not in production and provider supports vision
-   */
   isAvailableFor(_provider: string): boolean {
     // Block in production to prevent memory exhaustion
     if (GUARDS_ENABLED) {
@@ -63,11 +42,6 @@ export class ProcessGifTool extends BaseTool {
     return true;
   }
 
-  /**
-   * Enhanced availability check that considers context flags and model vision capabilities
-   *
-   * @returns True if tool should be available
-   */
   isAvailableForContext(provider: string, context?: ToolContext): boolean {
     // Base provider and environment check
     if (!this.isAvailableFor(provider)) {
@@ -97,24 +71,6 @@ export class ProcessGifTool extends BaseTool {
     return true;
   }
 
-  /**
-   * Execute GIF processing
-   *
-   * Algorithm:
-   * 1. Validate parameters (media_id is required)
-   * 2. Fetch recent messages from channel (last 100)
-   * 3. Find target message by ID
-   * 4. Extract GIF attachment from message
-   * 5. Validate GIF size via HEAD request (reject if > 50 MB)
-   * 6. Process GIF using extractGifKeyframes() utility
-   * 7. Create StructuredContextItem with processed frames
-   * 8. Store in static map for enhanced context restart
-   * 9. Return success signal to trigger context restart
-   *
-   * @param args - Arguments containing media_id and optional reason
-   * @param context - Tool execution context with Discord client access
-   * @returns Promise resolving to tool result with restart signal
-   */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     const messageId = args.media_id as string;
     const reason = (args.reason as string | undefined) || "No reason provided";

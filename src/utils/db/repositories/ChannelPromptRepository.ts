@@ -1,23 +1,9 @@
-/**
- * ChannelPromptRepository: manages per-channel system prompt overrides.
- *
- * Covered table: channel_prompt_overrides.
- *
- * Per-channel data is server-local and transient (not exported per-server),
- * so this repository implements no IRepository interface.
- */
 import type { ChannelPromptMode } from "@/types/db/schema";
 import { type ChannelPromptOverride, invalidateChannelPromptCache } from "@/utils/cache/channelPromptCacheStore";
 import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 
 class ChannelPromptRepository {
-  /**
-   * Returns the per-channel system prompt override, or null if none is set.
-   *
-   * @param serverId      - Internal server DB ID
-   * @param channelDiscId - Discord snowflake ID of the channel
-   */
   async getChannelPromptOverride(serverId: number, channelDiscId: string): Promise<ChannelPromptOverride | null> {
     try {
       const rows = await sql`
@@ -39,13 +25,6 @@ class ChannelPromptRepository {
     }
   }
 
-  /**
-   * Upserts a per-channel system prompt override and invalidates its cache.
-   *
-   * @param serverId      - Internal server DB ID
-   * @param channelDiscId - Discord snowflake ID of the channel
-   * @param mode          - "append" or "replace"
-   */
   async setChannelPromptOverride(
     serverId: number,
     channelDiscId: string,
@@ -71,12 +50,6 @@ class ChannelPromptRepository {
     }
   }
 
-  /**
-   * Deletes the per-channel system prompt override for a single channel and invalidates its cache.
-   *
-   * @param serverId      - Internal server DB ID
-   * @param channelDiscId - Discord snowflake ID of the channel
-   */
   async deleteChannelPromptOverride(serverId: number, channelDiscId: string): Promise<boolean> {
     try {
       await sql`

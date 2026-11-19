@@ -1,16 +1,8 @@
-/**
- * Fixture management for DB regression tests.
- *
- * Inserts minimal rows required by the harness and provides a single
- * cleanupFixtures() call that removes them all via FK cascades.
- *
- * Naming: all test rows use the "_rt_" prefix so they can never collide
- * with real data and so cleanup can target them precisely.
- */
+// All test rows must use the "_rt_" prefix so they never collide with real data and cleanupFixtures can target test
+// users.
 import type { SQL } from "bun";
 import { clearUserCache } from "@/utils/cache/userCache";
 
-/** Stable Discord-scoped identifiers for all fixture rows. */
 export const FIXTURE_IDS = {
   serverDiscId: "_rt_server_001",
   userDiscId: "_rt_user_001",
@@ -18,7 +10,6 @@ export const FIXTURE_IDS = {
   altUserDiscId: "_rt_user_alt_001", // for personal memory tests
 } as const;
 
-/** Internal DB IDs populated after insertFixtures() runs. */
 export interface FixtureRefs {
   serverId: number;
   personaId: number;
@@ -43,11 +34,6 @@ const SERVER_CONFIG_TABLES = [
   "server_welcome_configs",
 ] as const;
 
-/**
- * Inserts the minimal fixture set needed across all regression test files.
- * Idempotent: uses ON CONFLICT DO NOTHING wherever possible.
- *
- */
 export async function insertFixtures(db: SQL): Promise<FixtureRefs> {
   const [serverRow] = await db`
     INSERT INTO servers (server_disc_id)
@@ -157,12 +143,6 @@ export async function insertFixtures(db: SQL): Promise<FixtureRefs> {
   return { serverId, personaId, personaLineageId, userId };
 }
 
-/**
- * Removes all fixture rows created by insertFixtures().
- * Cascade deletes handle child rows (personas, split config tables, persona_configs,
- * server_memories) when the servers row is deleted.
- *
- */
 export async function cleanupFixtures(db: SQL): Promise<void> {
   // Cascade via FK: deletes personas, split config rows, persona_configs, server_memories
   await db`DELETE FROM servers WHERE server_disc_id = ${FIXTURE_IDS.serverDiscId}`;

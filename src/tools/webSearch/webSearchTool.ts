@@ -1,13 +1,3 @@
-/**
- * WebSearchTool : the single LLM-visible search tool.
- *
- * Replaces the previously-LLM-visible 4-tool Brave surface (`brave_web_search`,
- * `brave_image_search`, `brave_video_search`, `brave_news_search`) with one
- * tool that takes a `category` enum. The dispatcher routes to whichever
- * engine in the chain (Brave → SearXNG → OpenRouter → DuckDuckGo) can serve the
- * requested category.
- */
-
 import {
   BaseTool,
   type Tool,

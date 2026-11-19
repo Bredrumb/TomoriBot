@@ -2701,10 +2701,8 @@ function describeComfyUiHistoryOutputs(outputs: Record<string, unknown> | undefi
   };
 }
 
-/**
- * Summarizes `/prompt` `node_errors`, which ComfyUI returns beside a `prompt_id` when it drops the
- * outputs that depend on an invalid node and still runs the rest.
- */
+// ComfyUI returns /prompt node_errors beside a prompt_id because it drops invalid-node outputs and still runs the
+// rest.
 function describeComfyUiNodeErrors(nodeErrors: unknown): string[] {
   if (!isRecord(nodeErrors)) {
     return [];
@@ -2740,10 +2738,8 @@ function describeRejectedComfyUiInput(error: Record<string, unknown>): { inputNa
   return { inputName: extra.input_name, value: extra.received_value };
 }
 
-/**
- * Model files a rejected prompt could not find, kept only when the workflow sent that exact value to
- * that node input, so a tool result never repeats a string the endpoint supplied.
- */
+// Missing files are matched against the workflow's sent node inputs so a tool result never echoes a string the
+// endpoint supplied.
 function findMissingComfyUiModelFiles(nodeErrors: unknown, workflow: ComfyUiWorkflow): string[] {
   if (!isRecord(nodeErrors)) {
     return [];
@@ -3065,19 +3061,11 @@ async function generateWithComfyUi(
   }
 }
 
-/** Bounds each best-effort cancel request, because the ComfyUI being cancelled may be the thing that stalled. */
+// Cancel requests use a short timeout because the ComfyUI instance being cancelled may be the thing that stalled.
 const COMFYUI_CANCEL_REQUEST_TIMEOUT_MS = 5_000;
 
-/**
- * Cancels one ComfyUI prompt without touching other prompts on a shared instance.
- *
- * Prefers the ID-scoped `/api/jobs/{id}/cancel` route. On servers that predate it, deletes the
- * prompt from the queue and interrupts only when this exact prompt is the one executing, because
- * a bodiless or legacy `/interrupt` aborts whatever is running, including another user's job.
- * Never rejects.
- *
- * @internal Exported for focused cancellation regression tests.
- */
+// Legacy /interrupt aborts whatever is running on a shared instance, so older servers delete from the queue and
+// interrupt only this executing prompt.
 export async function cancelComfyUiPrompt(
   endpoint: CustomEndpointRow,
   apiKey: string,

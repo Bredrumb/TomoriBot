@@ -1,16 +1,8 @@
 import sharp from "sharp";
 import { log } from "@/utils/misc/logger";
 
-/**
- * libvips holds decoded bitmaps and its operation cache in native memory, which lands in
- * `process.memoryUsage().external` rather than the JS heap. Nothing in the cache-sweeping or
- * emergency-clear paths can reclaim it, and the memory guard only samples RSS, so an image
- * burst is invisible until it has already pushed the container toward its limit.
- *
- * Production sampling showed `arrayBuffers` swinging between 33 MB and 170 MB and `external`
- * between 82 MB and 316 MB against a 512 MB container budget, so the stock defaults (a 50 MB
- * operation cache and one worker thread per CPU) are too generous for this deployment.
- */
+// Libvips caches bitmaps in external native memory invisible to heap sweeps and the RSS memory guard, so stock
+// defaults risk exceeding the 512 MB budget.
 const DEFAULT_CONCURRENCY = 1;
 const DEFAULT_CACHE_MEMORY_MB = 16;
 const DEFAULT_CACHE_ITEMS = 50;
@@ -31,10 +23,8 @@ function readIntEnv(name: string, fallback: number, minimum: number): number {
   return parsed;
 }
 
-/**
- * Applies process-global limits to sharp. Must run before any module performs image work,
- * because {@link sharp.concurrency} and {@link sharp.cache} configure a shared libvips instance.
- */
+// Process-global sharp limits must run before any image work because sharp.concurrency and sharp.cache configure a
+// shared libvips instance.
 export function initMediaProcessing(): void {
   const concurrency = readIntEnv("SHARP_CONCURRENCY", DEFAULT_CONCURRENCY, 1);
   const cacheMemoryMb = readIntEnv("SHARP_CACHE_MEMORY_MB", DEFAULT_CACHE_MEMORY_MB, 0);

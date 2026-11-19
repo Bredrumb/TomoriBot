@@ -1,9 +1,4 @@
 import { isManagedWebhookMessage } from "@/utils/chat/webhookIdentity";
-/**
- * Formats Discord messages into a text representation suitable for LLM fact extraction.
- * Also detects which bot personas participated (via webhook author matching)
- * for the "automatic" scope in /memory history import.
- */
 
 import type { Message } from "discord.js";
 import { MessageType } from "discord.js";
@@ -15,22 +10,14 @@ import { getCachedVoiceTranscript } from "@/utils/audio/voiceTranscriptCache";
 import { getCachedRenderedMarkdownTable } from "@/utils/text/markdownTableCache";
 import { normalizeRenderModifierName, parseRenderModifierWebhookName } from "@/utils/discord/renderModifierParser";
 
-/** Result of formatting messages for extraction */
 export interface FormattedHistoryResult {
-  /** Formatted dialogue text for the extraction prompt */
   text: string;
 
-  /**
-   * Unique persona IDs detected in the batch (for automatic scope): from webhook-authored
-   * messages, plus the main persona when the bot posted under its own account.
-   */
   detectedPersonaTomoriIds: number[];
 
-  /** Number of messages that made it into the formatted text */
   messageCount: number;
 }
 
-/** System message types that should be skipped (joins, boosts, pins, etc.) */
 const SKIPPED_MESSAGE_TYPES = new Set([
   MessageType.UserJoin,
   MessageType.GuildBoost,
@@ -49,13 +36,6 @@ const SKIPPED_MESSAGE_TYPES = new Set([
   MessageType.AutoModerationAction,
 ]);
 
-/**
- * Resolves Discord mention formats to human-readable names using guild cache.
- *
- * @param content - Raw message content with Discord mention syntax
- * @param msg - The Discord message (for guild access)
- * @returns Content with resolved mentions
- */
 function resolveMentions(content: string, msg: Message): string {
   let resolved = content;
 
@@ -86,29 +66,6 @@ function resolveMentions(content: string, msg: Message): string {
   return resolved;
 }
 
-/**
- * Formats an array of Discord messages into a text representation
- * suitable for LLM fact extraction, and detects which bot personas
- * participated via webhook author name matching.
- *
- * Format per message: `[ISO timestamp] Username: content`
- *
- * Skips:
- * - System messages (joins, boosts, pins)
- * - Empty messages with no content and no attachments
- * - Bot refresh/system embeds
- *
- * Includes:
- * - Bot messages (they contain conversation context)
- * - Attachment indicators: `[Attachment: filename.ext]`
- * - Non-system embed indicators: `[Embed: title]`
- *
- * @param messages - Array of Discord messages in chronological order
- * @param serverPersonas - All personas for the server (for webhook author matching)
- * @param clientUserId - The bot's own user id, so replies it sent directly (rather than
- *        through a persona webhook) can still be attributed to the main persona
- * @returns Formatted text, detected persona IDs, and message count
- */
 export function formatMessagesForExtraction(
   messages: Message[],
   serverPersonas: TomoriState[],

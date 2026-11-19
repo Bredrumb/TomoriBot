@@ -56,24 +56,10 @@ function formatDiscordChannelReference(channelId: string | undefined, fallbackTe
   return channelId ? `<#${channelId}>` : fallbackText;
 }
 
-/**
- * Derives a human-readable display label from a slug for other-channel memories
- * where the originating server's category definitions are not loaded.
- * e.g. "my_goals" → "My Goals"
- */
 function slugToDisplayLabel(slug: string): string {
   return slug.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-/**
- * Formats a categories map as labeled lines for context injection.
- * When labelMap is provided (same-channel with full category row data), uses the
- * original labels in position order. Without labelMap (other-channel), uses
- * humanized slug names.
- *
- * @param categories - slug → value map from the cache entry
- * @param labelMap - Optional slug → display-label map (position-ordered)
- */
 function formatCategoryLines(categories: Record<string, string>, labelMap?: Map<string, string>): string {
   const lines: string[] = [];
 
@@ -97,17 +83,6 @@ function formatCategoryLines(categories: Record<string, string>, labelMap?: Map<
   return lines.join("\n");
 }
 
-/**
- * Renders the most recent crude turns of one other-channel memory entry.
- *
- * The speaker falls back through the stored name, then the triggerer for user turns and the bot for
- * model turns, so a turn whose author was never recorded still renders with someone recognizable.
- *
- * @param messages - Turns held by the cache entry
- * @param depth - Configured number of most recent turns to keep
- * @param isSameServerSharedMemory - Whether the entry belongs to the current server
- * @returns The turn lines, each terminated by a newline
- */
 function renderCrudeTurns(
   messages: ShortTermMemoryEntry["messages"],
   depth: number,
@@ -125,9 +100,6 @@ function renderCrudeTurns(
   return crudeText;
 }
 
-/**
- * Builds persona-scoped server or DM long-term memory context.
- */
 export async function buildServerMemoryContextItem(params: {
   tomoriState: TomoriState | null;
   guildId: string;
@@ -260,7 +232,8 @@ export async function buildShortTermMemoryContext(params: {
   memoryItems: StructuredContextItem[];
   nudgeItem?: StructuredContextItem;
   nudgeInjectionDepth: number;
-  /** Saved dialogue-item depth, with -1 anchoring stale same-channel memory at the top and STM_TAIL_SLOT marking fresh content for downstream position comparison. */
+  // Sentinel depths: -1 anchors stale same-channel memory at the top, and STM_TAIL_SLOT marks fresh content so
+  // downstream builders can compare positions.
   memoryInjectionDepth: number;
 }> {
   const memoryItems: PromptLayoutItem[] = [];

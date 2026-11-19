@@ -1,9 +1,3 @@
-/**
- * The loader registers `autocomplete` exports into a map parallel to `executionMap`. The two are
- * built at the same three sites from the same execution-key derivation, so the risk this covers is
- * them drifting apart: a command whose handler is reachable but whose autocomplete is not, or a key
- * registered under a path Discord will never send.
- */
 import { beforeAll, describe, expect, it } from "bun:test";
 import { loadCommandData } from "@/utils/discord/commandLoader";
 import { initializeLocalizer } from "@/utils/text/localizer";

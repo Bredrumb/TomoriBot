@@ -5,7 +5,7 @@ import { localizer } from "@/utils/text/localizer";
 import { getReminderRepetition } from "@/utils/text/processors/reminderRepetition";
 import { formatTimeWithOffset, formatUTCOffset } from "@/utils/text/timezoneHelper";
 
-/** Option values both scheduled-task selectors share, keyed for the shared locale placeholders. */
+// Field names stay snake_case because callers pass them directly into shared locale placeholder interpolation.
 export interface ReminderOptionParts {
   persona_name: string;
   reminder_time: string;
@@ -21,22 +21,13 @@ interface ReminderOptionPartsInput {
   timezoneOffset: number;
   hasManagePermission: boolean;
   viewerUserId: number | undefined;
-  /** Locale keys for the hourly and monthly repeat suffixes, which each command owns. */
   repeatTextKey: string;
   repeatMonthsTextKey: string;
-  /** Locale key for the creator suffix, which each command owns. */
   managerCreatedByKey: string;
 }
 
-/**
- * Resolves the option text one reminder row contributes to a scheduled-task selector.
- *
- * `persona_nickname` is NULL for a reminder the main persona owns, so the option names that
- * persona rather than leaving the field empty.
- *
- * A Matrix-originated reminder has `created_by_user_id` NULL with a bridge ID as its Discord ID,
- * so it names its creator with a Matrix marker instead of reading as unowned.
- */
+// Main-persona rows have null persona_nickname and Matrix rows have null created_by_user_id with a bridge ID, so both
+// need explicit fallbacks.
 export function buildReminderOptionParts(input: ReminderOptionPartsInput): ReminderOptionParts {
   const { reminder } = input;
   const repetition = getReminderRepetition(reminder);

@@ -76,10 +76,8 @@ const modalStringSelectValues = new Map<string, Record<string, string[]>>();
 // Storage for resolved attachments from modal file uploads (Discord.js doesn't expose these)
 const modalResolvedAttachments = new Map<string, Record<string, APIAttachment>>();
 
-/**
- * Tracks interactions that were acknowledged via raw Discord REST API
- * Used to prevent "already acknowledged" errors when Discord.js state is out of sync
- */
+// Interactions acknowledged via raw REST are tracked here because Discord.js leaves replied and deferred stale,
+// causing already-acknowledged errors.
 const rawModalAcknowledged = new WeakMap<Interaction, boolean>();
 
 const shutdownAcknowledged = new WeakSet<Interaction>();
@@ -128,11 +126,6 @@ export function initializeShutdownInteractionAdmission(client: Client): void {
   };
 }
 
-/**
- * Reports whether a command, button, or select menu interaction was acknowledged through the
- * raw REST modal path. Discord.js does not update `replied`/`deferred` for that
- * response, so workflow code must consult this state explicitly.
- */
 export function hasRawModalAcknowledgement(
   interaction:
     | ChatInputCommandInteraction
@@ -146,48 +139,24 @@ export function hasRawModalAcknowledgement(
   return rawModalAcknowledged.get(interaction) === true;
 }
 
-/**
- * Tracks interactions whose reply message has been rendered as a Components V2
- * payload. Discord permanently stamps `IsComponentsV2` on such a message, and that
- * flag can never be removed by a later edit, so nor can a V2 message carry legacy
- * `embeds`/`content`. So once a selector (or any V2 writer) renders onto an
- * interaction's reply, a subsequent legacy `editReply({ embeds })` on the SAME
- * interaction would be rejected by Discord.
- *
- * The shared legacy sinks below ({@link replyInfoEmbed}, {@link replySummaryEmbed})
- * consult this set and emit a V2-safe notice instead. Mirrors the {@link rawModalAcknowledged}
- * `WeakMap` pattern in this file: interaction-keyed state that avoids an extra Discord fetch to
- * read live flags.
- */
+// Discord permanently stamps IsComponentsV2 onto reply messages and rejects later legacy embeds, so V2 replies are
+// tracked locally without fetching.
 const componentsV2Reply = new WeakSet<ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction>();
 
-/**
- * Marks an interaction's reply message as carrying `IsComponentsV2`. Callers that
- * write a Components V2 payload onto an interaction's own reply must call this so the
- * legacy sinks stay V2-safe if they later target the same interaction.
- *
- */
 export function markComponentsV2Reply(
   interaction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
 ): void {
   componentsV2Reply.add(interaction);
 }
 
-/**
- * Reports whether {@link markComponentsV2Reply} previously flagged this interaction's
- * reply as a Components V2 message.
- *
- */
 export function hasComponentsV2Reply(
   interaction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
 ): boolean {
   return componentsV2Reply.has(interaction);
 }
 
-/**
- * Transform Component Type 18 modal submission to standard ActionRow format
- * This makes Discord.js process the submission as if it were a normal modal from the start
- */
+// Discord Component Type 18 modal rows are rewritten to ActionRow (type 1) so Discord.js parses the submission
+// normally.
 function transformModalSubmissionPacket(packet: RawDiscordWebSocketPacket): void {
   if (!packet.d?.data?.components) return;
 
@@ -246,11 +215,6 @@ function transformModalSubmissionPacket(packet: RawDiscordWebSocketPacket): void
     return comp;
   });
 }
-
-/**
- * Intercept and transform WebSocket messages for Component Type 18 support
- * This patches the actual WebSocket message handler at a lower level
- */
 
 type InterceptableDiscordClient = {
   ws?: {
@@ -424,17 +388,8 @@ const SELECT_PLACEHOLDER_MAX_LENGTH = 150;
 const SELECT_OPTION_TEXT_MAX_LENGTH = 100;
 const CONFIRMATION_DESCRIPTION_LIMIT = 3800; // Budget for description, leaving room for title/buttons in the 4000-char total component limit
 
-/**
- * @description Detects a discord.js collector expiry across every awaiting surface
- * (`awaitMessageComponent`, `awaitModalSubmit`, and raw component collectors).
- * discord.js is inconsistent about the rejection shape, so both are handled:
- *   - Raw collectors reject with the bare end-reason string (`"time"` / `"idle"`).
- *   - `Message#awaitMessageComponent` and `awaitModalSubmit` reject with an
- *      `InteractionCollectorError` whose message embeds the end reason, e.g.
- *      "Collector received no interactions before ending with reason: time".
- * Only `time`/`idle` count as expiry: `limit`, `messageDelete`, and channel/guild
- * deletions are genuine failures the caller must surface as errors.
- */
+// Both bare strings and InteractionCollectorError messages are checked for time or idle because discord.js uses
+// inconsistent rejection shapes across collectors.
 export function isCollectorTimeoutError(error: unknown): boolean {
   if (error === "time" || error === "idle") return true;
   if (!error || typeof error !== "object") return false;
@@ -544,10 +499,6 @@ function consumeStoredValue<T>(
   return val;
 }
 
-/**
- * Consumes every value submitted for one String Select.
- * @returns `undefined` when the submission is missing or already consumed; `[]` when submitted empty.
- */
 export function takeRawModalStringSelectValues(interactionId: string, customId: string): string[] | undefined {
   consumeStoredValue(modalSelectValues, interactionId, customId);
   return consumeStoredValue(modalStringSelectValues, interactionId, customId);
@@ -561,10 +512,6 @@ export function takeRawModalRoleSelectValue(interactionId: string, customId: str
   return takeRawModalSelectValue(interactionId, customId);
 }
 
-/**
- * Consumes the channel IDs submitted for one Channel Select.
- * @returns `undefined` when the submission is missing or already consumed; `[]` when submitted empty.
- */
 export function takeRawModalChannelSelectValues(interactionId: string, customId: string): string[] | undefined {
   const storedValues = modalChannelSelectValues.get(interactionId);
   if (!storedValues) return undefined;
@@ -637,11 +584,6 @@ export function takeRawModalFileUploads(interactionId: string, customId: string)
   return files.filter((file): file is APIAttachment => !!file);
 }
 
-/**
- * Safely localizes a string for modal usage, truncating if necessary to prevent Discord API errors
- * @param vars Variables for localization (optional)
- * @param maxLength Maximum allowed length (defaults to modal description limit)
- */
 export function safeModalLocalizer(
   locale: string,
   key: string,
@@ -688,19 +630,10 @@ function localizeConfirmationDescription(
   return truncateForDiscordDescription(localizedText);
 }
 
-/**
- * Safely truncates text for select option labels and values with "..." suffix,
- * delegating to the Unicode-safe truncation primitive.
- * @param maxLength Maximum allowed length (100 for select options)
- */
 export function safeSelectOptionText(text: string, maxLength = 100): string {
   return truncateDiscordText(text, maxLength, "...");
 }
 
-/**
- * @description Prompts the user with an embed and Continue/Cancel buttons, awaiting their response.
- * Handles interaction replies, button filtering, and timeouts.
- */
 export async function promptWithConfirmation(
   interaction: ChatInputCommandInteraction | ButtonInteraction,
   locale: string,
@@ -804,11 +737,8 @@ export async function promptWithConfirmation(
   }
 }
 
-/**
- * @description Prompts the user with a confirmation embed and buttons without
- * pre-acknowledging the selected button interaction, so the caller can still
- * open a modal from the returned ButtonInteraction.
- */
+// Selected button interactions stay unacknowledged here so callers can still open a Discord modal from the returned
+// ButtonInteraction.
 export async function promptWithUnacknowledgedConfirmation(
   interaction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
   locale: string,
@@ -977,14 +907,6 @@ export async function promptWithUnacknowledgedConfirmation(
   }
 }
 
-/**
- * Maps the title/description/footer of a legacy embed-style options object onto the
- * {@link NoticeContainerOptions} shape used by {@link buildNoticeContainer}. Used by
- * the V2-collision fallback in the legacy sinks so a marked interaction still receives
- * the same copy, rendered as a Components V2 notice rather than an embed.
- *
- * @param descriptionOverride - Optional pre-composed body (e.g. summary fields flattened).
- */
 function standardOptionsToNotice(
   locale: string,
   options: StandardEmbedOptions,
@@ -1005,16 +927,8 @@ function standardOptionsToNotice(
   };
 }
 
-/**
- * Delivers a {@link buildNoticeContainer} payload to an interaction whose reply message
- * already carries `IsComponentsV2`. Mirrors the three delivery situations of the legacy
- * embed sinks: `editReply` when acknowledged, `webhook.send` after a raw modal, `reply`
- * otherwise, so but never emits legacy `embeds`, which Discord rejects on a V2 message.
- *
- * A marked interaction is, by construction, an ephemeral private workflow message, so
- * the fresh-response paths stay ephemeral.
- *
- */
+// Fresh-response paths stay ephemeral without a flags parameter because every V2-marked interaction is an ephemeral
+// private workflow message.
 async function replyNoticeContainerV2(
   interaction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
   notice: NoticeContainerOptions,
@@ -1041,10 +955,6 @@ async function replyNoticeContainerV2(
   }
 }
 
-/**
- * @description Shows a simple info/status embed without any interactive components.
- * Handles interaction state management defensively to prevent acknowledgment conflicts.
- */
 export async function replyInfoEmbed(
   interaction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
   locale: string,
@@ -1196,11 +1106,6 @@ export async function replyInfoEmbed(
   }
 }
 
-/**
- * @description Shows a summary embed with multiple fields, organized and localized.
- * Useful for displaying configuration summaries, help information, etc.
- * Handles interaction state management defensively to prevent acknowledgment conflicts.
- */
 export async function replySummaryEmbed(
   interaction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
   locale: string,
@@ -1333,17 +1238,9 @@ interface PersonaPaginatedChoiceOptions {
   onSelect?: (index: number) => Promise<void>;
   onCancel?: () => Promise<void>;
   preserveSelectedInteraction?: boolean;
-  /** Workflow-owned avatar cache shared across internal picker retries. */
   avatarSessionCache?: AvatarSessionCache;
 }
 
-/**
- * Formats the leading "title" line of a Components V2 container. All CV2
- * containers render their title as an H3 heading for consistent prominence
- * (status, confirmation, persona picker, persona results all share this).
- *
- * @param text - The already-localized title text.
- */
 function formatContainerTitle(text: string): string {
   return `### ${text}`;
 }
@@ -1431,58 +1328,28 @@ function buildV2ConfirmationComponents(
   return [container];
 }
 
-/**
- * Optional in-container notice action button. Rendered as a left-aligned
- * ActionRow inside the notice card so utility actions stay visually attached
- * to the notice content.
- */
 export interface NoticeContainerButtonOptions {
-  /** Discord component custom ID for the button. */
   customId: string;
-  /** Locale key for the button label. */
   labelKey: string;
-  /** Button style (defaults to {@link ButtonStyle.Secondary}); Success, Link, and Premium are excluded. */
   style?: ButtonStyle.Primary | ButtonStyle.Secondary | ButtonStyle.Danger;
-  /** Whether the button is disabled after its collector expires. */
   disabled?: boolean;
 }
 
-/**
- * Configuration for {@link buildNoticeContainer}.
- */
 export interface NoticeContainerOptions {
-  /** Locale used for every localized string in the container. */
   locale: string;
-  /** Accent color of the container's left bar (maps to the old embed color). */
   color?: AccentColorInput;
-  /** Locale key for the H3 title line. */
   titleKey: string;
-  /** Variables for the title. */
   titleVars?: Record<string, string | number | boolean>;
-  /** Locale key for the body description. */
   descriptionKey?: string;
-  /** Raw description text, used when the caller has already composed the body. */
   description?: string;
-  /** Variables for the localized description. */
   descriptionVars?: Record<string, string | number | boolean>;
-  /** Optional muted footer line. */
   footerKey?: string;
-  /** Variables for the footer. */
   footerVars?: Record<string, string | number | boolean>;
-  /** Adds the shared `/config` > Behavior > Notices line below the footer. */
   configHint?: boolean;
-  /** Optional action button placed inside the container. */
   button?: NoticeContainerButtonOptions;
-  /** Renders only the emoji-free title; body, footer, config hint, and button are dropped. */
   minimal?: boolean;
 }
 
-/**
- * Builds a compact Components V2 notice container that mirrors the simple
- * title/description/footer shape of a standard embed while allowing an action
- * button to live inside the same card.
- *
- */
 export function buildNoticeContainer(options: NoticeContainerOptions): TopLevelComponentData[] {
   const { locale } = options;
   const accentColor = resolveAccentColor(options.color);
@@ -1543,43 +1410,16 @@ export function buildNoticeContainer(options: NoticeContainerOptions): TopLevelC
   return [container];
 }
 
-/** A Components V2 edit/send payload: a component tree flagged `IsComponentsV2`. */
 export interface ComponentsV2Payload {
   components: TopLevelComponentData[];
   flags: MessageFlags.IsComponentsV2;
 }
 
-/**
- * How many option ranges (`1-25`, `26-50`, …) a single selector page shows before
- * paginating with Previous/Next. Shared with `personaWorkflow.ts` so both consumers
- * of {@link buildRangeSelectorPayload} agree on the page depth.
- */
 export const RANGES_PER_SELECTOR_PAGE = 20;
 
-/** How many range buttons fit per Discord action row (max 5 components per row). */
+// Capped at 5 because Discord limits each ActionRow to at most 5 buttons.
 const RANGE_BUTTONS_PER_ROW = 5;
 
-/**
- * Builds the Components V2 range-selector container shown when a modal's select has
- * more than {@link MODAL_OPTIONS_PER_PAGE} options. Each range button opens a modal
- * scoped to its 25-option slice; a Previous/Cancel/Next nav row paginates the ranges.
- *
- * This is the single source of the `>25` selector shell. Both the persona anchor
- * workflow (`personaWorkflow.ts`) and the legacy `promptWithPaginatedModal`
- * `componentsV2` branch render it, replacing the two divergent renderers that used to
- * read the same two `general.pagination.*` locale keys.
- *
- * @param locale - Locale for the selector's localized strings.
- * @param customIdPrefix - Per-session prefix scoping every button custom id
- *   (`${prefix}_range_${index}`, `${prefix}_previous`, `${prefix}_cancel`, `${prefix}_next`).
- * @param optionCount - Total number of options across all ranges.
- * @param rangePage - Zero-based selector page currently shown.
- * @param pageSize - How many options each range covers. Defaults to
- *   {@link MODAL_OPTIONS_PER_PAGE}. Callers that reserve select entries for their own
- *   fixed choices (e.g. `/model fallback` prepends a "None" option to every page, so only
- *   24 models fit) pass the smaller number here, keeping the button labels honest about
- *   what the modal will actually show.
- */
 export function buildRangeSelectorPayload(
   locale: string,
   customIdPrefix: string,
@@ -1656,98 +1496,40 @@ export function buildRangeSelectorPayload(
   return { components: [container], flags: MessageFlags.IsComponentsV2 };
 }
 
-/**
- * Optional in-container action button (e.g. the "Import Now" button on persona
- * generate/create results). Rendered as an ActionRow inside the container so it
- * reads as part of the result card rather than a detached button row.
- */
 export interface PersonaResultButtonOptions {
-  /** Discord component custom ID for the button. */
   customId: string;
-  /** Locale key for the button label. */
   labelKey: string;
-  /** Button style (defaults to {@link ButtonStyle.Secondary}); Success, Link, and Premium are excluded. */
   style?: ButtonStyle.Primary | ButtonStyle.Secondary | ButtonStyle.Danger;
-  /** Whether the button is disabled (e.g. after a successful import). */
   disabled?: boolean;
-  /** Optional unicode emoji shown on the button. */
   emoji?: string;
 }
 
-/**
- * A content block rendered (after a divider) inside a persona-result container.
- * Supports a localized heading plus either a localized or raw body.
- */
 export interface PersonaResultSection {
-  /** Optional locale key for the bold section heading. */
   titleKey?: string;
-  /** Variables for the section heading. */
   titleVars?: Record<string, string | number | boolean>;
-  /** Locale key for the section body (takes precedence over {@link PersonaResultSection.body}). */
   bodyKey?: string;
-  /** Variables for the localized section body. */
   bodyVars?: Record<string, string | number | boolean>;
-  /** Raw (already-composed) section body, used when {@link PersonaResultSection.bodyKey} is absent. */
   body?: string;
 }
 
-/**
- * Configuration for {@link buildPersonaResultContainer}.
- */
 export interface PersonaResultContainerOptions {
-  /** Locale used for every localized string in the container. */
   locale: string;
-  /** Accent color of the container's left bar (maps to the old embed color). */
   color: AccentColorInput;
-  /** Locale key for the bold title line. */
   titleKey: string;
-  /** Variables for the title. */
   titleVars?: Record<string, string | number | boolean>;
-  /** Locale key for the body description. */
   descriptionKey: string;
-  /** Variables for the description. */
   descriptionVars?: Record<string, string | number | boolean>;
-  /** Optional hero image attachment name, rendered as a MediaGallery item under the title. */
   imageAttachmentName?: string;
-  /**
-   * Image arrangement. "image-top" (default) shows the attachment as a full-width
-   * MediaGallery under the title. "thumbnail-section" instead pins it as a
-   * right-aligned Thumbnail accessory on the final section, with the button
-   * directly beneath it, so mirroring the persona picker's avatar-above-button look.
-   */
   layout?: "image-top" | "thumbnail-section";
-  /** Optional content blocks (e.g. sample dialogue, next steps), each after a divider. */
   sections?: PersonaResultSection[];
-  /** Optional footer note (e.g. DM warning), rendered after a divider in a muted style. */
   footerKey?: string;
-  /** Variables for the footer. */
   footerVars?: Record<string, string | number | boolean>;
-  /** Optional action button placed inside the container. */
   button?: PersonaResultButtonOptions;
-  /**
-   * Horizontal alignment of {@link PersonaResultContainerOptions.button}.
-   * "left" renders it in an ActionRow; "right" renders it as a Section accessory
-   * (the only way to right-align a button in Components V2). Defaults to "left".
-   */
   buttonAlignment?: "left" | "right";
-  /**
-   * Optional closing note rendered as a final row *after* the button (e.g. a
-   * "you can edit this later" tip), so the button stays tight under the avatar
-   * while the note lives on its own row below.
-   */
   trailingNoteKey?: string;
-  /** Variables for the trailing note. */
   trailingNoteVars?: Record<string, string | number | boolean>;
 }
 
-/**
- * Builds a Components V2 container that mirrors a classic "result" embed: title,
- * hero image, description, optional next-steps block, optional footer; but can
- * also host an action button inside the same card. Used by `/persona generate`
- * and `/persona create` success messages so the "Import Now" button sits within
- * the result rather than dangling beneath a separate embed.
- *
- */
 export function buildPersonaResultContainer(options: PersonaResultContainerOptions): TopLevelComponentData[] {
   const { locale } = options;
   const accentColor = resolveAccentColor(options.color);
@@ -1940,42 +1722,23 @@ export type GuardedPanelDeliveryTarget =
 export type GuardedPanelDeliveryMethod = "editReply" | "update" | "reply" | "replace" | "replaceFrom";
 
 export interface GuardedPanelDeliveryOptions {
-  /** Delivery transport to invoke on the target. Defaults to editReply, falling back to available methods. */
   method?: GuardedPanelDeliveryMethod;
-  /** Locale used to localize the minimal fallback payload if the provided payload is invalid. */
   locale?: string;
-  /** Source interaction when method is "replace" and target provides replaceFrom. */
   sourceInteraction?: unknown;
-  /** Flags override, e.g. Ephemeral | IsComponentsV2 for initial reply. */
   flags?: MessageFlags | number;
-  /**
-   * The receipt this payload repaints with, when it carries one.
-   *
-   * Threaded through delivery rather than read back off the payload so the failure signal cannot
-   * cost the payload any of its Discord text budget or interfere with runtime panel formatting.
-   */
+  // Receipt is passed separately from the payload so failure tracking never consumes Discord text budget or alters
+  // runtime panel formatting.
   receipt?: PanelReceipt;
-  /**
-   * The panel this payload renders, logged on a limit violation because the interaction's custom ID
-   * names the pressed control (a page selector names the page being left, not the page that failed).
-   */
+  // Panel name for limit-violation logs because the interaction custom ID identifies the pressed control (such as the
+  // page left), not the rendered page.
   panel?: string;
 }
 
-/**
- * Resolves whether the current environment should enforce production behavior for panel delivery.
- * Reads dynamically from environment variables with fallback so runtime mode switches are detected immediately.
- */
 export function isProductionEnvironment(): boolean {
   const env = process.env.RUN_ENV || process.env.NODE_ENV || "development";
   return env.toLowerCase() === "production";
 }
 
-/**
- * Builds the minimal fallback Components V2 container payload for panel delivery.
- * Contains only a localized error title and description in a single container.
- * Guaranteed to satisfy validateComponentsV2MessageLimits.
- */
 export function buildPanelFallbackPayload(locale = "en-US"): ComponentsV2MessagePayload {
   const container = buildPanelContainer([
     {
@@ -1990,13 +1753,6 @@ export function buildPanelFallbackPayload(locale = "en-US"): ComponentsV2Message
   };
 }
 
-/**
- * Validates a Components V2 payload before it reaches a delivery transport.
- *
- * Invalid payloads throw outside production so tests and development expose the exact violation.
- * Production logs only structured limit metadata and returns the minimal fallback while retaining
- * attachment fields as empty arrays when the original payload included them.
- */
 export function validateAndFallbackPanelPayload<T>(payload: T, locale = "en-US", panel?: string): T {
   const validation = validateComponentsV2MessageLimits(payload as ComponentsV2MessagePayload);
   if (validation.valid) return payload;
@@ -2035,33 +1791,20 @@ export function validateAndFallbackPanelPayload<T>(payload: T, locale = "en-US",
   } as T;
 }
 
-/**
- * Sink for the `panel_failure` series, injected so this module stays usable without a pool.
- *
- * Deliberately not a top-level import of the repository singleton. `interactionCore` is pulled in
- * by nearly every Discord surface, and a static import would drag the database client into every
- * one of them, including tests that only want to deliver a panel. The default resolves lazily and
- * only when a failure actually happens.
- */
+// Panel failure sink is injected rather than imported at top level so interactionCore does not pull the DB client
+// into every surface and unit test.
 export interface PanelFailureSampleSink {
   recordSample(metricName: string, fields: Record<string, number | string>): Promise<void>;
 }
 
 let panelFailureSampleSink: PanelFailureSampleSink | null = null;
 
-/**
- * Overrides the sample sink, returning the previous one for the caller to restore.
- *
- * Mirrors the dependency-object shape `recordPanelActionStat` takes, in the form a module-private
- * reporter can use: tests install a spy, and production never calls it.
- */
 export function setPanelFailureSampleSink(sink: PanelFailureSampleSink | null): PanelFailureSampleSink | null {
   const previous = panelFailureSampleSink;
   panelFailureSampleSink = sink;
   return previous;
 }
 
-/** Discards the sample, for a context that must not reach a real database. */
 const inertPanelFailureSampleSink: PanelFailureSampleSink = { recordSample: async () => {} };
 
 async function resolvePanelFailureSampleSink(): Promise<PanelFailureSampleSink> {
@@ -2075,19 +1818,8 @@ async function resolvePanelFailureSampleSink(): Promise<PanelFailureSampleSink> 
   return metricSampleRepository;
 }
 
-/**
- * Writes the failure to Postgres alongside the log stream, without awaiting it.
- *
- * `recordSample` already never throws and never rejects, so a failing pool cannot break delivery.
- * It is still fire-and-forget rather than awaited because it performs an INSERT and can ride a
- * prune on the write path, and this call happens before the Discord request. Awaiting it would put
- * a database round trip in front of every failure repaint, which is the one thing the chokepoint's
- * contract forbids.
- *
- * The fields are passed as an object, never a `JSON.stringify` result: under Bun's driver a
- * stringified value binds as text and `::jsonb` turns it into a scalar string, which makes every
- * `fields->>'...'` read in Grafana return null. See migration 064 and `recordSample`'s own note.
- */
+// Fire-and-forget so failure repaints never wait on a DB round trip; fields stay an object because stringified text
+// binds as a scalar JSONB string.
 function recordPanelFailureSample(fields: Record<string, number | string>): void {
   void (async () => {
     try {
@@ -2100,25 +1832,8 @@ function recordPanelFailureSample(fields: Record<string, number | string>): void
   })();
 }
 
-/**
- * Single reporting point for every panel that repaints itself as a failed or warning receipt.
- *
- * Route code reports an expected refusal by returning a status object rather than throwing, so the
- * router's exception handler never sees it and the user's red receipt leaves no trace anywhere.
- * Every panel transport already funnels through {@link deliverGuardedPanel}, which makes it the one
- * place a receipt can be observed without an opt-in line in each of the roughly sixteen `repaint`
- * helpers.
- *
- * Emitted as a metric rather than an error record, because `error_logs` is reserved for incidents.
- * Most of these receipts are expected outcomes the actor can correct (bad input, stale panel,
- * unavailable read), and writing every one of them at error level is the storm the repository's
- * circuit breaker exists to absorb. The genuinely broken paths log at error level where their cause
- * is still in scope, and a site with free-text cause detail writes it to `log.warn`.
- *
- * Both sinks carry the same fields, so `stat_counters.panel_action` (successes) and
- * `metric_samples.panel_failure` (failures) join on `metric_key` / `fields->>'reason'` and answer
- * which controls fail and how often relative to succeeding, in one query.
- */
+// Expected panel receipts emit a metric instead of error logs so they never trip the circuit breaker, and fields stay
+// joinable with panel_action.
 function reportPanelFailure(
   target: GuardedPanelDeliveryTarget | ((payload: unknown) => Promise<unknown>),
   options?: GuardedPanelDeliveryOptions,
@@ -2152,14 +1867,6 @@ function reportPanelFailure(
   }
 }
 
-/**
- * Universal guarded delivery helper used across all panel transports (initial reply,
- * editReply, component update, anchor replacement, and avatar-bearing paths).
- *
- * In tests and development, surfaces exact limit violations loudly.
- * In production, logs a redacted structured diagnostic and delivers the minimal fallback
- * payload so committed operations always leave an acknowledged interaction repainted.
- */
 export async function deliverGuardedPanel<T = unknown>(
   target: GuardedPanelDeliveryTarget | ((payload: unknown) => Promise<T>),
   payload: unknown,
@@ -2229,36 +1936,11 @@ export async function deliverGuardedPanel<T = unknown>(
   return result;
 }
 
-/**
- * Resolved avatar data for a single persona, cached across page renders within a picker session.
- * - `url`: a public HTTP(S) URL or the bot fallback, so no file attachment needed.
- * - `buffer`: raw image bytes for a local-disk avatar that must be attached to the Discord message.
- */
 export type AvatarCacheEntry = PersonaAvatarAsset;
 
-/**
- * Session-scoped avatar cache keyed by absolute persona index (not page-local).
- * Populated lazily on first page visit; reused on re-navigation to the same page.
- * The persona workflow owns this map and passes it through internal picker retries.
- */
+// Keys are absolute persona indices rather than page-local ones so cached avatars never collide across pages.
 export type AvatarSessionCache = Map<number, AvatarCacheEntry>;
 
-/**
- * Resolves avatar images for a single page of personas, using a session cache to
- * avoid re-fetching the same avatar on repeated page visits.
- *
- * Resolution order per alter persona (only runs on first visit per persona):
- * 1. Public HTTP(S) URL (always works in production, and in dev when
- *    AVATAR_PUBLIC_BASE_URL is configured)
- * 2. Discord file attachment: used in non-production when the avatar is stored
- *    as a local path and AVATAR_PUBLIC_BASE_URL is not set. The buffer is loaded
- *    from disk and returned as an AttachmentBuilder so the caller can include it
- *    in the reply. The media URL is set to `attachment://avatar_{idx}.png` which
- *    Discord resolves against the message's attachments.
- * 3. Fallback URL (bot server avatar) when no avatar is available.
- *
- * @param sessionCache - Mutable cache shared across all page renders in one picker session
- */
 async function resolvePersonaPageAvatarData(
   pagePersonas: TomoriState[],
   pageStartIdx: number,
@@ -2455,10 +2137,6 @@ function buildPersonaPageComponents(
   return [container];
 }
 
-/**
- * Displays a paginated list of choices with emoji reactions for selection
- * @returns A promise that resolves with the selected item or null if cancelled/timeout
- */
 export async function replyPaginatedChoices(
   interaction: ChatInputCommandInteraction | ButtonInteraction,
   locale: string,
@@ -2779,11 +2457,8 @@ export async function replyPaginatedChoices(
   }
 }
 
-/**
- * Low-level Components V2 persona renderer used by `runPersonaPickerWorkflow`.
- * Command and feature callers must use the workflow API so acknowledgment,
- * retry, cache, and anchor-message invariants remain enforced.
- */
+// Callers must go through runPersonaPickerWorkflow rather than invoking this renderer directly so acknowledgment,
+// retry, cache, and anchor invariants hold.
 export async function replyPaginatedPersonaChoicesV2(
   interaction: ChatInputCommandInteraction | ButtonInteraction,
   locale: string,
@@ -3137,10 +2812,8 @@ export async function replyPaginatedPersonaChoicesV2(
   }
 }
 
-/**
- * @description Creates a modal using raw Discord API with Component Type 18 (Label) support for descriptions and string selects
- * @param autoDeferReply Optional. If provided, automatically defers the modal submission reply to prevent 3-second timeout. Pass `true` for public reply, or `MessageFlags.Ephemeral` for ephemeral reply.
- */
+// autoDeferReply: true defers publicly and MessageFlags.Ephemeral defers ephemerally so modal submission meets
+// Discord's 3-second ack limit.
 export async function promptWithRawModal(
   interaction: ChatInputCommandInteraction | ButtonInteraction,
   locale: string,
@@ -3159,7 +2832,6 @@ export async function promptWithRawModal(
   const modalNonce = Date.now().toString(36);
   const noncedModalCustomId = `${modalCustomId}_${modalNonce}`;
 
-  /** Append the nonce to a component custom_id for cache-busting */
   const nonceCustomId = (id: string) => `${id}_${modalNonce}`;
 
   try {
@@ -3629,37 +3301,18 @@ export async function promptWithRawModal(
   }
 }
 
-/**
- * Shared page size for the `>25`-option paginated modal selector. Both the legacy
- * page-button path in {@link promptWithPaginatedModal} and the Components V2 range
- * selector in `personaWorkflow.ts` slice option lists into chunks of this size, so a
- * single exported value keeps them in lockstep (previously `ITEMS_PER_PAGE` and
- * `OPTIONS_PER_MODAL` duplicated the same `25`).
- */
+// Matches Discord's 25-option modal select cap so promptWithPaginatedModal and personaWorkflow.ts stay in lockstep on
+// slice math.
 export const MODAL_OPTIONS_PER_PAGE = 25;
 
-/**
- * Finds the single string select in a modal's component list. Radio and checkbox groups also carry
- * `options` but are capped at 10, so they are skipped; matching one that precedes the select would
- * hide the select from pagination.
- *
- * @returns The paginatable select component, or `undefined` when none exists.
- */
+// Radio and checkbox groups also carry options (capped at 10) and are skipped because matching one first would hide
+// the string select from pagination.
 export function getPaginatedModalComponent(options: ModalOptions): ModalComponent | undefined {
   return options.components.find(
     (component) => "options" in component && Array.isArray(component.options) && !("kind" in component),
   );
 }
 
-/**
- * Returns a shallow copy of `options` whose `target` select component has its
- * option list narrowed to the half-open range `[start, end)`. Every other
- * component is passed through by reference. Shared by both selector paths so the
- * index math that maps a chosen page/range back to a modal is defined once.
- *
- * @param start - Inclusive start index into the target's option list.
- * @param end - Exclusive end index into the target's option list.
- */
 export function sliceModalOptions(
   options: ModalOptions,
   target: ModalComponent,
@@ -3675,15 +3328,6 @@ export function sliceModalOptions(
   };
 }
 
-/**
- * Parses a `${prefix}_range_${index}` custom id emitted by the shared range
- * selector, returning the 0-based range index or `null` when the id is not a
- * valid range button. Centralizing the parse keeps the selector's custom-id
- * scheme in one place for every consumer of the range payload.
- *
- * @param prefix - The selector's per-session custom-id prefix.
- * @returns The parsed 0-based range index, or `null` on a mismatch.
- */
 export function parseModalRangeIndex(customId: string, prefix: string): number | null {
   const marker = `${prefix}_range_`;
   if (!customId.startsWith(marker)) return null;
@@ -3691,9 +3335,6 @@ export function parseModalRangeIndex(customId: string, prefix: string): number |
   return Number.isNaN(parsed) ? null : parsed;
 }
 
-/**
- * Enhanced modal function that automatically handles pagination when select options exceed 25 items
- */
 export async function promptWithPaginatedModal(
   interaction: ChatInputCommandInteraction | ButtonInteraction,
   locale: string,
@@ -3802,21 +3443,8 @@ export async function promptWithPaginatedModal(
   }
 }
 
-/**
- * Components V2 range-selector implementation of the `>25`-option paginated modal.
- * Renders the shared {@link buildRangeSelectorPayload} shell (identical to the persona
- * workflow's `>25` selector) and drives its own await loop.
- *
- * Delivery is path-specific by design (see the plan's "Delivery must stay path-specific"):
- * this branch preserves the global path's three situations: `reply` when unacknowledged,
- * `editReply` when deferred/replied, and `webhook.send` after a raw modal; rather than
- * routing through the persona anchor-message controller.
- *
- * @param selectComponent - The paginatable select (already guaranteed non-null by the caller).
- * @param optionCount - Total option count across all ranges.
- * @param wasRawModalAcked - Whether a raw REST modal already consumed the initial response.
- *   `cancelled` when the user clicks the selector's Cancel button.
- */
+// Delivery stays path-specific (no persona anchor) because global callers lack one and raw REST modals ack Discord
+// without setting interaction.replied.
 async function runComponentsV2RangeSelectorModal(
   interaction: ChatInputCommandInteraction | ButtonInteraction,
   locale: string,

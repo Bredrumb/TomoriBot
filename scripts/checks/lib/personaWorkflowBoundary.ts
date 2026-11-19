@@ -1,12 +1,3 @@
-/**
- * Shared persona-workflow boundary scanner.
- *
- * Command code must use the high-level persona workflow instead of reaching for
- * its low-level picker or recreating the old preservation/callback boilerplate.
- * This module is the single source of truth used by both the CLI validation
- * check and its unit tests.
- */
-
 import { readFile, readdir } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { ts } from "ts-morph";
@@ -16,13 +7,11 @@ const COMPETING_PERSONA_HELPER = "selectConditioningPersona";
 const PRESERVE_SELECTED_INTERACTION = "preserveSelectedInteraction";
 const PICKER_ON_SELECT = "onSelect";
 
-/** Files allowed to implement or directly adapt the low-level picker. */
 export const INTERNAL_PERSONA_WORKFLOW_PATHS = new Map<string, string>([
   ["src/utils/discord/ui/interactionCore.ts", "low-level Discord interaction primitive"],
   ["src/utils/discord/ui/personaWorkflow.ts", "command-facing persona workflow implementation"],
 ]);
 
-/** Source roots covered by the boundary audit. */
 export const PERSONA_WORKFLOW_AUDIT_DIRS = ["src"] as const;
 
 export const PERSONA_WORKFLOW_REPO_ROOT = resolve(import.meta.dir, "..", "..", "..");
@@ -36,13 +25,9 @@ export type PersonaWorkflowViolationKind =
   | "self-acknowledging-on-selected"
   | "competing-persona-helper";
 
-/** One forbidden persona-picker pattern found in source. */
 export interface PersonaWorkflowBoundaryViolation {
-  /** Repo-relative path with POSIX separators. */
   file: string;
-  /** 1-based source line. */
   line: number;
-  /** 1-based source column. */
   column: number;
   kind: PersonaWorkflowViolationKind;
   symbol: string;
@@ -54,7 +39,6 @@ export interface PersonaWorkflowBoundaryAuditResult {
   scannedFiles: number;
 }
 
-/** Normalize a path for deterministic checks and output on every OS. */
 export function normalizePersonaWorkflowPath(path: string): string {
   return path.replaceAll("\\", "/");
 }
@@ -191,21 +175,12 @@ function collectImportedAliases(sourceFile: ts.SourceFile, importedName: string)
   return aliases;
 }
 
-/**
- * Calls that acknowledge an interaction outright, as opposed to the in-place update and
- * defer-update the workflow performs on the anchor message. A selection callback that makes one
- * of these claims an interaction the anchor already owns, and Discord answers it as a failure.
- */
+// Calling `deferReply` or `reply` inside a selection callback fails on Discord because the workflow already owns the
+// interaction via the anchor message.
 const SELF_ACKNOWLEDGEMENT_CALLS = new Set(["deferReply", "reply"]);
 
-/** The callback whose body must not acknowledge, named as the workflow's options declare it. */
 const WORKFLOW_ON_SELECTED = "onSelected";
 
-/**
- * Every function expression or declaration a property initializer can present as a callback.
- * Returns more than one entry only for a conditional or logical expression, where either branch
- * is still a callback body and so both are scanned.
- */
 function callbackBodies(initializer: ts.Expression): ts.FunctionLikeDeclaration[] {
   const unwrapped = unwrapExpression(initializer);
   if (ts.isArrowFunction(unwrapped) || ts.isFunctionExpression(unwrapped)) return [unwrapped];
@@ -222,10 +197,6 @@ function scriptKindForPath(file: string): ts.ScriptKind {
   return file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
 }
 
-/**
- * Scan one TypeScript source string for forbidden persona-workflow patterns.
- * Comments and string contents are ignored naturally by the TypeScript AST.
- */
 export function scanPersonaWorkflowSource(
   content: string,
   file = "src/unknown.ts",
@@ -262,11 +233,6 @@ export function scanPersonaWorkflowSource(
     });
   };
 
-  /**
-   * Scans one callback body for an acknowledgement call on the interaction. The workflow's own
-   * acknowledgement is not visible here: it happens through the message controller's in-place
-   * methods, which are not named like Discord's interaction acknowledgement methods.
-   */
   const walkForSelfAcknowledgement = (node: ts.Node): void => {
     if (ts.isCallExpression(node)) {
       const callee = unwrapExpression(node.expression);
@@ -425,7 +391,6 @@ async function listFiles(directory: string): Promise<string[]> {
   return files.flat();
 }
 
-/** Audit the real repository source tree using the same scanner as the unit tests. */
 export async function auditPersonaWorkflowBoundary(): Promise<PersonaWorkflowBoundaryAuditResult> {
   const candidates: string[] = [];
   for (const directory of PERSONA_WORKFLOW_AUDIT_DIRS) {

@@ -38,7 +38,6 @@ afterEach(() => {
   else process.env.PLURALKIT_API_TOKEN = originalApiToken;
 });
 
-/** Runs one test under a lookup budget other than the file's 2000ms default. */
 async function withLookupBudget(budgetMs: number, body: () => Promise<void>): Promise<void> {
   process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS = String(budgetMs);
   try {

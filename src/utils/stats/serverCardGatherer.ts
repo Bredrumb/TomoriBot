@@ -1,13 +1,3 @@
-/**
- * Gatherer for the Server Leaderboard infographic. It owns database reads,
- * Discord display-name resolution, image-data conversion, and per-avatar accent
- * sampling; the renderer is a pure function of the resulting ServerCardData.
- *
- * Layout mirrors the Personal Wrapped "golden standard": a light-mode card whose
- * palette is derived from the server icon, a vertical bar chart of the top
- * personas by tokens, then horizontal bars for the most active members and the
- * top models, and finally the server-wide token/spend totals.
- */
 import type { Guild } from "discord.js";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { statRepository } from "@/utils/db/repositories";

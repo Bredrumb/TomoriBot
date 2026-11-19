@@ -16,7 +16,6 @@ function makeChunk(data: Record<string, unknown>): RawStreamChunk {
   return { data, provider: "test", metadata: { timestamp: Date.now() } };
 }
 
-/** Feeds one streamed argument fragment for tool call index 0. */
 function feedArguments(adapter: OpenAICompatibleStreamAdapter, name: string, args: string): ProcessedChunk {
   return adapter.processChunk(
     makeChunk({
@@ -31,7 +30,6 @@ function feedArguments(adapter: OpenAICompatibleStreamAdapter, name: string, arg
   );
 }
 
-/** Feeds the terminal `finish_reason: "tool_calls"` chunk and returns the tool call. */
 function finishToolCalls(adapter: OpenAICompatibleStreamAdapter): NonNullable<ProcessedChunk["functionCall"]> {
   const processed = adapter.processChunk(makeChunk({ choices: [{ finish_reason: "tool_calls" }] }));
   expect(processed.type).toBe("function_call");

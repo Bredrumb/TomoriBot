@@ -9,7 +9,6 @@ const LIMITS: CharxReadLimits = {
   maxTotalAssetBytes: 4 * 1024 * 1024,
 };
 
-/** Minimal but complete Character Card V3 object, using only invented identities. */
 function v3Card(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     spec: "chara_card_v3",
@@ -58,10 +57,8 @@ function v3Card(overrides: Record<string, unknown> = {}): Record<string, unknown
   };
 }
 
-/** Builds a `.charx`-shaped zip: a card manifest plus an asset tree. */
 async function buildCharx(options: {
   card?: unknown;
-  /** Hand-written card payload, for bodies a fixture object cannot express. */
   rawCardJson?: string;
   cardName?: string;
   assets?: Array<{ path: string; bytes: Buffer }>;

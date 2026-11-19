@@ -2,17 +2,8 @@ import type { Message } from "discord.js";
 import { log } from "@/utils/misc/logger";
 import { isRefreshMarkerEmbed } from "./embedDetection";
 
-/**
- * Keep only the messages newer than the most recent refresh marker, oldest first.
- *
- * `messages` arrives newest-first, which is the order Discord returns a fetched channel
- * page in. A refresh marker bounds the context the bot was built with: everything before
- * it belongs to a conversation the bot never saw, so the page is cut there and reversed
- * into the chronological order the callers render.
- *
- * @param logLabel - Names the caller and the channel it read. It is joined with the marker
- *   id, because two fetches in one tool would otherwise produce identical lines.
- */
+// Input messages must be newest-first (Discord fetch order) so the break stops at the latest refresh marker before
+// reversing to oldest-first.
 export function truncateHistoryAtRefreshMarker(messages: Message[], logLabel: string): Message[] {
   const filtered: Message[] = [];
 

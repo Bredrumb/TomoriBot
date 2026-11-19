@@ -242,10 +242,6 @@ async function resolveThoughtLogOwnerIdentity(
   return await resolvePersonaWebhookIdentity(owner.persona, thoughtLogChannel.guild);
 }
 
-/**
- * Posts attribution alone when no thought-log embed was emitted, so admins still see whose
- * credentials and which model answered.
- */
 export async function sendAttributionOnlyEmbed({
   client,
   locale,

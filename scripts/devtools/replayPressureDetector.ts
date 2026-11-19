@@ -1,21 +1,3 @@
-/**
- * Replays a host observer log through the pressure detector to tune its thresholds offline.
- *
- * The detector deliberately has no action path, so the only way to learn whether a threshold set is
- * sane is to ask what it would have done against history. `/var/log/oom-observer.log` samples every
- * 15 s and never rotates, so it holds the incidents themselves rather than a quiet window after
- * them. That is a far better tuning corpus than waiting for the live series to accumulate, and it
- * is available now.
- *
- * Usage:
- *   bun run scripts/devtools/replayPressureDetector.ts <observer.log> [--elevated 10] [--critical 20]
- *     [--recovery 5] [--min-swap-in 1] [--elevated-dwell-min 10] [--critical-dwell-min 5]
- *     [--grace-min 15] [--action-interval-h 6] [--verbose]
- *
- * The log is fetched with the read-only recipe in
- * `docs/en/wiki/azure-production-inspection.md`; this script never touches production itself.
- */
-
 import { readFile } from "node:fs/promises";
 import {
   DEFAULT_PRESSURE_THRESHOLDS,
@@ -69,7 +51,6 @@ function parseArgs(argv: string[]): { path: string; thresholds: PressureThreshol
   };
 }
 
-/** Each observer line is flat `key=value`; PSI values are `avg10/avg60/avg300`. */
 function parseRow(line: string): ObserverRow | null {
   const fields: Record<string, string> = {};
   for (const pair of line.trim().split(/\s+/)) {

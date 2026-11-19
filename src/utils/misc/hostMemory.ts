@@ -1,35 +1,17 @@
-/**
- * Host memory and pressure sampler.
- *
- * Reads the host's own `/proc` and `/sys` counters rather than this process's usage. Docker does
- * not virtualize `/proc/meminfo` or `/proc/pressure/*`, so a container sees the real host values;
- * that is normally a wart, but it is what lets the bot record host telemetry without a host-side
- * agent. Removing the AzureMonitorLinuxAgent left host memory percent living only in
- * `/var/log/oom-observer.log`, a flat file rather than a queryable series.
- *
- * Every source is read independently and a missing or unparseable file drops only its own fields,
- * because this runs on developer machines where none of these paths exist.
- */
+// Docker does not virtualize /proc/meminfo or /proc/pressure/*, so reading them from the container intentionally
+// captures host-level telemetry without a host agent.
 
 import { readFile } from "node:fs/promises";
 
 export type HostMemoryFields = Record<string, number>;
 
-/**
- * Reads one `/proc` or `/sys` path, resolving to `null` when it is absent or unreadable.
- * Injected rather than module-mocked: Bun registers `mock.module` process-wide for the whole
- * run and `mock.restore()` does not undo it, so a mocked `node:fs` leaks into every later file.
- */
+// Injected rather than module-mocked because Bun mock.module persists process-wide after mock.restore() and would
+// leak a mocked node:fs into later test files.
 export type HostFileReader = (path: string) => Promise<string | null>;
 
 const KB_PER_MB = 1024;
 const BYTES_PER_MB = 1024 * 1024;
 
-/**
- * Cumulative counters from the previous sample, so `/proc/vmstat` totals can be reported as rates.
- * Levels are useless here: the runbook's rule for these fields is to read them as differences
- * between samples, never as absolutes.
- */
 let previousCounters: { values: Record<string, number>; atMs: number } | null = null;
 
 function round(value: number, places = 2): number {
@@ -45,7 +27,6 @@ async function readText(path: string): Promise<string | null> {
   }
 }
 
-/** Parses the `Key:   value kB` shape of `/proc/meminfo`. */
 function parseMeminfo(text: string): Record<string, number> {
   const values: Record<string, number> = {};
   for (const line of text.split("\n")) {
@@ -55,11 +36,7 @@ function parseMeminfo(text: string): Record<string, number> {
   return values;
 }
 
-/**
- * Parses one `/proc/pressure/*` file into `{ some: {avg10,…}, full: {…} }`.
- * `full` is the share of wall time every task was blocked, which is the variant that tracked
- * every incident in this deployment; `some` is kept because it moves earlier.
- */
+// Both some and full PSI lines are retained because full captures all-task stalls while some moves earlier.
 function parsePressure(text: string): Record<string, Record<string, number>> {
   const parsed: Record<string, Record<string, number>> = {};
   for (const line of text.split("\n")) {
@@ -105,11 +82,8 @@ function addPressureFields(fields: HostMemoryFields, resource: "mem" | "io", tex
   }
 }
 
-/**
- * Splits swap usage per device. The zram device and the disk-backed `/swapfile` differ by roughly
- * 100x in fault cost, so the aggregate from `/proc/meminfo` cannot answer whether the host is
- * merely compressing or actually paging to disk.
- */
+// Per-device swap is tracked instead of /proc/meminfo aggregates because zram and disk /swapfile differ roughly 100x
+// in fault cost.
 function addSwapDeviceFields(fields: HostMemoryFields, text: string): void {
   for (const line of text.split("\n").slice(1)) {
     const [filename, , size, used] = line.trim().split(/\s+/);
@@ -127,11 +101,8 @@ function addSwapDeviceFields(fields: HostMemoryFields, text: string): void {
   }
 }
 
-/**
- * `orig_data_size` and `compr_data_size` from `/sys/block/zram0/mm_stat`. `swapon` reports the
- * uncompressed size, which hides how much RAM the device actually holds, so the ratio is the only
- * way to see how close the pool is to its real ceiling.
- */
+// Zram mm_stat sizes are needed because swapon reports only uncompressed size, hiding actual RAM usage and proximity
+// to the pool ceiling.
 function addZramFields(fields: HostMemoryFields, text: string): void {
   const [orig, compressed] = text.trim().split(/\s+/).map(Number);
   if (!Number.isFinite(orig) || !Number.isFinite(compressed) || compressed <= 0) return;
@@ -140,13 +111,8 @@ function addZramFields(fields: HostMemoryFields, text: string): void {
   fields.zram_ratio = round(orig / compressed);
 }
 
-/**
- * Converts `/proc/vmstat`'s cumulative swap and fault counters into per-second rates.
- *
- * A negative delta means the host rebooted and the counters restarted, so the rates are dropped
- * rather than reported as a large negative spike. The first sample after startup has no
- * predecessor and therefore reports no rates at all.
- */
+// Negative deltas mean a host reboot restarted cumulative counters, so rates are dropped instead of reporting a
+// negative spike.
 function addVmstatRateFields(fields: HostMemoryFields, text: string, nowMs: number): void {
   const wanted = ["pswpin", "pswpout", "pgmajfault"] as const;
   const values: Record<string, number> = {};
@@ -175,12 +141,7 @@ function addVmstatRateFields(fields: HostMemoryFields, text: string, nowMs: numb
   }
 }
 
-/**
- * Samples host memory, PSI, swap, and zram.
- *
- * Returns `null` when nothing could be read, which is the normal case off Linux, so the caller can
- * skip the sink entirely rather than writing an empty row every interval.
- */
+// Null is returned when no Linux counters are readable so callers skip the sink instead of emitting empty rows.
 export async function collectHostMemorySnapshot(
   nowMs = Date.now(),
   read: HostFileReader = readText,
@@ -205,7 +166,6 @@ export async function collectHostMemorySnapshot(
   return Object.keys(fields).length > 0 ? fields : null;
 }
 
-/** Test seam: the rate fields depend on state carried between calls. */
 export function resetHostMemoryCountersForTests(): void {
   previousCounters = null;
 }

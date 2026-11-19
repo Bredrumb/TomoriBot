@@ -115,18 +115,8 @@ function buildRegisteredEntryFromVideoModel(model: VideoGenerationModelRow): Reg
   };
 }
 
-/**
- * OpenRouter publishes one catalog per modality and lists a model in exactly the catalogs
- * that serve it: embedding models are absent from `/models` entirely, and image generation
- * has a far larger catalog than the handful of chat models with image output. Each
- * capability therefore has to be checked against its own endpoint.
- *
- * `fresh` bypasses the shared refresh cooldown because this check only runs when someone is
- * registering a codename by hand, and the codename they type is most often one OpenRouter
- * published minutes ago. Answering that from a snapshot up to a TTL old reports a live model
- * as nonexistent, and the amplification the cooldown guards against cannot happen here: the
- * rate is one fetch per submitted registration, not one per chat turn.
- */
+// Each capability queries its own OpenRouter endpoint with fresh: true because catalogs are split by modality and
+// users often register brand-new models.
 async function modelExistsInOpenRouterCatalog(
   capability: OpenRouterModelCapability,
   modelCodename: string,
@@ -234,18 +224,8 @@ async function loadRegisteredOpenRouterEntriesForCapability(
   }
 }
 
-/**
- * Resolve a codename to a curated built-in catalog entry, or null when it is not
- * a built-in the scope can already use.
- *
- * A row counts as "built-in" (→ registration is rejected with `already_available`)
- * only when it is BOTH non-scoped AND non-deprecated. Deprecated built-ins are
- * deliberately excluded: every selection query filters `is_deprecated = false`, so
- * a deprecated catalog row is hidden from the picker and must instead be
- * registerable as a scoped model by a scope that explicitly opts into it. Returning
- * null here lets {@link registerOpenRouterModelForScope} promote the shared row to a
- * scoped registration (see `upsertScopedLlm`, which clears `is_deprecated`).
- */
+// Deprecated built-ins must return null here so scopes opting into hidden deprecated models can promote them via
+// upsertScopedLlm instead of failing.
 async function loadOpenRouterBuiltInEntry(
   capability: OpenRouterModelCapability,
   modelCodename: string,
@@ -488,12 +468,8 @@ export async function registerHostedSpeechModelForScope(
   };
 }
 
-/**
- * Registers and selects a hosted transcription model for one owner.
- *
- * OpenRouter accepts any codename its live transcription catalogue lists; Google and Vertex accept
- * only their seeded rows, because neither publishes a transcription catalogue to check against.
- */
+// Google and Vertex accept only seeded transcription rows because neither publishes a live transcription catalog to
+// validate against, unlike OpenRouter.
 export async function registerHostedTranscriptionModelForScope(
   scope: OpenRouterModelRegistryScope,
   provider: string,

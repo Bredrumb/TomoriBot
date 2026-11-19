@@ -450,11 +450,8 @@ function buildScopedPersonalConfigPanelPayload(
 
 export type SpotlightPersona = { id: number; name: string; isAlter: boolean; snippet?: string | null };
 
-/**
- * Resolves a block-relative selection bitmask back to personas. Returns null when the mask cannot
- * belong to the block it names, which is how a collection that shrank under an open continuation
- * fails stale instead of silently retargeting a different persona.
- */
+// Out-of-range mask bits return null so a collection that shrank under an open continuation fails stale instead of
+// silently retargeting another persona.
 export function resolveSpotlightBlockSelection(
   personas: readonly SpotlightPersona[],
   blockIdx: number,

@@ -85,7 +85,6 @@ interface RecordedRequest {
   init: RequestInit | undefined;
 }
 
-/** Serves the captured responses by endpoint and query, recording every request. */
 function stubDanbooru(requests: RecordedRequest[]) {
   return stubGlobalFetch(async (input, init) => {
     const url = new URL(String(input));

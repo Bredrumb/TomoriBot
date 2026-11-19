@@ -241,12 +241,6 @@ type MemoryImportMappingsResult =
   | { status: "ok"; kind: "personal_memories"; mappings: PersonalMemoryImportMapping[] }
   | { status: "refused" };
 
-/**
- * Binds every confirmed bucket to the key the repository call for its kind takes. A workspace destination carries
- * the persona the destination list offered, because that list is what the user saw and mapped against; a personal
- * destination is already the lineage. A bucket whose destination is missing, or a workspace destination that is
- * not one of the offered personas, refuses the whole write rather than importing part of the bundle.
- */
 export function buildMemoryImportMappings(
   kind: MemoryTransferKind,
   buckets: readonly MemoryBucket[],

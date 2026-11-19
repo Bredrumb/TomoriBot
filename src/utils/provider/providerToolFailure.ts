@@ -67,7 +67,7 @@ type FailureKind =
   | "not_configured"
   | "endpoint_blocked";
 
-/** Kinds that only say the request failed, so the provider's message may name a sharper cause. */
+// Generic failure kinds that only report failure, so the provider message may supply a sharper cause.
 const GENERIC_KINDS = new Set<FailureKind>([
   "provider_error",
   "request_failed",
@@ -76,10 +76,7 @@ const GENERIC_KINDS = new Set<FailureKind>([
   "invalid_request",
 ]);
 
-/**
- * A provider refused model files that the stored configuration names. `models` holds only values
- * TomoriBot sent, so a tool result may repeat them where it may not repeat provider text.
- */
+// Configured model names sent by TomoriBot rather than provider text, so tool results may repeat models safely.
 export class ConfiguredModelUnavailableError extends Error {
   constructor(
     message: string,

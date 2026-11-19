@@ -18,7 +18,7 @@ import { deliverTransferExport, transferExportReplyReceipts } from "@/utils/disc
 
 export type ConfigExportScope = TransferExportScope;
 
-/** Keeps this helper out of slash-command registration; the loader scans every file in a command directory. */
+// Excludes this helper from commandLoader registration (`commandLoader` scans all command directory files).
 export const isCommandEnabled = () => false;
 
 export interface ConfigExportDependencies {
@@ -43,16 +43,11 @@ const defaultDependencies: ConfigExportDependencies = {
   replyInfoEmbed,
 };
 
-/** The receipt and DM name the exported scope by this word, so it reads as the thing the reader asked for. */
 const EXPORT_TYPE_LABEL_KEYS: Record<ConfigExportScope, string> = {
   workspace: "commands.data.export.type_choice_server_config",
   personal: "commands.data.export.type_choice_personal_settings",
 };
 
-/**
- * The export operation shared by `/export config` and `/export personal config`, which differ only in their
- * authorization requirement and their destination key.
- */
 export async function runConfigExport(
   interaction: ChatInputCommandInteraction,
   locale: string,

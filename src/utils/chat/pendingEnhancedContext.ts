@@ -1,16 +1,8 @@
 import type { StructuredContextItem } from "@/types/misc/context";
 import { log } from "@/utils/misc/logger";
 
-/**
- * Side channel for enhanced-context payloads that are too heavy to travel inside
- * `ToolResult.data`.
- *
- * A tool stashes the item, puts the returned key in `data.pending_context_key`, and the
- * tool loop swaps it back in when it handles the `context_restart_*` signal. Passing the
- * item through `ToolResult.data` instead would pin it in `ToolRegistry.executionHistory`,
- * which retains the last 1000 results for the process lifetime: a megabyte of base64
- * image per avatar peek would never be reclaimed.
- */
+// Side channel for heavy enhanced-context payloads because ToolRegistry.executionHistory pins the last 1000
+// ToolResult.data entries in memory.
 
 const STASH_TTL_MS = 300_000;
 const STASH_MAX_ENTRIES = 16;
@@ -22,10 +14,6 @@ interface StashedEntry {
 
 const stash = new Map<string, StashedEntry>();
 
-/**
- * Stores an item for the tool loop to pick up on the next enhanced-context restart.
- * @returns Opaque key to return as `pending_context_key` in the tool's result data
- */
 export function stashEnhancedContextItem(item: StructuredContextItem): string {
   const now = Date.now();
   evictStaleEntries(now);
@@ -46,7 +34,6 @@ export function stashEnhancedContextItem(item: StructuredContextItem): string {
   return key;
 }
 
-/** Removes the item on retrieval so a later restart cannot replay stale media. */
 export function takeEnhancedContextItem(key: string): StructuredContextItem | undefined {
   const entry = stash.get(key);
   if (!entry) return undefined;

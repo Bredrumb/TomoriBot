@@ -80,11 +80,6 @@ describe("/setup registration", () => {
 });
 
 describe("/setup execution authorization", () => {
-  /**
-   * The command is now only an entry point: it resolves the workspace key and delegates to
-   * `startSetupWizard`, which owns the permission check and the workspace-health guard. These
-   * assertions therefore read the wizard's own surface, which is the deferred ephemeral reply.
-   */
   function makeCommandInteraction(options: {
     guildId: string | null;
     canManageGuild: boolean;

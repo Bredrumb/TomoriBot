@@ -87,14 +87,8 @@ scopedMock.module("@/utils/bridges/matrix", () => ({
 
 let ReminderProcessor: typeof import("@/timers/reminderProcessor").ReminderProcessor;
 
-/**
- * Silencing goes through `spyOn` on the live `log` singleton rather than a module mock. Nothing
- * here asserts on the logger, so the mock only ever suppressed noise, but registering it left the
- * module record replaced for the rest of the process: a later file's `spyOn(log, ...)` then
- * installs nothing at all, silently, and its assertions see the real implementation's output.
- * That cost `tests/unit/tools/searxngAvailabilityTransition.test.ts` a false failure. `spyOn`
- * mutates the singleton production already resolves at call time and is undone below.
- */
+// Log silencing uses spyOn on the live singleton rather than mock.module because mock.module persists across files
+// and breaks later spyOn calls.
 const silencedLogMethods = ["error", "info", "success", "warn"] as const;
 const logSpies = silencedLogMethods.map((method) => spyOn(realLogger.log, method));
 

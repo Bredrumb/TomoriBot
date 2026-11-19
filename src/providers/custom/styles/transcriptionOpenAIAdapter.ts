@@ -3,7 +3,6 @@ import type { CustomEndpointRow } from "@/types/db/schema";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import { getEndpointRemotePolicy } from "@/utils/security/remoteUrlSecurity";
 
-/** Timeout for /v1/audio/transcriptions requests, configurable via env. */
 const OPENAI_STT_TIMEOUT_MS =
   Number.parseInt(process.env.OPENAI_STT_TIMEOUT_MS ?? "", 10) > 0
     ? Number.parseInt(process.env.OPENAI_STT_TIMEOUT_MS ?? "", 10)
@@ -20,21 +19,13 @@ export interface OpenAITranscriptionResult {
 
 export interface OpenAITranscriptionRequest {
   endpoint: CustomEndpointRow;
-  /** Empty string for endpoints that don't require auth. */
+  // Empty string acts as the sentinel for unauthenticated endpoints because apiKey is required.
   apiKey: string;
   audioBuffer: Buffer;
   filename: string;
   mimeType?: string | null;
 }
 
-/**
- * Calls any STT server that implements the OpenAI /v1/audio/transcriptions endpoint.
- * Covers local WhisperX, whisper.cpp HTTP mode, and compatible cloud services.
- *
- * 1. Builds a multipart form with the audio file, model name, and optional language hint.
- * 2. POSTs to {endpoint_url}/audio/transcriptions, adding /v1 when the stored URL omits it.
- * 3. Returns the transcript text from the JSON response.
- */
 export async function transcribeViaOpenAIAdapter(
   request: OpenAITranscriptionRequest,
 ): Promise<OpenAITranscriptionResult> {

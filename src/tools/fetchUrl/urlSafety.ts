@@ -29,18 +29,15 @@ export interface FetchUrlSafetyResult {
   details?: string;
 }
 
-/**
- * Whether `fetch_url` may reach private/internal network addresses.
- *
- * Only the explicit `FETCH_URL_ALLOW_PRIVATE_NETWORK` opt-in grants this, in every `RUN_ENV`,
- * because self-hosted community instances commonly run in development mode with untrusted members.
- */
+// Explicit opt-in applies across every RUN_ENV because self-hosted instances often run development mode with
+// untrusted members.
 export function isPrivateNetworkFetchAllowed(): boolean {
   const raw = process.env[PRIVATE_NETWORK_ENV]?.trim().toLowerCase();
   return raw === "true" || raw === "1" || raw === "yes" || raw === "on";
 }
 
-/** Gate-2 policy for `fetchUserRemoteUrl`, so every redirect hop follows the same opt-in as gate 1. */
+// Gate-2 redirect policy for fetchUserRemoteUrl, so every redirect hop enforces the same private-network opt-in as
+// gate 1.
 export function getFetchUrlRemotePolicy(): FetchUserRemoteUrlOptions {
   const allowPrivateNetwork = isPrivateNetworkFetchAllowed();
   return { strict: !allowPrivateNetwork, allowPrivateNetwork };

@@ -1,29 +1,10 @@
-/**
- * Centralized construction of the runtime {@link StreamContext} handed to
- * {@link StreamOrchestrator} by every streaming provider.
- *
- * Historically each provider hand-built a near-identical `StreamContext` literal before
- * delegating to the orchestrator. That duplication meant any new cross-cutting stream field
- * had to be copy-pasted into every provider, and a single missed backend would silently drop
- * the new behavior. This helper owns all the common copy-through fields so provider files only
- * pass the values they already have in scope plus their provider name.
- */
-
 import type { Client, CommandInteraction, Message, Webhook } from "discord.js";
 import type { StreamContext } from "@/types/stream/interfaces";
 import type { StreamingContext } from "@/types/tool/interfaces";
 import type { TomoriState } from "@/types/db/schema";
 import type { StructuredContextItem } from "@/types/misc/context";
 
-/**
- * Inputs a provider supplies when asking the shared helper to assemble a {@link StreamContext}.
- *
- * The parameter types intentionally reuse the corresponding `StreamContext` field types
- * (`StreamContext["channel"]`, `StreamContext["functionInteractionHistory"]`) so a provider's
- * narrower channel/history unions remain structurally assignable without extra casts.
- */
 export interface BuildStreamContextParams {
-  /** Canonical provider identifier (e.g. "google", "novelai") copied verbatim into the context. */
   provider: string;
 
   // Discord context
@@ -51,15 +32,6 @@ export interface BuildStreamContextParams {
   prefixStrippingName?: string;
 }
 
-/**
- * Build the fully assembled {@link StreamContext} passed to `StreamOrchestrator.streamToDiscord`.
- *
- * All fields derived from {@link StreamingContext} are copied here so every provider propagates
- * the same shared stream behavior. Optional fields left unset by the caller (or absent from the
- * streaming context) remain `undefined`, matching the previous per-provider literals.
- *
- * @returns The runtime streaming context consumed by the orchestrator.
- */
 export function buildStreamContext(params: BuildStreamContextParams): StreamContext {
   const { streamingContext } = params;
 

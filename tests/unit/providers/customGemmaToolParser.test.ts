@@ -1,11 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { GemmaToolCallParser } from "@/providers/custom/customGemmaToolParser";
 
-/**
- * Drives a parser with a list of chunks and collects every function call and all
- * visible text emitted across feed() plus the final flush(). Mirrors how
- * CustomStreamAdapter.processChunk consumes the parser chunk-by-chunk.
- */
 function run(chunks: string[]): {
   visible: string;
   calls: { name: string; args: Record<string, unknown> }[];

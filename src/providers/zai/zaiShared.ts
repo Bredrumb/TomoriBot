@@ -6,11 +6,8 @@ export const ZAI_CODING_IMAGES_GENERATIONS_URL = "https://api.z.ai/api/coding/pa
 export const ZAI_REASONING_MODELS = ["glm-5.1", "glm-5", "glm-4.7"];
 export const ZAI_VISION_MODEL = "glm-4.6v";
 
-/**
- * Z.AI general-provider model rows are stored with a provider prefix in the DB
- * (for example `zai/glm-4.7`) so they can coexist with coding-endpoint rows.
- * Strip that prefix before sending the model name to the upstream API.
- */
+// Z.AI general DB rows include a provider prefix such as zai/glm-4.7 to coexist with coding-endpoint rows, so it must
+// be stripped for the upstream API.
 export function toZaiApiModelName(model: string): string {
   const trimmed = model.trim();
   const slashIndex = trimmed.lastIndexOf("/");

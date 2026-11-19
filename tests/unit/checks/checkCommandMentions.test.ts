@@ -65,11 +65,6 @@ describe("findMentions", () => {
   });
 });
 
-/**
- * The two ways a baseline entry stops being owed a fix are decided here rather than through the
- * CLI, because each CLI spawn loads the whole command graph. Both reasons share the one analysis and
- * report path, so the single spawn in {@link runWithBaseline} proves the wiring for both.
- */
 describe("stale baseline analysis", () => {
   const finding = (mention: string) => ({ file: "src/locales/en-US/commands.ts", line: 1, mention });
 
@@ -111,10 +106,8 @@ describe("stale baseline analysis", () => {
 describe("check-command-mentions CLI", () => {
   const realBaseline = join(process.cwd(), "scripts", "checks", "docs-mention-baseline.json");
 
-  /**
-   * Points the check at a throwaway baseline. Editing the tracked file in place would race the
-   * real check-command-mentions run, because vl executes its checks in parallel.
-   */
+  // A throwaway baseline is required because editing the tracked file in place races check-command-mentions when vl
+  // runs checks in parallel.
   async function runWithBaseline(extraEntry: { path: string; reason: string }) {
     const tempBaseline = join(process.cwd(), "tests", "unit", "checks", `tmp-baseline-${Date.now()}.json`);
     const parsed = JSON.parse(await readFile(realBaseline, "utf8"));

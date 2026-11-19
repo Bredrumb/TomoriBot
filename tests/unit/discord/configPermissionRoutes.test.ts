@@ -93,9 +93,7 @@ interface Harness {
   state: TomoriState;
   includeElevenLabs: boolean;
   dependencies: Partial<ConfigRouteDependencies>;
-  /** Payloads the current interaction has edited. */
   readonly edits: unknown[];
-  /** Payloads the current interaction has replied or followed up with. */
   readonly replies: unknown[];
   modals: unknown[];
   telemetry: string[];

@@ -17,21 +17,18 @@ import { getEndpointRemotePolicy } from "@/utils/security/remoteUrlSecurity";
 import { withProviderUsageContext, type ProviderUsageContext } from "@/utils/provider/providerUsage";
 
 export interface TextModelHandoffLease {
-  /** Callers fire and forget, so a Discord upload is never held behind text-model readiness. */
+  // Fire-and-forget contract so Discord uploads never block on text-model reload readiness.
   restore(): Promise<void>;
 }
 
-/**
- * One gate per backend connection, shaped as a readers/writer lock: text streams are readers that
- * may overlap, and a ComfyUI job is the writer that unloads the model. The writer closes the gate
- * before waiting for readers, so a steady flow of new text requests cannot postpone the unload
- * forever.
- */
+// Writer closes the gate before waiting for active text readers to drain, preventing steady text traffic from
+// starving model unloads.
 type ConnectionGate = {
   readers: number;
   onReadersDrained: (() => void) | null;
   mediaLeases: number;
-  /** ComfyUI servers used during this handoff, keyed by URL; each must release VRAM before the reload. */
+  // ComfyUI endpoints keyed by URL so every server used during the handoff releases VRAM before the text model
+  // reloads.
   comfyUiTargets: Map<string, { apiKey: string; usageContext?: ProviderUsageContext }>;
   closed: Promise<void> | null;
   open: (() => void) | null;
@@ -42,10 +39,11 @@ const writerQueues = new Map<number, Promise<void>>();
 
 const NO_HANDOFF: TextModelHandoffLease = { restore: async () => {} };
 
-/** Bounds each control request, because a stalled backend must not hold media jobs or text replies. */
+// Per-request control timeout because a stalled backend must not block media jobs or text replies.
 const CONTROL_REQUEST_TIMEOUT_MS = 15_000;
 const BACKEND_PROBE_TIMEOUT_MS = 5_000;
-/** How long a media job waits for in-flight replies before it gives up on unloading for this job. */
+// Wait ceiling for active text readers before skipping the unload, so media jobs proceed instead of hanging or
+// interrupting replies.
 const READER_DRAIN_TIMEOUT_MS = 120_000;
 const KOBOLDCPP_UNLOAD_CONFIRM_MS = 30_000;
 const KOBOLDCPP_RELOAD_CONFIRM_MS = 60_000;
@@ -80,7 +78,7 @@ function openGate(connectionId: number, gate: ConnectionGate): void {
   if (gate.readers === 0 && gate.mediaLeases === 0) gates.delete(connectionId);
 }
 
-/** Serializes writers per connection so two media jobs never unload or reload concurrently. */
+// Per-connection queue so concurrent media jobs never overlap model unloads or reloads.
 async function withWriterQueue<T>(connectionId: number, operation: () => Promise<T>): Promise<T> {
   const previous = writerQueues.get(connectionId) ?? Promise.resolve();
   let release!: () => void;
@@ -132,13 +130,8 @@ function abortableWait(promise: Promise<void>, signal?: AbortSignal): Promise<vo
   });
 }
 
-/**
- * Holds a text stream's claim on its local model for the stream's whole lifetime.
- *
- * Waits while the model is handed off to ComfyUI, then counts the stream as a reader so a media job
- * that starts afterwards waits for it instead of unloading the model mid-reply. The returned release
- * is idempotent and must run when the stream ends for any reason.
- */
+// Reader lease that waits out active handoffs so ComfyUI cannot unload mid-reply; callers must invoke the idempotent
+// release in finally.
 export async function acquireTextModelLease(
   connectionId: number | null | undefined,
   signal?: AbortSignal,
@@ -179,12 +172,7 @@ async function readJson(response: Response): Promise<Record<string, unknown> | n
   return payload !== null && typeof payload === "object" ? (payload as Record<string, unknown>) : null;
 }
 
-/**
- * Identifies which model unload API the server behind a text connection supports.
- *
- * @returns `null` for any other server, since generic OpenAI-compatible servers share no
- *   unload or reload API.
- */
+// Unrecognized servers yield null because generic OpenAI-compatible APIs share no standard unload or reload endpoint.
 export async function detectVramHandoffBackend(params: {
   apiStyle: CustomEndpointApiStyle;
   endpointUrl: string;
@@ -270,11 +258,8 @@ async function restoreKoboldCpp(endpointUrl: string, apiKey: string): Promise<bo
   return false;
 }
 
-/**
- * Unloads the KoboldCpp model and confirms it. An unconfirmed unload is rolled back, because a
- * request that timed out may still have been applied, and releasing text requests against an
- * unloaded model would fail every reply until someone reloads it by hand.
- */
+// Unconfirmed KoboldCpp unloads roll back because a timed-out request may still unload the model and break later text
+// replies.
 async function prepareKoboldCpp(endpointUrl: string, apiKey: string): Promise<boolean> {
   let outcome: "accepted" | "rejected" | "unknown";
   try {
@@ -333,14 +318,8 @@ async function readComfyUiFreeVram(endpointUrl: string, apiKey: string): Promise
   }
 }
 
-/**
- * Asks ComfyUI to drop its cached models and waits until the VRAM actually comes back.
- *
- * `/free` only sets a flag that ComfyUI's worker applies between prompts, so the request returns
- * before anything is released; reloading the text model on that response alone would race the
- * unload. It never interrupts a running prompt, which keeps it safe on a shared instance. The wait
- * is bounded because a server with nothing cached never reports a rise.
- */
+// VRAM poll after ComfyUI /free because /free only sets an asynchronous between-prompt flag, bounded since an empty
+// cache never frees more VRAM.
 async function releaseComfyUiVram(endpointUrl: string, apiKey: string): Promise<void> {
   const before = await readComfyUiFreeVram(endpointUrl, apiKey);
   try {
@@ -411,15 +390,11 @@ function createMediaLease(params: {
   };
 }
 
-/**
- * Unloads the active local text model before a ComfyUI job when its connection opted in.
- *
- * Never throws and never unloads under an in-flight reply: when replies do not finish in time, or
- * the backend does not confirm, the job runs without a handoff.
- */
+// Best-effort handoff that never throws or interrupts in-flight replies, so ComfyUI jobs proceed without handoff on
+// timeout or unconfirmed unload.
 export async function beginTextModelHandoffBeforeComfyUi(params: {
   tomoriState: TomoriState;
-  /** The ComfyUI server running the job, which is asked to release its VRAM before the text model reloads. */
+  // Target ComfyUI endpoint tracked here so restore can ask it to release VRAM before reloading the text model.
   comfyUi: { endpointUrl: string; apiKey: string; usageContext?: ProviderUsageContext };
 }): Promise<TextModelHandoffLease> {
   const connectionId = parseCustomProvider(params.tomoriState.llm.llm_provider)?.connectionId;

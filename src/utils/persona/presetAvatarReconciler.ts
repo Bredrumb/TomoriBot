@@ -1,23 +1,3 @@
-/**
- * Preset main-avatar fan-out reconciler.
- *
- * Main persona avatars are the bot's Discord guild member avatar: Discord-owned
- * state that cannot be live-resolved per message (unlike alter avatars/sprites).
- * So when a default preset's avatar art changes in the catalog, the only way to
- * fan it out to every server whose main persona is still an unforked pointer is
- * to PATCH each guild's member avatar once.
- *
- * This is a throttled, best-effort, resumable BACKGROUND reconciler; never a
- * startup burst and never blocking boot. Every PATCH is gated on a real byte
- * change via the hash columns (persona_presets.preset_avatar_hash vs
- * personas.applied_avatar_hash), which makes the run naturally idempotent and
- * resumable: an interrupted or rate-limited run simply picks up where it left
- * off on the next boot. Customized (materialized) personas are skipped
- * automatically because they are no longer pointers.
- *
- * See docs/subsystems/persona-presets.md and docs/subsystems/multi-persona.md.
- */
-
 import type { Client } from "discord.js";
 import { personaRepository, type UnsyncedMainPointer } from "@/utils/db/repositories";
 import { setGuildBotAvatar } from "@/utils/discord/guildIdentity";
@@ -26,11 +6,7 @@ import { loadStoredPersonaAvatarBuffer } from "@/utils/storage/avatarStorage";
 import { hasShardLeaseOwnership } from "@/utils/cluster/shardLeases";
 import { getShardTopology } from "@/utils/discord/shardOwnership";
 
-/**
- * Parses a non-negative-integer env var, falling back to a default when unset or
- * malformed. Keeps the throttle knobs configurable without hardcoding limits.
- * (0 is allowed: it is the documented "unlimited" sentinel for MAX_PER_RUN.)
- */
+// Zero is admitted because MAX_PER_RUN uses 0 as the unlimited sentinel.
 function readIntEnv(name: string, fallback: number): number {
   const raw = process.env[name]?.trim();
   if (!raw) {
@@ -40,46 +16,25 @@ function readIntEnv(name: string, fallback: number): number {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
-/**
- * Throttle / safety knobs (documented in .env.optional.example). Discord's
- * documented per-guild bucket lets one PATCH per guild proceed independently,
- * but the bot-wide global limit (~50 req/s) and Discord's aggressive
- * avatar-change throttling mean a mass burst must be paced. Sequential PATCHes
- * with a delay between each stay far under the global limit and leave headroom
- * for live traffic.
- */
-/** Operational kill switch (enabled by default). */
+// Sequential guild-avatar PATCHes are paced because Discord's ~50 req/s global limit and avatar throttling require
+// headroom for live traffic.
 const SYNC_ENABLED = (process.env.PRESET_AVATAR_SYNC_ENABLED?.trim().toLowerCase() ?? "true") !== "false";
-/** Delay between successive guild-avatar PATCHes. */
 const DELAY_MS = readIntEnv("PRESET_AVATAR_SYNC_DELAY_MS", 3000);
-/** Per-PATCH request timeout. */
 const API_TIMEOUT_MS = readIntEnv("PRESET_AVATAR_SYNC_API_TIMEOUT_MS", 15_000);
-/** 0 = unlimited; otherwise cap PATCHes per run so a large backlog drains across boots. */
+// 0 means unlimited; otherwise PATCHes per run are capped so a large backlog drains across boots.
 const MAX_PER_RUN = readIntEnv("PRESET_AVATAR_SYNC_MAX_PER_RUN", 0);
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/**
- * PATCHes one guild's member avatar to the supplied PNG data URI.
- *
- * @returns "ok" on success, "rate_limited" when Discord throttled the change, or
- *   "failed" for any other non-2xx / network error (all retried on a later boot).
- */
 async function patchGuildAvatar(guildDiscId: string, avatarDataUri: string): Promise<"ok" | "rate_limited" | "failed"> {
   const result = await setGuildBotAvatar(guildDiscId, avatarDataUri, API_TIMEOUT_MS);
   return result.success ? "ok" : result.error === "rate_limited" ? "rate_limited" : "failed";
 }
 
-/**
- * Runs one reconciliation pass. Intended to be fire-and-forget from clientReady
- * (never awaited by startup). Loads the work set, then for each present guild
- * downloads the shared preset avatar (cached per URL since many servers share
- * one image), PATCHes the guild avatar, and stamps applied_avatar_hash on
- * success so the persona is skipped next time.
- *
- */
+// Must remain fire-and-forget from clientReady without being awaited by startup because paced avatar PATCHes can run
+// long.
 export async function reconcilePresetMainAvatars(client: Client): Promise<void> {
   if (!hasShardLeaseOwnership()) return;
   // Operational kill switch. Default-on; an operator can disable the fan-out

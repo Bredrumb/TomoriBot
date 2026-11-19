@@ -1,22 +1,3 @@
-/**
- * Expandable Components V2 notification helper.
- *
- * Renders a standard notification as a Components V2 container with an optional
- * in-card "Expand" button. The button is attached only when the underlying
- * content exceeds the notice type's truncation threshold. Clicking it replies
- * ephemerally with the full, un-truncated content so users can read everything
- * without cluttering the channel.
- *
- * The generic `sendEmbedWithExpand` is reused by both memory-learning notices
- * (`sendMemoryEmbedWithExpand`) and scheduled-task notices
- * (`sendTaskEmbedWithExpand`); each wrapper supplies its own locale keys,
- * button custom ID, and collector timeout.
- *
- * Mirrors the lifecycle of `fallbackModelNotice.ts`: 24h collector, disable
- * the button on collector end (via webhook token when the message was sent
- * through a persona webhook, otherwise via the bot token).
- */
-
 import {
   AttachmentBuilder,
   ButtonStyle,
@@ -70,42 +51,20 @@ const EXPAND_BUTTON_TIMEOUT_MS = 86_400_000;
 // Discord limits an embed description to 4096 characters.
 const MAX_EXPANDED_DESCRIPTION_LENGTH = 4096;
 
-/**
- * Characters of memory content shown inline before the notice truncates and
- * offers the expand button. Deliberately below `MAX_MEMORY_LENGTH` (1000) so
- * the button still has a purpose, and far below Discord's 4000-char text
- * display cap so the title, footer, and framing sentence always fit.
- */
+// Capped at 600 so it stays below MAX_MEMORY_LENGTH (1000) to keep Expand useful while leaving room under Discord's
+// 4000-char cap for framing.
 export const MEMORY_NOTICE_PREVIEW_LIMIT = 600;
 
-/**
- * Per-notice configuration for {@link sendEmbedWithExpand}. Each notice type
- * (memory, task, …) supplies its own locale keys and a unique button custom ID.
- */
 interface ExpandableNoticeConfig {
-  /** Discord component custom ID for the expand button (must be unique per notice type). */
   customId: string;
-  /** Locale key for the button label. */
   buttonLabelKey: string;
-  /** Locale key for the ephemeral expand-popup embed title. */
   expandTitleKey: string;
-  /** Character count above which the button is attached. Defaults to {@link DEFAULT_TRUNCATION_THRESHOLD}. */
   truncationThreshold?: number;
-  /** Collector lifetime in ms before the button is disabled. */
   timeoutMs: number;
 }
 
-/**
- * Builds the public notice's full Components V2 tree from the old standard
- * embed options. The same function is used for initial sends and disabled
- * button edits so a CV2 notice never falls back to a partial component update.
- *
- * @param locale - Locale used for title, body, footer, and button label strings.
- * @param config - Notice-specific button labels and custom ID.
- * @param includeExpandButton - Whether the visible card needs an Expand action.
- * @param expandButtonDisabled - Whether the Expand button should render disabled.
- * @returns A complete Components V2 notice payload.
- */
+// Initial sends and disabled-button edits both call this full builder because Discord Components V2 notices cannot
+// use partial component updates.
 function buildNoticeComponents(
   locale: string,
   embedOptions: StandardEmbedOptions,
@@ -136,23 +95,6 @@ function buildNoticeComponents(
   });
 }
 
-/**
- * Sends a notification as a Components V2 notice container, attaching an
- * in-card "Expand" button when the full content exceeds the truncation
- * threshold. The button shows the full content as an ephemeral reply when
- * clicked. Callers normally use one of the thin wrappers
- * (`sendMemoryEmbedWithExpand`, `sendTaskEmbedWithExpand`) which pre-fill the
- * notice-specific {@link ExpandableNoticeConfig}.
- *
- * @param channel - Destination channel (supports the same channel types as `sendStandardEmbed`).
- * @param locale - Locale used for the button label, expand-popup title, and embed strings.
- *   The caller is responsible for placing the already-truncated content into `descriptionVars`:
- *   this helper does not modify the embed body.
- * @param fullContent - The full, already-processed content (e.g. post-{user}/{bot} substitution).
- *   Used both to decide whether to show the button and as the body of the ephemeral expand reply.
- * @param config - Notice-specific locale keys, button custom ID, threshold, and collector timeout.
- * @param webhookContext - Optional persona webhook identity, identical to `sendStandardEmbed`.
- */
 async function deliverNoticeComponents(
   channel: SupportedChannel,
   components: TopLevelComponentData[],
@@ -210,14 +152,8 @@ async function deliverNoticeComponents(
   }
 }
 
-/**
- * Sends a plain Components V2 notice card with no expand button.
- *
- * Tool notices use this rather than `sendStandardEmbed` because a legacy embed
- * description has no divider primitive, so a footer cannot be separated from the
- * body by anything but blank lines. The CV2 container emits a real `Separator`
- * before `footerKey`.
- */
+// Components V2 container is used instead of sendStandardEmbed because legacy embeds lack a divider primitive before
+// the footer.
 async function sendNoticeContainerMessage(
   channel: SupportedChannel,
   locale: string,
@@ -344,21 +280,8 @@ type NoticeDelivery = (
   webhookContext: WebhookEmbedContext | undefined,
 ) => Promise<Message | null>;
 
-/**
- * Delivers a hideable tool notice in the conversation and/or the thought log.
- *
- * Minimal notices post only their title in the conversation while mirroring the full card to the
- * thought log when one is configured. Verbose notices post the full card in conversation alone to
- * avoid redundancy. Hidden notices suppress conversation output and reroute the full card to the
- * thought log.
- *
- * A Minimal card given `ref` records it against the posted message, because the model rebuilds
- * context from Discord and would otherwise see only the title. Verbose cards carry their body.
- *
- * Deliberately ignores `suppressProgressNotices`: that flag silences "working..." progress cards,
- * while these confirm a change the persona already made, which flows like the silent turn have
- * always surfaced.
- */
+// Minimal cards record ref because Discord-rebuilt context sees only titles, and suppressProgressNotices is ignored
+// since these confirm committed changes.
 async function routeHideableNotice(
   context: ToolContext,
   noticeKey: ToolNoticeKey,
@@ -414,14 +337,6 @@ function sendToolEmbedWithExpand(
   );
 }
 
-/**
- * Memory-learning wrapper for {@link sendToolEmbedWithExpand}. Attaches a
- * "Show Full Memory" button when the processed memory content exceeds the
- * truncation threshold.
- *
- * @param fullMemoryContent - Full, processed (post-{user}/{bot}) memory content.
- * @param ref - The memory the notice confirms; omit for deletions, whose row no longer exists.
- */
 export async function sendMemoryEmbedWithExpand(
   context: ToolContext,
   embedOptions: StandardEmbedOptions,
@@ -438,14 +353,6 @@ export async function sendMemoryEmbedWithExpand(
   await sendToolEmbedWithExpand(context, "memory_update", embedOptions, fullMemoryContent, config, ref);
 }
 
-/**
- * Scheduled-task wrapper for {@link sendToolEmbedWithExpand}. Attaches a
- * "Show Full Task" button when the task/reminder purpose exceeds the
- * truncation threshold (created, updated, and deleted task notices).
- *
- * @param fullReminderPurpose - Full, un-truncated reminder/task purpose.
- * @param ref - The task the notice confirms; omit for deletions, whose row no longer exists.
- */
 export async function sendTaskEmbedWithExpand(
   context: ToolContext,
   embedOptions: StandardEmbedOptions,
@@ -467,10 +374,6 @@ export async function sendTaskEmbedWithExpand(
   );
 }
 
-/**
- * Sends a hideable plain notice card (no expand button) in the conversation, or reroutes it to
- * the thought log when the server hid `noticeKey`.
- */
 export function sendToolNoticeContainer(
   context: ToolContext,
   noticeKey: ToolNoticeKey,

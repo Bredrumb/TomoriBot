@@ -7,17 +7,10 @@ function makeChunk(provider: string, data: Record<string, unknown>): RawStreamCh
   return { data, provider, metadata: { timestamp: Date.now() } };
 }
 
-/** Anthropic chunks carry the SSE event name beside the decoded payload. */
 function makeAnthropicChunk(eventType: string, data: Record<string, unknown>): RawStreamChunk {
   return makeChunk("anthropic", { eventType, data });
 }
 
-/**
- * Every adapter that delivers tool arguments as a stream of text deltas has to recover a
- * payload the provider cut short and mark the call, because the tool loop decides whether to
- * dispatch on that flag. A provider that only falls back to empty arguments would dispatch a
- * call the model never finished.
- */
 describe("streamed tool arguments truncated mid-payload", () => {
   it("recovers OpenRouter arguments cut mid-string and marks the call", () => {
     const adapter = new OpenrouterStreamAdapter();

@@ -8,17 +8,12 @@ export function commandReferencePath(locale: DocsLocaleId): string {
   return join(process.cwd(), "docs", locale, "features", "command-reference.md");
 }
 
-/**
- * Ends a script that loaded the command graph successfully.
- *
- * Loading command modules leaves an open handle, so a successful script cannot fall off the end
- * of `main()`: its runner would kill the process and report a false failure instead.
- */
+// Loading command modules leaves an open handle, so scripts must exit explicitly here instead of returning from
+// main() or the runner reports a failure.
 export function exitAfterCommandGraphLoad(): never {
   process.exit(0);
 }
 
-/** Page text the generator writes around the command tables, per published docs locale. */
 interface CommandReferenceCopy {
   title: string;
   intro: string;
@@ -29,10 +24,8 @@ interface CommandReferenceCopy {
   groupFallback: (name: string) => string;
 }
 
-/**
- * Every published docs locale needs an entry, and the generator refuses to run without one, so a
- * newly published tree never ships an English page under its own prefix.
- */
+// Every published docs locale requires an entry without an English fallback, so a newly published locale never ships
+// an English page under its prefix.
 const COMMAND_REFERENCE_COPY: Record<string, CommandReferenceCopy> = {
   en: {
     title: "Command Reference",
@@ -139,10 +132,6 @@ function isNamedCommandOption(option: CommandOption): option is NamedCommandOpti
   return typeof option.name === "string";
 }
 
-/**
- * Picks the description Discord shows a user of `botLocale`: its localization when the command
- * loader attached one, else the English description, which is also Discord's own fallback.
- */
 function describe(item: CommandOption, botLocale: string): string {
   return item.description_localizations?.[botLocale] ?? item.description ?? "";
 }
@@ -244,13 +233,8 @@ function renderGroup(group: CommandGroup, copy: CommandReferenceCopy): string {
   return lines.join("\n");
 }
 
-/**
- * Every slash path a user can legitimately be told to type, including the intermediate
- * root and group prefixes that prose often names on their own ("configure it under `/config`").
- *
- * Shares `buildGroups` with the reference generator so the two can never disagree about
- * what is registered.
- */
+// Prefix paths are included because docs prose cites group roots (such as /config), and buildGroups is shared with
+// the reference generator so paths match.
 export async function collectValidCommandPaths(): Promise<Set<string>> {
   await initializeLocalizer();
   const { registrationData } = await loadCommandData();
@@ -269,7 +253,6 @@ export async function collectValidCommandPaths(): Promise<Set<string>> {
   return paths;
 }
 
-/** Renders the command reference for every published docs locale, keyed by locale id. */
 export async function generateCommandReferences(): Promise<Map<DocsLocaleId, string>> {
   await initializeLocalizer();
   const { registrationData } = await loadCommandData();

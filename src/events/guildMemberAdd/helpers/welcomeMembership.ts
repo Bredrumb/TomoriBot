@@ -1,29 +1,16 @@
 import type { GuildMember } from "discord.js";
 
-/** Discord's authoritative "this user is not in the guild" rejection. */
 const UNKNOWN_MEMBER_ERROR_CODE = 10007;
 
-/**
- * Outcome of re-checking a pending welcome's membership.
- *
- * `unverified` is deliberately distinct from `ended`: a rate limit or outage means the membership
- * could not be read, not that the member left, and the caller must not report it as a departure.
- */
+// Status unverified stays distinct from ended because rate limits or outages mean membership could not be read, so
+// callers must not report a departure.
 export type WelcomeMembershipCheck =
   | { status: "active"; member: GuildMember }
   | { status: "ended" }
   | { status: "unverified"; error: unknown };
 
-/**
- * Re-reads a pending welcome's membership straight from Discord.
- *
- * A user can leave and rejoin with the same Discord user ID while a delayed welcome is still
- * pending, so a matching user ID is not enough: joinedTimestamp is what distinguishes the original
- * membership from a new one. The fetch is forced because the cache goes stale around
- * guildMemberRemove and Tomori also sweeps guild members from it.
- *
- * @param originalMember - Membership instance that started the welcome flow
- */
+// Live fetch is forced because member caches go stale or get swept, while joinedTimestamp detects a leave-and-rejoin
+// with the same ID.
 export async function checkWelcomeMembership(originalMember: GuildMember): Promise<WelcomeMembershipCheck> {
   let currentMember: GuildMember;
 

@@ -1,16 +1,3 @@
-/**
- * Web-search dispatcher.
- *
- * Walks an ordered list of engines and returns the first successful result.
- * For non-text categories, returns a friendly "category unavailable" message
- * when no engine in the chain supports/serves the request.
- *
- * Chain order: Brave → SearXNG → OpenRouter → DuckDuckGo.
- *   - Brave first (lowest latency, best quality when keyed).
- *   - SearXNG plugs in for self-hosted operators without a Brave key.
- *   - DuckDuckGo is the keyless text-only fallback.
- */
-
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { log } from "@/utils/misc/logger";
 import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
@@ -22,7 +9,8 @@ import { OpenRouterEngine } from "@/tools/webSearch/openrouterEngine";
 import { getSearchCategoryLabel } from "./categoryMetadata";
 import type { SearchCategory, WebSearchEngine, WebSearchEngineFailure } from "./types";
 
-/** Rate limits, bot challenges, credential and credit refusals, and empty results are not outages. */
+// Rate limits, bot challenges, credential or credit refusals, and empty results are treated as expected refusals, so
+// they do not trigger outage reporting.
 const REFUSAL_FAILURES = new Set(["missing_key", "challenge", "rate_limited", "empty_results"]);
 const REFUSAL_STATUSES = new Set([401, 402, 403, 429]);
 
@@ -41,11 +29,6 @@ const ENGINE_CHAIN: readonly WebSearchEngine[] = [
   new DuckDuckGoEngine(),
 ];
 
-/**
- * Execute a web search, walking the chain until one engine returns a
- * `success: true` result. Engines that are unavailable or that fail are
- * skipped silently and the next chain member is tried.
- */
 export async function executeWebSearchWithFallback(
   query: string,
   category: SearchCategory,

@@ -18,12 +18,8 @@ export const MODEL_OVERRIDE_ROUTE_NAMESPACE = "model-overrides";
 export const MODEL_OVERRIDE_ROUTE_VERSION = "v1";
 export const MODEL_OVERRIDE_MODAL_CAPACITY = 50;
 
-/**
- * An override-row option description prints only the effective model, so the summary may spend
- * the whole checkbox option description allowance instead of a compact row bound. The truncation
- * stays as a wire guard: Discord rejects an option description over 100 characters, and an
- * absurd codename or provider must not make the removal modal fail to open.
- */
+// Caps option descriptions at 100 characters for Discord's wire limit so long model or provider names never break the
+// modal.
 const MODEL_OVERRIDE_MODEL_SUMMARY_MAX_LENGTH = DISCORD_SELECT_OPTION_DESCRIPTION_MAX;
 
 export function formatModelOverrideModelSummary(llm: LlmRow): string {
@@ -133,10 +129,6 @@ export function parseModelOverridePanelRoute(route: ParsedInteractionRoute): Mod
   return decodeRouteSegments<ModelOverridePanelRoute>(entry.codec, entry.action, locale, tail);
 }
 
-/**
- * Fingerprint exact batch content including scope, stable target ID, llm_id, and page.
- * Exactly 8 base64url characters.
- */
 export function computeModelOverrideBatchFingerprint(entries: readonly ModelOverrideEntry[], page: number): string {
   const tuples = entries.map((entry) => [
     entry.scope,
@@ -149,10 +141,6 @@ export function computeModelOverrideBatchFingerprint(entries: readonly ModelOver
     .slice(0, 8);
 }
 
-/**
- * Data ordering contract: sort channel entries first by channelDiscId,
- * then persona entries by persona_nickname with numeric persona_id tie-breaker.
- */
 export function sortModelOverrideEntries(
   channelEntries: readonly ChannelOverrideEntry[],
   personaEntries: readonly PersonaOverrideEntry[],

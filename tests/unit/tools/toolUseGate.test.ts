@@ -47,12 +47,8 @@ describe("resolveToolsEnabled", () => {
   });
 });
 
-/**
- * A provider that gates tool attachment on the raw flag cannot see either pipeline narrowing once
- * it holds a capability override, which is exactly how OpenRouter leaked tools past the master
- * toggle. Scanning source keeps that closed for providers added later, since a new provider file
- * is the only place the bypass can reappear.
- */
+// Source scanning prevents new provider files from gating on the raw flag, which would ignore pipeline narrowing when
+// a capability override exists.
 describe("provider tool gates", () => {
   const providersDir = join(import.meta.dir, "../../../src/providers");
 

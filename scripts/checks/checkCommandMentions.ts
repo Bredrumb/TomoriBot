@@ -1,12 +1,3 @@
-/**
- * Validates every slash path named in locale prose against the registered command tree.
- *
- * Locale strings routinely tell a user to run a command ("Use `/kill` if I am stuck").
- * `check-locales` validates key existence and parity but never inspects a string's content,
- * and `check-command-reference` only compares the generated reference page, so a command
- * move leaves those mentions pointing at a path Discord no longer exposes with nothing
- * failing. This check closes that gap.
- */
 import { join } from "node:path";
 import { collectValidCommandPaths } from "../lib/commandReference";
 
@@ -14,20 +5,12 @@ const LOCALE_ROOT = join(process.cwd(), "src", "locales");
 const SRC_ROOT = join(process.cwd(), "src");
 const EXCEPTIONS_PATH = join(process.cwd(), "scripts", "checks", "command-mention-exceptions.json");
 
-/**
- * Locale strings are template literals, so an inline code span is written with escaped
- * backticks. Double-quoted strings carry bare backticks instead, hence the optional escape
- * on each side. A path is lowercase words separated by single spaces, matching Discord's
- * own command-name rules.
- */
+// Backtick escapes are optional so both template literals and double-quoted strings match, and lowercase
+// space-separated segments match Discord command rules.
 const MENTION_PATTERN = /(?:\\)?`\/([a-z][a-z0-9_-]*(?: [a-z][a-z0-9_-]*)*)(?:\\)?`/g;
 
-/**
- * Local wrappers shadow getCommandMention to inject a shared prefix. Matching a bare
- * mention() identifier everywhere introduces false positives where an argument like
- * action: "add" | "remove" is parsed as a root command. This list restricts bare
- * mention() scanning to files known to implement that pattern safely.
- */
+// Bare `mention()` scanning stays restricted here because global matching falsely parses unrelated arguments like
+// `action` as root commands.
 const WRAPPER_ALLOWLIST = ["src/utils/discord/helpCatalog.ts"];
 
 // Overridable so a test can point at a temporary baseline instead of mutating the tracked file.
@@ -55,18 +38,11 @@ async function loadExceptions(path: string): Promise<Set<string>> {
 
 export interface UnusedBaselineEntry {
   path: string;
-  /** Why the entry is no longer owed a fix. */
   reason: string;
 }
 
-/**
- * Baseline entries that no longer earn their place.
- *
- * A baseline entry exists to excuse a mention of a path that is not registered yet. It stops being
- * owed a fix two ways: the path registers, or the mention disappears from every scanned file. Both
- * are reported, because catching only the first leaves an entry claiming a break that is gone. An
- * entry that did both reports the registration, which is the one a reader can act on.
- */
+// Registration is checked before disappearance because both make a baseline entry stale, and registration gives the
+// actionable reason.
 export function analyzeStaleBaseline(
   findings: readonly Finding[],
   validPaths: ReadonlySet<string>,
@@ -87,7 +63,6 @@ export function analyzeStaleBaseline(
   return unused;
 }
 
-/** The stale-baseline section of the failure report, or an empty string when every entry is owed. */
 export function formatStaleBaselineReport(entries: readonly UnusedBaselineEntry[]): string {
   if (entries.length === 0) return "";
 
@@ -136,7 +111,6 @@ export function findRuntimeMentions(source: string, relativePath: string): Findi
   return findings;
 }
 
-/** Longest registered path sharing a prefix with the stale mention, used as a repair hint. */
 function suggestClosest(mention: string, validPaths: Set<string>): string | null {
   const segments = mention.split(" ");
 

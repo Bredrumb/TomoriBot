@@ -3,11 +3,8 @@ import type { PanelReadStatus, PanelReceipt } from "@/types/discord/panel";
 import { buildConfigPanelPayload, type ConfigPanelPayload } from "@/utils/discord/ui/configPanel";
 import type { McpsPanelPage } from "@/utils/discord/ui/mcpsPanel";
 
-/**
- * The `/config` Plugins > MCP Servers page, which is the only surface that renders the MCP
- * components. Budget and layout assertions run against it rather than the bare component list,
- * because the category row, page row, and receipt share the same 40-component and text budgets.
- */
+// Tests must assert budgets against this full page because the category row, page row, and receipt share Discord's
+// 40-component and text limits.
 export function buildConfigMcpPagePayload(input: {
   locale: string;
   scope: "guild" | "dm";

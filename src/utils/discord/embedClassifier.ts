@@ -1,10 +1,3 @@
-/**
- * Shared embed classification and link-preview extraction utilities.
- *
- * The title-only entry point supports historical and Components V2 notices.
- * Full embeds use the persisted marker before falling back to a legacy title.
- */
-
 import type { Embed } from "discord.js";
 import { isMessageProxyReplyEmbed } from "@/utils/messageProxy/registry";
 
@@ -17,9 +10,6 @@ import {
 
 export type TargetEmbedCheck = { isTarget: true; type: TargetEmbedType } | { isTarget: false; type: null };
 
-/**
- * Classifies a title-only notice using the lookup built during locale initialization.
- */
 export function checkTargetEmbedTitle(embedTitle: string | null | undefined): TargetEmbedCheck {
   const kind = classifyProtocolTitle(embedTitle);
   return isTargetProtocolKind(kind) ? { isTarget: true, type: kind } : { isTarget: false, type: null };
@@ -57,12 +47,6 @@ function extractEmbedTextParts(embed: Pick<Embed, "author" | "title" | "descript
   return parts;
 }
 
-/**
- * Extracts text + image content from an auto-generated Discord link preview
- * embed (e.g., Twitter, YouTube, article card). Returns `isLinkPreview: false`
- * for empty embeds or for embeds already classified as bot-produced (per
- * `checkTargetEmbedTitle`).
- */
 export function processLinkEmbed(embed: Embed): LinkPreviewResult {
   if (classifyProtocolEmbed(embed) === "unshared_dice_roll")
     return { isLinkPreview: false, textContent: null, imageInfo: null, thumbnailInfo: null };
@@ -147,11 +131,6 @@ function deriveEmbedImageInfo(rawUrl: string, proxyUrl: string | null): LinkPrev
   }
 }
 
-/**
- * Mirrors `formatSystemProducedEmbedHint` in tomoriChat.ts. Wraps an embed
- * body in the `[System: ...]`-adjacent form that prefixes system-produced
- * embeds before sending to the LLM.
- */
 export function formatSystemProducedEmbedHint(embedBody: string): string {
   return `[System: The following content came from a system-produced embed]\n${embedBody}`;
 }

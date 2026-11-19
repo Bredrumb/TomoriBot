@@ -14,7 +14,6 @@ async function runSqlFile(tx: TransactionSQL, fileName: string): Promise<void> {
   for (const statement of statements) await tx.unsafe(statement);
 }
 
-/** Runs the body in a transaction that always rolls back, so the stand-in documents table never leaks. */
 async function inRolledBackTransaction(body: (tx: TransactionSQL) => Promise<void>): Promise<void> {
   try {
     await testSql.begin(async (tx) => {

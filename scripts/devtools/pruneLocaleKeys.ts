@@ -10,18 +10,10 @@ const log = {
   success: (msg: string) => console.log(`✅ ${msg}`),
 };
 
-/**
- * Returns true for assembler files that re-export sub-slices via relative imports.
- * These files have no own string values, so only leaf files do.
- */
 function isAssembler(content: string): boolean {
   return /import\s+\w+\s+from\s+['"]\./.test(content);
 }
 
-/**
- * Recursively removes a dot-notation path from a nested object.
- * Returns true if the leaf key was found and deleted, false if the path didn't exist.
- */
 function deletePath(obj: Record<string, unknown>, path: string): boolean {
   const parts = path.split(".");
   let current: Record<string, unknown> = obj;
@@ -38,10 +30,6 @@ function deletePath(obj: Record<string, unknown>, path: string): boolean {
   return true;
 }
 
-/**
- * Recursively removes empty objects left behind after key deletion.
- * Returns true if the object itself became empty and should also be removed.
- */
 function pruneEmptyObjects(obj: Record<string, unknown>): boolean {
   for (const key of Object.keys(obj)) {
     const val = obj[key];
@@ -53,11 +41,6 @@ function pruneEmptyObjects(obj: Record<string, unknown>): boolean {
   return Object.keys(obj).length === 0;
 }
 
-/**
- * Serializes a locale object back to a TypeScript default export string.
- * Uses backtick template literals for strings to match original style.
- * `bun run lint` normalizes formatting after the write.
- */
 function serializeToTypeScript(obj: unknown, indent = 0): string {
   const pad = "  ".repeat(indent);
   const padInner = "  ".repeat(indent + 1);
@@ -95,21 +78,11 @@ function serializeToTypeScript(obj: unknown, indent = 0): string {
 
 interface LocaleSlice {
   filePath: string;
-  /** Path relative to src/locales/, e.g. "en-US/commands/tool.ts" */
   relPath: string;
-  /**
-   * The locale key segment that the parent assembler adds above this file's exports.
-   * For files in a subdirectory (e.g. commands/tool.ts) this is the dir name ("commands").
-   * For top-level files (e.g. general.ts) this is "": the file's own export keys are root-level.
-   */
   keyPrefix: string;
   obj: Record<string, unknown>;
 }
 
-/**
- * Loads all non-assembler locale slice files across all locales.
- * Assembler files (commands.ts, etc.) are skipped because they have no own string values.
- */
 async function loadLocaleSlices(): Promise<LocaleSlice[]> {
   const slices: LocaleSlice[] = [];
   const localesPath = join(process.cwd(), "src", "locales");
@@ -136,12 +109,8 @@ async function loadLocaleSlices(): Promise<LocaleSlice[]> {
   return slices;
 }
 
-/**
- * Loads the allowlist of keys/prefixes the pruner must never delete.
- * The allowlist exists because the static scanner has known blind spots
- * (joined-string roots, cross-function plumbing, property access in templates).
- * Treat it as the load-bearing safety net; not the scanner.
- */
+// The allowlist is load-bearing because the static scanner misses dynamic keys (joined-string roots, cross-function
+// plumbing, template property access).
 async function loadAllowlist(): Promise<{ preservedPrefixes: string[]; preservedKeys: Set<string> }> {
   const allowlistPath = join(process.cwd(), "scripts", "devtools", "locale-prune-allowlist.json");
   try {

@@ -7,9 +7,6 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 
-/**
- * Configure /quota reset user subcommand.
- */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("user")
@@ -41,9 +38,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
         ),
     );
 
-/**
- * Execute /quota reset user.
- */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,

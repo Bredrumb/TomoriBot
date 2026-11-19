@@ -37,7 +37,6 @@ function git(cwd: string, ...args: string[]): string {
   return new TextDecoder().decode(proc.stdout).trim();
 }
 
-/** A real repository, because baselines come from commit history rather than file contents. */
 function createRepo(files: Record<string, string>) {
   const root = mkdtempSync(join(tmpdir(), "docs-staleness-"));
   temporaryRoots.push(root);

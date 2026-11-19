@@ -25,15 +25,6 @@ if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = `postgresql://${user}:${encodeURIComponent(password)}@${host}:${port}/${database}`;
 }
 
-/**
- * Destroys the entire TomoriBot database by dynamically discovering and
- * dropping all tables in the public schema.
- *
- * Uses pg_tables to enumerate tables at runtime so this script never goes
- * stale when new tables are added to the schema.
- *
- * DANGER: This is irreversible. Run `bun run backup` first.
- */
 async function nukeDatabase(): Promise<void> {
   log.section("⚠️ DATABASE DESTRUCTION SCRIPT ⚠️");
   log.info("This will DELETE ALL TABLES and DATA in the connected PostgreSQL database.");

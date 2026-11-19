@@ -33,10 +33,6 @@ export type MentionConverter = (
   identityValues?: { userFormatted?: string; userTerm?: string },
 ) => Promise<string>;
 
-/**
- * Resolves ST-style random choice macros that can appear in imported presets
- * or prompt fields. Each macro occurrence is rolled independently.
- */
 function resolveRandomChoiceMacros(text: string): string {
   return text.replace(
     RANDOM_CHOICE_MACRO_REGEX,

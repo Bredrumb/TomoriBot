@@ -20,9 +20,7 @@ import { localizer } from "@/utils/text/localizer";
 import { formatUTCOffset } from "@/utils/text/timezoneHelper";
 import { type EffectiveUserNaming, resolveEffectiveUserNaming } from "@/utils/text/userNaming";
 
-/** Fields stored per persona lineage, so each persona can address the same human differently. */
 const NAMING_FIELDS = ["nickname", "prefix", "suffix"] as const;
-/** Fields with only one storage slot per user; every persona reads the same value. */
 const GLOBAL_FIELDS = ["gender_identity", "pronouns", "addressing_style", "timezone_offset"] as const;
 const ALL_FIELDS = [...NAMING_FIELDS, ...GLOBAL_FIELDS] as const;
 
@@ -68,7 +66,6 @@ const updateUserInfoInputSchema = z
 
 type UpdateUserInfoInput = z.infer<typeof updateUserInfoInputSchema>;
 
-/** What a single field is being changed to. Absent from the plan means it is not being touched. */
 export type FieldPlan =
   | { field: UserInfoField; cleared: true }
   | { field: UserInfoField; cleared: false; value: string | number };
@@ -83,13 +80,6 @@ function failure(
   return { success: false, error: reason, message: reason, data: { status, ...data } };
 }
 
-/**
- * Turns the flat input into one entry per touched field.
- *
- * A blank or whitespace-only string is folded into a clear rather than rejected:
- * no field has a meaningful empty value, and treating it as a removal is what the
- * caller obviously meant.
- */
 function buildFieldPlans(input: UpdateUserInfoInput): { plans: FieldPlan[]; conflict: boolean } {
   const cleared = new Set<UserInfoField>(input.clear ?? []);
   const plans: FieldPlan[] = [];
@@ -116,15 +106,8 @@ function buildFieldPlans(input: UpdateUserInfoInput): { plans: FieldPlan[]; conf
   return { plans, conflict };
 }
 
-/**
- * Strips an affix the caller re-typed into the nickname.
- *
- * A model that only ever sees the joined formatted name will sometimes submit
- * "Master Mirri" as the nickname while "Master" is already the resolved prefix,
- * which would otherwise render "Master Master Mirri". Matching is against the
- * resolved affix values only: the nickname is never split on whitespace or
- * punctuation to invent an affix boundary.
- */
+// Models only see the joined formatted name and sometimes retype active affixes into nickname, so only resolved
+// affixes are stripped without splitting on spaces.
 export function stripRedundantAffixes(nickname: string, prefix: string, suffix: string): string {
   let value = nickname.trim();
   if (prefix && value.toLowerCase().startsWith(prefix.toLowerCase())) {
@@ -138,7 +121,6 @@ export function stripRedundantAffixes(nickname: string, prefix: string, suffix: 
   return value;
 }
 
-/** The affix that will be in effect once this batch commits, used to de-duplicate the nickname. */
 function pendingAffix(plans: FieldPlan[], field: "prefix" | "suffix", current: string): string {
   const plan = plans.find((candidate) => candidate.field === field);
   if (!plan) return current;
@@ -185,12 +167,8 @@ async function resolveNaming(
   });
 }
 
-/**
- * Routes each field to its own storage. Naming fields are per-lineage so personas can
- * address the same human differently; identity fields have a single slot per user.
- * A cleared affix is stored as an explicit suppression rather than an inherit, so the
- * removal cannot be undone by a lower layer still supplying a value.
- */
+// Cleared affixes are stored as "" rather than null, because null inherits from lower layers whereas "" explicitly
+// suppresses them.
 function buildBatch(plans: FieldPlan[], lineageId: number | null): UserInfoWriteBatch {
   const namingPatch: UserPersonaNamingPreferencePatch = {};
   const batch: UserInfoWriteBatch = { global: {} };
@@ -272,13 +250,8 @@ function nextValueLabel(locale: string, plan: FieldPlan): string {
   return String(plan.value);
 }
 
-/**
- * Builds the numbered list of what changed, followed by the resulting form of address
- * only when that name actually moved. Persona-scoped rows carry the persona's name; an
- * unlabelled row is global, which needs no explanation because global is the unsurprising
- * case. The channel notice quotes the list for contrast while the model-facing copy stays
- * plain, so Discord presentation syntax never reaches a functionResponse.
- */
+// Channel notice quotes change lines for contrast while model-facing copy stays plain, so Discord syntax never leaks
+// into functionResponse.
 function buildSuccessBody(
   context: ToolContext,
   plans: FieldPlan[],
@@ -330,25 +303,20 @@ function buildSuccessBody(
   };
 }
 
-/** Past this many distinct subjects the specific title stops scanning, so the generic profile title reads better. */
+// Past two distinct subjects the specific notice title stops scanning well, so the generic profile title is used
+// instead.
 const MAX_TITLE_SUBJECTS = 2;
 
-/**
- * A removed prefix or suffix leaves the nickname itself in place, so calling that "cleared
- * nickname" would misreport it; only a batch that also clears the nickname qualifies.
- */
+// Prefix and suffix fold into nickname in the title, so affix-only clears return false here to avoid falsely claiming
+// the nickname was cleared.
 function isPureClear(plans: FieldPlan[]): boolean {
   if (!plans.every((plan) => plan.cleared)) return false;
   const touchesAffix = plans.some((plan) => plan.field === "prefix" || plan.field === "suffix");
   return !touchesAffix || plans.some((plan) => plan.field === "nickname");
 }
 
-/**
- * Names what changed in the notice title, which is all a Minimal notice shows. Prefix and
- * suffix fold into "nickname" because they are parts of the one name the target is called.
- * A pure removal takes the red the memory-deletion notices use, so the colour and the 🗑️
- * title always arrive together.
- */
+// Pure removals use ColorCode.ERROR to match memory-deletion notices because Minimal notice mode renders only the
+// title and border color.
 export function buildSuccessHeading(
   locale: string,
   plans: FieldPlan[],

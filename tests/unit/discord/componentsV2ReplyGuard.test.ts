@@ -1,16 +1,5 @@
-/**
- * Components V2 reply-guard tests (Phase 1 of the paginated-modal-selector-consistency plan).
- *
- * Once a message carries `IsComponentsV2`, Discord permanently forbids editing it with
- * legacy `embeds`/`content`. `interactionCore` tracks such interactions in a WeakSet and
- * teaches the shared legacy sinks (`replyInfoEmbed`, `replySummaryEmbed`) to emit a V2
- * notice container instead of embeds when the target is marked.
- *
- * These tests import the REAL `interactionCore` and use no `mock.module`, so the official
- * runner batches this file into the shared unit lane where `interactionCore` is never
- * mocked. See scripts/checks/runTests.ts (planLanes) and tests/unit/checks/
- * testIsolationHygiene.test.ts for why this keeps the real module intact.
- */
+// This suite must not use mock.module, so runTests.ts keeps it in the shared unit lane where interactionCore stays
+// unmocked.
 
 import { beforeAll, describe, expect, it, spyOn } from "bun:test";
 import { AttachmentBuilder, type ButtonInteraction, ComponentType, MessageFlags } from "discord.js";
@@ -46,29 +35,21 @@ import { createRouteInteraction, type RouteInteraction } from "../../helpers/rou
 beforeAll(async () => initializeLocalizer());
 useEnvSandbox(["RUN_ENV", "ERROR_DB_LOGGING_ENABLED"]);
 
-/** One recorded acknowledgement call against the fake interaction. */
 interface RecordedCall {
   method: "reply" | "editReply" | "webhook.send";
   payload: Record<string, unknown>;
 }
 
-/** The shared route fake, typed as the command interaction the reply sinks accept. */
 type ReplyGuardInteraction = RouteInteraction & ChatInputCommandInteraction;
 
-/**
- * Fake interaction for the sinks under test.
- *
- * `deferred` selects whether a sink routes to `editReply` (acknowledged) or `reply`, and the
- * acknowledgement goes through `deferUpdate` rather than a flag assignment so the fake's recorded
- * state stays the one its own call log describes.
- */
+// Acknowledgement uses deferUpdate rather than assigning deferred directly so the fake's recorded state stays
+// consistent with its call log.
 function makeReplyGuardInteraction(deferred: boolean): ReplyGuardInteraction {
   const interaction = createRouteInteraction();
   if (deferred) void interaction.deferUpdate();
   return interaction as ReplyGuardInteraction;
 }
 
-/** In call order, as payloads these tests can inspect. */
 function acknowledgementCalls(interaction: RouteInteraction): RecordedCall[] {
   return interaction.calls
     .filter((call) => call.method === "reply" || call.method === "editReply" || call.method === "webhook.send")

@@ -18,10 +18,6 @@ import {
 
 const SITE = "https://docs.example.test";
 
-/**
- * A three-locale fixture whose middle locale is deliberately incomplete, which is the shape that
- * makes a fallback route and a real translation differ.
- */
 const FIXTURE_FILES: Record<string, string> = {
   "en/features/README.md": '---\ntitle: "Features"\n---\n\nFeature index.\n',
   "en/features/pair.md": '---\ntitle: "Paired Page"\n---\n\nEnglish pair.\n',

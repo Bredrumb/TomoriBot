@@ -6,18 +6,8 @@ import { createPersona } from "../../helpers/fixtures";
 import { verifyMessageWebhook, clearWebhookIdentityCache } from "@/utils/chat/webhookIdentity";
 import { serverRepository } from "@/utils/db/repositories/ServerRepository";
 
-/**
- * Regression guard for `/memory history import` automatic scope.
- *
- * Detection used to fire only for `msg.webhookId`, so a server whose Tomori replied under
- * the bot's own account reported "No personas detected" and fell back to serverwide, even
- * with the persona plainly present in the fetched messages. `personaTurnDetection.ts`
- * already attributed those turns to the main persona; this formatter did not.
- */
-
 const BOT_USER_ID = "900000000000000001";
 
-/** Minimal Discord message stand-in for the formatter's read surface. */
 function makeMessage(options: { content: string; authorId: string; username: string; webhookId?: string }): Message {
   return {
     type: MessageType.Default,

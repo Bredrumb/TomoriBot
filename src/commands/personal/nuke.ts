@@ -13,12 +13,8 @@ import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
-/**
- * Configures `/personal nuke`, the erasure route the Privacy Policy points users at.
- *
- * Deliberately not `guildOnly`: erasure is account-wide, so a user who no longer shares a server
- * with TomoriBot must still be able to run it from a DM.
- */
+// This subcommand stays DM-enabled without `guildOnly` because erasure is account-wide and users without a shared
+// server must reach it.
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("nuke")

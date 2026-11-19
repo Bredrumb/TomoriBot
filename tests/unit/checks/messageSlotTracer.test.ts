@@ -1,6 +1,3 @@
-/**
- * Verifies that extractMessageComponentUsages discovers known localized message component slots.
- */
 import { describe, expect, it } from "bun:test";
 import {
   extractMessageComponentUsages,

@@ -1,16 +1,3 @@
-/**
- * SearxngEngine : wraps the SearXNG REST service into a uniform WebSearchEngine.
- *
- * Supports the common search categories plus SearXNG-only verticals
- * (science/it/files/music).
- * Availability gates on SEARXNG_BASE_URL being configured AND the
- * instance responding healthy (cached probe : see `isSearxngAvailable`).
- *
- * Sits between Brave and DuckDuckGo in the dispatcher chain: when a Brave key
- * isn't configured but a self-hosted SearXNG server is, queries are routed
- * here instead of falling through to DuckDuckGo.
- */
-
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { sendToolNotice } from "@/utils/discord/toolProgressNotice";
 import { isSearxngAvailable } from "@/tools/restAPIs/searxng/searxngService";

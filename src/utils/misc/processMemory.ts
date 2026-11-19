@@ -8,12 +8,8 @@ export interface ProcessMemorySnapshot {
 
 export type ForcedGcRuntime = "bun" | "node" | "unavailable";
 
-/**
- * Runs a full, blocking garbage collection when the runtime exposes one.
- *
- * Throws whatever the underlying collector throws so callers can record the
- * failure; a caller that only wants a best-effort pass must catch.
- */
+// Collector errors are intentionally left uncaught so callers can record failures, unlike an absent collector which
+// returns unavailable.
 export function runForcedGc(): ForcedGcRuntime {
   if (typeof Bun !== "undefined" && typeof Bun.gc === "function") {
     Bun.gc(true);

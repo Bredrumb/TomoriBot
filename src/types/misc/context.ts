@@ -1,6 +1,3 @@
-/**
- * A segment of context for the LLM conversation
- */
 export type ContextPart =
   | { type: "text"; text: string }
   | { type: "image"; uri: string; mimeType: string; fallbackUri?: string } // URI could be a public URL or a data URI; fallbackUri tried on fetch failure
@@ -79,13 +76,10 @@ export type StructuredContextItem = {
   mediaDescriptors?: MediaDescriptor[];
   metadataTag?: ContextItemTag; // Optional tag for internal processing
   messageId?: string; // Optional Discord message ID for tools that need to reference the original message
-  /**
-   * Every Discord message folded into a merged history turn, so a reply to a later chunk of a split
-   * reply still resolves. `messageId` holds only the first.
-   */
+  // All Discord message IDs folded into a merged turn (`messageId` holds only the first), so replies to later split
+  // chunks still resolve.
   combinedMessageIds?: string[];
   sender?: ContextItemSender; // Hidden sender metadata for provider-side history normalization
-  /** Visible participant fields before mention-rendering instructions are added. */
   participantReviewEvidence?: {
     participants: Array<{ name: string; fields: string[] }>;
     channel: string;
@@ -95,39 +89,22 @@ export type StructuredContextItem = {
   conversationUsers?: ConversationUserReference[]; // Hidden metadata for user resolution and mention handling
   participantTargetIndex?: import("@/utils/text/participants/targetIndex").ParticipantTargetIndex;
   personaMentionMap?: Map<string, string>; // Hidden metadata for preserving known persona @trigger text
-  /** Built only when the context model can call tools, so a generation attempt that sends none drops it. */
+  // Built only when the context model can call tools, so a generation attempt that sends no tools drops it.
   requiresToolCalling?: true;
 };
 
-/**
- * Per-request snapshot of data used throughout context building.
- * Created once at the start of a request and reused across context builds/rebuilds
- * to avoid redundant database queries and ensure state consistency.
- *
- * @remarks
- * - Snapshot is per-request only (not shared globally)
- * - Provides consistency for the entire request lifecycle, including context restarts
- * - All fields are optional to maintain backward compatibility
- */
+// Scoped to one request and reused across context rebuilds, not shared globally, so mid-request DB reads stay
+// consistent without extra queries.
 export interface RequestSnapshot {
-  /** Tomori configuration and state for the server/DM */
   tomoriState?: import("@/types/db/schema").TomoriState;
 
-  /** User row data for the message triggerer */
   triggererUserRow?: import("@/types/db/schema").UserRow | null;
 
-  /** Whether the triggerer is blacklisted in this server */
   isTriggererBlacklisted?: boolean;
 
-  /** Whether the triggerer has opted out of personalization */
   isTriggererOptedOut?: boolean;
 
-  /** Privacy level of the triggerer (for efficiency) */
   triggererPrivacyLevel?: import("@/types/db/schema").PrivacyLevel;
 
-  /**
-   * Preloaded GuildMember for the triggerer (for presence lookups).
-   * Null for DM channels where member data doesn't apply.
-   */
   preloadedMember?: import("discord.js").GuildMember | null;
 }

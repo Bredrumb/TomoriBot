@@ -4,11 +4,6 @@ import {
   resolvePresetGenerationMaxOutputTokens,
 } from "@/utils/provider/maxOutputTokens";
 
-/**
- * The preset budget is larger than a chat reply's because the schema sizes the payload up to 16
- * string fields. It must still respect a ceiling the server set, or a capped deployment starts
- * sending requests larger than it allowed.
- */
 describe("preset generation output budget", () => {
   test("uses the preset default when the server set no ceiling", () => {
     expect(resolvePresetGenerationMaxOutputTokens()).toBe(DEFAULT_PRESET_GENERATION_MAX_OUTPUT_TOKENS);

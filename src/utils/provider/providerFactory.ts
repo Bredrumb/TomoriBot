@@ -1,9 +1,3 @@
-/**
- * Provider Factory for creating LLM provider instances
- * This factory implements auto-discovery of providers from src/providers/* directories
- * and provides a clean interface for getting the appropriate provider.
- */
-
 import { log } from "../misc/logger";
 import type { LLMProvider } from "../../types/provider/interfaces";
 import type { TomoriState } from "../../types/db/schema";
@@ -11,9 +5,6 @@ import * as path from "node:path";
 import { Glob } from "bun";
 import { normalizeProviderName } from "@/utils/provider/providerInfoRegistry";
 
-/**
- * Provider factory namespace for creating LLM provider instances
- */
 export namespace ProviderFactory {
   // Map of provider names (including aliases) to provider instances
   const providerInstances = new Map<string, LLMProvider>();
@@ -23,10 +14,6 @@ export namespace ProviderFactory {
 
   let discoveryComplete = false;
 
-  /**
-   * Discover all available providers by scanning provider entrypoint files
-   * This function is called lazily on first access to any provider
-   */
   async function discoverProviders(): Promise<void> {
     if (discoveryComplete) {
       return;
@@ -88,12 +75,6 @@ export namespace ProviderFactory {
     }
   }
 
-  /**
-   * Get a provider instance by name (canonical name or alias)
-   * Uses singleton pattern to reuse provider instances
-   * @param providerName - The name or alias of the provider (e.g., "google", "gemini")
-   * @throws Error if provider is not supported
-   */
   async function getProviderInstance(providerName: string): Promise<LLMProvider> {
     await discoverProviders();
 
@@ -167,11 +148,6 @@ export namespace ProviderFactory {
     throw new Error(`Unsupported provider: ${providerName}. Available providers: ${availableProviders.join(", ")}`);
   }
 
-  /**
-   * Get a provider based on the TomoriState configuration
-   * @param tomoriState - The Tomori state containing LLM provider information
-   * @throws Error if provider is not supported or not configured
-   */
   export async function getProvider(tomoriState: TomoriState): Promise<LLMProvider> {
     if (!tomoriState.llm?.llm_provider) {
       throw new Error("No LLM provider configured in TomoriState");
@@ -208,20 +184,11 @@ export namespace ProviderFactory {
     return provider;
   }
 
-  /**
-   * Get a provider instance directly by canonical name or alias.
-   * Prefer this when the caller only needs provider behavior and does not have
-   * a full TomoriState available.
-   * @param providerName - Provider canonical name or alias
-   */
   export async function getProviderByName(providerName: string): Promise<LLMProvider> {
     return getProviderInstance(providerName);
   }
 }
 
-/**
- * Convenience function to get a provider from TomoriState
- */
 export async function getProviderForTomori(tomoriState: TomoriState): Promise<LLMProvider> {
   return ProviderFactory.getProvider(tomoriState);
 }

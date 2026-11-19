@@ -891,11 +891,6 @@ describe("provider panel mutations", () => {
       }
     });
 
-    /**
-     * Rebuilding TomoriState reads the model through `llmModelRepo.loadById`, which is cache-first,
-     * so invalidating the server snapshot alone leaves the rebuilt state carrying the pre-edit
-     * capability flags. The repository read that follows a write is what this pins.
-     */
     it("drops the edited model from the LLM cache so the next read is not the stale row", async () => {
       replaceCachedLlms([makeLlmRow(false)]);
       expect(readCachedLlm(900)?.verbatim_tool_calling).toBe(false);
@@ -932,11 +927,6 @@ describe("provider panel mutations", () => {
       }
     });
 
-    /**
-     * A non-text endpoint's `model_ref_id` is an id in its own capability table, so the same number
-     * can name an unrelated llms row. Evicting it would push that model onto the database path until
-     * the next restart.
-     */
     it("leaves the LLM cache alone when a non-text endpoint's model is edited", async () => {
       replaceCachedLlms([makeLlmRow(false)]);
 

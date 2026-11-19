@@ -1,46 +1,22 @@
-/**
- * Page-level translation staleness for the docs site and the translated READMEs.
- *
- * The locale-key scans compare individual values. A translated page has no stable line mapping to
- * its English source, so the page is the unit here: a translation is stale when the English page's
- * translatable text changed after the translation was last committed, or when a branch changed the
- * English page without touching the translation.
- *
- * The baseline is the translation's last commit. A commit that edits both trees (a link sweep, say)
- * therefore resets it even if the prose was not re-translated, so a clean result means "touched
- * since", not "reviewed since".
- */
-
-/** Sections that stay English by policy (see docs/en/contributing/localization/docs-site.md). */
 export const ENGLISH_ONLY_DOC_SECTIONS = ["architecture/", "contributing/", "wiki/"] as const;
 
-/**
- * Pages a generator writes. Their freshness belongs to the generator and its check, not to a
- * translator, so they are never reported as stale translations.
- */
 export const GENERATED_DOC_PAGES = ["features/command-reference.md"] as const;
 
 export type DocsStaleReason = "unfollowed" | "drifted" | "missing" | "orphaned";
 
 export interface DocsStaleEntry {
   reason: DocsStaleReason;
-  /** Page identity shared across locales: `self-hosting/maintenance.md`, or `README.md`. */
   page: string;
   locale: string;
   english: string;
   translation: string;
-  /** For `unfollowed`: what the branch did to the English page. */
   change?: "added" | "changed" | "removed";
-  /** For `drifted`: the translation's last commit, the baseline the English is compared against. */
   baseline?: string;
-  /** For `drifted` and `unfollowed`: lines of translatable English text that differ. */
   changedLines?: number;
 }
 
-/** The git reads this module needs, batched so a full-tree scan costs a handful of processes. */
 export interface DocsGit {
   listFiles(revision: string): string[];
-  /** Last commit reachable from HEAD that touched each path. */
   lastCommits(): Map<string, string>;
   readMany(specs: { revision: string; path: string }[]): Map<string, string | null>;
   changedPaths(from: string, to: string): string[];
@@ -122,10 +98,8 @@ export function createGitDocsSource(repoRoot: string): DocsGit {
   };
 }
 
-/**
- * Text a translator is responsible for: the body plus the frontmatter fields readers see. Other
- * frontmatter (sidebar order, `aiGenerated`) changes without creating translation work.
- */
+// Only reader-visible frontmatter fields are kept because metadata such as sidebar order or aiGenerated must not
+// trigger translation staleness.
 export function translatableText(markdown: string): string {
   const normalized = markdown.replace(/\r\n/g, "\n");
   const frontmatter = /^---\n([\s\S]*?)\n---\n?/.exec(normalized);
@@ -134,7 +108,6 @@ export function translatableText(markdown: string): string {
   return [...visible, normalized.slice(frontmatter[0].length)].join("\n").trim();
 }
 
-/** Lines present on one side but not the other, counted as a multiset. */
 export function changedLineCount(before: string, after: string): number {
   const counts = new Map<string, number>();
   for (const line of before.split("\n")) counts.set(line, (counts.get(line) ?? 0) + 1);
@@ -176,7 +149,6 @@ interface PagePath {
   englishCandidates(): string[];
 }
 
-/** Maps a repository path to its page identity, or null when it is not a tracked translation surface. */
 export function englishPageFor(path: string): PagePath | null {
   if (path === "README.md") {
     return {
@@ -203,7 +175,6 @@ export function englishPageFor(path: string): PagePath | null {
   };
 }
 
-/** Maps a translated path back to its page identity and locale. */
 function translatedPageFor(
   path: string,
   locales: readonly string[],
@@ -224,11 +195,6 @@ function sortEntries(entries: DocsStaleEntry[]): DocsStaleEntry[] {
   return entries.sort((a, b) => a.locale.localeCompare(b.locale) || a.page.localeCompare(b.page));
 }
 
-/**
- * Whole-tree state at HEAD: pages with no translation (`missing`), translations with no English
- * source or inside an English-only section (`orphaned`), and translations whose English source
- * changed after their last commit (`drifted`).
- */
 export function findDocsTreeStaleness(git: DocsGit, locales: readonly string[]): DocsStaleEntry[] {
   const files = new Set(git.listFiles("HEAD"));
   const entries: DocsStaleEntry[] = [];
@@ -303,11 +269,6 @@ export function findDocsTreeStaleness(git: DocsGit, locales: readonly string[]):
   return sortEntries(entries);
 }
 
-/**
- * Branch follow-up: English pages whose translatable text changed between the merge base and HEAD
- * while a translation stayed untouched in the same range. An added English page with no
- * translation is reported as `added`; a removed one whose translation remains, as `removed`.
- */
 export function findDocsUnfollowed(git: DocsGit, mergeBase: string, locales: readonly string[]): DocsStaleEntry[] {
   const changed = new Set(git.changedPaths(mergeBase, "HEAD"));
   const changedPages = [...changed].map(englishPageFor).filter((page): page is PagePath => page !== null);
@@ -359,7 +320,6 @@ export function findDocsUnfollowed(git: DocsGit, mergeBase: string, locales: rea
   return sortEntries(entries);
 }
 
-/** Renders docs entries grouped by reason and page, listing the locales behind each page. */
 export function formatDocsStaleness(entries: DocsStaleEntry[]): string[] {
   const titles: Record<DocsStaleReason, string> = {
     unfollowed: "Docs pages this branch changed without updating the translation",

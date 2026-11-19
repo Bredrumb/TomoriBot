@@ -1,9 +1,5 @@
 import { OpenAICompatibleToolAdapter } from "@/providers/openaiCompatible/openaiCompatibleToolAdapter";
 
-/**
- * Singleton tool adapter for Z.ai provider.
- * Extends the shared OpenAI-compatible adapter with no overrides needed.
- */
 export class ZaiToolAdapter extends OpenAICompatibleToolAdapter {
   private static instance: ZaiToolAdapter;
 
@@ -19,9 +15,6 @@ export class ZaiToolAdapter extends OpenAICompatibleToolAdapter {
   }
 }
 
-/**
- * Get the singleton Z.ai tool adapter instance
- */
 export function getZaiToolAdapter(): ZaiToolAdapter {
   return ZaiToolAdapter.getInstance();
 }

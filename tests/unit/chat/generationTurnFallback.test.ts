@@ -684,7 +684,6 @@ function makeContext(primaryModel: LlmRow, fallbackModel: LlmRow): ChatTurnConte
   } as unknown as ChatTurnContext;
 }
 
-/** Turns the fixture into a user-triggered turn that runs on the user's own text provider. */
 function makePersonalContext(serverPrimary: LlmRow, serverFallback: LlmRow, personalPrimary: LlmRow): ChatTurnContext {
   const context = makeContext(serverPrimary, serverFallback);
   context.textCredentialSource = "personal";
@@ -701,7 +700,6 @@ function makePersonalContext(serverPrimary: LlmRow, serverFallback: LlmRow, pers
   return context;
 }
 
-/** The error the personal route returns before every server route attempt in these tests. */
 function personalRouteFailure(): GenerationTurnResult {
   return {
     status: "error",
@@ -710,7 +708,6 @@ function personalRouteFailure(): GenerationTurnResult {
   };
 }
 
-/** An attempt that posted `text` to Discord before failing, as the tool loop reports it. */
 function partialFailure(status: "error" | "timeout", text: string): GenerationTurnResult {
   return {
     status,
@@ -728,7 +725,6 @@ function partialFailure(status: "error" | "timeout", text: string): GenerationTu
   };
 }
 
-/** An attempt whose stream Google ended partway through after `text` was posted. */
 function interruptedStream(text: string): GenerationTurnResult {
   return {
     status: "error",
@@ -774,7 +770,6 @@ function collectingSink(): ChatResponseSink & { emittedErrors: unknown[]; finali
   };
 }
 
-/** Pins the model-randomizer draw so a pool's lead model is decided by the test, not by chance. */
 async function runWithFixedRandom(leadFraction: number, run: () => Promise<void>): Promise<void> {
   const originalRandom = Math.random;
   Math.random = () => leadFraction;
@@ -1981,12 +1976,6 @@ describe("runGenerationTurn fallback behavior", () => {
     expect(fallbackNoticeCalls).toHaveLength(0);
   });
 
-  /**
-   * A destination the bot cannot post into fails identically for every key and every model, so
-   * spending a generation per remaining arm only to discard it at the same send is waste. A 50001
-   * arrives here as error data rather than as a stop, which is the route that used to keep its
-   * fallback arms.
-   */
   it("abandons the fallback chain when the destination refuses the send for missing access", async () => {
     const primaryModel = makeLlm(1, "primary-model");
     const fallbackModel = makeLlm(2, "fallback-model");

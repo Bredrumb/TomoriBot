@@ -1,27 +1,3 @@
-/**
- * Migration rehearsal runner.
- *
- * Runs the full startup database bootstrap (schema + seed + pending migrations)
- * against a throwaway copy of production data so a release branch's migrations
- * can be validated before they run on the live database. This invokes the exact
- * same `initializeDatabase` path the bot uses at boot, so a clean run here means
- * the same migrations will apply cleanly in production.
- *
- * Intended workflow:
- *   1. Restore a production snapshot into a scratch database (see
- *      docs/guides/safe-migration.md: the target Postgres MUST have the
- *      `pgvector` extension available, or the snapshot's document_chunks table
- *      fails to restore and silently drops data).
- *   2. Point POSTGRES_DB at that scratch database and run this script.
- *   3. Inspect the applied-migration log and run your own integrity queries.
- *
- * Usage:
- *   POSTGRES_DB=tomodb_prodrehearse POSTGRES_PASSWORD=... \
- *     bun run scripts/db/rehearse-migration.ts
- *
- * Safety: refuses to run when RUN_ENV=production so it can never be aimed at the
- * live database by accident.
- */
 import { config } from "dotenv";
 import { initializeDatabase } from "@/utils/db/initializeDatabase";
 import { sql } from "@/utils/db/client";

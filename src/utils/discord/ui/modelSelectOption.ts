@@ -12,7 +12,7 @@ export interface ModelSelectChoice {
   priceLabel?: string | null;
 }
 
-/** The price leads because Discord truncates option descriptions at 100 characters. */
+// The price leads because Discord truncates option descriptions at 100 characters.
 export function modelOptionDetail(
   locale: string,
   provider: string,

@@ -133,17 +133,7 @@ function extractCustomEmojiImages(content: string): Array<{ url: string; name: s
   return results;
 }
 
-/**
- * Appends a classified system notice to the conversation line being built.
- *
- * Accepts a transport-agnostic {title, description} pair so real embeds and
- * Components V2 notices reconstructed by `extractNoticeTextFromComponents`
- * produce identical compaction input.
- *
- * @param baseContent - The message text accumulated so far.
- * @returns `baseContent` with the notice appended, or unchanged when the notice
- *          is not one of the classified system types.
- */
+// Input stays transport-agnostic so real embeds and Components V2 notices compact identically.
 function appendEmbedContent(
   baseContent: string,
   source: { title: string | null; description: string | null },

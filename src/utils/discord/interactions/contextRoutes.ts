@@ -11,11 +11,8 @@ import { resolveSelectedPersona } from "@/utils/persona/personaOptionValue";
 import { assemblePromptInspection } from "@/utils/text/promptInspection/assemble";
 import { canViewPromptText, deliverPromptSnapshot } from "@/utils/text/promptInspection/delivery";
 
-/**
- * Handles the `/context` "View as Text" and "View as JSON" buttons. Access is checked again on
- * every click: a disabled button is only a hint, and the moderation setting may have changed
- * since the panel was drawn.
- */
+// Access must be re-checked on every click because a disabled Discord button is only a client hint and moderation
+// settings can change after draw.
 export const contextInteractionRoute: GlobalInteractionRoute = {
   namespace: CONTEXT_ROUTE_NAMESPACE,
   version: CONTEXT_ROUTE_VERSION,

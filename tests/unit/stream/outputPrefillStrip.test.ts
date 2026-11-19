@@ -31,7 +31,6 @@ const typingConfig: TypingSimulationConfig = {
   thinkingPauseChance: 0,
 };
 
-/** Runs segments through the real processor with a prefill prepared the way the stream does. */
 async function deliver(segments: string[], outputPrefill = "Mirri: Sure, here"): Promise<string[]> {
   const context = {
     channel: { id: "1382235263668846612" },

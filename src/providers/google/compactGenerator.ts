@@ -44,9 +44,8 @@ async function buildUserParts(userPrompt: string, images?: Array<{ url: string; 
   return parts;
 }
 
-/**
- * @param client - Optional pre-built GoogleGenAI client (used by Vertex provider)
- */
+// Optional client parameter stays exported because the Vertex provider reuses this helper with its own pre-built
+// GoogleGenAI client.
 export async function generateConversationSummaryGoogle(
   request: CompactSummaryRequest,
   client?: GoogleGenAIType,
@@ -121,11 +120,7 @@ function buildRoleplaySchema() {
   };
 }
 
-/**
- * Generate a roleplay summary using Google Gemini with structured output.
- *
- * @param client - Optional pre-built GoogleGenAI client (used by Vertex provider)
- */
+// Optional client parameter only exists for Vertex reuse.
 export async function generateRoleplaySummaryGoogle(
   request: CompactSummaryRequest,
   client?: GoogleGenAIType,

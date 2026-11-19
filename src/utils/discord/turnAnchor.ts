@@ -1,15 +1,12 @@
 import type { Message, SendableChannels } from "discord.js";
 import { log } from "@/utils/misc/logger";
 
-/** Discord rejects an empty message body, so the placeholder is a blank braille character. */
+// Discord rejects an empty message body, so the placeholder uses a blank braille character.
 const PLACEHOLDER_CONTENT = "⠀";
 
 const seededAnchors = new WeakSet<Message>();
 
-/**
- * Posts then deletes a placeholder for a system turn to borrow as its trigger, since a turn cannot
- * run in a channel with no messages and Discord rejects an empty body.
- */
+// System turns post and delete a placeholder because a turn cannot run in an empty channel without a trigger message.
 export async function seedTurnAnchor(
   channel: SendableChannels,
   contextLabel: string,
@@ -32,7 +29,6 @@ export async function seedTurnAnchor(
   }
 }
 
-/** True for the deleted placeholder a system turn borrowed, which context assembly must not record. */
 export function isSeededTurnAnchor(message: Message): boolean {
   return seededAnchors.has(message);
 }

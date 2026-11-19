@@ -18,11 +18,6 @@ export interface ThinkBlockStripResult {
   changed: boolean;
 }
 
-/**
- * Stateful stripper for reasoning tags that leak through OpenAI-compatible
- * content deltas. It handles markers split across stream chunks, including
- * orphaned DeepSeek-style `</think>` closers.
- */
 export class ThinkBlockContentStripper {
   private insideThinkBlock = false;
   private pendingBoundaryText = "";

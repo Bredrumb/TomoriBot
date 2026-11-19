@@ -1,46 +1,21 @@
-/**
- * Gemini Image Segmentation Service
- *
- * Uses Google Gemini's native image segmentation capability to generate
- * pixel-precise masks from natural language descriptions. These masks
- * are used by the NovelAI inpainting pipeline to selectively redraw
- * regions of an existing image.
- *
- * Pipeline:
- * 1. Send image + text target description to Gemini
- * 2. Gemini returns JSON with bounding boxes (normalized 0-1000) and cropped PNG masks
- * 3. Each mask is resized to its bounding box pixel dimensions
- * 4. All masks are composited onto a full-canvas black image (white = redraw area)
- * 5. Final mask is binarized at threshold 127 for clean edges
- */
-
 import sharp from "sharp";
 import { GoogleGenAI, HarmBlockThreshold, HarmCategory, type SafetySetting } from "@google/genai";
 import { log } from "../misc/logger";
 import { omitGeminiSampling } from "@/utils/provider/samplingControl";
 import { buildGoogleThinkingConfig } from "@/utils/provider/thinkingControl";
 
-/** Whether to enable debug mode: when true, returns the raw mask buffer for inspection */
 const NAI_INPAINT_DEBUG = (process.env.NAI_INPAINT_DEBUG || "false").toLowerCase() === "true";
 
-/** Gemini model used for image segmentation (configurable for future model upgrades) */
 const NAI_SEGMENTATION_MODEL = process.env.NAI_SEGMENTATION_MODEL || "gemini-2.5-flash";
 
-/** Timeout in ms for the Gemini segmentation API call (default: 90s) */
 const NAI_SEGMENTATION_TIMEOUT_MS = Number.parseInt(process.env.NAI_SEGMENTATION_TIMEOUT_MS || "90000", 10);
 
-/**
- * Padding added to each side of the bounding box as a fraction of the box dimension.
- * 0.15 = 15% padding on each side, so helps capture regions that extend beyond
- * Gemini's detected bounding box (e.g. wispy hair strands, flowing fabric).
- * Clamped to image bounds after expansion.
- */
+// Fraction of each box dimension added as per-side padding (clamped to image bounds), so details such as wispy hair
+// or fabric outside Gemini's box are captured.
 const NAI_INPAINT_PADDING = 0.15;
 
-/**
- * OFF because anime/artistic images frequently trigger false positives on default thresholds,
- * causing Gemini to silently hang or return empty responses instead of masks.
- */
+// Safety thresholds are OFF because anime and artistic images often trigger false positives that make Gemini hang or
+// return empty responses instead of masks.
 const SEGMENTATION_SAFETY_SETTINGS: SafetySetting[] = [
   {
     category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
@@ -60,48 +35,26 @@ const SEGMENTATION_SAFETY_SETTINGS: SafetySetting[] = [
   },
 ];
 
-/**
- * A single segmentation result from Gemini.
- * Coordinates are normalized to 0-1000 range.
- */
 interface GeminiSegment {
-  /** Bounding box as [y0, x0, y1, x1], normalized 0-1000 */
+  // Gemini returns [y0, x0, y1, x1] coordinates normalized to 0-1000 instead of standard x-first pixel bounds, so
+  // tuple order must not be swapped.
   box_2d: [number, number, number, number];
-  /** Base64-encoded PNG mask cropped to the bounding box (white = target region) */
   mask: string;
-  /** Human-readable label for the detected region */
   label: string;
 }
 
-/**
- * Result of the full segmentation + mask processing pipeline.
- */
 export interface SegmentationResult {
-  /** Final full-canvas B/W mask as base64 PNG: white = redraw, black = preserve */
+  // NovelAI inpainting reads white pixels (alpha 255) as the redraw region and black pixels (alpha 0) as preserved,
+  // so polarity cannot be flipped.
   maskBase64: string;
-  /** Number of segments detected and merged */
   segmentCount: number;
-  /** Labels from all detected segments */
   labels: string[];
-  /** Source image width in pixels */
   imageWidth: number;
-  /** Source image height in pixels */
   imageHeight: number;
-  /** Raw mask buffer (only populated when NAI_INPAINT_DEBUG is true) */
   debugMaskBuffer?: Buffer;
-  /** Original image with bounding box overlays (only populated when NAI_INPAINT_DEBUG is true) */
   debugOverlayBuffer?: Buffer;
 }
 
-/**
- * Call Gemini's image segmentation API to identify and mask regions matching
- * a natural language description.
- *
- * @param imageBase64 - Base64-encoded source image (PNG or JPEG)
- * @param imageMimeType - MIME type of the source image
- * @param editTarget - Natural language description of what to segment (e.g. "the cat", "her hair")
- * @param apiKey - Decrypted Google API key
- */
 async function callGeminiSegmentation(
   imageBase64: string,
   imageMimeType: string,
@@ -205,28 +158,8 @@ async function callGeminiSegmentation(
   return validSegments;
 }
 
-/**
- * Build an inpainting mask from Gemini's bounding boxes using elliptical shapes,
- * quantized to 1/8th resolution to match NAI's latent space grid.
- *
- * Key design decisions based on open-source NAI implementations
- * (ComfyUI_NAIDGenerator, novelai-api, novelai-python):
- *
- * - **Elliptical shape**, so Organic curves blend better than rectangles in diffusion.
- * - **1/8th resolution quantization**, because NAI's diffusion model operates in latent space
- *    at 1/8th pixel resolution. Masks must be pre-quantized to this grid using
- *    nearest-neighbor interpolation (down to `ceil(w/64)*8` × `ceil(h/64)*8`, then
- *    back up to full size). Without this, full-resolution mask edges create intermediate
- *    grey values when the model internally downsamples, producing a visible halo.
- * - **RGBA format**, because NAI expects RGBA PNG where white pixels have alpha=255 (redraw)
- *    and black pixels have alpha=0 (preserve). The alpha channel is the actual mask
- *    signal, matching the `naimask_to_base64()` encoding from ComfyUI_NAIDGenerator.
- *
- * @param segments - Array of Gemini segmentation results (only box_2d is used)
- * @param originalWidth - Width of the source image in pixels
- * @param originalHeight - Height of the source image in pixels
- * @param isV4 - Whether the target model is V4+ (affects quantization grid)
- */
+// Masks use ellipses quantized to 1/8th latent resolution in RGBA (alpha 255 redraw, 0 preserve) because NovelAI
+// diffusion halos on unaligned or rectangular edges.
 async function buildBoundingBoxMask(
   segments: GeminiSegment[],
   originalWidth: number,
@@ -333,9 +266,6 @@ async function buildBoundingBoxMask(
   return finalMask;
 }
 
-/**
- * Color palette for bounding box overlays: matches Google's spatial understanding example.
- */
 const BBOX_COLORS = [
   "#FF0000",
   "#00FF00",
@@ -349,19 +279,6 @@ const BBOX_COLORS = [
   "#00FF88",
 ];
 
-/**
- * Generate a debug overlay image: the original image with colored bounding boxes,
- * padded ellipses, and labels drawn on top for each detected segment.
- *
- * Shows both the raw Gemini bounding box (dashed rectangle) and the actual
- * padded ellipse mask shape (semi-transparent fill) so the developer can
- * see exactly what region is being sent to NAI for inpainting.
- *
- * @param imageBuffer - Original source image as a Buffer
- * @param imgWidth - Source image width in pixels
- * @param imgHeight - Source image height in pixels
- * @returns PNG buffer of the original image with bounding box overlays
- */
 async function generateDebugOverlay(
   imageBuffer: Buffer,
   segments: GeminiSegment[],
@@ -424,16 +341,6 @@ async function generateDebugOverlay(
   return overlayBuffer;
 }
 
-/**
- * High-level segmentation pipeline: calls Gemini to segment the target region,
- * then processes and merges all resulting masks into a single inpainting mask.
- *
- * @param imageBase64 - Base64-encoded source image
- * @param imageMimeType - MIME type of the source image (e.g. "image/png")
- * @param apiKey - Decrypted Google API key for Gemini
- * @param isV4 - Whether the target NAI model is V4+ (affects mask quantization grid)
- * @returns SegmentationResult with the final mask and metadata
- */
 export async function segmentImage(
   imageBase64: string,
   imageMimeType: string,

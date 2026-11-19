@@ -101,14 +101,8 @@ async function getExistingSavedConfig(
     : await llmProviderRepo.loadUserSavedProviderConfig(scope.ownerId, provider);
 }
 
-/**
- * Drops the cached row for a synthetic text model just written.
- *
- * TomoriState invalidation alone is not enough: rebuilding the state reads the model through
- * `llmModelRepo.loadById`, which is cache-first, so the rebuilt state would carry the pre-edit
- * capability flags. Dropping the entry makes that read fall through to the row that was just
- * written.
- */
+// TomoriState invalidation alone leaves llmModelRepo.loadById serving stale pre-edit capability flags from the LLM
+// cache, so this drops that cache entry.
 function forgetCachedTextModel(modelId: number | null | undefined): void {
   if (modelId != null) {
     forgetCachedLlm(modelId);
@@ -208,13 +202,8 @@ async function upsertSyntheticCapabilityModel(
   }
 }
 
-/**
- * Writes the synthetic model row backing an endpoint and returns its id.
- *
- * On the add path (no existing model ref) it inserts a fresh synthetic model. On the edit path it
- * updates the existing model row in place by id, so a renamed model_name (which changes the derived
- * codename) does not orphan the row that live config still references by id.
- */
+// Edits must update the existing synthetic model row in place by id so renaming model_name (which changes codename)
+// does not orphan live config references.
 async function writeSyntheticCapabilityModel(
   provider: string,
   endpoint: CustomEndpointRegistrationInput,
@@ -716,17 +705,6 @@ export async function setActiveCustomEndpoint(params: {
   return await llmProviderRepo.setActiveCustomEndpoint(params);
 }
 
-/**
- * Resolves the custom endpoint row backing a provider for a capability.
- *
- * When an active model id is supplied, the specific endpoint owning that synthetic model is
- * returned: this is how the runtime picks the right row when several models share a connection.
- * When omitted (or no match), it falls back to the most-recently-updated endpoint for the connection.
- *
- * @param provider      - Internal custom provider name (custom:<connection_id>)
- * @param capability    - Endpoint capability
- * @param activeModelId - Optional id of the currently-active synthetic model for this capability
- */
 export async function resolveCustomEndpointForProvider(
   provider: string,
   capability: CustomEndpointCapability,
@@ -740,13 +718,8 @@ export async function resolveCustomEndpointForProvider(
   return await llmProviderRepo.loadCustomEndpointByConnection(parsed.connectionId, capability, activeModelId);
 }
 
-/**
- * The endpoint a custom text request targets and the `num_ctx` it sends.
- *
- * Shared by the request builder and the context budget because the truncation window must equal
- * the `num_ctx` actually sent. The model config mirror wins when set (a fallback hop pins it), and
- * only then is the endpoint row skipped.
- */
+// Shared by the request builder and context budget so truncation matches the sent num_ctx; the config mirror wins
+// because fallback hops pin it there.
 export async function resolveCustomTextEndpointTarget(tomoriState: TomoriState): Promise<{
   endpointUrl: string | null;
   modelNameHint: string | null;
@@ -864,14 +837,6 @@ const VERSIONED_API_STYLES = new Set<CustomEndpointApiStyle>([
   "openai-decisions",
 ]);
 
-/**
- * Normalizes a user-supplied endpoint URL before it is stored.
- *
- * A bare origin is extended with /v1 for versioned styles. Each owning adapter appends
- * its operation route, including the separate Decision protocols.
- * URLs that already end in /v1, or that carry a custom path such as a gateway prefix,
- * are kept verbatim: appending blindly would corrupt /api/v1 into /api/v1/v1.
- */
 export function normalizeCustomEndpointUrlForStorage(apiStyle: CustomEndpointApiStyle, endpointUrl: string): string {
   const trimmed = endpointUrl.trim().replace(/\/+$/, "");
   if (!VERSIONED_API_STYLES.has(apiStyle)) {
@@ -903,13 +868,8 @@ export function normalizeCustomEndpointUrlForStorage(apiStyle: CustomEndpointApi
   return trimmed;
 }
 
-/**
- * Decrypts the credential saved for one connection, looked up under that connection's own owner.
- * Capability-level resolution would instead return whichever text credential wins the workspace
- * policy, which can belong to a different provider entirely.
- *
- * @returns `null` when the connection has no stored credential or it cannot be decrypted.
- */
+// Must look up credentials under the connection's own owner because capability-level resolution can return another
+// provider's winning text key.
 export async function loadCustomConnectionCredential(
   connection: CustomEndpointConnectionRow,
   failureContext?: ErrorContext,

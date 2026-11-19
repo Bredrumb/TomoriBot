@@ -1245,10 +1245,6 @@ export type PersonalMemoriesPanelPayloadOrTerminal =
   | ReturnType<typeof buildPersonalMemoriesPanelPayload>
   | InteractionEditReplyOptions;
 
-/**
- * @param requestedLineageId - Lineage another panel links to; a `rawPersona` that resolves takes precedence
- * @param rawPersona - Untrusted `persona` slash option; with none, the panel opens on Global memories
- */
 export async function buildInitialPersonalMemoriesPanel(
   interaction: GlobalRoutableInteraction | ChatInputCommandInteraction,
   locale: string,

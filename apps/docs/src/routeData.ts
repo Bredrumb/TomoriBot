@@ -11,14 +11,8 @@ import {
 } from "./docsRouting";
 import { DEFAULT_DOCS_LOCALE_ID, DOCS_BASE_URL, getDocsLocaleConfig } from "../../../src/constants/docsLocales";
 
-/**
- * Content root, which is the src/content/docs junction pointing at repo-root docs/.
- *
- * Two anchors because a module URL is rewritten by the bundler: route middleware runs from
- * `dist/.prerender/chunks/`, where an `import.meta.url`-relative path lands inside the build output.
- * The working directory is the Astro project root for `astro dev` and `astro build` alike, and the
- * candidates stay separate strings rather than one resolved `..` chain so the dev path is exact.
- */
+// Both module dir and `process.cwd()` are passed because bundled middleware runs from `dist/.prerender/chunks/`,
+// where `import.meta.url` stays inside `dist/`.
 const docsRoot = resolveDocsRoot(
   dirname(fileURLToPath(import.meta.url)),
   process.cwd(),
@@ -34,15 +28,6 @@ function resolveDocsRoot(moduleDir: string, workingDir: string): string {
   return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
 }
 
-/**
- * Starlight route middleware for SEO head tags.
- *
- * - Auto-derives a per-page meta description from the page's first prose paragraph whenever the
- *   frontmatter has no explicit `description`. A hand-written `description:` always wins, because
- *   Starlight emits it before this middleware runs.
- * - Marks internal `wiki/` pages as `noindex`, along with every locale-fallback route.
- * - Replaces Starlight's hreflang alternates with ones derived from the pages that really exist.
- */
 export const onRequest = defineRouteMiddleware((context) => {
   const { starlightRoute } = context.locals;
   const { entry, head } = starlightRoute;

@@ -33,10 +33,7 @@ const decoratedFor = (sprite: string) => `${CLEAN} (${sprite})`;
 // Last swappable letter of the last word: the final Latin "a" of "Fukawa" becomes Cyrillic U+0430.
 const GROUP_BREAK = `Touko Fukaw${String.fromCodePoint(0x0430)}`;
 
-/**
- * Stands in for the Discord channel the alternation reads adjacency from. Ids must be real
- * snowflakes because the adjacency test compares magnitude, not equality.
- */
+// IDs must be monotonic snowflakes because the adjacency check compares magnitude rather than equality.
 function makeChannel(channelId: string = CHANNEL) {
   const BASE = 1400000000000000000n;
   let counter = 0n;
@@ -51,18 +48,15 @@ function makeChannel(channelId: string = CHANNEL) {
     get lastMessageId(): string | null {
       return lastMessageId;
     },
-    /** A webhook send by us landing in the channel, as `recordSuccessfulSend` would report it. */
     deliverWebhook(identity: ResolvedWebhookIdentity, speaker: DeliveredSpeaker | null = null): void {
       const id = nextId();
       lastMessageId = id;
       recordChannelDeliveredWebhookIdentity(channelId, identity, id, speaker, "1400000000000000002");
     },
-    /** A bot-user fallback send, which is a different Discord author than the webhook. */
     deliverBotMessage(): void {
       lastMessageId = nextId();
       recordChannelDeliveredBotMessage(channelId);
     },
-    /** Anyone else posting: a user, or another persona's webhook. */
     foreignMessage(): void {
       lastMessageId = nextId();
     },
@@ -136,12 +130,6 @@ describe("sprite group-break naming", () => {
     expect(cleanIdentity.username).toBe(CLEAN);
   });
 
-  /**
-   * Regression: the alternation used to live in StreamState, which is rebuilt for every SDK
-   * call. A queued turn therefore saw its first sprite as "the channel's first" and kept the
-   * clean name, so colliding with the previous turn's final sprite, which Discord then grouped
-   * under one avatar. A separate resolver instance stands in for the new turn's stream.
-   */
   it("carries the alternation across turn boundaries in the same channel", () => {
     const channel = makeChannel();
 
@@ -158,11 +146,6 @@ describe("sprite group-break naming", () => {
     );
   });
 
-  /**
-   * Regression: the suffix is a collision breaker, not an emotion display. Discord groups a
-   * message only with the one directly above it, so once anyone else has posted there is
-   * nothing to collide with and the group-break name is unnecessary.
-   */
   it("restarts on the clean name when another author posted since our last delivery", () => {
     const resolve = makeResolver();
     const channel = makeChannel();
@@ -195,10 +178,6 @@ describe("sprite group-break naming", () => {
     );
   });
 
-  /**
-   * A bot-user message is a different Discord author than the webhook, so it breaks the webhook
-   * group just as a foreign message does even though we sent it.
-   */
   it("restarts on the clean name after our own bot-user fallback message", () => {
     const resolve = makeResolver();
     const channel = makeChannel();
@@ -210,11 +189,6 @@ describe("sprite group-break naming", () => {
     expect(resolve(cleanIdentity, decoratedFor("shy"), "shy", CHANNEL, channel.lastMessageId).username).toBe(CLEAN);
   });
 
-  /**
-   * `channel.lastMessageId` is maintained from the gateway MESSAGE_CREATE dispatch, which can lag
-   * a send we just made. Reading a stale (older) id must not be mistaken for a broken group, or
-   * back-to-back sprites in one reply would collapse under a single avatar.
-   */
   it("treats a lagging lastMessageId as adjacent rather than as a foreign message", () => {
     const resolve = makeResolver();
     const channel = makeChannel();

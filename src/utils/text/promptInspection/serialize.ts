@@ -24,14 +24,6 @@ import {
   serializeGoogleThinkingConfig,
 } from "@/utils/provider/thinkingControl";
 
-/**
- * Human-readable label (and optional command hint) for each `ContextItemTag`.
- * Rendered by `buildTextSnapshot` as `=== Title (command/system-managed) ===` blocks.
- *
- * `subsections` lets a single context item (especially composites like
- * `KNOWLEDGE_USERS_IN_CONVERSATION`: expose multiple `== SubTitle ==` markers
- * so users can see which separate data pools feed into that block.
- */
 type TagLabel = {
   title: string;
   hint: string; // Slash-command reference like `/memories`, or the literal "system-managed"
@@ -104,17 +96,6 @@ function renderTagHeader(tag: ContextItemTag | undefined): string {
   return lines.join("\n");
 }
 
-/**
- * Serializes `contextItems` (already rearranged by preset routing, if applicable) into
- * a human-readable flat-text format that mirrors the order produced by `buildContext`.
- *
- * Each context item gets a `=== Title (/command) ===` header derived from its
- * `metadataTag`. These headers are annotations: they are NOT part of the prompt
- * actually sent to the LLM. The DM body that ships with the file explains this.
- *
- * The snapshot info and request config lead the file under their own annotation headers,
- * so they read as request metadata rather than prompt text.
- */
 export function buildTextSnapshot(
   contextItems: StructuredContextItem[],
   requestConfig: Record<string, unknown>,
@@ -165,24 +146,8 @@ export function buildTextSnapshot(
   return lines.join("\n");
 }
 
-/**
- * Produces a provider-specific JSON snapshot that matches the format emitted by
- * each adapter's `logSanitizedRequest` to terminal. Base64 image data is redacted
- * to keep file sizes manageable, matching the terminal log sanitization.
- *
- * Supported providers with full native fidelity:
- *   - google            → GoogleStreamAdapter.buildTokenCountPayload
- *   - vertex            → VertexStreamAdapter.buildTokenCountPayload
- *   - vertexexpress     → VertexexpressStreamAdapter.buildTokenCountPayload
- *   - openrouter-family → OpenrouterStreamAdapter.buildProbeMessages
- *   - anthropic         → AnthropicStreamAdapter.buildProbeMessages
- *
- * Metadata (server/channel/persona/provider/preset) is NOT embedded in the file:
- * the payload must stay shaped like the provider request.
- *
- * When `toolsData` is provided, a top-level `tools` key is appended in the same
- * shape the adapter would send to the provider. The request config keys follow `model`.
- */
+// Snapshot metadata is omitted and base64 image data is redacted so the payload stays compact and shaped like a
+// provider request.
 export async function buildJsonSnapshot(
   contextItems: StructuredContextItem[],
   persona: TomoriState,
@@ -369,23 +334,8 @@ export async function buildJsonSnapshot(
   return { model, ...config, ...payload, ...(toolsData ? { tools: toolsData } : {}) };
 }
 
-/**
- * Produces a provider-specific sampling/request-config block matching what each
- * adapter would actually send at runtime. UNFILTERED: does not probe OpenRouter
- * for `supportedParameters`, so params the model may reject are still shown.
- *
- * Provider shapes:
- *   - google           : `{temperature, top_k, top_p, frequency_penalty, presence_penalty, max_output_tokens, stop_sequences, safety_settings, thinking_config?}`
- *   - vertex / vertexexpress: `{temperature, top_k, top_p, max_output_tokens, stop_sequences, safety_settings, thinking_config?}`
- *   - anthropic        : `{temperature?, top_p?, top_k?, max_tokens, stop_sequences}` (Anthropic rejects sending both temp+top_p, uses `selectAnthropicSamplingParams`)
- *   - openai-compat    : `{temperature?, top_p?, top_k?, frequency_penalty?, presence_penalty?, min_p?, max_tokens?, stop}`
- *
- * Used in two places:
- *   - Baked into the JSON snapshot file at the top level, right after `model`
- *   - Written at the top of the text snapshot file under an annotation header
- *
- * @param maxOutputTokens - From `resolveRequestMaxOutputTokens()`; undefined omits the key, as the request does.
- */
+// OpenRouter supportedParameters are not probed here, so parameters a model may reject at runtime still appear in the
+// snapshot.
 export function buildRequestConfig(
   persona: TomoriState,
   providerName: string,

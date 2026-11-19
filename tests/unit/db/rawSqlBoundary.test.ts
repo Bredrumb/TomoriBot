@@ -6,19 +6,6 @@ import {
   scanFileForSqlQueries,
 } from "../../../scripts/checks/lib/sqlAudit";
 
-/**
- * Enforces TomoriBot's raw-SQL boundary standard: every `sql`/`tx` template
- * literal must live inside `src/utils/db/repositories/` (or a small, explicitly
- * justified exemption list). The detector itself is shared with the
- * `bun run audit-sql` CLI (scripts/checks/lib/sqlAudit.ts) so the gate and this
- * test can never disagree.
- *
- * The synthetic-input tests below exist specifically to prove the detector has
- * NO false positives (it ignores SQL in comments and plain strings) and NO false
- * negatives (it still catches real tagged-template literals), so the headline
- * "zero violations" assertion is trustworthy rather than vacuously green.
- */
-
 describe("scanFileForSqlQueries — true positives", () => {
   it("detects a single-line awaited sql literal", () => {
     const hits = scanFileForSqlQueries("const a = await sql`SELECT 1`;");

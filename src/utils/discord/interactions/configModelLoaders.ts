@@ -41,12 +41,6 @@ import {
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
 import { localizer, resolveDescription } from "@/utils/text/localizer";
 
-/**
- * Resolves the display name of whatever currently occupies one slot.
- *
- * Each slot reads a different catalog, and only Text and Vision are joined into `TomoriState`
- * already, so the rest need a lookup by id rather than a field read.
- */
 async function resolveSlotAssignment(
   state: TomoriState,
   capability: ConfigModelCapability,
@@ -120,13 +114,8 @@ async function resolveSlotAssignment(
   }
 }
 
-/**
- * Builds the Switch page view for one workspace.
- *
- * The workspace snowflake is required rather than derived from `state`, because `TomoriState`
- * carries the internal server id only and the persona half of the override list is read through the
- * workspace persona cache.
- */
+// Separate workspaceDiscId is required because TomoriState holds only the internal server id while the persona cache
+// keys by Discord snowflake.
 export async function loadConfigSwitchModelsView(
   state: TomoriState,
   workspaceDiscId: string,
@@ -253,13 +242,8 @@ function describeFallbackEntry(
   )})`;
 }
 
-/**
- * Value a provider option carries on Switch Models and Fallbacks: the provider plus the option-page
- * offset the modal should open on.
- *
- * A modal select holds 25 options and cannot page inside itself, so the range is chosen here, as one
- * select option per page, rather than by a prev/next row that would strand the page it is parked on.
- */
+// Modal selects cap at 25 options and cannot page internally, so each provider option pre-encodes its modal
+// option-page offset.
 export function encodeConfigProviderPageValue(provider: string, start: number): string {
   return `${start}|${provider}`;
 }
@@ -273,14 +257,8 @@ export function decodeConfigProviderPageValue(value: string): { provider: string
   return { provider, start };
 }
 
-/**
- * Value the Switch Models provider select carries to scroll its own entry list.
- *
- * The provider selectors share one page, so a prev/next row per capability costs more components
- * than the forty-component budget has. Riding the select instead costs none, and the expanded
- * provider has to ride along or the next window rebuilds a shorter entry list and the offset it
- * was given now points outside it.
- */
+// Pagination rides the select to fit Discord's 40-component cap, and expandedProvider must ride along so list
+// collapse cannot invalidate the offset.
 export function encodeConfigProviderRangeValue(start: number, expandedProvider: string | null): string {
   return `more|${start}|${expandedProvider ?? ""}`;
 }
@@ -335,12 +313,8 @@ export async function loadConfigFallbacksView(
   };
 }
 
-/**
- * The models one provider contributes to a fallback slot.
- *
- * A custom label resolves through connection-scoped endpoint rows rather than the model catalog, so
- * each saved fallback keeps pointing at the exact endpoint it was chosen from.
- */
+// Custom providers resolve via connection-scoped endpoint rows rather than the model catalog so saved fallbacks stay
+// bound to their exact endpoint.
 export async function loadConfigFallbackOptions(
   state: TomoriState,
   provider: string,

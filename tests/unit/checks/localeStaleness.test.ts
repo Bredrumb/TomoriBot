@@ -60,13 +60,8 @@ interface FixtureRepo {
   commit(message: string): string;
 }
 
-/**
- * Base repositories, keyed by their file map, built once and copied per case.
- *
- * Building a repository costs a `git init`, a `git add`, and a `git commit`; the cases here only
- * differ in what they do afterwards, so paying that once per distinct starting shape is enough.
- * Every case still gets its own repository, because each one commits its own change.
- */
+// Base repos are cached by file map and copied per case because git init/commit is costly while sharing a repo would
+// leak test commits.
 const templateRepos = new Map<string, string>();
 
 afterAll(() => {
@@ -99,10 +94,6 @@ function writeLocaleFile(root: string, relativePath: string, contents: string): 
   writeFileSync(target, contents, "utf8");
 }
 
-/**
- * A real repository rather than a mocked git, so the shallow-clone, missing-ref, and merge-base
- * paths under test are the ones the command actually takes.
- */
 function createFixtureRepo(files: Record<string, string>): FixtureRepo {
   const root = mkdtempSync(join(tmpdir(), "locale-staleness-"));
   temporaryRoots.push(root);
@@ -127,11 +118,8 @@ function reportFor(repo: FixtureRepo, base: string, source?: "head" | "worktree"
   return checkLocaleStaleness({ repoRoot: repo.root, base, source });
 }
 
-/**
- * A genuine CI-shaped shallow checkout: one commit, no remote-tracking base branch, and no local
- * `main`. The refs are deleted deliberately because a `file://` clone otherwise copies the source
- * repository's branches and leaves a resolvable base behind.
- */
+// Local and remote-tracking refs must be deleted after cloning because git clone over file:// copies the source
+// branches and leaves a resolvable base behind.
 function createShallowClone(source: FixtureRepo): string {
   const root = mkdtempSync(join(tmpdir(), "locale-staleness-shallow-"));
   temporaryRoots.push(root);

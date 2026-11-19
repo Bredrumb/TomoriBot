@@ -21,7 +21,6 @@ afterEach(() => {
   for (const cleanup of cleanups.splice(0)) cleanup();
 });
 
-/** The option offers `MODEL_ID` as a structured-output text model; every config write succeeds. */
 function stubPanel(): void {
   const spies = [
     spyOn(naturalNudgeRepository, "saveServerConfig").mockResolvedValue(true),

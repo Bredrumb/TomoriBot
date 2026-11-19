@@ -1,22 +1,3 @@
-/**
- * Runs a devtool script with environment variables injected from a JSON secrets file.
- *
- * Lets cutover tasks target a specific database (GCP Cloud SQL, Azure Flexible
- * Server, local dev) without editing `.env`. Point it at a flat JSON blob of
- * env-style keys (the same shape as the `TOMORI_SECRETS_JSON` deploy secret),
- * and every string/number/boolean value is exported into the child process
- * before the wrapped script starts. JSON values win over `.env` because dotenv
- * never overrides variables that are already set.
- *
- * Usage:
- *   bun run scripts/devtools/runWithSecrets.ts <secrets-file> <script> [scriptArgs...]
- *
- * Examples:
- *   bun run scripts/devtools/runWithSecrets.ts rehearsal/gcp-db.json scripts/devtools/backupData.ts --backup
- *   bun run scripts/devtools/runWithSecrets.ts rehearsal/azure-db.json scripts/devtools/backupData.ts --restore --latest
- *   bun run scripts/devtools/runWithSecrets.ts rehearsal/azure-db.json scripts/devtools/migrateAssetUrls.ts --from <old> --to <new> --dry-run
- */
-
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { log } from "@/utils/misc/logger";
@@ -26,12 +7,6 @@ function printUsage(): void {
   log.info("  bun run scripts/devtools/runWithSecrets.ts <secrets-file> <script> [scriptArgs...]");
 }
 
-/**
- * Reads a flat JSON secrets file and converts scalar values to env-var strings.
- *
- * @param filePath - Absolute path to the JSON secrets file.
- * @returns Map of env var names to string values, ready to merge into a child environment.
- */
 function loadSecretsAsEnv(filePath: string): Record<string, string> {
   const parsed: unknown = JSON.parse(readFileSync(filePath, "utf8"));
 

@@ -13,13 +13,6 @@ interface RecordedMetric {
   fields: Record<string, number | string>;
 }
 
-/**
- * Captures `log.metric` without touching pino.
- *
- * The panel failure signal is a metric rather than an error record by design (the error level is
- * reserved for incidents, and most receipts are expected refusals), so asserting the metric is
- * asserting the contract.
- */
 function captureMetrics(): { metrics: RecordedMetric[]; restore(): void } {
   const metrics: RecordedMetric[] = [];
   const original = log.metric;
@@ -55,7 +48,6 @@ function fakeInteraction(customId: string): { customId: string; editReply: (payl
   };
 }
 
-/** Minimal Components V2 payload that satisfies the delivery validator. */
 function validPayload(content = "### Update Failed\n> Try again."): {
   components: unknown[];
   flags: MessageFlags;
@@ -185,7 +177,6 @@ describe("panel failure reporting chokepoint", () => {
 });
 
 describe("panel failure Postgres sink", () => {
-  /** Lets the unawaited sample write run, without depending on its internal microtask depth. */
   const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
   it("records the same fields the log metric carries, so the two sinks join on reason", async () => {

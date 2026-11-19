@@ -29,10 +29,8 @@ import { renderFencedPreview } from "@/utils/text/textPreview";
 
 const CONFIG_PERSONA_VOICE_PAGE_SIZE = DISCORD_SELECT_OPTIONS_MAX;
 
-/**
- * The route layer owns remote catalog fetching. The renderer receives only bounded labels and
- * fingerprints, so an external provider ID can never become a component value by accident.
- */
+// Remote voice options expose only bounded labels and fingerprints so raw external provider IDs never become
+// component values.
 interface ConfigPersonaVoiceRemoteOptionView {
   label: string;
   fingerprint?: string;
@@ -45,7 +43,6 @@ const VOICE_PRIORITY_KEYS: Record<TomoriState["voice_source_priority"], string> 
 };
 
 export interface ConfigPersonaVoiceRemoteView {
-  /** `voices` is the normal name; `options` keeps fixture views easy to adapt from catalog APIs. */
   voices?: readonly ConfigPersonaVoiceRemoteOptionView[];
   options?: readonly ConfigPersonaVoiceRemoteOptionView[];
   catalogFingerprint?: string;

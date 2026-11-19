@@ -94,10 +94,6 @@ function toPgTextArray(values: string[]): string {
   return `{${values.map((v) => `"${v.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`).join(",")}}`;
 }
 
-/**
- * Creates a document record without chunks. Use with appendDocumentChunks for
- * incremental writes across long-running extraction pipelines.
- */
 export async function createDocumentRecord(params: {
   serverId: number;
   personaId: number | null;
@@ -121,10 +117,6 @@ export async function createDocumentRecord(params: {
   return Number(row.document_id);
 }
 
-/**
- * Appends a batch of chunks (with embeddings) to an existing document starting
- * at the given chunk index.
- */
 export async function appendDocumentChunks(params: {
   documentId: number;
   documentName: string;
@@ -158,16 +150,10 @@ export async function appendDocumentChunks(params: {
   });
 }
 
-/**
- * Sets text_content after all chunks have been appended.
- */
 export async function finalizeDocumentContent(documentId: number, textContent: string): Promise<void> {
   await sql`UPDATE documents SET text_content = ${textContent} WHERE document_id = ${documentId}`;
 }
 
-/**
- * Keeps text_content consistent with stored chunks after edits or deletes.
- */
 export async function rebuildDocumentTextContent(documentId: number): Promise<void> {
   const rows = await sql<Array<{ content: string }>>`
     SELECT content
@@ -193,9 +179,8 @@ export async function insertDocumentWithChunks(params: {
   embeddings: number[][];
   embeddingModelId: number;
   embeddingFamily: string;
-  /** Document origin: 'upload' (default) or 'history' */
   sourceType?: string;
-  /** Discord channel IDs restricting retrieval; empty means every channel. */
+  // Empty array means unrestricted across every channel, because retrieval treats an empty scope as global.
   channelDiscIds?: string[];
 }): Promise<number> {
   const {
@@ -296,12 +281,9 @@ export async function retrieveRelevantDocumentChunks(params: {
   maxResults: number;
   minSimilarity: number;
   batchSize?: number;
-  /**
-   * When set, excludes chunks whose document is scoped to channels outside this list. Pass the current
-   * channel and, inside a thread, its parent so a thread inherits its channel's scope.
-   */
+  // Callers inside a thread must pass both the thread and parent channel IDs so the thread inherits its parent's
+  // document scope.
   channelIds?: readonly string[] | null;
-  /** Optional sink filled in place, so callers that only need chunks keep the same return type. */
   timings?: RetrievalTimings;
 }): Promise<RetrievedDocumentChunk[]> {
   const {

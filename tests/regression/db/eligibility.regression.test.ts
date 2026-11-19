@@ -1,13 +1,3 @@
-/**
- * Regression harness: batched per-persona queries against the loaders they summarize.
- *
- * The memories panel marks personas with history documents and counts personal memories per
- * lineage from one batched query each. A batched query that drifts from its loader shows a
- * marker or count the opened page contradicts, so each is compared with its loader over real
- * Postgres rather than mocked SQL.
- *
- * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md).
- */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { personalMemoryRepository, serverMemoryRepository, userRepository } from "@/utils/db/repositories";
 import { FIXTURE_IDS, cleanupFixtures, insertFixtures } from "./setup/fixtures";
@@ -30,11 +20,8 @@ async function insertPersona(serverId: number, nickname: string): Promise<Person
   return { persona_id: row.persona_id, persona_lineage_id: Number(row.persona_lineage_id) };
 }
 
-/**
- * True when a table exists. The RAG schema (`documents`) is only created when
- * pgvector is installed, so the document case skips on a Postgres without the
- * extension while the base-schema memory case always runs.
- */
+// The RAG `documents` table exists only when pgvector is installed, so document tests check this to skip without
+// pgvector while base memory tests still run.
 async function tableExists(name: string): Promise<boolean> {
   const [row] = await testSql<Array<{ exists: boolean }>>`
     SELECT to_regclass(${`public.${name}`}) IS NOT NULL AS exists

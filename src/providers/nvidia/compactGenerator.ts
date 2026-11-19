@@ -1,12 +1,3 @@
-/**
- * Conversation compaction for the NVIDIA NIM provider.
- *
- * - Plain-text conversation summaries via direct POST to the NVIDIA
- *   chat-completions endpoint, with optional image support via
- *   fetchAndOptimizeImage.
- * - Roleplay structured summaries delegated to callNvidiaStructuredJSON,
- *   which handles the full json_schema → json_object → plain fallback chain.
- */
 import { log } from "@/utils/misc/logger";
 import type {
   CompactConversationResult,
@@ -22,10 +13,6 @@ type NvidiaContentPart = { type: "text"; text: string } | { type: "image_url"; i
 
 type NvidiaMessage = { role: "system"; content: string } | { role: "user"; content: string | NvidiaContentPart[] };
 
-/**
- * Build the user content for a compact summary request, optionally
- * fetching and embedding images as optimized base64 data URLs.
- */
 async function buildNvidiaCompactUserContent(
   userPrompt: string,
   images?: Array<{ url: string }>,
@@ -56,12 +43,6 @@ async function buildNvidiaCompactUserContent(
   return parts.length === 1 ? userPrompt : parts;
 }
 
-/**
- * Generate a plain-text conversation summary using the NVIDIA NIM API.
- *
- * @param request - Compact summary request with model, prompts, auth, and optional images
- * @returns Plain-text summary or an error object
- */
 export async function generateConversationSummaryNvidia(
   request: ProviderCompactSummaryRequest,
 ): Promise<CompactConversationResult> {
@@ -145,15 +126,6 @@ export async function generateConversationSummaryNvidia(
   }
 }
 
-/**
- * Generate a structured roleplay summary using the NVIDIA NIM API.
- *
- * Delegates to callNvidiaStructuredJSON, which handles the full
- * json_schema → json_object → plain fallback chain automatically.
- *
- * @param request - Compact summary request with model, prompts, auth, and optional images
- * @returns Structured roleplay summary or an error object
- */
 export async function generateRoleplaySummaryNvidia(
   request: ProviderCompactSummaryRequest,
 ): Promise<CompactRoleplayResult> {

@@ -1,17 +1,3 @@
-/**
- * Anthropic-specific streaming adapter
- *
- * Implements the StreamProvider interface for Anthropic's Messages API.
- * Uses raw fetch + SSE parsing (no SDK) for consistency with other providers.
- *
- * Key Anthropic API differences from OpenAI:
- * - System prompt is a top-level `system` parameter, not a message
- * - Messages use content blocks: [{type: "text", ...}, {type: "image", ...}]
- * - Tool results are wrapped in user messages as tool_result content blocks
- * - Strict user/assistant alternation is enforced
- * - SSE uses named events: content_block_start, content_block_delta, etc.
- */
-
 import { applyAnthropicCacheBreakpoints, relocateCacheContextItems } from "@/providers/utils/anthropicCache";
 import { buildTargetedAttempt, extractRejectedParams } from "@/providers/utils/paramDegradation";
 import { mapWithConcurrency } from "@/utils/async/bounded";
@@ -47,18 +33,12 @@ import type {
   StreamContext,
 } from "../../types/stream/interfaces";
 
-/**
- * Anthropic-specific stream configuration extending the base StreamConfig
- */
 export interface AnthropicStreamConfig extends StreamConfig {
   seesImages?: boolean;
   topP?: number;
   topK?: number;
 }
 
-/**
- * Anthropic content block types used in messages and streaming
- */
 interface AnthropicTextBlock {
   type: "text";
   text: string;
@@ -104,9 +84,6 @@ interface AnthropicMessage {
   content: string | AnthropicContentBlock[];
 }
 
-/**
- * Accumulated tool call data across streaming chunks
- */
 interface AccumulatedToolCall {
   id?: string;
   name: string;
@@ -123,9 +100,6 @@ type AnthropicSseEventType =
   | "ping"
   | "error";
 
-/**
- * Parsed SSE event with both event type and data payload
- */
 interface ParsedSseEvent {
   eventType: AnthropicSseEventType;
   data: unknown;
@@ -150,9 +124,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
     });
   }
 
-  /**
-   * Initialize and start the streaming process with Anthropic's Messages API
-   */
   async *startStream(config: StreamConfig, context: StreamContext): AsyncGenerator<RawStreamChunk, void, unknown> {
     this.toolCallAccumulator.clear();
     this.thinkingAccumulator = "";
@@ -385,9 +356,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
     }
   }
 
-  /**
-   * Convert a raw Anthropic SSE event into a normalized ProcessedChunk
-   */
   processChunk(chunk: RawStreamChunk): ProcessedChunk {
     if (
       typeof chunk.data === "object" &&
@@ -589,9 +557,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
     }
   }
 
-  /**
-   * Convert provider-specific errors into normalized ProviderError format
-   */
   handleProviderError(error: unknown): ProviderError {
     const errorMessage = error instanceof Error ? error.message : String(error);
 
@@ -676,9 +641,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
     };
   }
 
-  /**
-   * Create provider-specific error description for display in embeds
-   */
   createErrorDescription(error: ProviderError, locale: string): string | null {
     const errorCode = formatProviderErrorCodeForDisplay(error.code);
     const isTemperatureTopPConflict =
@@ -698,10 +660,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
     return error.code ? `Error Code ${errorCode}: ${message}` : message;
   }
 
-  /**
-   * Assemble context items into Anthropic message format.
-   * Returns the system prompt (top-level) and messages array separately.
-   */
   private async assembleAnthropicContext(
     contextItems: StructuredContextItem[],
     currentTurnModelParts: Array<Record<string, unknown>>,
@@ -954,11 +912,8 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
     };
   }
 
-  /**
-   * Anthropic requires strict user/assistant alternation. Merges consecutive same-role messages
-   * into single messages with combined content blocks and guarantees a leading user turn, via the
-   * shared {@link mergeConsecutiveSameRole} / {@link ensureLeadingUserTurn} helpers.
-   */
+  // Anthropic's Messages API rejects consecutive same-role turns and leading assistant turns, so alternation must be
+  // enforced here.
   private enforceStrictAlternation(messages: AnthropicMessage[]): AnthropicMessage[] {
     const merged = mergeConsecutiveSameRole(messages as unknown as NormalizableMessage[]);
 
@@ -974,14 +929,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
     return withLeading as unknown as AnthropicMessage[];
   }
 
-  /**
-   * Log a sanitized version of the outbound Anthropic request for debugging.
-   * Mirrors the Google/OpenRouter pattern: logs the full structured request body
-   * as a single JSON object so the payload is copy-pasteable and spec-comparable.
-   * Base64 image data is redacted to keep logs readable.
-   *
-   * @param requestBody - The assembled request body (without API key)
-   */
   private logSanitizedRequest(requestBody: Record<string, unknown>): void {
     log.section("AnthropicStreamAdapter: Request Details");
 
@@ -1018,13 +965,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
     log.info(`Request Body: ${JSON.stringify(sanitizedBody, null, 2)}`);
   }
 
-  /**
-   * Assemble context into Anthropic message format for non-streaming use cases
-   * (e.g. token counting probe in /tool estimate cost).
-   *
-   * @param seesImages - Whether the model accepts image inputs
-   * @returns Assembled system prompt and messages array ready for the Anthropic API
-   */
   async buildProbeMessages(
     contextItems: StructuredContextItem[],
     seesImages: boolean,

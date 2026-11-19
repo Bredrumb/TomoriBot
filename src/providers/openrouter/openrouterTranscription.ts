@@ -25,7 +25,7 @@ const transcriptionResponseSchema = z.object({
 export interface HostedTranscriptionRequest {
   model: string;
   apiKey: string;
-  /** MP3 bytes; callers transcode first so every catalogue model accepts the format. */
+  // MP3 bytes; callers transcode first so every catalogue model accepts the format.
   audio: Buffer;
   signal: AbortSignal;
   operations: SpeechOperation[];

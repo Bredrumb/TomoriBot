@@ -39,13 +39,7 @@ if (!existsSync(junctionPath)) {
   symlinkSync(docsTarget, junctionPath, "junction");
 }
 
-/**
- * Locale trees the sidebar reads labels from. A locale whose page tree does not exist yet has no
- * files to read and no sidebar entries of its own, so it is deliberately absent here even though
- * `DOCS_LOCALES` lists it as a planned target.
- */
 const sidebarLocales = DOCS_LOCALES.filter((locale) => locale.docsTree);
-/** Locales other than the default, which are the ones needing fallback sidebar labels. */
 const translatedLocales = sidebarLocales.filter((locale) => locale.id !== DEFAULT_DOCS_LOCALE_ID);
 
 // Sidebar source of truth:
@@ -168,14 +162,8 @@ function buildSidebarSection(directory) {
   };
 }
 
-/**
- * Starlight's `translations` map is keyed by each locale's `lang`, so this has to emit one entry per
- * published locale rather than the single hardcoded pair it replaced.
- *
- * A directory with no counterpart README keeps the default locale's label. Starlight already serves
- * the default locale's content at that URL, so an invented label would name a translation that does
- * not exist while the English wording stays honest about what the reader is looking at.
- */
+// Untranslated directories keep the default label because Starlight serves default locale content there, so a
+// translated label would misname English text.
 function buildSidebarTranslations(dirPath, slugPrefix) {
   const translations = {};
   const configuredTranslations = slugPrefix ? groupDirectoryConfig[slugPrefix]?.translations : undefined;
@@ -199,7 +187,6 @@ function buildSidebarTranslations(dirPath, slugPrefix) {
   return Object.keys(translations).length > 0 ? { translations } : {};
 }
 
-/** Same rule as a group label, applied to a single page's sidebar entry. */
 function buildPageTranslations(filePath) {
   const translations = {};
   const relativeStem = stripMarkdownExtension(relative(defaultLocaleTarget, filePath));
@@ -401,42 +388,21 @@ const docsLocales = Object.fromEntries(
   sidebarLocales.map((locale) => [locale.id, { label: locale.label, lang: locale.lang }]),
 );
 
-/**
- * Language tag for the sitemap's `xhtml:link` hreflang annotations.
- *
- * `@astrojs/sitemap` validates every value in its i18n map against `/^[a-zA-Z-]+$/`. A tag carrying
- * a UN M.49 numeric region (`es-419`) fails that schema, and the integration then skips generating a
- * sitemap for the entire site rather than for that one locale, while `robots.txt` still advertises
- * one. Dropping the numeric region yields a valid, less specific tag; the page's own head keeps the
- * exact tag, so only the sitemap annotation loses precision.
- */
+// `@astrojs/sitemap` requires `/^[a-zA-Z-]+$/` and omits the whole sitemap on `es-419`, so strip numeric regions here
+// while page heads keep exact tags.
 function sitemapLanguageTag(lang: string): string {
   return lang.replace(/-\d+$/, "");
 }
 
-/**
- * Locale roots each get a meta-refresh redirect to their own introduction page, matching the
- * Cloudflare 200-rewrites in `public/_redirects`. Unlisted roots are not routes at all: a locale
- * enters this map only once its page tree exists.
- */
 const localeRootRedirects = Object.fromEntries(
   sidebarLocales.map((locale) => [`/${locale.id}/`, `/${locale.id}/introduction/`]),
 );
 
-/**
- * Machine-readable documentation stays English-only, so every non-default locale tree is excluded
- * by pattern rather than by name. A locale added to the shared table is covered here without an
- * edit, which is what keeps a new translation out of the agent-facing text sets.
- */
 const nonDefaultLocalePatterns = (suffix: string) =>
   DOCS_LOCALES.filter((locale) => locale.id !== DEFAULT_DOCS_LOCALE_ID).map((locale) => `${locale.id}${suffix}`);
 
-/**
- * Sitemap filter for URLs that must not be advertised: internal wiki pages and every locale route
- * that only serves the default locale's content. A `noindex` URL left in the sitemap makes Search
- * Console report "Submitted URL marked 'noindex'", so a fallback has to stay out while the real
- * translations under the same locale root stay in.
- */
+// Sitemap excludes `noindex` fallback and wiki URLs because Search Console flags submitted `noindex` pages, while
+// real translations stay in.
 const fallbackRoutePattern = buildFallbackRoutePattern();
 
 function buildFallbackRoutePattern() {
@@ -465,7 +431,6 @@ function buildFallbackRoutePattern() {
   return new RegExp(fallbacks.length > 0 ? fallbacks.join("|") : "(?!)");
 }
 
-/** Normalized page ids and their routes for one locale tree. */
 function collectPageIds(localeRoot: string): Map<string, string> {
   const pages = new Map<string, string>();
 
@@ -487,13 +452,8 @@ function collectPageIds(localeRoot: string): Map<string, string> {
   return pages;
 }
 
-/**
- * Pages deploy only under a locale prefix, but search results, bookmarks, and older links use the
- * bare path (`/self-hosting/`). One stub per default-locale page sends each to its `/en/` page.
- * Written before the hand-maintained redirects below, which win where both name the same path, and
- * without `wiki/`, which has no bare URL to preserve. A bare path cannot collide with a content
- * route because every content route starts with a locale id.
- */
+// Bare route stubs must precede manual redirects so explicit entries win on collision, and `wiki/` stays excluded
+// because it has no bare URL.
 const bareRouteRedirects = Object.fromEntries(
   [...collectPageIds(defaultLocaleTarget).values()]
     .filter((route) => route !== "" && !/^wiki(\/|$)/.test(route))

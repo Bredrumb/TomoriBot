@@ -1,10 +1,3 @@
-/**
- * DuckDuckGoEngine: the keyless text-search fallback, read from DuckDuckGo's HTML results page.
- *
- * The page has no stable schema, so this adapter owns markup drift, rate limiting, and challenge
- * detection. It reads only titles, links, and snippets; it never follows a result link.
- */
-
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { sendToolNotice } from "@/utils/discord/toolProgressNotice";
@@ -50,7 +43,8 @@ const NAMED_ENTITIES: Record<string, string> = {
   nbsp: " ",
 };
 
-/** HTMLRewriter hands over text and attributes exactly as written in the source, entities included. */
+// Manual entity decoding is required because HTMLRewriter returns raw source text and attributes with entities
+// unescaped.
 function decodeHtmlEntities(text: string): string {
   return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (entity, body: string) => {
     if (body.startsWith("#")) {
@@ -72,10 +66,8 @@ function isDuckDuckGoHost(hostname: string): boolean {
   return hostname === "duckduckgo.com" || hostname.endsWith(".duckduckgo.com");
 }
 
-/**
- * Unwraps DDG's `/l/?uddg=` click wrapper once. Other DDG-hosted links (ads under `/y.js`, internal
- * pages) are not organic results, and unwrapping their tracking parameters would follow ad routing.
- */
+// Only DDG's `/l/?uddg=` click wrapper is unwrapped once because other DDG links (such as `/y.js` ads) are
+// non-organic and would follow ad routing.
 export function normalizeDuckDuckGoResultUrl(rawHref: string): string | null {
   let url: URL;
   try {
@@ -95,7 +87,7 @@ export function normalizeDuckDuckGoResultUrl(rawHref: string): string | null {
   return url.href;
 }
 
-/** Collected text stops growing well past its display cap, so a giant text node cannot balloon memory. */
+// Collected text stops growing well past its display cap, so a giant text node cannot balloon memory.
 function appendBounded(current: string, chunk: string, maxChars: number): string {
   return current.length > maxChars * 4 ? current : current + chunk;
 }

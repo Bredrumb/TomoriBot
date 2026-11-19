@@ -1,15 +1,5 @@
-/**
- * Shared route codec interfaces, primitive parsers, and codec runners for Discord panel interactions.
- * Centralizes wire-token serialization and parsing across panel route families to guarantee
- * symmetric encoding and decoding without duplicating boundary checks.
- *
- * A custom ID already living in a user's Discord client was encoded by an earlier build, so the field
- * order in a codec is a published format rather than an implementation detail. Encoding and decoding
- * walk that one ordered list, which means a field moved between positions moves both sides together:
- * every round-trip still passes while every open client breaks. Only a table of literal custom IDs
- * catches that, which is what `WIRE_CONTRACT_V2` in `tests/unit/discord/personalConfigRoutes.test.ts`
- * exists to be.
- */
+// Codec field order is a wire contract because open Discord clients hold old custom IDs and symmetric round-trip
+// tests pass even if fields move.
 
 export interface RouteFieldCodec<TKey extends string = string, TValue = unknown> {
   key: TKey;

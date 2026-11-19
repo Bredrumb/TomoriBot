@@ -1,7 +1,5 @@
-/**
- * Parses one PDF off the main thread. `pdf-parse` has no abort, so the caller enforces its deadline
- * by terminating this worker; keep it free of shared state that termination could corrupt.
- */
+// Worker must hold no shared state because pdf-parse has no abort and the caller enforces deadlines by terminating
+// the worker.
 import pdfParse from "pdf-parse";
 
 declare const self: Worker;

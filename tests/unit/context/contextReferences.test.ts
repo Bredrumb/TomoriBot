@@ -23,13 +23,6 @@ import { resolveUniqueParticipantAliasReferences } from "@/utils/text/participan
 import { composeParticipantDiscoveryPlan } from "@/utils/text/participants/sources";
 import type { PublicPersonaProfile } from "@/utils/text/context/types";
 
-/**
- * Resolves textual references through the same alias catalog and matcher the
- * production resolver uses, so these cases cannot pass against a test-only
- * alias shape. Positional aliases map onto the real sources in catalog
- * priority order: saved nickname, guild nickname, guild display name, global
- * name, username.
- */
 function resolveAliasReferences(
   historyText: string,
   candidates: readonly { userId: string; aliases: readonly string[] }[],

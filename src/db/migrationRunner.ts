@@ -5,29 +5,19 @@ import { splitSqlStatements } from "@/utils/db/sqlSplitter";
 import { log } from "@/utils/misc/logger";
 import type { SQL } from "bun";
 
-/** Absolute path to the migrations directory. */
 const MIGRATIONS_DIR = path.join(import.meta.dir, "migrations");
 
-/** Deployment-specific migrations start at 900 and are absent from schema.sql, so fresh installs must run them. */
+// Deployment-specific migrations start at 900 and are absent from schema.sql, so fresh installs must still run them.
 const DEPLOYMENT_MIGRATION_BAND_START = 900;
 
-/**
- * Migration file name pattern: NNN_description.sql
- * Capture group 1 is the zero-padded version number.
- */
 const MIGRATION_FILENAME = /^(\d{3})_[a-z0-9_]+\.sql$/;
 
 interface PendingMigration {
   version: number;
-  /** Stem without .sql extension, e.g. "001_baseline". Used as the tracking key. */
   name: string;
   filePath: string;
 }
 
-/**
- * Creates the schema_migrations tracking table if it does not yet exist.
- * The table records which migration files have been applied and when.
- */
 async function ensureMigrationsTable(client: SQL): Promise<void> {
   await client.unsafe(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -38,32 +28,11 @@ async function ensureMigrationsTable(client: SQL): Promise<void> {
   `);
 }
 
-/**
- * Returns the set of migration names (stems) that have already been applied.
- */
 async function getAppliedMigrations(client: SQL): Promise<Set<string>> {
   const rows = await client<{ name: string }[]>`SELECT name FROM schema_migrations`;
   return new Set(rows.map((r) => r.name));
 }
 
-/**
- * Scans the migrations directory and returns unapplied up-migrations,
- * sorted ascending by version number, then by full stem name as a tie-break.
- *
- * The secondary stem-name key makes ordering fully deterministic even when two
- * migrations share the same NNN prefix (a cross-PR numbering collision): the
- * pair is ordered by code-point of their stems rather than by filesystem
- * `readdir` order, so a fresh install and an upgraded install apply them
- * identically. Because stems are unique per file, (version, name) is a total
- * order, so no ties survive. Same-number siblings must still be mutually
- * order-independent; this tie-break guarantees *stability*, not that an
- * alphabetically-later migration may safely depend on an earlier one.
- *
- * Rollback files (*.down.sql) and files not matching the naming convention
- * are skipped. An unrecognised filename emits a warning so typos are visible.
- *
- * @param applied - Set of already-applied migration names
- */
 async function getPendingMigrations(applied: Set<string>, migrationsDir: string): Promise<PendingMigration[]> {
   let files: string[];
   try {
@@ -104,17 +73,8 @@ async function getPendingMigrations(applied: Set<string>, migrationsDir: string)
   });
 }
 
-/**
- * Records every historical migration as applied without executing the migration body.
- *
- * This is used only after a fresh database has been initialized from the latest
- * static schema snapshot. In that case the historical expand/backfill/drop
- * migrations are already represented by schema.sql and replaying them would ask
- * for legacy source tables that correctly do not exist on a clean install.
- *
- * Deployment-band migrations are excluded because schema.sql does not contain
- * them, so the caller must subsequently run them.
- */
+// Fresh schema.sql installs already contain pre-900 migrations, so these are marked applied without running because
+// replaying would query dropped legacy tables.
 export async function markAllMigrationsApplied(
   client: SQL = defaultSql,
   migrationsDir: string = MIGRATIONS_DIR,
@@ -136,14 +96,8 @@ export async function markAllMigrationsApplied(
   );
 }
 
-/**
- * Applies a single migration file and records it in schema_migrations.
- *
- * Comment-only files (e.g. the 001_baseline marker) produce zero statements
- * from splitSqlStatements and are recorded without executing any SQL, so
- * this is intentional for marker migrations.
- *
- */
+// Comment-only marker migrations such as 001_baseline intentionally yield zero statements, so recording them without
+// executing SQL is expected.
 async function applyMigration(client: SQL, migration: PendingMigration): Promise<void> {
   const sqlText = await readFile(migration.filePath, "utf-8");
   const statements = splitSqlStatements(sqlText);
@@ -157,19 +111,6 @@ async function applyMigration(client: SQL, migration: PendingMigration): Promise
   await client`INSERT INTO schema_migrations (name) VALUES (${migration.name})`;
 }
 
-/**
- * Runs all pending database migrations in ascending version order.
- *
- * Migration files live in src/db/migrations/ and follow the naming convention
- * NNN_description.sql (e.g. 002_split_tomori_configs.sql).  Each migration
- * must ship with a paired NNN_description.down.sql rollback file.
- *
- * Applied migrations are tracked in the schema_migrations table; already-applied
- * migrations are skipped so the runner is safe to call on every boot.
- *
- * A migration failure is re-thrown so the caller (initializeDatabase) can
- * decide whether to abort startup.
- */
 export async function runMigrations(client: SQL = defaultSql, migrationsDir: string = MIGRATIONS_DIR): Promise<void> {
   await ensureMigrationsTable(client);
 

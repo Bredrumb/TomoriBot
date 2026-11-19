@@ -14,7 +14,6 @@ export interface ConfigPersonaVoiceCapabilityView {
   supportsVoiceDesign: boolean;
 }
 
-/** The render-facing sample projection deliberately excludes server-local storage details. */
 type ConfigPersonaVoiceSampleView = Pick<VoiceSampleRow, "sample_id" | "name" | "ref_text" | "duration_ms">;
 
 export interface ConfigPersonaVoiceView {
@@ -55,9 +54,6 @@ function unavailableCapability(): ConfigPersonaVoiceCapabilityView {
   };
 }
 
-/**
- * Resolves the speech capability needed by Persona > Voice without loading endpoint credentials.
- */
 export async function resolveActiveSpeechCapability(
   serverId: number,
   deps: ConfigPersonaVoiceResolverDependencies = defaultResolverDependencies,

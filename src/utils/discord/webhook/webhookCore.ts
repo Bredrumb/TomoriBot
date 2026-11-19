@@ -29,35 +29,15 @@ import {
   WebhookAvatarEditDeferredError,
 } from "@/utils/discord/webhook/avatarEditRateLimit";
 
-/**
- * In-memory webhook cache: channelId -> Webhook
- * Reduces webhook lookups and creation operations.
- * No TTL - webhooks persist unless manually deleted by users.
- */
+// Cached without a TTL because Discord webhooks persist until manually deleted or invalidated.
 const webhookCache = new Map<string, Webhook>();
 
-/**
- * Channels whose last webhook resolution failed: channelId -> reason and expiry.
- *
- * Without this the failure is retried on every turn, because `webhookCache` stores only successes
- * and several call sites resolve a webhook independently per turn. A 50013 stays true until an
- * admin edits the channel, so each retry spends a database read, a Discord call that cannot
- * succeed, and an error-log insert. Cleared on invalidation as well as on expiry, so granting the
- * permission takes effect at the next turn instead of at the end of the TTL.
- *
- * Distinct from `WEBHOOK_ERROR_COOLDOWN_MS` in `responseEmitter`, which throttles how often the
- * user-facing embed is posted. This one suppresses the API call; that one suppresses the message.
- * The cached `errorReason` is still returned to callers, so suppression here never silences that
- * notice.
- */
+// Negative cache prevents repeated failing API/DB lookups per turn while still returning errorReason, unlike
+// responseEmitter's embed cooldown.
 const webhookFailureCache = new Map<string, { reason: WebhookCreateErrorReason; expiresAt: number }>();
 
 const WEBHOOK_FAILURE_RETRY_MS = 15 * 60_000;
 
-/**
- * Webhook name used for all multi-persona responses.
- * Consistent naming makes it easier to identify and manage.
- */
 const WEBHOOK_NAME = "TomoriBot Multi-Persona";
 const PERSONA_WEBHOOK_PREFIX = "TomoriBot Persona";
 export const GENERIC_WEBHOOK_AVATAR_URL = "https://cdn.discordapp.com/embed/avatars/0.png";
@@ -116,11 +96,6 @@ const managedWebhookSlots = new Map<
   }
 >();
 
-/**
- * Returns current sizes of every in-memory map owned by the webhook manager.
- * Used by the cache metrics logger to detect unbounded growth in webhook caches
- * (none of these maps have a TTL: they only shrink on explicit invalidation).
- */
 export function getWebhookCacheSizes(): {
   webhookChannel: number;
   webhookManagedSlots: number;
@@ -268,12 +243,6 @@ async function storeMigratedPersonaAvatar(
   return storedReference;
 }
 
-/**
- * Attempts to recover persona avatar by scanning guild for surviving webhooks.
- * Used when the stored webhook_avatar_url fails to download (Edge Case 2: last webhook deleted).
- *
- * @returns Avatar data URI and recovered URL, or null if no recovery possible
- */
 async function attemptWebhookAvatarRecovery(
   guild: Guild,
   personaId: number,
@@ -872,7 +841,8 @@ async function ensureWebhookAvatarState(
   }
 }
 
-/** Pins a specific webhook through a raw REST operation because Discord requires data-URI avatars to be stored on it. */
+// Data-URI avatars must be stored on the webhook itself by Discord requirement, so this pins the webhook identity
+// around raw REST operations.
 export async function runWithWebhookIdentity<T>(
   webhook: Webhook,
   identity: ResolvedWebhookIdentity | undefined,
@@ -1188,20 +1158,6 @@ export async function resolvePersonaWebhookIdentity(
   return identity;
 }
 
-/**
- * Sends a voice transcript as a blockquote chat message impersonating the user.
- *
- * Used when `voice_transcript_chat_mode` is enabled. Instead of storing the
- * transcript in an internal TTL cache, it is posted visibly to the channel so:
- *   - Other users can see what was said
- *   - The LLM reads it naturally from chat history (no re-transcription)
- *   - Audio attachments are never sent to the AI
- *
- * The message is prefixed with `> ` (Discord blockquote) to visually distinguish
- * it from a regular typed message.
- *
- * @returns The sent Discord message, or null if posting failed
- */
 export async function sendUserTranscriptViaWebhook(
   channel: BaseGuildTextChannel | AnyThreadChannel,
   displayName: string,
@@ -1256,12 +1212,6 @@ export async function sendUserTranscriptViaWebhook(
   }
 }
 
-/**
- * Resolves the avatar URL for a given persona and guild.
- * Handles fallback chain: alter avatar -> bot's guild avatar -> default avatar.
- *
- * @returns Avatar URL string, or undefined to use webhook default
- */
 function resolvePersonaAvatarURL(persona: TomoriState, guild: Guild | null | undefined): string | undefined {
   const validateAvatarURL = (avatarReference: string): string | undefined => {
     const resolvedUrl = resolvePersonaAvatarPublicUrl(avatarReference);
@@ -1324,9 +1274,6 @@ export function invalidateWebhookCache(channelId: string, webhookId?: string): v
   }
 }
 
-/**
- * Useful for testing or manual refresh operations.
- */
 export function clearWebhookCache(): void {
   webhookCache.clear();
   const slotSize = managedWebhookSlots.size;
@@ -1339,10 +1286,6 @@ export function clearWebhookCache(): void {
   log.info(`[Webhook Manager] Cleared entire webhook cache (${slotSize} entries)`);
 }
 
-/**
- * Gets webhook cache statistics for monitoring.
- *
- */
 export function getWebhookCacheStats(): {
   cacheSize: number;
 } {

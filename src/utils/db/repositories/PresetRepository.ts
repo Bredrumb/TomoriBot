@@ -3,17 +3,6 @@ import { convertCharacterBook, extractCharacterBook } from "@/modules/lorebooks/
 import { LOREBOOK_ENTRIES_PER_SCOPE_MAX, lorebookEntryToInput } from "@/modules/lorebooks/db/types";
 import { sanitizeSillyTavernText } from "@/utils/text/sillyTavernText";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
-/**
- * PresetRepository: manages SillyTavern preset data, persona preset import/export,
- * and SillyTavern card conversion.
- *
- * Consolidates stPresetDb.ts, presetExport.ts, presetImport.ts, sillyTavernImport.ts.
- *
- * Size note: this file exceeds 1,000 lines. Split decision documented here:
- * sillyTavernImport.ts (545 lines) is pure text-processing tightly coupled to
- * convertSillyTavernJsonToPresetData. A separate SillyTavernConverter class would
- * add an import dependency layer without meaningful cohesion gain. Single class accepted.
- */
 import { sql } from "@/utils/db/client";
 import type { StPresetRow, StPresetNodeRow, TomoriPresetRow } from "@/types/db/schema";
 import {
@@ -107,10 +96,8 @@ function arraysEqual<T>(left: readonly T[], right: readonly T[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
-/**
- * Compares authored definitions field by field, because JSONB reorders object keys and a raw
- * serialization would misread an unchanged list as a customization.
- */
+// Field-by-field comparison is required because Postgres JSONB reorders object keys, which would make raw JSON
+// comparison report false customizations.
 function samePersonaAuthoredIdleNudges(cardList: readonly PersonaAuthoredIdleNudge[], stored: unknown): boolean {
   const card = personaAuthoredIdleNudgesSchema.safeParse(cardList);
   const preset = personaAuthoredIdleNudgesSchema.safeParse(stored);
@@ -426,7 +413,6 @@ class PresetRepository {
     return this.asObject(cardData?.[key]) ?? this.asObject(rootData[key]);
   }
 
-  /** Returns true if the given unknown value looks like a SillyTavern character card JSON. */
   private isUniqueViolation(error: unknown): boolean {
     return (
       typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "23505"
@@ -516,17 +502,6 @@ class PresetRepository {
     return preset ?? null;
   }
 
-  /**
-   * Insert a new ST preset with its parsed nodes in a single transaction.
-   * If a preset with the same name already exists for this server, the
-   * insert fails (unique constraint on server_id + preset_name).
-   *
-   * @param serverId - Internal server_id (FK to servers table)
-   * @param presetName - Display name for the preset (from filename or JSON metadata)
-   * @param rawJson - The full raw SillyTavern preset JSON object
-   * @param nodes - Parsed toggleable nodes to insert (order matters)
-   * @returns The inserted preset row, or null on failure
-   */
   async insertPresetWithNodes(
     serverId: number,
     presetName: string,
@@ -590,9 +565,6 @@ class PresetRepository {
     }
   }
 
-  /**
-   * Load all ST presets for a server with read status provenance.
-   */
   async loadPresetsForServerResult(serverId: number): Promise<StPresetsReadResult> {
     try {
       const rows = await sql`
@@ -608,19 +580,11 @@ class PresetRepository {
     }
   }
 
-  /**
-   * Load all ST presets for a server (metadata only, no nodes).
-   *
-   * @returns Array of preset rows ordered by creation date
-   */
   async loadPresetsForServer(serverId: number): Promise<StPresetRow[]> {
     const result = await this.loadPresetsForServerResult(serverId);
     return result.presets;
   }
 
-  /**
-   * Load a single preset by ID and server scope (with raw JSON).
-   */
   async loadPresetByIdForServer(presetId: number, serverId: number): Promise<StPresetRow | null> {
     try {
       const [row] = await sql`
@@ -634,10 +598,6 @@ class PresetRepository {
     }
   }
 
-  /**
-   *
-   * @returns The active preset row or null
-   */
   async loadActivePreset(serverId: number): Promise<StPresetRow | null> {
     try {
       const [row] = await sql`
@@ -652,13 +612,6 @@ class PresetRepository {
     }
   }
 
-  /**
-   * Load all toggleable (non-marker, non-comment-only) nodes for a preset,
-   * ordered by node_order. These are the nodes shown in the toggle UI.
-   *
-   * @param presetId - The preset_id to load nodes for
-   * @returns Array of node rows in prompt_order sequence
-   */
   async loadToggleableNodes(presetId: number): Promise<StPresetNodeRow[]> {
     try {
       const rows = await sql`
@@ -674,10 +627,6 @@ class PresetRepository {
     }
   }
 
-  /**
-   * Returns total non-marker and enabled non-marker node counts in a single query
-   * scoped to the server.
-   */
   async countToggleableNodesForServer(presetId: number, serverId: number): Promise<StPresetNodeCounts> {
     try {
       const [row] = await sql`
@@ -703,13 +652,6 @@ class PresetRepository {
     }
   }
 
-  /**
-   * Load ALL nodes for a preset (including markers), ordered by node_order.
-   * Used by the context builder when assembling the full prompt.
-   *
-   * @param presetId - The preset_id to load nodes for
-   * @returns Array of all node rows in prompt_order sequence
-   */
   async loadAllNodes(presetId: number): Promise<StPresetNodeRow[]> {
     try {
       const rows = await sql`
@@ -724,15 +666,6 @@ class PresetRepository {
     }
   }
 
-  /**
-   * Batch-update enabled states for multiple nodes in a single transaction.
-   * Accepts a map of identifier -> is_enabled for all nodes in the preset.
-   *
-   * @param presetId - The preset_id owning these nodes
-   * @param enabledMap - Map of node identifier -> desired enabled state
-   * @param serverId - Internal server_id for scope resolution and cache invalidation
-   * @returns True if the update succeeded
-   */
   async updateNodeEnabledStates(
     presetId: number,
     enabledMap: Map<string, boolean>,
@@ -769,13 +702,6 @@ class PresetRepository {
     }
   }
 
-  /**
-   * Delete a preset and all its nodes (CASCADE handles node cleanup).
-   *
-   * @param presetId - The preset_id to delete
-   * @param serverId - Internal server_id for scope resolution and cache invalidation
-   * @returns True if a row was deleted
-   */
   async deletePreset(presetId: number, serverId: number): Promise<boolean> {
     try {
       const rows = await sql<Array<{ preset_id: number }>>`
@@ -795,15 +721,6 @@ class PresetRepository {
     }
   }
 
-  /**
-   * Set a preset as active and deactivate all others for the same server.
-   * Uses a transaction to ensure only one preset is active at a time.
-   * Target preset must belong to serverId; forged or cross-scope targets perform no write.
-   *
-   * @param serverId - Internal server_id for scope resolution and cache invalidation
-   * @param presetId - The preset_id to activate
-   * @returns True if the activation succeeded
-   */
   async setActivePreset(serverId: number, presetId: number): Promise<boolean> {
     try {
       const success = await sql.begin(async (tx) => {
@@ -837,12 +754,6 @@ class PresetRepository {
     }
   }
 
-  /**
-   * Deactivate all presets for a server.
-   *
-   * @param serverId - Internal server_id for scope resolution and cache invalidation
-   * @returns True if the deactivation succeeded
-   */
   async deactivateAllPresets(serverId: number): Promise<boolean> {
     try {
       await sql`
@@ -858,14 +769,6 @@ class PresetRepository {
     }
   }
 
-  /**
-   * Exports TomoriBot preset personality data for a given server.
-   * Queries data from personas and persona_configs (tomori_configs was dropped in Task F2, migration 008).
-   *
-   * @param serverDiscId - Discord server ID to export preset for
-   * @param targetPersonaId - Optional persona ID to export; defaults to current main persona
-   * @returns ExportResult containing the exported preset data or error
-   */
   async exportPresetData(serverDiscId: string, targetPersonaId?: number): Promise<ExportResult> {
     try {
       const serverRows = await sql`
@@ -1065,11 +968,6 @@ class PresetRepository {
     }
   }
 
-  /**
-   * Replaces the existing personality.
-   *
-   * @param identityMode - preserve: keep/import lineage, fork: assign a fresh lineage
-   */
   async importPresetData(
     serverDiscId: string,
     importData: PresetExportData,
@@ -1348,10 +1246,8 @@ class PresetRepository {
     }
   }
 
-  /**
-   * Covers converted imports and command-added trigger words. Runtime memory env limits are
-   * intentionally not applied here; preset import uses schema safety limits.
-   */
+  // Runtime memory env limits are intentionally omitted here because converted imports and command-added trigger
+  // words use schema safety limits.
   validatePresetData(data: unknown): ValidationResult {
     const validated = presetExportDataSchema.safeParse(data);
     if (!validated.success) {
@@ -1384,9 +1280,6 @@ class PresetRepository {
     return { valid: true, data: normalizedData };
   }
 
-  /**
-   * @param jsonData - The parsed JSON data from the PNG metadata
-   */
   validatePresetFile(jsonData: unknown): ValidationResult {
     if (typeof jsonData !== "object" || jsonData === null) {
       return { valid: false, error: "commands.persona.import.error_not_json" };
@@ -1415,11 +1308,6 @@ class PresetRepository {
     return this.validatePresetData(validated.data.data);
   }
 
-  /**
-   * Returns true if the given unknown value looks like a SillyTavern character card JSON.
-   *
-   * @param input - Unknown value to inspect
-   */
   looksLikeSillyTavernCardJson(input: unknown): boolean {
     const rootData = this.asObject(input);
     if (!rootData) return false;
@@ -1438,12 +1326,6 @@ class PresetRepository {
     return (cardData !== null || this.hasOwnKey(rootData, "data")) && matchedFieldCount >= 1;
   }
 
-  /**
-   * Converts SillyTavern PNG card metadata to a TomoriBot preset data shape.
-   *
-   * @param metadata - Parsed SillyTavern card metadata including parsedJson
-   * @returns SillyTavernConversionResult with preset data or error
-   */
   convertSillyTavernMetadataToPresetData(metadata: SillyTavernCardMetadata): SillyTavernConversionResult {
     return this.convertSillyTavernJsonToPresetData(metadata.parsedJson);
   }
@@ -1510,12 +1392,6 @@ class PresetRepository {
     };
   }
 
-  /**
-   * Converts a raw SillyTavern JSON object to a TomoriBot preset data shape.
-   *
-   * @param input - Raw SillyTavern card JSON (parsed from PNG tEXt chunk)
-   * @returns SillyTavernConversionResult with preset data or error
-   */
   convertSillyTavernJsonToPresetData(input: unknown): SillyTavernConversionResult {
     const rootData = this.asObject(input);
     if (!rootData) {

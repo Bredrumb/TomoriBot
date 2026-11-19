@@ -1,10 +1,3 @@
-/**
- * Cross-Channel Message Tool
- * Allows the AI to send an instant, natural message to a different channel in the same server.
- * Includes an optional "boomerang" mechanism that triggers a follow-up generation back in the
- * source channel to report what happened.
- */
-
 import { PermissionFlagsBits } from "discord.js";
 import type { GuildTextBasedChannel, Message } from "discord.js";
 import { log } from "../../utils/misc/logger";
@@ -29,40 +22,25 @@ import { localizer } from "@/utils/text/localizer";
 // After tomoriChat() completes in the target channel, the source channel
 // consumes this data to trigger a separate follow-up generation.
 
-/** Data stored for a pending boomerang report-back */
 export interface PendingBoomerang {
-  /** Channel ID where the original conversation happened */
   sourceChannelId: string;
-  /** Human-readable name of the target channel */
   targetChannelName: string;
-  /** Discord ID of the target channel */
   targetChannelId: string;
-  /** The task that was dispatched */
   task: string;
-  /** Whether the target generation succeeded */
   success: boolean;
-  /** Error message if failed */
   error?: string;
-  /** Persona ID to use for the boomerang generation */
   personaId?: number;
-  /** Whether the source turn was a user impersonation */
   isUserImpersonation?: boolean;
-  /** Impersonated Discord user ID to preserve across boomerang follow-up */
   impersonatedUserId?: string;
   manualTriggerInvoker?: ManualTriggerInvoker;
   borrowsTriggerMessage: boolean;
-  /** Recent messages from the target channel (newest first) */
+  // Ordered newest first, so callers formatting the boomerang prompt know the chronological direction.
   targetChannelMessages: Array<{
     author: string;
     content: string;
     timestamp: string;
   }>;
-  /**
-   * Override for the opening lines of the boomerang context injection.
-   * Defaults to the cross-channel "You have just returned from channel X." narrative.
-   */
   introText?: string;
-  /** Override for the closing instruction line of the boomerang context injection. */
   outroText?: string;
 }
 
@@ -102,10 +80,6 @@ async function formatVisibleHistory(
   );
 }
 
-/**
- * Exposed so other tools (e.g. create_thread) can register boomerangs
- * without duplicating the map or the consume/build logic.
- */
 export function storePendingBoomerang(boomerang: PendingBoomerang): void {
   pendingBoomerangs.set(boomerang.sourceChannelId, boomerang);
 }
@@ -135,11 +109,6 @@ function inferTargetChannelFromTask(task: unknown): string | undefined {
   return undefined;
 }
 
-/**
- * Consume (retrieve and delete) a pending boomerang for a given channel.
- * Called by tomoriChat after STM storage to check if a follow-up is needed.
- * @returns The boomerang data if one exists, otherwise undefined
- */
 export function consumePendingBoomerang(channelId: string): PendingBoomerang | undefined {
   const boomerang = pendingBoomerangs.get(channelId);
   if (boomerang) {
@@ -148,10 +117,6 @@ export function consumePendingBoomerang(channelId: string): PendingBoomerang | u
   return boomerang;
 }
 
-/**
- * Build the injected context items for a boomerang report-back generation.
- * @param boomerang - The boomerang data to format
- */
 export function buildBoomerangContext(boomerang: PendingBoomerang): StructuredContextItem[] {
   let messagesBlock = "";
   if (boomerang.targetChannelMessages.length > 0) {
@@ -191,11 +156,6 @@ export function buildBoomerangContext(boomerang: PendingBoomerang): StructuredCo
   ];
 }
 
-/**
- * Tool for sending an instant, natural message to a different channel in the same server,
- * or silently peeking its recent message context without sending anything.
- * Unlike create_task, this executes immediately rather than scheduling.
- */
 export class CrossChannelMessageTool extends BaseTool {
   name = "cross_channel_message";
   description =
@@ -242,13 +202,6 @@ export class CrossChannelMessageTool extends BaseTool {
     return true;
   }
 
-  /**
-   * Execute cross-channel message dispatch.
-   * 1. Validates parameters and resolves the target channel
-   * 2. Fetches a context message from the target channel
-   * 3. Calls tomoriChat() with injected task context
-   * 4. Optionally stores boomerang data for follow-up
-   */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     if (context.streamContext?.disableCrossChannelMessage) {
       log.info("CrossChannelMessageTool: Execution blocked for this turn to prevent nested cross-channel dispatch");

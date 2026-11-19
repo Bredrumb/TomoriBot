@@ -1,12 +1,3 @@
-/**
- * Regression harness: ServerRepository domain.
- *
- * Covers: channel whitelist reads/writes, blacklist, server setup basics.
- * loadTomoriState implicitly tests server row loading; this file focuses on
- * server-scoped operations that don't fit other domain files.
- *
- * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md)
- */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { userRepository } from "@/utils/db/repositories";
 import { FIXTURE_IDS, cleanupFixtures, insertFixtures, type FixtureRefs } from "./setup/fixtures";

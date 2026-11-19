@@ -1,13 +1,5 @@
-/**
- * Modal construction for `/generate voice-message`.
- *
- * Split out of the command module so the component budget is testable without a Discord
- * interaction. Discord caps a modal at five components, and the worst case here (an `auto`
- * Chatterbox endpoint, an uploaded clip, a typed design prompt, and a persona holding both a
- * sample and a design prompt) lands on exactly five. That leaves no headroom, so this module
- * asserts the cap and documents the drop order instead of letting Discord reject the modal at
- * runtime.
- */
+// Split from the command so the 5-component Discord modal cap is testable, because worst-case fields use all 5 slots
+// with zero headroom.
 
 import { TextInputStyle } from "discord.js";
 import type { ModalComponent } from "@/types/discord/modal";
@@ -19,7 +11,6 @@ import {
   type VoiceSourceId,
 } from "@/utils/speech/voiceSourceResolution";
 
-/** Modal custom id, matched by the command's `execute` on the nonced id. */
 export const VOICE_MESSAGE_MODAL_CUSTOM_ID = "generate_voice_message_modal";
 
 export const VOICE_MESSAGE_SCRIPT_INPUT_ID = "voice_message_script";
@@ -28,26 +19,19 @@ export const VOICE_MESSAGE_DIRECTION_INPUT_ID = "voice_message_direction";
 export const VOICE_MESSAGE_TRANSCRIPT_INPUT_ID = "voice_message_transcript";
 export const VOICE_MESSAGE_EXPRESSIVENESS_INPUT_ID = "voice_message_expressiveness";
 
-/** Discord's hard cap on components per modal. */
+// Discord's hard limit on components per modal, so raising this value causes Discord to reject the modal.
 export const VOICE_MESSAGE_MODAL_COMPONENT_LIMIT = 5;
 
-/** Longest spoken script the TextInput accepts. */
 const VOICE_MESSAGE_SCRIPT_MAX_LENGTH = 2000;
 
-/** Delivery direction and reference transcript are short prose, not scripts. */
 const VOICE_MESSAGE_SHORT_FIELD_MAX_LENGTH = 300;
 
-/**
- * Order in which optional components are dropped if the budget is ever exceeded.
- * Highest number goes first, so the least-essential control disappears first.
- */
 const DROP_ORDER = [
   VOICE_MESSAGE_EXPRESSIVENESS_INPUT_ID,
   VOICE_MESSAGE_TRANSCRIPT_INPUT_ID,
   VOICE_MESSAGE_DIRECTION_INPUT_ID,
 ] as const;
 
-/** Which delivery-knob backend the expressiveness radio drives, if any. */
 export type ExpressivenessBackend = "chatterbox" | "elevenlabs";
 
 interface ChatterboxDefaults {
@@ -58,29 +42,20 @@ interface ChatterboxDefaults {
 export interface VoiceMessageModalInput {
   locale: string;
   candidates: readonly VoiceSourceCandidate[];
-  /** Active endpoint's `script_markup`, which picks the script placeholder. */
   scriptMarkup: string | undefined;
-  /** Render the Delivery Direction field: some design-shaped source is available. */
   designShapeAvailable: boolean;
-  /** Render Delivery Direction for clone-shaped requests that support `instruct`. */
   cloneInstructionsAvailable: boolean;
-  /** Render the Reference Transcript field: an uploaded clip will be cloned. */
   uploadShapeSelected: boolean;
-  /** Render the delivery-knob radio, or null when the backend has no such knob. */
   expressiveness: ExpressivenessBackend | null;
-  /** Stored server values behind the clone radio's pre-selected `Server default` option. */
   chatterboxDefaults: ChatterboxDefaults;
 }
 
-/** One `Expressiveness` / `Voice Stability` preset and the values it sends. */
 export interface ExpressivenessPreset {
   value: string;
   labelKey: string;
   descriptionKey: string;
   default?: boolean;
-  /** Chatterbox overrides; absent on the ElevenLabs mapping. */
   chatterbox?: ChatterboxDefaults;
-  /** ElevenLabs `voice_settings.stability`; absent on the Chatterbox mapping. */
   stability?: number;
 }
 
@@ -133,7 +108,6 @@ const ELEVENLABS_PRESETS: ExpressivenessPreset[] = [
   },
 ];
 
-/** Preset table for a backend, ordered as it renders in the radio. */
 export function getExpressivenessPresets(backend: ExpressivenessBackend): ExpressivenessPreset[] {
   return backend === "chatterbox" ? CHATTERBOX_PRESETS : ELEVENLABS_PRESETS;
 }
@@ -166,7 +140,6 @@ function formatSourceDescription(locale: string, candidate: VoiceSourceCandidate
   return formatVoiceSourceOptionDescription(modePrefix, body);
 }
 
-/** Script placeholder for the endpoint's `script_markup`, teaching the in-band emotion syntax. */
 function resolveScriptPlaceholderKey(scriptMarkup: string | undefined): string {
   if (scriptMarkup === "bracket-tags") return "commands.generate.voice-message.modal.script_placeholder_bracket_tags";
   if (scriptMarkup === "emoji") return "commands.generate.voice-message.modal.script_placeholder_emoji";
@@ -218,12 +191,8 @@ function buildExpressivenessField(locale: string, backend: ExpressivenessBackend
   };
 }
 
-/**
- * Builds the modal's component list.
- *
- * Exported for the budget tests: the assertion below is the contract that keeps a future field
- * from reaching Discord as a rejected interaction response.
- */
+// Exported for budget tests so the component-limit check catches over-budget modals before Discord rejects the
+// interaction.
 export function buildVoiceMessageModalComponents(input: VoiceMessageModalInput): ModalComponent[] {
   const { locale } = input;
   const components: ModalComponent[] = [];

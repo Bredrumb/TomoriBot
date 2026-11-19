@@ -1,28 +1,3 @@
-/**
- * Manual migration rollback runner.
- *
- * Applies the paired NNN_description.down.sql rollback files in DESCENDING
- * version order, then removes the matching rows from schema_migrations so the
- * forward runner will re-apply them on the next boot.
- *
- * Unlike the forward runner (which executes automatically at startup via
- * initializeDatabase.ts), rollback is ALWAYS manual and never runs on boot:
- * down migrations are typically lossy (DROP TABLE / DROP COLUMN), so undoing a
- * migration must be a deliberate, explicit act.
- *
- * IMPORTANT: run this while still checked out on the branch that introduced the
- * migration. The rollback reads NNN_description.down.sql from disk; once you
- * switch branches those files disappear and the rollback can no longer execute.
- *
- * Usage:
- *   bun run migrate:down <version>        # roll back this migration + all newer applied ones
- *   bun run migrate:down 034              # e.g. undo 035 then 034, leaving 033 as head
- *   bun run migrate:down --last           # roll back only the most recently applied migration
- *   bun run migrate:down --last=2         # roll back the 2 most recently applied migrations
- *
- * By default the command performs a DRY RUN and only prints the ordered plan.
- * Re-run with --yes (or -y) to actually execute the rollback.
- */
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { config } from "dotenv";
@@ -49,24 +24,16 @@ if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = `postgresql://${user}:${encodeURIComponent(password)}@${host}:${port}/${database}`;
 }
 
-/** Absolute path to the migrations directory (shared with the forward runner). */
 const MIGRATIONS_DIR = path.join(import.meta.dir, "..", "..", "src", "db", "migrations");
 
-/** Up-migration filename pattern: NNN_description.sql (capture group 1 = version). */
 const MIGRATION_FILENAME = /^(\d{3})_[a-z0-9_]+\.sql$/;
 
 interface MigrationFile {
   version: number;
-  /** Stem without extension, e.g. "051_stm_customization". The schema_migrations key. */
   name: string;
-  /** Absolute path to the paired NNN_description.down.sql rollback file. */
   downPath: string;
 }
 
-/**
- * Scans the migrations directory and returns every up-migration on disk keyed by
- * its tracking name, along with the path to its paired rollback file.
- */
 async function scanMigrationFiles(): Promise<Map<string, MigrationFile>> {
   const files = await readdir(MIGRATIONS_DIR);
   const byName = new Map<string, MigrationFile>();
@@ -88,10 +55,6 @@ async function scanMigrationFiles(): Promise<Map<string, MigrationFile>> {
   return byName;
 }
 
-/**
- * Returns the tracking names of every migration currently recorded as applied.
- * Returns an empty set if the schema_migrations table does not exist yet.
- */
 async function getAppliedNames(): Promise<Set<string>> {
   const exists = await sql<{ exists: boolean }[]>`
     SELECT to_regclass('public.schema_migrations') IS NOT NULL AS exists
@@ -102,13 +65,8 @@ async function getAppliedNames(): Promise<Set<string>> {
   return new Set(rows.map((r) => r.name));
 }
 
-/**
- * Executes a single rollback file and removes its schema_migrations row.
- *
- * Statements run in file order (down files are authored to undo in the correct
- * sequence) and outside an explicit transaction, mirroring the forward runner's
- * applyMigration so behaviour is symmetric between up and down.
- */
+// Statements run outside an explicit transaction to mirror the forward runner's applyMigration so up and down
+// behavior stay symmetric.
 async function rollbackOne(migration: MigrationFile): Promise<void> {
   const sqlText = await readFile(migration.downPath, "utf-8");
   const statements = splitSqlStatements(sqlText);
@@ -122,12 +80,6 @@ async function rollbackOne(migration: MigrationFile): Promise<void> {
   await sql`DELETE FROM schema_migrations WHERE name = ${migration.name}`;
 }
 
-/**
- * Parses CLI arguments into a rollback request.
- *
- * @returns target selection (`lastCount` for --last, or `fromVersion` for a
- *          positional version/name) plus the confirmation flag.
- */
 function parseArgs(): { lastCount?: number; fromVersion?: number; confirmed: boolean } {
   const argv = process.argv.slice(2);
   const confirmed = argv.includes("--yes") || argv.includes("-y");

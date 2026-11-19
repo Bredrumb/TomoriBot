@@ -6,22 +6,8 @@ import { createPersona } from "../../helpers/fixtures";
 import { personaSpriteSchema } from "@/types/db/schema";
 import { clearPersonaSpriteCache, setPersonaSpriteCache } from "@/utils/cache/personaSpriteCacheStore";
 import { buildPersonaSpriteContextItem } from "@/utils/text/context/personaSprites";
-/**
- * The tool's source-selection ladder.
- *
- * This is the layer that had no test across two rounds of review, and both regressions lived here
- * rather than in the dispatcher below it. The ladder answers "which voice does this persona use,
- * and is it usable against this endpoint", and its two failure modes so far were:
- *
- *   - a design prompt unconditionally outranking a perfectly good clone sample, and
- *   - a shape capability asked of the fallback *list* instead of its members, which made the list
- *     unusable on exactly the servers where ElevenLabs is the only voice (an ElevenLabs endpoint,
- *     or no endpoint at all).
- *
- * Every collaborator below is stubbed, including delivery, so that `execute()` runs all the way to
- * a success result: a stub that fails would replace the tool's own refusal message with its own and
- * silently make every refusal assertion vacuous, which is the trap this file walked into once.
- */
+// Downstream collaborators (including delivery) are stubbed to succeed so a failing stub never masks the tool's own
+// refusal error.
 import { beforeAll, describe, expect, it, mock } from "bun:test";
 import { speechModelSchema, type CustomEndpointRow } from "@/types/db/schema";
 import type { ToolContext, ToolAssemblyState, ToolResult } from "@/types/tool/interfaces";
@@ -60,7 +46,6 @@ function hostedTarget(mode: "design" | "clone"): realSpeechEndpointResolver.Spee
     }),
   };
 }
-/** Sources the tool handed to the dispatcher, most recent last. */
 const dispatchedSources: ResolvedVoiceSource[] = [];
 const dispatchedSignals: Array<AbortSignal | undefined> = [];
 let deliveryCount = 0;
@@ -175,7 +160,6 @@ function makeContext(fields: PersonaVoiceFields): ToolContext {
   } as unknown as ToolContext;
 }
 
-/** Runs execute() and reports either the dispatched source or the refusal message. */
 async function runTool(
   fields: PersonaVoiceFields,
   endpoint: CustomEndpointRow | null,

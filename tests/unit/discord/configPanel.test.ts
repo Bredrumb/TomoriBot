@@ -1,10 +1,3 @@
-/**
- * Renderer coverage for the `/config` shell and Persona pages.
- *
- * Component types are asserted as the raw numbers Discord receives. `RawDiscordComponent.type` and
- * the Components V2 payload are both bare numbers on the wire, so TypeScript accepts any of them
- * and a wrong one renders without throwing; only a literal assertion catches it.
- */
 import { humanizerSettingsFromDegree } from "@/constants/humanizer";
 import { beforeAll, describe, expect, it } from "bun:test";
 import { ComponentType, type ComponentInContainerData, type ContainerComponentData } from "discord.js";
@@ -125,10 +118,6 @@ function actionRows(payload: unknown): string[][] {
   return rows;
 }
 
-/**
- * The suite's personas share server 9, and the nickname is derived from the id because the panel
- * renders it: a roster of fixed "Mirri" rows would let a nickname regression pass unnoticed.
- */
 function makePersona(overrides: Partial<TomoriState> & { persona_id: number }): TomoriState {
   return createPersona({
     server_id: 9,
@@ -198,7 +187,6 @@ function buttonFor(payload: unknown, route: Parameters<typeof buildConfigRouteId
   return walk(payload).find((component) => component.customId === customId);
 }
 
-/** Returns the custom IDs of the button row holding a button whose custom ID contains `marker`. */
 function buttonRowContaining(payload: unknown, marker: string): string[] | undefined {
   return actionRows(payload).find((row) => row.some((customId) => customId.includes(marker)));
 }

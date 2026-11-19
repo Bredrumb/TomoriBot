@@ -7,19 +7,11 @@ import {
 } from "@/utils/cache/invalidationBus";
 import { TOMORI_STATE_CACHE_TTL_MS } from "@/constants/cacheTtl";
 
-/**
- * Resolved per-channel context note.
- * `null` (cached) means the channel has no note : a negative-cache hit.
- */
 export type ChannelContextNote = {
   note: string;
   depth: number;
 };
 
-/**
- * In-memory TTL store for per-channel context notes.
- * Repository writes invalidate this store after successful note changes.
- */
 const channelContextNoteCache = new Map<string, { entry: ChannelContextNote | null; expiresAt: number }>();
 
 const CACHE_TTL_MS = TOMORI_STATE_CACHE_TTL_MS;
@@ -28,9 +20,8 @@ function getCacheKey(serverId: number, channelDiscId: string): string {
   return `${serverId}:${channelDiscId}`;
 }
 
-/**
- * Returns the cached entry (or cached `null` for "no note"), or `undefined` on miss/expiry.
- */
+// Cached null represents a negative hit (no note) so callers can distinguish it from undefined on cache miss or
+// expiry.
 export function getChannelContextNoteCacheEntry(
   serverId: number,
   channelDiscId: string,
@@ -60,7 +51,6 @@ export function invalidateChannelContextNoteCache(serverId: number, channelDiscI
   broadcastInvalidation("channelContextNote", [[String(serverId), channelDiscId]]);
 }
 
-/** Removes every cached context-note result for one server without flushing other servers. */
 export function invalidateAllChannelContextNoteCacheForServer(serverId: number): void {
   const prefix = `${serverId}:`;
   for (const key of channelContextNoteCache.keys()) {

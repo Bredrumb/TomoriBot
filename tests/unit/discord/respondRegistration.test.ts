@@ -1,12 +1,3 @@
-/**
- * `/bot respond` became the bare root `/respond`. `bot` sits in neither restriction list, so the
- * move must add no restriction, and the old leaf must be gone rather than coexisting.
- *
- * The relocated namespaces must resolve, asserting the returned string is not its own key path.
- * Only en-US is checked because `localizer` falls back to en-US per key, so any other locale passes
- * whenever en-US does. `/bot` itself is asserted gone by dissolvedBotRegistration.test.ts, and the
- * command description by commandDescriptionRegistration.test.ts.
- */
 import { beforeAll, describe, expect, it } from "bun:test";
 import { ApplicationCommandOptionType } from "discord.js";
 import { loadCommandData, ROOT_COMMAND_EXECUTION_KEY } from "@/utils/discord/commandLoader";

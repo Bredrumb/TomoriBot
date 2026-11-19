@@ -10,10 +10,6 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-/**
- * Minimal adapter options: the usage-extraction path under test touches none of
- * the request-building hooks, so stub resolveApiUrl and the naming fields only.
- */
 function makeAdapter(): OpenAICompatibleStreamAdapter {
   return new OpenAICompatibleStreamAdapter({
     providerName: "test",
@@ -105,10 +101,6 @@ describe("OpenAICompatibleStreamAdapter usage capture", () => {
   });
 });
 
-/**
- * Mirrors the NVIDIA adapter's configuration: it injects thinking params via mutateRequestBody,
- * opts into opaque-5xx degradation, and declares the keys it injects.
- */
 function makeNvidiaLikeAdapter(): OpenAICompatibleStreamAdapter {
   return new OpenAICompatibleStreamAdapter({
     providerName: "test",

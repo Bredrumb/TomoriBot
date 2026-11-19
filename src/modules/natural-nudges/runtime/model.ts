@@ -13,10 +13,8 @@ import {
 } from "@/utils/provider/serverStructuredOutput";
 import type { TokenUsage } from "@/utils/text/tokenEstimate";
 
-/**
- * The provider-option slot that pays for a Natural Nudges call: a pinned model has its own slot,
- * while the server's chat model is paid as chat (`text`).
- */
+// Pinned nudge models bill to their own provider-option slot, whereas unpinned calls bill as `text` because they use
+// the server chat model.
 export type NudgeModelSlot = Extract<ProviderOptionCapability, "text" | "nudge-planner" | "nudge-checker">;
 
 export interface NudgeModelRef {
@@ -28,10 +26,8 @@ export type NudgeModelResolution =
   | { kind: "ready"; resolved: ResolvedServerStructuredModel }
   | { kind: "unavailable"; reason: "model_unavailable" | "credentials" | "denied" };
 
-/**
- * Resolves who pays for one Natural Nudges call. A provider option's refusal is an expected outcome
- * with no member to tell, so it is a warning and an `unavailable` result, never an error.
- */
+// Provider-option refusals are expected with no member to notify, so they log a warning and return `unavailable`
+// instead of an error.
 export async function resolveNudgeModel(
   state: TomoriState,
   ref: NudgeModelRef,
@@ -49,12 +45,10 @@ export async function resolveNudgeModel(
   }
 }
 
-/** True when a failed call was refused by the provider option paying for it. */
 export function isNudgeCallDenied(resolved: ResolvedServerStructuredModel, cause: unknown): boolean {
   return findProviderRequestDeniedError(cause, resolved.usageContext) !== null;
 }
 
-/** Reports one call's usage to whoever pays for it and adds it to the running total. */
 export function recordNudgeUsage(
   resolved: ResolvedServerStructuredModel,
   model: string,
@@ -73,7 +67,6 @@ export function recordNudgeUsage(
   };
 }
 
-/** Where one out-of-turn structured call goes and how long its answer may be. */
 export async function resolveStructuredCallTarget(resolved: ResolvedServerStructuredModel) {
   const provider = resolved.state.llm.llm_provider;
   const target = provider.startsWith("custom:") ? await resolveCustomTextEndpointTarget(resolved.state) : null;
@@ -97,18 +90,14 @@ export type PlannerModelStatus =
   | { kind: "unusable"; llmId: number; source: PlannerModelSource; reason: "no_structured_output" | "unavailable" }
   | { kind: "none" };
 
-/** The slot a planner-model call bills to: the pin's own slot, else the chat model's. */
 export function plannerModelRef(state: TomoriState, pinnedLlmId: number | null): NudgeModelRef {
   return pinnedLlmId === null
     ? { llmId: state.llm.llm_id ?? 0, slot: "text" }
     : { llmId: pinnedLlmId, slot: "nudge-planner" };
 }
 
-/**
- * The planner model is the pinned `llm_id`, else the server's chat model (`state.llm`, never a
- * persona override). Either one must pass `resolveServerStructuredModel`; a pinned model that fails
- * does not fall back, because the admin chose it.
- */
+// Unpinned calls use `state.llm` (never a persona override), and a failing pinned model never falls back because the
+// admin chose it.
 export async function resolvePlannerModel(state: TomoriState, pinnedLlmId: number | null): Promise<PlannerModelStatus> {
   const source: PlannerModelSource = pinnedLlmId === null ? "chat" : "pinned";
   const ref = plannerModelRef(state, pinnedLlmId);

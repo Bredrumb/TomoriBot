@@ -27,7 +27,8 @@ export type ProtocolKind =
   | "generation_source";
 type ProtocolEntry = { key: string; kind: ProtocolKind; match?: "template" | "prefix" };
 
-/** These rendered strings are persisted in Discord and must remain recognizable after a locale ships. */
+// Locale strings for these keys are persisted in historical Discord messages, so existing renderings must remain
+// recognizable after locale changes.
 export const PROTOCOL_KEYS: ProtocolEntry[] = [
   { key: "tools.media.generation_source_line", kind: "generation_source", match: "template" },
   ...[
@@ -113,12 +114,8 @@ const targetKinds = new Set<ProtocolKind>([
 ]);
 const knownKinds = new Set<ProtocolKind>([...targetKinds, "diagnostic", "reply_context", "generation_source"]);
 
-/**
- * Kinds whose notices can render at Minimal verbosity. Minimal titles once dropped their leading
- * emoji, and those messages remain in channel history, so only these kinds are stored and matched
- * emoji-free: reward and punish titles share text across commands ("Snack Time!") and are told apart
- * by that emoji alone.
- */
+// Only these kinds match emoji-free because reward and punish share title text across commands and rely on their
+// leading emoji to tell them apart.
 const MINIMAL_TITLE_KINDS = new Set<ProtocolKind>([
   "memory_learning",
   "reminder_set",
@@ -126,7 +123,6 @@ const MINIMAL_TITLE_KINDS = new Set<ProtocolKind>([
   "user_moderation",
 ]);
 
-/** Whether a notice of this kind may arrive as a bare title, because it renders Minimal. */
 export function isMinimalTitleKind(kind: ProtocolKind | null): boolean {
   return kind !== null && MINIMAL_TITLE_KINDS.has(kind);
 }

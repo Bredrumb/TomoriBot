@@ -218,11 +218,6 @@ describe("chunkMessage HEAVY protected spans", () => {
     expect(chunkMessage("*a. b\nc. d*", "lines")).toEqual(["*a. b\nc. d*"]);
   });
 
-  /**
-   * The span finders pair any two markers, so every one of these arrives as an emphasis candidate.
-   * Protecting them would suppress the paragraph and sentence splits the degree exists to make,
-   * which is why a candidate has to clear the flanking rules before it is held whole.
-   */
   it("ignores markers that are not emphasis delimiters", () => {
     expect(chunkMessage("* first item\n* second item\n* third item\n* fourth item", "sentences")).toEqual([
       "* first item",

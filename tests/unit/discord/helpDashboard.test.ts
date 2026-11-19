@@ -341,20 +341,6 @@ describe("help dashboard", () => {
   });
 });
 
-/**
- * Setup > Getting Started > Get an API Key is the only screen that mounts a provider picker, so
- * these assertions are the whole coverage of that render path. The expected option lists are taken
- * from the catalog's own id tuples rather than hand-written copies, because a second literal list
- * here would keep passing after the guide table itself moved.
- *
- * `buildProviderGuideModal` is reached only through the provider select route, so "reachable" means
- * a value in one of these two pickers; asserting the modal renders would prove only that the guide
- * exists.
- *
- * `BaseComponentData.type` spans the whole enum and the narrowed `"components" in comp` branch loses
- * its type argument, so the provider picker is recognized by a predicate over the concrete row type
- * rather than by the type field alone.
- */
 function isProviderSelect(child: ActionRowComponentData): child is StringSelectMenuComponentData {
   if (!("customId" in child) || typeof child.customId !== "string") return false;
   return child.type === ComponentType.StringSelect && child.customId.startsWith("help:v2:provider:");

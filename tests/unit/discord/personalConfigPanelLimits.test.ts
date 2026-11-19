@@ -36,7 +36,6 @@ const REALISTIC_RECEIPT: PanelReceipt = {
   metadata: "trace: pcfg-op-789012 | user: 123456789012345678 | latency: 29ms",
 };
 
-/** Every identity field the personal config panel renders, so the sweep sees a fully populated user. */
 const USER_OVERRIDES: UserFixtureOverrides = {
   user_disc_id: "user-123",
   user_nickname: "Test User",
@@ -52,7 +51,6 @@ const USER_OVERRIDES: UserFixtureOverrides = {
 
 const USER: UserRow = createUserRow(USER_OVERRIDES);
 
-/** The single persona every case renders against. */
 const MAIN_PERSONA = createPersona({ persona_id: 1, persona_lineage_id: 10, persona_nickname: "Tomori" });
 
 function makeModelDisplayInfo(fallbackCount = 2, providerCount = 1): PersonalConfigModelDisplayInfo {

@@ -12,76 +12,34 @@ import type { ContextPart, StructuredContextItem } from "@/types/misc/context";
 //
 // A and B are exposed as per-endpoint toggles, C is unconditional.
 
-/**
- * Minimal message shape shared by the OpenAI-compatible and Anthropic message arrays: a `role`
- * plus `content` that is either a flat string or an array of content parts/blocks. Text parts in
- * both shapes are `{ type: "text", text }`, which is all the role-alternation merge relies on.
- */
 export interface NormalizableMessage {
   role: string;
   content: string | Array<Record<string, unknown>>;
 }
 
-/**
- * Providers whose built-in behavior REQUIRES strict role alternation regardless of the stored
- * column. Acts as a request-time safety net (D4) so a mis-seeded row can never emit an invalid
- * body. The column on `llms` is the primary source of truth; this is belt-and-suspenders.
- */
+// Request-time safety net alongside the llms column so a mis-seeded database row cannot emit an invalid body.
 const ALTERNATION_REQUIRED_PROVIDERS = new Set<string>(["anthropic"]);
 
-/**
- * Providers whose built-in behavior REQUIRES assistant prefix-completion (the DeepSeek / Z.ai
- * "continue this assistant turn" extension). Same safety-net role as
- * {@link ALTERNATION_REQUIRED_PROVIDERS}.
- */
 const PREFIX_COMPLETION_REQUIRED_PROVIDERS = new Set<string>(["deepseek", "zai", "zaicoding"]);
 
-/**
- * Prefix-completion providers whose backend rejects `prefix: true` in a request that also carries
- * `tools` (DeepSeek: "Function call should not be used with prefix"). Z.ai is absent because no
- * such rejection has been observed there.
- */
+// Only DeepSeek is listed here because it rejects prefix: true alongside tools ("Function call should not be used
+// with prefix"), whereas Z.ai allows both.
 const PREFIX_COMPLETION_EXCLUDES_TOOLS_PROVIDERS = new Set<string>(["deepseek"]);
 
 export function providerPrefixCompletionExcludesTools(provider: string): boolean {
   return PREFIX_COMPLETION_EXCLUDES_TOOLS_PROVIDERS.has(provider);
 }
 
-/**
- * @returns `true` when the provider must always apply strict role alternation.
- * @param provider - Provider codename (e.g. "anthropic").
- */
 export function providerRequiresAlternation(provider: string): boolean {
   return ALTERNATION_REQUIRED_PROVIDERS.has(provider);
 }
 
-/**
- * @returns `true` when the provider must always apply assistant prefix-completion.
- * @param provider - Provider codename (e.g. "deepseek").
- */
 export function providerRequiresPrefixCompletion(provider: string): boolean {
   return PREFIX_COMPLETION_REQUIRED_PROVIDERS.has(provider);
 }
 
-/**
- * Sets `prefix: true` on the trailing assistant message when it matches the resolved output
- * prefill, enabling the vendor "continue this turn" completion used by DeepSeek and Z.ai.
- *
- * All four original guards are preserved so the request body is only mutated when it is safe:
- *   - A non-empty prefill must be present.
- *   - `messages` must be a non-empty array.
- *   - The last message must have role `assistant`.
- *   - Its `content` must exactly equal the prefill (so we only flag a genuine prefill turn).
- *
- * @param requestBody - The OpenAI-shaped request body (mutated in place).
- * @param outputPrefill - The already-trimmed output prefill, or undefined when none is set.
- * @param requiresReasoningContent - When `true`, also stamps `reasoning_content: ""` on the
- *   flagged turn. DeepSeek's thinking-mode backend rejects a `prefix: true` assistant turn that
- *   omits the key (`"reasoning_content in the thinking mode must be passed back"`), the same
- *   requirement the tool-call replay path already carries. Empty string because a manual prefill
- *   has no captured chain-of-thought to echo. Gated behind the caller's flag (only DeepSeek sets
- *   it today) so Z.ai/zaicoding prefix completion stays byte-identical.
- */
+// DeepSeek thinking mode rejects prefix: true without reasoning_content, so requiresReasoningContent stamps "" while
+// keeping Z.ai requests unchanged.
 export function applyAssistantPrefixCompletion(
   requestBody: Record<string, unknown>,
   outputPrefill: string | undefined,
@@ -114,14 +72,8 @@ export function applyAssistantPrefixCompletion(
   }
 }
 
-/** Canonical text used when prepending a synthetic leading `user` turn (Anthropic's wording). */
 export const CONVERSATION_START_USER_TEXT = "[System: Conversation start]";
 
-/**
- * Normalize message content to an array of content parts/blocks. A plain string becomes a single
- * `{ type: "text", text }` part; an array passes through untouched. Mirrors Anthropic's previous
- * private `normalizeToContentBlocks` so merged output is byte-identical.
- */
 function normalizeToParts(content: string | Array<Record<string, unknown>>): Array<Record<string, unknown>> {
   if (typeof content === "string") {
     return [{ type: "text", text: content }];
@@ -129,32 +81,13 @@ function normalizeToParts(content: string | Array<Record<string, unknown>>): Arr
   return content;
 }
 
-/**
- * Whether a message carries OpenAI-style top-level tool wiring: `tool_calls` on an assistant turn
- * or `tool_call_id` on a tool result turn. Such turns must NOT be merged, so the merge keeps only the
- * run's first message's non-`content` keys (see {@link mergeConsecutiveSameRole}), which would
- * silently drop a second turn's `tool_calls`/`tool_call_id` and orphan the matching tool result,
- * producing an invalid request body. Anthropic carries tool data inside `content` blocks rather
- * than as top-level keys, so this is always `false` there and that path stays byte-identical.
- *
- */
+// Tool-bearing turns must not merge because keeping only the first message's non-content keys drops OpenAI
+// tool_calls/tool_call_id and orphans tool results.
 function hasToolMetadata(message: NormalizableMessage): boolean {
   const record = message as unknown as Record<string, unknown>;
   return record.tool_calls !== undefined || record.tool_call_id !== undefined;
 }
 
-/**
- * Merge consecutive same-role messages into single messages with combined content parts. An
- * un-merged message is returned unchanged (string content stays a string); only when two adjacent
- * messages share a role are their contents normalized to arrays and concatenated. Non-`content`
- * keys on the first message of a run are preserved.
- *
- * Tool-bearing turns (those with top-level `tool_calls`/`tool_call_id`) act as merge boundaries so
- * their wiring is never dropped (see {@link hasToolMetadata}); this keeps the OpenAI-compatible
- * tool path valid while leaving the Anthropic path byte-identical.
- *
- * @typeParam T - Any {@link NormalizableMessage}-compatible message shape.
- */
 export function mergeConsecutiveSameRole<T extends NormalizableMessage>(messages: T[]): T[] {
   if (messages.length === 0) {
     return [];
@@ -184,15 +117,6 @@ export function mergeConsecutiveSameRole<T extends NormalizableMessage>(messages
   return merged;
 }
 
-/**
- * Guarantee that the first dialogue turn is `user` by prepending a synthetic user turn when the
- * first `user`/`assistant` message is an `assistant` turn. Leading non-dialogue messages (e.g. a
- * `system` turn carried in the array) are skipped so the inserted turn lands in the right place.
- *
- * @typeParam T - Any {@link NormalizableMessage}-compatible message shape.
- * @param leadingTurnFactory - Builds the synthetic leading `user` turn to insert when needed.
- * @returns A new array, with the synthetic turn inserted when required.
- */
 export function ensureLeadingUserTurn<T extends NormalizableMessage>(messages: T[], leadingTurnFactory: () => T): T[] {
   // Locate the first dialogue turn (skip leading system/tool turns).
   const firstDialogueIndex = messages.findIndex((m) => m.role === "user" || m.role === "assistant");
@@ -206,14 +130,6 @@ export function ensureLeadingUserTurn<T extends NormalizableMessage>(messages: T
   return result;
 }
 
-/**
- * Canonical system notice prepended to a synthetic user turn that carries media peeled off an
- * assistant turn. One wording is used across every provider path, with per-sender attribution
- * when the neutral context item still carries it.
- *
- * @param imageCount - Number of relocated images (controls singular/plural).
- * @param senderName - Optional sender display name for per-persona attribution.
- */
 export function assistantMediaRelocationNotice(imageCount: number, senderName?: string | null): string {
   const normalizedSenderName = senderName?.trim();
   const imagePhrase = imageCount === 1 ? "image was" : "images were";
@@ -225,14 +141,8 @@ export function assistantMediaRelocationNotice(imageCount: number, senderName?: 
   return `[System: The following ${imagePhrase} sent by ${normalizedSenderName}.]`;
 }
 
-/**
- * Canonical system notice standing in for tool-returned images that an image-blind model cannot
- * receive. The tool's own response text already reports that it delivered images, so the notice has
- * to state both that delivery succeeded and that the contents are unseen, or the model narrates
- * pictures it never got.
- *
- * @param imageCount - Number of withheld images (controls singular/plural).
- */
+// Notice must state both that delivery succeeded and that the images are unseen because otherwise an image-blind
+// model narrates pictures it never received.
 export function unseenToolImageNotice(imageCount: number): string {
   const imagePhrase = imageCount === 1 ? "1 image" : `${imageCount} images`;
   const pronoun = imageCount === 1 ? "it" : "them";
@@ -246,13 +156,8 @@ export function unseenToolImageNotice(imageCount: number): string {
 
 export { isPromptSystemItem as isSystemInstructionContextItem } from "@/utils/text/context/promptLayout";
 
-/**
- * Move neutral `image` parts off model turns into following synthetic user turns while sender
- * metadata is still attached to the originating context item. Provider serializers then see only
- * user-role media and one canonical attributed notice.
- *
- * @returns A new context item array with model-role image parts relocated.
- */
+// Relocation runs before provider serialization while item.sender metadata is still attached so synthetic user turns
+// keep per-persona attribution.
 export function relocateAssistantMediaContextItems(contextItems: StructuredContextItem[]): StructuredContextItem[] {
   const result: StructuredContextItem[] = [];
 
@@ -295,20 +200,8 @@ export function relocateAssistantMediaContextItems(contextItems: StructuredConte
   return result;
 }
 
-/**
- * Move OpenAI-style `image_url` parts off assistant turns into a following synthetic `user` turn,
- * because the `assistant` role cannot carry media in the input history. Runs unconditionally for
- * every OpenAI-compatible provider path (it is universal, not a per-endpoint capability).
- *
- * For each assistant message whose `content` is an array:
- *   1. Image (`image_url`) parts are peeled out.
- *   2. Remaining text parts are flattened back to a newline-joined string (matching the builder's
- *      prior output), emitted as the assistant turn only when non-empty.
- *   3. Any peeled images are emitted as a trailing `{ role: "user", content: [notice, ...images] }`.
- * Messages with string content, and non-assistant messages, pass through untouched.
- *
- * @returns A new array with assistant media relocated to synthetic user turns.
- */
+// OpenAI-compatible providers cannot carry media on the assistant role in input history, so this runs unconditionally
+// rather than per endpoint.
 export function relocateAssistantMediaToUserTurns(
   messages: Array<Record<string, unknown>>,
   fallbackSenderName?: string | null,
@@ -350,12 +243,10 @@ export function relocateAssistantMediaToUserTurns(
   return result;
 }
 
-/** Type guard for image parts in the provider-neutral context representation. */
 function isContextImagePart(part: ContextPart): part is Extract<ContextPart, { type: "image" }> {
   return part.type === "image";
 }
 
-/** Join the `text` of all `{ type: "text" }` parts with newlines, ignoring non-text parts. */
 function flattenTextParts(parts: Array<Record<string, unknown>>): string {
   return parts
     .filter((part): part is { type: "text"; text: string } => part.type === "text" && typeof part.text === "string")

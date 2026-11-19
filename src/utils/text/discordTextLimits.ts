@@ -1,37 +1,22 @@
-/**
- * Shared Unicode measurement, grapheme-safe truncation, and markdown fence guards.
- *
- * Kept free of discord.js dependencies so tool execution paths can budget Discord
- * text safely without loading the Discord client runtime.
- */
+// Kept free of `discord.js` imports so tool execution paths can budget Discord text without loading the Discord
+// client runtime.
 
-/** Zero-width space: renders as nothing, but stops a backtick run from parsing as a fence. */
+// Zero-width space literal that renders invisibly, so inserting it stops backtick runs from parsing as a markdown
+// fence.
 export const FENCE_GUARD = "​";
 
-/**
- * Breaks up every run of two or more backticks so stored content cannot close the fence it is
- * rendered inside.
- *
- * Replacing the literal triple backtick instead leaves a fence intact for some run lengths: five
- * backticks guard to `` `<zwsp>```` ``, whose tail is still a closing delimiter, and applying the
- * same replacement twice does not converge. Interleaving the whole run leaves no two backticks
- * adjacent at any length.
- */
+// Every backtick run is interleaved because replacing only triple backticks leaves longer runs with a closing fence
+// tail and is non-idempotent.
 export function neutralizeFenceRuns(content: string): string {
   return content.replace(/`{2,}/g, (run) => run.split("").join(FENCE_GUARD));
 }
 
-/**
- * Measures text length in Unicode codepoints, matching Discord's backend length calculation.
- */
+// Codepoints are counted by spreading the string rather than using UTF-16 length, because Discord's backend measures
+// limits in codepoints.
 export function getDiscordTextLength(text: string): number {
   return [...text].length;
 }
 
-/**
- * Truncates text so its Discord codepoint length stays within maxLength without splitting
- * surrogate pairs or combining-mark grapheme clusters.
- */
 export function truncateDiscordText(text: string, maxLength: number, suffix = "..."): string {
   if (maxLength <= 0) return "";
   const totalLength = getDiscordTextLength(text);

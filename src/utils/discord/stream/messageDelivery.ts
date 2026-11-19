@@ -34,9 +34,7 @@ export type BufferedDeliveryBoundary =
 export type StreamDeliveryOptions = {
   identityOverride?: ResolvedWebhookIdentity;
   accumulatedTextPrefix?: string;
-  /** Sprite mapping persisted after a successful webhook send (clean-name sprite renders). */
   spriteRecord?: SpriteMessageRecordInfo;
-  /** The persona's base appearance under an identity override, which is not a copied identity. */
   isNeutralAppearance?: boolean;
 };
 
@@ -45,9 +43,6 @@ type StreamMessageDeliveryDependencies = {
   uiUpdater: StreamUiUpdater;
 };
 
-/**
- * Owns Discord message delivery, typing simulation, aggregate-mode flushing, and table attachments.
- */
 export class StreamMessageDelivery {
   public constructor(private readonly deps: StreamMessageDeliveryDependencies) {}
 

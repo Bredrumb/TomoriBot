@@ -1,11 +1,3 @@
-/**
- * Regression harness: ServerRepository.initializeExpressions.
- *
- * Covers: overwrite-mode matching when an emoji and a sticker share a name, and the
- * batch scope that confines name matches to the rows the model was actually shown.
- *
- * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md)
- */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "bun:test";
 import { serverRepository } from "@/utils/db/repositories";
 import { cleanupFixtures, insertFixtures, type FixtureRefs } from "./setup/fixtures";

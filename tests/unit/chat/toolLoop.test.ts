@@ -285,7 +285,6 @@ function makeContext(): ChatTurnContext {
   } as unknown as ChatTurnContext;
 }
 
-/** A guild text channel whose sends record into `events`, with sticker sends eligible to deliver. */
 function makeStickerContext(events: string[]): ChatTurnContext {
   const context = makeContext();
   const send = async () => {
@@ -308,7 +307,6 @@ function makeProviderConfig(): ProviderConfig {
   return { model: "test-model", apiKey: "test-key", temperature: 0.7 };
 }
 
-/** Function-call stream result: simulates the provider requesting a tool. */
 function makeFunctionCallResult(
   name: string,
   args: Record<string, unknown> = {},
@@ -317,11 +315,6 @@ function makeFunctionCallResult(
   return { status: "function_call", data: { name, args }, accumulatedText };
 }
 
-/**
- * Creates a fake LLMProvider whose streamToDiscord pops from a result queue.
- * Returns the provider and an array that accumulates every functionInteractionHistory
- * array passed to each call, so tests can verify what the provider sees.
- */
 function makeProvider(
   results: StreamResult[],
   providerName = "test-provider",
@@ -408,7 +401,6 @@ function makeProvider(
   return { provider, capturedHistories, capturedModelParts, capturedContexts };
 }
 
-/** Convenience: build ToolLoopParams from a context and provider. */
 function makeParams(context: ChatTurnContext, provider: LLMProvider): ToolLoopParams {
   return { context, provider, providerConfig: makeProviderConfig(), tomoriState: context.tomoriState };
 }

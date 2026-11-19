@@ -1,8 +1,3 @@
-/**
- * Reminder Tool
- * Allows the AI to set reminders for users, causing TomoriBot to mention them at the specified time
- */
-
 import { log } from "../../utils/misc/logger";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
 import { validateFutureTime } from "@/utils/text/processors/timeUtils";
@@ -23,9 +18,6 @@ import { resolveChannelTarget, resolveTriggererDiscordId, resolveUserTarget } fr
 import { MAX_REMINDERS_PER_SERVER, ReminderLimitError } from "@/utils/db/repositories/ServerScheduleRepository";
 import { getChannelPrivacyReason } from "@/utils/discord/channelPrivacy";
 
-/**
- * Tool for creating scheduled tasks that trigger messages at specific times
- */
 export class ReminderTool extends BaseTool {
   name = "create_task";
   description =
@@ -99,29 +91,17 @@ export class ReminderTool extends BaseTool {
     required: ["reminder_purpose", "repetition_interval_hours"],
   };
 
-  /**
-   * Check if reminder tool is available for the given provider
-   * @returns True if provider supports reminder functionality
-   */
   isAvailableFor(_provider: string): boolean {
     return true;
   }
 
-  /**
-   * Context-aware availability check: disabled during non-task reminder-triggered turns
-   * to prevent the AI from scheduling new reminders while executing an existing one.
-   * Self-reminder (task) turns are exempt so tasks can spawn follow-up tasks.
-   * @param context - Optional tool context containing streaming flags
-   */
+  // Non-task reminder turns disable this tool so the AI cannot schedule reminders mid-execution, while self-reminder
+  // turns stay exempt to spawn follow-ups.
   isAvailableForContext(_provider: string, context?: ToolContext): boolean {
     if (context?.streamContext?.disableReminderTool) return false;
     return true;
   }
 
-  /**
-   * Execute reminder creation
-   * @param args - Arguments containing reminder details
-   */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     const validation = this.validateParameters(args);
     if (!validation.isValid) {

@@ -8,11 +8,6 @@ import { userNamingRepository, userRepository } from "@/utils/db/repositories";
 import { createParticipantAlias } from "@/utils/text/participants/aliases";
 import { createDiscordUserKey, createPersonaKey, serializeParticipantKey } from "@/utils/text/participants/identity";
 
-/**
- * Builds a minimal ToolContext carrying only the conversation-user metadata that
- * `resolveUserTarget`'s first (conversation) stage reads. That stage short-circuits
- * before any guild/client access, so a partial cast is safe for these cases.
- */
 function buildContext(conversationUsers: ConversationUserReference[]): ToolContext {
   const contextItem: StructuredContextItem = {
     role: "user",
@@ -223,11 +218,8 @@ interface FakeGuildMember {
   username: string;
 }
 
-/**
- * Builds a ToolContext whose guild answers the two calls the post-conversation
- * stages make: a prefix search (what Discord's member search actually does) and a
- * fetch by ID. Members absent from the map reject, matching a left server.
- */
+// Discord member search matches by prefix and fetch rejects for departed members, so the fake reproduces both
+// behaviors.
 function buildGuildContext(
   members: FakeGuildMember[],
   options?: { namingConfig?: PersonaNamingConfig; personaLineageId?: number },

@@ -1,46 +1,17 @@
-/**
- * Shared text-preview convention scanner.
- *
- * Commands that render user-authored text into a Discord message must route it
- * through `buildTextPreview` (`src/utils/text/textPreview.ts`). This module is
- * the single source of truth used by both the CLI validation check and its unit
- * tests, mirroring `personaWorkflowBoundary.ts`.
- *
- * Rule 1: `baked-ellipsis`
- *   A locale string where a `{placeholder}` is immediately followed by `...`.
- *   The ellipsis renders whether or not the value was actually truncated, so it
- *   claims truncation that may never have happened. Signal truncation from the
- *   command side instead, via `textPreviewFooterKey`.
- *
- * Rule 2: `unguarded-fenced-placeholder`
- *   A locale string that interpolates a `{placeholder}` inside a ``` fence,
- *   consumed by a file that does not import `buildTextPreview`. User-authored
- *   text containing its own fence closes the block early and mangles the rest
- *   of the message. `buildTextPreview` neutralizes backtick runs.
- */
-
 import { readdir, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { Glob } from "bun";
 
-/** The helper every fenced, user-authored placeholder must be routed through. */
 export const REQUIRED_HELPER = "buildTextPreview";
 
-/** Domain wrappers that apply the required preview before rendering their result. */
 export const SAFE_PREVIEW_WRAPPERS = ["renderMemorySaveNoticeContent"] as const;
 
-/**
- * Every locale audited for rule 1. Both are scanned because `check-locales`
- * enforces key PARITY, not content, so a baked ellipsis added only to `ja` would
- * otherwise pass every gate.
- */
+// `ja` is audited alongside `en-US` because `check-locales` enforces key parity rather than content, so a `ja`-only
+// baked ellipsis would otherwise pass.
 export const AUDITED_LOCALES = ["en-US", "ja"] as const;
 
-/**
- * Pre-existing rule 2 sites, frozen so the guard blocks NEW violations while
- * the backlog stays visible. Remove entries as they are migrated to
- * {@link REQUIRED_HELPER}; do not add to this list.
- */
+// Frozen legacy backlog so the guard blocks new violations while existing ones stay visible: remove keys as migrated,
+// and never add new entries.
 export const KNOWN_UNGUARDED = new Set([
   "commands.persona.image-tags.success_description",
   "commands.novelai.generate.image.error_description",
@@ -48,17 +19,13 @@ export const KNOWN_UNGUARDED = new Set([
 
 export const TEXT_PREVIEW_REPO_ROOT = resolve(import.meta.dir, "..", "..", "..");
 
-/** A placeholder sitting inside a fenced block. */
 const FENCED_PLACEHOLDER = /```[\s\S]*?\{[a-zA-Z_][a-zA-Z0-9_]*\}[\s\S]*?```/;
-/** A placeholder immediately followed by an ellipsis. */
 const BAKED_ELLIPSIS = /\{[a-zA-Z_][a-zA-Z0-9_]*\}(\.\.\.|…)/g;
 
 export type TextPreviewViolationKind = "baked-ellipsis" | "unguarded-fenced-placeholder";
 
-/** One text-preview convention breach. */
 export interface TextPreviewViolation {
   kind: TextPreviewViolationKind;
-  /** Dotted locale key, prefixed with `[locale]` for rule 1. */
   key: string;
   detail: string;
 }
@@ -68,12 +35,6 @@ export interface TextPreviewAuditResult {
   scannedFiles: number;
 }
 
-/**
- * Rule 1: scans a single locale string for an unconditional ellipsis.
- *
- * Pure and synchronous so unit tests can exercise it without touching disk.
- *
- */
 export function scanBakedEllipsis(key: string, value: string, locale = "en-US"): TextPreviewViolation[] {
   const violations: TextPreviewViolation[] = [];
   // matchAll on a /g regex is stateless per call, so no lastIndex reset needed.
@@ -87,22 +48,12 @@ export function scanBakedEllipsis(key: string, value: string, locale = "en-US"):
   return violations;
 }
 
-/**
- * Reports whether a locale string interpolates a placeholder inside a fence.
- *
- */
 export function hasFencedPlaceholder(value: string): boolean {
   return FENCED_PLACEHOLDER.test(value);
 }
 
-/**
- * Rule 2: checks that every consumer of a fenced-placeholder key guards it.
- *
- * Keys with no locatable consumer are SKIPPED rather than flagged: some call
- * sites build key names dynamically (e.g. `embed${n}_description`), and a
- * static scan cannot resolve those without false positives.
- *
- */
+// Keys with no static consumer are skipped because dynamic key construction (such as `embed${n}_description`) cannot
+// be resolved without false positives.
 export function scanFencedPlaceholderUsage(
   key: string,
   value: string,
@@ -126,11 +77,6 @@ export function scanFencedPlaceholderUsage(
     }));
 }
 
-/**
- * Loads one locale tree as a single object.
- *
- * @returns The merged locale object across every slice file.
- */
 async function loadLocale(locale: string): Promise<Record<string, unknown>> {
   const localeDir = join(TEXT_PREVIEW_REPO_ROOT, "src/locales", locale);
   const files = (await readdir(localeDir)).filter((file) => file.endsWith(".ts"));
@@ -143,10 +89,6 @@ async function loadLocale(locale: string): Promise<Record<string, unknown>> {
   return merged;
 }
 
-/**
- * Flattens a locale tree into dotted key/value pairs.
- *
- */
 export function flattenLocale(node: unknown, path: string[], out: Map<string, string>): void {
   if (typeof node === "string") {
     out.set(path.join("."), node);
@@ -157,10 +99,6 @@ export function flattenLocale(node: unknown, path: string[], out: Map<string, st
   }
 }
 
-/**
- * Runs both rules across the real repository.
- *
- */
 export async function auditTextPreview(): Promise<TextPreviewAuditResult> {
   const violations: TextPreviewViolation[] = [];
 

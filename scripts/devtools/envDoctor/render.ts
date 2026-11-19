@@ -5,7 +5,7 @@ function at(site: Location): string {
   return `${site.origin ? `${site.origin}:` : ""}${site.file}:${site.line}`;
 }
 
-/** Every printed value goes through here, so a secret-named variable can never leak one. */
+// All printed values must go through this helper so secret-named variables are always redacted.
 export function displayValue(name: string, value: string): string {
   if (isSecretName(name)) return REDACTED;
   return value === "" ? "(empty)" : JSON.stringify(value);
@@ -29,7 +29,6 @@ function describeDeclaration(declaration: DeclarationSite): string {
   return `${declaration.layer} ${where}${scope ? ` [${scope}]` : ""}${value}`;
 }
 
-/** Renders one variable's full evidence. */
 export function renderVariable(variable: VariableReport): string {
   const lines: string[] = [];
   const { classification } = variable;
@@ -76,7 +75,6 @@ function section(title: string, count: number, body: string[]): string {
   return [`\n${title} (${count})`, ...(body.length > 0 ? body : ["  none"])].join("\n");
 }
 
-/** Renders the review summary: counts, every diagnostic, and the uncertainty behind them. */
 export function renderSummary(report: EnvDoctorReport, options: { limit: number }): string {
   const { diagnostics } = report;
   const byName = new Map(report.variables.map((variable) => [variable.name, variable]));

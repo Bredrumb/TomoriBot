@@ -3,28 +3,13 @@ import { broadcastInvalidation, registerInvalidation, invalidationKey } from "@/
 import type { WhitelistCheckResult } from "@/types/misc/channelWhitelist";
 import { whitelistRepository } from "@/utils/db/repositories/WhitelistRepository";
 
-/**
- * Cache for channel whitelist status
- * Key format: "serverDiscId:channelDiscId:parentChannelDiscId:roleSignature"
- * TTL: 5 minutes (whitelists change infrequently)
- */
 const whitelistCache = new Map<string, { result: WhitelistCheckResult; expiresAt: number }>();
 
-/**
- * Cache statistics for monitoring
- */
 let cacheHits = 0;
 let cacheMisses = 0;
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
-/**
- * Generate cache key from server and channel Discord IDs
- * @param serverDiscId - Discord server ID (snowflake)
- * @param channelDiscId - Discord channel ID (snowflake)
- * @param memberRoleDiscIds - Optional member role IDs used for role-whitelist checks
- * @param parentChannelDiscId - Optional parent channel ID for threads
- */
 function getCacheKey(
   serverDiscId: string,
   channelDiscId: string,
@@ -41,13 +26,6 @@ function getCacheKey(
   return `${serverDiscId}:${channelDiscId}:${parentSig}:${roleSignature}`;
 }
 
-/**
- * @param serverDiscId - Discord server ID (snowflake)
- * @param channelDiscId - Discord channel ID (snowflake)
- * @param memberRoleDiscIds - Optional member role IDs used for role-whitelist checks
- * @param parentChannelDiscId - Optional parent channel ID for threads; threads inherit whitelist from parent
- * and any channel-specific cooldown settings
- */
 export async function getCachedWhitelistStatus(
   serverDiscId: string,
   channelDiscId: string,
@@ -80,12 +58,6 @@ export async function getCachedWhitelistStatus(
   return result;
 }
 
-/**
- * If channelDiscId is provided, only invalidate that specific channel (and any thread checks referencing it)
- * Otherwise, invalidate ALL channels for the server
- * @param serverDiscId - Discord server ID (snowflake)
- * @param channelDiscId - Optional Discord channel ID (snowflake)
- */
 export function invalidateWhitelistCache(serverDiscId: string, channelDiscId?: string): void {
   for (const key of whitelistCache.keys()) {
     const [server, channel, parent] = key.split(":");
@@ -96,9 +68,6 @@ export function invalidateWhitelistCache(serverDiscId: string, channelDiscId?: s
   broadcastInvalidation("whitelist", [channelDiscId === undefined ? [serverDiscId] : [serverDiscId, channelDiscId]]);
 }
 
-/**
- * Get cache statistics for monitoring
- */
 export function getWhitelistCacheStats(): {
   hits: number;
   misses: number;
@@ -113,20 +82,12 @@ export function getWhitelistCacheStats(): {
   };
 }
 
-/**
- * Calculate current cache hit rate
- * @returns Hit rate as percentage (0-100)
- */
 function getCacheHitRate(): number {
   const total = cacheHits + cacheMisses;
   if (total === 0) return 0;
   return (cacheHits / total) * 100;
 }
 
-/**
- * Clear all cache entries and reset statistics
- * Useful for testing or manual cache refresh
- */
 export function clearWhitelistCache(): void {
   whitelistCache.clear();
   cacheHits = 0;

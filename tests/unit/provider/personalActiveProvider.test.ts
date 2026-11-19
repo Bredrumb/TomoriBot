@@ -17,14 +17,12 @@ function makeRow(overrides: Partial<UserSavedProviderConfigRow> & { provider: st
   } as unknown as UserSavedProviderConfigRow;
 }
 
-/** A provider whose Text capability is both configured and switched on. */
 const ACTIVE_TEXT_OPENROUTER = makeRow({
   provider: "openrouter",
   enabled_capabilities: ["text"],
   llm_id: 10,
 });
 
-/** A provider with a stored Text model that the user has not enabled. */
 const STORED_BUT_DISABLED_GOOGLE = makeRow({ provider: "google", llm_id: 20 });
 
 const activeProvider = (

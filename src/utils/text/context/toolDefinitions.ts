@@ -7,27 +7,11 @@ import { shouldInjectVerbatimToolCallingNudge } from "@/utils/tools/verbatimTool
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import type { TomoriState } from "@/types/db/schema";
 
-/**
- * Header text placed above the serialized tool schemas. Kept terse because the
- * accompanying verbatim nudge (injected near the dialogue tail) already carries
- * the full calling-format instructions; this block only supplies the schemas.
- */
+// Kept terse without full calling-format instructions because the accompanying verbatim nudge near the dialogue tail
+// already provides them.
 const VERBATIM_TOOL_DEFINITIONS_HEADER =
   'The following tools are available to you in verbatim tool-calling mode. These are the only callable tools, shown with their exact JSON parameter schemas. To use one, output a single verbatim tool call as described in your tool-calling instructions, for example: `tool_name({"arg":"value"})`.';
 
-/**
- * Builds the OpenAI-compatible tool-schema JSON for the active state, mirroring
- * how `CustomProvider.getTools` assembles `config.tools` at request time.
- *
- * Mirrors the recipe used by `/tool prompt snapshot` (`fetchProviderTools`):
- *   1. Assemble the minimal {@link ToolStateForContext} from the live persona state.
- *   2. Ask the registry which built-in tools + MCP functions pass feature-flag gates.
- *   3. Route both through the OpenAI-compatible adapter to get full native schemas
- *      (built-in + global MCP + guild MCP), exactly matching what the model is sent.
- *
- * @param tomoriState - Active persona/server state used for tool availability gating.
- * @returns Provider-native tool JSON array, or an empty array when none apply.
- */
 async function buildVerbatimToolDefinitionsJson(
   tomoriState: TomoriState,
   contextItems: StructuredContextItem[],
@@ -101,16 +85,8 @@ async function buildVerbatimToolDefinitionsJson(
   );
 }
 
-/**
- * Only emitted when the active model opted into verbatim tool calling and is
- * tool-capable (gated identically to the verbatim nudge so the schema dump and
- * the behavioral nudge are always switched on together). When enabled, the
- * resolved tool set is serialized to JSON and embedded in-band so endpoints that
- * ignore the native `tools` field still expose the schemas to the model.
- *
- * @param params.tomoriState - Active persona/server state, or null when unavailable.
- * @returns A structured context item, or null when the flag is off / no tools apply.
- */
+// Tool schemas are serialized in-band under the verbatim-nudge gate so endpoints that ignore the native tools field
+// still receive them with the nudge.
 export async function buildVerbatimToolDefinitionsContextItem(params: {
   tomoriState: TomoriState | null | undefined;
   userId?: number;

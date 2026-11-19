@@ -25,14 +25,11 @@ import { readImportFile } from "@/utils/discord/importFileIntake";
 
 export type ConfigImportScope = "workspace" | "personal";
 
-/** Keeps this helper out of slash-command registration; the loader scans every file in a command directory. */
+// Excludes config import helper from commandLoader discovery (scanned as command otherwise).
 export const isCommandEnabled = () => false;
 
-/**
- * The portable `sourceType` values each command accepts: the v2 format it emits, plus the v1 export W7a's adapter
- * still reads. A `server` or `personal` v1 file carries memories beside its config, so it is not a config file for
- * this entry point and is refused rather than partially applied.
- */
+// Combined v1 server/personal exports are excluded because they bundle memories with config, so this entry point
+// refuses partial applies.
 const CONFIG_IMPORT_SOURCE_TYPES: Record<ConfigTransferKind, readonly string[]> = {
   workspace_config: ["workspace_config", "server_config"],
   personal_config: ["personal_config", "personal_settings"],
@@ -72,11 +69,8 @@ const defaultDependencies: ConfigImportDependencies = {
   replyInfoEmbed,
 };
 
-/**
- * The upload operation shared by `/import config` and `/import personal config`. It validates the file and stores
- * the parsed result behind an actor-bound nonce; the routed `config-continue` and `config-apply` actions read that
- * snapshot, and only `config-apply` writes.
- */
+// Validated snapshots stay behind an actor-bound nonce for config-continue and config-apply, so no DB write happens
+// before config-apply runs.
 export async function startConfigImport(
   interaction: ChatInputCommandInteraction,
   locale: string,

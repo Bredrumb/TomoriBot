@@ -8,10 +8,6 @@ export interface ThresholdValidationResult {
   isRangeMode: boolean;
 }
 
-/**
- * Validates a threshold+max pair and identifies which auto-chat mode applies.
- * (0,0) = always-reply; (n,n) = fixed; (min,max where max>min) = random range.
- */
 export function validateThresholdInput(threshold: number, maxThreshold: number): ThresholdValidationResult {
   const isAlwaysReplyMode = threshold === MIN_THRESHOLD && maxThreshold === MIN_THRESHOLD;
   const isRangeMode = threshold >= MIN_RANDOM_THRESHOLD && maxThreshold > threshold;
@@ -31,13 +27,10 @@ export interface ThresholdInput {
 
 const THRESHOLD_INPUT_PATTERN = /^(\d+)(?:\s*-\s*(\d+))?$/;
 
-/** Sized for a padded "1000 - 1000" range: a shorter field cap truncates text the parser accepts. */
+// Modal field cap is 18 to fit a padded "1000 - 1000" range so the UI never truncates input the parser accepts.
 export const THRESHOLD_INPUT_MAX_LENGTH = 18;
 
-/**
- * Reads the one-field modal form: `0` for every message, `50` for a fixed count, or `50-60` for a
- * random range. Returns the pair so {@link validateThresholdInput} stays the only validity owner.
- */
+// Syntax-only parser omits range checks so validateThresholdInput stays the single owner of threshold validity.
 export function parseThresholdInput(value: string): ThresholdInput | null {
   const match = THRESHOLD_INPUT_PATTERN.exec(value.trim());
   if (!match) return null;
@@ -49,7 +42,6 @@ export function parseThresholdInput(value: string): ThresholdInput | null {
   return { threshold, maxThreshold };
 }
 
-/** Prefills the modal with the same shape the panel displays for the stored pair. */
 export function formatThresholdInput(threshold: number, maxThreshold: number): string {
   if (threshold === MIN_THRESHOLD) return "0";
   return maxThreshold > threshold ? `${threshold}-${maxThreshold}` : String(threshold);

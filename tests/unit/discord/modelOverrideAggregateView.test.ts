@@ -1,7 +1,3 @@
-/**
- * /model override remove aggregate view tests
- * Retained aggregate destructive command browsing channel and persona overrides together.
- */
 import { beforeAll, describe, expect, it, spyOn } from "bun:test";
 import {
   ButtonStyle,
@@ -62,7 +58,6 @@ const LLM_A: LlmRow = {
   llm_codename: "gemini-2.5-flash",
 } as unknown as LlmRow;
 
-/** Override browsing reads the persona's server, id, lineage, and nickname, so all four stay fixed. */
 function makePersona(overrides: Partial<TomoriState>): TomoriState {
   return createPersona({
     server_id: 9,

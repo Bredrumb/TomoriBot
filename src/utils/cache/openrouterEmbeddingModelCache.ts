@@ -1,9 +1,5 @@
-/**
- * OpenRouter embedding model catalog.
- *
- * Embedding models are absent from `/api/v1/models` entirely, so registration can only be
- * validated against this dedicated endpoint.
- */
+// OpenRouter omits embedding models from `/api/v1/models`, so registration must validate against this separate
+// catalog endpoint.
 
 import {
   createOpenRouterCatalog,

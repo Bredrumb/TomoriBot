@@ -1,45 +1,19 @@
 import { log } from "@/utils/misc/logger";
 
-/**
- * Generated master keys (`bun run setup`, `openssl rand -base64 32`) are at least this long.
- * pgcrypto applies no application KDF and length cannot prove entropy, so this only identifies
- * keys too short to have come from a generator.
- */
+// Minimum length of generated master keys (such as openssl rand -base64 32); since pgcrypto uses no KDF, this only
+// flags keys too short to be generated.
 export const MIN_GENERATED_KEY_LENGTH = 32;
 
 export function isGeneratedLengthKey(key: string): boolean {
   return key.length >= MIN_GENERATED_KEY_LENGTH;
 }
 
-/**
- * Rotation status information for monitoring and diagnostics
- */
 interface RotationStatus {
   currentVersion: number;
   availableVersions: number[];
   rotationCapable: boolean;
 }
 
-/**
- * Retains encryption versions so old ciphertext remains readable during migration.
- *
- * Key Features:
- * - Auto-loads all CRYPTO_SECRET_V* environment variables
- * - Backward compatible with legacy CRYPTO_SECRET (treated as V1)
- * - Auto-detects current version (highest number) with optional override
- * - Validates current version exists in environment
- *
- * Environment Variable Examples:
- * ```
- * # Simple mode (casual users)
- * CRYPTO_SECRET=abc123...
- *
- * # Advanced mode (key rotation)
- * CRYPTO_SECRET_V1=old-key
- * CRYPTO_SECRET_V2=new-key
- * CRYPTO_SECRET_CURRENT=2  # Optional: Override auto-detection
- * ```
- */
 class CryptoKeyManager {
   private keys: Map<number, string> = new Map();
   private currentVersion: number = 0;
@@ -94,10 +68,6 @@ class CryptoKeyManager {
     }
   }
 
-  /**
-   * Load all encryption keys from environment variables
-   * Supports both versioned (CRYPTO_SECRET_V*) and legacy (CRYPTO_SECRET) formats
-   */
   private loadKeysFromEnv(): void {
     log.section(`Loading Keys from Environment`);
     for (const [key, value] of Object.entries(process.env)) {
@@ -124,10 +94,6 @@ class CryptoKeyManager {
     }
   }
 
-  /**
-   * Get the current active encryption key for new encryptions
-   * @throws Error if current version key is not available
-   */
   getCurrentKey(): string {
     const key = this.keys.get(this.currentVersion);
     if (!key) {
@@ -136,18 +102,11 @@ class CryptoKeyManager {
     return key;
   }
 
-  /**
-   * Get the current active key version number
-   */
   getCurrentVersion(): number {
     this.getCurrentKey();
     return this.currentVersion;
   }
 
-  /**
-   * Get a specific encryption key version for decryption
-   * @throws Error if the version doesn't exist
-   */
   getKey(version: number): string {
     const key = this.keys.get(version);
     if (!key) {
@@ -163,31 +122,18 @@ class CryptoKeyManager {
     return key;
   }
 
-  /**
-   * Check if a specific key version exists in the environment
-   */
   hasVersion(version: number): boolean {
     return this.keys.has(version);
   }
 
-  /**
-   * Get all available key version numbers sorted in ascending order
-   */
   getAvailableVersions(): number[] {
     return Array.from(this.keys.keys()).sort((a, b) => a - b);
   }
 
-  /**
-   * Check if key rotation is possible (multiple versions loaded)
-   */
   canRotate(): boolean {
     return this.keys.size > 1;
   }
 
-  /**
-   * Get detailed rotation status for monitoring and diagnostics
-   * @returns Object containing current version, available versions, and rotation capability
-   */
   getRotationStatus(): RotationStatus {
     return {
       currentVersion: this.currentVersion,

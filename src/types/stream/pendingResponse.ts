@@ -1,21 +1,19 @@
 import type { StreamResult } from "@/types/provider/interfaces";
 
-/** Room left for held prose in the current turn, shared across tool-loop passes. */
+// Shared across tool-loop passes rather than reset per stream, so held-prose caps apply to the entire turn.
 export interface PendingResponseLimit {
   maxBytes: number;
   maxSegments: number;
 }
 
-/**
- * Why collection stopped before the provider finished. The first two mirror the caps ordinary
- * streaming applies while sending; `retention_limit` is the fixed ceiling for held text.
- */
+// Truncation reasons: the first two mirror ordinary streaming send caps, while `retention_limit` is the fixed
+// held-text ceiling.
 export type PendingResponseTruncation = "send_message_limit" | "flush_limit" | "retention_limit";
 
-/** Normalized public prose and its original presentation, held until the turn chooses it. */
 export interface PendingStreamResponse {
   text: string;
-  /** UTF-8 bytes of the raw replay segments, counted against the turn's retention ceiling. */
+  // Counts UTF-8 bytes of the raw replay segments rather than `text`, because this enforces the turn's retention
+  // ceiling.
   retainedBytes: number;
   segments: number;
   truncation?: PendingResponseTruncation;

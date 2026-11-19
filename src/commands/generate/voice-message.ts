@@ -5,17 +5,8 @@ import {
   replyGenerationModelUnavailable,
 } from "@/utils/discord/autocomplete/generationModelAutocomplete";
 import { GenerationModelUnavailableError } from "@/utils/provider/generationModels";
-/**
- * `/generate voice-message`
- *
- * Manual driver for the server's configured speech endpoint, so testing a voice clone or a voice
- * design prompt does not cost a full chat turn and a coin flip on whether the model decides to
- * call `generate_voice_message`.
- *
- * Two per-invocation overrides are accepted and deliberately never persisted: an uploaded voice
- * sample and a typed voice design prompt. The uploaded buffer lives only in this invocation, and
- * neither value reaches `persona_voice_configs` or `voice_samples`.
- */
+// Ad-hoc sample and design overrides stay ephemeral and never write to persona_voice_configs or voice_samples, so
+// test runs do not alter saved voices.
 
 import { MAX_VOICE_DESIGN_PROMPT_LENGTH } from "@/constants/speech";
 import {
@@ -143,10 +134,8 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
     "commands.generate.voice-message.model_description",
   );
 
-/**
- * Autocomplete is the same persona list `/impersonate persona` uses: already filtered through
- * `filterPersonasForTrigger`, so a suggestion never reveals a persona the actor cannot use here.
- */
+// Persona suggestions reuse handlePersonaAutocomplete because it filters via filterPersonasForTrigger, preventing
+// leaks of personas the actor cannot use.
 const modelAutocomplete = createGenerationModelAutocomplete("speech");
 export const autocomplete: typeof handlePersonaAutocomplete = (client, interaction) =>
   interaction.options.getFocused(true).name === "model"
@@ -213,14 +202,8 @@ function describeBackend(locale: string, backendKey: VoiceBackendKey): string {
   return localizer(locale, BACKEND_LABEL_KEYS[backendKey]);
 }
 
-/** True when the persona holds an ElevenLabs voice id the fallback path could use. */
-
-/**
- * Picks the delivery-knob radio for the resolved endpoint, or null when that endpoint has no knob.
- *
- * A control that renders where it does nothing teaches the user it is broken, so the Chatterbox
- * variant is gated on the label sniff rather than shown everywhere and disclaimed.
- */
+// Chatterbox delivery control is gated on the endpoint label sniff rather than shown everywhere because rendering a
+// no-op control looks broken.
 function resolveExpressivenessBackend(input: {
   endpoint: CustomEndpointRow | null;
   usesElevenLabs: boolean;
@@ -231,7 +214,6 @@ function resolveExpressivenessBackend(input: {
   return null;
 }
 
-/** Display name of the persona's assigned reference sample, for the radio option text. */
 async function resolvePersonaSampleName(persona: TomoriState): Promise<string | null> {
   const sampleId = persona.speech_voice_sample_id ?? null;
   if (!sampleId) return null;
@@ -262,7 +244,6 @@ function resolveSourceDisplayText(input: {
   return localizer(locale, "commands.generate.voice-message.source_elevenlabs");
 }
 
-/** Downloads and normalizes the ad-hoc upload. The buffer is never written to `voice_samples`. */
 async function loadUploadedReferenceAudio(
   attachment: Attachment,
 ): Promise<{ ok: true; refAudio: Buffer } | { ok: false; failure: PreModalFailure }> {

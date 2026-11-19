@@ -27,13 +27,11 @@ import { deliverTransferExport, transferExportReplyReceipts } from "@/utils/disc
 
 export type MemoryExportScope = TransferExportScope;
 
-/** Discord answers an autocomplete request with at most this many choices. */
+// Capped at 25 because Discord allows at most this many choices in an autocomplete response.
 const MEMORY_EXPORT_PERSONA_CHOICES_MAX = 25;
 
-/**
- * The scope choices each domain offers. The workspace domain has no account-global memory namespace, so its
- * single-lineage scope is the current main persona; only the personal domain has a true global scope.
- */
+// Workspace has no account-global memory namespace, so its single-lineage scope is "main" (current main persona),
+// while only personal has "global".
 export const WORKSPACE_MEMORY_EXPORT_SELECTIONS = ["main", "persona", "all"] as const;
 export const PERSONAL_MEMORY_EXPORT_SELECTIONS = ["global", "persona", "all"] as const;
 
@@ -46,17 +44,14 @@ export type PersonalMemoryExportMode =
   | { mode: "persona"; personaLineageId: number }
   | { mode: "all" };
 
-/** Keeps this helper out of slash-command registration; the loader scans every file in a command directory. */
+// Excludes memories helper from commandLoader file scans (otherwise treated as a command).
 export const isCommandEnabled = () => false;
 
 export interface MemoryExportDependencies {
   exportWorkspaceMemories(serverDiscId: string, scope: WorkspaceMemoryExportMode): Promise<ExportResult>;
   exportPersonalMemories(userDiscId: string, scope: PersonalMemoryExportMode): Promise<ExportResult>;
-  /**
-   * Resolves the personas of the workspace the command addresses, including a DM-backed one. The database read is
-   * deliberate: `persona` option values arrive from a client-rendered picker, so resolving one against a cached
-   * list could refuse a persona that exists and cannot confirm one that was just deleted.
-   */
+  // Must hit the DB rather than cache because persona options come from a client-rendered picker, so stale cache
+  // could reject live personas or miss deletions.
   loadWorkspacePersonas(workspaceKey: string): Promise<TomoriState[]>;
   deliverDirectMessage(
     interaction: ChatInputCommandInteraction,
@@ -88,7 +83,6 @@ function memoryExportTypeLabelKey(scope: MemoryExportScope): string {
     : "commands.transfer.personal_memories_label";
 }
 
-/** Ranked so an exact nickname outranks a prefix, which outranks a mid-string match. */
 function nicknameMatchRank(nickname: string, focusedValue: string): number {
   const lowerNickname = nickname.toLowerCase();
   if (lowerNickname === focusedValue) return 0;
@@ -127,10 +121,6 @@ async function resolvePersonalMemoryExportMode(
   return { mode: "persona", personaLineageId: lineageId };
 }
 
-/**
- * The memory export operation shared by `/export memories` and `/export personal memories`, which differ only in
- * their authorization requirement, their scope vocabulary, and their destination key.
- */
 export async function runMemoryExport(
   interaction: ChatInputCommandInteraction,
   locale: string,
@@ -255,10 +245,6 @@ export async function runMemoryExport(
   }
 }
 
-/**
- * The `persona` option's autocomplete, shared by both leaves. It keys on the same workspace the leaf does, so a
- * DM-backed workspace lists its own personas rather than answering nothing.
- */
 export async function respondWithMemoryExportPersonas(
   interaction: AutocompleteInteraction,
   overrides: Partial<MemoryExportDependencies> = {},

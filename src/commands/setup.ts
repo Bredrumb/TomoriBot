@@ -25,13 +25,8 @@ export const configureCommand = (command: SlashCommandBuilder) =>
         ),
     );
 
-/**
- * Starts the guided setup wizard.
- *
- * The command is only the entry point. Authorization, the workspace-health guard, the draft, and the
- * commit all live behind {@link startSetupWizard} and the routed setup namespace, because the same
- * guards have to run again on every button, select, and modal submission the wizard produces.
- */
+// Authorization and health guards stay inside `startSetupWizard` rather than here because every wizard button,
+// select, and modal must re-run them.
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,

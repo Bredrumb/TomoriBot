@@ -5,13 +5,11 @@ import { localizer } from "@/utils/text/localizer";
 
 export const PANEL_PAGE_OPTION_NAME = "page";
 
-/** Discord rejects an autocomplete response carrying more than 25 choices. */
+// Capped at 25 because Discord rejects autocomplete responses carrying more than 25 choices.
 const MAX_PAGE_CHOICES = 25;
 
-/**
- * A page a panel command can open on directly, already filtered to what the invoker may open. A panel
- * whose categories have no pages uses a null `page` and `pageLabel`, so the category is the destination.
- */
+// Entries must be pre-filtered to what the invoker may open, using null page fields when a category has no pages so
+// the category acts as the destination.
 export interface PanelPageDestination<Category extends string = string, Page extends string | null = string | null> {
   category: Category;
   page: Page;
@@ -19,7 +17,7 @@ export interface PanelPageDestination<Category extends string = string, Page ext
   pageLabel: Page extends string ? string : null;
 }
 
-/** Never required: Discord runs a bare root only while it has no subcommand or required option. */
+// Must stay optional: Discord runs a bare root only while it has no subcommand or required option.
 export function configurePanelPageOption(
   option: SlashCommandStringOption,
   description: string,
@@ -41,11 +39,8 @@ function startsAnyWord(text: string, prefix: string): boolean {
   return text.split(/[^\p{L}\p{N}]+/u).some((word) => word.startsWith(prefix));
 }
 
-/**
- * Lower tiers sort first: an exact label, then page name prefix, then a word of the page name, then the
- * category name, then any substring. Matching the stable IDs too lets a user type an English page ID in
- * any locale.
- */
+// Stable category and page IDs stay in the haystack alongside labels so users can type English page IDs in any
+// locale.
 function matchTier(destination: PanelPageDestination, query: string, tokens: readonly string[]): number | null {
   const categoryLabel = destination.categoryLabel.toLowerCase();
   const primaryLabel = destination.pageLabel?.toLowerCase() ?? categoryLabel;
@@ -71,7 +66,6 @@ function rankPanelPages<T extends PanelPageDestination>(destinations: readonly T
     .map((entry) => entry.destination);
 }
 
-/** Answers the focused `page` option with the destinations matching what the user has typed. */
 export async function respondWithPanelPages(
   interaction: AutocompleteInteraction,
   destinations: readonly PanelPageDestination[],
@@ -85,11 +79,8 @@ export async function respondWithPanelPages(
   await interaction.respond(choices);
 }
 
-/**
- * Discord submits whatever was typed when the user does not pick a suggestion, so text that is not a
- * suggestion value resolves to its best label match. Only `destinations` can be returned, which keeps
- * the invoker's permission filter authoritative over a hand-typed value.
- */
+// Raw typed input resolves only against `destinations` because Discord submits unpicked text, keeping the invoker's
+// permission filter authoritative.
 export function resolvePanelPage<T extends PanelPageDestination>(
   destinations: readonly T[],
   submitted: string,
@@ -101,7 +92,7 @@ export function resolvePanelPage<T extends PanelPageDestination>(
   );
 }
 
-/** `info` rather than `warning`, because a mistyped page name is not a panel failure worth a metric. */
+// Info tone rather than warning because a mistyped page name is not a panel failure worth recording as a metric.
 export function panelPageNotFoundReceipt(locale: string): PanelReceipt {
   return {
     tone: "info",
@@ -110,7 +101,6 @@ export function panelPageNotFoundReceipt(locale: string): PanelReceipt {
   };
 }
 
-/** `info` for the same reason as the page notice: a persona name typed without picking is not a failure. */
 export function panelPersonaNotFoundReceipt(locale: string): PanelReceipt {
   return {
     tone: "info",

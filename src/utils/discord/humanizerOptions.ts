@@ -14,7 +14,8 @@ export const HUMANIZER_CUSTOM_VALUE = "custom";
 const HUMANIZER_CHECKBOX_GROUPS = ["streaming", "requires_streaming", "other"] as const;
 export type HumanizerCheckboxGroup = (typeof HUMANIZER_CHECKBOX_GROUPS)[number];
 
-/** Literal keys, because the unused-key audit only sees keys spelled out in source. */
+// Keys must stay literal strings rather than template expressions because the unused-key audit only detects keys
+// spelled out in source.
 const TOGGLE_LOCALE_KEYS: Record<HumanizerToggle, { label: string; description: string }> = {
   humanizer_streaming_enabled: {
     label: "commands.config.humanizer.toggle_streaming_label",
@@ -53,7 +54,7 @@ const GROUP_LOCALE_KEYS: Record<HumanizerCheckboxGroup, { label: string; descrip
   },
 };
 
-/** Derived from the dependency map, so a group heading can never contradict what the submit check enforces. */
+// Group membership is derived from HUMANIZER_TOGGLE_REQUIRES so UI headings cannot contradict submit validation.
 function toggleGroup(toggle: HumanizerToggle): HumanizerCheckboxGroup {
   if (toggle === "humanizer_streaming_enabled") return "streaming";
   return HUMANIZER_TOGGLE_REQUIRES[toggle] === "humanizer_streaming_enabled" ? "requires_streaming" : "other";
@@ -84,9 +85,8 @@ export function createHumanizerCheckboxGroups(
   }));
 }
 
-/**
- * Unchecked means off, so an absent group payload must not read as "all off".
- */
+// Returning null when a group payload is undefined prevents an absent modal component from silently clearing every
+// toggle as unchecked.
 export function readHumanizerCheckboxGroups(
   read: (group: HumanizerCheckboxGroup) => string[] | undefined,
 ): HumanizerSettings | null {

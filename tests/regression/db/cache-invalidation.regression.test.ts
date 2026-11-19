@@ -1,15 +1,3 @@
-/**
- * Regression harness: Cache invalidation assertions.
- *
- * Each test follows the pattern: write → assert cache is cleared →
- * next read hits DB and returns fresh data.
- *
- * This file is the direct implementation of the plan's "at least one
- * cache-invalidation assertion (write → cache cleared → next read goes to DB)"
- * acceptance criterion for #4a.
- *
- * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md)
- */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { PrivacyLevel } from "@/types/db/schema";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";

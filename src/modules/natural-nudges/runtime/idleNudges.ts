@@ -31,11 +31,9 @@ export {
 
 const IMAGE_TOOL_NAMES = ["generate_image", "generate_image_nai"] as const;
 
-/** Built-in idle nudges share the custom shape, so one path runs both. */
 export interface IdleNudgeDefinition {
   key: string;
   category: NaturalNudgeCategory;
-  /** Locale key for built-ins; custom idle nudges carry their own title. */
   titleKey?: string;
   title?: string;
   brief: string;
@@ -43,11 +41,10 @@ export interface IdleNudgeDefinition {
   prerequisites: readonly string[];
   recommendedTools: readonly string[];
   builtIn: boolean;
-  /** Present only on persona-authored definitions: the local persona instance that owns and may run this entry. */
   ownerPersonaId?: number;
 }
 
-/** Briefs are planner instructions, so they stay in English like every other model-facing prompt. */
+// Briefs stay unlocalized in English because they are model-facing planner prompts, unlike titleKey.
 export const BUILTIN_IDLE_NUDGES: readonly IdleNudgeDefinition[] = [
   {
     key: "ping_user.check_in",
@@ -357,7 +354,6 @@ export function customIdleNudgeDefinition(row: CustomIdleNudgeRow): IdleNudgeDef
   };
 }
 
-/** Built-in, server-created, or persona-authored. */
 export type IdleNudgeSource = "builtin" | "server" | "persona";
 
 export function idleNudgeSource(idleNudge: IdleNudgeDefinition): IdleNudgeSource {
@@ -365,13 +361,11 @@ export function idleNudgeSource(idleNudge: IdleNudgeDefinition): IdleNudgeSource
   return idleNudge.ownerPersonaId === undefined ? "server" : "persona";
 }
 
-/** A persona-authored definition and its local availability, for surfaces that list disabled entries too. */
 export interface PersonaIdleNudgeEntry {
   definition: IdleNudgeDefinition;
   enabled: boolean;
 }
 
-/** Owner definitions stay with their own persona; a missing or unreadable config never opens them to others. */
 export function listPersonaIdleNudges(
   personaId: number,
   config: PersonaNaturalNudgeConfig | undefined,
@@ -398,7 +392,6 @@ export function isInPersonaScope(key: string, personaId: number, scopes: IdleNud
   return scopes.get(key)?.includes(personaId) ?? true;
 }
 
-/** Enabled built-ins and custom idle nudges, in panel order. */
 export function listRunnableIdleNudges(
   disabledBuiltIns: readonly string[],
   customIdleNudges: readonly CustomIdleNudgeRow[],
@@ -409,7 +402,6 @@ export function listRunnableIdleNudges(
   ];
 }
 
-/** Loaded server and owner state that idle nudge selection reads for one drawn persona. */
 export interface IdleNudgeSelectionSources {
   personaId: number;
   disabledBuiltIns: readonly string[];
@@ -418,7 +410,6 @@ export interface IdleNudgeSelectionSources {
   personaConfig: PersonaNaturalNudgeConfig | undefined;
 }
 
-/** Everything the drawn persona may run: enabled built-ins, scoped server customs, and its own available entries. */
 export function listPersonaRunnableIdleNudges(sources: IdleNudgeSelectionSources): IdleNudgeDefinition[] {
   const serverDefinitions = listRunnableIdleNudges(sources.disabledBuiltIns, sources.customIdleNudges).filter(
     (idleNudge) => isInPersonaScope(idleNudge.key, sources.personaId, sources.scopes),
@@ -429,7 +420,6 @@ export function listPersonaRunnableIdleNudges(sources: IdleNudgeSelectionSources
   return [...serverDefinitions, ...ownerDefinitions];
 }
 
-/** Fresh lookup of the planned entry; null when it was deleted, disabled, or no longer belongs to this persona. */
 export function findPersonaRunnableIdleNudge(
   key: string,
   sources: IdleNudgeSelectionSources,
@@ -443,7 +433,6 @@ function sameStringList(left: readonly string[], right: readonly string[]): bool
   return right.every((value) => values.has(value));
 }
 
-/** The authored content the planner saw must still match the stored definition right before delivery. */
 export function sameIdleNudgeDefinition(left: IdleNudgeDefinition, right: IdleNudgeDefinition): boolean {
   return (
     left.category === right.category &&
@@ -458,13 +447,10 @@ export function sameIdleNudgeDefinition(left: IdleNudgeDefinition, right: IdleNu
   );
 }
 
-/** What the prerequisite checks know about one persona at one moment. */
 export interface PrerequisiteFacts {
   hasHangingConversation: boolean;
-  /** Another persona that could join a scene shares a channel with this one. */
   hasScenePartner: boolean;
   availableTools: ReadonlySet<string>;
-  /** The persona's drawn Ping User nudge target, or null when nobody passed the gate. */
   target: { hasRecentMemories: boolean; isActive: boolean } | null;
 }
 
@@ -474,15 +460,12 @@ const TARGET_PREREQUISITES: readonly string[] = [
   PRESENCE_ACTIVITY_PREREQUISITE,
 ];
 
-/**
- * A Ping User nudge always pings someone, so a custom one that forgot `relationship_user` still needs a
- * target, and so does any idle nudge that asks about a target's memories or activity.
- */
 export function idleNudgeNeedsTarget(idleNudge: IdleNudgeDefinition): boolean {
   return idleNudge.category === "ping_user" || idleNudge.prerequisites.some((id) => TARGET_PREREQUISITES.includes(id));
 }
 
-/** An unknown prerequisite (the registry shrank since the idle nudge was saved) makes the idle nudge ineligible. */
+// Unknown prerequisites intentionally fail eligibility since they indicate the registry shrank after the idle nudge
+// was saved.
 export function isIdleNudgeChannelEligible(
   idleNudge: IdleNudgeDefinition,
   facts: Omit<PrerequisiteFacts, "target">,
@@ -517,7 +500,6 @@ function prerequisiteTools(idleNudge: IdleNudgeDefinition): NudgeToolName[] {
   return idleNudge.prerequisites.flatMap((id) => prerequisiteTool(id) ?? []);
 }
 
-/** Whether `findIdleNudgeBlocker` could block it, so callers skip resolving tools when nothing could. */
 export function canIdleNudgeBeBlocked(idleNudge: IdleNudgeDefinition): boolean {
   return needsScenePartner(idleNudge) || prerequisiteTools(idleNudge).length > 0;
 }
@@ -526,7 +508,6 @@ function hasNudgeTool(tool: NudgeToolName, availableTools: ReadonlySet<string>):
   return tool === "image" ? IMAGE_TOOL_NAMES.some((name) => availableTools.has(name)) : availableTools.has(tool);
 }
 
-/** The first prerequisite tool the persona no longer holds; the before-send recheck aborts instead of offering it. */
 export function findMissingIdleNudgeTool(
   idleNudge: IdleNudgeDefinition,
   availableTools: ReadonlySet<string>,
@@ -538,22 +519,19 @@ export function findMissingIdleNudgeTool(
   return null;
 }
 
-/** What keeps an enabled idle nudge from ever running on a server, judged only on facts that hold for days. */
 export type IdleNudgeBlocker =
   | { kind: "tool"; tool: NudgeToolName }
   | { kind: "two_personas" }
   | { kind: "no_persona" };
 
 export interface ServerCapabilityFacts {
-  /** Available tools of each persona that can nudge at all, by persona ID. */
+  // Keyed only by personas that can nudge (excluding silenced ones), because size determines whether a scene partner
+  // exists.
   personaTools: ReadonlyMap<number, ReadonlySet<string>>;
 }
 
-/**
- * Hanging conversations, targets, and presence change minute to minute, so only scope, tools, and a
- * second nudging persona can block. A tool nudge needs one persona in `scope` holding every tool it
- * names; a scene partner may be any nudging persona, because scope limits only the lead.
- */
+// Scene partners may be any nudging persona because scope limits only the lead, unlike tool checks which require a
+// scoped persona holding all prerequisite tools.
 export function findIdleNudgeBlocker(
   idleNudge: IdleNudgeDefinition,
   facts: ServerCapabilityFacts,
@@ -571,10 +549,8 @@ export function findIdleNudgeBlocker(
   return { kind: "tool", tool: missing ?? tools[0] };
 }
 
-/**
- * Recommended and prerequisite tools that are available; `image` expands to every concrete
- * generator, since the catalogue names the capability rather than a provider.
- */
+// Expands "image" to all concrete image-generator tool names because the idle nudge catalogue names the capability
+// rather than a provider.
 export function availableIdleNudgeTools(idleNudge: IdleNudgeDefinition, availableTools: ReadonlySet<string>): string[] {
   const named = [...idleNudge.recommendedTools, ...idleNudge.prerequisites.flatMap((id) => prerequisiteTool(id) ?? [])];
   const expanded = named.flatMap((tool) => (tool === "image" ? [...IMAGE_TOOL_NAMES] : [tool]));

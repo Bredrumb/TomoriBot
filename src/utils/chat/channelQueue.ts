@@ -40,10 +40,8 @@ export type QueuedMessage = {
   reasoningQuery?: string;
   llmOverrideCodename?: string;
   isStopResponse?: boolean;
-  /**
-   * Set only on a follow-up: the account whose newer follow-up supersedes this one. A verified
-   * proxy repost is authored by the service's webhook, so its author ID cannot key this.
-   */
+  // Stored separately from message.author.id because verified proxy reposts are authored by the proxy service
+  // webhook.
   followUpUserDiscId?: string;
   selectedPersonaId?: number;
   triggeredPersonaIds?: number[];
@@ -89,7 +87,7 @@ export interface ChannelLockEntry {
   currentIsPersonaJob?: boolean;
   activePersonaId?: number;
   activeTriggeredPersonaIds?: number[];
-  /** Set during a Natural Nudges turn so gateway echoes cannot schedule duplicate persona replies. */
+  // Active during Natural Nudges turns so gateway echoes cannot schedule duplicate persona replies.
   activeNaturalNudge?: "single" | "scene";
   activeSuppressSelfReply?: boolean;
   nudgeInterrupted?: boolean;
@@ -97,25 +95,21 @@ export interface ChannelLockEntry {
   activeImpersonatedUserId?: string;
   followUpEligible?: boolean;
   isInToolCallChain?: boolean;
-  /** Tool currently executing for this turn, read by /kill to warn when a paid media job was in flight. */
   activeToolName?: string;
   isCommandTriggered?: boolean;
   typingKeepaliveTimer: NodeJS.Timeout | null;
   followUpCount: number;
   messageQueue: QueuedMessage[];
-  /** Callback that aborts the active HTTP request and rejects the stream Promise.race. Set by toolLoop, cleared on release. */
   activeStreamKill?: ((reason: Error) => void) | null;
-  /** Last sign of life from the turn holding the lock; `lockedAt` stays the turn's start time. */
+  // Separate progress timestamp because lockedAt must remain the turn's start time.
   lastProgressAt?: number;
-  /** One token per in-flight phase that carries its own timeout; see {@link runUnderWatchdog}. */
   activeWatchdogs?: Set<symbol>;
-  /** AbortController for the entire turn (streaming + tools). Aborted by /kill; signal forwarded to tools via ToolContext. */
   activeTurnAbortController: AbortController | null;
 }
 
 export const channelLocks = new Map<string, ChannelLockEntry>();
 export const selfReplySuppressionUntil = new Map<string, number>();
-/** A nudge turn's last message can reach the gateway after its lock releases, so its output stays ignored briefly. */
+// A nudge turn's last message can reach the gateway after its lock releases, so its output stays ignored briefly.
 const nudgeOutputQuietUntil = new Map<string, number>();
 const suppressedTurnQuietUntil = new Map<string, number>();
 
@@ -245,15 +239,8 @@ export function getOrCreateChannelLockEntry(channelId: string, serverDiscId: str
   return fresh;
 }
 
-/**
- * Whether a held lock has outlived its turn and may be treated as abandoned.
- *
- * A lock is never expired while a {@link runUnderWatchdog} phase is in flight: that phase already
- * carries its own timeout, and the stream's first-token budget and the tool budget both exceed
- * {@link CHANNEL_LOCK_TIMEOUT_MS} on purpose. Expiring on turn age let any message sent in a busy
- * channel kill a slow but healthy reply or tool call. Work outside those phases has no other bound,
- * so it keeps this recovery.
- */
+// Watchdog phases stay exempt because stream and tool budgets intentionally exceed CHANNEL_LOCK_TIMEOUT_MS, while
+// unguarded work still needs this fallback.
 function isChannelLockExpired(lockEntry: ChannelLockEntry): boolean {
   if (!lockEntry.isLocked || (lockEntry.activeWatchdogs?.size ?? 0) > 0) {
     return false;
@@ -261,10 +248,6 @@ function isChannelLockExpired(lockEntry: ChannelLockEntry): boolean {
   return Date.now() - (lockEntry.lastProgressAt ?? lockEntry.lockedAt) > CHANNEL_LOCK_TIMEOUT_MS;
 }
 
-/**
- * Records that the turn holding this channel's lock is still making progress, so the stale-lock
- * window measures time since the last sign of life rather than time since the turn began.
- */
 export function touchChannelLock(channelId: string): void {
   const lockEntry = channelLocks.get(channelId);
   if (lockEntry?.isLocked) {
@@ -272,15 +255,8 @@ export function touchChannelLock(channelId: string): void {
   }
 }
 
-/**
- * Runs a phase that enforces its own timeout, exempting the channel lock from stale release until it
- * settles. Only wrap work whose every path ends within a bounded time (a `Promise.race` against a
- * timer), because the exemption removes the lock's last recovery for that phase.
- *
- * Each phase holds its own token rather than a shared counter: `/kill` can release the lock and a
- * new turn can acquire it while the old phase is still settling, and that phase's cleanup must not
- * lift the new turn's exemption.
- */
+// Per-phase tokens stop stale /kill cleanup from clearing a new turn's exemption, and callers must bound work because
+// stale-lock recovery is disabled.
 export async function runUnderWatchdog<T>(channelId: string, work: () => Promise<T>): Promise<T> {
   const lockEntry = channelLocks.get(channelId);
   const token = Symbol("watchdog");
@@ -590,14 +566,8 @@ export async function requestNaturalStopForLockedTurn(args: {
   log.info(`Stop signal sent for channel ${args.channelId}. Stop response will be generated after stream completes.`);
 }
 
-/**
- * Queues a message from the active turn's user as a follow-up, interrupting the stream unless a
- * tool chain is running.
- * @param args.verifiedProxySenderDiscId - Attested host of a confirmed message-proxy repost whose
- *   original never ran. Only this admits a bot-authored webhook message, so an unrelated webhook
- *   can neither interrupt the turn nor speak as its user.
- * @returns Whether the message was queued as a follow-up
- */
+// verifiedProxySenderDiscId must come only from an attested proxy repost whose original never ran, so unrelated
+// webhooks cannot interrupt or spoof the user.
 export function queueFollowUpForLockedTurn(args: {
   lockEntry: ChannelLockEntry;
   channelId: string;
@@ -860,12 +830,6 @@ export function isChannelProcessingLocked(channelId: string): boolean {
   return lockEntry ? lockEntry.isLocked && !isChannelLockExpired(lockEntry) : false;
 }
 
-/**
- * Registers (or clears) the active stream kill callback for a channel.
- * Called by toolLoop when a new SDK call starts or finishes.
- * @param channelId - Target channel
- * @param fn - Callback that aborts the HTTP request and rejects the Promise.race, or null to clear
- */
 export function setChannelStreamKill(channelId: string, fn: ((reason: Error) => void) | null): void {
   const lockEntry = channelLocks.get(channelId);
   if (lockEntry) {
@@ -873,20 +837,10 @@ export function setChannelStreamKill(channelId: string, fn: ((reason: Error) => 
   }
 }
 
-/**
- * Returns the turn-level AbortSignal for a channel, used to cancel tool execution.
- * @param channelId - Target channel
- */
 export function getChannelTurnAbortSignal(channelId: string): AbortSignal | undefined {
   return channelLocks.get(channelId)?.activeTurnAbortController?.signal;
 }
 
-/**
- * Force-kills the active turn for a channel (used by /kill).
- * Aborts the turn-level controller (cancels tool execution) and the stream kill (cancels HTTP + unblocks Promise.race).
- * @param channelId - Target channel
- * @returns true if anything was killed
- */
 export function forceKillChannelStream(channelId: string): boolean {
   const lockEntry = channelLocks.get(channelId);
   if (!lockEntry) return false;
@@ -942,20 +896,8 @@ function enqueueLatestFollowUp(lockEntry: ChannelLockEntry, userDiscId: string, 
   return removedCount;
 }
 
-/**
- * Removes history messages that are still waiting for a turn of their own in the channel queue.
- *
- * History is fetched as of "now", so a message that arrives while an earlier turn is being
- * prepared is visible to that turn even though it is also queued. The model then answers it
- * early and the queued turn's reply directive makes it answer the same message again.
- * @param messages - Fetched channel history
- * @param channelId - Channel whose queue is consulted
- * @param triggerMessageId - Message the current turn answers; always kept, since persona jobs
- *   queue further entries for this same message
- * @param allPersonas - Server personas; their own messages stay visible so a turn never loses
- *   what another persona just said
- * @returns The history without messages that have a pending turn
- */
+// Exclusion prevents earlier turns from answering queued messages twice, while keeping triggerMessageId (for persona
+// jobs) and all persona messages.
 export function excludeMessagesAwaitingOwnTurn(
   messages: Message[],
   channelId: string,
@@ -1023,9 +965,6 @@ function clearQueuedSelfReplyWork(
   };
 }
 
-/**
- * Drops queued Natural Nudges turns so a member who speaks up is answered next; `/generate scene` turns stay.
- */
 export function clearQueuedNudgeWork(channelId: string): QueuedMessage[] {
   const lockEntry = channelLocks.get(channelId);
   if (!lockEntry || lockEntry.messageQueue.length === 0) {
@@ -1048,7 +987,6 @@ export function clearQueuedNudgeWork(channelId: string): QueuedMessage[] {
   return removedMessages;
 }
 
-/** Stops pending nudge turns when a member speaks and returns the next queued speaker, or the active scene speaker. */
 export function interruptNudgeScene(channelId: string): number | undefined {
   const lockEntry = channelLocks.get(channelId);
   if (lockEntry?.isLocked && lockEntry.activeNaturalNudge) lockEntry.nudgeInterrupted = true;
@@ -1057,7 +995,6 @@ export function interruptNudgeScene(channelId: string): number | undefined {
   return lockEntry?.isLocked && lockEntry.activeNaturalNudge === "scene" ? lockEntry.activePersonaId : undefined;
 }
 
-/** Whether gateway persona output must be ignored because nudge handoffs are queued after generation. */
 export function isNudgeOutputActive(channelId: string): boolean {
   const lockEntry = channelLocks.get(channelId);
   if (lockEntry?.isLocked && lockEntry.activeNaturalNudge) return true;

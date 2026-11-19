@@ -6,7 +6,6 @@ import { config } from "dotenv";
 import { AUDIT_IGNORED_ADVISORIES } from "./lib/auditIgnores";
 import { isVerboseOutput } from "./lib/gateOutput";
 
-/** Shape of every item pushed into the results array */
 type ResultItem = {
   name: string;
   exitCode: number | null;
@@ -15,44 +14,23 @@ type ResultItem = {
   isWarning?: boolean;
   subItems?: string[];
   summary?: string;
-  /** Inline hint shown on failure: takes precedence over the global HINTS lookup */
   hint?: string;
-  /** Used by CATEGORIES to identify test-file buckets without string matching */
   _category?: "unit-test" | "regression-test";
 };
 
-/**
- * Detail level for this run, resolved once in main().
- *
- * Quiet and full differ in exactly one place: whether a check that PASSED prints its
- * output. A failing check prints its full detail under both, because that detail is
- * the reason anyone runs the gate at all. Quiet mode must never be able to hide a
- * finding, only the passing noise around it.
- */
+// Quiet mode hides only passing output because failing checks must always print full detail under both modes.
 let verboseOutput = false;
 
-/** First-party checks in scripts/checks/ that understand `--verbose` / `--no-verbose`. */
 type Command = { argv: string[]; acceptsDetailFlag: boolean };
 
-/**
- * The flag to forward to a first-party check so it picks its own detail level.
- *
- * Always explicit rather than only sent when true, because `--no-verbose` is what lets
- * this process override a `--verbose` it forwards for a sibling. Only our own scripts in
- * scripts/checks/ may receive it: `bun run lint`, `knip`, `bunx tsc` and `bun audit`
- * are third-party CLIs whose argument parsers would reject an unknown flag.
- */
+// Explicitly returns --no-verbose so it overrides inherited verbosity, and applies only to first-party checks because
+// third-party CLIs reject unknown flags.
 function detailFlag(): string {
   return verboseOutput ? "--verbose" : "--no-verbose";
 }
 
-/**
- * Builds the argv to spawn, forwarding the detail flag only to checks that read it.
- *
- * The `--` separator is what delivers the flag to the script itself rather than to
- * bun's own argument parser, which normalizes the two forms inconsistently across
- * platforms.
- */
+// Using the double-dash separator delivers the detail flag because Bun parses bare flags inconsistently across
+// platforms.
 function resolveArgv({ argv, acceptsDetailFlag }: Command): string[] {
   return acceptsDetailFlag ? [...argv, "--", detailFlag()] : argv;
 }
@@ -73,26 +51,13 @@ async function runCheck(
   return { name, exitCode, fatal };
 }
 
-/** How one advisory-graded check reports itself, and what its non-zero exit means. */
 interface WarningCheckOptions {
-  /** True when the child's output contains advisory findings that cannot change the exit code. */
   outputHasWarnings?: (output: string) => boolean;
-  /** Counts advisory findings, so a passing run can collapse them to a number. */
   summarizeWarnings?: (output: string) => string;
-  /** One extra line shown under a non-zero row, for a check that fails as a whole. */
   summarizeFailure?: (output: string) => string | undefined;
-  /** Forwards the detail flag, for a child under scripts/checks/ that reads it. */
   acceptsDetailFlag?: boolean;
-  /**
-   * Whether a non-zero exit is a real failure rather than a finding.
-   *
-   * This is the one thing `runWarningCheck` cannot infer, and getting it wrong is how a
-   * gate goes silent: `knip` reports "found unused things" with exit 1 and `vl` grades it
-   * a warning, so a count is the whole report. `audit-comments` reports unactionable
-   * counts the same way but exits 1 only for errors that are entirely file and line
-   * specific, so its listing is the report. Defaults to true, because silence is the
-   * failure mode that hides bugs.
-   */
+  // Defaults to true so unfamiliar non-zero exits never hide failure output; only set false when exit 1 means a
+  // count-only warning like knip.
   failureNeedsDetail?: boolean;
   blocksOnFailure?: boolean;
 }
@@ -260,7 +225,6 @@ function displayNameFromTestFile(file: string, topLevelDescribeNames: string[] =
   return humanizeDisplayName(stripTestSuffix(fileNameFromPath(file)));
 }
 
-/** One decoded file-level `<testsuite>` element from bun's JUnit reporter output. */
 type JUnitSuite = {
   name: string;
   file: string;
@@ -290,14 +254,6 @@ function sortTestItems(items: ResultItem[]): ResultItem[] {
   });
 }
 
-/**
- * Parses bun's JUnit XML into one ResultItem per test FILE.
- *
- * Bun emits a file-level `<testsuite>` (where `name` equals the `file` path)
- * plus nested suites for `describe` blocks. We keep the file-level suites for
- * counts and collect direct child describe names as optional display-name hints.
- * Returns `null` when the XML has no usable suites so the caller can fall back.
- */
 export function parseJUnitSuites(xml: string): ResultItem[] | null {
   const fileSuites = new Map<string, Omit<JUnitSuite, "topLevelDescribeNames">>();
   const topLevelDescribeNames = new Map<string, string[]>();
@@ -353,12 +309,8 @@ export function parseJUnitSuites(xml: string): ResultItem[] | null {
   );
 }
 
-/**
- * Legacy fallback: parse `bun test`'s piped console output into per-file items.
- * Used only when the JUnit XML is unavailable (older bun, reporter failure).
- * Note: bun omits per-file headers for files that log nothing, so this path can
- * under-report, so the JUnit path above is preferred.
- */
+// Console parsing is a fallback for missing JUnit XML because Bun omits headers for quiet test files, so this path
+// can under-report.
 function parseConsoleOutput(output: string, exitCode: number): ResultItem[] {
   const testBlocks = output.split(/([a-zA-Z0-9_\\/\-.]+\.test\.ts):/);
   const items: ResultItem[] = [];
@@ -400,17 +352,8 @@ function parseConsoleOutput(output: string, exitCode: number): ResultItem[] {
   return sortTestItems(items);
 }
 
-/**
- * Runs all tests and returns one ResultItem per test file. Prefers bun's JUnit
- * reporter (reliable per-file enumeration) and falls back to console parsing.
- *
- * On failure the runner's own output is reprinted rather than a per-file subset of it.
- * The runner prints each lane as one buffered block, so extracting only the failing
- * files would mean re-running them, and a targeted re-run in this environment surfaces
- * the application logger's DB and cache chatter instead of a clean assertion diff. The
- * red per-file rows below already name each failing file and the command to reproduce
- * it, so the full output is kept as the backstop it has always been.
- */
+// Failure output reprints the full runner buffer because lanes print whole blocks and targeted re-runs surface noisy
+// DB and cache logger chatter.
 async function runTests(): Promise<ResultItem[]> {
   console.log(`> Running Tests (bun run test)...`);
 
@@ -503,15 +446,8 @@ async function runLint(): Promise<ResultItem> {
   };
 }
 
-/**
- * Keeps only the `bun audit` package blocks holding a high or critical advisory.
- *
- * `bun audit` groups its output into blocks: an unindented package line, then an
- * indented dependency path per line, then an indented severity line per advisory. A
- * block is kept whole rather than filtered line by line, because a severity line only
- * means something next to the dependency path that reaches it. The trailing counts
- * line and anything after it are unindented and pass through untouched.
- */
+// Whole bun audit package blocks are kept rather than matching severity lines because a severity needs its indented
+// dependency path for context.
 function selectBlockingAuditBlocks(output: string): string {
   const blocks: string[][] = [];
   let current: string[] = [];
@@ -616,26 +552,14 @@ async function runAudit(): Promise<ResultItem> {
   };
 }
 
-/**
- * Whether a local database is reachable, so the DB-dependent checks can run.
- * Read lazily inside main() rather than at module scope: `parseJUnitSuites` is
- * imported by its unit test, and loading `.env` as an import side effect would
- * leak real credentials into every other test sharing that process.
- */
+// Checked lazily inside main() rather than at module scope because tests import parseJUnitSuites and module-level
+// .env loading would leak real credentials.
 function isDbConfigured(): boolean {
   return !!(process.env.POSTGRES_PASSWORD || process.env.DATABASE_URL || process.env.POSTGRES_URL);
 }
 
-/**
- * True for the fixed set of named checks, false for per-test-file items.
- *
- * Sections are rendered by independent filters, so an item matching two
- * predicates would print (and be counted) twice. Test files are named after their
- * top-level `describe`, which is arbitrary prose that can easily contain a word a
- * named-check predicate looks for: "Database Only Lifecycle Secrets" matches
- * `includes("Lifecycle")`, for example. Test items are therefore routed solely by
- * `_category`, and every named-check predicate is gated on this guard.
- */
+// Named-check filters must gate on this guard because test names use arbitrary describe prose that can match check
+// substrings and double-count.
 const isNamedCheck = (r: ResultItem): boolean => r._category === undefined;
 
 const CATEGORIES = {
@@ -916,14 +840,8 @@ async function main() {
     for (const item of items) printItem(item);
   };
 
-  /**
-   * Test-file sections, where one row per file is detail rather than a verdict.
-   *
-   * There are roughly 360 test files, so listing every green one buries the handful
-   * that matter. Only the non-green rows are printed under quiet mode, with the green
-   * count that replaces them stated explicitly so a silent section can never be
-   * mistaken for a section that did not run.
-   */
+  // Quiet mode omits green test rows to avoid burying failures, and states the green count explicitly so a quiet
+  // section cannot look skipped.
   const printTestSection = (title: string, items: ResultItem[], emptyMessage: string) => {
     if (verboseOutput) {
       printSection(title, items, emptyMessage);

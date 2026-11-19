@@ -1,16 +1,3 @@
-/**
- * Generates a multi-size ICO file and an optimized 256x256 PNG from assets/img/icons/tomoricon.png.
- *
- * ICO layout: 16x16, 32x32, 48x48, 256x256 (each stored as a compressed embedded PNG
- * inside the ICO container (supported by all modern browsers and Google's faviconV2 service).
- *
- * Output:
- *   assets/img/icons/tomoricon.ico: replaces the bloated single-size ICO
- *   apps/docs/public/favicon.ico: copy served by the docs site
- *   apps/docs/public/tomoricon.png: optimized 256x256 PNG for docs
- *   apps/docs/public/tomoricon.svg: copy of the vector mark for the SVG favicon/nav icon
- */
-
 import sharp from "sharp";
 import { copyFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";

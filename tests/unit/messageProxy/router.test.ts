@@ -37,7 +37,6 @@ afterAll(() => {
   else process.env.MESSAGE_PROXY_WAIT_MS = originalProxyWaitMs;
 });
 
-/** Runs one test under timing other than the production defaults it would otherwise wait out. */
 async function withTiming(
   timing: { lookupTimeoutMs?: number; proxyWaitMs?: number },
   body: () => Promise<void>,
@@ -55,7 +54,6 @@ async function withTiming(
   }
 }
 
-/** A valid PluralKit lookup payload whose original and sender match the standard expectation. */
 function pluralKitPayload(): Record<string, unknown> {
   return {
     original: "123456789012345678",

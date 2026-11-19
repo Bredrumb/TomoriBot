@@ -15,7 +15,6 @@ export type MalformedStructuredReply = NonNullable<
   Extract<StructuredOutputResult<unknown>, { success: false }>["malformed"]
 >;
 
-/** The note a single format retry appends, naming the exact problem with the previous reply. */
 export function formatStructuredRetryNote(malformed: MalformedStructuredReply): string {
   const ask = "Answer again with only the JSON object, without code fences or other text.";
   if (malformed.reason === "empty")
@@ -46,10 +45,8 @@ export interface StructuredModelResolutionFailure {
   provider?: string;
 }
 
-/**
- * The provider option owning `slot` pays for this out-of-turn structured call, else the server's
- * saved key does, so a personal key never pays; an option's refusal throws `ProviderRequestDeniedError`.
- */
+// Slot-owner or server-key resolution so a personal key never pays, throwing ProviderRequestDeniedError on refusal
+// instead of falling back.
 export async function resolveServerStructuredModel(
   baseState: TomoriState,
   llmId: number,

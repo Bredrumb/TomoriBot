@@ -1,8 +1,4 @@
 import { LOREBOOK_ENTRIES_PER_SCOPE_MAX, isLorebookRegexKey } from "@/modules/lorebooks/db/types";
-/**
- * Preset Import Command
- * Imports TomoriBot's personality from a PNG or JSON file
- */
 
 import { convertCharacterBook, extractCharacterBook } from "@/modules/lorebooks/imports/characterBook";
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
@@ -34,9 +30,7 @@ import {
 import { readPersonaBundle, type PersonaBundle } from "@/utils/persona/personaBundleArchive";
 import { restorePersonaBundleAssets } from "@/utils/persona/personaBundleOperations";
 
-/** Maximum file size for imports (uses centralized constant). */
 const MAX_FILE_SIZE = IMPORT_LIMITS.MAX_PERSONA_IMPORT_SIZE_MB * 1024 * 1024;
-/** Byte budget for the `card.json` payload the archive reader will decompress. */
 const MAX_CHARX_CARD_BYTES = IMPORT_LIMITS.MAX_CHARX_CARD_SIZE_MB * 1024 * 1024;
 const MAX_CHARX_ASSET_TOTAL_BYTES = IMPORT_LIMITS.MAX_CHARX_ASSET_TOTAL_MB * 1024 * 1024;
 
@@ -63,16 +57,7 @@ type ResolvedImportFile = {
   presetData: PresetExportData;
   source: PersonaImportSource;
   bundle?: PersonaBundle;
-  /**
-   * Embedded assets the archive carried but the import does not read. Reported
-   * in the success embed so the omission is stated rather than discovered.
-   */
   ignoredAssetCount?: number;
-  /**
-   * Card fields the conversion had no destination for. Carried to the single
-   * convergence point below so every converter path reports its losses the same
-   * way, rather than only the path that happened to be written last.
-   */
   unmappedCardFields?: string | null;
 };
 
@@ -132,14 +117,6 @@ function parseCommaSeparatedTriggers(input: string): string[] {
   return parseTriggerWordListInput(input, { lowercase: false });
 }
 
-/**
- * Replies when a card was decoded but could not be converted.
- *
- * Shared by all three card formats so the reply, the attachment name, and the
- * prose stay identical across them. `sourceLabel` naming where the payload came
- * from is what distinguishes the three, and it is the operator-facing half of
- * the reply, so the visible text is localized like every other reply.
- */
 async function replyCardConversionFailure(options: {
   interaction: ChatInputCommandInteraction;
   locale: string;
@@ -180,12 +157,6 @@ async function replyCardConversionFailure(options: {
   });
 }
 
-/**
- * Maps a `.charx` container failure to its reply text.
- *
- * The two unreadable-container reasons share one message: from the reader's
- * side they are the same problem, and the distinction is a detail of the zip.
- */
 function localizeCharxFailure(locale: string, reason: CharxReadFailureReason): string {
   switch (reason) {
     case "invalid_zip":
@@ -203,7 +174,6 @@ function localizeCharxFailure(locale: string, reason: CharxReadFailureReason): s
   }
 }
 
-/** Replies with the `.charx` container failure that stopped the import. */
 async function replyInvalidCharx(
   interaction: ChatInputCommandInteraction,
   locale: string,
@@ -236,7 +206,6 @@ async function replyUnknownError(interaction: ChatInputCommandInteraction, local
   });
 }
 
-/** Narrows an unknown value to a plain object, or null. */
 function asPlainObject(value: unknown): Record<string, unknown> | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return null;
@@ -244,31 +213,16 @@ function asPlainObject(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
-/** True when the field holds non-blank text. */
 function hasText(container: Record<string, unknown>, key: string): boolean {
   const value = container[key];
   return typeof value === "string" && value.trim().length > 0;
 }
 
-/** True when the field holds at least one array element. */
 function hasItems(container: Record<string, unknown>, key: string): boolean {
   const value = container[key];
   return Array.isArray(value) && value.length > 0;
 }
 
-/**
- * Names the card fields an import cannot carry anywhere.
- *
- * A conversion that succeeds is not the same as a conversion that lost nothing,
- * and the fields below change how a card reads rather than merely annotating it:
- * `nickname` is the name the card's own text addresses, and `group_only_greetings`
- * is content that must not be dropped when the card has no other first message.
- * Reporting them is what keeps a successful import from reading as a faithful one.
- *
- * An unset field is not a lost field, so a `depth_prompt` carrying settings but
- * no text is left alone: SillyTavern writes exactly that shape into its default
- * export, and reporting it would put noise at the front of every log line.
- */
 export function describeUnmappedCardFields(card: unknown): string | null {
   const root = asPlainObject(card);
   if (!root) {
@@ -315,12 +269,6 @@ export function describeUnmappedCardFields(card: unknown): string | null {
   return dropped.length > 0 ? dropped.join(", ") : null;
 }
 
-/**
- * Helper function to localize error messages from utility functions
- * Handles both simple locale keys and keys with pipe-separated variables
- * @param errorString - Error string (locale key or key|var1|var2...)
- * @returns Localized error message
- */
 function localizeError(locale: string, errorString: string): string {
   const parts = errorString.split("|");
   const key = parts[0];
@@ -394,7 +342,8 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
     subcommand.setName("import").setDescription(localizer("en-US", "commands.persona.import.description")),
   );
 
-/** One builder for both import routes, because the `/nsfw` route's option locale aliases assume identical option names. */
+// Both import routes share this builder because the `/nsfw` route's option locale aliases assume identical option
+// names.
 export const addPersonaImportOptions = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .addAttachmentOption((option) =>
@@ -442,20 +391,14 @@ export const addPersonaImportOptions = (subcommand: SlashCommandSubcommandBuilde
         ),
     );
 
-/**
- * An import counts as NSFW when the file says so or when it matches an NSFW official preset, because a
- * matching import becomes a pointer that takes its flag from the preset, not from the file.
- */
+// Official preset lookup is required because a matching import becomes a pointer inheriting `is_nsfw` from the preset
+// rather than the file.
 export async function isNsfwPersonaImport(presetData: PresetExportData): Promise<boolean> {
   if (presetData.is_nsfw === true) return true;
   const matchingPreset = await presetRepository.findMatchingOfficialPresetForImport(presetData);
   return matchingPreset?.is_nsfw === true;
 }
 
-/**
- * Executes the 'import' command
- * Imports TomoriBot's personality from an uploaded PNG or JSON file
- */
 export async function execute(
   client: Client,
   interaction: ChatInputCommandInteraction,
@@ -465,10 +408,6 @@ export async function execute(
   await importPersona(client, interaction, userData, locale, { allowNsfw: false });
 }
 
-/**
- * Shared body of `/persona import` and `/nsfw persona import`; only the age-restricted route may import
- * a persona flagged NSFW.
- */
 export async function importPersona(
   client: Client,
   interaction: ChatInputCommandInteraction,

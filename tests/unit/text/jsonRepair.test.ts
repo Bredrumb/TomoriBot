@@ -168,7 +168,6 @@ describe("tryRepairIncompleteJson", () => {
   });
 });
 
-/** True when `value` is `original` or a prefix of it, compared structurally. */
 function isPrefixOf(value: unknown, original: unknown): boolean {
   if (Array.isArray(original) && Array.isArray(value)) {
     return value.every((item, index) => isPrefixOf(item, original[index]));

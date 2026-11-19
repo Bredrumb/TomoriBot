@@ -11,19 +11,11 @@ import { acquireTextModelLease } from "@/utils/provider/textModelComfyUiHandoff"
 import { VerbatimToolCallParser, getVerbatimToolCallMaxBufferChars } from "@/utils/tools/verbatimToolCallParser";
 import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
 
-/**
- * When true, the stream adapter scans `delta.content` for Gemma 4's hallucinated
- * tool-call formats: both the special-token `<|tool_call>...<tool_call|>` form and
- * the Python-call `<tool_code>name(...)</tool_code>` form; and converts matches into
- * proper function_call chunks. Set CUSTOM_GEMMA_TOOL_PARSER_ENABLED=false to disable
- * if another local model produces similar token strings unexpectedly.
- */
 const GEMMA_TOOL_PARSER_ENABLED = (process.env.CUSTOM_GEMMA_TOOL_PARSER_ENABLED ?? "true").toLowerCase() !== "false";
 
 export interface CustomStreamConfig extends OpenAICompatibleStreamConfig {
   endpointUrl: string;
   customConnectionId?: number | null;
-  /** Optional context window override sent as options.num_ctx (Ollama extension) */
   numCtx?: number | null;
 }
 
@@ -131,22 +123,8 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
     }
   }
 
-  /**
-   * Intercept text chunks to handle two Gemma 4 token formats that KoboldCPP
-   * does not always convert to standard OpenAI fields:
-   *
-   * - `<|channel>thought\n[reasoning]\n<channel|>`: thinking block. KoboldCPP
-   *    converts this to `reasoning_content` for pure-text responses, but when a
-   *    tool call follows in the same chunk the entire blob arrives as raw content.
-   *    GemmaThinkingParser runs first to extract thoughts before the tool parser sees it.
-   *
-   * - `<|tool_call>call:name{...}<tool_call|>` or `<tool_code>name(...)</tool_code>`
-   *    : hallucinated tool call leaked as text. GemmaToolCallParser recognises both
-   *    dialects and converts completed blocks into function_call chunks.
-   *
-   * Parsers are intentionally serial and each maintains its own scanHoldback,
-   * so a chunk boundary mid-token is handled safely by whichever parser is active.
-   */
+  // KoboldCPP leaves Gemma 4 thinking and tool tokens in raw delta.content when a tool call follows, so the thinking
+  // parser must run before the tool parser.
   override processChunk(chunk: RawStreamChunk): ProcessedChunk {
     const base = super.processChunk(chunk);
 
@@ -256,32 +234,15 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
   }
 }
 
-/** Omits undefined and empty sources. */
 function mergeThoughts(a: ThoughtLogEntry[] | undefined, b: ThoughtLogEntry[]): ThoughtLogEntry[] | undefined {
   if ((!a || a.length === 0) && b.length === 0) return undefined;
   return [...(a ?? []), ...b];
 }
 
-/**
- * Port that ChatMock listens on by default.
- * Override with the `CHATMOCK_PORT` environment variable if you run ChatMock
- * on a non-standard port (e.g. `CHATMOCK_PORT=9000`).
- */
 const CHATMOCK_PORT = process.env.CHATMOCK_PORT ?? "8000";
 
-/**
- * Returns `true` when the resolved API URL looks like a ChatMock endpoint.
- *
- * ChatMock (github.com/RayBytes/ChatMock) is a local OpenAI-compatible proxy
- * used to bridge Codex CLI.  It silently strips system-role messages, so the
- * system prompt must be injected as an in-band user turn instead.
- *
- * Detection heuristic: ChatMock's documented default is `http://127.0.0.1:8000`
- * (or `localhost:8000`), so we match any loopback address on the configured
- * port.  The port defaults to `8000` but is overridable via `CHATMOCK_PORT`.
- * This is intentionally narrow because other common local tools use different ports
- * (Ollama: 11434, KoboldCPP: 5001, LM Studio: 1234).
- */
+// Loopback plus CHATMOCK_PORT matching is intentionally narrow because other local backends (Ollama, KoboldCPP, LM
+// Studio) use different default ports.
 function isChatmockEndpoint(apiUrl: string): boolean {
   try {
     const { hostname, port } = new URL(apiUrl);
@@ -293,14 +254,8 @@ function isChatmockEndpoint(apiUrl: string): boolean {
   }
 }
 
-/**
- * The session affinity key OpenCode Go and Zen require, or null for every other endpoint.
- *
- * OpenCode asks for one stable ID per conversation, which here is a channel plus the persona
- * answering in it. It is hashed because the value leaves for a third party and a raw Discord
- * snowflake would identify the channel; it must stay deterministic so retries and later turns keep
- * the same affinity.
- */
+// OpenCode Go and Zen require a stable per-conversation session ID, so channel and persona are deterministically
+// hashed instead of leaking raw Discord snowflakes.
 export function resolveOpenCodeSessionId(
   endpointUrl: string,
   conversation: { channelId: string; personaId: number | null | undefined },

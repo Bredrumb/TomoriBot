@@ -9,17 +9,8 @@ await initializeLocalizer();
 
 const WIZARD_PREFIX = "commands.setup.wizard.";
 
-/** The wizard sources that name a locale key, one for the panels and modals, one for the routes. */
 const WIZARD_SOURCE_FILES = ["src/utils/discord/ui/setupPanel.ts", "src/utils/discord/interactions/setupRoutes.ts"];
 
-/**
- * Keys the wizard composes from a value it holds rather than naming as a literal string.
- *
- * The style and capability families are derived from the same enums the composing code reads, so
- * adding a style or a capability produces a key this test requires and the locale does not have yet,
- * instead of a panel that renders the key path. The five notice keys are the ones a rejection or a
- * failed catalog read picks by name.
- */
 function composedWizardKeys(): string[] {
   return [
     "settings_persona_unknown",
@@ -42,7 +33,6 @@ function composedWizardKeys(): string[] {
   ];
 }
 
-/** Literal `commands.setup.wizard.*` keys the wizard sources name. */
 function literalWizardKeys(): string[] {
   const keys = new Set<string>();
   for (const file of WIZARD_SOURCE_FILES) {
@@ -54,7 +44,6 @@ function literalWizardKeys(): string[] {
   return [...keys].sort();
 }
 
-/** Every leaf key the `en-US` wizard block defines, which is what `localizer` reads as `commands.*`. */
 function definedWizardKeys(): string[] {
   const wizard = (wizardLocale as { setup?: { wizard?: Record<string, unknown> } }).setup?.wizard;
   function leafKeys(value: Record<string, unknown>, prefix = ""): string[] {

@@ -18,9 +18,11 @@ export const ELEVENLABS_API_BASE_URL = "https://api.elevenlabs.io";
 const ELEVENLABS_ERROR_BODY_BYTES = 64 * 1024;
 const DISCORD_MESSAGE_MAX_CHARS = 2_000;
 
-/** A rejected key, a missing permission, an exhausted quota, or a rate limit is the key owner's to fix. */
+// Statuses 401, 402, 403, and 429 indicate key-owner issues (invalid key, permission, quota, or rate limit), so they
+// log as expected refusals.
 const EXPECTED_ELEVENLABS_STATUSES = new Set([401, 402, 403, 429]);
-/** ElevenLabs answers a key ID pasted in place of the key with a 400 rather than a 401. */
+// ElevenLabs returns HTTP 400 instead of 401 when a key ID is pasted in place of an API key, so auth errors also
+// match the response body.
 const ELEVENLABS_AUTH_ERROR_BODY = /"type"\s*:\s*"authentication_error"/;
 
 interface ElevenLabsFailure {
@@ -37,7 +39,6 @@ function isExpectedElevenLabsFailure({ errorKind, statusCode, providerDetail }: 
   return EXPECTED_ELEVENLABS_STATUSES.has(statusCode) || ELEVENLABS_AUTH_ERROR_BODY.test(providerDetail ?? "");
 }
 
-/** The status and response body behind a failed request, or the transport error when none arrived. */
 export function elevenLabsFailureDetail(failure: ElevenLabsFailure): string | undefined {
   return failure.providerDetail ?? (failure.errorKind === "request_failed" ? failure.details : undefined);
 }
@@ -64,7 +65,7 @@ export async function reportElevenLabsFailure(
   });
 }
 
-/** ElevenLabs' status and response body, scrubbed of the key that sent the request. */
+// Error detail scrubs the request API key from ElevenLabs' status and body so operator logs never leak credentials.
 export async function readElevenLabsErrorDetail(response: Response, apiKey: string): Promise<string> {
   const body = await readBoundedResponse(response, ELEVENLABS_ERROR_BODY_BYTES).then(
     (buffer) => speechErrorBody(buffer.toString("utf8"), apiKey),

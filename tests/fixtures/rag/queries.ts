@@ -5,12 +5,10 @@ interface RagQuery {
   key: string;
   language: RagLanguage;
   text: string;
-  /** The earlier message from the same author that a short follow-up depends on. */
   precedingMessage?: string;
   category: RagQueryCategory;
   relevant: readonly RagPassageKey[];
   irrelevant: readonly RagPassageKey[];
-  /** Tuning queries may guide a configuration choice; holdout queries are scored once that choice is fixed. */
   split: RagQuerySplit;
 }
 

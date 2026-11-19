@@ -1,9 +1,3 @@
-/**
- * The voice-source table is what decides which voice a `/generate voice-message` invocation can
- * use, and in what order the modal pre-selects them. Two properties matter enough to pin here:
- * an option that the active endpoint cannot accept must never be offered, and the user's own
- * input must outrank stored persona configuration.
- */
 import { describe, expect, it } from "bun:test";
 import { speechModelSchema, type CustomEndpointRow } from "@/types/db/schema";
 import { createPersona } from "../../helpers/fixtures";

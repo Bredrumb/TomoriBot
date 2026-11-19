@@ -13,12 +13,6 @@ import {
 } from "@/utils/provider/providerUsage";
 import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 import { createProviderToolFailure } from "@/utils/provider/providerToolFailure";
-/**
- * Video Generation Command (/generate video)
- * Allows users to generate AI videos using Google Gemini Omni, OpenRouter, or Z.ai.
- * Supports text-to-video and image-to-video via an optional reference image upload.
- * Video generation is async: takes 1-5 minutes with provider-side polling.
- */
 
 import {
   MessageFlags,
@@ -74,7 +68,7 @@ const REFERENCE_IMAGE_INPUT_ID = "image_upload_1";
 const DURATION_INPUT_ID = "duration_input";
 const FPS_INPUT_ID = "fps_input";
 
-/** Discord file size limit for non-boosted servers (25 MB) */
+// Conservative 25 MB ceiling because Discord caps file uploads at 25 MB on non-boosted servers.
 const DISCORD_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
 
 // Duration/FPS bounds for the modal inputs. Kept env-configurable so operators can tune
@@ -83,14 +77,6 @@ const DEFAULT_VIDEO_DURATION_SECONDS = parsePositiveIntegerEnv(process.env.VIDEO
 const MAX_VIDEO_DURATION_SECONDS = parsePositiveIntegerEnv(process.env.VIDEO_GEN_MAX_DURATION_SECONDS) ?? 20;
 const MAX_VIDEO_FPS = parsePositiveIntegerEnv(process.env.VIDEO_GEN_MAX_FPS) ?? 60;
 
-/**
- * Parse and validate an integer entered into a modal text field.
- * @param raw - Raw string value from the modal submission (may be undefined/empty)
- * @param min - Inclusive minimum allowed value
- * @param max - Inclusive maximum allowed value
- * @returns `{ value }` on success (value is `undefined` when the optional field is blank),
- *          or `{ error: true }` when the entry is non-numeric or out of range.
- */
 function parseModalInteger(raw: string | undefined, min: number, max: number): { value?: number; error?: true } {
   const trimmed = raw?.trim();
   // Blank input is treated as "not provided", so callers decide if that's allowed.
@@ -126,10 +112,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 
 export const autocomplete = createGenerationModelAutocomplete("video");
 
-/**
- * @param videoModelId - Database ID of the video generation model
- * @returns The model codename string (e.g., "gemini-omni-1.1-flash")
- */
 async function getVideoModelCodename(videoModelId: number): Promise<string> {
   const model = await llmModelRepo.loadVideoGenerationModelById(videoModelId);
 
@@ -140,11 +122,6 @@ async function getVideoModelCodename(videoModelId: number): Promise<string> {
   return model.codename;
 }
 
-/**
- * Convert a Discord attachment to base64 format for image-to-video API.
- * @param attachment - Discord API attachment object
- * @returns Object with mimeType and base64 data
- */
 async function convertAttachmentToBase64(attachment: APIAttachment): Promise<{ mimeType: string; data: string }> {
   if (!attachment.content_type?.startsWith("image/")) {
     throw new Error(`Invalid image type: ${attachment.content_type}`);
@@ -218,16 +195,6 @@ async function replyVideoQuotaUnavailable(
   });
 }
 
-/**
- * Execute the /generate video command.
- *
- * Flow:
- *   1. Pre-validation (channel, state, permissions, provider, API key, model, quota)
- *   2. Show modal for prompt + aspect ratio + optional reference image
- *   3. Auto-defer reply (video gen takes 1-5 minutes)
- *   4. Route to appropriate provider implementation
- *   5. Check file size and send result
- */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,

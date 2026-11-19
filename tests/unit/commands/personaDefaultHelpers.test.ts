@@ -8,7 +8,6 @@ import {
 import type { TomoriPresetRow } from "@/types/db/schema";
 import { EMPTY_PERSONA_NAMING_CONFIG } from "@/types/personaNaming";
 
-/** Minimal preset fixture: only the fields used by the pure helpers. */
 function makePreset(overrides: Partial<TomoriPresetRow> = {}): TomoriPresetRow {
   return {
     persona_preset_id: 1,

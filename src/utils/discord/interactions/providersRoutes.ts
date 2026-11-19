@@ -238,7 +238,6 @@ function removalEntryId(route: { entryKind: "provider" | "endpoint" | "brave"; e
   return route.entryKind === "brave" ? "brave" : `${route.entryKind}:${route.entryKey}`;
 }
 
-/** Derived from the resolver rather than restated, so a registry change cannot leave this behind. */
 type ProviderPanelScopeKind = Parameters<typeof resolveProviderPanelAction>[0];
 
 function addReceipt(locale: string, result: AddServerProviderResult, scopeKind: ProviderPanelScopeKind): PanelReceipt {
@@ -452,13 +451,6 @@ function endpointEditReceipt(
   };
 }
 
-/**
- * Chooses the image capability defaults a model modal opens with, or omits them entirely.
- *
- * A custom endpoint stores its declaration on the endpoint row and can only inpaint through ComfyUI. A
- * curated model stores its own columns and inherits its provider's defaults until it declares otherwise;
- * a provider whose image path ignores these flags yields no section at all.
- */
 function imageModalDefaults(
   capability: CustomEndpointCapability,
   entryKind: "provider" | "endpoint",
@@ -515,7 +507,8 @@ function endpointEditContext(scope: LoadedProviderPanelScope, connectionId: numb
   };
 }
 
-/** Undefined when the group has no text connection, matching when the edit modal offers the option. */
+// Sentinel `undefined` (distinct from `false`) is returned for presets or groups without text connections, so the
+// edit modal omits the VRAM handoff option.
 function endpointVramHandoffState(entry: EndpointProviderPanelEntry): boolean | undefined {
   const textDetails = entry.connectionDetails.filter((detail) => detail.capability === "text");
   if (entry.isPreset || textDetails.length === 0) return undefined;

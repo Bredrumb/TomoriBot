@@ -16,14 +16,6 @@ import {
   ZAI_VISION_MODEL,
 } from "@/providers/zai/zaiShared";
 
-/**
- * Build an example JSON object from a JSON Schema definition.
- * Used to steer the model toward the correct output shape.
- */
-/**
- * Build a system prompt that steers the model toward valid JSON output
- * matching the provided schema.
- */
 function buildZaiStructuredSystemPrompt(
   systemPrompt: string,
   responseSchema: Record<string, unknown>,
@@ -46,14 +38,8 @@ function buildZaiStructuredSystemPrompt(
     .join("\n\n");
 }
 
-/**
- * Call Z.ai with JSON Output (`response_format: json_object`).
- * Uses prompt-steered schema injection + Zod validation,
- * similar to the DeepSeek structured output approach.
- * @param responseSchema - JSON Schema describing the expected response shape
- * @param zodSchema - Zod schema for runtime validation of the parsed response
- * @returns Structured output result with parsed data or error
- */
+// Z.ai lacks native json_schema mode, so structured output uses json_object with prompt-steered schema injection and
+// Zod validation.
 export async function callZaiStructuredJSON<T>(
   request: ProviderStructuredJsonRequest,
   responseSchema: Record<string, unknown>,

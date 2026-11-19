@@ -1,66 +1,29 @@
-/**
- * Shared raw-SQL boundary scanner.
- *
- * TomoriBot's code-quality standard: every raw `sql`/`tx` template literal must
- * live inside a repository layer (`src/utils/db/repositories/` for shared code,
- * or `src/modules/<module>/db/repositories*` for removable feature modules),
- * with a small, explicitly-listed set of exemptions (security primitives,
- * observability, the RAG service facade). This module is the SINGLE source of
- * truth for detecting violations: it is consumed by both:
- *   - `scripts/checks/audit_sql.ts` (the CLI report + `bun run vl` gate), and
- *   - `tests/unit/db/rawSqlBoundary.test.ts` (the unit-test enforcement).
- *
- * Keeping the scan logic here (instead of duplicated in each caller) guarantees
- * the report and the test can never disagree about what counts as a violation.
- */
-
 import { readFileSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 
-/** Classification of a detected query, derived from its leading keyword. */
 export type QueryKind = "READ" | "WRITE";
 
-/** A raw `sql`/`tx` template literal found in a source file. */
 export interface QueryHit {
-  /** Repo-relative, POSIX-normalized path (e.g. `src/commands/foo.ts`). */
   file: string;
-  /** 1-based line number where the template literal opened. */
   line: number;
-  /** Trimmed query text (best-effort; multi-line literals are joined). */
   query: string;
   kind: QueryKind;
 }
 
-/** A {@link QueryHit} that sits on an explicitly-exempted file. */
 export interface ExemptQueryHit extends QueryHit {
-  /** Human-readable justification from {@link EXEMPT_PATHS}. */
   reason: string;
 }
 
-/** Result of a full-tree scan: genuine violations vs. allow-listed hits. */
 export interface SqlAuditResult {
   violations: QueryHit[];
   exemptions: ExemptQueryHit[];
 }
 
-/**
- * Repository root, resolved from this file's location
- * (`scripts/checks/lib/sqlAudit.ts` → up three levels). Makes the scan
- * independent of the process's current working directory, so the unit test and
- * the CLI both audit the same tree regardless of where they're launched.
- */
 export const REPO_ROOT = resolve(import.meta.dir, "..", "..", "..");
 
-/** Source roots that are scanned for raw SQL. */
 export const AUDIT_DIRS = ["src"] as const;
 
-/**
- * Path fragments that are skipped entirely (substring match on the
- * POSIX-normalized repo-relative path). These are the legitimate homes of raw
- * SQL: the repository layer itself, the DB client/migration plumbing, and type
- * declarations (which may embed SQL only inside doc comments / string types).
- */
 export const IGNORE_PATHS = [
   "src/utils/db/repositories",
   "src/utils/db/client.ts",
@@ -71,20 +34,10 @@ export const IGNORE_PATHS = [
   "src/types/",
 ] as const;
 
-/**
- * Module-local repository layers: `src/modules/<module>/db/repositories.ts` (or
- * a `repositories/` directory). Removable feature modules (supporter-billing
- * established the layout) keep their SQL in their own repository file so the
- * whole module can be deleted cleanly: that file IS a repository layer, the
- * per-module analogue of `src/utils/db/repositories/`, not a boundary breach.
- */
+// Feature modules keep SQL in per-module repositories so each module can be deleted cleanly without touching shared
+// `src/utils/db/repositories/`.
 export const MODULE_REPOSITORY_PATH_RE = /^src\/modules\/[^/]+\/db\/repositories(\.ts$|\/)/;
 
-/**
- * Files allowed to contain raw SQL outside the repository layer, each paired
- * with a justification. Hits here are reported as EXEMPTIONS (not violations).
- * Keep this list intentional and small; prefer moving SQL into a repository.
- */
 export const EXEMPT_PATHS = new Map<string, string>([
   ["src/utils/metrics/dbStats.ts", "observability/status helper"],
   ["src/utils/metrics/status/serverConfigPages.ts", "observability/status aggregation"],
@@ -99,21 +52,14 @@ export const EXEMPT_PATHS = new Map<string, string>([
   ["src/db/seed/catalog/presetAssetLock.ts", "catalog seeding concurrency lock"],
 ]);
 
-/** Normalize a path to POSIX separators for stable comparison across OSes. */
 export function normalizePath(p: string): string {
   return p.replace(/\\/g, "/");
 }
 
-/** Express an absolute path as a POSIX, repo-relative path. */
 function toRepoRelative(absolutePath: string): string {
   return normalizePath(relative(REPO_ROOT, absolutePath));
 }
 
-/**
- * Classifies a query as a READ (pure SELECT) or WRITE (anything that can mutate
- * rows). Mirrors the original audit heuristic exactly: a query counts as READ
- * only when it mentions SELECT and none of INSERT/UPDATE/DELETE.
- */
 export function classifyQuery(query: string): QueryKind {
   const upper = query.toUpperCase();
   // Whole-word match so column/identifier names that merely CONTAIN a keyword
@@ -125,18 +71,6 @@ export function classifyQuery(query: string): QueryKind {
     : "WRITE";
 }
 
-/**
- * Scans a single file's text for raw `sql`/`tx` template literals.
- *
- * Comment-aware: line comments (`//`) and block comments (`/* *​/`) are stripped
- * before matching so SQL written inside documentation is never flagged. The
- * `tx` alternative catches transaction callbacks (`sql.begin(async tx => tx`…`)`).
- *
- * This is a pure function over the file content (it performs no I/O), which is
- * what lets the unit test exercise the detector against synthetic inputs to
- * prove it has no false positives (comments/strings) or false negatives.
- *
- */
 export function scanFileForSqlQueries(content: string): Array<{ line: number; query: string }> {
   const lines = content.split("\n");
   const hits: Array<{ line: number; query: string }> = [];
@@ -207,7 +141,6 @@ export function scanFileForSqlQueries(content: string): Array<{ line: number; qu
   return hits;
 }
 
-/** Recursively lists every file under `dir` (absolute paths). */
 async function getFiles(dir: string): Promise<string[]> {
   const dirents = await readdir(dir, { withFileTypes: true });
   const files = await Promise.all(
@@ -219,13 +152,6 @@ async function getFiles(dir: string): Promise<string[]> {
   return files.flat();
 }
 
-/**
- * Walks the audited source roots and partitions every detected raw-SQL literal
- * into genuine `violations` (raw SQL outside the repository layer with no
- * exemption) and `exemptions` (hits on an allow-listed file).
- *
- * @returns Sorted, deterministic {@link SqlAuditResult}
- */
 export async function auditRawSqlBoundary(): Promise<SqlAuditResult> {
   const candidateFiles: string[] = [];
   for (const dir of AUDIT_DIRS) {

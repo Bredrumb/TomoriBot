@@ -1,8 +1,3 @@
-/**
- * Create Thread Tool
- * Allows the active persona to create a public thread and send the first message into it.
- */
-
 import { ChannelType, PermissionFlagsBits, type Guild, type NewsChannel, type TextChannel } from "discord.js";
 import { BaseTool, type ToolContext, type ToolParameterSchema, type ToolResult } from "@/types/tool/interfaces";
 import { resolveChannelTarget } from "@/utils/discord/targetResolver";

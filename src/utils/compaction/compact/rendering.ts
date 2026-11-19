@@ -56,14 +56,12 @@ export const COMPACT_EDIT_WINDOW_MS = 10 * 60 * 1000;
 
 export type SummaryControlAction = "edit" | "save";
 
-/**
- * Summary button state carried in each button's custom ID, so a click after a restart can repaint
- * the message without any in-memory record of it.
- */
+// Encoded into each button's custom ID so clicks after a restart can repaint the summary without any in-memory
+// record.
 export interface SummaryControls {
   locale: string;
   refresh: boolean;
-  /** Unix seconds after which the Edit button is withdrawn. */
+  // Unit is Unix seconds (not milliseconds): after this deadline, the Edit button is withdrawn.
   editDeadline: number;
 }
 
@@ -93,10 +91,7 @@ export function isSummaryEditWindowOpen(controls: SummaryControls, now = Date.no
   return now < controls.editDeadline * 1000;
 }
 
-/**
- * Sets the footer and buttons for one summary state. Saving withdraws both buttons, so an edit can
- * never make the message disagree with the stored document.
- */
+// Saving withdraws both buttons so a later edit can never make the summary message disagree with the stored document.
 export function renderSummaryMessage(
   embed: EmbedBuilder,
   controls: SummaryControls,

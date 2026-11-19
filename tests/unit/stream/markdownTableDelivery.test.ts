@@ -2,16 +2,11 @@ import { describe, expect, it } from "bun:test";
 import { autoCloseIncompleteMarkers, findRegularOverflowFlushIndex } from "@/utils/discord/stream/bufferManager";
 import { extractMarkdownTableSegments, findMarkdownTableBlockAt } from "@/utils/text/markdownTable";
 
-/**
- * Counts the body rows the table renderer would draw for the first table in `text`.
- * A row lost to buffer damage shows up here as a smaller count.
- */
 function renderedRowCount(text: string): number {
   const tableSegment = extractMarkdownTableSegments(text).find((segment) => segment.type === "table");
   return tableSegment?.type === "table" ? tableSegment.table.rows.length : 0;
 }
 
-/** Counts how many distinct tables survive in `text`. */
 function tableCount(text: string): number {
   return extractMarkdownTableSegments(text).filter((segment) => segment.type === "table").length;
 }

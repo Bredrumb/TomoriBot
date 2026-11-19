@@ -32,7 +32,6 @@ import type {
 
 export type FileKind = ScanLanguage | "required-example" | "optional-example" | "docs";
 
-/** Routes a repository path to the scanner that understands it, or null to skip it. */
 export function fileKindFor(path: string): FileKind | null {
   const normalized = path.replaceAll("\\", "/");
   const base = normalized.split("/").at(-1) ?? normalized;
@@ -79,11 +78,8 @@ function isReleasePath(path: string): boolean {
   return path.startsWith("deploy/") || path.startsWith("terraform/");
 }
 
-/**
- * For comparison only; reports always show the value as written. When every
- * value for one variable is boolean-like, `1` and `0` compare as `true` and `false`, since the
- * Python servers spell a flag default as `"0"` where the example file writes `false`.
- */
+// Normalized only for conflict comparison because Python servers spell boolean flag defaults as "0" where example
+// files write false.
 function normalizeDefaults(values: string[]): string[] {
   const cleaned = values.map((value) => value.trim().replace(/^["']|["']$/g, ""));
   const allBoolean = cleaned.every((value) => value.toLowerCase() in BOOLEAN_WORDS);
@@ -112,7 +108,6 @@ function matchDynamicPattern(name: string, patterns: DynamicPatternSite[]): Dyna
   return best;
 }
 
-/** Runs every scanner over the input files. Exported so tests can inspect raw sites. */
 export function scanAll(files: SourceFile[]): {
   scan: ScanResult;
   docs: Map<string, Set<string>>;
@@ -164,11 +159,6 @@ export function scanAll(files: SourceFile[]): {
   return { scan, docs, counts };
 }
 
-/**
- * Builds the inventory and diagnostics. The report is conservative about removal: a variable is
- * `dead` only when no live file reads it by any recognized route, no literal mentions it, every
- * consumer surface was scanned, and no unexplained dynamic read could produce its name.
- */
 export function analyze(input: EnvDoctorInput): EnvDoctorReport {
   const { scan, docs, counts } = scanAll(input.files);
 
@@ -394,11 +384,8 @@ export function analyze(input: EnvDoctorInput): EnvDoctorReport {
   };
 }
 
-/**
- * Replaces every value of a secret-named variable. Runs after conflict detection, which needs the
- * real values, so no rendering path ever receives one; that includes tracked placeholders and
- * Compose fallbacks, which a reader could otherwise mistake for a usable credential.
- */
+// Redaction runs after conflict detection compares real values, so no rendering path receives a secret, placeholder,
+// or Compose fallback.
 function redactVariable(variable: VariableReport): VariableReport {
   if (!variable.secret) return variable;
   const hideFallback = <T extends { fallback?: ConsumerSite["fallback"] }>(site: T): T =>
@@ -534,7 +521,6 @@ function classify(input: ClassifyInput): Classification {
   };
 }
 
-/** Compose `environment:` entries that rename a host variable, such as `A: ${B:-x}`. */
 function interpolationRenames(scan: ScanResult, name: string): string[][] {
   return scan.declarations
     .filter(
@@ -545,10 +531,6 @@ function interpolationRenames(scan: ScanResult, name: string): string[][] {
     .map((site) => [site.name, ...(site.interpolates ?? []).filter((source) => source !== site.name)]);
 }
 
-/**
- * Compares {@link RELEASE_ONLY_CONSUMERS} against what the release files actually read, so the
- * fallback list used by clones without a release ref cannot silently rot.
- */
 function exceptionDrift(variables: VariableReport[]): string[] {
   const drift: string[] = [];
   const byName = new Map(variables.map((variable) => [variable.name, variable]));

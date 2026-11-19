@@ -19,7 +19,7 @@ import {
 } from "@/utils/mcp/oauth/signIn";
 import { type OAuthCallbackResponse, registerOAuthCallbackFlow } from "@/utils/oauth/callbackRoute";
 
-/** The confirmation form carries a state, a confirmation token, and an action, all well under this. */
+// Body limit is 8 KiB because the confirmation POST form only carries state, a confirmation token, and an action.
 const MAX_CONFIRM_BODY_BYTES = 8 * 1024;
 
 async function readFormBody(req: IncomingMessage): Promise<URLSearchParams | null> {
@@ -43,7 +43,7 @@ function writePage(res: ServerResponse, response: OAuthCallbackResponse): void {
   res.end(response.body);
 }
 
-/** Registers MCP sign-in on the shared callback and its own routes, so `callbackRoute.ts` stays shared verbatim. */
+// MCP sign-in registers via shared callback hooks and separate routes so callbackRoute.ts stays shared verbatim.
 export function initializeMcpOAuthRoutes(publicBaseUrl: string): void {
   const signerSecret = deriveMcpStateSigner();
   configureMcpSignIn({

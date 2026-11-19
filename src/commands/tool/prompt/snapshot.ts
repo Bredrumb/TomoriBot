@@ -33,12 +33,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 
 export const autocomplete = handleServerPersonaAutocomplete;
 
-/**
- * Dumps the compiled LLM prompt for a persona in the current channel to a file, then sends it to
- * the invoking user via DM (or as a private attachment if DMs are closed).
- *
- * @param userData - Invoker's user row, passed to buildContext so STM loads correctly
- */
 export async function execute(
   client: Client,
   interaction: ChatInputCommandInteraction,

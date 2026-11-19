@@ -31,7 +31,6 @@ const defaultDependencies: PersonaPanelAvatarDependencies = {
   loadStoredAvatarBuffer: loadStoredPersonaAvatarBuffer,
 };
 
-/** Resolves a stored avatar reference for use in a Components V2 thumbnail. */
 export async function resolvePersonaPanelAvatarReference(
   reference: string | null | undefined,
   attachmentName: string,
@@ -50,7 +49,6 @@ export async function resolvePersonaPanelAvatarReference(
     : { url: null, files: [] };
 }
 
-/** Resolves a stored alter avatar into the transport Discord can consume. */
 export async function resolveAlterPersonaAvatarAsset(
   persona: TomoriState,
   dependencies: PersonaPanelAvatarDependencies = defaultDependencies,
@@ -69,13 +67,7 @@ export async function resolveAlterPersonaAvatarAsset(
   return buffer ? { type: "buffer", buffer } : null;
 }
 
-/**
- * Resolves one selected persona's thumbnail for a Components V2 panel.
- *
- * Public URLs are used directly. A self-hosted local avatar is attached to the ephemeral message
- * and addressed through `attachment://`, matching the established paginated persona picker. Main
- * personas prefer the bot's guild-specific avatar because they speak through the bot account.
- */
+// Main personas prefer the bot's guild avatar before webhook_avatar_url because they speak through the bot account.
 export async function resolvePersonaPanelAvatar(
   interaction: GlobalRoutableInteraction | ChatInputCommandInteraction,
   persona: TomoriState,
@@ -99,10 +91,8 @@ export async function resolvePersonaPanelAvatar(
   );
 }
 
-/**
- * Replaces attachments on every repaint so a previously selected local avatar cannot remain on a
- * page that no longer references it.
- */
+// Existing attachments are cleared on every repaint because Discord keeps prior message attachments unless
+// attachments: [] is sent.
 export function withPersonaPanelAvatar<T extends InteractionEditReplyOptions>(
   payload: T,
   avatar?: PersonaPanelAvatarData | readonly PersonaPanelAvatarData[],
@@ -115,10 +105,6 @@ export function withPersonaPanelAvatar<T extends InteractionEditReplyOptions>(
   };
 }
 
-/**
- * Prefers the invoker's server avatar over their global one. A Discord CDN URL needs no attachment,
- * unlike a persona avatar.
- */
 export function resolveInvokerAvatarUrl(interaction: GlobalRoutableInteraction | ChatInputCommandInteraction): string {
   // An uncached member arrives as a raw APIInteractionGuildMember, which has no displayAvatarURL.
   const source = interaction.member instanceof GuildMember ? interaction.member : interaction.user;

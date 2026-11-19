@@ -19,7 +19,6 @@ export interface ProviderPageEntriesInput {
   expandedOptionCount: number;
   pageSize: number;
   locale: string;
-  /** Locale key for one page entry's label. Each surface owns its own, so neither borrows the other's. */
   pageLabelKey: string;
   encodeProviderValue(provider: string): string;
   encodePageValue(provider: string, start: number): string;
@@ -28,20 +27,11 @@ export interface ProviderPageEntriesInput {
 export interface ProviderPageEntriesResult {
   entries: ProviderSelectEntry[];
   expandedStartIndex: number;
-  /** Pages the expanded provider contributed, or 0 when nothing expanded. */
   expandedPageCount: number;
 }
 
-/**
- * Expands one provider into a value per page of its option list.
- *
- * A modal select holds 25 options, so a provider with more models than that needs one entry per
- * page: the shared pagination row disables the position it is parked on, so a row driving the
- * modal directly can never open its own current page and those options stay unreachable.
- *
- * `expandedStartIndex` is the index of the first expanded entry, which lets the caller scroll the
- * provider selector to the page holding them instead of stranding the expansion off-screen.
- */
+// Providers over 25 models expand into per-page entries because modal selects cap at 25 options and parked pagination
+// rows cannot reopen their own page.
 export function buildProviderPageEntries(input: ProviderPageEntriesInput): ProviderPageEntriesResult {
   const expanded = input.expandedProvider && input.expandedOptionCount > input.pageSize ? input.expandedProvider : null;
   const pageCount = expanded ? Math.ceil(input.expandedOptionCount / input.pageSize) : 0;
@@ -82,18 +72,13 @@ export interface ModelRoutingControlInput {
   capabilityLabel: string;
   activeModelName: string | null;
   activeProvider: string | null;
-  /** Provider names to map into options. Ignored when `providerEntries` is supplied. */
   eligibleProviders?: readonly string[];
-  /** Pre-built provider options, letting one provider contribute a page entry per option slice. */
   providerEntries?: readonly ProviderSelectEntry[];
   customId: string;
-  /** Omit both value and label on a surface with nothing to inherit from, such as a server. */
   serverDefaultValue?: string;
   serverDefaultLabel?: string;
-  /** Description for the leading entry, for a clear whose consequence the label cannot carry. */
   serverDefaultDescription?: string;
   serverDefaultDisplay: string;
-  /** Replaces the current-value placeholder, for a state the active model alone cannot describe. */
   placeholderOverride?: string;
   providerOverflowValue?: string;
   providerOverflowLabel?: string;

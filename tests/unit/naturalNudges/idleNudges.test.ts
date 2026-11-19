@@ -157,7 +157,6 @@ describe("idle nudge eligibility", () => {
 
 describe("idle nudge blockers", () => {
   const tools = (...names: string[]) => new Set(names);
-  /** Persona IDs follow argument order, starting at 1. */
   const facts = (...personaTools: Set<string>[]) => ({
     personaTools: new Map(personaTools.map((available, index) => [index + 1, available])),
   });

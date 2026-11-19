@@ -26,9 +26,6 @@ type StreamBufferFlusherDependencies = {
   segmentProcessor: StreamSegmentProcessor;
 };
 
-/**
- * Owns streaming text buffer mutation and final/pending flush behavior.
- */
 export class StreamBufferFlusher {
   public constructor(private readonly deps: StreamBufferFlusherDependencies) {}
 

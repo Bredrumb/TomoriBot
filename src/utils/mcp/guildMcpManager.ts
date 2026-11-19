@@ -1,13 +1,3 @@
-/**
- * Guild MCP Manager: On-demand connection pool for per-guild remote MCP servers.
- *
- * Singleton that manages lazy (production) or eager (dev) connections to remote
- * MCP servers registered by guild admins. Each connection is keyed by
- * "${serverId}:${name}" and auto-evicted after a configurable idle TTL.
- *
- * Streamable HTTP and SSE share pinned URL validation and response-byte limits.
- */
-
 import { Client as MCPClient } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport, StreamableHTTPError } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { SSEClientTransport, SseError } from "@modelcontextprotocol/sdk/client/sse.js";
@@ -62,38 +52,25 @@ async function validateReplacementUrls(value: unknown, schema: unknown, property
   }
 }
 
-/** How long an idle connection lives before eviction (default: 10 min) */
 const CONNECTION_TTL_MS = (Number(process.env.GUILD_MCP_CONNECTION_TTL_MINUTES) || 10) * 60 * 1000;
 
-/** Timeout for initial connect + tool discovery (default: 15s) */
 const CONNECT_TIMEOUT_MS = Number(process.env.GUILD_MCP_CONNECT_TIMEOUT_MS) || 15_000;
 
-/** Timeout for individual tool execution calls (default: 30s) */
 const EXECUTION_TIMEOUT_MS = Number(process.env.GUILD_MCP_EXECUTION_TIMEOUT_MS) || 30_000;
 
-/**
- * Base quarantine after a failed connect (default: 5 min). This is the circuit
- * breaker that stops one unreachable server from re-paying the full connect
- * timeout on every generation (and every fallback-model attempt), which
- * otherwise stalls chat.
- */
+// Base circuit-breaker quarantine because an unreachable server would otherwise re-pay the connect timeout on every
+// generation and fallback model, stalling chat.
 const CONNECT_FAILURE_COOLDOWN_MS = Number(process.env.GUILD_MCP_FAILURE_COOLDOWN_MS) || 5 * 60_000;
 
-/**
- * Quarantine multiplier per consecutive failure; the last entry repeats. At the
- * default base this is 5m, 15m, 1h, then 3h, so a dead server costs about a dozen
- * attempts a day while a recovered one returns within three hours.
- */
+// Backoff multipliers (5m, 15m, 1h, then repeating 3h at 5m base) are chosen so dead servers take roughly 12 probes
+// daily while recovered ones return within 3h.
 const CONNECT_FAILURE_BACKOFF_MULTIPLIERS = [1, 3, 12, 36] as const;
 
-/**
- * A registration that has failed every attempt for this long is disabled in the
- * database, and the panel shows why. The streak start is persisted, so restarts
- * and deploys do not reset the window.
- */
+// Failure streak start is persisted in the database so restarts and deploys do not reset the 24h window before
+// auto-disabling a failing registration.
 const AUTO_DISABLE_AFTER_FAILING_MS = 24 * 60 * 60_000;
 
-/** Failures in memory outlive their retry time by this much, so a backoff survives quiet hours. */
+// In-memory failure entries outlive their retry timestamp by this window so backoff escalation survives quiet hours.
 const CONNECT_FAILURE_MEMORY_MS = AUTO_DISABLE_AFTER_FAILING_MS;
 
 interface ConnectFailureState {
@@ -101,7 +78,8 @@ interface ConnectFailureState {
   attempts: number;
 }
 
-/** Carries the failure kind across the transport fallback, whose message is a joined summary. */
+// Structured reason field preserves the failure kind across transport fallback because the error message becomes a
+// joined summary.
 class GuildMcpConnectError extends Error {
   constructor(
     message: string,
@@ -111,35 +89,24 @@ class GuildMcpConnectError extends Error {
   }
 }
 
-/** Both SDK transport errors expose the HTTP status as `code`. */
 function isAuthRejection(error: unknown): boolean {
   if (!(error instanceof StreamableHTTPError || error instanceof SseError)) return false;
   return error.code === 401 || error.code === 403;
 }
 
-/** Eviction sweep interval (60s) */
 const EVICTION_INTERVAL_MS = 60_000;
 
 class GuildMcpManager {
   private static instance: GuildMcpManager;
 
-  /**
-   * Active connections keyed by "${serverId}:${serverName}".
-   * Each entry holds the MCP client, CallableTool, and timing metadata.
-   */
   private pool = new Map<string, GuildMCPConnection>();
 
-  /** Interval handle for the TTL eviction sweep */
   private evictionTimer: ReturnType<typeof setInterval> | null = null;
 
-  /** Set of pool keys currently being connected (prevents duplicate connect races) */
   private connectingKeys = new Set<string>();
 
-  /**
-   * Circuit breaker keyed by pool key. Cleared on successful connect and on explicit
-   * disconnect (which an administrator's enable or disable performs); an elapsed
-   * entry is kept so the next failure escalates the backoff.
-   */
+  // Elapsed failure entries stay in the map until CONNECT_FAILURE_MEMORY_MS expires (cleared only on connect or
+  // explicit disconnect) so retries escalate backoff.
   private connectFailures = new Map<string, ConnectFailureState>();
 
   private constructor() {
@@ -153,7 +120,8 @@ class GuildMcpManager {
     return GuildMcpManager.instance;
   }
 
-  /** Raw names never grant ownership; only one selected registration can replace its own family. */
+  // Tool names alone never grant reserved-tool ownership because only a unique registration matching the family's
+  // server_type may replace it.
   async getGuildMCPRouting(serverId: number): Promise<GuildMcpRouting> {
     const read = await getGuildMcpConfigReadResult(serverId);
     if (read.status !== "fresh") throw new Error("Current MCP registrations unavailable");
@@ -198,7 +166,8 @@ class GuildMcpManager {
     };
   }
 
-  /** Reads the exact connected registration; a same-name replacement cannot inherit its binding. */
+  // Pool lookup verifies guild_mcp_id matches config so a newly created registration with the same name cannot
+  // inherit an old pooled binding.
   async getRegisteredTool(config: GuildMcpServerRow, privateFailure = false): Promise<CallableTool | null> {
     if (!config.is_enabled || config.oauth_status === "needs_reauthorization") return null;
     const connection =
@@ -208,7 +177,8 @@ class GuildMcpManager {
       : null;
   }
 
-  /** The caller revalidates the owned row; dispatch also checks the exact pooled registration. */
+  // Dispatch verifies is_enabled and guild_mcp_id on the pooled connection, while callers must revalidate row
+  // ownership beforehand because this method trusts config.
   async callInternalRuleChecker(
     config: GuildMcpServerRow,
     toolName: string,
@@ -251,12 +221,6 @@ class GuildMcpManager {
     });
   }
 
-  /**
-   * Get all discovered function names for a server's guild MCP tools.
-   * Used by toolRegistry to build the MCP function name list.
-   *
-   * @param serverId - Internal server_id
-   */
   async getGuildMCPFunctionNames(serverId: number): Promise<string[]> {
     const tools = await this.getGuildMCPTools(serverId);
     const names: string[] = [];
@@ -278,36 +242,16 @@ class GuildMcpManager {
     return names;
   }
 
-  /**
-   * Get discovered function names for only the guild MCP servers that advertise
-   * a specific `server_type`. This is used by prompt-macro resolution so
-   * capability families like web search and URL fetching can point at the
-   * exact replacement tool names provided by guild MCP servers.
-   *
-   * @param serverId - Internal server_id
-   */
   async getGuildMCPFunctionNamesByServerType(serverId: number, serverType: string): Promise<string[]> {
     const { routes } = await this.getGuildMCPRouting(serverId);
     return [...routes].filter(([, route]) => route.config.server_type === serverType).map(([name]) => name);
   }
 
-  /**
-   * Check if a function name belongs to a guild MCP server for this guild.
-   *
-   * @param serverId - Internal server_id
-   */
   async isGuildMCPFunction(serverId: number, functionName: string): Promise<boolean> {
     const names = await this.getGuildMCPFunctionNames(serverId);
     return names.includes(functionName);
   }
 
-  /**
-   * Execute a guild MCP function. Finds the right connection, calls the tool,
-   * and returns a standardized TypedMCPToolResult using default MCP processing.
-   *
-   * @param serverId - Internal server_id
-   * @param context - Optional ToolContext for Discord operations
-   */
   async executeGuildMCPFunction(
     serverId: number,
     functionName: string,
@@ -445,13 +389,6 @@ class GuildMcpManager {
     }
   }
 
-  /**
-   * Formats MCP tool arguments into a human-readable description for the
-   * user-facing embed. Renders as a Markdown code block with key-value pairs,
-   * truncated to stay within Discord embed limits.
-   *
-   * @param args - The arguments record passed to the MCP function
-   */
   private formatMcpArgs(args: Record<string, unknown>, locale: string): string {
     const entries = Object.entries(args);
 
@@ -478,13 +415,6 @@ class GuildMcpManager {
     return `${header}\n\`\`\`\n${body}\n\`\`\``;
   }
 
-  /**
-   * Test a remote MCP server connection without persisting anything.
-   * Used by MCP registration surfaces to validate before saving.
-   *
-   * @param authToken - Optional bearer token
-   * @returns Test result with tool count and names
-   */
   async testConnection(url: string, authToken?: string): Promise<GuildMCPTestResult> {
     let client: MCPClient | null = null;
     let unauthorized: GuildMCPTestResult["unauthorized"];
@@ -531,11 +461,6 @@ class GuildMcpManager {
     }
   }
 
-  /**
-   * Called when removing or disabling a server via commands.
-   *
-   * @param serverId - Internal server_id
-   */
   async disconnectGuildServer(serverId: number, name: string): Promise<void> {
     const key = this.poolKey(serverId, name);
     // Always clear any quarantine so a fixed/re-added server isn't skipped by the
@@ -554,12 +479,6 @@ class GuildMcpManager {
     log.info(`[GuildMcpManager] Disconnected guild MCP server: ${key}`);
   }
 
-  /**
-   * Eagerly connect all enabled guild MCP servers.
-   * Called at startup in dev/local environments for instant availability.
-   *
-   * @param configs - Pre-loaded enabled guild MCP server rows
-   */
   async eagerConnectAll(configs: GuildMcpServerRow[]): Promise<void> {
     if (configs.length === 0) return;
 
@@ -573,9 +492,6 @@ class GuildMcpManager {
     log.info(`[GuildMcpManager] Eager connect complete: ${succeeded} succeeded, ${failed} failed`);
   }
 
-  /**
-   * Graceful shutdown: close all connections and stop eviction timer.
-   */
   async cleanup(): Promise<void> {
     if (this.evictionTimer) {
       clearInterval(this.evictionTimer);
@@ -596,9 +512,6 @@ class GuildMcpManager {
     log.info("[GuildMcpManager] Cleanup complete");
   }
 
-  /**
-   * Get pool statistics for monitoring/debugging.
-   */
   getPoolStats(): {
     activeConnections: number;
     serverBreakdown: Record<string, number>;
@@ -615,10 +528,6 @@ class GuildMcpManager {
     };
   }
 
-  /**
-   * Connect to a single guild MCP server and add it to the pool.
-   * Handles transport creation, connection, tool discovery, and collision checks.
-   */
   private async connectServer(config: GuildMcpServerRow, privateFailure = false): Promise<GuildMCPConnection | null> {
     const key = this.poolKey(config.server_id, config.name);
 
@@ -736,11 +645,8 @@ class GuildMcpManager {
     }
   }
 
-  /**
-   * Escalates the quarantine and extends the persisted failure streak. Failures are the guild's
-   * configuration or the remote host, not a bot fault, so they log as warnings: the full error once
-   * per streak, then one line per retry.
-   */
+  // Connection failures stem from guild config or remote hosts rather than bot faults, so only the first failure logs
+  // a full warning.
   private async recordConnectFailure(
     config: GuildMcpServerRow,
     key: string,
@@ -778,7 +684,6 @@ class GuildMcpManager {
     );
   }
 
-  /** A client whose discovery fails is closed here, so callers never hold a half-open transport. */
   private async connectAndDiscover(
     clientName: string,
     url: string,
@@ -804,10 +709,8 @@ class GuildMcpManager {
     }
   }
 
-  /**
-   * SSE-only servers reject the Streamable HTTP handshake, so both attempts need
-   * fresh clients and the same guarded fetcher.
-   */
+  // SSE-only servers reject the Streamable HTTP handshake, so fallback attempts need fresh MCP clients with the same
+  // guarded fetcher.
   private async connectWithFallback(
     clientName: string,
     url: string,
@@ -899,16 +802,10 @@ class GuildMcpManager {
     }
   }
 
-  /** Create a fresh MCP client. One is used per transport attempt (see connectWithFallback). */
   private newMcpClient(clientName: string): MCPClient {
     return new MCPClient({ name: clientName, version: "1.0.0" });
   }
 
-  /**
-   * Connect a client to a transport with a hard timeout, always clearing the timer.
-   *
-   * @param kind - Transport kind for the timeout message (e.g. "SSE")
-   */
   private async connectWithTimeout(
     client: MCPClient,
     transport: Parameters<MCPClient["connect"]>[0],
@@ -928,7 +825,6 @@ class GuildMcpManager {
     }
   }
 
-  /** Best-effort close of a failed client, releasing its transport. */
   private async safeCloseClient(client: MCPClient): Promise<void> {
     try {
       await client.close();
@@ -937,9 +833,6 @@ class GuildMcpManager {
     }
   }
 
-  /**
-   * Evict connections that have been idle longer than CONNECTION_TTL_MS.
-   */
   private async evictIdleConnections(): Promise<void> {
     const now = Date.now();
     const toEvict: string[] = [];
@@ -975,9 +868,6 @@ class GuildMcpManager {
     }
   }
 
-  /**
-   * Default result processing for guild MCP tools.
-   */
   private processDefaultResult(
     functionName: string,
     mcpResult: MCPServerResponse,
@@ -1028,13 +918,11 @@ class GuildMcpManager {
     };
   }
 
-  /** Build a consistent pool key from serverId and server name. */
   private poolKey(serverId: number, name: string): string {
     return `${serverId}:${name}`;
   }
 }
 
-/** Get the GuildMcpManager singleton */
 export function getGuildMcpManager(): GuildMcpManager {
   return GuildMcpManager.getInstance();
 }

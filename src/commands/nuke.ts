@@ -9,14 +9,6 @@ import { localizer } from "@/utils/text/localizer";
 export const guildOnly = true;
 export const managerOnly = true;
 
-/**
- * Configures the `/nuke` command.
- * Completely wipes a server's settings and data, optionally preserving personas.
- *
- * Options:
- *  - `confirmation` (required, yes/no): mirrors the `/import config` safety gate.
- *  - `preserve_personas` (optional, default false): keep personas + their subtree.
- */
 export const configureCommand = (command: SlashCommandBuilder) =>
   command
     .setName("nuke")
@@ -44,17 +36,6 @@ export const configureCommand = (command: SlashCommandBuilder) =>
         .setRequired(false),
     );
 
-/**
- * Executes the destructive nuke flow.
- *
- * 1. ManageGuild permission gate
- * 2. Confirmation gate (reject if "no")
- * 3. Look up internal server_id
- * 4. Fetch + best-effort delete managed Discord webhooks on Discord's side
- * 5. Call serverRepository.nukeServer() with the chosen mode
- * 6. Invalidate tomoriStateCache for the guild
- * 7. Reply with success embed prompting `/setup` (or noting personas were kept)
- */
 export async function execute(
   client: Client,
   interaction: ChatInputCommandInteraction,

@@ -24,13 +24,6 @@ const CHANNEL_ID = "1382235263668846612";
 
 type StopCall = { channelId: string; requesterId: string | undefined };
 
-/**
- * Builds the real orchestrator with only the Discord channel surface stubbed.
- *
- * The orchestrator wires its own delivery chain over the global stop registry, which is what the
- * ordering under test depends on: a local stub for `hasStopRequest` would report whatever the test
- * wants rather than what the clear actually left behind.
- */
 function makeOrchestrator() {
   const channelSends: unknown[] = [];
   const context = makeContext({ channelSends });
@@ -71,10 +64,6 @@ function makeLoopStopArgs(context: StreamContext, state: ReturnType<typeof creat
   return { state, config, context, textConfig, metrics: createDefaultStreamMetrics() };
 }
 
-/**
- * Builds a `StreamUiUpdater` whose stop registry is recorded rather than global, plus the fake
- * channel `sendStandardEmbed` falls back to when no webhook context is supplied.
- */
 function makeUpdater() {
   const stopCalls: StopCall[] = [];
   const channelSends: unknown[] = [];
@@ -131,10 +120,6 @@ describe("delivery caps resolve as stops, never as throws", () => {
     expect(channelSends).toEqual([]);
   });
 
-  /**
-   * The regression this guards: user impersonation used to throw here, which the generation stage
-   * read as a retryable provider failure and re-ran across every rotation key and fallback model.
-   */
   it("requests a stop rather than throwing when the send limit is hit under user impersonation", async () => {
     const { updater, stopCalls } = makeUpdater();
     const channelSends: unknown[] = [];
@@ -162,7 +147,6 @@ describe("delivery caps resolve as stops, never as throws", () => {
     expect(channelSends).toHaveLength(1);
   });
 
-  /** A bot-authored embed posted while wearing a user's identity would break the disguise. */
   it("suppresses the flush-cap embed under user impersonation but still stops", async () => {
     const { updater, stopCalls, channelSends } = makeUpdater();
     const context = makeContext({ channelSends, personaUsername: "Impersonated User" });
@@ -176,10 +160,6 @@ describe("delivery caps resolve as stops, never as throws", () => {
     expect(channelSends).toEqual([]);
   });
 
-  /**
-   * `messageSentCount` only increments after a send lands, so a positive limit can never trip
-   * before the first message. Any "nothing was delivered" handling for this cap is unreachable.
-   */
   it("cannot trip before the first message has been delivered", async () => {
     const { updater, stopCalls, channelSends } = makeUpdater();
     const context = makeContext({ channelSends, sendMessageLimit: 1 });
@@ -197,13 +177,6 @@ describe("delivery caps resolve as stops, never as throws", () => {
 });
 
 describe("a stop that arrived mid-stream does not leak a buffered send", () => {
-  /**
-   * The loop stop path clears the stop request before it flushes, so the flush reaches the send
-   * path with nothing left to consult and posts the buffered text as a real Discord call. For a
-   * destination the bot cannot post into that is a second rejected send, and the stop it raises on
-   * the way out is registered after the clear, so it outlives the stream and silences the next
-   * turn. The flush is skipped for these reasons instead.
-   */
   it.each([
     "channel_deleted",
     "missing_access",
@@ -233,12 +206,6 @@ describe("a stop that arrived mid-stream does not leak a buffered send", () => {
     // the next turn's pre-stream check.
     expect(peekStopRequest(CHANNEL_ID)).toBeUndefined();
   });
-
-  /**
-   * The mirror case is why this is a skip list rather than a blanket "never flush on a stop": a
-   * user stop must still deliver what the bot already generated. That direction stays with the
-   * `makeUpdater` cases above, whose fixture carries the full context a real flush needs.
-   */
 });
 
 describe("internal stop requests do not outlive their stream", () => {

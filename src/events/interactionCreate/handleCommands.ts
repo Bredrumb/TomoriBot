@@ -33,11 +33,8 @@ const DEFAULT_COOLDOWN_MS = 1_600;
 const CATEGORY_COOLDOWN_MS = 3_000;
 const COOLDOWN_PERSONA_MS = 10_000;
 
-/**
- * Operators tune every cooldown with one unitless multiplier instead of per-category
- * milliseconds, so `/persona` stays proportionally longer than the rest whatever the scale.
- * 0 disables cooldowns; an unset or invalid value keeps the windows above unchanged.
- */
+// Cooldown scaling uses one unitless multiplier so /persona stays proportionally longer than other categories, with 0
+// disabling cooldowns.
 function parseCooldownScale(raw: string | undefined): number {
   const trimmed = raw?.trim();
   if (!trimmed) return 1;
@@ -130,10 +127,7 @@ const handler = async (client: Client, interaction: Interaction): Promise<void> 
   }
 };
 
-/**
- * Returns the three lookup maps rather than a boolean so callers get non-null locals. A boolean
- * cannot narrow the module-level caches, and both dispatch branches index them immediately.
- */
+// Maps are returned instead of a boolean because TypeScript cannot narrow module-level caches from a boolean result.
 async function ensureCommandsLoaded(): Promise<LoadedCommandMaps | null> {
   if (executionMap && cooldownMap && autocompleteMap) {
     return { executionMap, cooldownMap, autocompleteMap };
@@ -162,11 +156,6 @@ async function ensureCommandsLoaded(): Promise<LoadedCommandMaps | null> {
   return { executionMap, cooldownMap, autocompleteMap };
 }
 
-/**
- * @param commandName - Root command name, which doubles as its cooldown category
- * @param scale - Multiplier applied to the base window; defaults to `COMMAND_COOLDOWN_SCALE`
- * @returns Cooldown in milliseconds; 0 means the command has no cooldown
- */
 export function resolveCommandCooldown(commandName: string, scale = COMMAND_COOLDOWN_SCALE): number {
   const baseMs = cooldownMap?.get(commandName) ?? COOLDOWN_MAP.get(commandName) ?? DEFAULT_COOLDOWN_MS;
   return Math.round(baseMs * scale);

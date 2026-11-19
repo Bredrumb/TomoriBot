@@ -1,11 +1,4 @@
-/**
- * LlmOverrideRepository: manages channel/persona LLM override assignments and fallback refs.
- *
- * Covered tables: channel_llm_overrides, persona_configs (llm_id column),
- * server_model_configs (fallback_llm_ids), server_chat_configs (fallback_model_refs).
- *
- * No IRepository implementation, so override state is transient and not exported per-server.
- */
+// LlmOverrideRepository omits IRepository because override state is transient and excluded from per-server exports.
 import type { FallbackModelRef, LlmRow } from "@/types/db/schema";
 import { invalidateAllChannelLlmCacheForServer, invalidateChannelLlmCache } from "@/utils/cache/channelLlmCacheStore";
 import { getCachedLLM } from "@/utils/cache/llmCache";
@@ -18,19 +11,11 @@ const FALLBACK_DEBUG_ENABLED = new Set(["1", "true", "yes", "on"]).has(
   (process.env.FALLBACK_DEBUG_ENABLED ?? "").trim().toLowerCase(),
 );
 
-/** Cache invalidation options for override writes. */
 type LlmOverrideCacheOptions = {
   serverDiscId?: string;
 };
 
 class LlmOverrideRepository {
-  /**
-   * Returns the LLM assigned as a channel-level override, or null if none is set.
-   * Resolves the llm_id via the LLM cache before falling back to a direct DB query.
-   *
-   * @param serverId      - Internal server DB ID
-   * @param channelDiscId - Discord snowflake ID of the channel
-   */
   async getChannelLlmOverride(serverId: number, channelDiscId: string): Promise<LlmRow | null> {
     try {
       const overrideRows = await sql`
@@ -57,12 +42,6 @@ class LlmOverrideRepository {
     }
   }
 
-  /**
-   * Returns all channel-level LLM overrides for a server, each paired with the resolved LlmRow.
-   * Used by the status command to display per-channel model overrides.
-   *
-   * @param serverId - Internal server DB ID
-   */
   async getAllChannelLlmOverridesForServer(serverId: number): Promise<{ channelDiscId: string; llm: LlmRow }[]> {
     try {
       const overrideRows = await sql`
@@ -93,12 +72,6 @@ class LlmOverrideRepository {
     }
   }
 
-  /**
-   * Returns all persona-level LLM overrides for a server as raw {persona_id, llm_id} pairs.
-   * Only returns personas with a non-null llm_id override. Used for snapshotting during provider switch.
-   *
-   * @param serverId - Internal server DB ID
-   */
   async loadPersonaLlmOverridesForServer(serverId: number): Promise<{ persona_id: number; llm_id: number }[]> {
     try {
       const rows = await sql`
@@ -118,14 +91,6 @@ class LlmOverrideRepository {
     }
   }
 
-  /**
-   * Upserts a channel-level LLM override and invalidates the channel LLM cache.
-   *
-   * @param serverId      - Internal server DB ID
-   * @param channelDiscId - Discord snowflake ID of the channel
-   * @param llmId         - LLM ID to assign as the override
-   * @param options       - Optional cache invalidation scope
-   */
   async setChannelLlmOverride(
     serverId: number,
     channelDiscId: string,
@@ -140,13 +105,6 @@ class LlmOverrideRepository {
     return ok;
   }
 
-  /**
-   * Deletes the channel-level LLM override for a single channel and invalidates its cache.
-   *
-   * @param serverId      - Internal server DB ID
-   * @param channelDiscId - Discord snowflake ID of the channel
-   * @param options       - Optional cache invalidation scope
-   */
   async deleteChannelLlmOverride(
     serverId: number,
     channelDiscId: string,
@@ -160,13 +118,6 @@ class LlmOverrideRepository {
     return ok;
   }
 
-  /**
-   * Deletes all channel-level LLM overrides for a server and invalidates the server-wide cache.
-   * Called when the server switches providers so stale model references are removed.
-   *
-   * @param serverId - Internal server DB ID
-   * @param options  - Optional cache invalidation scope
-   */
   async clearAllChannelLlmOverridesForServer(
     serverId: number,
     options: LlmOverrideCacheOptions = {},
@@ -179,13 +130,6 @@ class LlmOverrideRepository {
     return ok;
   }
 
-  /**
-   * Deletes all channel-level overrides in a server that point at a specific LLM.
-   * Used when removing custom/scoped model registrations so unrelated overrides survive.
-   *
-   * @param serverId - Internal server DB ID
-   * @param options  - Optional cache invalidation scope
-   */
   async deleteChannelLlmOverridesForModel(
     serverId: number,
     llmId: number,
@@ -199,14 +143,6 @@ class LlmOverrideRepository {
     return ok;
   }
 
-  /**
-   * Upserts a persona-level LLM override in persona_configs.
-   * Creates the persona_configs row if it does not yet exist.
-   *
-   * @param personaId - The persona's persona_id
-   * @param llmId    - LLM ID to set as the override, or null to clear it
-   * @param options  - Optional cache invalidation scope
-   */
   async setPersonaLlmOverride(
     personaId: number,
     llmId: number | null,
@@ -217,13 +153,6 @@ class LlmOverrideRepository {
     return ok;
   }
 
-  /**
-   * Nulls out the llm_id override for every persona belonging to a server.
-   * Called when the server switches providers so stale model references are removed.
-   *
-   * @param serverId - Internal server DB ID
-   * @param options  - Optional cache invalidation scope
-   */
   async clearAllPersonaLlmOverridesForServer(
     serverId: number,
     options: LlmOverrideCacheOptions = {},
@@ -233,13 +162,6 @@ class LlmOverrideRepository {
     return ok;
   }
 
-  /**
-   * Nulls persona-level overrides in a server that point at a specific LLM.
-   * Used when removing custom/scoped model registrations so unrelated overrides survive.
-   *
-   * @param serverId - Internal server DB ID
-   * @param options  - Optional cache invalidation scope
-   */
   async clearPersonaLlmOverridesForModel(
     serverId: number,
     llmId: number,
@@ -250,14 +172,6 @@ class LlmOverrideRepository {
     return ok;
   }
 
-  /**
-   * Sets the ordered fallback LLM model chain for a server.
-   * Pass an empty array to clear all configured fallback models.
-   *
-   * @param serverId - Internal server DB ID
-   * @param llmIds   - Ordered array of llm_id values (up to 5), or [] to clear
-   * @param options  - Optional cache invalidation scope
-   */
   async setFallbackLlms(serverId: number, llmIds: number[], options: LlmOverrideCacheOptions = {}): Promise<boolean> {
     try {
       const ok = await configRepository.updateModelConfig(serverId, { fallback_llm_ids: llmIds });
@@ -281,15 +195,6 @@ class LlmOverrideRepository {
     }
   }
 
-  /**
-   * Writes the ordered fallback model reference list to a server's config.
-   * Supports mixed provider types (llm and custom_endpoint). Also mirrors llm-only IDs into the
-   * legacy fallback_llm_ids column for backward compatibility with readers not yet using fallback_model_refs.
-   *
-   * @param serverId - Internal server DB ID
-   * @param refs     - Ordered array of FallbackModelRef entries (up to 5), or [] to clear
-   * @param options  - Optional cache invalidation scope
-   */
   async setFallbackModelRefs(
     serverId: number,
     refs: FallbackModelRef[],
@@ -317,19 +222,8 @@ class LlmOverrideRepository {
     }
   }
 
-  /**
-   * Restores channel and persona LLM overrides from a saved provider config snapshot.
-   * Validates that each referenced llm_id still exists before restoring.
-   * Dead overrides (missing LLM, deleted channel) are silently skipped.
-   *
-   * Calls private SQL methods directly to avoid per-override cache thrashing;
-   * the caller is responsible for invalidating caches after the bulk restore.
-   *
-   * @param serverId        - Internal server DB ID
-   * @param channelOverrides - {channel_disc_id, llm_id} pairs from saved config
-   * @param personaOverrides - {persona_id, llm_id} pairs from saved config
-   * @param validChannelIds  - Discord channel IDs currently present in the guild
-   */
+  // Callers must invalidate caches after restoreOverridesFromSnapshot because it calls raw SQL helpers to avoid
+  // per-override cache thrashing.
   async restoreOverridesFromSnapshot(
     serverId: number,
     channelOverrides: { channel_disc_id: string; llm_id: number }[],
@@ -411,13 +305,6 @@ class LlmOverrideRepository {
     return { channelRestored, personaRestored, skipped, restoredChannelOverrides, restoredPersonaOverrides };
   }
 
-  /**
-   * Removes channel LLM overrides for channels that no longer exist in the guild.
-   *
-   * @param serverId       - Internal server DB ID
-   * @param validChannelIds - Discord channel IDs currently present in the guild
-   * @returns Number of dead overrides removed
-   */
   async cleanupDeadChannelOverrides(serverId: number, validChannelIds: Set<string>): Promise<number> {
     try {
       const overrideRows = await sql`
@@ -447,10 +334,6 @@ class LlmOverrideRepository {
     }
   }
 
-  /**
-   * Raw SQL upsert for a channel LLM override row. No cache invalidation.
-   * Called directly by restoreOverridesFromSnapshot to avoid per-override cache thrashing.
-   */
   private async writeChannelOverrideSql(serverId: number, channelDiscId: string, llmId: number): Promise<boolean> {
     try {
       await sql`
@@ -466,7 +349,6 @@ class LlmOverrideRepository {
     }
   }
 
-  /** Raw SQL delete for a single channel LLM override row. No cache invalidation. */
   private async deleteChannelOverrideSql(serverId: number, channelDiscId: string): Promise<boolean> {
     try {
       await sql`
@@ -481,7 +363,6 @@ class LlmOverrideRepository {
     }
   }
 
-  /** Raw SQL delete for all channel LLM override rows for a server. No cache invalidation. */
   private async clearAllChannelOverridesSql(serverId: number): Promise<boolean> {
     try {
       await sql`DELETE FROM channel_llm_overrides WHERE server_id = ${serverId}`;
@@ -492,7 +373,6 @@ class LlmOverrideRepository {
     }
   }
 
-  /** Raw SQL delete for channel override rows pointing at one model. No cache invalidation. */
   private async deleteChannelOverridesForModelSql(serverId: number, llmId: number): Promise<boolean> {
     try {
       await sql`
@@ -507,10 +387,6 @@ class LlmOverrideRepository {
     }
   }
 
-  /**
-   * Raw SQL upsert for a persona LLM override in persona_configs. No cache invalidation.
-   * Called directly by restoreOverridesFromSnapshot to avoid per-override cache thrashing.
-   */
   private async writePersonaOverrideSql(personaId: number, llmId: number | null): Promise<boolean> {
     try {
       await sql`
@@ -526,7 +402,6 @@ class LlmOverrideRepository {
     }
   }
 
-  /** Raw SQL update to null all persona llm_id overrides for a server. No cache invalidation. */
   private async clearAllPersonaOverridesSql(serverId: number): Promise<boolean> {
     try {
       await sql`
@@ -543,7 +418,6 @@ class LlmOverrideRepository {
     }
   }
 
-  /** Raw SQL update to null persona overrides pointing at one model. No cache invalidation. */
   private async clearPersonaOverridesForModelSql(serverId: number, llmId: number): Promise<boolean> {
     try {
       await sql`

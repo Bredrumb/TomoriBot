@@ -8,10 +8,6 @@ import { sendFetchProgressNotice } from "./fetchProgressNotice";
 import type { FetchOpts } from "./types";
 import { getFetchUrlRemotePolicy, validateFetchUrlTarget } from "./urlSafety";
 
-/**
- * Validates fetch URL size before downloading
- * Performs HEAD request to check Content-Length header
- */
 async function validateFetchSize(url: string): Promise<{ allowed: boolean; reason?: string; sizeMB?: number }> {
   try {
     const maxSizeMB = FETCH_LIMITS.MAX_FETCH_SIZE_MB;

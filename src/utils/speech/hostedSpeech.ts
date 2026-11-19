@@ -72,10 +72,8 @@ export type HostedSpeechErrorKind =
 
 export class HostedSpeechError extends Error {
   readonly providerCode?: string;
-  /**
-   * @param providerStatus - Set only when the provider answered, which separates a provider 400 from
-   *   the local checks that also throw `invalid_request`.
-   */
+  // providerStatus is set only when the provider answered, so callers can distinguish a provider 400 from local
+  // checks that also throw invalid_request.
   constructor(
     readonly kind: HostedSpeechErrorKind,
     readonly providerStatus?: number,
@@ -86,7 +84,6 @@ export class HostedSpeechError extends Error {
     this.providerCode = options?.code;
   }
 
-  /** The provider's status and body as logged and shown behind "Show Full Error". */
   get providerDetail(): string | undefined {
     if (this.providerStatus === undefined) return undefined;
     return this.providerBody ? `HTTP ${this.providerStatus}: ${this.providerBody}` : `HTTP ${this.providerStatus}`;
@@ -103,7 +100,8 @@ const EXPECTED_HOSTED_SPEECH_KINDS: ReadonlySet<HostedSpeechErrorKind> = new Set
 ]);
 const TRANSIENT_HOSTED_SPEECH_STATUSES = new Set([500, 502, 503, 504]);
 
-/** Refusals the key owner or the provider's own availability explains, which are a metric and a warning. */
+// Classifies key-owner and provider-availability refusals as expected so callers emit a metric and warning instead of
+// an error.
 export function isExpectedHostedSpeechFailure(
   kind: HostedSpeechErrorKind,
   providerStatus: number | undefined,
@@ -117,7 +115,8 @@ export function isExpectedHostedSpeechFailure(
   );
 }
 
-/** Provider error bodies can echo the request's credential in a form pattern redaction misses. */
+// Explicitly strips apiKey before pattern redaction because provider error bodies can echo credentials in forms
+// redactLogString misses.
 export function speechErrorBody(body: unknown, apiKey: string): string {
   const text = typeof body === "string" ? body : JSON.stringify(body);
   return redactLogString(apiKey ? text.replaceAll(apiKey, "[REDACTED]") : text);

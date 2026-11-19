@@ -1,6 +1,3 @@
-/**
- * Split a stored prompt string into fixed-size modal text input parts.
- */
 export function splitPromptIntoModalParts(
   prompt: string | null | undefined,
   partCount: number,
@@ -13,12 +10,8 @@ export function splitPromptIntoModalParts(
   );
 }
 
-/**
- * Recombine modal prompt parts while preserving overflow continuations.
- * If a part was not filled to the modal limit, moving to the next field is
- * treated as an intentional section break unless the user already supplied
- * leading/trailing whitespace between the two parts.
- */
+// Parts below `partMaxLength` insert `separator` unless whitespace already borders them, because moving to the next
+// field signals an intentional section break.
 export function combineModalPromptParts(parts: readonly string[], partMaxLength: number, separator = "\n\n"): string {
   let combined = "";
   let previousNonEmptyPart = "";

@@ -35,7 +35,7 @@ import { DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX } from "@/utils/discord/ui/compo
 import { measureFormattedPanelTextLength } from "@/utils/discord/ui/panelProse";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
-import { getDiscordTextLength, neutralizeFenceRuns } from "@/utils/text/discordTextLimits";
+import { getDiscordTextLength } from "@/utils/text/discordTextLimits";
 import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { localizer } from "@/utils/text/localizer";
 import { buildTextPreview, textPreviewFooterKey, textPreviewFooterVars } from "@/utils/text/textPreview";
@@ -44,14 +44,6 @@ import { personaRepresentativeForLineage } from "@/utils/persona/lineage";
 export const MAX_PERSONAL_MEMORY_PAGE_SIZE = 24;
 const PERSONA_SELECT_MAX_OPTIONS = 25;
 
-/**
- * Renders one memory as a fenced block so it reads as content rather than panel prose.
- *
- * Stored content is guarded via {@link neutralizeFenceRuns} so runs of backticks cannot close the
- * markdown fence early. Rendered text is bounded to `availableBudget` (including fence syntax overhead
- * and the footer line) using {@link buildTextPreview}, appending an honest hidden-character notice
- * when truncation occurs. The footer reserve is measured dynamically from the preview.
- */
 function renderMemoryBlock(locale: string, content: string, availableBudget: number): string {
   const fenceOverhead = getDiscordTextLength("```markdown\n\n```");
   const rawBudget = Math.max(0, availableBudget - fenceOverhead);
@@ -71,13 +63,8 @@ function renderMemoryBlock(locale: string, content: string, availableBudget: num
   return ["```markdown", preview.text, "```"].join("\n") + finalFooter;
 }
 
-/**
- * Option description for one persona lineage in the memories selector.
- *
- * Counts exclude global memories, matching what selecting that persona actually lists. The four
- * variants stay literal rather than composed: `check-locales` only sees literal keys, so a
- * fragment-built string can go missing with every gate green.
- */
+// The four locale keys stay literal rather than dynamically composed because check-locales only scans literal keys
+// and would pass with missing variants.
 function describeLineageMemories(locale: string, memoryCount: number, personaCount: number): string {
   const singular = memoryCount === 1;
   if (personaCount > 1) {

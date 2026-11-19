@@ -52,9 +52,7 @@ type NaiOrientation = "portrait" | "landscape" | "square";
 
 interface SceneSettingPreset {
   aspectRatio: string;
-  /** Human-readable framing label shown in the modal and passed to the hidden agent. */
   plannerLabel: string;
-  /** Framing instruction passed to the hidden agent as part of its directive. */
   plannerInstruction: string;
   novelAiOrientation: NaiOrientation;
 }
@@ -96,20 +94,13 @@ interface SceneImageBackendAvailability {
   defaultBackend: SceneImageBackend | null;
 }
 
-/**
- * Persona fields needed for the modal selector, webhook identity resolution,
- * and overriding the `buildContext()` persona identity in the hidden agent.
- */
 interface PersonaSummary {
   persona_id: number;
   persona_nickname: string;
   webhook_avatar_url: string | null;
   is_alter: boolean;
-  /** From persona_configs: null when no persona-specific prompt is set. */
   persona_prompt: string | null;
-  /** Appearance/personality attribute list used by buildContext(). */
   attribute_list: string[];
-  /** Lineage ID used by buildContext() for persona-scoped memory/RAG. */
   persona_lineage_id: number | null;
 }
 
@@ -157,22 +148,10 @@ function getBackendOptions(locale: string, providerName: string) {
   ];
 }
 
-/**
- * Fetches persona summaries for the modal selector and context overrides.
- * Includes the fields needed to override buildContext() persona identity
- * (nickname, attributes, persona prompt, lineage ID) without loading a full TomoriState.
- * Returns main persona first (is_alter=false), then alters ordered by recency.
- * @param serverId - Numeric DB server ID from tomoriState
- */
 async function loadServerPersonaSummaries(serverId: number): Promise<PersonaSummary[]> {
   return personaRepository.loadServerPersonaSummaries(serverId);
 }
 
-/**
- * Builds string-select options from persona summaries for the modal.
- * The active persona (matching activeTomoriId) is marked as default.
- * @param activeTomoriId - The currently active persona's persona_id
- */
 function getPersonaSelectOptions(personas: PersonaSummary[], activeTomoriId: number) {
   return personas.map((p) => ({
     label: p.persona_nickname,
@@ -249,7 +228,6 @@ async function replyQuotaExceeded(
   });
 }
 
-/** Execute the contextual scene-image path exposed by `/generate image` Auto mode. */
 export async function executeAutoImageCommand(
   client: Client,
   interaction: ChatInputCommandInteraction,

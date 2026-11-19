@@ -4,15 +4,6 @@ import {
   createProviderUsageRecorder,
   getProviderRequestFailureCopy,
 } from "@/utils/provider/providerUsage";
-/**
- * /expressions initialize command
- *
- * Uses LLM vision with structured output to automatically analyze and classify
- * all custom emojis and stickers in a Discord server, generating emotion keys
- * and descriptions for use in bot responses.
- *
- * Requires model with both sees_images=true and supports_structoutput=true
- */
 
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags, PermissionFlagsBits } from "discord.js";
@@ -36,14 +27,11 @@ import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/p
 import { resolveStructuredOutputCapability } from "@/utils/provider/providerCapabilityResolver";
 import { getEffectiveLlmModelName } from "@/utils/provider/modelDisplay";
 
-/**
- * Loop-safety guard for the batch loop: after this many consecutive no-progress iterations the
- * loop aborts, so a model that consistently errors or fails to match items can never loop
- * forever. Any other exit condition must keep that guarantee.
- */
+// Consecutive no-progress iteration cap before aborting, so an erroring or non-matching model never loops forever;
+// preserve this invariant on exit changes.
 const EXPRESSION_INIT_MAX_CHUNK_RETRIES = 3;
 
-/** Brief pause between batches to stay within provider rate limits. */
+// Batch delay so consecutive requests stay within provider rate limits.
 const EXPRESSION_INIT_BATCH_DELAY_MS = 1000;
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
@@ -57,21 +45,11 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
         .setRequired(false),
     );
 
-/**
- * Convert ColorCode hex string to Discord number format
- * @param hexColor - Hex color string (e.g., "#3498DB")
- */
 function hexToNumber(hexColor: string): number {
   return Number.parseInt(hexColor.replace("#", ""), 16);
 }
 
-/**
- * Build Discord CDN URL for an emoji
- * Always use .png format (including for animated emojis - gets first frame)
- *
- * @param emojiId - Discord emoji ID (snowflake)
- * @returns Discord CDN URL for the emoji as PNG
- */
+// PNG URLs work even for animated emojis because Discord CDN returns their first frame as a static image.
 function buildEmojiCDNUrl(emojiId: string): string {
   return `https://cdn.discordapp.com/emojis/${emojiId}.png`;
 }
@@ -104,10 +82,6 @@ For each expression, determine:
 Return results in the specified JSON format.`;
 }
 
-/**
- * Execute the /expressions initialize command
- *
- */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,

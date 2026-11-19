@@ -1,9 +1,5 @@
-/**
- * Ordering contract for removeVoiceSample, the shared voice-sample retirement operation.
- *
- * Collaborators are injected rather than module-mocked: Bun cannot unregister `mock.module`, so a
- * mocked sql client or cache store would leak into every other test sharing the lane process.
- */
+// Dependencies are injected rather than module-mocked because Bun cannot unregister mock.module, so mocked sql or
+// caches would leak across tests in the lane.
 import { describe, expect, it } from "bun:test";
 import { removeVoiceSample, type VoiceSampleRemovalDeps } from "@/utils/db/repositories/SpeechRepository";
 

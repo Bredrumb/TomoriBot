@@ -1,17 +1,4 @@
 #!/usr/bin/env bun
-/**
- * Stage D migration: drain the @/utils/db/repositories free-function shim.
- *
- * For every source file that imports free functions from the index.ts shim,
- * this script:
- *   1. Rewrites the import block to use repository instances instead
- *   2. Rewrites every call site: funcName(...) → repoVar.methodName(...)
- *
- * After running, `bun run check` validates correctness (TypeScript is the
- * verification layer, not this script).
- *
- * Run with: bun scripts/maintenance/drainRepositoryShim.ts [--dry-run]
- */
 
 import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -279,18 +266,8 @@ function walkTs(dir: string): string[] {
 }
 
 
-/**
- * Matches a full import block from "@/utils/db/repositories":
- *   import { ... } from "@/utils/db/repositories";
- * Also matches `import type { ... } from ...`.
- * Uses the `s` flag so `.` matches newlines (handles multi-line imports).
- */
 const IMPORT_RE = /import\s+(type\s+)?\{([^}]+)\}\s+from\s+"[^"]*\/db\/repositories"\s*;/gs;
 
-/**
- * Strips leading/trailing whitespace and the `type` prefix from a single
- * imported name token, e.g. "  type Foo  " → { name: "Foo", isType: true }.
- */
 function parseToken(raw: string): { name: string; isType: boolean } {
   const trimmed = raw.trim();
   if (trimmed.startsWith("type ")) {
@@ -299,15 +276,6 @@ function parseToken(raw: string): { name: string; isType: boolean } {
   return { name: trimmed, isType: false };
 }
 
-/**
- * Rewrites all import blocks from the shim in `source`:
- * - Free functions → replaced by their owning repo instance import
- * - Repo instances and types → kept as-is (still valid shim re-exports)
- * - Duplicate repo vars across multiple import blocks → deduplicated
- * - Stale direct-path imports of repo instances already in the shim path → removed
- *
- * Returns the modified source string.
- */
 function rewriteImports(source: string): string {
   const repoVarsNeeded = new Set<string>();
   const typeNamesKept = new Set<string>();
@@ -394,14 +362,6 @@ function rewriteImports(source: string): string {
 }
 
 
-/**
- * Replaces all call sites for the free functions listed in `fileFuncs`.
- * funcName → repoVar.methodName
- *
- * Only functions that actually appear in `fileFuncs` (the set we extracted
- * from this file's imports) are replaced, so we don't accidentally touch
- * locally-defined functions with colliding names.
- */
 function rewriteCallSites(source: string, fileFuncs: Set<string>): string {
   let out = source;
   for (const funcName of fileFuncs) {

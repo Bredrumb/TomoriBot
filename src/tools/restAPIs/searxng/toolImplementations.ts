@@ -1,16 +1,3 @@
-/**
- * SearXNG Tool Implementations.
- *
- * Function-call wrappers consumed by `webSearch/searxngEngine.ts`. Mirrors the
- * `brave/toolImplementations.ts` shape (validate args → call service → format
- * result into a ToolResult) so the engine layer can treat both providers
- * symmetrically.
- *
- * Image search additionally downloads + validates URLs and sends them to
- * Discord as attachments (same UX as Brave image search) by piggybacking
- * on the existing helpers.
- */
-
 import { AttachmentBuilder } from "discord.js";
 import { log } from "../../../utils/misc/logger";
 import type { ToolContext, ToolResult } from "../../../types/tool/interfaces";
@@ -57,11 +44,6 @@ function createToolResult(
   };
 }
 
-/**
- * Execute a generic text-like search via SearXNG and return a formatted
- * ToolResult. Image category has its own implementation below because it also
- * downloads + posts attachments to Discord.
- */
 async function searxngTextLikeSearch(
   query: string,
   category: Exclude<SearxngCategory, "images">,
@@ -119,10 +101,6 @@ export async function searxng_category_search(
   }
 }
 
-/**
- * Compress an image to fit Discord's per-attachment size limit. Returns the
- * compressed buffer on success.
- */
 async function compressImage(imageUrl: string): Promise<{ success: boolean; buffer?: Buffer; reason?: string }> {
   try {
     const response = await safeDownload(imageUrl, {
@@ -153,9 +131,6 @@ async function compressImage(imageUrl: string): Promise<{ success: boolean; buff
   }
 }
 
-/**
- * HEAD-probe + optional compression for a single image URL.
- */
 async function validateImageUrl(imageUrl: string): Promise<{
   url: string;
   valid: boolean;

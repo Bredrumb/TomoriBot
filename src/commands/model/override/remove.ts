@@ -1,10 +1,3 @@
-/**
- * /model override remove
- * Removes channel and persona model overrides from the server.
- * Presents one combined bulk-management modal with all current overrides
- * pre-checked. Unchecked entries are removed on submit.
- */
-
 import {
   MessageFlags,
   type ChatInputCommandInteraction,

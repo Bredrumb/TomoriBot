@@ -12,12 +12,8 @@ export function groupPersonasByLineage(personas: readonly TomoriState[]): Map<nu
   return grouped;
 }
 
-/**
- * Chooses the persona that represents a lineage in labels and thumbnails.
- *
- * A non-alter member wins because it is the identity the lineage is named after. Keeping this
- * choice shared prevents a selector label and its thumbnail from describing different personas.
- */
+// Non-alter members take precedence because the lineage is named after them, and sharing this helper prevents label
+// and thumbnail mismatches.
 export function personaRepresentativeForLineage(
   personas: readonly TomoriState[],
   lineageId: number,

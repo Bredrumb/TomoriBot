@@ -64,7 +64,7 @@ import { resolvePersonaSnippet } from "@/utils/text/personaPrompt";
 import { DISCORD_SELECT_OPTION_DESCRIPTION_MAX } from "@/utils/discord/ui/componentsV2Limits";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 
-/** Discord rejects a String Select carrying more than 25 options. */
+// Capped at 25 because Discord rejects any String Select carrying more than 25 options.
 const PERSONA_SELECT_MAX_OPTIONS = 25;
 
 export interface PersonalConfigPanelPayload {
@@ -131,7 +131,6 @@ export interface PersonalConfigModelDisplayInfo {
   parametersProviders: string[];
   selectedParametersConfig?: UserSavedProviderConfigRow | null;
   fallbacksProviders: string[];
-  /** The provider whose models the Fallbacks select expands; the slots themselves span providers. */
   fallbacksProvider: string | null;
   fallbackSlots: PersonalConfigFallbackDisplaySlot[];
   randomizerEnabled: boolean;
@@ -173,7 +172,6 @@ export interface PersonalConfigPanelRenderInput {
   modelDisplayInfo?: PersonalConfigModelDisplayInfo;
   spotlightDisplayInfo?: PersonalConfigSpotlightDisplayInfo;
   serverTriggerBehavior?: { deliberate_trigger_mode: boolean; deliberate_tool_mode: boolean } | null;
-  /** Whether the current server lends its own models to member-triggered turns. */
   serverModelAccess?: { userByokMode: boolean } | null;
   view?: PersonalConfigPanelView;
 }

@@ -42,7 +42,6 @@ const MIB = 1024 * 1024;
 
 type RecordedRequest = { path: string; authorization: string | null };
 
-/** A synthetic homeserver on loopback; each test installs the route handler it needs. */
 const homeserverRequests: RecordedRequest[] = [];
 let homeserverRoute: (request: Request, path: string) => Response | Promise<Response> = () =>
   new Response("unexpected", { status: 500 });
@@ -59,7 +58,6 @@ const homeserverUrl = `http://127.0.0.1:${homeserver.port}`;
 
 type MatrixEnv = Partial<Record<(typeof MATRIX_ENV_NAMES)[number], string>>;
 
-/** Every name written here is in `MATRIX_ENV_NAMES`, so the env sandbox restores it. */
 function setMatrixEnv(values: MatrixEnv): void {
   for (const [name, value] of Object.entries(values)) process.env[name] = value;
 }

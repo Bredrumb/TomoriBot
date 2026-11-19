@@ -1,21 +1,6 @@
 import { buildFailedToolResponse } from "@/utils/tools/toolResult";
 import type { GenerationModelSelection } from "@/types/provider/generationModels";
 import { reportProviderUsage, withProviderUsageContext } from "@/utils/provider/providerUsage";
-/**
- * Hidden Image Agent Turn
- *
- * Runs a "hidden" LLM streaming turn that uses the full bot context pipeline
- * (persona prompt, users-in-conversation, short-term memory, RAG docs, etc.) to
- * generate an image of the current channel scene.
- *
- * Key properties vs. a normal bot turn:
- * - Text output is suppressed  (`suppressTextOutput: true`), so only the image appears.
- * - The target image tool (generate_image or generate_image_nai) signals `endTurn: true`
- *   on success via the `endTurnAfterTools` mechanism, stopping the loop immediately.
- * - STM writes are disabled (`disableShortTermMemoryUpdate: true`), because a hidden turn
- *   should not pollute the short-term memory log.
- * - The caller may supply webhook/persona identity so the generated image posts as the selected persona.
- */
 
 import type { Client, Guild, Webhook } from "discord.js";
 import { log } from "@/utils/misc/logger";
@@ -38,13 +23,10 @@ import { prepareParticipantContext } from "@/utils/text/participants/preparation
 import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 import { createProviderToolFailure } from "@/utils/provider/providerToolFailure";
 
-/** Number of recent messages to fetch from the channel for context. */
 const BOT_GENERATE_IMAGE_HISTORY_LIMIT = 24;
 
-/** Maximum streaming iterations in the hidden agent tool loop. */
 const BOT_GENERATE_IMAGE_AGENT_MAX_ITERATIONS = 5;
 
-/** Discord message types that carry no conversational content and should be skipped. */
 const SKIPPED_MESSAGE_TYPES = new Set<number>([
   1, // RecipientAdd
   2, // RecipientRemove
@@ -63,43 +45,25 @@ const SKIPPED_MESSAGE_TYPES = new Set<number>([
   24, // AutoModerationAction
 ]);
 
-/** Configuration for the hidden image agent. Caller (image.ts) owns preset/backend logic. */
 export interface HiddenImageTurnParams {
   spoiler?: boolean;
   imageModelSelection?: GenerationModelSelection;
-  /** Discord text channel to read history from and post the image to. */
   channel: ToolContext["channel"];
   client: Client;
   guild: Guild | null;
   tomoriState: TomoriState;
   locale: string;
-  /** Discord ID of the user who invoked `/generate image` in Auto mode. */
   interactingUserId: string;
-  /** Internal database user ID of the invoking user, if known. */
   internalUserId?: number | null;
-  /** "current_provider" → generate_image, "novelai" → generate_image_nai */
   backend: "current_provider" | "novelai";
-  /** Human-readable label for the framing preset (e.g. "Character Focus"). */
   presetLabel: string;
-  /** Instruction for the model describing how to frame the image. */
   presetInstruction: string;
-  /** Aspect ratio string for current_provider backend (e.g. "3:4"). */
   aspectRatio: string;
-  /** Orientation for NovelAI backend. */
   naiOrientation: "portrait" | "landscape" | "square";
-  /** Optional extra direction from the user (free text from the modal). */
   extraDirection?: string;
-  /** Webhook to use for posting the generated image (persona identity). */
   webhook?: Webhook;
-  /** Display name for the persona posting the image. */
   personaUsername?: string;
-  /** Avatar URL or data URI for the persona posting the image. */
   personaAvatarUrl?: string;
-  /**
-   * When the user picks a sender persona that differs from the active persona,
-   * these fields override the buildContext() persona identity so the model is
-   * prompted as that persona rather than the active one.
-   */
   contextPersonaOverride?: {
     tomoriNickname: string;
     personaPrompt: string | null;
@@ -108,10 +72,6 @@ export interface HiddenImageTurnParams {
   };
 }
 
-/**
- * Builds the hidden turn's `[System: ...]` directive. With Danbooru Search off it keeps the original
- * wording; with it on, the model may look tags up before the image call.
- */
 export function buildHiddenImageDirective(
   params: Pick<
     HiddenImageTurnParams,
@@ -150,17 +110,6 @@ export function buildHiddenImageDirective(
   return `[System: ${dirLines.join(" ")}]`;
 }
 
-/**
- * Runs a hidden bot turn that generates an image of the current channel scene.
- *
- * The turn uses the full `buildContext()` pipeline so the model sees the same
- * persona prompt, users-in-conversation block, short-term memory, and RAG
- * documents a normal bot turn would see.  Text output is suppressed and the turn
- * exits immediately after the target image tool returns successfully.
- *
- * @returns `{ success: true }` if an image was generated, or
- *          `{ success: false, error: "…" }` with a human-readable reason.
- */
 export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise<{ success: boolean; error?: string }> {
   const serverDiscId = params.guild?.id ?? params.interactingUserId;
   const {

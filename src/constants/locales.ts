@@ -1,4 +1,3 @@
-/** Discord accepts these keys in application command localization maps. */
 export const DISCORD_LOCALES = [
   "id",
   "da",
@@ -42,7 +41,6 @@ export function isDiscordLocaleCode(value: string): value is LocaleCode {
   return discordLocaleSet.has(value);
 }
 
-/** One authored Spanish tree serves both Discord Spanish locale keys. */
 export const LOCALE_ALIASES = {
   "es-ES": "es-419",
 } as const satisfies Partial<Record<LocaleCode, LocaleCode>>;

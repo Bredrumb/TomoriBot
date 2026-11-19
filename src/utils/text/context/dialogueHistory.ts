@@ -28,11 +28,8 @@ import type { MentionConverter } from "./templates";
 import type { SimplifiedMessageForContext } from "./types";
 import { buildDateSpacer } from "./timeAwareness";
 
-/**
- * Expanded by the caller's tool macro resolver before use, so the `read_file` instruction appears only
- * when the turn actually exposes `read_file`. `{filename}` and `{media_id}` are filled afterwards
- * because a filename is user-controlled and must never be parsed as a conditional or macro.
- */
+// Tool macros must expand before filling {filename} and {media_id}, because filenames are user-controlled and must
+// never be parsed as conditionals or macros.
 export const DOCUMENT_HINT_TEMPLATE =
   "[System: A file named `{filename}` is attached (message ID: {media_id}).{{if tool:read_file}} Use {document_tool} with this message ID to read its contents, only if needed.{{else}} Its contents are not available to you right now, so do not guess them.{{/if}}]";
 
@@ -47,7 +44,6 @@ export async function appendDialogueHistoryContext(params: {
   channelContextNote?: { note: string; depth: number } | null;
   reunionNote?: string | null;
   dateSpacerTemplate?: string | null;
-  /** `DOCUMENT_HINT_TEMPLATE` after tool macro expansion. */
   documentHintTemplate: string;
   includeTimestamps: boolean;
   isUserImpersonation: boolean;
@@ -381,12 +377,6 @@ function appendVideoDescriptors(params: Parameters<typeof appendMediaDescriptors
   }
 }
 
-/**
- * Register the fetchable Discord message that owns one media attachment.
- *
- * Copied reply media carries the referenced source message. Local media and
- * forwarded snapshots fall back to the current wrapper message.
- */
 function registerAttachmentMediaId(
   params: Parameters<typeof appendMediaDescriptors>[0],
   sourceMessageId?: string,

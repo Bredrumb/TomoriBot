@@ -1,21 +1,4 @@
 import { verifyMessageWebhook } from "@/utils/chat/webhookIdentity";
-/**
- * Matrix Relay Handler
- * Auto-discovered by eventHandler.ts via messageCreate folder scanning.
- *
- * Relays TomoriBot's own messages (main persona + alter persona webhooks) to
- * the linked Matrix room, if one exists for the channel.
- *
- * Each message is sent as the persona's own Matrix virtual user
- * (e.g., @_tomori_lilya:yourdomain.com), so Matrix users see the correct
- * display name and avatar without any text prefix.
- *
- * Exit conditions (checked first to minimize overhead):
- *   - Matrix bridge not configured → immediate return
- *   - Message not from a guild
- *   - Message is NOT from TomoriBot itself (checked via isSelfTriggerMessage)
- *   - Channel has no linked Matrix room
- */
 
 import type { Client, Embed, Message } from "discord.js";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
@@ -38,12 +21,6 @@ import { safeDownload } from "@/utils/security/safeDownload";
 const MATRIX_EMBED_CHUNK_MAX_CHARS = 3500;
 const BYTES_PER_MIB = 1024 * 1024;
 
-/**
- * Strip Discord inline markdown from a string for plain-text Matrix relay.
- * Removes **bold**, *italic*, __underline__, ~~strikethrough~~, and `code` spans.
- *
- * @param text - Raw Discord markdown string
- */
 function stripDiscordMarkdown(text: string): string {
   return text
     .replace(/\*\*(.+?)\*\*/g, "$1") // **bold**
@@ -54,9 +31,6 @@ function stripDiscordMarkdown(text: string): string {
     .trim();
 }
 
-/**
- * Append a non-empty text fragment to the embed serialization output.
- */
 function pushEmbedTextPart(parts: string[], value: string | null | undefined): void {
   if (!value) return;
   const normalized = stripDiscordMarkdown(value);
@@ -64,9 +38,6 @@ function pushEmbedTextPart(parts: string[], value: string | null | undefined): v
   parts.push(normalized);
 }
 
-/**
- * Append a URL-like fragment once while preserving source order.
- */
 function pushEmbedUrlPart(parts: string[], seen: Set<string>, value: string | null | undefined): void {
   if (!value) return;
   const normalized = value.trim();
@@ -75,10 +46,6 @@ function pushEmbedUrlPart(parts: string[], seen: Set<string>, value: string | nu
   parts.push(normalized);
 }
 
-/**
- * Serialize a Discord embed to plain text so Matrix can receive all useful content
- * without relying on per-embed title detection.
- */
 function serializeEmbedToText(embed: Embed): string {
   const parts: string[] = [];
   const seenUrls = new Set<string>();
@@ -115,10 +82,6 @@ function serializeEmbedToText(embed: Embed): string {
   return parts.join("\n\n").trim();
 }
 
-/**
- * Split a long text block into newline-aware chunks so each Matrix event stays
- * within the configured per-message size target.
- */
 function splitTextIntoChunks(text: string, maxChars: number): string[] {
   if (!text) return [];
   if (text.length <= maxChars) return [text];
@@ -155,38 +118,10 @@ function splitTextIntoChunks(text: string, maxChars: number): string[] {
   return chunks;
 }
 
-/**
- * Escape special HTML characters in a string for safe embedding in HTML attributes
- * or element content (e.g., inside Matrix mention anchor tags).
- *
- * @param text - Raw string that may contain HTML-special characters
- * @returns HTML-safe string with &, <, >, " replaced by their entity equivalents
- */
 function escapeHtml(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-/**
- * Resolve all mention formats in a Discord message body to proper Matrix equivalents,
- * building both a plain-text `body` and an HTML `formatted_body` in a single pass.
- *
- * Handles two mention formats that appear in TomoriBot's Discord messages:
- *
- *   `<@userId>` / `<@!userId>`: Discord snowflake mentions (already resolved by Discord.js
- *     before matrixRelay.ts sees the message). The guild member's display name is used to
- *     look up a corresponding Matrix ID; if found, rendered as a Matrix mention anchor.
- *     If the user is Discord-only, rendered as plain display name.
- *
- *   `@{name}`: TomoriBot's internal mention format injected by contextBuilder.ts.
- *     Resolved the same way as above using the display name directly.
- *
- * Resolution rules (same for both formats):
- *   - Known Matrix user → `@user:server` (plain) + `<a href="...">` (HTML) + `m.mentions` entry
- *   - Discord/unknown user → display name only (no ping, no anchor tag)
- *
- * @param text    - Raw Discord message content (may contain `<@id>` and/or `@{name}` patterns)
- *          mentions were resolved), and `mentionedIds` (Matrix user IDs for MSC3952 `m.mentions`)
- */
 function resolveDiscordTextForMatrix(
   text: string,
   message: Message,
@@ -262,10 +197,6 @@ function resolveDiscordTextForMatrix(
   };
 }
 
-/**
- * Convert a Discord embed to one or more Matrix text payloads.
- * All embed types are relayed by serializing visible content to plain text.
- */
 function embedToMatrixTextChunks(embed: Embed): string[] {
   const serialized = serializeEmbedToText(embed);
   if (!serialized) return [];
@@ -276,11 +207,6 @@ function embedToMatrixTextChunks(embed: Embed): string[] {
   return chunks.map((chunk, index) => `[${index + 1}/${chunks.length}]\n${chunk}`);
 }
 
-/**
- * Handler function auto-discovered and invoked by eventHandler.ts on each messageCreate event.
- * Relays TomoriBot's responses to the linked Matrix room (if any).
- *
- */
 const handler = async (client: Client, message: Message): Promise<void> => {
   // Fast exit: skip if Matrix bridge is not configured (common case)
   if (!isMatrixConfigured()) return;

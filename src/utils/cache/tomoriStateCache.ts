@@ -12,32 +12,17 @@ import { log } from "../misc/logger";
 // repositories barrel.
 export { invalidateTomoriStateCache };
 
-/**
- * How long a DB error entry stays relevant (2 minutes).
- * After this, we assume the error is stale and fall back to "not set up".
- */
 const DB_ERROR_STALENESS_MS = 2 * 60 * 1000;
 
-/**
- * Cache statistics for monitoring
- */
 let cacheHits = 0;
 let cacheMisses = 0;
 
-/**
- * Tracks when the bot process started so the UI layer can treat "not set up"
- * results as "currently updating" during the startup grace period.
- * During fresh container starts (e.g. ECS deployments), the DB may be
- * available but the first query can return empty results before connections
- * stabilise. This grace period prevents showing the misleading
- * "Initial Setup Required" embed to users of servers that ARE set up.
- */
+// Grace period prevents showing Initial Setup Required to configured servers when early queries on a fresh container
+// start return empty before DB connections stabilize.
 const botStartTimestamp = Date.now();
 
-/** How long after process start to treat empty persona results as "updating" rather than "not set up". */
 const STARTUP_GRACE_PERIOD_MS = 3 * 60 * 1000;
 
-/** Returns only a recent database failure recorded for this workspace. */
 export function getRecordedDbError(serverDiscId: string): { message: string; timestamp: number } | null {
   const entry = lastDbError.get(serverDiscId);
   if (entry) {
@@ -51,10 +36,8 @@ export function getRecordedDbError(serverDiscId: string): { message: string; tim
   return null;
 }
 
-/**
- * Returns a recent database failure or a startup-grace marker for an empty workspace read.
- * The synthetic startup marker must not be used to downgrade successfully loaded data.
- */
+// During startup this returns a synthetic grace marker when no error is recorded, so callers must not use it to
+// downgrade successfully loaded data.
 export function getLastDbError(serverDiscId: string): { message: string; timestamp: number } | null {
   const entry = getRecordedDbError(serverDiscId);
   if (entry) return entry;
@@ -72,20 +55,6 @@ export function getLastDbError(serverDiscId: string): { message: string; timesta
   return null;
 }
 
-/**
- * Loads ALL personas (main + alters) with 10-minute in-memory cache.
- * Falls back to DB query on cache miss or stale.
- *
- * Cache flow:
- * 1. Check in-memory cache
- *    - HIT & FRESH (<10 min) -> Return immediately (0 DB queries)
- *    - MISS or STALE -> Continue to step 2
- * 2. Load from DB via personaRepository.loadAllForServer()
- * 3. Cache in memory for next requests
- *
- * @param serverDiscId - Discord server ID
- * @returns Array of TomoriState objects (main first, then alters), or empty array if not found
- */
 export async function getCachedAllPersonas(serverDiscId: string): Promise<TomoriState[]> {
   const now = Date.now();
   const cachedEntry = cache.get(serverDiscId);
@@ -160,13 +129,6 @@ export async function getCachedAllPersonas(serverDiscId: string): Promise<Tomori
   }
 }
 
-/**
- * Loads ONLY the main persona with 10-minute in-memory cache.
- * Backward compatibility wrapper for getCachedAllPersonas().
- *
- * @param serverDiscId - Discord server ID
- * @returns Main TomoriState or null if not found
- */
 export async function getCachedMainPersona(serverDiscId: string): Promise<TomoriState | null> {
   const cachedEntry = cache.get(serverDiscId);
   if (cachedEntry) {
@@ -188,20 +150,10 @@ export async function getCachedMainPersona(serverDiscId: string): Promise<Tomori
   return mainPersona || null;
 }
 
-/**
- * DEPRECATED: Use getCachedMainPersona() or getCachedAllPersonas() instead.
- * Kept for backward compatibility during transition.
- *
- * @deprecated Use getCachedMainPersona() for main persona only, or getCachedAllPersonas() for all personas.
- */
 export async function getCachedTomoriState(serverDiscId: string): Promise<TomoriState | null> {
   return getCachedMainPersona(serverDiscId);
 }
 
-/**
- * Clears entire in-memory cache.
- * Useful for testing or manual refresh operations.
- */
 export function clearTomoriStateCache(): void {
   clearPersonaAppearances();
   cache.clear();
@@ -210,11 +162,6 @@ export function clearTomoriStateCache(): void {
   cacheMisses = 0;
 }
 
-/**
- * Gets cache statistics for monitoring and debugging.
- *
- * @returns Object with cache hits, misses, hit rate percentage, and cache size
- */
 export function getTomoriStateCacheStats(): {
   hits: number;
   misses: number;

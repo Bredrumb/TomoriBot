@@ -1,12 +1,3 @@
-/**
- * Provider stop-string helpers.
- *
- * These utilities keep turn-boundary stop behavior consistent across providers
- * while preserving first-turn behavior (a response can still begin with "Name:").
- * They also centralize provider/model-specific stop strings for models that
- * hallucinate sentinel/control tokens.
- */
-
 import { getNovelAIProfile } from "@/providers/novelai/modelProfiles";
 
 interface SpecializedStopStringRule {
@@ -18,27 +9,11 @@ interface SpecializedStopStringRule {
 
 type StopStringInput = string | null | undefined | readonly (string | null | undefined)[];
 
-/**
- * Universal stop strings applied to every provider path that supports stop
- * parameters.
- */
 const UNIVERSAL_STOP_STRINGS: readonly string[] = ["<｜begin▁of▁sentence｜>"];
 
-/**
- * Central registry for provider/model-specific stop strings.
- *
- * Add new specialized stop strings here when a model starts emitting control
- * tokens or sentinel markers that should terminate generation immediately.
- */
 const SPECIALIZED_STOP_STRING_RULES: readonly SpecializedStopStringRule[] = [];
 
-/**
- * Build a newline-prefixed speaker stop string for the current persona.
- * Example: "\nTomori:"
- *
- * Newline prefix is intentional so an initial "Tomori:" at the very beginning
- * of a response is not blocked.
- */
+// The newline prefix is intentional so an initial speaker label at the very start of a response is not blocked.
 function buildPersonaSpeakerStopString(personaName?: string | null): string | null {
   if (!personaName) return null;
 
@@ -112,10 +87,6 @@ function getSpecializedStopStrings(providerName?: string | null, model?: string 
   return matchedStops.length > 0 ? matchedStops : undefined;
 }
 
-/**
- * Merge additional stop strings into an existing stop list, preserving order
- * and avoiding duplicates.
- */
 export function mergeStopStrings(
   existingStops: readonly string[] | undefined,
   ...additionalStopInputs: StopStringInput[]
@@ -149,14 +120,6 @@ export interface ProviderStopStringArgs {
   includePersonaSpeakerStop?: boolean;
 }
 
-/**
- * Build the final provider stop-string list from:
- * 1. Any adapter-specific existing stops
- * 2. Universal rules from this module
- * 3. Specialized provider/model rules from this module
- * 4. Server-configured exact stop strings
- * 5. The active persona's newline-prefixed speaker stop, when enabled
- */
 export function buildProviderStopStrings(args: ProviderStopStringArgs): string[] | undefined {
   return mergeStopStrings(
     args.existingStops,

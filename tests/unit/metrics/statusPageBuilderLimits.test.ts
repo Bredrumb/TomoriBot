@@ -137,7 +137,6 @@ function countComponents(component: unknown): number {
   return 1 + (value.components?.reduce<number>((total, item) => total + countComponents(item), 0) ?? 0);
 }
 
-/** The declared config defaults, which is what a server reads back after setup with nothing changed. */
 function emptyConfig(overrides: Partial<TomoriState["config"]> = {}): TomoriState["config"] {
   return createServerConfig(overrides);
 }

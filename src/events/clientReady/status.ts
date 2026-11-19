@@ -13,22 +13,11 @@ const CYCLE_DELAY = 60000;
 const BIRTHDAY_MONTH = 4; // 0-indexed (April = 3, May = 4)
 const BIRTHDAY_DAY = 11;
 
-/**
- * Checks if today is Tomori's birthday (May 11).
- * @returns {boolean} True if today is May 11, false otherwise.
- */
 function isTomoriBirthday(): boolean {
   const now = new Date();
   return now.getMonth() === BIRTHDAY_MONTH && now.getDate() === BIRTHDAY_DAY;
 }
 
-/**
- * Posts the current Discord guild count to Top.gg once during startup.
- * Only runs in production and only when TOPGG_TOKEN is configured.
- * Non-critical, so failures are logged as warnings and do not affect startup.
- *
- * @param client - The Discord client instance (must be ready, provides bot ID and guild cache).
- */
 async function postTopggStats(client: Client, serverCount: number): Promise<boolean> {
   const isProduction = process.env.NODE_ENV === "production";
   const topggToken = process.env.TOPGG_TOKEN;
@@ -64,9 +53,6 @@ async function postTopggStats(client: Client, serverCount: number): Promise<bool
   return true;
 }
 
-/**
- * Sets the bot's status and logs startup information.
- */
 const handler = async (client: Client): Promise<void> => {
   log.section(`Launching ${client.user?.tag} on Discord...`);
 

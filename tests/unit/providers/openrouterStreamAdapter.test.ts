@@ -133,23 +133,12 @@ it("serializes each sent body once for OpenRouter and NVIDIA, including failures
   }
 });
 
-/**
- * Consumes a stream to completion and discards the chunks.
- *
- * Request assembly and provider-side processing run inside the generator, so a test that asserts on
- * what the adapter sent has to pull every chunk first. Use `collectRawChunks` when the chunks
- * themselves are what the test is about.
- */
 async function drainStream(stream: AsyncIterable<unknown>): Promise<void> {
   for await (const _chunk of stream) {
     // Discarded: the assertion reads state the generator wrote while producing them.
   }
 }
 
-/**
- * Builds a RawStreamChunk wrapping an OpenRouter-shaped data object.
- * chunk.data is typed as unknown so no type assertion is needed in the fixture.
- */
 function makeOpenrouterChunk(data: Record<string, unknown>): RawStreamChunk {
   return { data, provider: "openrouter", metadata: { timestamp: Date.now() } };
 }
@@ -752,10 +741,8 @@ describe("OpenrouterStreamAdapter parameter degradation", () => {
   });
 });
 
-/**
- * Unlike `makeSseResponse`, this reports whether the body was cancelled and never closes the
- * stream, which is the state an abandoned response is really in: the server has not ended it.
- */
+// The stream stays unclosed because an abandoned response is still open on the server, so early consumer exit must
+// trigger cancel.
 function makeCancelObservableSseResponse(events: unknown[]): {
   response: Response;
   wasCancelled: () => boolean;
@@ -783,10 +770,6 @@ function makeCancelObservableSseResponse(events: unknown[]): {
   };
 }
 
-/**
- * A retained response body holds its buffers and its connection. Production heap snapshots showed
- * these accumulating one per abandoned request, so the teardown is load-bearing rather than tidiness.
- */
 describe("OpenrouterStreamAdapter response body teardown", () => {
   it("cancels the body when the consumer stops iterating early", async () => {
     const { response, wasCancelled } = makeCancelObservableSseResponse([
@@ -1314,10 +1297,6 @@ describe("OpenrouterStreamAdapter strict chat-completion compatibility", () => {
   });
 });
 
-/**
- * Streams OpenRouter's queue keepalive comments for `keepaliveMs`, then the given data events.
- * `contentFirst` sends one content chunk before the keepalives instead, to model a stall mid-reply.
- */
 function makeQueuedSseResponse(keepaliveMs: number, contentFirst: boolean): Response {
   const encoder = new TextEncoder();
   const content = (text: string) =>

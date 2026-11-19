@@ -46,9 +46,6 @@ import { log } from "@/utils/misc/logger";
 import { reportStreamProviderFailure } from "@/utils/provider/providerErrorMetrics";
 import { isStreamInterruption } from "@/utils/provider/providerErrorClassification";
 
-/**
- * Coordinates provider streaming as a state machine while delegating buffer, stop, UI, and error responsibilities.
- */
 export class StreamOrchestrator implements IStreamOrchestrator {
   private readonly uiUpdater = new StreamUiUpdater({
     hasStopRequest: (channelId) => hasStopRequest(channelId),
@@ -471,7 +468,7 @@ export class StreamOrchestrator implements IStreamOrchestrator {
     return { status: "error", data: chunk.error, providerFailureReported: true, ...this.collectDeliveredOutput(state) };
   }
 
-  /** What a failed stream already posted, which the next attempt continues instead of regenerating. */
+  // Error results include already-posted output so the next retry attempt continues from it instead of regenerating.
   private collectDeliveredOutput(
     state: StreamState,
   ): Pick<StreamResult, "accumulatedText" | "detailsContent" | "spritesShown" | "usage"> {

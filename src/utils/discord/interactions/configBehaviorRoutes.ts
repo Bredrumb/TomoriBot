@@ -151,7 +151,6 @@ export const CONFIG_BEHAVIOR_MODAL_SUBMIT_ACTIONS = new Set<ConfigPanelRoute["ac
   "behavior-cooldown-submit",
 ]);
 
-/** Actions that edit the server system prompt, which an active SillyTavern preset takes over. */
 const SYSTEM_PROMPT_ACTIONS = new Set<ConfigPanelRoute["action"]>([
   "behavior-prompt-open",
   "behavior-prompt-submit",
@@ -195,11 +194,6 @@ function modal(interaction: GlobalRoutableInteraction): ModalSubmitInteraction {
   return interaction as ModalSubmitInteraction;
 }
 
-/**
- * Reads the persona page a range select was opened on. The range entry carries its own start in the
- * option value rather than the route id, mirroring how the persona range selects on the Channels
- * pages hand their page to the shared modal builders.
- */
 function personaRangeStart(interaction: GlobalRoutableInteraction): number {
   if (!interaction.isStringSelectMenu()) return 0;
   const start = Number.parseInt(interaction.values[0] ?? "", 10);
@@ -334,10 +328,8 @@ function triggerRows(triggers: readonly RandomTriggerRow[]): Array<RandomTrigger
   );
 }
 
-/**
- * Modal-open routes use the modal response as their acknowledgement. The state read supplies
- * defaults and the submit route re-resolves everything before it writes.
- */
+// Modal-open routes must run before deferring because a modal is its own Discord acknowledgement; submit routes
+// re-resolve state rather than trusting defaults.
 export async function handleConfigBehaviorModalOpen(
   interaction: GlobalRoutableInteraction,
   route: ConfigPanelRoute,
@@ -497,10 +489,8 @@ export async function handleConfigBehaviorModalOpen(
 
 type BehaviorWriteOutcome = { receipt: ConfigRepaintOptions["receipt"]; telemetry?: PanelAction };
 
-/**
- * Writes NULL so the built-in `DEFAULT_SYSTEM_PROMPT` keeps resolving at read time. Shared by Remove
- * Prompt and the preset modal's built-in option so both paths report and meter identically.
- */
+// Null is written rather than an empty string or copied text so the built-in DEFAULT_SYSTEM_PROMPT keeps resolving
+// dynamically at read time.
 async function clearCustomSystemPrompt(
   scope: ConfigScope,
   state: TomoriState,

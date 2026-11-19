@@ -5,11 +5,6 @@ import { keyManager } from "./keyManager";
 import type { ErrorContext } from "@/types/db/schema";
 import { storedCredentialUsageContext } from "@/utils/security/apiKeyRetention";
 import type { ProviderUsageContext } from "@/utils/provider/providerUsage";
-/**
- * Encrypts an API key before storing it in the database using pgcrypto's PGP symmetric encryption.
- *
- * @param apiKey - The raw API key to encrypt
- */
 export const encryptApiKey = async (apiKey: string): Promise<{ encrypted: Buffer; version: number }> => {
   if (!apiKey) {
     log.warn("Empty API key provided for encryption");
@@ -49,11 +44,6 @@ export const encryptApiKey = async (apiKey: string): Promise<{ encrypted: Buffer
   }
 };
 
-/**
- * Decrypts an API key retrieved from the database using pgcrypto's PGP symmetric decryption.
- *
- * @param keyVersion - The version of the key used to encrypt (defaults to 1 for backward compatibility)
- */
 export const decryptApiKey = async (
   encryptedKey: Buffer,
   keyVersion: number = 1,
@@ -93,11 +83,6 @@ export const decryptApiKey = async (
   }
 };
 
-/**
- * Store an encrypted optional API key in the database
- * @param serviceName - Name of the service (e.g., 'brave-search', 'duckduckgo-search')
- * @param apiKey - The raw API key to encrypt and store
- */
 export const storeOptApiKey = async (serverId: number, serviceName: string, apiKey: string): Promise<boolean> => {
   if (!apiKey || !serviceName || !serverId) {
     log.warn("Missing required parameters for optional API key storage");
@@ -131,11 +116,6 @@ export const storeOptApiKey = async (serverId: number, serviceName: string, apiK
   }
 };
 
-/**
- * Retrieve and decrypt an optional API key from the database
- * Automatically performs lazy rotation if the key is encrypted with an old version
- *
- */
 export const getOptApiKey = async (serverId: number, serviceName: string): Promise<string | null> =>
   (await getOptApiKeyCredentials(serverId, serviceName))?.apiKey ?? null;
 
@@ -178,9 +158,6 @@ export const getOptApiKeyCredentials = async (
   }
 };
 
-/**
- * Delete an optional API key from the database
- */
 export const deleteOptApiKey = async (serverId: number, serviceName: string): Promise<boolean> => {
   if (!serviceName || !serverId) {
     log.warn("Missing required parameters for optional API key deletion");
@@ -203,9 +180,6 @@ export const deleteOptApiKey = async (serverId: number, serviceName: string): Pr
   }
 };
 
-/**
- * Check if an optional API key exists for a server
- */
 export const hasOptApiKey = async (serverId: number, serviceName: string): Promise<boolean> => {
   if (!serviceName || !serverId) {
     return false;

@@ -27,29 +27,17 @@ import { TRANSLATOR_COLORS, TranslationProvider } from "../../types/discord/embe
 
 type Provider = keyof typeof TRANSLATOR_COLORS;
 
-/**
- * Discord's maximum field value length for embeds
- */
+// Constant is 1024 because Discord rejects embed field values exceeding 1024 characters.
 const MAX_FIELD_VALUE_LENGTH = 1024;
 
-/**
- * Discord's maximum embed description length.
- */
+// Constant is 4096 because Discord rejects embed descriptions exceeding 4096 characters.
 const MAX_EMBED_DESCRIPTION_LENGTH = 4096;
 
-/**
- * Tip-item locale key for the Official Support Server link, appended to every rendered tip modal.
- */
 const SUPPORT_SERVER_TIP_KEY = "genai.tips.support_server";
 const TIP_DETAILS_BUTTON_ID = "error_tip_details";
 const ERROR_DETAIL_BUTTON_ID = "error_full_detail";
 const TIP_BUTTON_TIMEOUT_MS = 86_400_000;
 
-/**
- * Truncates text so it fits within Discord's embed description limit, optionally reserving
- * space for other content that shares the same description (e.g. a headline above the detail).
- * @returns The value, truncated with a trailing ellipsis when it would otherwise overflow.
- */
 export function truncateForEmbedDescription(value: string, reservedChars = 0): string {
   const available = Math.max(0, MAX_EMBED_DESCRIPTION_LENGTH - reservedChars);
   if (value.length <= available) {
@@ -63,11 +51,6 @@ export type WebhookEmbedContext = Omit<PersonaPostContext, "channel" | "persona"
   persona?: PersonaPostContext["persona"];
 };
 
-/**
- * Truncates a field value to Discord's maximum allowed length.
- * Adds ellipsis if truncation occurs.
- * @returns Truncated value that fits within Discord's limits
- */
 function truncateFieldValue(value: string): string {
   if (value.length <= MAX_FIELD_VALUE_LENGTH) {
     return value;
@@ -76,11 +59,6 @@ function truncateFieldValue(value: string): string {
   return `${value.substring(0, MAX_FIELD_VALUE_LENGTH - 3)}...`;
 }
 
-/**
- * Creates a standard info embed for non-interaction contexts.
- * This is a low-level utility - prefer using sendStandardEmbed for consistency.
- * @param locale - The locale to use for strings
- */
 export function createStandardEmbed(locale: string, options: StandardEmbedOptions): EmbedBuilder {
   const {
     titleKey,
@@ -126,7 +104,6 @@ export function createStandardEmbed(locale: string, options: StandardEmbedOption
   return embed;
 }
 
-/** Builds the localized markdown shown by a "What You Can Do" text modal. */
 function createTipText(
   locale: string,
   tipKeys: string[],
@@ -220,11 +197,6 @@ export function createSummaryEmbed(locale: string, options: SummaryEmbedOptions)
   return embed;
 }
 
-/**
- * Shows a standard embed in a text channel. This follows the pattern of interactionHelpers
- * by handling the sending of the embed directly.
- * @param locale - The locale to use for strings
- */
 export async function sendStandardEmbed(
   channel: TextChannel | NewsChannel | DMChannel | BaseGuildTextChannel | AnyThreadChannel | BaseGuildVoiceChannel,
   locale: string,
@@ -301,11 +273,6 @@ export async function sendStandardEmbed(
   modalButtons.attach(deliveredMessage, disableButtons);
 }
 
-/**
- * Builds the tip and full-error buttons an embed offers, plus the collectors that open them once the
- * message is sent.
- * @param logLabel - Prefix for the collectors' failure logs.
- */
 export function prepareEmbedModalButtons(
   locale: string,
   options: Pick<StandardEmbedOptions, "tipKeys" | "tipVars" | "restrictedDetail">,
@@ -361,10 +328,6 @@ export function prepareEmbedModalButtons(
 }
 
 const TRANSLATION_TIMEOUT = 90000;
-/**
- * Creates an embed with translation buttons that cycle between different translations.
- * Returns a promise that resolves when the buttons are disabled (timeout or all providers shown).
- */
 export async function sendTranslationEmbed(message: Message, options: TranslationEmbedOptions): Promise<void> {
   const { translations, initialProvider = TranslationProvider.GOOGLE, timeout = TRANSLATION_TIMEOUT } = options;
 

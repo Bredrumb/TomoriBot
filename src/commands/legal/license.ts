@@ -7,10 +7,6 @@ import type { UserRow } from "@/types/db/schema";
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("license").setDescription(localizer("en-US", "commands.legal.license.description"));
 
-/**
- * Executes the 'license' command
- * Shows a link to the AGPLv3 LICENSE file on GitHub
- */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,

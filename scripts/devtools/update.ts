@@ -80,11 +80,6 @@ async function getUnmergedPaths(): Promise<string[]> {
     .filter((line) => line.length > 0);
 }
 
-/**
- * Compares two dot-separated version strings numerically.
- *
- * @returns Negative when `a` precedes `b`, zero when equal, positive otherwise.
- */
 function compareVersions(a: string, b: string): number {
   const left = a.split(".").map(Number);
   const right = b.split(".").map(Number);
@@ -97,18 +92,8 @@ function compareVersions(a: string, b: string): number {
   return 0;
 }
 
-/**
- * Aborts the update when the running Bun is older than the `packageManager` pin.
- *
- * Bun refuses to parse a lockfile written by a newer major or minor, so an outdated runtime fails
- * the install with `UnknownLockfileVersion` naming only `bun.lock`. That reads as a corrupt
- * repository rather than an outdated runtime, and the natural recovery (dropping
- * `--frozen-lockfile`) makes Bun ignore the lockfile and re-resolve every dependency from its
- * version ranges, silently drifting off the tested tree. Failing here keeps that door shut.
- *
- * Must run after the pull: `packageManager` is read from the checkout, so before the pull it still
- * carries the previous requirement.
- */
+// Must run after git pull so packageManager reflects the new checkout and catches an older Bun before bun.lock fails
+// with UnknownLockfileVersion.
 async function ensureBunRuntimeVersion(): Promise<void> {
   const packageJson = (await Bun.file("package.json").json()) as { packageManager?: string };
   const pin = packageJson.packageManager?.match(/^bun@(\d+\.\d+\.\d+)$/)?.[1];

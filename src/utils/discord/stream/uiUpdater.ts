@@ -39,13 +39,10 @@ import type { ChatSendReason } from "@/utils/chat/diagnosticTimeline";
 export type StreamSendPayload = {
   content?: string;
   files?: import("discord.js").AttachmentBuilder[];
-  /** Interactive rows attached to the sent message (e.g. the rendered table's "Show Markdown" button). */
   components?: import("discord.js").ActionRowBuilder<import("discord.js").ButtonBuilder>[];
   identityOverride?: ResolvedWebhookIdentity;
   accumulatedTextPrefix?: string;
-  /** Sprite mapping persisted after a successful webhook send (clean-name sprite renders). */
   spriteRecord?: SpriteMessageRecordInfo;
-  /** The persona's base appearance under an identity override, which is not a copied identity. */
   isNeutralAppearance?: boolean;
   allowedMentions?: {
     users?: string[];
@@ -73,13 +70,8 @@ function resolveWebhookThreadId(channel: StreamContext["channel"]): string | und
   return "isThread" in channel && typeof channel.isThread === "function" && channel.isThread() ? channel.id : undefined;
 }
 
-/**
- * Signals that the destination channel cannot be reached, raised before a send is attempted.
- *
- * A deleted channel is not retryable and no fallback can rescue it, so this carries the same code
- * a REST 10003 would report and takes the quiet teardown path in the send catch rather than the
- * error path.
- */
+// Code 10003 matches Discord's deleted-channel REST error so the send catch routes pre-send absence through the quiet
+// teardown path.
 class ChannelGoneError extends Error {
   public readonly code = 10003;
 
@@ -89,23 +81,12 @@ class ChannelGoneError extends Error {
   }
 }
 
-/**
- * Names the condition behind a failure, so the stop reason and the log agree.
- *
- * The code decides rather than the error class: the same 50001 arrives from a REST send and from
- * this file's own resolver, and only one of those is an instance of the local error.
- */
+// Error code rather than instanceof decides here because REST sends and the local resolver both surface 50001, and
+// only one uses the local class.
 function unreachableReasonFor(error: unknown): ChannelUnreachableReason {
   return isMissingChannelAccessError(error) ? "missing_access" : "channel_deleted";
 }
 
-/**
- * Raises the failure that matches why the destination could not be reached.
- *
- * Both reasons stop the stream, but they are different operator problems, so the stop reason and
- * the log have to name the one that happened. A revoked access grant reported as a deletion sends
- * an operator looking for a channel that still exists.
- */
 function unreachableChannelError(
   reason: ChannelUnreachableReason,
   channelId: string | undefined,
@@ -115,13 +96,8 @@ function unreachableChannelError(
     : new ChannelGoneError(channelId);
 }
 
-/**
- * Stops a stream whose destination cannot receive anything, naming the condition that caused it.
- *
- * The two reasons are terminal for the same reason: no retry, key rotation, or fallback model
- * reaches a channel the bot cannot post into, so both tear down quietly rather than producing an
- * error row per remaining arm.
- */
+// Requesting a stop on missing access or deletion tears down the stream quietly so key rotation and fallback models
+// do not emit per-arm errors.
 function stopForUnreachableChannel(
   deps: StreamUiUpdaterDependencies,
   channelId: string,
@@ -133,23 +109,8 @@ function stopForUnreachableChannel(
   deps.requestStop(channelId, reason);
 }
 
-/**
- * Picks the channel that will receive the next stream message, and the reply reference when the
- * turn is answering a source message.
- *
- * `replyToMessage.reply()` cannot be used here: discord.js resolves `message.channel` from the
- * cache at call time and throws `ChannelNotCached` when the entry is absent, which a turn that
- * streams for minutes can outlive. This resolves the destination by id instead, and the reply is
- * carried as an explicit reference, which is the same payload `Message#reply` would build.
- *
- * A restored channel is written back onto the context because one stream sends many chunks and
- * only the first consults this helper. Leaving the context pointing at a channel that cannot be
- * sent into would break every later chunk, which takes the `context.channel.send` branch once
- * `hasRepliedToOriginalMessage` is set.
- *
- * @param context - Turn context, whose channel was captured at admission
- * @returns The destination channel and reply reference, or the reason it is unreachable
- */
+// Direct id resolution avoids Message#reply cache eviction errors, and writing context.channel back is required
+// because later chunks skip this helper.
 async function resolveReplyTarget(
   context: StreamContext,
 ): Promise<
@@ -171,14 +132,8 @@ async function resolveReplyTarget(
   return { channel: resolved.channel, reply: buildReplyReference(context, resolved.channel.id) };
 }
 
-/**
- * Builds the reply reference, or omits it when the reference would point out of the target channel.
- *
- * Discord rejects a reference whose message lives in another channel, so a turn whose source
- * channel is unreachable has to post a plain message into the reachable one rather than a reply
- * that cannot be delivered. Without this the send fails with 10008 from a path that already
- * decided the destination was usable.
- */
+// Cross-channel reply references are omitted because Discord rejects them with 10008 when a turn falls back to
+// another reachable channel.
 function buildReplyReference(context: StreamContext, targetChannelId: string): ReplyOptions | undefined {
   const source = context.replyToMessage;
   if (!source || source.system || source.channelId !== targetChannelId) return undefined;
@@ -207,11 +162,8 @@ function classifyWebhookSpeaker(
   return { personaId, kind: "appearance" };
 }
 
-/**
- * A bot-user line always shows the bot's own name and avatar, which is the main persona's
- * appearance. An alter's line only lands there as a failed-webhook fallback, where the face shown
- * is not the alter's, so it is recorded as an unknown speaker.
- */
+// Bot-user messages show the main bot identity, so an alter landing here on webhook fallback is recorded with a null
+// personaId rather than misattributed.
 function classifyBotSpeaker(context: StreamContext): DeliveredSpeaker {
   return {
     personaId: context.tomoriState.is_alter ? null : (context.tomoriState.persona_id ?? null),

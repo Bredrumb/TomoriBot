@@ -2,18 +2,8 @@ import { getPersonaSpriteMessageRecord } from "@/utils/cache/personaSpriteMessag
 import { formatRenderModifierWebhookName } from "@/utils/discord/renderModifierParser";
 import { log } from "@/utils/misc/logger";
 
-/**
- * Rebuilds the decorated "Name (sprite)" context label for a webhook message
- * that was delivered with a clean persona username.
- *
- * Sprite messages display only the persona name in Discord; the sprite label is
- * recovered from the persona_sprite_messages mapping so the model still sees
- * "Name (sprite):" in context. Returns null when the message has no sprite
- * mapping or the mapping belongs to a different persona (e.g. the nickname now
- * matches a recreated persona), so callers fall back to the plain persona name.
- *
- * @param personaNickname - current nickname used to build the label
- */
+// Clean-name sprite webhooks omit the sprite in Discord, so this restores it for model context and returns null if
+// personaId mismatches a recreated persona.
 export async function resolveSpriteMessageDisplayName(
   messageDiscId: string,
   personaId: number | null | undefined,

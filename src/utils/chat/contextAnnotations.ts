@@ -385,10 +385,8 @@ export function hasContextReactions(message: Message): boolean {
   return selectContextReactions(message).selected.length > 0;
 }
 
-/**
- * Counts come from the gateway payload, so this never calls Discord; reactor names wait for
- * {@link fetchReactionUserSummaries} during a `reveal_message_metadata` restart.
- */
+// Reactor names stay omitted here so initial context needs zero Discord calls, deferring user fetches to
+// fetchReactionUserSummaries on reveal_message_metadata.
 export function buildReactionContextAnnotation(message: Message): string | null {
   const { selected, hiddenTypeCount } = selectContextReactions(message);
   if (selected.length === 0) {
@@ -404,13 +402,8 @@ export function buildReactionContextAnnotation(message: Message): string | null 
   return `[System: Reactions on this message: ${reactionSegments.join("; ")}]`;
 }
 
-/**
- * Fetches who reacted to each message, newest message first so the per-reveal call budget
- * covers the messages the model is most likely asking about.
- *
- * @returns Reactor summaries keyed by message ID; a message whose lookups all failed or fell
- * outside the budget is absent, leaving its counts-only history line as the only reaction context.
- */
+// Newest-first order ensures the per-reveal call budget covers recent messages, so failed or over-budget entries are
+// omitted to keep counts-only lines.
 export async function fetchReactionUserSummaries(
   messages: readonly Message[],
   options: ReactionUserLabelOptions,
@@ -599,14 +592,8 @@ const INJECTED_CONTEXT_ANNOTATION_PATTERNS: RegExp[] = [
   /\[System: Reactions on this message:[^\]]*\]/g,
 ];
 
-/**
- * Removes injected, turn-ephemeral `[System: …]` annotations from message text so the
- * clean conversational content can be persisted (e.g. into short-term memory) without
- * stale per-turn `ref_N` handles or IDs leaking into future turns.
- *
- * @param content - Raw message text that may carry injected context annotations.
- * @returns The text with known injected annotations removed and blank lines collapsed.
- */
+// Must run before persisting conversation text (such as short-term memory) so turn-ephemeral ref_N handles and IDs do
+// not leak into future turns.
 export function stripInjectedContextAnnotations(content: string): string {
   let cleaned = content;
   for (const pattern of INJECTED_CONTEXT_ANNOTATION_PATTERNS) {

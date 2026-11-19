@@ -16,12 +16,6 @@ it("checks attachment permission before posting an imported persona", async () =
   expect(await missingPublicImportPermission({ guild: null } as ChatInputCommandInteraction, true)).toBeNull();
 });
 
-/**
- * Dropped-field reporting exists because a successful conversion is not the same
- * as a faithful one. These cases pin which losses are worth naming, so a future
- * field-mapping change either removes a report (the field gained a destination)
- * or fails here.
- */
 describe("import dropped-field reporting", () => {
   it("reports nothing for a card whose fields all have a destination", () => {
     expect(

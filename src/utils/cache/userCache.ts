@@ -10,11 +10,6 @@ import { PrivacyLevel, type UserRow } from "@/types/db/schema";
 import { userRepository } from "@/utils/db/repositories/UserRepository";
 import { log } from "../misc/logger";
 
-/**
- * Cache entry structure for user data.
- * Includes user row, privacy level, and per-server blacklist status.
- * Blacklist is per-server, so we store a map of serverDiscId -> userRepository.isBlacklisted.
- */
 interface UserCacheEntry {
   userRow: UserRow | null; // null if user doesn't exist in DB
   privacyLevel: PrivacyLevel;
@@ -22,24 +17,16 @@ interface UserCacheEntry {
   cachedAt: number; // Timestamp in milliseconds
 }
 
-/**
- * In-memory cache map: userDiscId -> cache entry
- * Reduces database queries from 3-15 per message to 0-1 (cache hit + possible blacklist miss).
- */
 const cache = new Map<string, UserCacheEntry>();
 
 // Longer TTL than server config caches since user data changes even less frequently.
 const USER_CACHE_DURATION_MS = 30 * 60 * 1000;
 
-/**
- * Cache statistics for monitoring
- */
 let cacheHits = 0;
 let cacheMisses = 0;
 let blacklistCacheHits = 0;
 let blacklistCacheMisses = 0;
 
-/** Never null: creates an entry with defaults when the user is not found. */
 async function getOrCreateCacheEntry(userDiscId: string): Promise<UserCacheEntry> {
   const now = Date.now();
   const cachedEntry = cache.get(userDiscId);
@@ -97,34 +84,16 @@ async function getOrCreateCacheEntry(userDiscId: string): Promise<UserCacheEntry
   }
 }
 
-/**
- * Loads UserRow with 30-minute in-memory cache.
- * Falls back to DB query on cache miss or stale.
- *
- * @param userDiscId - Discord user ID
- * @returns UserRow or null if not found
- */
 export async function getCachedUserRow(userDiscId: string): Promise<UserRow | null> {
   const entry = await getOrCreateCacheEntry(userDiscId);
   return entry.userRow;
 }
 
-/** Cached in memory for 30 minutes. Defaults to MINIMAL when the user is not found. */
 export async function getCachedPrivacyLevel(userDiscId: string): Promise<PrivacyLevel> {
   const entry = await getOrCreateCacheEntry(userDiscId);
   return entry.privacyLevel;
 }
 
-/**
- * Checks blacklist status with caching.
- * Per-server blacklist is stored within the user cache entry.
- * If blacklist status for a specific server is not cached, it queries the DB
- * and caches the result for future lookups.
- *
- * @param serverDiscId - Discord server ID
- * @param userDiscId - Discord user ID
- * @returns boolean indicating if user is blacklisted in this server
- */
 export async function getCachedBlacklistStatus(serverDiscId: string, userDiscId: string): Promise<boolean> {
   try {
     return await getCachedBlacklistStatusOrThrow(serverDiscId, userDiscId);
@@ -150,24 +119,11 @@ export async function getCachedBlacklistStatusOrThrow(serverDiscId: string, user
   return isUserBlacklisted;
 }
 
-/**
- * Invalidates entire user cache entry.
- * Called when user settings change (privacy, nickname, memories).
- *
- * @param userDiscId - Discord user ID to invalidate
- */
 export function invalidateUserCache(userDiscId: string): void {
   cache.delete(userDiscId);
   broadcastInvalidation("user", [[userDiscId]]);
 }
 
-/**
- * Invalidates only blacklist status for a user in a specific server.
- * More granular than full user invalidation - preserves user row and privacy level.
- *
- * @param serverDiscId - Discord server ID
- * @param userDiscId - Discord user ID
- */
 export function invalidateUserBlacklistCache(serverDiscId: string, userDiscId: string): void {
   const entry = cache.get(userDiscId);
   if (entry) {
@@ -176,7 +132,6 @@ export function invalidateUserBlacklistCache(serverDiscId: string, userDiscId: s
   broadcastInvalidation("userBlacklist", [[serverDiscId, userDiscId]]);
 }
 
-/** Removes cached blacklist answers for a workspace while retaining unrelated user settings. */
 export function invalidateAllUserBlacklistCacheForServer(serverDiscId: string): void {
   for (const entry of cache.values()) {
     entry.blacklistStatus.delete(serverDiscId);
@@ -184,9 +139,6 @@ export function invalidateAllUserBlacklistCacheForServer(serverDiscId: string): 
   broadcastInvalidation("userBlacklist", [[serverDiscId]]);
 }
 
-/**
- * Useful for testing or manual refresh operations.
- */
 export function clearUserCache(): void {
   cache.clear();
   cacheHits = 0;
@@ -195,10 +147,6 @@ export function clearUserCache(): void {
   blacklistCacheMisses = 0;
 }
 
-/**
- * Gets cache statistics for monitoring and debugging.
- *
- */
 export function getUserCacheStats(): {
   hits: number;
   misses: number;

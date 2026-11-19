@@ -273,11 +273,6 @@ describe("stripLeakedOwnNameLabels", () => {
     });
   });
 
-  /**
-   * Safety net for the decorated render-modifier grammar ("Tomori (silly):"). Only a label opening a
-   * segment is consumed by parseLeadingRenderModifier; one stranded mid-body because a buffer
-   * boundary shifted used to reach Discord as visible text.
-   */
   describe("decorated render-modifier labels", () => {
     it("strips a stranded mid-body label while keeping the reply before it", () => {
       expect(stripLeakedOwnNameLabels("bet sending the vibes.\ntomori (silly): double message", "tomori")).toBe(
@@ -305,10 +300,6 @@ describe("stripLeakedOwnNameLabels", () => {
       expect(stripLeakedOwnNameLabels("**Tomori (shy)**： h-hello", "Tomori").trim()).toBe("h-hello");
     });
 
-    /**
-     * Opening decorated must land on branch A. On branch B the leaked-preamble pass cuts everything
-     * before the label it matches, which would delete the real reply preceding a stray one.
-     */
     it("keeps text preceding a stranded label rather than treating it as a leaked preamble", () => {
       const result = stripLeakedOwnNameLabels("first real line here.\nTomori (mad): second line", "Tomori");
 

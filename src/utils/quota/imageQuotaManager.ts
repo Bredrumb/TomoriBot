@@ -26,18 +26,10 @@ export interface ImageQuotaClaim extends QuotaCheckResult {
   reservation: QuotaReservation | null;
 }
 
-/**
- * Get or create server's quota configuration
- * Creates default config if not exists (10 daily user quota, unlimited serverwide)
- */
 export async function getQuotaConfig(serverId: number): Promise<ImageQuotaConfigRow> {
   return getOrCreateImageConfig(serverId);
 }
 
-/**
- * Check if user can generate an image based on daily quota
- * Returns remaining quota and whether generation is allowed
- */
 async function checkUserDailyQuota(
   serverId: number,
   userDiscId: string,
@@ -72,10 +64,6 @@ async function checkUserDailyQuota(
   };
 }
 
-/**
- * Check if server has remaining server-wide quota
- * Returns remaining quota and whether generation is allowed
- */
 async function checkServerwideQuota(serverId: number, config: ImageQuotaConfigRow): Promise<QuotaCheckResult> {
   // If serverwide quota is 0 (unlimited), allow
   if (config.serverwide_quota === 0) {
@@ -115,10 +103,6 @@ async function checkServerwideQuota(serverId: number, config: ImageQuotaConfigRo
   };
 }
 
-/**
- * Check all quotas (user daily + server-wide)
- * Returns combined result indicating if generation is allowed
- */
 export async function checkImageQuota(serverId: number, userDiscId: string): Promise<QuotaCheckResult> {
   const read = await getImageConfigResult(serverId);
   if (read.status === "unavailable") throw new QuotaUnavailableError();
@@ -147,10 +131,8 @@ export async function checkImageQuota(serverId: number, userDiscId: string): Pro
   }
 }
 
-/**
- * Claim one image generation on both counters or neither.
- * A database failure throws, so the caller refuses instead of spending an uncounted generation.
- */
+// Atomic reservation across both counters throws QuotaUnavailableError on DB failure, so callers fail closed instead
+// of spending uncounted image quota.
 export async function reserveImageQuota(serverId: number, userDiscId: string): Promise<ImageQuotaClaim> {
   const read = await getImageConfigResult(serverId);
   if (read.status === "unavailable") throw new QuotaUnavailableError();

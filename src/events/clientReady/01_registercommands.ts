@@ -4,9 +4,6 @@ import { loadCommandData } from "@/utils/discord/commandLoader";
 import type { ErrorContext } from "@/types/db/schema";
 import { isPrimaryProcess } from "@/utils/cluster/shardLeases";
 
-/**
- * Event handler for registering commands when the bot is ready
- */
 export default async (client: Client): Promise<void> => {
   if (!isPrimaryProcess()) return;
   try {

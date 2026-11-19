@@ -306,8 +306,6 @@ const MODAL_OPEN_ACTIONS = new Set<ConfigPanelRoute["action"]>([
   "sprite-import-open",
 ]);
 
-/** Sprite routes repaint their own page rather than the Persona General default. */
-/** Naming edits repaint Persona > Naming Habits, which is where their controls live. */
 const NAMING_ACTIONS = new Set<ConfigPanelRoute["action"]>(["naming-open", "naming-submit"]);
 
 const SPRITE_ACTIONS = new Set<ConfigPanelRoute["action"]>([
@@ -324,15 +322,8 @@ const SPRITE_ACTIONS = new Set<ConfigPanelRoute["action"]>([
   "sprite-export",
 ]);
 
-/**
- * Resolves the sprite a route's list position names, refusing when the fingerprint no longer
- * matches.
- *
- * The route carries a position rather than a `sprite_key` because a key may be 64 characters and
- * would push the custom ID past Discord's limit. The fingerprint is what makes the position safe: a
- * concurrent add, rename, or removal changes it, so a replayed route reports staleness instead of
- * resolving to whichever sprite now sits at that position.
- */
+// Routes index sprites by position rather than 64-char keys to fit Discord's custom ID limit, so the fingerprint must
+// match to avoid hitting a shifted sprite.
 function resolveSpriteAtIndex(
   sprites: readonly PersonaSpriteRow[],
   personaId: number,
@@ -358,12 +349,6 @@ function receipt(
   };
 }
 
-/**
- * Maps the shared sprite failure statuses onto their receipts.
- *
- * Add, edit, and import fail through the same transfer statuses, so a single mapping keeps one
- * wording per cause rather than three that drift apart.
- */
 function spriteFailureReceipt(
   locale: string,
   result: { status: string; reason?: string; resetAt?: number | null },
@@ -752,11 +737,8 @@ const defaultDependencies: ConfigRouteDependencies = {
   takeSnapshot: takeChecklistSnapshot,
 };
 
-/**
- * A write must land on exactly the persona its button named. Navigation may fall back to the main
- * persona when a route outlives its row, but a write that fell back would silently mutate a
- * different persona than the one the user was looking at.
- */
+// Writes must never fall back to the main persona like navigation does, because a stale button would silently mutate
+// a different persona.
 function findExactPersona(personas: readonly TomoriState[], personaId: number | null): TomoriState | null {
   if (personaId === null) return null;
   return personas.find((persona) => persona.persona_id === personaId) ?? null;
@@ -3232,18 +3214,8 @@ ${localizer(locale, "commands.config.panel.avatar_preset_character_reference_rem
   return null;
 }
 
-/**
- * Handles every sprite route that is not a repository write: selection, pagination, the removal
- * confirmation, and Export.
- *
- * Export is the reason this cannot fall through to the generic repaint. The panel is deferred
- * ephemerally like every panel root, so an `editReply` carrying the archive would silently make a
- * public export private. The archive therefore arrives as its own non-ephemeral `followUp` while
- * the panel repaints in place.
- *
- * @returns `handled` when the route is fully served here, `write` when it must continue to the
- *   write path.
- */
+// Export must send a non-ephemeral followUp and repaint in place because an editReply on the ephemerally deferred
+// panel would make the archive private.
 async function handleSpriteNavigation(
   interaction: GlobalRoutableInteraction,
   route: ConfigPanelRoute,
@@ -4038,7 +4010,6 @@ export function createConfigInteractionRoute(overrides: Partial<ConfigRouteDepen
 
 export const configInteractionRoute = createConfigInteractionRoute();
 
-/** Pages `/config page:` may open for this actor, in panel order. */
 export function listConfigPageDestinations(
   locale: string,
   actor: ConfigActor,
@@ -4060,12 +4031,6 @@ export async function autocompleteConfigPage(interaction: AutocompleteInteractio
   );
 }
 
-/**
- * Opens `/config` on the requested page and persona when they resolve for this actor.
- *
- * The default destination comes from `resolveConfigLanding` rather than the landing constants, so the
- * page the panel opens on is always one this actor may also navigate back to after a denial.
- */
 export async function executeConfigCommand(
   interaction: ChatInputCommandInteraction,
   locale: string,

@@ -12,12 +12,6 @@ import {
 } from "./chunkProcessor";
 import { escapeRegExp } from "./regexUtils";
 
-/**
- * Universal URL detection and protection function
- * Detects all URLs regardless of surrounding context (angle brackets, markdown, raw)
- * and replaces them with placeholders to protect from chunking and humanization
- * @param text - Text that may contain URLs
- */
 function detectAndProtectURLs(text: string): {
   protectedText: string;
   urls: string[];
@@ -47,11 +41,6 @@ function detectAndProtectURLs(text: string): {
   return { protectedText, urls };
 }
 
-/**
- * Restore URLs from placeholders back to their original form
- * @param text - Text containing URL placeholders
- * @param urls - Array of original URLs
- */
 function restoreURLsFromPlaceholders(text: string, urls: string[]): string {
   let restoredText = text;
 
@@ -66,7 +55,6 @@ function restoreURLsFromPlaceholders(text: string, urls: string[]): string {
   return restoredText;
 }
 
-/** List of common internet expressions that should be lowercased even when all-caps */
 const INTERNET_EXPRESSIONS = new Set([
   "lol",
   "rofl",
@@ -153,34 +141,8 @@ function protectSemanticSpans(text: string): { protectedText: string; spans: str
   return { protectedText: result, spans };
 }
 
-/**
- * Humanizes text by lowercasing words and simplifying punctuation while preserving
- * code blocks, acronyms, internet expressions, and sender prefixes.
- *
- * Modifications:
- * - With `lowercase`: converts text to lowercase unless it's an acronym or special expression
- * - Preserves sender strings in format "(Name): " or "Name: "
- * - With `punctuation`: removes semicolons (`;` and full-width `；`), then runs the rolls below
- * - Each comma (`,`, `、`, `，`, or `､`) independently rolls remove / flush / keep. An ASCII comma
- *   only rolls when whitespace or the end follows it, so "1,000" and "a,b" are left untouched; a
- *   full-width comma only skips the roll before a digit
- * - Each run of "!"/"?"/"！"/"？" independently rolls a flush chance, keeping the marks either way.
- *   An ASCII run only rolls when whitespace or the end follows it, so "<@!id>", "!help", and
- *   "?..." are never split
- * - Never flushes inside **bold**, *italic*, ~~strikethrough~~, ||spoiler||, a "quoted" span or
- *   any paired quotation («», “”, 「」, and the rest of PAIRED_QUOTE_MARKS), a (parenthesized) aside, or a [markdown link](url); flushing there would
- *   leave one side of the pair as broken syntax in a separate Discord message
- * - Maintains code blocks and inline code unchanged
- * - Preserves standalone "I" pronoun
- * @param options.suppressPunctuationNoise - Skip every comma/emphasis roll above (still lowercases
- *   and strips semicolons when those are on). Used for sample dialogues and dialogue-history
- *   reconstruction, since both already represent real authored/delivered text where re-randomizing
- *   the same message on every context build adds no fidelity and only costs prompt-prefix cache
- *   stability.
- * @returns One or more text segments; length > 1 means a flush was rolled somewhere in the text,
- *   and each piece is meant to be sent as its own Discord message. Always a single segment when
- *   `suppressPunctuationNoise` is set. Never empty, even for empty or fully-stripped input.
- */
+// Callers building sample dialogues or history must set suppressPunctuationNoise because re-rolling punctuation
+// across rebuilds breaks prompt-prefix caching.
 export function humanizeString(
   text: string,
   options: { lowercase: boolean; punctuation: boolean; suppressPunctuationNoise?: boolean },
@@ -283,10 +245,6 @@ export function humanizeString(
   return segments.length > 0 ? segments : [""];
 }
 
-/**
- * The deterministic part of the humanizer: it never splits text, so a non-streamed reply stays one
- * message, and prompt text (sample dialogue and past replies) keeps the same bytes across rebuilds.
- */
 export function applyStableHumanizer(text: string, humanizer: HumanizerSettings): string {
   if (!humanizer.humanizer_lowercase_enabled && !humanizer.humanizer_punctuation_split_enabled) return text;
   return humanizeString(text, {
@@ -296,22 +254,12 @@ export function applyStableHumanizer(text: string, humanizer: HumanizerSettings)
   })[0];
 }
 
-/**
- * Formats a boolean value into a localized user-friendly string ("Enabled" or "Disabled").
- * Uses locale keys from commands.choices.enabled and commands.choices.disabled.
- * @param value - The boolean value to format.
- * @param locale - The user's locale for localization.
- * @returns Localized "Enabled" if true, "Disabled" if false, wrapped in backticks.
- */
 export function formatBooleanLocalized(value: boolean, locale: string): string {
   return value
     ? `\`${localizer(locale, "commands.choices.enabled")}\``
     : `\`${localizer(locale, "commands.choices.disabled")}\``;
 }
 
-/**
- * @returns Formatted string like "2 days, 3 hours, 15 minutes" or "45 minutes"
- */
 export function formatTimeRemaining(milliseconds: number): string {
   if (milliseconds <= 0) return "now";
 
@@ -345,11 +293,8 @@ export function formatTimeRemaining(milliseconds: number): string {
   }
 }
 
-/**
- * Renders a duration for a user-facing sentence in the resolved authored locale, so an unauthored
- * preference gets English words to match the English sentence it falls back to. Model-facing text
- * keeps using {@link formatTimeRemaining}.
- */
+// Authored-locale resolution is required so unauthored preferences render English duration words matching the English
+// fallback sentence.
 export function formatLocalizedDuration(milliseconds: number, locale: string): string {
   const resolvedLocale = resolveSupportedLocale(locale);
   if (milliseconds <= 0) return localizer(resolvedLocale, "general.duration.now");
@@ -358,12 +303,8 @@ export function formatLocalizedDuration(milliseconds: number, locale: string): s
   );
 }
 
-/**
- * Joins day, hour, and minute phrases through Intl rather than locale keys, because a key pair such
- * as "day/days" cannot express languages with several plural forms (Russian has three).
- *
- * @returns The joined phrase, or null when the duration is under one minute.
- */
+// Duration units format via Intl rather than locale keys because singular/plural key pairs cannot represent languages
+// with three or more plural forms.
 export function formatDurationUnits(milliseconds: number, intlLocale: string): string | null {
   const totalMinutes = Math.floor(milliseconds / 60_000);
   const units = [

@@ -15,10 +15,6 @@ import {
   TIMEFRAME_VALUES,
 } from "@/utils/stats/statsDashboard";
 
-/**
- * Configures the /stats server subcommand: server-wide usage stats for the chosen
- * timeframe (leaderboard, models, tools, expression, generations).
- */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("server")
@@ -33,9 +29,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
         ),
     );
 
-/**
- * Renders the server-wide stats dashboard.
- */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,

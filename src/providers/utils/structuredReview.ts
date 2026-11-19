@@ -81,7 +81,8 @@ function logMalformedPrivateOutput(
   );
 }
 
-/** Private callers receive validated data or bounded metadata, never provider prose in errors. */
+// Errors must return only bounded metadata and never provider prose so raw model output cannot leak to callers or
+// replies.
 export function parsePrivateStructuredOutput<T>(
   request: ProviderStructuredJsonRequest,
   raw: unknown,

@@ -64,9 +64,7 @@ import {
 } from "@/utils/discord/renderModifierParser";
 import { collectPersonaNameAliases } from "@/utils/discord/stream/textConfig";
 
-/** A pre-commitment SSE error event, in the shape the shared degradation classifier accepts. */
 interface OpenAICompatibleMidStreamError extends DegradableErrorInput {
-  /** Provider-declared error type (e.g. `internal_server_error`), when the event carried one. */
   type?: string;
 }
 
@@ -798,7 +796,6 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
     return this.createRawChunk(chunk, { model });
   }
 
-  /** Reset every mutable field that can be touched before an SSE attempt commits. */
   private resetPerAttemptState(personaSpeakerLabelRegex: RegExp | null): void {
     this.toolCallAccumulator.clear();
     this.speakerGuardPendingTail = "";
@@ -819,7 +816,6 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
     };
   }
 
-  /** Text, reasoning, tool-call deltas, and usage are the stream commitment point. */
   private isMeaningfulCommitmentChunk(chunk: OpenAICompatibleStreamChunk): boolean {
     if (chunk.usage || this.pendingThinkBlockThoughtText.length > 0) return true;
     const delta = chunk.choices?.[0]?.delta;

@@ -40,15 +40,9 @@ const defaultDependencies: ServerResetOperationDependencies = {
   emitScheduledWorkNudge,
 };
 
-/** Excludes this operation module from being registered as a slash subcommand by commandLoader. */
+// Excludes server reset helper from commandLoader scans (warns without this export).
 export const isCommandEnabled = () => false;
 
-/**
- * Resets a server and clears every cache that can retain reset configuration.
- *
- * Cache eviction and scheduler coordination happen only after the repository transaction commits,
- * so a failed reset leaves the current configuration and its cached view together.
- */
 export async function resetServerConfiguration(
   input: ServerResetOperationInput,
   deps: ServerResetOperationDependencies = defaultDependencies,

@@ -42,13 +42,9 @@ export interface MessageProxyMessageRecord {
   expiresAt: number;
   originalMessage: Message | null;
   originalReference: Message["reference"] | null;
-  /** Stable speaker ID from the attestation, used while the channel turn holds its lock. */
   identityUserDiscId: string | null;
-  /**
-   * Whether the original was still held by its speedbump when this repost was confirmed, so the
-   * repost is the only admitted copy. False for a late PluralBuddy repost whose original already
-   * ran, which must not be admitted as a second follow-up of the same message.
-   */
+  // False when a late PluralBuddy repost arrived after its original already ran, so callers do not admit the repost
+  // as a second copy.
   originalSuppressed: boolean;
 }
 
@@ -74,10 +70,8 @@ export function getMessageProxyExpectationTtlMs(): number {
   return parseIntegerEnv(process.env.MESSAGE_PROXY_EXPECTATION_TTL_MS, 10000, Math.max(getMessageProxyWaitMs(), 1));
 }
 
-/**
- * Capped at half the expectation TTL: the router pairs the attestation with its
- * expectation only after the lookup returns, so a longer budget lets it expire mid-lookup.
- */
+// Capped at half the expectation TTL because the router pairs an attestation after lookup returns, so a longer budget
+// lets it expire mid-lookup.
 export function getMessageProxyLookupTimeoutMs(): number {
   const requested = parseIntegerEnv(process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS, 5000, 1);
   return Math.max(1, Math.min(requested, Math.floor(getMessageProxyExpectationTtlMs() / 2)));
@@ -320,18 +314,8 @@ export function isKnownMessageProxyMessage(message: Pick<Message, "id" | "webhoo
   return Boolean(message.webhookId && getMessageProxyMessageRecord(message.id));
 }
 
-/**
- * IDs of originals that a confirmed proxy in this channel has superseded.
- *
- * A service may post the webhook and delete the original as separate operations, so an attestation
- * can resolve while the delete is still in flight. A history fetch in that window still returns the
- * original, which would render the same message twice under two identities. Callers building
- * dialogue context must drop these.
- *
- * Scanned rather than kept as a reverse index because a service may split long messages into
- * several proxies sharing one original, so an original-to-proxy map would drop live entries as
- * siblings expired.
- */
+// Scanned rather than reverse-indexed because split proxies share one original, and callers drop them so an in-flight
+// delete does not duplicate history.
 export function getSupersededMessageProxyOriginalMessageIds(channelId: string): Set<string> {
   sweepExpiredMessageProxyState();
   const originalMessageIds = new Set<string>();

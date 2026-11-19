@@ -2,7 +2,8 @@ import type { SQL } from "bun";
 import { log } from "@/utils/misc/logger";
 import { keyManager } from "@/utils/security/keyManager";
 
-/** The legacy mirror remains recoverable until its credential column is removed by migration. */
+// Legacy server_model_configs mirror stays listed so recovery still covers it until a migration drops its api_key
+// column.
 export const ENCRYPTED_COLUMNS = [
   { table: "saved_provider_configs", id: "saved_config_id", column: "api_key" },
   { table: "user_saved_provider_configs", id: "user_saved_config_id", column: "api_key" },
@@ -34,14 +35,16 @@ export interface EncryptedRow {
 
 const SCAN_BATCH_SIZE = 100;
 
-/** Null tags predate versioning and contain V1 ciphertext, even when the current key is newer. */
+// Null key_version tags predate versioning and must default to V1 rather than the current key, because unversioned
+// rows hold V1 ciphertext.
 export function storedKeyVersion(version: number | null): number {
   const effective = version ?? 1;
   if (!Number.isSafeInteger(effective) || effective < 1) throw new Error("Invalid stored encryption version.");
   return effective;
 }
 
-/** Missing canonical columns fail the scan; only a removed legacy mirror can be omitted. */
+// Only the legacy server_model_configs column may be skipped if dropped, because missing canonical columns must fail
+// the scan rather than silently omit rows.
 export async function* scanEncryptedRows(client: SQL): AsyncGenerator<{
   target: EncryptedColumn;
   row: EncryptedRow;
@@ -77,7 +80,8 @@ export async function* scanEncryptedRows(client: SQL): AsyncGenerator<{
   }
 }
 
-/** Checks actual pgcrypto decryption without returning plaintext to the script process. */
+// Ciphertext check verifies length > 0 inside Postgres rather than returning plaintext, so raw credentials never
+// enter script memory.
 export async function verifyCiphertext(client: SQL, ciphertext: Buffer, version: number): Promise<void> {
   try {
     const key = keyManager.getKey(version);
@@ -90,7 +94,8 @@ export async function verifyCiphertext(client: SQL, ciphertext: Buffer, version:
   }
 }
 
-/** A conditional update preserves a credential replaced after the scan and keeps its tag atomic. */
+// Conditional WHERE on old ciphertext and version keeps rotation atomic so concurrent writes cannot overwrite newer
+// credentials.
 export async function rotateEncryptedRow(client: SQL, target: EncryptedColumn, row: EncryptedRow): Promise<void> {
   try {
     const oldKey = keyManager.getKey(storedKeyVersion(row.key_version));
@@ -115,11 +120,8 @@ export async function rotateEncryptedRow(client: SQL, target: EncryptedColumn, r
   }
 }
 
-/**
- * Re-encrypts a row that a running instance just decrypted under an older key. The row may have
- * been replaced since that read, so this reuses the conditional update and skips the row instead
- * of writing the stale credential back; a skipped row stays readable and rotates on a later read.
- */
+// Concurrent replacement errors are swallowed on lazy rotation so stale reads never overwrite newer credentials,
+// since skipped rows stay readable.
 export async function lazyRotateEncryptedRow(
   client: SQL,
   table: EncryptedColumn["table"],

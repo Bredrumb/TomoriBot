@@ -1,9 +1,3 @@
-/**
- * Brave Search Tool Implementations
- * Function call implementations that match MCP function signatures
- * Provides seamless replacement for MCP-based Brave Search functions
- */
-
 import { log } from "../../../utils/misc/logger";
 import type { ToolContext, ToolResult } from "../../../types/tool/interfaces";
 import { sendStandardEmbed } from "../../../utils/discord/embedHelper";
@@ -35,10 +29,6 @@ import {
   IMAGE_MIN_SIZE_BYTES,
 } from "@/tools/restAPIs/imageSearchResults";
 
-/**
- * Extract server ID from tool context
- * @returns Server ID or undefined
- */
 function getServerIdFromContext(context?: ToolContext): number | undefined {
   if (context && "serverId" in context) {
     return (context as ToolContext & { serverId?: number }).serverId;
@@ -51,11 +41,6 @@ function getServerIdFromContext(context?: ToolContext): number | undefined {
   return undefined;
 }
 
-/**
- * Send API key missing error embed to Discord channel
- * @param context - Tool execution context with channel access
- * @param searchType - Type of search that was attempted
- */
 async function sendApiKeyErrorEmbed(context?: ToolContext, searchType = "search") {
   if (!context?.channel || context.suppressProgressNotices) return;
 
@@ -77,12 +62,6 @@ async function sendApiKeyErrorEmbed(context?: ToolContext, searchType = "search"
   }
 }
 
-/**
- * @param success - Whether the operation was successful
- * @param message - Result message for humans
- * @param dataOrError - Either structured data for LLM processing, or error string
- * @param error - Error message (if any, when first param is data)
- */
 function createToolResult(
   success: boolean,
   message: string,
@@ -105,9 +84,6 @@ function createToolResult(
   };
 }
 
-/**
- * Brave Web Search function call implementation
- */
 export async function brave_web_search(
   args: Record<string, unknown>,
   context?: ToolContext,
@@ -192,9 +168,6 @@ export async function brave_web_search(
   }
 }
 
-/**
- * Brave Image Search function call implementation
- */
 export async function brave_image_search(args: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
   try {
     if (!args.query || typeof args.query !== "string") {
@@ -249,11 +222,6 @@ export async function brave_image_search(args: Record<string, unknown>, context?
       const failedUrls: string[] = [];
       const validatedUrls: string[] = [];
 
-      /**
-       * Compress image if it exceeds Discord's 8MB limit
-       * @param imageUrl - URL of the image to compress
-       * @returns Promise resolving to compressed image buffer or null if compression failed
-       */
       const compressImage = async (
         imageUrl: string,
       ): Promise<{ success: boolean; buffer?: Buffer; reason?: string }> => {
@@ -311,11 +279,6 @@ export async function brave_image_search(args: Record<string, unknown>, context?
         }
       };
 
-      /**
-       * Fast URL validation function with aggressive timeout
-       * @param imageUrl - URL to validate
-       * @returns Promise resolving to validation result with optional compressed buffer
-       */
       const validateImageUrl = async (
         imageUrl: string,
       ): Promise<{
@@ -615,9 +578,6 @@ export async function brave_image_search(args: Record<string, unknown>, context?
   }
 }
 
-/**
- * Brave Video Search function call implementation
- */
 export async function brave_video_search(
   args: Record<string, unknown>,
   context?: ToolContext,
@@ -677,9 +637,6 @@ export async function brave_video_search(
   }
 }
 
-/**
- * Brave News Search function call implementation
- */
 export async function brave_news_search(
   args: Record<string, unknown>,
   context?: ToolContext,

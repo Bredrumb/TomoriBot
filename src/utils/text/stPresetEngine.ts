@@ -1,39 +1,18 @@
-/**
- * SillyTavern Preset Template Engine
- *
- * Resolves ST-specific macros in preset node content at context build time.
- * Uses a two-pass architecture:
- *   Pass 1: Select Handlebars branches and apply their variable declarations in source order
- *   Pass 2: Resolve {{getvar::key}}, content macros, randomization, dice rolls, trim, etc.
- *
- * Identity macros ({{user}}, {{char}}) are intentionally left unresolved here, so
- * they are handled downstream by convertMentions() / replaceTemplateVariables()
- * in contextBuilder.ts, which applies the stable "User" placeholder optimization.
- */
+// Identity macros ({{user}}, {{char}}) stay unresolved here so contextBuilder.ts handles them downstream with its
+// stable User placeholder.
 
 import type { StPresetNodeRow } from "@/types/db/schema";
 import { log } from "@/utils/misc/logger";
 import { formatDateWithOffset, formatTimeWithOffset } from "@/utils/text/timezoneHelper";
 import { flattenConditionals, renderStConditionals } from "@/utils/tools/promptConditionals";
 
-/**
- * Runtime context data provided to the macro engine for content macro expansion.
- * These values are sourced from the current TomoriBot state at context build time.
- */
 export interface MacroContext {
-  /** {{user}} triggerer display name (left for convertMentions, but used in content macros) */
   userName: string;
-  /** {{char}} bot/persona display name */
   charName: string;
-  /** {{personality}} joined personality attributes */
   personality: string;
-  /** {{description}} persona description / persona prompt */
   description: string;
-  /** {{scenario}} scenario text (no TomoriBot equivalent: typically empty) */
   scenario: string;
-  /** {{mesExamples}} formatted sample dialogue text */
   mesExamples: string;
-  /** {{lastChatMessage}} the most recent user message content */
   lastChatMessage: string;
   model: string;
   provider: string;
@@ -42,9 +21,6 @@ export interface MacroContext {
   nowMs: number;
 }
 
-/**
- * A preset node after full macro resolution, ready for context assembly.
- */
 export interface ResolvedNode {
   identifier: string;
   name: string;
@@ -57,39 +33,30 @@ export interface ResolvedNode {
   injection_position: number;
   injection_depth: number;
   injection_order: number;
-  /** True if the resolved content contains HTML tags (Discord incompatible) */
   hasHtmlWarning: boolean;
 }
 
-/** Matches {{// comment }} blocks */
 const COMMENT_REGEX = /\{\{\/\/[^}]*\}\}/g;
 
-/** Matches {{setvar::key::value}} / {{addvar::key::value}} declarations */
 const VAR_DECLARATION_REGEX = /\{\{(setvar|addvar)::([^:}]+)::([^}]*)\}\}/g;
 
-/** Matches {{getvar::key}} references */
 const GETVAR_REGEX = /\{\{getvar::([^}]+)\}\}/g;
 
-/** Matches {{random: A, B, C}} selections: negative lookahead prevents matching {{random::...}} double-colon form */
+// Negative lookahead prevents matching {{random::...}} double-colon syntax because comma macros run before
+// double-colon macros.
 const RANDOM_COMMA_REGEX = /\{\{random:(?!:)\s*([^}]+)\}\}/gi;
 
-/** Matches legacy {{random::A::B::C}} selections */
 const RANDOM_DOUBLE_COLON_REGEX = /\{\{random::([^}]+)\}\}/gi;
 
-/** Matches {{roll: XdY}} dice rolls */
 const ROLL_REGEX = /\{\{roll:\s*(\d+)d(\d+)\}\}/gi;
 
-/** Matches {{trim}} directives */
 const TRIM_REGEX = /\{\{trim\}\}/g;
 
-/** Matches simple supported content / identity macros */
 const SIMPLE_SUPPORTED_MACRO_REGEX =
   /\{\{(?:user|char|bot|personality|description|scenario|mesExamples|lastChatMessage|time|date|weekday|isotime|isodate|model|provider|char_version|input)\}\}/gi;
 
-/** Matches any remaining {{...}} macro for compatibility warnings */
 const GENERIC_MACRO_REGEX = /\{\{([^{}]+)\}\}/g;
 
-/** Detects HTML tags that Discord cannot render */
 const HTML_TAG_REGEX =
   /<(?:div|span|style|br|p|h[1-6]|table|tr|td|th|ul|ol|li|details|summary|img|a|strong|em|b|i|u|s|pre|code)\b[^>]*>/i;
 
@@ -98,21 +65,6 @@ const HTML_TAG_REGEX =
 // does not implement that regex engine, so they are handled here as direct replacements. Each
 // entry records the observed preset and the rationale for its patch.
 
-/**
- * Resolve additional identity placeholders used by some preset authors.
- * These may originate from presets that rely on ST's regex post-processing
- * pipeline (which TomoriBot does not implement) to substitute identity tokens.
- * The standard ST macros are {{user}}/{{char}}, but some presets also use:
- *
- * - `<USER>` → triggerer display name (seen in: Marinara's Spaghetti Recipe)
- * - `<BOT>` → bot/persona display name (seen in: Marinara's Spaghetti Recipe)
- *
- * Applied after all standard macro processing so it doesn't interfere
- * with HTML detection (these are uppercase XML tags, not real HTML elements).
- *
- * @param userName - Triggerer's display name
- * @returns Text with additional placeholders resolved
- */
 function applyCompatibilityPatches(text: string, userName: string, charName: string): string {
   // Patch 1: <USER> / <BOT> XML-style identity placeholders
   // Case-sensitive to avoid false positives with lowercase HTML-like tags
@@ -122,24 +74,10 @@ function applyCompatibilityPatches(text: string, userName: string, charName: str
   return result;
 }
 
-/**
- * Remove all {{// comment }} blocks from the text.
- * @param text - Raw node content
- * @returns Text with comment blocks stripped
- */
 function stripComments(text: string): string {
   return text.replace(COMMENT_REGEX, "");
 }
 
-/**
- * Apply all {{setvar::key::value}} / {{addvar::key::value}} declarations in text.
- * Returns the cleaned text (with variable macros removed) and the updated map.
- *
- * `setvar` replaces the current value for the key.
- * `addvar` appends to the current value for the key, preserving raw whitespace.
- *
- * @param targetVars - Optional existing variable map to mutate in-place
- */
 function processVarDeclarations(
   text: string,
   targetVars?: Map<string, string>,
@@ -164,16 +102,6 @@ function processVarDeclarations(
   return { cleaned, vars };
 }
 
-/**
- * Find unsupported `{{...}}` macros that remain after stripping the subset of
- * SillyTavern syntax TomoriBot actually resolves.
- *
- * Used by `/config` > Plugins > SillyTavern Presets import to warn users when enabled nodes still reference
- * macros that will not behave like they do in SillyTavern.
- *
- * @param text - Raw preset node content
- * @returns Deduplicated user-facing macro labels
- */
 export function findUnsupportedPresetMacros(text: string): string[] {
   let malformedConditional = false;
   const flattened = flattenConditionals(stripComments(text), () => {
@@ -213,27 +141,12 @@ export function findUnsupportedPresetMacros(text: string): string[] {
   return [...labels];
 }
 
-/**
- * Replace all {{getvar::key}} references with values from the variable map.
- * Unknown keys resolve to an empty string.
- *
- * @returns Text with all getvar references resolved
- */
 function processGetVars(text: string, vars: Map<string, string>): string {
   return text.replace(GETVAR_REGEX, (_match, key: string) => {
     return vars.get(key.trim()) ?? "";
   });
 }
 
-/**
- * Replace ST content macros with their TomoriBot equivalents.
- * Tracks which macros were actually expanded (non-empty replacement)
- * so the context builder can skip duplicate marker blocks.
- *
- * @param ctx - Macro context with runtime data
- * @param expanded - Set to track which content macros were resolved with real data
- * @returns Text with content macros replaced
- */
 function processContentMacros(text: string, ctx: MacroContext, expanded: Set<string>): string {
   // Map of ST macro name → { value, trackingKey }
   // trackingKey is used for deduplication tracking in the context builder
@@ -343,12 +256,6 @@ function resolveConditionExpression(expression: string, vars: Map<string, string
   return resolved.replace(GENERIC_MACRO_REGEX, "");
 }
 
-/**
- * Evaluate {{random: A, B, C}} and legacy {{random::A::B::C}} macros by picking
- * a random item from the provided list.
- *
- * @returns Text with each random macro replaced by a randomly chosen item
- */
 function processRandom(text: string): string {
   const pickRandomItem = (items: string[]) => {
     if (items.length === 0) {
@@ -375,12 +282,6 @@ function processRandom(text: string): string {
   });
 }
 
-/**
- * Evaluate {{roll: XdY}} dice roll macros.
- * Rolls X dice with Y sides each and returns the sum.
- *
- * @returns Text with each roll macro replaced by the computed sum
- */
 function processRoll(text: string): string {
   return text.replace(ROLL_REGEX, (_match, countStr: string, sidesStr: string) => {
     const count = Math.min(Number.parseInt(countStr, 10), 100); // Cap at 100 dice
@@ -395,13 +296,6 @@ function processRoll(text: string): string {
   });
 }
 
-/**
- * Process {{trim}} macros: remove the macro token, then trim leading/trailing whitespace.
- * If the trimmed result is empty or whitespace-only, the node is effectively disabled.
- *
- * @param text - Node content with optional {{trim}} macros
- * @returns The trimmed result and whether it resolved to empty
- */
 function processTrim(text: string): { result: string; isEmpty: boolean } {
   const hasTrim = TRIM_REGEX.test(text);
   if (!hasTrim) {
@@ -413,22 +307,10 @@ function processTrim(text: string): { result: string; isEmpty: boolean } {
   return { result: cleaned, isEmpty: cleaned.length === 0 };
 }
 
-/**
- * Detect whether resolved content contains HTML tags that Discord cannot render.
- * Used to flag nodes for user awareness (not auto-disabled).
- *
- * @param text - Resolved node content
- * @returns True if HTML tags are detected
- */
 function detectHtmlContent(text: string): boolean {
   return HTML_TAG_REGEX.test(text);
 }
 
-/**
- * Map SillyTavern role names to TomoriBot StructuredContextItem roles.
- * ST uses "assistant" where TomoriBot uses "model".
- *
- */
 function mapStRole(stRole: string): "system" | "user" | "model" {
   switch (stRole.toLowerCase()) {
     case "assistant":

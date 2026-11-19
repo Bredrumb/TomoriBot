@@ -1,27 +1,10 @@
-/**
- * Minimal fake ChatInputCommandInteraction for interaction timing tests.
- *
- * Records every acknowledgement-related call (reply, deferReply, showModal,
- * editReply, followUp, deferUpdate, update) so tests can assert exact call
- * order without connecting to Discord.
- */
-
-/** One recorded call to the fake interaction object. */
 export type FakeCall = {
-  /** Name of the interaction method that was invoked. */
   method: string;
-  /** Arguments passed to the method. */
   args: unknown[];
 };
 
-/**
- * Covers every acknowledgement method the Discord command-system docs require plus the helpers
- * commands call directly.
- */
 export type FakeInteraction = {
-  /** Tracks whether deferReply() has been called. */
   deferred: boolean;
-  /** Tracks whether reply() or showModal() has been called. */
   replied: boolean;
   id: string;
   createdTimestamp: number;
@@ -56,14 +39,6 @@ export type FakeInteraction = {
   fetchReply: () => Promise<{ id: string; createdTimestamp: number }>;
 };
 
-/**
- * Creates a minimal fake interaction that records every acknowledgement-related
- * call. The `calls` array grows in call order so tests can assert exact
- * sequences with `calls.map(c => c.method)`.
- *
- * @param overrides - Partial FakeInteraction values merged after default setup.
- *                    Use this to supply guild, channel, options, etc.
- */
 export function makeFakeInteraction(overrides: Partial<FakeInteraction> = {}): {
   interaction: FakeInteraction;
   calls: FakeCall[];
@@ -153,10 +128,6 @@ export function makeFakeInteraction(overrides: Partial<FakeInteraction> = {}): {
   return { interaction, calls };
 }
 
-/**
- * Convenience helper: extract just the method names from a calls array.
- * Useful for `expect(callMethods(calls)).toEqual(["deferReply", "editReply"])`.
- */
 export function callMethods(calls: FakeCall[]): string[] {
   return calls.map((call) => call.method);
 }

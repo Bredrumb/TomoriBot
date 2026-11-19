@@ -53,10 +53,8 @@ import type { SendableChannel } from "./types";
 
 const DISCORD_SNOWFLAKE_PATTERN = /^\d{17,20}$/;
 
-/**
- * Message IDs whose document save is in flight. Saved state itself lives on the message (its buttons
- * are withdrawn), so this set only covers the window between a submit and that repaint.
- */
+// In-flight set covers only the window between modal submit and message repaint, because withdrawn buttons on the
+// message hold the persisted saved state.
 const savingSummaryMessageIds = new Set<string>();
 
 export async function postSummaryWithControls(params: {
@@ -111,10 +109,8 @@ async function replyAlreadySaved(interaction: Parameters<typeof replyInfoEmbed>[
   });
 }
 
-/**
- * Opens the edit modal. The lock is checked on the click and again on the submit, because a member
- * may save the summary while this modal is open.
- */
+// Save lock is checked on both click and modal submit because another member can save the summary while the edit
+// modal is open.
 export async function handleSummaryEditClick(interaction: ButtonInteraction, controls: SummaryControls): Promise<void> {
   const locale = await resolveUserLocale(interaction);
   const summaryEmbed = interaction.message.embeds[0];
@@ -168,10 +164,8 @@ export async function handleSummaryEditClick(interaction: ButtonInteraction, con
   );
 }
 
-/**
- * Opens the save modal for any member. Several members can hold it open at once, so the first submit
- * claims the message and later submits are told it was already saved.
- */
+// Multiple members can hold this save modal open at once, so the first submit claims the message and later submits
+// see an already-saved notice.
 export async function handleSummarySaveClick(interaction: ButtonInteraction, controls: SummaryControls): Promise<void> {
   const locale = await resolveUserLocale(interaction);
   const serverDiscId = interaction.guild?.id ?? interaction.user.id;
@@ -305,10 +299,6 @@ async function promptSaveAsDocModal(
   return { modalResult, allPersonas, autoName };
 }
 
-/**
- * Embeds the summary text into the document store and returns the stored document name. Replies
- * with the failure reason and returns null when the save cannot proceed.
- */
 async function saveSummaryToDocs(params: {
   buttonInteraction: ButtonInteraction;
   submitInteraction: NonNullable<ModalResult["interaction"]>;

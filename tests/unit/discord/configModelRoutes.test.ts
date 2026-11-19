@@ -1,11 +1,3 @@
-/**
- * Route coverage for the `/config` Models surface.
- *
- * Drives the real registered route through the real policy, catalog, renderer, and canonical model
- * operations. Writes are proved by spying on the repository each operation actually calls rather
- * than by substituting an operations double, which would restate the expected answer instead of
- * exercising the code under test.
- */
 import { beforeAll, describe, expect, it, spyOn } from "bun:test";
 import type { Client } from "discord.js";
 import type { SavedProviderConfigRow, TomoriState } from "@/types/db/schema";
@@ -193,14 +185,11 @@ interface HarnessOptions {
 interface Harness {
   dependencies: Partial<ConfigRouteDependencies>;
   telemetry: string[];
-  /** Payloads every interaction in this harness has edited, oldest first. */
   readonly edits: unknown[];
-  /** Payloads every interaction in this harness has replied or followed up with, oldest first. */
   readonly replies: unknown[];
   modals: unknown[];
   checkboxValues: Record<string, string[] | undefined>;
   selectValues: Record<string, string | undefined>;
-  /** Files the newest interaction's arrays behind the running `edits`/`replies` views. */
   record: (interaction: RouteInteraction) => void;
 }
 
@@ -394,7 +383,6 @@ function textDisplayContents(value: unknown): string[] {
   return [...content, ...Object.values(record).flatMap(textDisplayContents)];
 }
 
-/** Options of the model select inside a raw model-picker modal payload. */
 function modelModalOptions(payload: unknown): Array<{ value: string }> {
   const parsed = payload as { components?: Array<{ component?: { options?: Array<{ value: string }> } }> } | undefined;
   return parsed?.components?.[0]?.component?.options ?? [];

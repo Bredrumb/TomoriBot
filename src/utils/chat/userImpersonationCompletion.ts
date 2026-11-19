@@ -54,12 +54,8 @@ export function getUserImpersonationGenerationError(result: GenerationTurnResult
   return new Error(fallbackMessage);
 }
 
-/**
- * Makes user-impersonation chat calls wait for the real generation outcome, including turns that
- * are queued behind an active channel lock. The slash-command caller can then use its existing
- * try/catch to edit the deferred interaction into an ephemeral error embed instead of reporting
- * success merely because tomoriChat() returned a non-throwing status.
- */
+// Promise tracking the real generation outcome across channel-lock queuing so the caller's catch edits the deferred
+// reply instead of reporting false success.
 export function installUserImpersonationCompletion(incoming: ChatIncoming): Promise<void> | null {
   if (!incoming.isUserImpersonation) {
     return null;

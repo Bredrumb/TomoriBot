@@ -23,10 +23,6 @@ afterEach(() => {
   for (const spy of spies.splice(0)) spy.mockRestore();
 });
 
-/**
- * Plans a manually triggered turn whose borrowed anchor belongs to a bystander, and reports the turn
- * locale and the user the text credentials were resolved for (resolution then fails, ending planning).
- */
 async function planWithAnchorAuthor(options: {
   borrowsTriggerMessage?: boolean;
   rejectedByRoleWhitelist: boolean;

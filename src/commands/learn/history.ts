@@ -7,19 +7,6 @@ import {
   getProviderRequestFailureCopy,
 } from "@/utils/provider/providerUsage";
 import { verifyMessageWebhook } from "@/utils/chat/webhookIdentity";
-/**
- * /memory history import - Extract atomic facts from channel message history using an LLM
- * and store them as document chunks for RAG retrieval.
- *
- * Inspired by SimpleMem's "Semantic Structured Compression" approach:
- * instead of summarizing chat into a blob, extract self-contained atomic facts
- * with resolved pronouns.
- *
- * Supports three scopes:
- * - persona: Store facts for a specific persona (user selects via paginated buttons)
- * - automatic: Detect personas from webhook authors, create per-persona documents
- * - global: Store facts serverwide (persona_id = NULL)
- */
 
 import type {
   ChatInputCommandInteraction,
@@ -80,24 +67,19 @@ import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/p
 import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
 import type { TokenUsage } from "@/utils/text/tokenEstimate";
 
-/** Maximum document name length */
 const MAX_DOCUMENT_NAME_LENGTH = 64;
 
-/** Number of messages per LLM extraction window */
 const HISTORY_EXTRACTION_WINDOW_SIZE = 40;
 
-/** Number of previous restatements to pass as dedup context between windows */
 const DEDUP_CONTEXT_COUNT = 3;
 
-/** Max retrieved document chunks injected into the in-character system prompt per window */
 const HISTORY_INCHARACTER_RAG_MAX_RESULTS = 16;
 
-/** Minimum similarity score for chunks pulled into in-character context (loose; we're seeding awareness) */
+// Deliberately loose 0.3 similarity floor because in-character extraction only needs to seed background awareness.
 const HISTORY_INCHARACTER_RAG_MIN_SIMILARITY = 0.3;
 
 type HistoryScope = "persona" | "automatic" | "global";
 
-/** Target document for incremental per-window chunk writes */
 interface WriteTarget {
   documentId: number;
   documentName: string;
@@ -129,10 +111,6 @@ async function replaceHistoryImportStatus(
   await target.editReply({ embeds: [embed] });
 }
 
-/**
- * Builds the localized footer appended to every terminal embed: range timestamps,
- * last-processed message ID, jump link, and channel-end status.
- */
 function buildFooter(params: {
   firstMessage: Message;
   lastMessage: Message;
@@ -155,12 +133,6 @@ function buildFooter(params: {
   });
 }
 
-/**
- * Loads existing server memories for a persona whose channel scope admits one of the filter
- * channels; unscoped memories are always included.
- *
- * @param serverId Internal server id
- */
 async function loadInCharacterMemoryLines(
   serverId: number,
   personaLineageId: number | null,
@@ -176,10 +148,6 @@ async function loadInCharacterMemoryLines(
     .filter((content) => content.length > 0);
 }
 
-/**
- * Retrieves document chunks relevant to a query from unscoped documents and documents scoped to
- * any of the filter channels.
- */
 async function retrieveInCharacterChunks(params: {
   serverId: number;
   personaId: number | null;
@@ -205,7 +173,6 @@ async function retrieveInCharacterChunks(params: {
   });
 }
 
-/** Shows the "no facts extracted from this batch" embed with the pagination footer. */
 async function showNoFactsExtractedEmbed(
   statusTarget: HistoryImportStatusTarget,
   locale: string,
@@ -218,12 +185,8 @@ async function showNoFactsExtractedEmbed(
   });
 }
 
-/**
- * Shows the "extraction failed" embed, quoting the provider's own error text.
- *
- * Kept distinct from {@link showNoFactsExtractedEmbed} so a model that cannot emit
- * structured output reports the real cause instead of a misleading empty-result notice.
- */
+// Kept separate from showNoFactsExtractedEmbed so a model that cannot emit structured output surfaces the real error
+// instead of an empty-result notice.
 async function showExtractionFailedEmbed(
   statusTarget: HistoryImportStatusTarget,
   locale: string,
@@ -246,10 +209,6 @@ async function showExtractionFailedEmbed(
   });
 }
 
-/**
- * Renders the correct terminal embed for a failed extraction run, so every import flow
- * reports a provider error as an error and an empty result as an empty result.
- */
 async function showExtractionFailureTerminal(
   statusTarget: HistoryImportStatusTarget,
   locale: string,
@@ -272,9 +231,6 @@ async function showExtractionFailureTerminal(
   await showNoFactsExtractedEmbed(statusTarget, locale, footer);
 }
 
-/**
- * Configures the /memory history import subcommand options.
- */
 const LEARNER_SCOPE_LABEL_KEYS = {
   automatic: "commands.learn.history.learner_choice_automatic",
   global: "commands.learn.history.learner_choice_global",
@@ -284,10 +240,8 @@ function learnerLabelName(label: string): string {
   return label.split(/[(（]/)[0]?.trim() ?? label;
 }
 
-/**
- * Discord submits typed text unchanged when nothing is picked, so a scope also matches its value or
- * the name its label opens with in any locale, ignoring case.
- */
+// Raw values and localized label prefixes match case-insensitively because Discord submits typed text verbatim when
+// no autocomplete choice is picked.
 export function resolveLearnerScope(learnerInput: string | null): HistoryScope {
   if (learnerInput === null) return "persona";
   const typed = learnerInput.toLowerCase();
@@ -300,7 +254,6 @@ export function resolveLearnerScope(learnerInput: string | null): HistoryScope {
   return "persona";
 }
 
-/** Suggests Automatic and Global ahead of the workspace's personas, so the learner list names every scope. */
 export async function autocomplete(_client: Client, interaction: AutocompleteInteraction): Promise<void> {
   await respondWithPersonaChoices(interaction, interaction.guild?.id ?? interaction.user.id, undefined, [
     { name: localizer(interaction.locale, LEARNER_SCOPE_LABEL_KEYS.automatic), value: "automatic" },
@@ -376,11 +329,6 @@ const EXTRACTION_CHANNELS_FIELD_ID = "channels";
 const EXTRACTION_PROMPT_FIELD_ID = "system_prompt";
 const DISCORD_SNOWFLAKE_PATTERN = /^\d{17,20}$/;
 
-/**
- * The extraction prompt modal shared by every scope, with the document's channel limit above the prompt.
- *
- * @param inServer - False in a DM, where the channel field is omitted because there are no channels to pick
- */
 export function buildExtractionPromptModal(defaultPrompt: string, inServer: boolean): ModalOptions {
   const channelField: ModalChannelSelectField = {
     kind: "channelSelect",
@@ -410,19 +358,15 @@ export function buildExtractionPromptModal(defaultPrompt: string, inServer: bool
   };
 }
 
-/** @returns The channels picked in the extraction prompt modal; empty means every channel. */
+// Empty channel list means every channel is included rather than none, because omitting channels leaves extraction
+// unscoped.
 export function readExtractionChannelIds(multiValues: Readonly<Record<string, string[]>> | undefined): string[] {
   const picked = multiValues?.[EXTRACTION_CHANNELS_FIELD_ID] ?? [];
   return [...new Set(picked.filter((id) => DISCORD_SNOWFLAKE_PATTERN.test(id)))];
 }
 
-/**
- * Shows a modal pre-filled with the chosen system prompt template, lets the user edit it,
- * and returns the submit interaction and final system prompt string. For in_character
- * mode the framing template is shown with {persona_nickname} already substituted; the
- * runtime context blocks (attributes, memories, retrieved chunks) are NOT shown in the
- * modal and are appended later by composeInCharacterSystemPrompt.
- */
+// In-character mode excludes attributes, memories, and RAG chunks from this modal because
+// composeInCharacterSystemPrompt appends them per window later.
 async function promptForExtractionSystem(
   host: ChatInputCommandInteraction,
   locale: string,
@@ -456,9 +400,6 @@ async function promptForExtractionSystem(
   };
 }
 
-/**
- * Splits an array of formatted message lines into windows of the configured size.
- */
 function splitIntoWindows(lines: string[], windowSize: number): string[] {
   const windows: string[] = [];
   for (let i = 0; i < lines.length; i += windowSize) {
@@ -467,12 +408,8 @@ function splitIntoWindows(lines: string[], windowSize: number): string[] {
   return windows;
 }
 
-/**
- * Runs the LLM extraction for a single text window.
- *
- * Returns the provider outcome verbatim so a failed window stays distinguishable from
- * an empty one; {@link runIncrementalExtraction} decides how to aggregate the two.
- */
+// Provider errors stay uncollapsed here so runIncrementalExtraction can distinguish a failed window from an empty
+// one.
 async function extractWindow(
   windowText: string,
   previousRestatements: string[],
@@ -497,12 +434,8 @@ async function extractWindow(
   });
 }
 
-/**
- * Fetches messages after a starting anchor and formats them for extraction.
- * Returns null only when the raw fetch yields zero messages (channel-end reached);
- * otherwise returns the formatted result alongside batch boundary metadata so the
- * caller can build the pagination footer and handle empty-after-filtering cases.
- */
+// Null return means raw fetch yielded zero messages, so batches emptied by filtering still carry boundary metadata
+// for pagination.
 async function fetchAndFormatMessages(params: {
   channel: TextBasedChannel;
   startMessageId: string;
@@ -567,12 +500,8 @@ async function fetchAndFormatMessages(params: {
   };
 }
 
-/**
- * Reserves a document quota slot at the point of commitment. Called right before
- * each scope branch's document creation so that preflight validation (creds,
- * embedding model, scope checks) doesn't burn the user's daily slot.
- * Returns false and posts a rate-limit message if denied.
- */
+// Must run after preflight validation right before document creation so failed credential, model, or scope checks do
+// not burn a daily quota slot.
 async function reserveDocumentQuotaForImport(
   userId: string,
   replyInteraction: HistoryImportStatusTarget,
@@ -591,10 +520,6 @@ async function reserveDocumentQuotaForImport(
   return false;
 }
 
-/**
- * Checks document count limit and duplicate name, then creates the document record.
- * Returns the new document_id or null (error already replied).
- */
 async function createDocumentForImport(params: {
   documentName: string;
   serverId: number;
@@ -659,33 +584,22 @@ async function createDocumentForImport(params: {
   });
 }
 
-/**
- * Aggregate outcome of an incremental extraction run.
- *
- * `no-facts` means every window succeeded but yielded nothing worth keeping;
- * `extraction-failed` means at least one window errored and none produced facts, and
- * carries the provider's own error text so the terminal embed can show the real cause.
- */
+// extraction-failed triggers only when at least one window errors and none yield facts, so the terminal embed can
+// surface the provider error.
 type IncrementalExtractionResult =
   | { ok: true; totalFactCount: number; allChunkText: string }
   | { ok: false; reason: "no-facts" }
   | { ok: false; reason: "extraction-failed"; error: string; failedWindows: number; totalWindows: number }
   | { ok: false; reason: "provider-denied"; denied: ProviderRequestDeniedError };
 
-/**
- * Runs incremental LLM extraction over message windows, embedding and persisting each
- * window's facts immediately after extraction to avoid interaction token timeouts.
- *
- * @returns Fact count and joined chunk text on success, otherwise a typed failure the
- *          caller renders (and cleans up its documents for).
- */
+// Each window embeds and persists immediately rather than batching at the end to survive timeouts, so callers must
+// clean up documents on failure.
 async function runIncrementalExtraction(params: {
   formattedResult: ReturnType<typeof formatMessagesForExtraction>;
   provider: string;
   model: string;
   apiKey: string;
   endpointUrl?: string;
-  /** Composes the system prompt for a given window. For static prompts (conversation/roleplay) this returns a constant; for in_character it does per-window RAG. */
   composeSystemPrompt: (windowText: string, windowIndex: number) => Promise<string>;
   replyInteraction: HistoryImportStatusTarget;
   locale: string;
@@ -1067,10 +981,6 @@ async function validateHistoryMessageRange(
   return null;
 }
 
-/**
- * Executes the /memory history import command.
- * Extracts atomic facts from channel history using an LLM and stores them for RAG retrieval.
- */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,

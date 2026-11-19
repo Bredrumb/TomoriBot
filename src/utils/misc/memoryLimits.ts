@@ -6,9 +6,6 @@ const MAX_SAMPLE_DIALOGUE_LENGTH = 2000;
 const MAX_SAMPLE_DIALOGUES = 15;
 const MAX_TRIGGER_WORDS = 10;
 
-/**
- * Memory limit configuration loaded from environment variables with defaults
- */
 export interface MemoryLimits {
   maxPersonalMemories: number;
   maxServerMemories: number;
@@ -43,9 +40,6 @@ type MemoryValidationError =
   | "PERSONA_LIMIT_EXCEEDED"
   | "CONTENT_EMPTY";
 
-/**
- * Load memory limits from environment variables with sensible defaults
- */
 export function getMemoryLimits(): MemoryLimits {
   // Counted per (owner, persona_lineage_id), so a multi-persona server holds this
   // many times the persona count. Memory length, not count, is the context tax.
@@ -103,9 +97,6 @@ export function validateMemoryContent(content: string): MemoryValidationResult {
   return { isValid: true };
 }
 
-/**
- * Attributes use a higher limit (default 2000) than regular memories (default 1000).
- */
 export function validateAttribute(content: string): MemoryValidationResult {
   const limits = getMemoryLimits();
 
@@ -120,9 +111,6 @@ export function validateAttribute(content: string): MemoryValidationResult {
   return { isValid: true };
 }
 
-/**
- * Sample dialogues use a higher limit (default 2000) than regular memories (default 1000).
- */
 export function validateSampleDialogue(content: string): MemoryValidationResult {
   const limits = getMemoryLimits();
 

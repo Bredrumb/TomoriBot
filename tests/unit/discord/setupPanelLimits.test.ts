@@ -32,7 +32,6 @@ beforeAll(async () => {
 const SECRET_KEY_STRING = "super-secret-api-key-do-not-leak";
 const TEST_NONCE = "nonce-abc-12345";
 
-/** The catalog rows the complete-draft fixture stores, so its settings step resolves and reads as done. */
 const COMPLETE_DRAFT_CATALOGS = {
   personas: [{ id: 1, name: "Lighthouse", description: "A steady, watchful companion." }],
   prompts: [{ name: "Tomori Default", displayName: "Tomori Default", description: "The standard reply style." }],
@@ -55,13 +54,6 @@ function createDraft(overrides: Partial<SetupDraftRecord> = {}): SetupDraftRecor
   };
 }
 
-/**
- * A draft with every step done, paired with the catalogs its settings step resolves against.
- *
- * The two travel together because a completed settings step is only complete against a catalog that
- * still holds its persona and prompt: building the pair separately once already produced a fixture
- * that rendered `1 of 2` with an enabled Finish while the test asserted it was ready.
- */
 function createCompleteDraftInput(isHosted = false): {
   draft: SetupDraftRecord;
   settingsCatalogs: typeof COMPLETE_DRAFT_CATALOGS;

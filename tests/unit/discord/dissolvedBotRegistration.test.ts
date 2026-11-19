@@ -1,10 +1,3 @@
-/**
- * Proves the /bot dissolution landed: /generate scene is reachable at its new path and the root is gone.
- * This file owns the /bot absence assertion; the per-command registration files do not restate it.
- *
- * The relocated `/generate scene` description is asserted by commandDescriptionRegistration.test.ts,
- * which rejects any registered root, group, or subcommand description that is still a locale key path.
- */
 import { beforeAll, describe, expect, it } from "bun:test";
 import { loadCommandData } from "@/utils/discord/commandLoader";
 import { initializeLocalizer } from "@/utils/text/localizer";

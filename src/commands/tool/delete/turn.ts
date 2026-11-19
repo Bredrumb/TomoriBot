@@ -17,13 +17,9 @@ import { resolveManagedWebhookForChannel } from "@/utils/discord/webhook/fallbac
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
-/** Module-level lock set keyed by channelId, so prevents double-invocation. */
 const activeDeleteLocks = new Set<string>();
 
-/**
- * Max message age (in ms) below which Discord allows bulk deletion.
- * Messages older than 14 days must be deleted individually.
- */
+// Discord rejects bulk deletion for messages older than 14 days, so older messages must be deleted individually.
 const BULK_DELETE_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 
 interface DeleteTurnStatus {
@@ -33,11 +29,7 @@ interface DeleteTurnStatus {
   color: ColorCode;
 }
 
-/**
- * Resolves the parent text channel that owns the webhook for the given channel.
- * Threads cannot own webhooks, so the parent channel is used instead.
- * @returns The BaseGuildTextChannel that owns webhooks, or null if unavailable
- */
+// Discord threads cannot own webhooks, so webhook resolution must fall back to the parent text channel.
 function resolveWebhookHostChannel(channel: Message["channel"]): BaseGuildTextChannel | null {
   const isThread = "isThread" in channel && typeof channel.isThread === "function" && channel.isThread();
   if (isThread) {
@@ -47,19 +39,12 @@ function resolveWebhookHostChannel(channel: Message["channel"]): BaseGuildTextCh
   return "fetchWebhooks" in channel && "createWebhook" in channel ? (channel as BaseGuildTextChannel) : null;
 }
 
-/**
- * Resolves the thread ID for webhook message deletion.
- * When deleting webhook messages inside a thread, the thread ID must be passed
- * as the second argument to `webhook.deleteMessage()`.
- * @returns The thread ID if in a thread, otherwise undefined
- */
+// Thread IDs are passed separately because Discord requires the thread ID argument when deleting webhook messages
+// inside a thread.
 function resolveWebhookThreadId(channel: Message["channel"]): string | undefined {
   return "isThread" in channel && typeof channel.isThread === "function" && channel.isThread() ? channel.id : undefined;
 }
 
-/**
- * Configures the 'turn' subcommand under the 'delete' group.
- */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("turn")
@@ -77,21 +62,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
         .setRequired(false),
     );
 
-/**
- * Executes the `/tool delete turn` command.
- *
- * Walks the recent channel history, finds the last contiguous block of
- * messages sent by a single known persona (via webhook username or bot
- * non-webhook messages), deletes those messages, and optionally re-triggers
- * that persona with `tomoriChat`. Matrix bridge relay webhooks are treated
- * as user messages and stop block detection without being deleted.
- *
- * Interaction patterns used:
- * - The slash interaction is deferred before state/persona loads.
- * - With `select_persona`, the persona workflow edits that reply, then
- *   update-defers the selected button and keeps the anchor message in place.
- *
- */
 export async function execute(
   client: Client,
   interaction: ChatInputCommandInteraction,

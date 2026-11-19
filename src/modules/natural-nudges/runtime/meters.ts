@@ -46,7 +46,6 @@ function bucketKey(dayStartMs: number): string {
   return new Date(dayStartMs).toISOString().slice(0, 10);
 }
 
-/** Recency-weighted engagement per day, normalized so N weighted turns every day read as heat N. */
 export function computeHeat(dailyCounts: ReadonlyMap<string, number>, now: Date): number {
   const today = utcDayStart(now);
   let weighted = 0;
@@ -84,7 +83,6 @@ export function rollLullHours(random: () => number = Math.random): number {
   return LULL_MIN_HOURS + random() * (LULL_MAX_HOURS - LULL_MIN_HOURS);
 }
 
-/** When the next idle nudge becomes due; a server that never had one is due at once. */
 export function computeIdleNudgeDueAt(args: {
   lastIdleNudgeAt: Date | null;
   perDay: number;
@@ -100,10 +98,8 @@ export function computeIdleNudgeDueAt(args: {
   return new Date(args.lastIdleNudgeAt.getTime() + intervalMs);
 }
 
-/**
- * Consecutive unanswered inviting idle nudges, newest first. A `message_sent` after an idle nudge means
- * the server talked to Tomori since, so that idle nudge and everything older no longer counts.
- */
+// Callers must pass `latestIdleNudges` newest first, because the count stops at the first answered nudge or later
+// engagement.
 export function countUnansweredStreak(
   latestIdleNudges: readonly NaturalNudgeFireRow[],
   lastEngagementAt: Date | null,
@@ -124,7 +120,6 @@ export function restedShare(lastFiredAt: Date | undefined, now: Date, restMs: nu
   return RESTED_FLOOR + (1 - RESTED_FLOOR) * Math.min(1, elapsed / restMs);
 }
 
-/** A targeted idle nudge multiplies in its rest on this persona and target, so the drawn member rarely sees a repeat. */
 export function idleNudgeTickets(
   idleNudge: IdleNudgeDefinition,
   lastFiredAt: Date | undefined,
@@ -136,7 +131,6 @@ export function idleNudgeTickets(
   return serverRest * restedShare(lastFiredOnTargetAt, now, PING_USER_REPEAT_REST_MS);
 }
 
-/** UTC hours (index 0-23) in which idle nudges may start. */
 export function resolveWakingHours(utcHistogram: readonly number[], timezoneOffset: number): boolean[] {
   const total = utcHistogram.reduce((sum, count) => sum + count, 0);
   if (total < WAKING_HOURS_MIN_TURNS) {
@@ -152,7 +146,6 @@ export function resolveWakingHours(utcHistogram: readonly number[], timezoneOffs
   return smoothed.map((value) => value >= busiest * WAKING_HOUR_SHARE);
 }
 
-/** Minutes the first waking hour opens late, fixed per server and stretch so it varies day to day. */
 export function wakeDelayMinutes(serverId: number, stretchStart: Date): number {
   const digest = createHash("sha256").update(`${serverId}:${stretchStart.toISOString()}`).digest();
   return digest.readUInt32BE(0) % (WAKE_DELAY_MAX_MINUTES + 1);
@@ -184,7 +177,8 @@ export function drawRaffle<T>(entries: readonly RaffleEntry<T>[], random: () => 
   return live[live.length - 1]?.item ?? null;
 }
 
-/** Human messages between Active Nudge checks: busier servers check sooner, and nothing runs below the heat floor. */
+// Returned bounds count human messages between Active Nudge checks rather than time, because busier servers check
+// after fewer messages.
 export function activeNudgeTripRange(
   heat: number,
   level: IdleNudgeFrequencyLevel,
@@ -201,7 +195,6 @@ export function activeNudgeTripRange(
   };
 }
 
-/** Detour ticket multiplier: 1 for the most-talked-to persona, rising toward the maximum as its share falls. */
 export function underdogBoost(count: number, topCount: number): number {
   if (topCount <= 0) return ACTIVE_NUDGE_UNDERDOG_MAX_BOOST;
   const share = Math.min(1, Math.max(0, count / topCount));

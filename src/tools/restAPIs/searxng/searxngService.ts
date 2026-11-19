@@ -1,18 +1,3 @@
-/**
- * SearXNG Search REST API Service.
- *
- * Direct HTTP integration with a self-hosted SearXNG instance. SearXNG
- * normalizes results from upstream engines (Google, Bing, DDG, Brave,
- * Wikipedia, etc.) and exposes a single `/search` endpoint that takes
- * a `categories=` parameter, so unlike Brave (4 endpoints) all supported
- * search modes ride one HTTP call here.
- *
- * Availability gates on whether `SEARXNG_BASE_URL` is set AND the
- * instance responds healthy. We cache the health probe so we don't hit
- * the local server on every tool invocation (the chain dispatcher calls
- * `isSearxngAvailable()` once per call).
- */
-
 import { log } from "../../../utils/misc/logger";
 import type {
   SearxngApiResult,
@@ -41,19 +26,10 @@ interface HealthcheckCache {
 
 let healthcheckCache: HealthcheckCache | null = null;
 
-/** Last availability the transition logger reported; null until the first probe resolves. */
 let lastReportedAvailability: boolean | null = null;
 
-/**
- * Emits an error-level record when availability flips, and only then.
- *
- * A server that is merely unreachable is otherwise invisible in production: the probe
- * failures below log at `warn`, which sits under the level-50 threshold on the JSONL sink
- * that Azure Monitor tails, and `dispatcher.ts` skips an unavailable engine silently on its
- * way down the chain. So the operator sees errors when SearXNG is up and broken, but nothing
- * at all when it is simply gone, which is the louder failure. Error level is what reaches the
- * table; transition-only is what keeps a 60s probe from flooding it.
- */
+// Transition logging uses error level because warn sits below Azure Monitor's level 50 sink and 60s probes would
+// otherwise flood it.
 function reportAvailabilityTransition(available: boolean, reason?: string): void {
   if (lastReportedAvailability === available) return;
 
@@ -84,21 +60,12 @@ function reportAvailabilityTransition(available: boolean, reason?: string): void
   );
 }
 
-/**
- * Resolve the configured SearXNG base URL, trimming trailing slashes.
- * Returns null if the env var is not set.
- */
 function getSearxngBaseUrl(): string | null {
   const raw = process.env.SEARXNG_BASE_URL?.trim();
   if (!raw) return null;
   return raw.replace(/\/+$/, "");
 }
 
-/**
- * Test whether a configured SearXNG instance is reachable.
- *
- * Result is cached for a minute to keep the dispatcher fast without locking the bot out of recovery.
- */
 export async function isSearxngAvailable(force = false): Promise<boolean> {
   const baseUrl = getSearxngBaseUrl();
   if (!baseUrl) return false;
@@ -205,9 +172,6 @@ async function makeSearxngRequest(
   }
 }
 
-/**
- * Generic search: pass any category supported by your SearXNG config.
- */
 export async function searxngSearch(
   query: string,
   category: SearxngCategory,
@@ -223,12 +187,8 @@ export async function searxngSearch(
   );
 }
 
-/**
- * Format SearXNG results into a compact text block.
- *
- * Output shape intentionally mirrors `formatBraveSearchResults` so consumers
- * downstream of the engine layer don't see provider-specific formatting drift.
- */
+// Output shape intentionally mirrors formatBraveSearchResults so downstream consumers see uniform text across search
+// engines.
 export function formatSearxngResults(response: SearxngResponse, category: SearxngCategory, count?: number): string {
   const results = response.results ?? [];
   const queryDisplay = response.query || "your search";

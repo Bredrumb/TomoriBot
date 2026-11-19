@@ -48,7 +48,6 @@ import { buildCustomProviderName, rememberCustomProviderLabel } from "@/utils/pr
 import type { OpenRouterModelScope } from "./LlmModelRepository";
 import type { IRepository } from "./IRepository";
 
-/** Export shape for server-scoped provider configuration. */
 type LlmProviderExportShape = {
   savedProviderConfigs: SavedProviderConfigRow[];
 };
@@ -73,7 +72,6 @@ export type CustomEndpointConnectionsReadResult =
   | { status: "fresh"; connections: CustomEndpointConnectionRow[]; endpoints: CustomEndpointRow[] }
   | { status: "unavailable"; connections: []; endpoints: [] };
 
-/** Sets or clears the VRAM handoff on the text connections of a group being edited. */
 export interface VramHandoffChange {
   connectionIds: number[];
   backend: VramHandoffBackend | null;
@@ -94,13 +92,6 @@ async function applyVramHandoffChange(tx: SQL, change: VramHandoffChange | undef
   `;
 }
 
-/**
- * LlmProviderRepository: saved provider configs, custom endpoints, and scoped model registrations.
- *
- * Owns tables: saved_provider_configs, user_saved_provider_configs, custom_endpoint_connections,
- * custom_endpoints, scoped_model_registrations, scoped_model_registrations,
- * scoped_model_registrations, scoped_model_registrations.
- */
 class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
   private async invalidateNovelaiCredentials(
     previous: Pick<SavedProviderConfigRow, "api_key" | "key_version"> | null,
@@ -691,11 +682,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     return `{${(values ?? []).map((v) => `"${v.replace(/(["\\])/g, "\\$1")}"`).join(",")}}`;
   }
 
-  /**
-   * Returns all saved provider configs for a server.
-   *
-   * @param serverId - Internal server DB ID
-   */
   async loadSavedProviderConfigs(serverId: number): Promise<SavedProviderConfigRow[]> {
     const result = await this.loadSavedProviderConfigsResult(serverId);
     if (result.status === "unavailable") {
@@ -704,9 +690,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     return result.configs;
   }
 
-  /**
-   * Loads saved server provider rows without presenting a failed database read as an empty collection.
-   */
   async loadSavedProviderConfigsResult(serverId: number): Promise<SavedProviderConfigsReadResult> {
     try {
       const rows = await withTransientDbRetry(
@@ -740,11 +723,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /**
-   * Returns the saved provider config for a server + provider pair, or null.
-   *
-   * @param serverId - Internal server DB ID
-   */
   async loadSavedProviderConfig(serverId: number, provider: string): Promise<SavedProviderConfigRow | null> {
     try {
       const rows = await withTransientDbRetry(
@@ -776,11 +754,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /**
-   * Returns all saved personal provider configs for a user.
-   *
-   * @param userId - Internal user DB ID
-   */
   async loadUserSavedProviderConfigs(userId: number): Promise<UserSavedProviderConfigRow[]> {
     const result = await this.loadUserSavedProviderConfigsResult(userId);
     if (result.status === "unavailable") {
@@ -822,11 +795,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /**
-   * Returns the saved personal provider config for a user + provider pair, or null.
-   *
-   * @param userId   - Internal user DB ID
-   */
   async loadUserSavedProviderConfig(userId: number, provider: string): Promise<UserSavedProviderConfigRow | null> {
     try {
       const rows = await withTransientDbRetry(
@@ -856,18 +824,10 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /**
-   * Returns custom endpoints configured for a server.
-   *
-   * @param serverId - Internal server DB ID
-   */
   async loadCustomEndpointsForServer(serverId: number): Promise<CustomEndpointRow[]> {
     return (await this.loadCustomEndpointConnectionsForServerResult(serverId)).endpoints;
   }
 
-  /**
-   * Loads connection entities and their optional model rows together, including zero-model connections.
-   */
   async loadCustomEndpointConnectionsForServerResult(serverId: number): Promise<CustomEndpointConnectionsReadResult> {
     try {
       const [connectionRows, endpointRows] = await Promise.all([
@@ -931,16 +891,10 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /**
-   * Returns custom endpoints configured for a user.
-   *
-   * @param userId - Internal user DB ID
-   */
   async loadCustomEndpointsForUser(userId: number): Promise<CustomEndpointRow[]> {
     return (await this.loadCustomEndpointConnectionsForUserResult(userId)).endpoints;
   }
 
-  /** Loads user-owned connections and their optional model rows, including zero-model connections. */
   async loadCustomEndpointConnectionsForUserResult(userId: number): Promise<CustomEndpointConnectionsReadResult> {
     try {
       const [connectionRows, endpointRows] = await Promise.all([
@@ -1003,11 +957,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /**
-   * Returns custom endpoints by their internal IDs, preserving input order.
-   *
-   * @param ids - Array of internal custom endpoint IDs
-   */
   async loadCustomEndpointsByIds(ids: number[]): Promise<CustomEndpointRow[]> {
     if (ids.length === 0) return [];
 
@@ -1069,11 +1018,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /**
-   * Returns a specific custom endpoint by lookup parameters.
-   *
-   * @param params - Lookup parameters including scope (serverId or userId), label, and capability
-   */
   async loadCustomEndpoint(params: {
     serverId?: number | null;
     userId?: number | null;
@@ -1176,15 +1120,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /**
-   * Returns the custom endpoint that owns a specific synthetic model row.
-   *
-   * Used at runtime to resolve the currently-active model back to its exact endpoint when several
-   * models share a label+capability. Matching is by (owner, capability, model_ref_id): the
-   * model_ref_id uniquely identifies the synthetic model, so label is not required.
-   *
-   * @param params - Scope (serverId or userId), capability, and the synthetic model's id
-   */
   async loadCustomEndpointByModelRef(params: {
     serverId?: number | null;
     userId?: number | null;
@@ -1283,7 +1218,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /** Returns a custom endpoint connection by its primary key ID. */
   async loadCustomEndpointConnectionById(connectionId: number): Promise<CustomEndpointConnectionRow | null> {
     try {
       const rows = await sql`
@@ -1303,7 +1237,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /** Returns all endpoints belonging to a specific connection. */
   async loadCustomEndpointsByConnectionId(connectionId: number): Promise<CustomEndpointRow[]> {
     try {
       const rows = await sql<unknown[]>`
@@ -1344,9 +1277,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /**
-   * Returns a custom endpoint for a connection, optionally matching a specific synthetic model ID.
-   */
   async loadCustomEndpointByConnection(
     connectionId: number,
     capability: CustomEndpointCapability,
@@ -1430,7 +1360,8 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /** Cascades to the connection's models. */
+  // Database foreign keys cascade deletes on custom_endpoint_connections to its custom_endpoints rows, so no separate
+  // model delete is needed.
   async deleteCustomEndpointConnectionById(connectionId: number): Promise<boolean> {
     try {
       const result = await sql`
@@ -1444,7 +1375,8 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /** Reuses the connection identity needed by model rows and saved provider snapshots. */
+  // Upsert must preserve the existing connection_id because custom_endpoints rows and saved provider snapshots key
+  // off it.
   async upsertCustomEndpointConnection(params: {
     serverId?: number | null;
     userId?: number | null;
@@ -1493,7 +1425,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /** Updates one server-owned endpoint group and its credential snapshots atomically. */
   async updateServerCustomEndpointConnectionGroup(params: {
     serverId: number;
     connectionIds: number[];
@@ -1561,7 +1492,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /** Updates one user-owned endpoint group and its credential snapshots atomically. */
   async updateUserCustomEndpointConnectionGroup(params: {
     userId: number;
     connectionIds: number[];
@@ -1630,7 +1560,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /** Deletes a server provider snapshot, its rotation pool, and its scope-local model registrations atomically. */
   async deleteServerProviderRegistration(serverId: number, provider: string): Promise<boolean> {
     const normalizedProvider = provider.toLowerCase();
     try {
@@ -1699,7 +1628,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /** Deletes a personal provider snapshot and its scope-local model registrations atomically. */
   async deleteUserProviderRegistration(userId: number, provider: string): Promise<boolean> {
     const normalizedProvider = provider.toLowerCase();
     try {
@@ -1753,7 +1681,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /** Deletes server-owned endpoint connections, snapshots, and synthetic models as one durable entity group. */
   async deleteServerCustomEndpointConnectionGroup(serverId: number, connectionIds: number[]): Promise<boolean> {
     const uniqueIds = [...new Set(connectionIds)];
     if (uniqueIds.length === 0) return false;
@@ -1794,7 +1721,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /** Deletes user-owned endpoint connections, snapshots, and synthetic models as one durable entity group. */
   async deleteUserCustomEndpointConnectionGroup(userId: number, connectionIds: number[]): Promise<boolean> {
     const uniqueIds = [...new Set(connectionIds)];
     if (uniqueIds.length === 0) return false;
@@ -1833,7 +1759,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /** Returns LLM registrations for a server. @param serverId - Internal server DB ID */
   async loadOpenRouterModelRegistrationsForServer(serverId: number): Promise<OpenRouterModelRegistrationRow[]> {
     try {
       const rows = await sql<unknown[]>`
@@ -1850,7 +1775,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /** Returns LLM registrations for a user. @param userId - Internal user DB ID */
   async loadOpenRouterModelRegistrationsForUser(userId: number): Promise<OpenRouterModelRegistrationRow[]> {
     try {
       const rows = await sql<unknown[]>`
@@ -1867,7 +1791,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /** Returns embedding registrations for a server. @param serverId - Internal server DB ID */
   async loadOpenRouterEmbeddingModelRegistrationsForServer(
     serverId: number,
   ): Promise<OpenRouterEmbeddingModelRegistrationRow[]> {
@@ -1886,7 +1809,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /** Returns embedding registrations for a user. @param userId - Internal user DB ID */
   async loadOpenRouterEmbeddingModelRegistrationsForUser(
     userId: number,
   ): Promise<OpenRouterEmbeddingModelRegistrationRow[]> {
@@ -1905,7 +1827,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /** Returns image model registrations for a server. @param serverId - Internal server DB ID */
   async loadOpenRouterImageModelRegistrationsForServer(
     serverId: number,
   ): Promise<OpenRouterImageModelRegistrationRow[]> {
@@ -1924,7 +1845,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /** Returns image model registrations for a user. @param userId - Internal user DB ID */
   async loadOpenRouterImageModelRegistrationsForUser(userId: number): Promise<OpenRouterImageModelRegistrationRow[]> {
     try {
       const rows = await sql<unknown[]>`
@@ -1941,7 +1861,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /** Returns video model registrations for a server. @param serverId - Internal server DB ID */
   async loadOpenRouterVideoModelRegistrationsForServer(
     serverId: number,
   ): Promise<OpenRouterVideoModelRegistrationRow[]> {
@@ -1960,7 +1879,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /** Returns video model registrations for a user. @param userId - Internal user DB ID */
   async loadOpenRouterVideoModelRegistrationsForUser(userId: number): Promise<OpenRouterVideoModelRegistrationRow[]> {
     try {
       const rows = await sql<unknown[]>`
@@ -1977,12 +1895,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /**
-   * Returns LLMs visible for a given scope (server or personal), filtered by registration.
-   *
-   * @param scope             - {kind: "server"|"personal", ownerId: number}
-   * @param includeDeprecated - Include deprecated models
-   */
   async loadScopedOpenRouterModels(
     scope: OpenRouterModelScope,
     includeDeprecated = false,
@@ -2005,12 +1917,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /**
-   * Returns embedding models visible for a given scope.
-   *
-   * @param scope             - {kind: "server"|"personal", ownerId: number}
-   * @param includeDeprecated - Include deprecated models
-   */
   async loadScopedOpenRouterEmbeddingModels(
     scope: OpenRouterModelScope,
     includeDeprecated = false,
@@ -2033,12 +1939,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /**
-   * Returns diffusion models visible for a given scope.
-   *
-   * @param scope             - {kind: "server"|"personal", ownerId: number}
-   * @param includeDeprecated - Include deprecated models
-   */
   async loadScopedOpenRouterDiffusionModels(
     scope: OpenRouterModelScope,
     includeDeprecated = false,
@@ -2061,12 +1961,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /**
-   * Returns video generation models visible for a given scope.
-   *
-   * @param scope             - {kind: "server"|"personal", ownerId: number}
-   * @param includeDeprecated - Include deprecated models
-   */
   async loadScopedOpenRouterVideoGenerationModels(
     scope: OpenRouterModelScope,
     includeDeprecated = false,
@@ -2089,12 +1983,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /**
-   *
-   * @param serverId - Internal server DB ID
-   * @param config   - Provider config fields to save
-   * @param options  - Optional cache invalidation options
-   */
   async upsertSavedProviderConfig(
     serverId: number,
     config: SavedProviderConfigUpsert,
@@ -2211,11 +2099,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /**
-   *
-   * @param userId - Internal user DB ID
-   * @param config - Personal provider config fields to save
-   */
   async upsertUserSavedProviderConfig(userId: number, config: UserSavedProviderConfigUpsert): Promise<boolean> {
     try {
       const provider = config.provider.toLowerCase();
@@ -2305,10 +2188,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /**
-   * Returns the user's personal text fallback chain and randomizer, or their defaults when the user
-   * has no personalization row yet.
-   */
   async loadPersonalFallbackSettings(userId: number): Promise<PersonalFallbackSettings> {
     try {
       const rows = await withTransientDbRetry(
@@ -2382,11 +2261,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /**
-   *
-   * @param params  - Endpoint configuration
-   * @param options - Optional cache invalidation options
-   */
   async upsertCustomEndpoint(
     params: {
       serverId?: number | null;
@@ -2657,15 +2531,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /**
-   * Deletes a single custom endpoint row by its primary key.
-   *
-   * Used when removing one model from a label+capability that may hold several. Caller supplies the
-   * owning serverId (when server-scoped) so the appropriate caches are invalidated.
-   *
-   * @param customEndpointId - Primary key of the endpoint row to delete
-   * @param options          - Cache invalidation options; serverId triggers channel/tomori cache busts
-   */
   async deleteCustomEndpointById(
     customEndpointId: number,
     options: ChannelLlmCacheOptions & { serverId?: number | null } = {},
@@ -2857,11 +2722,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     });
   }
 
-  /**
-   * Upserts an OpenRouter LLM model registration.
-   *
-   * @param params - {serverId?, userId?, llmId}
-   */
   async upsertOpenRouterModelRegistration(params: {
     serverId?: number | null;
     userId?: number | null;
@@ -2910,11 +2770,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /**
-   * Deletes an OpenRouter LLM model registration.
-   *
-   * @param params - {serverId?, userId?, llmId}
-   */
   async deleteOpenRouterModelRegistration(params: {
     serverId?: number | null;
     userId?: number | null;
@@ -2950,11 +2805,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /**
-   * Upserts an OpenRouter embedding model registration.
-   *
-   * @param params - {serverId?, userId?, embeddingModelId}
-   */
   async upsertOpenRouterEmbeddingModelRegistration(params: {
     serverId?: number | null;
     userId?: number | null;
@@ -3003,11 +2853,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /**
-   * Deletes an OpenRouter embedding model registration.
-   *
-   * @param params - {serverId?, userId?, embeddingModelId}
-   */
   async deleteOpenRouterEmbeddingModelRegistration(params: {
     serverId?: number | null;
     userId?: number | null;
@@ -3037,11 +2882,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /**
-   * Upserts an OpenRouter image model registration.
-   *
-   * @param params - {serverId?, userId?, diffusionModelId}
-   */
   async upsertOpenRouterImageModelRegistration(params: {
     serverId?: number | null;
     userId?: number | null;
@@ -3090,11 +2930,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /**
-   * Deletes an OpenRouter image model registration.
-   *
-   * @param params - {serverId?, userId?, diffusionModelId}
-   */
   async deleteOpenRouterImageModelRegistration(params: {
     serverId?: number | null;
     userId?: number | null;
@@ -3124,11 +2959,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /**
-   * Upserts an OpenRouter video model registration.
-   *
-   * @param params - {serverId?, userId?, videoModelId}
-   */
   async upsertOpenRouterVideoModelRegistration(params: {
     serverId?: number | null;
     userId?: number | null;
@@ -3177,11 +3007,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /**
-   * Deletes an OpenRouter video model registration.
-   *
-   * @param params - {serverId?, userId?, videoModelId}
-   */
   async deleteOpenRouterVideoModelRegistration(params: {
     serverId?: number | null;
     userId?: number | null;
@@ -3211,12 +3036,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /**
-   * Exports server-scoped provider configuration.
-   * Stub: full composition with the unified export pipeline lands in Phase 6 (#16.7).
-   *
-   * @param ownerId - Internal server DB ID
-   */
   async toExportShape(ownerId: string | number): Promise<LlmProviderExportShape | null> {
     const serverId = Number(ownerId);
     if (Number.isNaN(serverId)) return null;
@@ -3224,14 +3043,9 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     return { savedProviderConfigs };
   }
 
-  /**
-   * Restores server-scoped provider configuration from an export.
-   * Stub: full implementation lands in Phase 6 (#16.7).
-   */
   async fromExportShape(_ownerId: string | number, _data: LlmProviderExportShape): Promise<boolean> {
     return false;
   }
 }
 
-/** Singleton instance: import this in callers. */
 export const llmProviderRepo = new LlmProviderRepository();

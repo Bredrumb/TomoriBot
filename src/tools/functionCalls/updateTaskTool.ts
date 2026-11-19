@@ -1,10 +1,3 @@
-/**
- * Update Task Tool
- *
- * Replaces or deletes an existing scheduled reminder/task by ID.
- * The ID is shown in participant context as "ID:N".
- */
-
 import { PermissionFlagsBits } from "discord.js";
 import { extractBridgeUserId } from "@/utils/bridges";
 import { isMatrixRelayMessage } from "@/utils/chat/triggerProcessor";

@@ -1,14 +1,5 @@
 import { lorebookRepository } from "@/modules/lorebooks/db/repositories";
 import { lorebookEntryInputSchema, LOREBOOK_ENTRIES_PER_SCOPE_MAX } from "@/modules/lorebooks/db/types";
-/**
- * Shared alter-persona import core.
- *
- * Factored out of the `/persona import` command so that both the slash command
- * and the "Import Now" button (on `/persona generate` and `/persona create`
- * success messages) drive identical business logic. This module is intentionally
- * UI-free: it performs all DB / storage / cache work and returns a structured
- * result, leaving the caller to render the outcome (embed, CV2 container, etc.).
- */
 
 import type { Client, Guild } from "discord.js";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
@@ -28,51 +19,26 @@ import {
   type PersonaAuthoredIdleNudge,
 } from "@/modules/natural-nudges/db/types";
 
-/**
- * Parameters for {@link importAlterPreset}.
- */
 export interface ImportAlterPresetParams {
-  /** Discord client, used to resolve a fallback avatar when no image is supplied. */
   client: Client;
-  /** Guild the import targets, or null in DM contexts (alter import is guild-only). */
   guild: Guild | null;
-  /** Server (or DM) scope ID the persona belongs to. */
   serverDiscId: string;
-  /** Already-validated preset payload (e.g. from `validatePresetData`). */
   presetData: PresetExportData;
-  /**
-   * Lineage behavior: "preserve" keeps the incoming lineage id, "fork" mints a
-   * fresh lineage so the alter is treated as an independent character.
-   */
   identityMode: "preserve" | "fork";
-  /** Raw persona image (PNG) used as the alter avatar, or null to inherit the main avatar. */
   avatarImageBuffer: Buffer | null;
   importMode?: PresetImportMode;
 }
 
-/**
- * Discriminated result of {@link importAlterPreset}. On success the caller
- * receives everything needed to render a confirmation; on failure the `reason`
- * maps 1:1 to a localized error in the calling command/handler.
- */
 export type ImportAlterPresetResult =
   | {
       ok: true;
-      /** Newly created alter persona row id. */
       personaId: number;
-      /** Imported persona nickname. */
       nickname: string;
-      /** Triggers shown to the user (the unique set this alter owns after dropping overlaps). */
       displayedTriggers: string[];
-      /** Count of non-overlapping triggers actually stored on the persona config. */
       uniqueTriggerCount: number;
-      /** True when no avatar image was supplied and the main persona avatar was inherited. */
       usedMainAvatarFallback: boolean;
-      /** True when the persona was imported without any usable trigger words. */
       hasNoTriggers: boolean;
-      /** Nickname of the main persona (for the avatar-fallback notice). */
       mainPersonaNickname: string;
-      /** Public display URL of the inherited avatar, when the fallback was used. */
       fallbackAvatarDisplayUrl: string | null;
     }
   | { ok: false; reason: "limit_reached"; current: number; max: number }
@@ -81,29 +47,12 @@ export type ImportAlterPresetResult =
   | { ok: false; reason: "config_failed" }
   | { ok: false; reason: "insert_failed" };
 
-/**
- * Detects a Postgres unique-constraint violation so a duplicate persona name can
- * be surfaced as a friendly conflict instead of an unhandled error.
- * Mirrors the private helper in `commands/persona/import.ts`.
- *
- */
 function isUniqueViolation(error: unknown): boolean {
   return (
     typeof error === "object" && error !== null && "code" in error && (error as { code?: unknown }).code === "23505"
   );
 }
 
-/**
- * Imports a preset as a new alter persona for a server.
- *
- * Performs limit/uniqueness validation, inserts the alter persona (as an official
- * preset pointer when one matches, otherwise as a full custom row), stores its
- * trigger words, persists the avatar, and invalidates the Tomori state cache.
- * All side effects are completed before returning; the caller only renders the
- * outcome.
- *
- * @returns A {@link ImportAlterPresetResult} describing success or the failure reason.
- */
 export async function importAlterPreset(params: ImportAlterPresetParams): Promise<ImportAlterPresetResult> {
   const { client, guild, serverDiscId, presetData, identityMode, avatarImageBuffer, importMode = "card" } = params;
 
@@ -328,12 +277,6 @@ export async function importAlterPreset(params: ImportAlterPresetParams): Promis
   };
 }
 
-/**
- * Normalizes a persona nickname for case-insensitive comparison.
- * Mirrors the private helper in `commands/persona/import.ts`.
- *
- * @param name - Raw persona nickname.
- */
 function normalizePersonaName(name: string): string {
   return name.trim().toLowerCase();
 }

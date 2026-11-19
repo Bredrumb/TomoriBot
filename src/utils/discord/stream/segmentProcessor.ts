@@ -55,16 +55,10 @@ type StreamSegmentProcessorDependencies = {
   requestStop: (channelId: string, requesterId?: string) => boolean;
 };
 
-/**
- * Loose detector for "something that LOOKS like a decorated speaker label": a parenthesized
- * group followed by a colon, anywhere near the head of a segment. Deliberately far more
- * permissive than parseLeadingRenderModifier (no name allowlist, not anchored to the start)
- * so the diagnostic below fires precisely on the cases where the strict parser refused text
- * a human would call a sprite label.
- */
+// Deliberately unanchored and without a name allowlist (unlike parseLeadingRenderModifier) so diagnostics catch
+// leaked labels that the strict parser rejected.
 const SUSPECTED_RENDER_MODIFIER_LABEL_RE = /\([^()\n\r:：]{1,64}\)\s*[:：]/;
 
-/** How much of a segment to echo into the diagnostic line. */
 const RENDER_MODIFIER_DIAGNOSTIC_HEAD_CHARS = 80;
 
 function joinFlushedSegments(held: string, next: string, opensLine: boolean): string {
@@ -72,9 +66,6 @@ function joinFlushedSegments(held: string, next: string, opensLine: boolean): st
   return held + separator + next;
 }
 
-/**
- * Owns normalization and routing for flushed stream text segments before Discord delivery.
- */
 export class StreamSegmentProcessor {
   public constructor(private readonly deps: StreamSegmentProcessorDependencies) {}
 
@@ -385,7 +376,6 @@ export class StreamSegmentProcessor {
     }
   }
 
-  /** Delivery identity and stream state for a sprite the persona just selected. */
   private applySpriteRenderTarget(
     renderTarget: CopiedRenderTarget,
     context: StreamContext,
@@ -412,10 +402,6 @@ export class StreamSegmentProcessor {
     };
   }
 
-  /**
-   * Resolves the shortened bare label a model writes instead of the decorated form, keeping only a
-   * label that names one of the persona's sprites so ordinary parenthetical prose is left alone.
-   */
   private async resolveBareSpriteLabel(params: {
     segment: string;
     opensLine: boolean;
@@ -439,23 +425,6 @@ export class StreamSegmentProcessor {
     return target ? { ...match, target } : null;
   }
 
-  /**
-   * Diagnostic probe for sprite/render-modifier labels that leak into Discord as literal text.
-   *
-   * A successful `parseLeadingRenderModifier` always strips the label from the segment, so a
-   * label visible in the delivered message proves the parse returned null. This logs every
-   * input that decision depends on, letting a leaked label be attributed to exactly one of:
-   *
-   * - `isInsideCodeBlock` / `isUserImpersonation` vetoing render modifiers outright.
-   * - A name mismatch: the label's speaker name is absent from the allowlist built from
-   *    `botName` + `botNameAliases`.
-   * - Anchor loss: text (notably re-attached orphan punctuation) sits ahead of the label,
-   *    so the `^\s*`-anchored pattern cannot reach it.
-   *
-   * Fires only when the strict parse failed AND the segment still looks like it carried a
-   * decorated label, so ordinary prose never triggers it.
-   *
-   */
   private logUnparsedRenderModifierLabel(args: {
     renderModifierMatch: boolean;
     canUseRenderModifier: boolean;
@@ -491,24 +460,6 @@ export class StreamSegmentProcessor {
     );
   }
 
-  /**
-   * Diagnostic probe for the silent-drop branch: the model emitted a well-formed
-   * "Name (modifier):" label, the parser accepted it and stripped it, but neither a sprite
-   * nor a copied identity resolved. The message then ships under the default identity with
-   * no sprite and no trace: visually identical to the model never having tried.
-   *
-   * Logs the persona the sprite lookup was performed against alongside that persona's actual
-   * sprite keys, which distinguishes the two candidate causes:
-   *
-   * - Wrong persona: `personaId` is not the persona the model was told to speak as, so its sprite
-   *   keys can never match (the failure mode expected on queued/chained turns).
-   * - Right persona, unknown label: the model invented a sprite key, or the sprite exists
-   *    but its avatar is unusable (`resolveSpriteIdentity` returning null).
-   *
-   * @param modifier - The modifier text the model used, e.g. "mad"
-   * @param spriteStatus - Whether the sprite lookup matched before identity resolution
-   * @param context - Active stream context (supplies the persona used for the lookup)
-   */
   private async logUnresolvedRenderModifierTarget(
     modifier: string,
     spriteStatus: SpriteRenderModifierResolution["status"],
@@ -537,13 +488,8 @@ export class StreamSegmentProcessor {
     );
   }
 
-  /**
-   * An alter leaving a non-identity sprite sends its base messages through the webhook under the
-   * same clean username the sprite used, so Discord would group the reverted line under the
-   * sprite's avatar. The base appearance then joins the channel's sprite alternation under its own
-   * key, and on the decorated half it is delivered as "Persona (neutral)". That state is returned
-   * so later base lines keep the same name.
-   */
+  // Discord groups consecutive webhook lines with one username under the prior avatar, so reverting from a sprite
+  // alternates and keeps the base name.
   private resolveBaseAppearanceRevert(
     previous: NonNullable<StreamState["activeRenderModifier"]>,
     context: StreamContext,
@@ -575,23 +521,6 @@ export class StreamSegmentProcessor {
     return identity === baseIdentity ? undefined : { identity, isNeutralAppearance: true };
   }
 
-  /**
-   * Detects a leaked speaker label at the start of a response segment: a label the
-   * render-modifier parse already refused (its source name is not the active persona/aliases).
-   *
-   * Firing rules, per shape:
-   * 1. Decorated "Name (modifier):": always a leak. The parenthetical grammar belongs
-   *    exclusively to the active persona (sprites, copied identities), so ANY other name using
-   *    it is the model cross-breeding history label formats ("Chris (smug): ...").
-   * 2. Plain "Name:": a leak only when Name is a known conversation participant (another
-   *    persona or a user in the conversation). Ordinary prose openings ("Note:", "TL;DR:")
-   *    never match a participant and pass through untouched.
-   *
-   * A leading chain of the persona's own plain labels ("Tomori: Chris (smug): hi") is peeled
-   * before deciding, since those are stripped later by cleanLLMOutput anyway.
-   *
-   * @returns The leaked-label match (body = text after the label), or null when clean
-   */
   private async matchLeadingSpeakerLeak(
     segment: string,
     context: StreamContext,
@@ -726,11 +655,8 @@ export class StreamSegmentProcessor {
     return "";
   }
 
-  /**
-   * Whether `text` waiting in the stream buffer could no longer be retained as held prose. An
-   * unterminated table, code fence or semantic marker can keep the buffer from ever flushing a
-   * segment, so the segment ceiling alone cannot bound it.
-   */
+  // Segment ceilings alone cannot bound held prose because an unterminated table, code fence, or semantic marker can
+  // keep the buffer from flushing.
   public exceedsHeldRetention(text: string, context: StreamContext, state: StreamState): boolean {
     const room = resolveHeldLimit(context).maxBytes - (state.pendingResponseBytes ?? 0);
     // A UTF-16 code unit encodes to 1-3 UTF-8 bytes, which skips the byte count for short buffers.
@@ -738,12 +664,6 @@ export class StreamSegmentProcessor {
     return text.length > room || Buffer.byteLength(text, "utf8") > room;
   }
 
-  /**
-   * Records a flushed segment for replay within the turn's held-prose ceiling, cutting it at the
-   * ceiling when it does not fit.
-   *
-   * @returns The text to normalize, or null once collection has stopped.
-   */
   private retainHeldSegment(
     segment: string,
     boundary: BufferedDeliveryBoundary | undefined,
@@ -793,11 +713,8 @@ function resolveHeldLimit(context: StreamContext): PendingResponseLimit {
   );
 }
 
-/**
- * The longest held text one replay could send, using the same caps `StreamUiUpdater` applies to
- * each delivery. Text past this length can never reach Discord, so collecting it only spends
- * generation and memory. Each pass replays with fresh counters, so the length applies per pass.
- */
+// Held prose caps mirror StreamUiUpdater per pass because each replay resets counters and text past that cap can
+// never reach Discord.
 function resolveDeliverableHeldLength(
   context: StreamContext,
 ): { chars: number; truncation: PendingResponseTruncation } | null {
@@ -811,19 +728,17 @@ function resolveDeliverableHeldLength(
   };
 }
 
-/** `encodeInto` writes only whole code points, so `read` never splits a character. */
+// TextEncoder.encodeInto writes only whole code points, so slicing to read never splits a character.
 function sliceToUtf8Bytes(text: string, maxBytes: number): string {
   if (maxBytes <= 0) return "";
   return text.slice(0, new TextEncoder().encodeInto(text, new Uint8Array(maxBytes)).read);
 }
 
-/** Only sentence and overflow flushes cut mid-line. */
 function segmentEndsLine(segment: string, boundary: BufferedDeliveryBoundary | undefined): boolean {
   if (/\n[ \t]*$/u.test(segment)) return true;
   return boundary !== "period" && boundary !== "overflow";
 }
 
-/** True once any of this response's text has reached the delivery pipeline. */
 function hasStreamedResponseText(state: StreamState): boolean {
   return Boolean(
     (state.accumulatedText || state.pendingResponseText || "").trim() || state.pendingAggregatedText.trim(),

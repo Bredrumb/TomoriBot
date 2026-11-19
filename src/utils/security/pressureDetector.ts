@@ -1,31 +1,12 @@
-/**
- * Sustained host-pressure detector, evaluated but not armed.
- *
- * `memoryGuard` watches process RSS, which is the wrong signal for host distress: swap makes RSS
- * read safe while the host is saturating zram and faulting to disk, and on a roomy host the same
- * guard inverts and pins itself in permanent emergency mode. This detector reads host PSI and
- * active swap-in instead.
- *
- * It is a pure function over a sample sequence, deliberately: the same logic has to run from three
- * drivers. In-process it records what it would have done, offline it replays historical observer
- * logs to tune thresholds, and a host-side watchdog is the only place it could ever act, because an
- * in-process detector stops running during the starvation it exists to detect.
- *
- * Nothing here restarts anything. `evaluatePressure` returns a recommendation; acting on one is
- * gated on a threshold set tuned across several daily cycles, since tuning a dwell period and a
- * hysteresis band off a single day commits at design time the error this design forbids at runtime.
- */
+// Must stay pure and observe-only for log replay and a host watchdog, because an in-process actor stalls during the
+// host starvation it detects.
 
 export type PressureLevel = "normal" | "elevated" | "critical";
 
-/**
- * Ordered by cost. Co-tenants come first because recycling them alone was measured cutting host IO
- * pressure 43%, so the cheap rung is worth having below the expensive one. A VM restart is reserved
- * for a confirmed reclaim livelock, where the guest agent cannot deliver a container restart.
- */
+// Actions escalate by cost because recycling co-tenants cut host IO pressure 43%, while VM restart is reserved for
+// reclaim livelock.
 export type PressureAction = "none" | "recycle_cotenants" | "recycle_bot" | "restart_vm";
 
-/** Why a recommendation was withheld even though the level warranted one. */
 type PressureSuppression = "startup_grace" | "dwell" | "rate_limit" | null;
 
 export interface PressureSample {
@@ -40,20 +21,14 @@ export interface PressureSample {
 export interface PressureThresholds {
   elevatedIoFull: number;
   criticalIoFull: number;
-  /** Separate from the entry thresholds so the level cannot oscillate on one noisy sample. */
+  // Kept separate from entry thresholds so pressure levels cannot oscillate on one noisy sample.
   recoveryIoFull: number;
-  /** Distinguishes cold pages evicted once, which are harmless, from a live shortfall. */
+  // Minimum live swap-in rate required so harmless one-time cold page evictions are ignored.
   minSwapInPerS: number;
-  /** Trailing window the duty cycle is measured over, not a continuous run. */
   elevatedDwellMs: number;
   criticalDwellMs: number;
-  /**
-   * Fraction of samples in the window that must be at or above the level.
-   *
-   * A continuous-run rule does not work here: replaying 12 days of production showed `io_full`
-   * crosses any threshold constantly but is almost never above it without interruption, so a
-   * "sustained for T" condition resets on every dip and fires zero times through real incidents.
-   */
+  // Duty-cycle fraction over dwell windows instead of a continuous run, because io_full dips constantly during real
+  // incidents.
   minDutyCycle: number;
   startupGraceMs: number;
   minActionIntervalMs: number;
@@ -61,10 +36,8 @@ export interface PressureThresholds {
 
 export interface PressureState {
   level: PressureLevel;
-  /**
-   * Trailing samples as `[timestamp, level rank]`, pruned to the longest window in use. Bounded by
-   * that window rather than by run length, so it cannot grow with uptime.
-   */
+  // [timestampMs, levelRank] pairs pruned by retention window rather than sample count, so state cannot grow
+  // unbounded with uptime.
   recent: Array<[number, number]>;
   rawLevel: PressureLevel;
   lastActionAtMs: number | null;
@@ -76,26 +49,14 @@ export interface PressureVerdict {
   rawLevel: PressureLevel;
   wouldAct: PressureAction;
   suppressedBy: PressureSuppression;
-  /** Share of the trailing window spent at or above each level, in the range 0 to 1. */
   elevatedDuty: number;
   criticalDuty: number;
-  /** History actually available, so a short window can be distinguished from a quiet one. */
+  // Retained history span exported so observers can distinguish an incomplete startup window from a quiet one.
   windowSpanMs: number;
 }
 
-/**
- * Derived by replaying 67,967 observer samples spanning 290 h of production through this exact
- * function, not chosen by intuition. Run `scripts/devtools/replayPressureDetector.ts` to reproduce.
- *
- * The selection criterion was discrimination rather than sensitivity: this set recommends an action
- * 3 times across 12 days, all of them on the two days before any mitigation shipped, and **zero**
- * times from the day co-tenant recycling landed onward, including after the monitoring agent was
- * removed. Looser sets are not merely noisier, they are wrong in kind: at a 0.7 duty cycle the same
- * corpus produces 2 actions per day spaced exactly one rate-limit interval apart, which is the
- * detector reporting a chronic baseline as if it were a series of incidents.
- *
- * These remain observe-only. Arming is a separate decision.
- */
+// Observe-only thresholds calibrated by replaying 290h of production samples, because looser duty cycles (such as
+// 0.7) flag baseline noise as daily incidents.
 export const DEFAULT_PRESSURE_THRESHOLDS: PressureThresholds = {
   elevatedIoFull: 15,
   criticalIoFull: 30,
@@ -113,10 +74,8 @@ function numberFromEnv(name: string, fallback: number): number {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
-/**
- * Builds a threshold set from the environment, kept out of {@link evaluatePressure} so the decision
- * stays a pure function of its inputs and can be replayed against historical logs.
- */
+// Env threshold loader kept separate from evaluatePressure, so pressure evaluation remains a pure function replayable
+// on historical logs.
 export function pressureThresholdsFromEnv(): PressureThresholds {
   return {
     elevatedIoFull: numberFromEnv("PRESSURE_ELEVATED_IO_FULL", DEFAULT_PRESSURE_THRESHOLDS.elevatedIoFull),
@@ -134,16 +93,12 @@ export function pressureThresholdsFromEnv(): PressureThresholds {
   };
 }
 
-/**
- * Whether a recommendation may be acted on. Defaults to false and must stay false until thresholds
- * are tuned across several daily cycles; the in-process detector has no action path regardless, so
- * today this only labels the recorded series.
- */
+// Must stay false by default until thresholds are tuned across multi-day cycles, since the in-process path only
+// labels recorded series.
 export function isPressureDetectorArmed(): boolean {
   return process.env.PRESSURE_DETECTOR_ARMED === "true";
 }
 
-/** Reads a host snapshot's flat fields into the detector's input shape. */
 export function pressureSampleFromHostFields(fields: Record<string, number>, atMs: number): PressureSample {
   return {
     atMs,
@@ -167,14 +122,8 @@ export function initialPressureState(): PressureState {
 
 const LEVEL_RANK: Record<PressureLevel, number> = { normal: 0, elevated: 1, critical: 2 };
 
-/**
- * Classifies a single sample, before any dwell or hysteresis is applied.
- *
- * Both a PSI reading and a live swap-in rate are required for anything above normal. PSI alone
- * fires on a transient reclaim burst, and swap depth alone fires on cold pages that were evicted
- * once and are never touched again, which is the reading that has already taken production down
- * once when treated as an incident.
- */
+// Both PSI and live swap-in rate are required above normal, because PSI alone catches transient bursts and swap depth
+// counts harmless cold pages.
 function classify(sample: PressureSample, thresholds: PressureThresholds): PressureLevel {
   const ioFull = sample.ioFullAvg60;
   const swapIn = sample.swapInPerS;
@@ -185,10 +134,6 @@ function classify(sample: PressureSample, thresholds: PressureThresholds): Press
   return "normal";
 }
 
-/**
- * Recovery is checked against its own lower threshold rather than the entry one, so a host sitting
- * exactly at the boundary does not alternate between levels every sample.
- */
 function hasRecovered(sample: PressureSample, thresholds: PressureThresholds): boolean {
   const ioFull = sample.ioFullAvg60;
   if (ioFull === undefined) return false;
@@ -201,21 +146,8 @@ function actionFor(level: PressureLevel): PressureAction {
   return "none";
 }
 
-/**
- * Advances the detector by one sample and returns what it would recommend.
- *
- * `processStartMs` drives the startup grace: the normal warm-up working set of roughly 700 MB is
- * reached within ten minutes, and treating that as an incident is how a naive threshold creates a
- * restart loop out of a healthy boot.
- */
-/**
- * Share of samples inside the trailing window at or above `minRank`.
- *
- * `covered` reports whether history reaches back past the window at all, and it is deliberately
- * measured from the oldest *retained* sample rather than the oldest in-window one. Those differ:
- * history is retained for longer than any window precisely so this check can be true, since an
- * in-window sample is by definition younger than the window and could never prove coverage.
- */
+// Coverage checks the oldest retained sample instead of the oldest in-window one, because in-window samples are
+// always younger than the window.
 function dutyCycle(
   recent: Array<[number, number]>,
   nowMs: number,
@@ -234,13 +166,7 @@ function dutyCycle(
   return { duty: total === 0 ? 0 : hits / total, covered: nowMs - oldestRetained >= windowMs };
 }
 
-/**
- * Advances the detector by one sample and returns what it would recommend.
- *
- * `processStartMs` drives the startup grace: the normal warm-up working set of roughly 700 MB is
- * reached within ten minutes, and treating that as an incident is how a naive threshold creates a
- * restart loop out of a healthy boot.
- */
+// Startup grace from `processStartMs` suppresses the ~700 MB boot warm-up so healthy restarts avoid restart loops.
 export function evaluatePressure(
   state: PressureState,
   sample: PressureSample,
@@ -313,7 +239,6 @@ export function evaluatePressure(
   };
 }
 
-/** Flattens a verdict for `metric_samples`, whose fields are scalar. */
 export function pressureVerdictFields(verdict: PressureVerdict, armed: boolean): Record<string, number | string> {
   return {
     pressure_level: verdict.level,

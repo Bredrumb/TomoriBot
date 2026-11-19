@@ -1,14 +1,6 @@
 import { type HumanizerSettings, humanizerSettingsFromDegree } from "@/constants/humanizer";
 import { HUMANIZER_CUSTOM_VALUE } from "@/utils/discord/humanizerOptions";
 import { computePersonaNudgeFingerprint, computePersonaNudgeListFingerprint } from "@/modules/natural-nudges/db/types";
-/**
- * Route coverage for the `/config` Persona surface.
- *
- * Drives the real registered route through the real policy, catalog, and renderer. Where a test
- * proves that a denied actor writes nothing, it spies on the repository the canonical operation
- * actually calls rather than substituting an operations double, because a double would restate the
- * expected answer instead of exercising the guard.
- */
 import { beforeAll, describe, expect, it, spyOn } from "bun:test";
 import { randomBytes } from "node:crypto";
 import sharp from "sharp";
@@ -104,7 +96,6 @@ beforeAll(async () => initializeLocalizer());
 
 const CLIENT = {} as Client;
 
-/** The interaction the route registry hands a route, which the shared factory models by hand. */
 type ConfigInteraction = Parameters<ReturnType<typeof createConfigInteractionRoute>["execute"]>[1];
 
 function requireRoute(customId: string): ParsedInteractionRoute {
@@ -113,11 +104,6 @@ function requireRoute(customId: string): ParsedInteractionRoute {
   return parsed;
 }
 
-/**
- * Persona rows for the workspace this suite drives: server 9, with persona 55 as the roster's first
- * entry. The nickname default follows the persona id because the conditioning aggregate view prints
- * it beside each entry, so a caller that names no persona still renders as `Persona <id>`.
- */
 function makePersona(overrides: PersonaFixtureOverrides = {}): TomoriState {
   const personaId = overrides.persona_id ?? 55;
   return createPersona({ server_id: 9, persona_id: personaId, persona_nickname: `Persona ${personaId}`, ...overrides });
@@ -238,18 +224,14 @@ interface HarnessOptions {
 interface Harness {
   dependencies: Partial<ConfigRouteDependencies>;
   telemetry: string[];
-  /** Payloads every interaction in this harness has edited, oldest first. */
   readonly edits: unknown[];
-  /** Payloads every interaction in this harness has replied or followed up with, oldest first. */
   readonly replies: unknown[];
-  /** Payloads every interaction in this harness has followed up with, derived from its recorded calls. */
   readonly followUps: unknown[];
   modals: unknown[];
   scopeLoads: boolean[];
   spriteLoads: number[];
   personaNudgeCalls: string[];
   snapshots: Map<string, string[]>;
-  /** Files the newest interaction's recordings behind the running `edits`/`replies`/`followUps` views. */
   record: (interaction: RouteInteraction) => void;
 }
 
@@ -401,11 +383,6 @@ async function dispatch(harness: Harness, interaction: RouteInteraction): Promis
   await registry.dispatch(CLIENT, interaction as unknown as ConfigInteraction);
 }
 
-/**
- * Pins the `/config` v2 wire contract: each literal custom ID and the exact route it must decode to.
- * Encoding and decoding through one shared codec table cannot catch a field reordering, because
- * both sides move together and a round-trip still succeeds; only literal bytes can.
- */
 const WIRE_CONTRACT_V2: ReadonlyArray<readonly [string, ConfigPanelRoute]> = [
   ["config:v2:draft-set:en-US:1", { action: "draft-set", locale: "en-US", enabled: true }],
   ["config:v2:draft-items-open:en-US", { action: "draft-items-open", locale: "en-US" }],
@@ -1273,7 +1250,6 @@ describe("config route wire contract", () => {
     }
   });
 
-  /** Each row is one field the codec must refuse instead of defaulting. */
   const REJECTED_WIRE_FIELDS: ReadonlyArray<readonly [string, string]> = [
     ["config:v2:persona-select:en-US:0", "a persona id of 0, which is not a real persona"],
     ["config:v2:persona-select:en-US:abc", "a non-numeric persona id"],
@@ -2903,11 +2879,6 @@ describe("config persona collections", () => {
 });
 
 describe("config promotion", () => {
-  /**
-   * Installs the spies and identity a live-CDN promotion records into, and returns the run's handles.
-   * Each case below drives its own promotion, because sharing one run would make a case's call order
-   * depend on what the case before it asserted.
-   */
   function installLiveCdnPromotion() {
     const mainPersona = makePersona({
       persona_id: 55,
@@ -3076,10 +3047,6 @@ describe("config promotion", () => {
     }
   });
 
-  /**
-   * The local-avatar variant of {@link installLiveCdnPromotion}: the guild has no live CDN avatar and
-   * the nickname sync fails, so the run must keep going from the stored former-main avatar.
-   */
   function installLocalFallbackPromotion() {
     const mainPersona = makePersona({
       persona_id: 55,
@@ -3431,7 +3398,6 @@ describe("config Persona Advanced routes", () => {
       ATTG_FIELDS.map((field) => [buildConfigModalFieldId(field, "nonce1234567"), values[field] ?? ""]),
     );
 
-  /** Dispatches one ATTG submit carrying exactly these modal field values. */
   async function submitAttg(fields: Record<string, string>): Promise<void> {
     const harness = makeHarness({ personas: [makePersona({ persona_id: 55 })] });
     await dispatch(
@@ -3585,7 +3551,6 @@ describe("config Persona Advanced routes", () => {
     setAttgSpy.mockRestore();
   });
 
-  /** `false` marks an input the route must refuse, `null` a blank it stores as no value. */
   const STARS_CASES: ReadonlyArray<readonly [string, number | null | false]> = [
     ["0", false],
     ["1", 1],
@@ -3678,7 +3643,6 @@ describe("config Persona Advanced routes", () => {
     setAttgSpy.mockRestore();
   });
 
-  /** Arity cases: a truncated nonce and a superseded version must both die at the codec. */
   const REJECTED_ATTG_IDS: ReadonlyArray<readonly [string, string]> = [
     ["config:v2:attg-submit:en-US:55:", "a truncated nonce segment"],
     ["config:v0:attg-submit:en-US:55:nonce1234567", "a superseded wire version"],
@@ -4042,11 +4006,6 @@ describe("config Persona Advanced routes", () => {
     expect(clearInput).toEqual({ scope: "persona", personaId: 55, llmId: null, serverDiscId: "guild-1" });
   });
 
-  /**
-   * Every manager-only Advanced write, with the interaction kind and modal fields it needs. The case
-   * asserts the whole repository surface stayed untouched, so a row added here is denied for a plain
-   * member by construction.
-   */
   const MANAGER_ONLY_WRITES: Array<{
     label: string;
     route: ConfigPanelRoute;
@@ -4140,7 +4099,6 @@ describe("config Persona Advanced routes", () => {
     modelSpy.mockRestore();
   });
 
-  /** The Advanced writes that need a guild workspace, with the interaction each one arrives on. */
   const GUILD_ONLY_WRITES: Array<{
     label: string;
     route: ConfigPanelRoute;
@@ -4227,7 +4185,6 @@ describe("config Persona Sprites routes", () => {
     [buildConfigModalFieldId(CONFIG_SPRITE_INSTRUCTIONS_FIELD, SPRITE_NONCE)]: instructions,
   });
 
-  /** The sprite mutations a plain member must never reach, with the interaction each arrives on. */
   const MEMBER_DENIED_SPRITE_ROUTES: Array<{
     label: string;
     route: ConfigPanelRoute;

@@ -47,7 +47,6 @@ const defaultStatusCommandDependencies: StatusCommandDependencies = {
   renderStatusPageDashboard,
 };
 
-/** Every category is built for every invoker, so none is filtered out. */
 export function listStatusPageDestinations(locale: string): PanelPageDestination<StatusCategory, null>[] {
   return STATUS_CATEGORIES.map((category) => ({
     category,

@@ -53,10 +53,6 @@ describe("shouldRejectWebhookRateLimit", () => {
     expect(decision).toBe(true);
   });
 
-  /**
-   * A 429 without bucket headers leaves `timeToReset` near zero while discord.js still sleeps for
-   * `Retry-After`, so judging on `timeToReset` alone would wait out the very stall this exists for.
-   */
   it("judges the wait by the larger of timeToReset and retryAfter", async () => {
     const decision = await runDeferrableWebhookAvatarEdit("1", async () =>
       shouldRejectWebhookRateLimit(rateLimitData({ timeToReset: 0 })),

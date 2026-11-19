@@ -27,9 +27,6 @@ export interface ProtocolMarkerSummary {
   issues: ProtocolMarkerIssue[];
 }
 
-/**
- * Validates protocol marker and title configuration across authored locales.
- */
 export async function validateProtocolMarkers(targetLocales?: string[]): Promise<ProtocolMarkerSummary> {
   await initializeLocalizer();
 
@@ -91,7 +88,6 @@ export async function validateProtocolMarkers(targetLocales?: string[]): Promise
   };
 }
 
-/** Prints the protocol marker section of `check-locales` and returns whether it passed. */
 export async function reportProtocolMarkers(): Promise<boolean> {
   log.info("Validating embed protocol keys and markers across authored locales…");
   const summary = await validateProtocolMarkers();

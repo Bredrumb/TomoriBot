@@ -31,10 +31,8 @@ const VIDEO_SECOND_SKUS = new Set([
   "text_to_video_duration_seconds",
 ]);
 
-/**
- * Reads only what the OpenRouter caches already hold, because model pickers open as modals inside
- * Discord's 3-second acknowledgement window; `warmOpenRouterMediaPricing` fills them off that path.
- */
+// Reads cached OpenRouter rates only because model pickers open modals inside Discord's 3-second ack window, while
+// warmOpenRouterMediaPricing fills them.
 export function cachedOpenRouterMediaRates(kind: OpenRouterMediaKind, codename: string): MediaRate[] | null {
   switch (kind) {
     case "image": {
@@ -52,10 +50,8 @@ export function cachedOpenRouterMediaRates(kind: OpenRouterMediaKind, codename: 
   }
 }
 
-/**
- * Warms catalog image prices and the speech list (video prices arrive with the video catalog);
- * member-registered image models are skipped, so warm scoped rows too if their missing prices matter.
- */
+// Member-registered image models and video (priced via its catalog) are skipped here, so warm scoped rows separately
+// if missing prices matter.
 export async function warmOpenRouterMediaPricing(): Promise<void> {
   const images = (await llmModelRepo.loadAvailableDiffusionModels("openrouter")) ?? [];
   await Promise.all([
@@ -87,10 +83,8 @@ export function openRouterImageRates(
   return rates.length > 0 ? rates : null;
 }
 
-/**
- * Prices video at the resolution the generate tool requests by default, falling back to the
- * resolution-free SKU; the highest matching rate wins so audio-included pricing is never understated.
- */
+// Video pricing uses the generate tool's default resolution SKU first and picks the highest matching rate so
+// audio-included rates are never understated.
 export function openRouterVideoRates(codename: string, pricing: unknown): MediaRate[] | null {
   const parsed = skuRatesSchema.safeParse(pricing);
   if (!parsed.success) return null;

@@ -1,6 +1,6 @@
 import type { SetupDraftContext, SetupDraftProviderAccess, SetupDraftRecord } from "@/types/discord/setupWizard";
 
-/** Exported so the eviction test sizes its fixture against the real bound. */
+// Exported only so the eviction test can size its fixture against the real capacity bound.
 export const SETUP_DRAFT_MAX_ENTRIES = 200;
 
 export interface SetupDraftStoreEntry extends SetupDraftRecord {
@@ -79,14 +79,8 @@ function wipeProviderAccessSecrets(access: SetupDraftProviderAccess | null | und
   }
 }
 
-/**
- * Wipes only the secrets the replacement does not still reference.
- *
- * Identity is compared per Buffer rather than per access object because a caller that spreads a previous access
- * into its replacement (`{ ...previous, provider: "other" }`) carries the same Buffer across. Wiping the displaced
- * object wholesale would zero the credential that is still live in the draft, and the resulting all-zero key would
- * reach the setup commit with nothing raising an error.
- */
+// Identity is compared per Buffer because spreading an access reuses the same Buffer, so wiping the old object
+// wholesale would silently zero a live key.
 function wipeDisplacedProviderAccessSecrets(
   previous: SetupDraftProviderAccess | null | undefined,
   next: SetupDraftProviderAccess | null | undefined,
@@ -107,18 +101,8 @@ export function createSetupDraftStore(_now: () => number = Date.now): SetupDraft
     context: SetupDraftContext,
   ): boolean => draft.actorDiscId === actorDiscId && draft.workspaceKey === workspaceKey && draft.context === context;
 
-  /**
-   * Reads a draft, refusing one that a commit has claimed.
-   *
-   * The claim is enforced at the store rather than at each route arm because the commit's snapshot is
-   * a shallow copy: any other mutation landing in its window reaches
-   * `wipeDisplacedProviderAccessSecrets` (or `consume`'s wipe) and zero-fills the credential buffer
-   * the running transaction is about to write, so the setup would succeed with a dead key. Refusing
-   * every action, including Cancel, is the only shape that closes every one of those windows.
-   *
-   * The claim's own transitions are the exception, and they say so with `allowClaimed`: the commit
-   * has to be able to release its own claim and then consume the record it owns.
-   */
+  // Claimed drafts reject non-`allowClaimed` reads because snapshots share key Buffers, so concurrent writes or
+  // cancels would zero-fill the committing key.
   const read = (
     nonce: string,
     actorDiscId: string,
@@ -169,13 +153,8 @@ export function createSetupDraftStore(_now: () => number = Date.now): SetupDraft
     return { status: "ok", draft: updatedDraft };
   };
 
-  /**
-   * Claims the draft for the interaction that is about to commit it.
-   *
-   * The read and the write happen in one synchronous step, so no second interaction can pass the check in between:
-   * that is the whole point of the claim, because the commit transaction itself is awaited and a duplicate
-   * confirmation arriving during it would otherwise validate against the same unclaimed draft and commit twice.
-   */
+  // Reading and setting `writeClaimed` must stay synchronous with no `await` so a duplicate confirmation cannot
+  // commit while the first transaction is awaited.
   const claim = (
     nonce: string,
     actorDiscId: string,
@@ -192,7 +171,6 @@ export function createSetupDraftStore(_now: () => number = Date.now): SetupDraft
     return { status: "claimed", draft: claimedDraft };
   };
 
-  /** Releases a claim whose commit did not complete, so the pending draft stays retryable. */
   const releaseClaim = (
     nonce: string,
     actorDiscId: string,

@@ -34,10 +34,6 @@ export async function resolveTextCredentialState(
   };
 }
 
-/**
- * A chat turn's text model before its credentials apply; only a personal `planned` route takes the
- * personal overlay and skips the channel override.
- */
 export async function resolveRouteTextModel(params: {
   state: TomoriState;
   route: "planned" | "server";

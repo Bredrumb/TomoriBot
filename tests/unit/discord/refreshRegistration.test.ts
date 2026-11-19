@@ -1,11 +1,3 @@
-/**
- * `/tool refresh` became the bare root `/refresh`. `tool` sits in neither restriction list, so the
- * move must add no restriction, and the old leaf must be gone rather than coexisting.
- *
- * The reset marker is the reason this move is not cosmetic: three subsystems compare a live embed
- * title against `commands.refresh.title`, so the key must resolve and its text must be unchanged.
- * `embedClassifier.test.ts` covers the classification itself; this file covers registration.
- */
 import { beforeAll, describe, expect, it } from "bun:test";
 import { loadCommandData, ROOT_COMMAND_EXECUTION_KEY } from "@/utils/discord/commandLoader";
 import { hasLocaleKey, initializeLocalizer, localizer } from "@/utils/text/localizer";

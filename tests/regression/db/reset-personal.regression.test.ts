@@ -1,19 +1,3 @@
-/**
- * Regression harness: atomic personal configuration reset.
- *
- * Covers resetRepository.resetPersonalConfiguration:
- * - Resets language_pref to 'en-US' and privacy_level to 0 in users table.
- * - Preserves registration_locale and the Ping User nudge opt-out.
- * - Resets all 13 columns in user_personalization_configs to DDL defaults.
- * - Deletes user_persona_naming_preferences for the user.
- * - Deletes all personal_spotlights for the user across workspaces, cascading to personal_spotlight_personas.
- * - Returns the distinct internal server IDs whose spotlights were deleted.
- * - Proves reminders, user_saved_provider_configs, personal_memories, and personas survive.
- * - Proves missing user_personalization_configs row is repaired with DDL defaults.
- * - Proves atomic rollback when a statement fails mid-transaction.
- *
- * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md)
- */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { resetRepository } from "@/utils/db/repositories/ResetRepository";
 import { FIXTURE_IDS, cleanupFixtures, insertFixtures } from "./setup/fixtures";

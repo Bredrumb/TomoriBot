@@ -1,8 +1,3 @@
-/**
- * Persona Remove Command
- * Removes an alter persona from the server
- */
-
 import type {
   AutocompleteInteraction,
   ChatInputCommandInteraction,
@@ -24,7 +19,7 @@ function isDuplicateTaggedName(name: string): boolean {
   return /\[dup-\d+\]\s*$/i.test(name.trim());
 }
 
-/** Duplicate-tagged rows from schema migration cleanup stay removable even when marked as main. */
+// Schema migration cleanup can leave duplicate rows marked as main, so duplicate-tagged rows stay removable.
 function isRemovablePersona(persona: Pick<TomoriState, "is_alter" | "persona_nickname">): boolean {
   return persona.is_alter || isDuplicateTaggedName(persona.persona_nickname);
 }
@@ -44,10 +39,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 export const autocomplete = async (_client: Client, interaction: AutocompleteInteraction): Promise<void> =>
   respondWithPersonaChoices(interaction, interaction.guild?.id, isRemovablePersona);
 
-/**
- * Executes the 'remove' command
- * Removes an alter persona from the server
- */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,

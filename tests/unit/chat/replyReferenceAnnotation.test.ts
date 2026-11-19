@@ -13,17 +13,12 @@ import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 import { localizedCopy } from "../../helpers/localeCases";
 import { createScopedModuleMocker } from "../../helpers/mockSurface";
 
-/**
- * Reply annotations name an author outside the dialogue-history label path, so a verified proxy
- * author has to be recovered from its indexed attribution rather than from the webhook name.
- * These cases pin that recovery, including the bounded index read used when the referenced
- * message sits outside the fetched history window.
- */
+// Reply annotations sit outside the dialogue-history label path, so verified proxy authors must come from indexed
+// attribution rather than webhook names.
 
 const MEMBER_UUID = "11111111-2222-4333-8444-555555555555";
 const MEMBER_USER_DISC_ID = `pk:${MEMBER_UUID}`;
 
-/** Saved TomoriBot nicknames the mocked user cache answers with, keyed by Discord ID. */
 const savedNicknames = new Map<string, string>();
 
 const cacheMocker = createScopedModuleMocker(mock, {

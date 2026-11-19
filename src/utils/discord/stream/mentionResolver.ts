@@ -9,11 +9,6 @@ import type {
 import { replaceMentionHandles } from "@/utils/text/processors/mentionProcessor";
 import { normalizeParticipantAlias } from "@/utils/text/participants/aliases";
 
-/**
- * Channel shape accepted by {@link resolveGuildMentions}. Matches both `StreamContext.channel`
- * and `ToolContext.channel` so the stream pipeline and message-interaction tools share one
- * mention-resolution implementation.
- */
 export type MentionResolvableChannel =
   | BaseGuildTextChannel
   | BaseGuildVoiceChannel

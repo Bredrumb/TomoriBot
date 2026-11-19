@@ -6,25 +6,13 @@ import { log } from "@/utils/misc/logger";
 const SCOPE = { lineageId: 4, language: "en-US", personaName: "Default Tomori" };
 
 type CapturedStatement = {
-  /** Bind parameters in the order the client received them. */
   values: unknown[];
-  /** The protected key set, taken from the only array-valued parameter. */
   protectedKeys: string[];
-  /** Text of the statement, for shape assertions. */
   text: string;
 };
 
-/**
- * Reads the protected key set out of the bind the driver receives.
- *
- * Our `sql.array(keys, "text")` marshals to Bun's `{ serializedValues, arrayType }` wrapper whose
- * `serializedValues` is a PostgreSQL array literal (`{"smug","silly"}`), not a JS array. Parsing
- * that literal is what keeps the assertion on the real statement rather than on a restatement of
- * the test's own input.
- *
- * The caller passes the bind position, so a statement that binds its keys elsewhere yields an empty
- * set and the assertion fails rather than quietly passing.
- */
+// Bun's sql.array marshals to { serializedValues, arrayType } with a PostgreSQL array literal rather than a JS array,
+// so this parses that wrapper directly.
 function readKeySet(bind: unknown): string[] {
   if (Array.isArray(bind)) return bind as string[];
   const serialized = (bind as { serializedValues?: unknown } | undefined)?.serializedValues;
@@ -75,7 +63,6 @@ afterEach(() => {
   for (const restore of restoreSpies.splice(0)) restore();
 });
 
-/** Captures log.warn calls; always restored, including when the delete path throws. */
 function captureWarnings() {
   const warnings: string[] = [];
   const spy = spyOn(log, "warn").mockImplementation((message: string) => {

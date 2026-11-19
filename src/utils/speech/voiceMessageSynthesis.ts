@@ -53,7 +53,6 @@ import { ZodError } from "zod";
 import { ResponseSizeError } from "@/utils/security/boundedResponse";
 import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 
-/** Metric key recorded against the `audio_generated` stat. */
 export type VoiceBackendKey =
   | "elevenlabs"
   | "tts-clone"
@@ -64,13 +63,8 @@ export type VoiceBackendKey =
 
 type VoiceSynthesisErrorKind = TtsCloneErrorKind | ElevenLabsTtsErrorKind | HostedSpeechErrorKind;
 
-/**
- * Which voice the caller wants this message synthesized from.
- *
- * A clone source carries either a stored sample id or raw audio: `/generate voice-message`
- * accepts an ad-hoc upload that has no `voice_samples` row, so a sample id alone cannot
- * express every clone request.
- */
+// Clone sources carry either a sample ID or raw audio because ad-hoc `/generate voice-message` uploads have no
+// `voice_samples` row.
 export type ResolvedVoiceSource =
   | { kind: "design"; designPrompt: string; personaId?: number }
   | { kind: "clone"; voiceSampleId: number }
@@ -80,20 +74,16 @@ export type ResolvedVoiceSource =
 export interface VoiceMessageSynthesisResult {
   success: boolean;
   audioBuffer?: Buffer;
-  /** Bare MIME type (no parameters), e.g. "audio/wav". */
+  // Bare MIME type without parameters (such as "audio/wav"), since callers expect codec and charset suffixes
+  // stripped.
   contentType?: string;
   extension?: string;
-  /** Script text with markup stripped, suitable for transcript display. */
   cleanedCaptionText?: string;
   errorKind?: VoiceSynthesisErrorKind;
   providerCode?: string;
   details?: string;
-  /**
-   * The provider's status and response body exactly as logged. It stays off `attempts` because the
-   * voice tool returns those to the model.
-   */
+  // Raw provider status and response body kept off `attempts` because the voice tool returns `attempts` to the model.
   providerDetail?: string;
-  /** The backend that produced the audio, already resolved for `audio_generated`. */
   backendKey: VoiceBackendKey;
   attempts?: VoiceSynthesisAttempt[];
   effectiveSource?: ResolvedVoiceSource["kind"];
@@ -125,23 +115,18 @@ export interface VoiceMessageSynthesisRequest {
     sourceIsExplicit: boolean;
   };
   endpoint: CustomEndpointRow | null;
-  /** Credential for the active speech endpoint; empty for unauthenticated local servers. */
+  // Credential for the active speech endpoint: empty string means an unauthenticated local server.
   endpointApiKey: string;
-  /** Credential for the ElevenLabs fallback, consulted only when that path is taken. */
   elevenLabsApiKey: string;
   source: ResolvedVoiceSource;
   script: string;
-  /** Per-message delivery direction for design-shaped or instruction-capable clone sources. */
   voiceInstructions?: string;
-  /** Chatterbox delivery overrides for this invocation, clone sources only. */
   chatterbox?: {
     turboEnabled: boolean;
     cfgWeight: number;
     exaggeration: number;
   };
-  /** ElevenLabs voice settings for this invocation, `elevenlabs` sources only. */
   elevenLabsVoiceSettings?: Record<string, unknown>;
-  /** Turn-level cancellation from /kill, forwarded to whichever backend runs. */
   abortSignal?: AbortSignal;
 }
 

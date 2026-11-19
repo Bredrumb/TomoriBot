@@ -9,21 +9,20 @@ export const HUMANIZER_TOGGLES = [
 export type HumanizerToggle = (typeof HUMANIZER_TOGGLES)[number];
 export type HumanizerSettings = Record<HumanizerToggle, boolean>;
 
-/**
- * Pacing and both splits act between streamed messages, so a non-streamed reply has nowhere to apply
- * them; lowercase rewrites text in place and works in either mode.
- */
+// Pacing and splits operate only between streamed chunks, so non-streamed replies cannot apply them, while lowercase
+// rewrites text in place in either mode.
 export const HUMANIZER_TOGGLE_REQUIRES: Partial<Record<HumanizerToggle, HumanizerToggle>> = {
   humanizer_pacing_enabled: "humanizer_streaming_enabled",
   humanizer_sentence_split_enabled: "humanizer_streaming_enabled",
   humanizer_punctuation_split_enabled: "humanizer_streaming_enabled",
 };
 
-/** Indexed by the retired 0-3 degree, which `/setup` still offers and older exports still carry. */
+// Array indices match the retired 0-3 degree index because /setup still offers it and older exports still carry
+// numeric degrees.
 const HUMANIZER_PRESETS = ["none", "light", "medium", "heavy"] as const;
 export type HumanizerPreset = (typeof HUMANIZER_PRESETS)[number];
 
-/** Must match migration 134's backfill, so an imported or set-up degree lands where an upgraded one did. */
+// Thresholds must match migration 134's backfill so imported or set-up degrees map identically to upgraded rows.
 export function humanizerSettingsFromDegree(degree: number): HumanizerSettings {
   return {
     humanizer_streaming_enabled: degree >= 1,

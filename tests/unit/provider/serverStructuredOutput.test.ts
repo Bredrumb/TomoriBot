@@ -39,7 +39,6 @@ function savedRow(provider: string): SavedProviderConfigRow {
   });
 }
 
-/** One OpenRouter catalog model the server is offered, with a saved key under every provider name. */
 function stubCatalog(): { savedLookups: string[] } {
   const model = createLlmRow({ llm_id: MODEL_ID, llm_provider: "openrouter", supports_structoutput: true });
   const savedLookups: string[] = [];

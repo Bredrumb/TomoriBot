@@ -1,11 +1,3 @@
-/**
- * Crawl4AI function wrappers.
- *
- * These are intentionally hidden from LLM discovery. `fetchUrl/crawl4aiEngine`
- * calls this wrapper so the REST integration follows the same shape as other
- * sibling REST tool implementation modules.
- */
-
 import { log } from "@/utils/misc/logger";
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import {

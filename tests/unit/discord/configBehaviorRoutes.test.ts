@@ -1,10 +1,3 @@
-/**
- * Route coverage for Behavior > General and Trigger.
- *
- * These cases dispatch through the real registry, policy, and route handler. Repository spies
- * only observe the canonical methods the handler should call, which keeps the authorization and
- * acknowledgement assertions on the actual wiring.
- */
 import { humanizerSettingsFromDegree, pickHumanizerSettings } from "@/constants/humanizer";
 import { type HumanizerCheckboxGroup, humanizerCheckboxFieldName } from "@/utils/discord/humanizerOptions";
 import { beforeAll, describe, expect, it, spyOn } from "bun:test";
@@ -119,18 +112,13 @@ function makeRandomTrigger(): RandomTriggerRow & { trigger_id: number } {
 interface Harness {
   dependencies: Partial<ConfigRouteDependencies>;
   scope: ConfigScope;
-  /** Payloads every interaction in this harness has edited, oldest first. */
   readonly edits: unknown[];
-  /** Payloads every interaction in this harness has replied or followed up with, oldest first. */
   readonly replies: unknown[];
   modals: unknown[];
   deferredAtWrite: boolean[];
   telemetry: string[];
-  /** Values the intercepted modal store holds, keyed by interaction id then field id. */
   selectValues: Map<string, Map<string, string>>;
-  /** Checkbox payloads by interaction id; an interaction with none set reads every group as empty. */
   checkboxValues: Map<string, Map<string, string[]>>;
-  /** Files the newest interaction's arrays behind the running `edits`/`replies` views. */
   record: (interaction: RouteInteraction) => void;
 }
 
@@ -215,11 +203,8 @@ function makeInteraction(
   options: {
     kind?: "button" | "modal" | "select";
     fields?: Record<string, string>;
-    /** Component type per field id, for modal fields that are not text inputs. */
     componentTypes?: Record<string, number>;
-    /** Values the reader should find in the intercepted store, keyed by field id. */
     selectValues?: Record<string, string>;
-    /** Checkbox payloads keyed by field id; a field left out reads as never submitted. */
     checkboxValues?: Record<string, string[]>;
     values?: string[];
     isManager?: boolean;
@@ -289,12 +274,6 @@ function collectRawComponentTypes(value: unknown): number[] {
   ];
 }
 
-/**
- * Maps each modal field's custom id to the type of the component the reader will actually receive.
- *
- * The component carrying a custom id sits one level below the label that wraps it, so the type of
- * interest is the innermost one.
- */
 function collectModalFieldTypes(payload: unknown): Map<string, number> {
   const types = new Map<string, number>();
 

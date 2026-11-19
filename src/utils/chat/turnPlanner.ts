@@ -544,11 +544,8 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
   return { lockedTurn, turns };
 }
 
-/**
- * The user whose name `{user}` and the triggerer name carry. A Ping User speaks to its target, not to
- * whoever posted the message it borrowed as a trigger, so only naming moves to the target: credentials,
- * quotas, and stats stay with the trigger message's author. Null when the target's row is unreadable.
- */
+// Ping User moves only {user} and triggerer naming to its target, so credentials, quotas, and stats stay with the
+// trigger message's author.
 async function resolveNamingSubject(params: {
   incoming: ChatIncoming;
   message: Message;
@@ -611,10 +608,8 @@ async function loadOrRegisterTriggerUser(
   return registered;
 }
 
-/**
- * A borrowed-trigger turn counts as system-initiated because an admin configured it (random trigger
- * or Natural Nudges allow-list), as creation authorizes a reminder.
- */
+// Borrowed-trigger turns count as system-initiated because admin configuration (random trigger or Natural Nudges
+// allow-list) authorizes them like reminders.
 function isSystemInitiatedIncoming(incoming: ChatIncoming): boolean {
   return Boolean(
     incoming.reminderRecipientID || incoming.reminderData?.self_reminder || incoming.borrowsTriggerMessage,
@@ -632,7 +627,6 @@ export async function resolveTextCredentialPolicy(params: {
   isManuallyTriggered?: boolean;
   isUserImpersonation: boolean;
   borrowsTriggerMessage: boolean;
-  /** Who a borrowed-trigger turn bills instead of the anchor message's author, such as a reminder's creator. */
   borrowedTurnOwnerUserId?: number | null;
   userRow: UserRow;
   channel: Message["channel"];

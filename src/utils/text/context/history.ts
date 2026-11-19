@@ -256,7 +256,6 @@ export async function getUserPresenceDetails(
   }
 }
 
-/** One gateway activity as the text the model reads, such as "Playing Elden Ring: Limgrave for 2 hours". */
 export function formatPresenceActivity(activity: Activity): string {
   const largeText = activity.assets?.largeText?.trim() || null;
   const smallText = activity.assets?.smallText?.trim() || null;

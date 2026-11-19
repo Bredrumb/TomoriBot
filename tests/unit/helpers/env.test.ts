@@ -1,7 +1,6 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import { useEnvSandbox, useFullEnvSandbox } from "../../helpers/env";
 
-/** Unset in any real environment, so each restore below must delete it rather than assign it. */
 const PROBE = "TOMORI_ENV_SANDBOX_PROBE";
 
 describe("useEnvSandbox", () => {

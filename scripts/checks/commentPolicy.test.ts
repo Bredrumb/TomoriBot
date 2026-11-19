@@ -11,11 +11,8 @@ import {
 } from "./checkCommentPolicy";
 import { collectRepoPatternFindings, maskMarkdownCode } from "./lib/docProse";
 
-/**
- * The audit limits are a parameter now, but a maintainer recalibrating the corpus exports the
- * environment variables that the command line reads. Those must not change what these tests
- * assert, so the overrides are removed for the duration of the file and restored afterwards.
- */
+// Env override keys are cleared and restored per file because locally exported COMMENT_AUDIT_* recalibration vars
+// would skew test assertions.
 const AUDIT_OVERRIDE_KEYS = [
   "COMMENT_AUDIT_DUPLICATE_MIN_WORDS",
   "COMMENT_AUDIT_DUPLICATE_MIN_CHARS",
@@ -778,11 +775,6 @@ describe("audit command line", () => {
     "",
   ].join("\n");
 
-  /**
-   * Strips the audit override variables a maintainer may have exported for recalibration. A child
-   * that inherits them would answer a different question than the assertion asks, and the test
-   * would fail for a reason that has nothing to do with the code.
-   */
   const withoutAuditOverrides = (extra: Record<string, string> = {}): Record<string, string> => {
     const env = Object.fromEntries(
       Object.entries(Bun.env).filter(([key, value]) => !key.startsWith("COMMENT_AUDIT_") && value !== undefined),

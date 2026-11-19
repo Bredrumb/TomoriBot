@@ -41,7 +41,7 @@ export interface ProviderUsageReport {
   outputTokens?: number | null;
   cacheReadTokens?: number | null;
   cacheWriteTokens?: number | null;
-  /** Identifies one billed provider request, so repeated polling of the same job records it once. */
+  // Single-request billing identifier so repeated job polls record usage only once.
   providerRequestId?: string | null;
 }
 

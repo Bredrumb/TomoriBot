@@ -9,11 +9,6 @@ import { buildGoogleThinkingConfig } from "@/utils/provider/thinkingControl";
 import { fetchAndOptimizeImage } from "@/utils/image/imageProcessor";
 type GenericStructuredOutputRequest = ProviderStructuredJsonRequest;
 
-/**
- * Call Google Gemini with structured output using a generic JSON schema.
- * Unlike the expression-specific variant, this accepts any Zod schema and
- * response schema, enabling reuse for history extraction and other tasks.
- */
 export async function callGoogleStructuredJSON<T>(
   request: GenericStructuredOutputRequest,
   responseSchema: Record<string, unknown>,

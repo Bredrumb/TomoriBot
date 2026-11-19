@@ -6,9 +6,6 @@ import type { ErrorContext } from "@/types/db/schema";
 import { getShardTopology } from "@/utils/discord/shardOwnership";
 import { hasShardLeaseOwnership } from "@/utils/cluster/shardLeases";
 
-/**
- * Guild MCP servers are remote and administrator-registered; the bot starts no local MCP process.
- */
 export default async (): Promise<void> => {
   if (isDraining() || !hasShardLeaseOwnership()) return;
   try {

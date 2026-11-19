@@ -1,18 +1,4 @@
 #!/usr/bin/env bun
-/**
- * Read-only environment variable inventory. Reports where each variable is declared, overridden,
- * read, and defaulted, with a classification candidate for review. It never writes a file and
- * never prints a value from the live `.env`.
- *
- * Usage:
- *   bun run env-doctor                 summary and diagnostics
- *   bun run env-doctor --var NAME      full evidence for one variable (repeatable)
- *   bun run env-doctor --all           full evidence for every variable
- *   bun run env-doctor --json          machine-readable report
- *   bun run env-doctor --limit N       rows per diagnostic in the summary (0 = all, default 40)
- *   bun run env-doctor --no-release    do not read deploy/ and terraform/ from a release ref
- *   bun run env-doctor --no-live-env   skip the live .env names (use for output shared publicly)
- */
 import { analyze } from "./envDoctor/analyze";
 import { renderSummary, renderVariable } from "./envDoctor/render";
 import { loadCheckout } from "./envDoctor/sources";

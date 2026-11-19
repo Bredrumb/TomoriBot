@@ -183,12 +183,8 @@ async function setMessageTriggerCooldownForAdmission(params: {
   );
 }
 
-/**
- * The channel a message's channel-scoped configuration applies to.
- *
- * A thread's messages carry their parent's scope for settings such as the auto-chat override,
- * while reads and writes keyed on the message itself keep the thread's own id.
- */
+// Only channel-scoped settings (such as auto-chat overrides) inherit a thread's parent scope, because message-keyed
+// operations still need the thread's own ID.
 export function resolveChannelScope(message: Message): { effectiveChannelId: string; parentChannelId?: string } {
   const isThread =
     "isThread" in message.channel && typeof message.channel.isThread === "function" && message.channel.isThread();
@@ -196,16 +192,8 @@ export function resolveChannelScope(message: Message): { effectiveChannelId: str
   return { effectiveChannelId: parentChannelId ?? message.channelId, parentChannelId };
 }
 
-/**
- * Applies the server's message-trigger cooldown to a turn that answers on the server's credentials.
- *
- * Planning runs this for a server-sourced turn. The server route a personal turn can fall back to
- * has to run it as well, because the server is now the one paying: without it, a personal provider
- * that fails on every message would buy a server reply on every message for as long as the server's
- * quota allows, and a server that leaves quota off would never stop.
- *
- * @returns false when the caller must not proceed, the same answer planning gives a cooldown hit.
- */
+// Server fallback routes from personal turns must also call this, because otherwise a failing personal provider
+// bypasses cooldown and drains server quota.
 export async function enforceServerTriggerCooldownForAdmission(params: {
   serverDiscId: string;
   cooldownUserDiscId: string;
@@ -245,13 +233,8 @@ export async function enforceServerTriggerCooldownForAdmission(params: {
   return true;
 }
 
-/**
- * Whether this turn draws on a server's text quota once it runs on the server's credentials.
- *
- * Direct messages, system-initiated turns, reminder deliveries, and stop responses never count
- * against a server's text quota. The caller decides the credential route separately, because a
- * turn planned on personal credentials only reaches this quota if it falls back to the server.
- */
+// Intentionally ignores credential route, because a turn planned on personal credentials only hits server text quota
+// when it falls back to server.
 export function shouldApplyServerTextQuota(incoming: ChatIncoming, isDMChannel: boolean | undefined): boolean {
   return (
     incoming.textQuotaSource === "user" &&

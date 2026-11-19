@@ -33,21 +33,6 @@ const EMOJI_TAG_GLOBAL_REGEX = /<a?:[^:]+:[^>]+>/g;
 // the emoji ends in one of these, the emoji isn't really "mid-sentence".
 const TERMINAL_PUNCTUATION_REGEX = /[.!?。！？]$/;
 
-/**
- * Decides whether a custom Discord emoji should be folded inline with surrounding
- * text rather than isolated into its own emoji-run message.
- *
- * Two carve-outs return true (= inline); everything else falls back to the default
- * isolation behavior in Pass 4:
- *   - List item: the emoji's line starts with a list marker (e.g. "1. ", "- "),
- *      so list numbering stays attached to the emoji it labels.
- *   - Mid-sentence: non-emoji text exists on both sides of the emoji on the same
- *      line, AND the text immediately before does not end in sentence-terminating
- *      punctuation. Prevents splitting natural prose like
- *      "I really like :Soup:, don't you?" into 3 messages.
- *
- * @returns true if the emoji should be merged into adjacent text, false to isolate
- */
 function shouldEmojiStayInline(sourceText: string, emojiStart: number, emojiLength: number): boolean {
   const lineStart = sourceText.lastIndexOf("\n", emojiStart - 1) + 1;
   const nextNewline = sourceText.indexOf("\n", emojiStart);
@@ -92,11 +77,8 @@ function findBalancedParentheses(text: string, startIndex = 0): { start: number;
   return { start: openIndex, end: closeIndex + 1, content: text.substring(openIndex, closeIndex + 1) };
 }
 
-/**
- * Scanning variant of {@link findBalancedParentheses}: the base function only examines the first "("
- * at or after `startIndex`, so an unclosed "(" or an emoticon like ":(" would hide every balanced
- * aside after it, and a flush landing in one of those asides would sever it.
- */
+// Unclosed "(" or ":(" hides later balanced asides in findBalancedParentheses, so this variant scans ahead to keep
+// them protected from flushes.
 export function findNextBalancedParentheses(
   text: string,
   startIndex = 0,
@@ -127,12 +109,8 @@ export function findQuotedString(text: string, startIndex = 0): { start: number;
   return null;
 }
 
-/**
- * Distinct open/close quotation pairs whose contents must never be split. The straight `"` is
- * handled by {@link findQuotedString} because it opens and closes with one character. `'` and
- * `‘ ’` are excluded: they double as apostrophes ("don’t"), so treating them as openers would
- * protect arbitrary stretches of prose.
- */
+// Single quotes ("'" and "‘ ’") are omitted because they double as apostrophes, which would protect arbitrary prose
+// stretches from splitting.
 export const PAIRED_QUOTE_MARKS: ReadonlyArray<readonly [string, string]> = [
   ["「", "」"],
   ["『", "』"],
@@ -144,7 +122,6 @@ export const PAIRED_QUOTE_MARKS: ReadonlyArray<readonly [string, string]> = [
   ["《", "》"],
 ];
 
-/** Finds the earliest closed span of any {@link PAIRED_QUOTE_MARKS} pair at or after `startIndex`. */
 export function findPairedQuotedString(
   text: string,
   startIndex = 0,
@@ -373,7 +350,6 @@ const SPACELESS_SCRIPT_REGEX = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Kata
 // an aside: "ugh :( that sucks. anyway. glad you're back :)" would otherwise hold the whole stretch
 // between the two faces in one message.
 const EMOTICON_GLUE_REGEX = /[:;=8']/;
-/** Pass 1 and {@link maskInlineCodeAndUrls} share one URL shape so the two cannot drift apart. */
 const URL_PATTERN_SOURCE = String.raw`(?<!\]\()(https?|ftps?):\/\/[^\s<>[\](){}'"]+`;
 const INLINE_CODE_PATTERN = /`[^`\n]*`/g;
 
@@ -381,36 +357,15 @@ function isEmphasisMarkerChar(char: string): char is EmphasisMarker {
   return char === "*" || char === "_" || char === "~";
 }
 
-/**
- * Whether `char` reads as part of a word when a marker run sits next to it.
- *
- * A spaceless script's letter does not: Japanese and Chinese put the marker straight against the
- * text ("ふん*顔をそむける*わけ"), and a renderer italicizes that, so counting those letters as word
- * characters would leave the ja and zh-TW locales with exactly the split this classifier exists to
- * prevent. Only `*` gets this exemption. An underscore glued to a word is an identifier ("user_id")
- * in every script, and an ASCII `~~` glued to kana is almost always a wave-dash elongation
- * ("やだ~~w", "おはよ~~！"); exempting it would hold the rest of the reply behind a strikethrough
- * that was never opened.
- */
+// Only "*" exempts spaceless-script letters because CJK italicizes against text, whereas "_" forms identifiers and
+// "~~" on kana is wave-dash elongation.
 function isWordCharForMarker(char: string, marker: EmphasisMarker): boolean {
   if (!EMPHASIS_WORD_CHAR_REGEX.test(char)) return false;
   return marker !== "*" || !SPACELESS_SCRIPT_REGEX.test(char);
 }
 
-/**
- * Flanking classification for one marker run, following the rules a markdown renderer applies.
- *
- * An opener needs non-whitespace after it and must not sit inside a word, so `2 * 3` and a `* ` list
- * bullet never open. A closer needs non-whitespace before it and must not sit inside a word either,
- * so a `Best*` footnote never closes. `_` additionally needs a letter or digit against its inner
- * side, which keeps kaomoji (`-_-`, `^_^`, `>_<`) and identifiers (`user_id`, `_id`) from reading as
- * emphasis. A single `~` is prose.
- *
- * The stream hold and the sentence-split span protection both classify runs here, so a run one layer treats
- * as an opener is an opener for the other as well. Deliberately stricter than a renderer in one
- * place: an intraword closer in a spaced script (`*a*b`) is rejected, because the hold shares this
- * rule and would otherwise stall on prose.
- */
+// Shared by stream hold and sentence splitting so both agree on openers; intraword closers ("*a*b") are rejected
+// because the hold would otherwise stall on prose.
 export function classifyEmphasisMarkerRun(
   text: string,
   runStart: number,
@@ -436,25 +391,14 @@ export function classifyEmphasisMarkerRun(
   return { opens, closes };
 }
 
-/**
- * Blanks out inline code and URLs, leaving length and line structure intact, so an emphasis scan
- * reads them as prose rather than as markers: `*args`, `**kwargs`, and a `/_next/` path segment are
- * not emphasis.
- */
+// Replaces inline code and URLs with same-length spaces rather than empty strings because callers use maskedText
+// offsets directly to index into text.
 export function maskInlineCodeAndUrls(text: string): string {
   return text
     .replace(INLINE_CODE_PATTERN, (match) => " ".repeat(match.length))
     .replace(new RegExp(URL_PATTERN_SOURCE, "g"), (match) => " ".repeat(match.length));
 }
 
-/**
- * True when a finder-reported span is an emphasis pair a renderer would honor.
- *
- * The finders pair any two markers, so "* first item\n* second item", "2 * 3 ... 4 * 5", and
- * "yay ^_^ ... snake_case" all come back as spans. Protecting those suppresses the paragraph and
- * sentence splits the degree exists to make, so both delimiter runs have to classify as a real
- * opener and closer, and neither may sit in inline code or a URL.
- */
 function isRealEmphasisSpan(
   text: string,
   maskedText: string,
@@ -481,39 +425,16 @@ function isRealEmphasisSpan(
   return opener.opens && closer.closes;
 }
 
-/**
- * True when a paren candidate is an emoticon's face rather than a parenthetical aside.
- *
- * A face opens with a bare "(" glued to its eyes (`:(`, `;(`, `:'(`), so a pair of faces reads as a
- * balanced aside: "ugh :( that sucks. anyway. glad you're back :)" arrives as one span, and holding
- * it whole would swallow every sentence split between the two faces. Only the opener is checked: a
- * spurious opener is what creates the false pair, while `(see note:)` is a real aside whose closer
- * happens to follow a colon.
- */
+// Only the opening "(" is checked for emoticon glue because a spurious opener creates the false pair, whereas
+// checking ")" would break "(see note:)".
 function isEmoticonParenSpan(text: string, span: { start: number; content: string }): boolean {
   if (span.content.charAt(0) !== "(") return false;
   const charBeforeOpen = span.start > 0 ? text[span.start - 1] : "";
   return EMOTICON_GLUE_REGEX.test(charBeforeOpen);
 }
 
-/**
- * Replaces every protected span in `text` with a placeholder so the sentence splitter cannot
- * cut inside one.
- *
- * The semantic-block merge below rewrites protected spans to plain "text" blocks so their
- * surrounding prose stays in one message, so the sentence branch then splits the merged block at every
- * newline and sentence period, including ones inside the span. A split span reaches Discord as two
- * messages, each holding one half of the pair as literal syntax
- * ("*...but if you're asking the answer's more than zero" / "don't make me say a number.*").
- * Placeholders survive both splits, and each span is restored into whichever chunk holds it.
- *
- * The candidate set mirrors the semantic-block pass, markdown links included, so the sentence path
- * needs no separate link protection. Emphasis candidates the finders paired wrongly are rejected,
- * and the scan resumes one character into them, so a real span that starts before the false pair's
- * closer is still found. Placeholders are literal tokens, so a reply that emits
- * `__TOMORI_SPAN_<n>__` verbatim could collide with one; the ellipsis placeholder shares that
- * exposure, and a collision costs a visible token rather than content.
- */
+// Rejected spans advance by 1 rather than candidate end so nested spans before a false closer are found; candidates
+// mirror semantic blocks so links stay protected.
 function protectSpansForSentenceSplit(text: string): { protectedText: string; spans: string[] } {
   const spans: string[] = [];
   let protectedText = "";
@@ -562,14 +483,8 @@ function protectSpansForSentenceSplit(text: string): { protectedText: string; sp
   return { protectedText, spans };
 }
 
-/**
- * Restores the spans a chunk holds, in one pass over that chunk.
- *
- * Scanning every placeholder for every sentence would cost spans times sentences: a 20k-character
- * span-dense reply spends over a second there, where matching the placeholders actually present
- * stays proportional to the sentence. A placeholder the model emitted verbatim and that no span owns
- * is left as written.
- */
+// Matches present placeholders in one regex pass rather than looping over all spans per sentence because O(spans *
+// sentences) takes >1s on 20k-char replies.
 function restoreSpansFromPlaceholders(text: string, spans: string[]): string {
   const placeholderPattern = new RegExp(`${SENTENCE_SPLIT_SPAN_PLACEHOLDER_PREFIX}(\\d+)__`, "g");
 
@@ -685,11 +600,6 @@ function splitCodeBlock(codeBlock: string, chunkLength: number): string[] {
   return chunks;
 }
 
-/**
- * Creates a regex pattern for splitting sentences while preserving common abbreviations.
- * Splits on periods and full-width periods (。．｡) but avoids splitting on common abbreviations,
- * numbered lists, and other period-containing patterns.
- */
 export function createSentenceSplitRegex(): RegExp {
   const titles = ["mr", "mrs", "ms", "dr", "prof", "rev", "fr", "sr", "jr"];
   const business = ["inc", "ltd", "co", "corp", "llc", "vs"];
@@ -727,18 +637,10 @@ export function createSentenceSplitRegex(): RegExp {
   return new RegExp(`${negativeLookbehind}${sentenceEnd}`, "iu");
 }
 
-/**
- * How prose outside code blocks becomes messages: `lines` keeps a block's lines together up to the
- * length limit, `paragraphs` sends each line on its own, and `sentences` also splits at sentence ends
- * and drops a closing period.
- */
+// Split modes outside code blocks: "lines" packs to limit, "paragraphs" splits every line, and "sentences" splits at
+// sentence ends and drops closing periods.
 export type MessageSplitMode = "lines" | "paragraphs" | "sentences";
 
-/**
- * Splits a long message into smaller chunks for Discord's limits, preserving code blocks
- * and natural breakpoints.
- * @param chunkLength - Optional max length for each chunk (defaults to 1900)
- */
 export function chunkMessage(inputText: string, splitMode: MessageSplitMode, chunkLength = 1900): string[] {
   const chunkedMessages: string[] = [];
   if (!inputText || inputText.length === 0) return chunkedMessages;

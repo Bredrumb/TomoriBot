@@ -29,19 +29,8 @@ function shouldDelayTrailingPeriodFlush(buffer: string, periodMatch: RegExpExecA
   return periodMatch[0] === "." && periodEndIndex === buffer.length;
 }
 
-/**
- * Moves a flush offset out of any markdown table it lands inside.
- *
- * Table rows end in newlines, so every sentence/whitespace heuristic happily treats a row
- * boundary as a safe break; but cutting there splits the block, and only the fragment that
- * still parses as a table reaches the PNG renderer. The rest is delivered as raw pipes.
- *
- * Cutting *before* the table is preferred: it keeps the whole table together for the next
- * flush. When the table starts at offset 0 there is no prose to flush ahead of it, so the
- * cut moves past the table's end instead, and 0 is returned when even that is unavailable
- * (the caller treats 0 as "no safe cut, hold the buffer").
- *
- */
+// Splitting inside a markdown table breaks PNG rendering into raw pipes, so this snaps the cut outside (returning 0
+// to hold the buffer if neither side fits).
 function snapFlushIndexOutOfMarkdownTable(buffer: string, index: number): number {
   const enclosingTable = findMarkdownTableBlockAt(buffer, index);
   if (!enclosingTable) return index;
@@ -202,18 +191,8 @@ export function drainDetailsBlocksFromBuffer(state: StreamState): void {
 // hold never provided. The chunker still recognizes "_" spans in the text it receives whole.
 const HOLD_EMPHASIS_MARKERS: readonly EmphasisMarker[] = ["*", "~"];
 
-/**
- * Counts the marker characters of `marker` that are still open.
- *
- * Runs are classified by the flanking rules a renderer applies (see
- * {@link classifyEmphasisMarkerRun}), so prose full of stray markers ("2 * 3", a `* ` bullet,
- * "Best*") never holds the buffer, and each run is weighted by its length so a nested
- * "**bold *italic***" closes both levels instead of stranding the outer run. Depth clamps at zero in
- * step with the parenthesis count, so an orphan closer cannot cancel a genuinely open marker.
- *
- * The ceiling: a false positive defers this response's remaining flushes to the final flush
- * (longer messages, no loss), where a false negative splits the span across two messages.
- */
+// Depth clamps at zero and runs weight by length per flanking rules so stray markers never lock flushes; false
+// positives defer to final flush, negatives split.
 function countOpenEmphasisMarkers(buffer: string, marker: EmphasisMarker): number {
   let depth = 0;
 
@@ -330,14 +309,8 @@ export function hasIncompleteSemanticMarkers(buffer: string): boolean {
   return false;
 }
 
-/**
- * Appends closing markers for every unbalanced inline-markdown marker in the text.
- *
- * Splitting this out of {@link autoCloseIncompleteMarkers} lets the public function run the
- * repair over prose only, so a table's cell contents never influence the counts and the
- * closers never land on a table row.
- *
- */
+// Runs only on prose outside tables (via autoCloseIncompleteMarkers) so table cell contents never skew marker counts
+// or receive appended closers.
 function appendUnbalancedMarkerClosers(buffer: string): string {
   let fixedBuffer = buffer;
   const fixes: string[] = [];

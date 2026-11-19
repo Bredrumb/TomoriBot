@@ -1,21 +1,3 @@
-/**
- * Refines the locale category split in two ways:
- *
- * Task 1: Split commands.ts:
- *   Reads each locale's commands.ts, writes one sub-file per top-level key under
- *   commands/ subdirectory, then rewrites commands.ts as a thin assembler that
- *   imports the sub-files. The localizer's *.ts glob picks up commands.ts only;
- *   the sub-files are internal imports resolved at runtime.
- *
- * Task 2: Move tool-activity keys from genai.* to tools.*:
- *   Extracts search, mcp, tool_notice, video, document, image, vision, gif, fetch
- *   from providers.ts and appends them to tools.ts under the same key names.
- *   Then bulk-replaces all "genai.<key>." call-site references in src/ with
- *   "tools.<key>." so the runtime localizer paths stay valid.
- *
- * Run with: bun run scripts/maintenance/refineLocaleSplit.ts
- */
-
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { Glob } from "bun";
@@ -52,16 +34,13 @@ function serializeToTS(value: unknown, depth = 0): string {
 
 const LOCALES = ["en-US", "ja"];
 
-/** Keys under genai.* that belong semantically with tools, not providers. */
 const TOOL_ACTIVITY_KEYS = ["search", "mcp", "tool_notice", "video", "document", "image", "vision", "gif", "fetch"];
 
 
-/** Converts a hyphenated key like "st-preset" to a valid JS identifier "stPreset". */
 function toVarName(key: string): string {
   return key.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
 }
 
-/** Returns the quoted form of a key when it is not a bare identifier. */
 function quoteKey(key: string): string {
   return /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key) ? key : `"${key}"`;
 }

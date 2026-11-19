@@ -3,7 +3,6 @@ import { PLAY_SCENE_SECOND_PARTNER_CHANCE } from "@/modules/natural-nudges/runti
 
 export interface PartnerCandidate<T> {
   persona: T;
-  /** Talkativeness tickets times rested share, as in the lead's raffle. */
   tickets: number;
   channelIds: ReadonlySet<string>;
 }
@@ -12,10 +11,6 @@ export function hasScenePartner<T>(candidates: readonly PartnerCandidate<T>[], c
   return candidates.some((candidate) => candidate.tickets > 0 && channelIds.some((id) => candidate.channelIds.has(id)));
 }
 
-/**
- * Draws one Play Scene partner, sometimes two, each by tickets among personas allowed in a channel
- * every speaker so far shares. Null when nobody can join.
- */
 export function drawScenePartners<T>(
   candidates: readonly PartnerCandidate<T>[],
   channelIds: readonly string[],

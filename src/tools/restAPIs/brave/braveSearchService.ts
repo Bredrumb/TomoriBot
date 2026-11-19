@@ -1,9 +1,3 @@
-/**
- * Brave Search REST API Service
- * Direct HTTP implementation for Brave Search API endpoints
- * Supports Web, Image, Video, and News search with server-specific API keys
- */
-
 import { log } from "../../../utils/misc/logger";
 import { getOptApiKeyCredentials } from "@/utils/security/crypto";
 import { withProviderUsageContext, type ProviderUsageContext } from "@/utils/provider/providerUsage";
@@ -29,17 +23,12 @@ const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
 const REQUEST_TIMEOUT = 15000; // 15 seconds
 
-/**
- * Language code mapping: Standard ISO 639-1 codes to Brave API codes
- * Brave uses non-standard codes for some languages (e.g., "jp" instead of "ja")
- */
+// Brave Search API expects non-standard language codes such as "jp" instead of ISO 639-1 "ja", so this map translates
+// before sending queries.
 const BRAVE_LANGUAGE_CODE_MAP: Record<string, string> = {
   ja: "jp", // Japanese: ISO 639-1 "ja" → Brave "jp"
 };
 
-/**
- * Normalize language code to Brave API format
- */
 function normalizeBraveLangCode(langCode: string | undefined): string | undefined {
   if (!langCode) return undefined;
 
@@ -82,10 +71,6 @@ export function extractImageUrls(response: ImageSearchApiResponse): string[] {
   return imageUrls;
 }
 
-/**
- * Add fetch capability reminder to web search results
- * @param originalResult - Original web search result text
- */
 export function addFetchCapabilityReminder(originalResult: string): {
   enhancedMessage: string;
   urlsFound: number;
@@ -120,11 +105,6 @@ export function addFetchCapabilityReminder(originalResult: string): {
   }
 }
 
-/**
- * Get Brave API key for the given server, with fallback to environment variable
- * @param serverId - Discord server ID (optional)
- * @returns API key or null if not available
- */
 async function getBraveApiKey(
   serverId?: number,
 ): Promise<{ apiKey: string; usageContext?: ProviderUsageContext } | null> {
@@ -151,10 +131,6 @@ async function getBraveApiKey(
   return null;
 }
 
-/**
- * @param params - Query parameters
- * @param config - Request configuration
- */
 async function makeBraveApiRequest<T>(
   endpoint: string,
   params: Record<string, string | number | boolean | undefined>,
@@ -253,11 +229,6 @@ async function makeBraveApiRequest<T>(
   }
 }
 
-/**
- * Perform a web search using Brave Search API
- * @param params - Web search parameters
- * @param config - Request configuration
- */
 export async function braveWebSearch(
   params: WebSearchParams,
   config: ApiRequestConfig = {},
@@ -281,11 +252,6 @@ export async function braveWebSearch(
   return makeBraveApiRequest<WebSearchApiResponse>("/web/search", searchParams, config);
 }
 
-/**
- * Perform an image search using Brave Search API
- * @param params - Image search parameters
- * @param config - Request configuration
- */
 export async function braveImageSearch(
   params: ImageSearchParams,
   config: ApiRequestConfig = {},
@@ -301,11 +267,6 @@ export async function braveImageSearch(
   return makeBraveApiRequest<ImageSearchApiResponse>("/images/search", searchParams, config);
 }
 
-/**
- * Perform a video search using Brave Search API
- * @param params - Video search parameters
- * @param config - Request configuration
- */
 export async function braveVideoSearch(
   params: VideoSearchParams,
   config: ApiRequestConfig = {},
@@ -326,11 +287,6 @@ export async function braveVideoSearch(
   return makeBraveApiRequest<VideoSearchApiResponse>("/videos/search", searchParams, config);
 }
 
-/**
- * Perform a news search using Brave Search API
- * @param params - News search parameters
- * @param config - Request configuration
- */
 export async function braveNewsSearch(
   params: NewsSearchParams,
   config: ApiRequestConfig = {},
@@ -351,19 +307,11 @@ export async function braveNewsSearch(
   return makeBraveApiRequest<NewsSearchApiResponse>("/news/search", searchParams, config);
 }
 
-/**
- * @param serverId - Discord server ID (optional)
- * @returns True if API key is available
- */
 export async function isBraveSearchAvailable(serverId?: number): Promise<boolean> {
   const apiKey = await getBraveApiKey(serverId);
   return apiKey !== null;
 }
 
-/**
- * Format search results for consistent output with current MCP implementation
- * @param searchType - Type of search performed
- */
 export function formatBraveSearchResults(
   response: BraveSearchResponse,
   searchType: "web" | "image" | "video" | "news",
@@ -463,12 +411,6 @@ export function formatBraveSearchResults(
   }
 }
 
-/**
- * Check if an error is related to API key issues
- * @param error - Error to check
- * @param statusCode - HTTP status code
- * @returns True if error is API key related
- */
 export function isBraveApiKeyError(error: string, statusCode?: number): boolean {
   const keywordErrors = ["unauthorized", "invalid api key", "subscription", "authentication"];
 
@@ -477,12 +419,6 @@ export function isBraveApiKeyError(error: string, statusCode?: number): boolean 
   );
 }
 
-/**
- * Check if an error is related to rate limiting
- * @param error - Error to check
- * @param statusCode - HTTP status code
- * @returns True if error is rate limit related
- */
 export function isBraveRateLimitError(error: string, statusCode?: number): boolean {
   const rateLimitKeywords = ["rate limit", "too many requests", "quota exceeded"];
 

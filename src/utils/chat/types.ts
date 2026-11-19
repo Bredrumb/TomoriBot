@@ -27,7 +27,8 @@ export interface ChatReminderData {
   reminder_purpose: string;
   reminder_lateness?: string | null;
   self_reminder?: boolean;
-  /** Routes the turn's personal key, because the borrowed trigger message's author is a bystander. */
+  // Personal-key routing uses this ID instead of the borrowed trigger message's author, because that author is a
+  // bystander.
   created_by_user_id?: number | null;
 }
 
@@ -67,28 +68,22 @@ export interface SceneTurnMetadata {
   turnIndex: number;
   totalTurns: number;
   additionalInstructions?: string;
-  /**
-   * Context for each queued turn by index, given instead of turn 0's injected items so one speaker
-   * never sees another's private goal. Turn 0 takes its context from the invocation.
-   */
+  // Indexed context per queued turn replaces turn 0's injected items so one speaker never sees another's private
+  // goal.
   turnContextItems?: StructuredContextItem[][];
 }
 
-/**
- * A persona turn's expression allowance handed to its own empty-response retry, so the retry
- * cannot send a second expression after one is already visible. Keyed by persona because one
- * invocation can plan turns for several personas, each with its own allowance.
- */
+// Expression allowance passed to an empty-response retry so it cannot emit a second expression, keyed by persona
+// because one invocation plans multiple.
 interface CarriedExpressionDelivery {
   personaId: number;
   state: ExpressionDeliveryState;
 }
 
-/** Public input to tomoriChat(): optional fields apply defaults in normalizeChatInvocation. */
 export interface NaturalNudgeTurn {
-  /** Idle nudge tools that Deliberate Tool Mode admits, since no human message carries their trigger words. */
+  // Deliberate Tool Mode admits these idle nudge tools because no human message carries their trigger words.
   toolNames: readonly string[];
-  /** The one user a Ping User may ping; `{user}` and the triggerer name resolve to them. */
+  // Ping User target: restricts pings to this user and resolves {user} and triggerer name to them.
   targetUserDiscId?: string;
 }
 
@@ -124,15 +119,12 @@ export interface TomoriChatInput {
   systemTriggerIdentity?: SystemTriggerIdentity;
   manualStreamingContextOverrides?: Partial<StreamingContext>;
   sceneTurn?: SceneTurnMetadata;
-  /** Unprompted Natural Nudges turn: never queues and never feeds engagement stats. */
+  // Unprompted Natural Nudges turn: never queues and never feeds engagement stats.
   naturalNudge?: NaturalNudgeTurn;
   conditioningInteraction?: { actorType: "user" | "persona"; type: ConditioningType; action: ConditioningActionKey };
-  /** A member's message that interrupted a Natural Nudges scene, answered by the persona about to speak. */
   nudgeSceneCatcherPersonaId?: number;
-  /**
-   * System turn that borrows the channel's latest message as its trigger, so that message's author is
-   * a bystander: not their personal key, reunion clock, or access gates.
-   */
+  // Borrowed-trigger system turn treats the anchor message's author as a bystander, so personal keys, reunion clock,
+  // and access gates never apply to them.
   borrowsTriggerMessage?: boolean;
   suppressSelfReply?: boolean;
   carriedExpressionDelivery?: CarriedExpressionDelivery;
@@ -172,15 +164,11 @@ export interface ChatIncoming {
   systemTriggerIdentity?: SystemTriggerIdentity;
   manualStreamingContextOverrides?: Partial<StreamingContext>;
   sceneTurn?: SceneTurnMetadata;
-  /** Unprompted Natural Nudges turn: never queues and never feeds engagement stats. */
+  // Unprompted Natural Nudges turn: never queues and never feeds engagement stats.
   naturalNudge?: NaturalNudgeTurn;
   conditioningInteraction?: { actorType: "user" | "persona"; type: ConditioningType; action: ConditioningActionKey };
-  /** A member's message that interrupted a Natural Nudges scene, answered by the persona about to speak. */
   nudgeSceneCatcherPersonaId?: number;
-  /**
-   * System turn that borrows the channel's latest message as its trigger, so that message's author is
-   * a bystander: not their personal key, reunion clock, or access gates.
-   */
+  // Same borrowed-trigger bystander semantics: see `TomoriChatInput.borrowsTriggerMessage`.
   borrowsTriggerMessage?: boolean;
   suppressSelfReply?: boolean;
   autochatCounterSnapshot?: { autoch_counter: number; autoch_next_target: number };
@@ -278,7 +266,7 @@ export interface ChatTurnContext {
   memoryRecall?: import("@/utils/text/context/memoryRecall").MemoryRecallOutcome;
   usageContext?: ProviderUsageContext;
   responseReview?: import("@/utils/chat/responseReview").ResponseReviewState;
-  /** Successful tool calls by request identity, kept across key rotation and model fallback. */
+  // Map keyed by request identity so successful tool calls are preserved across key rotation and model fallback.
   completedToolCalls?: Map<string, ToolHistoryEntry>;
   turn: ChatTurn;
   client: Client;
@@ -288,7 +276,6 @@ export interface ChatTurnContext {
   locale: string;
   serverDiscId: string;
   userDiscId: string;
-  /** Internal users FK of the triggerer, resolved once at turn planning (no per-turn lookup). */
   triggererUserId: number | undefined;
   isDMChannel: boolean;
   isFromQueue: boolean;
@@ -298,22 +285,17 @@ export interface ChatTurnContext {
   isUserImpersonation: boolean;
   impersonatedUserId?: string;
   allPersonas: TomoriState[];
-  /**
-   * Direct-triggerer presence and any one-shot claim awaiting the post-turn
-   * success decision. Both phases live in `@/utils/chat/reunionPresence`.
-   */
   reunionPresence: ReunionPresenceScope | null;
   currentPersona: TomoriState;
   tomoriState: TomoriState;
   requestSnapshot: RequestSnapshot;
   contextItems: StructuredContextItem[];
   nativeContextItems?: StructuredContextItem[];
-  /** Kept out of `contextItems` because each attempt decides how its own model takes it. */
+  // Kept separate from contextItems because each attempt decides how its own model handles assistant prefill.
   assistantPrefill: TurnPrefill | null;
-  /** Shared by every attempt of this persona turn; see {@link ExpressionDeliveryState}. */
+  // Shared by reference across every attempt of this persona turn so retries do not reset ExpressionDeliveryState.
   expressionDelivery: ExpressionDeliveryState;
   simplifiedMessages: SimplifiedMessageForContext[];
-  /** History messages carrying reaction counts, whose reactors `reveal_message_metadata` fetches on demand. */
   reactedMessages: Message[];
   streamingContext: StreamingContext;
   messageIdMap: MessageIdMap;
@@ -335,11 +317,8 @@ export interface ChatTurnContext {
   textQuotaState: TextQuotaTriggerState | null;
   shouldSurfaceUserErrors: boolean;
   responseTarget?: ChatResponseTarget;
-  /** Whether deliberate-tool-mode is gating this turn (server flag OR user override). */
   deliberateToolModeActive: boolean;
-  /** Resolved per-turn context window for retained-affordance carryover. */
   deliberateToolContextTurns: number;
-  /** Map of tool name -> the trigger match that admitted it (used for hidden-notice routing). */
   deliberateToolTriggerMatchByToolName: Map<string, DeliberateToolIntentMatch>;
 }
 
@@ -358,10 +337,8 @@ export interface ChatResponseSink {
   emitStreamResult(result: StreamResult): Promise<void>;
   emitError(error: unknown): Promise<void>;
   finalize(result: GenerationTurnResult): Promise<void>;
-  /**
-   * Releases per-turn resources (currently the temporary impersonation webhook) on every exit
-   * path, including the throws that bypass {@link ChatResponseSink.finalize}. Must be idempotent.
-   */
+  // Must be idempotent because callers run it on every exit path, including throws that bypass
+  // ChatResponseSink.finalize.
   cleanup?(): Promise<void>;
 }
 
@@ -384,9 +361,7 @@ export interface GenerationTurnResult {
   streamResults: StreamResult[];
   usageEntries?: import("@/utils/chat/responseReview").TurnUsageEntry[];
   personaResponses: ChatPersonaResponse[];
-  /** A tool delivered the response directly even though no streamed text was captured. */
   toolResponseDelivered?: boolean;
-  /** Discord ID of the turn's first delivered text message, the anchor for message-keyed rows. */
   firstDeliveredMessageId?: string;
   thoughtLog?: ThoughtLogPayload;
   thoughtLogOwner?: ThoughtLogOwner;

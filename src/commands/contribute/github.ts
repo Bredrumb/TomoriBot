@@ -5,15 +5,9 @@ import { ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { UserRow } from "@/types/db/schema";
 
-/**
- * Configure the github subcommand for contribute category
- */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("github").setDescription(localizer("en-US", "commands.contribute.github.description"));
 
-/**
- * Execute the contribute github command - show GitHub repository link and contribution information
- */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,

@@ -1,10 +1,3 @@
-/**
- * One-time script: strips .md / .mdx extensions from internal relative links
- * in docs files so they route correctly in Starlight (e.g. ./foo.md → ./foo).
- *
- * Run from repo root: bun run scripts/devtools/fixDocLinks.ts
- */
-
 import { join } from "node:path";
 
 const docsDir = join(import.meta.dir, "../../docs");

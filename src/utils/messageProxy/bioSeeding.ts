@@ -1,4 +1,5 @@
-/** Later service-side bio edits must not rewrite memory the user may already have curated. */
+// Bio seeding runs only for new identities because later service-side bio edits must not overwrite user-curated
+// memory.
 import { invalidateUserCache } from "@/utils/cache/userCache";
 import { personalMemoryRepository } from "@/utils/db/repositories/PersonalMemoryRepository";
 import { log } from "@/utils/misc/logger";
@@ -6,7 +7,7 @@ import { getMessageProxyHostProtection } from "@/utils/messageProxy/hostProtecti
 
 const DEFAULT_BIO_SEED_MAX_CHARS = 1000;
 
-/** Read lazily per call (never cached at module load) so tests can set the env before a dynamic import. */
+// The env var is read lazily per call instead of cached at module load so tests can set it before a dynamic import.
 function getBioSeedMaxChars(): number {
   const parsed = Number.parseInt(process.env.MESSAGE_PROXY_BIO_SEED_MAX_CHARS || "", 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_BIO_SEED_MAX_CHARS;
@@ -41,10 +42,8 @@ const defaultDeps: MessageProxyBioSeedDeps = {
   invalidateCache: invalidateUserCache,
 };
 
-/**
- * Callers must fire this without awaiting: it must never delay admission, and failures must never
- * surface to the triggering reply. The memory is written under persona lineage 0.
- */
+// Callers must fire without awaiting so failures never delay or break replies; personal memory is written under
+// persona lineage 0.
 export async function seedMessageProxyIdentityBio(
   args: MessageProxyBioSeedArgs,
   deps: MessageProxyBioSeedDeps = defaultDeps,

@@ -4,10 +4,6 @@ import type { GuildMcpServerRow } from "@/types/db/schema";
 import { log } from "@/utils/misc/logger";
 import { mcpRepository, type McpConfigRepositoryReadResult } from "@/utils/db/repositories/McpRepository";
 
-/**
- * Cache entry for a guild's MCP server configurations.
- * Stores all rows (enabled + disabled) so callers can filter in-memory.
- */
 interface GuildMcpConfigCacheEntry {
   configs: GuildMcpServerRow[];
   cachedAt: number;
@@ -92,25 +88,12 @@ export class GuildMcpConfigCache {
 
 const guildMcpConfigCache = new GuildMcpConfigCache((serverId) => mcpRepository.loadGuildMcpConfigsResult(serverId));
 
-/**
- * Get cached guild MCP server configurations for a server.
- * Returns all rows (enabled + disabled) from cache or DB.
- *
- * Cache flow:
- * - Check in-memory cache
- *    - HIT within TTL → return immediately with fresh/stale provenance (0 DB queries)
- *    - MISS or expired entry → load from DB, cache, and return
- *
- * @returns Array of GuildMcpServerRow (may be empty if none registered)
- */
 export async function getCachedGuildMcpConfigs(serverId: number): Promise<GuildMcpServerRow[]> {
   return (await getGuildMcpConfigReadResult(serverId)).configs;
 }
 
-/**
- * Returns current MCP registrations with enough provenance for writable panels
- * to avoid presenting a failed read as an empty collection.
- */
+// Writable panels must use this instead of getCachedGuildMcpConfigs so a failed read is not mistaken for an empty
+// config list.
 export async function getGuildMcpConfigReadResult(
   serverId: number,
   options: { forceRefresh?: boolean } = {},
@@ -118,37 +101,20 @@ export async function getGuildMcpConfigReadResult(
   return guildMcpConfigCache.read(serverId, options);
 }
 
-/**
- * Get only enabled guild MCP server configurations.
- * Convenience wrapper that filters getCachedGuildMcpConfigs().
- *
- */
 export async function getCachedEnabledGuildMcpConfigs(serverId: number): Promise<GuildMcpServerRow[]> {
   const configs = await getCachedGuildMcpConfigs(serverId);
   return configs.filter((c) => c.is_enabled);
 }
 
-/**
- * Invalidate the cache for a specific server.
- * Must be called after any DB write (insert/delete/toggle) to ensure consistency.
- *
- */
 export function invalidateGuildMcpConfigCache(serverId: number): void {
   guildMcpConfigCache.invalidate(serverId);
   broadcastInvalidation("guildMcpConfig", [[String(serverId)]]);
 }
 
-/**
- * Useful for testing or manual refresh.
- */
 export function clearGuildMcpConfigCache(): void {
   guildMcpConfigCache.clear();
 }
 
-/**
- * Get cache statistics for monitoring and debugging.
- *
- */
 export function getGuildMcpConfigCacheStats(): GuildMcpConfigCacheStats {
   return guildMcpConfigCache.getStats();
 }

@@ -3,7 +3,6 @@ import { z } from "zod";
 import { isPrimaryProcess } from "@/utils/cluster/shardLeases";
 import type { ShardTopology } from "@/utils/discord/shardOwnership";
 
-/** Flat numeric snapshot as produced by `collectCacheMetricsSnapshot()`. */
 export type MetricFields = Record<string, number | string>;
 
 const DEFAULT_RETENTION_DAYS = 30;
@@ -16,22 +15,15 @@ const clusterSampleSchema = z.object({
   discord_guilds: z.number().int().nonnegative().safe(),
 });
 
-/**
- * Reads a positive integer from the environment, falling back when unset or unparseable.
- * Kept local so this file stays importable without pulling in config machinery.
- */
+// Kept local instead of importing config helpers so MetricSampleRepository stays free of config initialization
+// dependencies.
 function positiveIntFromEnv(name: string, fallback: number): number {
   const parsed = Number.parseInt(process.env[name] ?? "", 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-/**
- * Sink for periodic process and cache measurements, read by Grafana over the existing
- * Postgres datasource.
- *
- * Replaces the `TomoriBotCacheMetrics_CL` Log Analytics table so the AzureMonitorLinuxAgent
- * can be removed from a host where it holds 179 MB against a saturated 1 GB zram device.
- */
+// Grafana reads metric_samples over Postgres instead of Log Analytics so the host avoids running
+// AzureMonitorLinuxAgent.
 export class MetricSampleRepository {
   private lastPruneAt = 0;
 
@@ -73,34 +65,18 @@ export class MetricSampleRepository {
     }
   }
 
-  /**
-   * The executor is injected rather than module-mocked in tests. `mock.module` is registered
-   * process-wide for the whole run and is not undone by `mock.restore()`, so a mocked `sql`
-   * leaks into every later test file and quietly answers its queries too.
-   *
-   * It stays optional and resolves in {@link executor} rather than as a `= sql` default, for the
-   * same reason as ErrorLogRepository: a default parameter is evaluated while constructing the
-   * singleton below, which can read `sql` before its module has finished initializing.
-   */
+  // Optional db injection avoids process-wide mock.module leaks in tests, and resolving sql inside executor prevents
+  // init-order reads.
   constructor(private readonly db?: typeof sql) {}
 
-  /** Resolved per call so module initialization order cannot matter. */
   private get executor(): typeof sql {
     return this.db ?? sql;
   }
 
-  /** Suppresses repeat reports so a pool-wide failure logs once, not once per sample. */
   private hasReportedSinceSuccess = false;
 
-  /**
-   * Records one sample and prunes expired rows when due. Never throws and never rejects:
-   * telemetry must not be able to break the caller that produced it.
-   *
-   * Deliberately NOT wrapped in `withTransientDbRetry`. A retry is right for work a user is
-   * waiting on, but for a 5-minute telemetry sample it converts a pool retirement into extra
-   * load at exactly the moment the pool is already failing. A missing sample is the cheaper
-   * outcome, and `log.metric()` still writes the durable copy to the host JSONL regardless.
-   */
+  // Never throws or retries with withTransientDbRetry because droppable telemetry must not break callers or amplify
+  // failing DB pool load.
   async recordSample(metricName: string, fields: MetricFields): Promise<void> {
     // `fields` is bound as an object, not a `JSON.stringify` result: under Bun's driver a
     // stringified value binds as text and `::jsonb` parses it into a JSONB scalar string, which
@@ -120,15 +96,8 @@ export class MetricSampleRepository {
     }
   }
 
-  /**
-   * Deletes samples past the retention window, at most once per prune interval.
-   *
-   * Pruning rides the write path rather than a pg_cron job because production runs with
-   * `DATABASE_SCHEMA_MANAGEMENT_ENABLED=false`, and `src/init/database.ts` returns before
-   * scheduling any job in that mode. pg_cron is not installed on the server at all, so a
-   * scheduled job would never run and nothing would report that it hadn't. This mirrors the
-   * sweep-on-write approach in `personaSpriteMessageCache.ts`.
-   */
+  // Write-path pruning replaces pg_cron or init jobs because pg_cron is absent and schema management is disabled in
+  // production.
   private async pruneIfDue(): Promise<void> {
     if (!isPrimaryProcess()) return;
     const intervalMs = positiveIntFromEnv("METRIC_SAMPLE_PRUNE_INTERVAL_MS", DEFAULT_PRUNE_INTERVAL_MS);
@@ -152,15 +121,8 @@ export class MetricSampleRepository {
     }
   }
 
-  /**
-   * Logs a failure only when the previous write succeeded, so a pool-wide retirement does not
-   * add its own log storm to the incident that caused it. The logger import is deferred to
-   * keep this repository out of `logger.ts`'s import cycle, matching `ErrorLogRepository`.
-   *
-   * An error, because a gap in `metric_samples` during an outage is otherwise traceless, and this
-   * line is the one artifact that names the cause. Not persisted: an `error_logs` insert would
-   * queue on the same pool that just failed, adding load to the incident it is reporting.
-   */
+  // Logger import is deferred to avoid an import cycle and errors log once with persist: false so failing DB writes
+  // never storm the pool.
   private async reportOnce(message: string, error: unknown): Promise<void> {
     if (this.hasReportedSinceSuccess) return;
     this.hasReportedSinceSuccess = true;
@@ -175,5 +137,4 @@ export class MetricSampleRepository {
   }
 }
 
-/** Singleton: import this in callers. */
 export const metricSampleRepository = new MetricSampleRepository();

@@ -35,7 +35,8 @@ export type PluralBuddyMessage = NonNullable<z.infer<typeof responseSchema>["mes
   alterIdKey: string;
 };
 
-/** Resolving `null` instead means PluralBuddy said it has no such message; the router counts this as timeout/error, not a miss. */
+// Thrown instead of returning null when PluralBuddy could not answer, so the router records a timeout or error rather
+// than a confirmed miss.
 export class PluralBuddyLookupUnavailableError extends Error {
   constructor(message: string, cause?: unknown) {
     super(message, { cause });
@@ -70,13 +71,12 @@ function failLookup(
   throw new PluralBuddyLookupUnavailableError(`PluralBuddy message lookup ${reason}`, cause);
 }
 
-/** A miss PluralBuddy already answered stands when the budget ends; any other exhaustion is unresolved. */
 function endExhaustedLookup(instance: MessageProxyInstanceContext, lastAnswerWasMiss: boolean, cause?: unknown): null {
   if (lastAnswerWasMiss) return null;
   return failLookup(instance, "timed out", { errorClass: cause instanceof Error ? cause.name : "unknown" }, cause);
 }
 
-/** Null also covers no connected bot host, which is a state to report quietly rather than an outage. */
+// Missing access tokens return null rather than throwing because an unconnected bot host is not treated as an outage.
 async function lookUp(instance: MessageProxyInstanceContext, messageId: string): Promise<PluralBuddyMessage | null> {
   const lookupTimeoutMs = getMessageProxyLookupTimeoutMs();
   const deadline = Date.now() + lookupTimeoutMs;

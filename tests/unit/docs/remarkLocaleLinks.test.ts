@@ -6,7 +6,6 @@ import { localizeDocsLink, remarkLocaleLinks } from "../../../apps/docs/src/rema
 
 const SECTIONS: ReadonlySet<string> = new Set(["features", "self-hosting"]);
 
-/** Only `/ja/features/pair` is translated; everything else exists in English alone. */
 const jaHasPage = (locale: string, pageId: string): boolean => locale === "ja" && pageId === "features/pair";
 
 const FIXTURE_FILES: Record<string, string> = {

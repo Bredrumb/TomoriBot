@@ -1,9 +1,3 @@
-/**
- * Regression harness: user_personalization_configs cutover.
- *
- * Covers the Phase 6 follow-up that moved five user-scoped personalization
- * fields from users into user_personalization_configs.
- */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";

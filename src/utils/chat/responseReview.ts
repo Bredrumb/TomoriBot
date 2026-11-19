@@ -76,11 +76,8 @@ export const draftReviewResultSchema = reviewResultSchema([...REPLY_FINDING_CATE
 const replyOnlyReviewResultSchema = reviewResultSchema(REPLY_FINDING_CATEGORIES);
 export type DraftReviewResult = z.infer<typeof draftReviewResultSchema>;
 
-/**
- * The provider still receives the strict schema; this only decides what is accepted back. A pass or
- * unavailable carries no other meaning, so a stray key such as `"findings": []` is dropped instead of
- * voiding the review. A revise is never repaired: its findings go to the author verbatim.
- */
+// Stray provider keys like findings are stripped on pass or unavailable so they do not void the review, while revise
+// stays unedited.
 function acceptReviewResult<T extends z.ZodType>(schema: T) {
   return z.preprocess((value) => {
     if (!value || typeof value !== "object" || Array.isArray(value)) return value;
@@ -96,7 +93,6 @@ export interface TurnUsageEntry {
   usage: TokenUsage;
 }
 
-/** Shared by stream passes, key rotation and model fallback for one admitted persona turn. */
 export interface ResponseReviewState {
   reviewerId: number | null;
   prompt: string;
@@ -119,10 +115,6 @@ export interface ResponseReviewState {
   verdict?: { identity: string; result: DraftReviewResult };
 }
 
-/**
- * Room left for held prose before the next stream pass. Pre-tool narration from earlier passes is
- * still pending, so the turn ceiling covers the whole candidate rather than each pass.
- */
 export function remainingPendingResponseLimit(state: ResponseReviewState): PendingResponseLimit {
   let bytes = 0;
   let segments = 0;
@@ -136,7 +128,8 @@ export function remainingPendingResponseLimit(state: ResponseReviewState): Pendi
   };
 }
 
-/** Late auxiliary usage still reaches accounting after post-turn effects drain the ledger. */
+// Auxiliary usage is also sent to usageRecorder because late review calls can arrive after post-turn effects drain
+// state.usage.
 export function recordResponseReviewUsage(state: ResponseReviewState, entry: TurnUsageEntry): void {
   state.usage.push(entry);
   state.usageRecorder?.(entry);
@@ -193,10 +186,8 @@ function reviewItemGroup(item: StructuredContextItem): ResponseReviewItem {
   return "context";
 }
 
-/**
- * The reviewer reads as a blind model even when it has vision: it judges prose, and loading media
- * would add a fetch and image tokens to each of up to ten reviews per turn for little gain.
- */
+// Media becomes text placeholders even for vision reviewers because fetching media and spending image tokens on up to
+// ten reviews per turn is too costly.
 const MEDIA_PLACEHOLDERS = {
   image: "[Image attached here. It is not shown to the reviewer.]",
   video: "[Video attached here. It is not shown to the reviewer.]",
@@ -227,12 +218,8 @@ interface ReviewerToolEntry {
   parameters: string[];
 }
 
-/**
- * The reviewer judges tool choice, not argument syntax, so it gets names, purposes and parameter
- * names. Full schemas nest past the sanitizer's depth cap (array-of-object parameters such as
- * NovelAI characters), and the `[TRUNCATED` marker that leaves would void every packet of the turn.
- * Providers hand tools in OpenAI (`function`), Gemini (`functionDeclarations`) or flat Anthropic shape.
- */
+// Tools are compacted to names, purposes, and parameter names because full schemas exceed the sanitizer depth cap and
+// emit [TRUNCATED, voiding every packet.
 function compactToolCatalog(tools: ProviderConfig["tools"] = []): ReviewerToolEntry[] {
   const describe = (definition: Record<string, unknown>): ReviewerToolEntry[] => {
     if (typeof definition.name !== "string") return [];
@@ -255,7 +242,6 @@ function compactToolCatalog(tools: ProviderConfig["tools"] = []): ReviewerToolEn
   });
 }
 
-/** Why a reviewer packet could not be built; traced as the unavailable category. */
 type ReviewerPacketGap =
   | "review_inactive"
   | "candidate_credential"
@@ -267,7 +253,6 @@ type ReviewerPacketGap =
   | "evidence_over_budget"
   | "evidence_truncated";
 
-/** Uses admitted evidence only. Required prose is complete; optional dialogue carries coverage. */
 export function buildReviewerPacket(
   context: ChatTurnContext,
   candidate: string,
@@ -416,11 +401,8 @@ function renderEvidenceItem(item: ProjectedItem): string {
   ].join("\n");
 }
 
-/**
- * The reviewer judges voice and flow, so evidence reads as a tagged transcript rather than escaped JSON.
- * Evidence fixed for the turn comes first and everything a revision changes comes last, so a second
- * review of the same turn reuses the provider's prompt-prefix cache up to `<coverage>`.
- */
+// Fixed turn evidence precedes <coverage> and revision fields so subsequent reviews of the same turn reuse the
+// provider's prompt-prefix cache.
 export function renderReviewerPrompt(packet: ReviewerPacket, ruleEvidence?: unknown): string {
   const items = (list: ProjectedItem[]) => list.map(renderEvidenceItem).join("\n\n");
   const tools = packet.availableTools;
@@ -865,7 +847,6 @@ export function reviewResponseCandidate(context: ChatTurnContext, author: LLMPro
   return reviewCandidate(context, author, config);
 }
 
-/** Object key order and provider call IDs cannot make an identical action new. */
 export function toolRequestIdentity(request: ProposedToolRequest): string {
   const canonical = (value: unknown): unknown => {
     if (Array.isArray(value)) return value.map(canonical);
@@ -887,15 +868,13 @@ export type ToolReviewOutcome =
   | { status: "cancelled" }
   | (Extract<DraftReviewResult, { status: "revise" }> & {
       correctionAllowed: boolean;
-      /** Blocked without review after the author was already told no correction remains. */
+      // True only when blocked without review because the author already had no correction left, distinguishing a
+      // repeat from a first final rejection.
       futile: boolean;
     });
 
-/**
- * A rejection opens a chain for its tool name, and the next proposal of that name is its one correction.
- * Only exact rejected requests stay blocked; a later, different proposal of the same tool is reviewed on
- * its own, because one tool often serves several parts of one request.
- */
+// Only exact rejected calls stay blocked while a different call to the same tool gets fresh review, because one tool
+// often serves multiple parts of a request.
 export async function reviewToolCandidate(
   context: ChatTurnContext,
   author: LLMProvider,

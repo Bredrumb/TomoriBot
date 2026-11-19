@@ -9,10 +9,6 @@ import { clearShortTermMemoryForChannel } from "@/utils/cache/shortTermMemoryCac
 export const configureCommand = (command: SlashCommandBuilder) =>
   command.setName("refresh").setDescription(localizer("en-US", "commands.refresh.description"));
 
-/**
- * Executes the 'refresh' command.
- * Sends an embed that acts as a visual separator and triggers conversation history reset.
- */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,

@@ -189,10 +189,6 @@ function makeTomoriState(fixture: ConversationFixture, persona: PersonaFixture):
   });
 }
 
-/**
- * Confirms a repost the way admission does. `originalRan` models a late PluralBuddy repost: its
- * expectation outlives the speedbump, so the original was already admitted when the repost matched.
- */
 async function confirmProxyRepost(args: {
   original: Message;
   repost: Message;

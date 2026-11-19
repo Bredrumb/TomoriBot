@@ -91,9 +91,7 @@ interface HarnessOptions {
 interface Harness {
   dependencies: Partial<ConfigRouteDependencies>;
   modals: unknown[];
-  /** Payloads the current interaction has edited. */
   readonly edits: unknown[];
-  /** Payloads the current interaction has replied or followed up with. */
   readonly replies: unknown[];
   operationCalls: string[];
   fileUploadCalls: { value: number };

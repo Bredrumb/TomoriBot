@@ -7,10 +7,6 @@ import {
   type ProviderUsageContext,
   getProviderRequestFailureCopy,
 } from "@/utils/provider/providerUsage";
-/**
- * Preset Generate Command
- * AI-powered personality generation using supported structured output providers
- */
 
 import type {
   ChatInputCommandInteraction,
@@ -85,10 +81,6 @@ function parsePersonaNameInput(input: string): string[] {
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("generate").setDescription(localizer("en-US", "commands.persona.generate.description"));
 
-/**
- * @param maxExamples - Maximum number of examples to show (default: 3)
- * @param maxLength - Maximum length per dialogue snippet (default: 100)
- */
 function formatDialoguePreview(
   dialoguesIn: string[],
   dialoguesOut: string[],
@@ -266,14 +258,8 @@ function isToolContextChannel(channel: unknown): channel is ToolContextChannel {
   return typeof maybeChannel.send === "function";
 }
 
-/**
- * Builds the question the vision model answers about an uploaded avatar.
- *
- * The persona schema's Appearance attribute is what consumes this text, so the request names
- * the facets that attribute expects instead of asking for a general description. The user's
- * own words are included as the subject the description has to serve: without them the model
- * describes everything visible, and the primary model has to guess which details matter.
- */
+// Prompt facets target the persona schema's Appearance field, and `characterDescription` anchors focus so the vision
+// model skips irrelevant details.
 function buildAppearanceCaptionPrompt(characterDescription: string, additionalInstructions?: string): string {
   let prompt = `Describe the visual appearance of the character in this image, for a written character profile.
 
@@ -294,27 +280,14 @@ Report only what is visible. State when something is unclear, hidden, or out of 
   return prompt;
 }
 
-/**
- * What an uploaded image requires before generation can run.
- *
- * - `primary_with_image`: the primary model reads the image itself.
- * - `caption_then_generate`: a vision model describes it, then the primary model generates.
- * - `text_only_extracted`: an extracted card/preset carries the character, so no vision is needed.
- * - `fail_no_vision`: nothing can read the image and no card data exists to replace it.
- */
 export type ImageHandlingPlan =
   | "primary_with_image"
   | "caption_then_generate"
   | "text_only_extracted"
   | "fail_no_vision";
 
-/**
- * Decides how an uploaded image reaches generation.
- *
- * Extracted card data only matters when nothing can read the image. When a model can see it,
- * the image wins and the card stays reference material: the card is a text approximation of the
- * character, while the upload is the character the user actually chose.
- */
+// Vision takes precedence over `hasExtractedPreset` because the uploaded image is the chosen character while card
+// text is only an approximation.
 export function planImageHandling(input: {
   primarySeesImages: boolean;
   visionSeesImages: boolean;
@@ -329,11 +302,6 @@ export function planImageHandling(input: {
   return input.hasExtractedPreset ? "text_only_extracted" : "fail_no_vision";
 }
 
-/**
- * Executes the 'generate' command
- * AI-powered personality generation using structured output providers
- *
- */
 export async function execute(
   client: Client,
   interaction: ChatInputCommandInteraction,

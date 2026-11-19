@@ -20,26 +20,10 @@ async function generateEmbeddingsOnce(request: EmbeddingRequest): Promise<number
   return await capability.generateEmbeddings(request);
 }
 
-/**
- * Models observed to return a single embedding regardless of how many inputs were sent.
- *
- * Some embedding models (notably the newer Gemini embedding family) accept only one content
- * per request and silently embed just the first, rather than erroring. Once a model is seen
- * behaving this way, later batches for that model go straight to per-input requests instead
- * of paying for a doomed batch call first. Keyed `provider:model`; process-lifetime only.
- */
+// Process-lifetime set keyed as provider:model because models like Gemini silently embed only the first input instead
+// of erroring on batches.
 const singleInputEmbeddingModels = new Set<string>();
 
-/**
- * Runs `embed` for the whole batch, falling back to one call per input when the model
- * returns fewer embeddings than it was given.
- *
- * Kept free of provider resolution so the retry policy is testable on its own; callers
- * supply whatever performs the actual request.
- *
- * @param modelKey - `provider:model`, used to remember non-batching models for the process.
- * @throws When a single-input request returns anything other than one embedding.
- */
 export async function embedWithBatchFallback(
   inputs: string[],
   modelKey: string,

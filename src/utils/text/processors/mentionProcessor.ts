@@ -2,13 +2,6 @@ import { escapeRegExp } from "./regexUtils";
 import { resolvePersonaMentionHandle } from "@/utils/text/personaMentionHandles";
 import { normalizeParticipantAlias } from "@/utils/text/participants/aliases";
 
-/**
- * Strips curly braces from unknown template placeholders in text, leaving only the inner word.
- * Valid identity placeholders and their double-brace variants are preserved.
- * This prevents LLM-generated `{username}` artifacts from appearing literally in stored
- * memories or Discord messages when the model incorrectly imitates the `{user}` convention.
- * @param text - Text that may contain erroneous `{word}` placeholders
- */
 export function sanitizeUnknownTemplatePlaceholders(text: string): string {
   const result = text.replace(/\{\{([a-zA-Z][a-zA-Z0-9_]*)\}\}/g, (_match, inner: string) =>
     /^(user|user_formatted|user_term|bot|char)$/i.test(inner) ? `{{${inner}}}` : inner,
@@ -18,11 +11,6 @@ export function sanitizeUnknownTemplatePlaceholders(text: string): string {
   );
 }
 
-/**
- * Replaces template variables in a text string with their corresponding values.
- * Supports both `{name}` and `{{name}}` syntaxes, and normalises `char` as an alias for `bot`.
- * @param text - The template string containing placeholders to be replaced
- */
 export function replaceTemplateVariables(text: string, variables: Record<string, string | undefined>): string {
   let result = text;
   const normalizedVariables: Record<string, string | undefined> = {
@@ -43,11 +31,6 @@ export function replaceTemplateVariables(text: string, variables: Record<string,
   return result;
 }
 
-/**
- * Normalizes custom Discord emoji tags into :name: for LLM context.
- * Skips code blocks and inline code to preserve literal examples.
- * @param text - Raw message content from Discord
- */
 export function normalizeCustomEmojisForLlm(text: string): string {
   if (!text) return text;
 
@@ -76,13 +59,6 @@ export function normalizeCustomEmojisForLlm(text: string): string {
   return processedText;
 }
 
-/**
- * Converts @{name} mention handles into Discord mentions using a provided lookup.
- * Also handles the LLM hallucination variants @(name) and @[name].
- * Skips code blocks and inline code to preserve literal examples.
- * @param text - Raw text from LLM output
- * @param mentionIdSet - Set of known user IDs for disambiguation
- */
 export function replaceMentionHandles(
   text: string,
   mentionMap?: Map<string, string[]>,

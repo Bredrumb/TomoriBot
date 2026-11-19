@@ -1,27 +1,9 @@
-/**
- * Vertex AI client construction and composite-key parsing
- *
- * The stored "API key" for the Vertex provider is actually a composite config:
- *   {project_id}::{location}
- * Example: "my-gcp-project::us-central1"
- *
- * Real authentication comes from Application Default Credentials (ADC) on the host:
- *   - Service account on the machine/container
- *   - GOOGLE_APPLICATION_CREDENTIALS env var
- *   - `gcloud auth application-default login`
- *
- * This module centralises parsing, validation, and GoogleGenAI client construction
- * so streaming, validation, and any future v2 helpers share the same logic.
- */
-
 import { ApiError, GoogleGenAI } from "@google/genai";
 import { log } from "../../utils/misc/logger";
 import { MODEL_LOOKUP_TIMEOUT_MS, reportModelLookupFailure } from "@/utils/provider/modelCatalogLookup";
 
 export interface VertexConfig {
-  /** GCP project ID */
   projectId: string;
-  /** GCP region / location (e.g. "us-central1") */
   location: string;
 }
 
@@ -33,12 +15,8 @@ const VERTEX_SEGMENT_PATTERN = /^[a-z0-9-]+$/i;
 export const VERTEX_OWNER_NOT_ALLOWED_CODE = "vertex_owner_not_allowed";
 export const VERTEX_CONFIG_ERROR_CODE = "vertex_config_error";
 
-/**
- * Admits every owner while `VERTEX_ALLOWED_OWNERS` is unset; once set, even to an empty value, only
- * listed IDs pass, so clearing the list cannot reopen the host's ADC identity to every server.
- *
- * @param ownerDiscordId - The guild ID for a server configuration (the user ID in DMs), or the user ID for a personal one.
- */
+// Unset VERTEX_ALLOWED_OWNERS admits everyone, whereas an empty string denies all owners so clearing the list cannot
+// expose host ADC credentials.
 export function isVertexOwnerAllowed(ownerDiscordId: string | undefined): boolean {
   const configured = process.env.VERTEX_ALLOWED_OWNERS;
   if (configured === undefined) return true;
@@ -46,14 +24,6 @@ export function isVertexOwnerAllowed(ownerDiscordId: string | undefined): boolea
   return configured.split(",").some((entry) => entry.trim() === ownerDiscordId);
 }
 
-/**
- * Parse the composite key string stored as the "API key" for Vertex.
- *
- * Expected format: `{project_id}::{location}`
- *
- * @param compositeKey - The raw composite key from the database
- * @throws Error if the format is invalid
- */
 export function parseVertexCompositeKey(compositeKey: string): VertexConfig {
   if (!compositeKey || typeof compositeKey !== "string") {
     throw new Error("Vertex composite key is empty. Expected format: {project_id}::{location}");
@@ -92,13 +62,6 @@ export function parseVertexCompositeKey(compositeKey: string): VertexConfig {
   return { projectId, location };
 }
 
-/**
- * Construct a GoogleGenAI client configured for Vertex AI.
- *
- * Uses ADC (Application Default Credentials) rather than an API key.
- *
- * @returns GoogleGenAI client ready for Vertex AI calls
- */
 class VertexClient extends GoogleGenAI {
   getAuthHeaders(): Promise<Headers> {
     return this.apiClient.getAuthHeaders();
@@ -109,7 +72,6 @@ class VertexClient extends GoogleGenAI {
 // even for real partner models, so only its structured publisher-model 404 means the model is absent.
 const VERTEX_PUBLISHER_MODEL_NOT_FOUND = /Publisher Model `[^`]+` is not found/;
 
-/** Looks a text model up for registration on either Vertex provider; see `LLMProvider.checkTextModel`. */
 export async function checkVertexTextModel(
   provider: "vertex" | "vertexexpress",
   client: GoogleGenAI,

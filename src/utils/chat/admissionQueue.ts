@@ -35,7 +35,7 @@ type RateLimitedChannel = Parameters<typeof enforceGlobalRateLimit>[0]["channel"
 type SendableChannel = Parameters<typeof sendStandardEmbed>[0];
 
 const LOG_CHANNEL_NOTICE_COOLDOWN_MS = 10 * 60_000;
-/** One entry per channel ever configured as a log channel, so it stays small without a sweeper. */
+// One entry per channel ever configured as a log channel, so it stays bounded without a sweeper.
 const logChannelNoticeSentAt = new Map<string, number>();
 
 type AdmissionQueueAndTriggerArgs = {
@@ -51,7 +51,6 @@ type AdmissionQueueAndTriggerArgs = {
   cooldownUserDiscId: string;
   isActiveNaturalStopMessage: boolean;
   isNaturalStopMessage: boolean;
-  /** Confirmed repost record; its original, when attested, carries the trigger verdict. */
   messageProxyRecord?: MessageProxyMessageRecord | null;
   referencedMessage: Message | null;
 };
@@ -415,12 +414,8 @@ async function evaluatePreLockReplyGate(args: AdmissionQueueAndTriggerArgs): Pro
   };
 }
 
-/**
- * Explains a direct mention that the log-channel gate is about to drop.
- *
- * Without this the skip is invisible: chat goes silent in that one channel while slash commands
- * still work there, which admins misread as a Discord permission problem.
- */
+// Sending this notice prevents a silent channel drop that admins misread as a Discord permission failure when slash
+// commands still work.
 async function noticeMentionInLogChannel(
   incoming: ChatIncoming,
   guild: Guild | null,

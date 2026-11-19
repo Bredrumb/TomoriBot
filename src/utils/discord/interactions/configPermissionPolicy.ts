@@ -10,23 +10,15 @@ import {
   type ConfigPanelRoute,
 } from "@/utils/discord/configPanelCatalog";
 
-/**
- * `/config` opens over a guild or over a DM-backed personal workspace. A DM actor is the workspace
- * owner by construction, so the manager flag only discriminates guild members.
- */
 export interface ConfigActor {
   workspaceKind: "guild" | "dm";
   isManager: boolean;
 }
 
-/**
- * `omitted` hides a surface entirely; `disabled` renders an inert control that explains a permission
- * boundary. Sensitive or context-inapplicable state is omitted rather than disabled, so a member
- * never sees a value they may not read.
- */
+// Sensitive or context-inapplicable surfaces are omitted rather than disabled, so members never see values they may
+// not read.
 export type ConfigSurfaceState = "enabled" | "disabled" | "omitted";
 
-/** A page whose controls are inert but whose explanatory prose still renders. */
 export type ConfigPageState = "enabled" | "read-only" | "omitted";
 
 export type ConfigPersonaGeneralAction =
@@ -100,13 +92,8 @@ export type ConfigChannelsAutoTriggerAction = "auto-trigger" | "threshold";
 export type ConfigChannelsRulesAction = "private" | "roleplay" | "blocklist";
 export type ConfigChannelsOverridesAction = "prompt" | "context-note" | "text-model";
 
-/**
- * Derives the acting workspace identity from the interaction alone.
- *
- * No repository read is involved, which is what lets authorization run before the workspace loads:
- * a forged custom ID is rejected without ever touching the database. Outside a guild the actor is
- * the DM recipient, who owns that workspace by construction.
- */
+// Deriving the actor from the interaction alone avoids DB reads, so forged custom IDs are rejected before loading the
+// workspace.
 export function resolveConfigActor(interaction: {
   guildId: string | null;
   memberPermissions: { has(flag: bigint): boolean } | null;
@@ -149,10 +136,8 @@ export function resolveConfigPageState(
   return "omitted";
 }
 
-/**
- * Pages a filtered selector may present. A String Select option cannot be disabled, so an omitted
- * page must not appear at all; a read-only page still appears because its prose is safe.
- */
+// Discord String Select options cannot be disabled, so omitted pages are filtered out while read-only pages stay
+// because their prose is safe.
 export function visibleConfigPages(category: ConfigCategory, actor: ConfigActor): ConfigPage[] {
   const pages = CONFIG_PAGES_BY_CATEGORY[category];
   if (!pages) return [];
@@ -166,10 +151,6 @@ export function visibleConfigCategories(actor: ConfigActor): Array<{ category: C
   });
 }
 
-/**
- * Resolves where the panel opens, and where a denied or stale navigation falls back to. Prefers the
- * declared landing location and degrades to the first surface this actor may actually open.
- */
 export function resolveConfigLanding(actor: ConfigActor): { category: ConfigCategory; page: ConfigPage } {
   if (
     resolveConfigCategoryState(CONFIG_LANDING_CATEGORY, actor) === "enabled" &&
@@ -190,11 +171,6 @@ export function resolveConfigLanding(actor: ConfigActor): { category: ConfigCate
   return { category: CONFIG_LANDING_CATEGORY, page: CONFIG_LANDING_PAGE };
 }
 
-/**
- * Per-action policy for Persona > General, re-derived from the commands these actions absorb.
- * Identity, naming, trigger, and promotion mutations are manager-owned in a guild. Rename and
- * naming remain available in a DM workspace because the actor owns that workspace.
- */
 export function resolvePersonaGeneralActionState(
   action: ConfigPersonaGeneralAction,
   actor: ConfigActor,
@@ -214,10 +190,6 @@ export function resolvePersonaCollectionActionState(
   return resolveConfigPageState("persona", "general", actor) === "enabled" ? "enabled" : "omitted";
 }
 
-/**
- * Long-term memory navigation and STM inspection are readable on the mixed-permission Memories page;
- * STM editing remains a guild-manager action while the legacy command permits DM editing.
- */
 export function resolvePersonaMemoriesActionState(
   action: ConfigPersonaMemoriesAction,
   actor: ConfigActor,
@@ -231,13 +203,8 @@ export function resolvePersonaMemoriesActionState(
   return actor.workspaceKind === "guild" && actor.isManager ? "enabled" : "omitted";
 }
 
-/**
- * Per-action policy for Persona > Advanced, re-derived from the five commands these actions absorb.
- * Image tags, ATTG, and the persona target of character reference require a guild, while prompt
- * set/remove gate on Manage Guild only inside `if (interaction.guild)`, so a DM workspace owner may
- * write. Context-note set carries no handler gate at all, so the route is its only gate once the bare
- * root drops its registration default.
- */
+// Context-note handlers lack Manage Guild checks, so this policy is their sole authorization gate once /config drops
+// registration defaults.
 export function resolvePersonaAdvancedActionState(
   action: ConfigPersonaAdvancedAction,
   actor: ConfigActor,
@@ -249,11 +216,6 @@ export function resolvePersonaAdvancedActionState(
   return "omitted";
 }
 
-/**
- * Per-action policy for Persona > Overrides, re-derived from the humanizer and text-model routes.
- * Both actions are available to a DM workspace owner and a guild manager, while guild members
- * cannot read or change the manager-owned values.
- */
 export function resolvePersonaOverridesActionState(
   _action: ConfigPersonaOverridesAction,
   actor: ConfigActor,
@@ -374,10 +336,6 @@ export const PERSONA_VOICE_PAGE_BY_ROUTE: Partial<Record<ConfigPanelRoute["actio
   "voice-design-remove": "voice",
 };
 
-/**
- * Behavior General keeps the DM-capable global settings from their legacy commands. Timezone is
- * the one exception because its source command requires a guild interaction.
- */
 export const BEHAVIOR_GENERAL_ACTION_BY_ROUTE: Partial<
   Record<ConfigPanelRoute["action"], ConfigBehaviorGeneralAction>
 > = {
@@ -398,7 +356,6 @@ export const BEHAVIOR_GENERAL_ACTION_BY_ROUTE: Partial<
   "behavior-timezone-submit": "timezone",
 };
 
-/** All Trigger writes are guild-manager operations; Trigger itself is omitted in DMs. */
 export const BEHAVIOR_TRIGGER_ACTION_BY_ROUTE: Partial<
   Record<ConfigPanelRoute["action"], ConfigBehaviorTriggerAction>
 > = {
@@ -474,7 +431,6 @@ export const PLUGINS_CONTEXT_ADDITIONS_ACTION_BY_ROUTE: Partial<
   "behavior-self-debug-set": "self-debug",
 };
 
-/** Every Natural Nudges route resolves to the page that owns it; the page state is its gate. */
 const NATURAL_NUDGE_PAGE_BY_ROUTE: Partial<
   Record<ConfigPanelRoute["action"], { category: ConfigCategory; page: ConfigPage }>
 > = {
@@ -700,16 +656,8 @@ export function resolveChannelsOverridesActionState(
   return actor.isManager ? "enabled" : "disabled";
 }
 
-/**
- * Every Models route resolves to the page that owns it.
- *
- * Models carries no per-action exception: re-derived from source, `/model text|vision|embedding|
- * image|video`, `/model parameters|fallback|stop-strings|logit-bias`, `/config model-randomizer`,
- * and `/config image-tags` carry no handler Manage Guild gate at all, so their whole protection was
- * the registration default. The NovelAI preset route is additionally guild-only because its
- * control is omitted from DMs. The page state is therefore the gate for the remaining routes, and
- * it is what the route layer re-resolves on every interaction.
- */
+// Absorbed model handlers lack Manage Guild checks, so every route here must map to its owning page to keep
+// isConfigRouteAuthorized as their gate.
 export const MODELS_PAGE_BY_ROUTE: Partial<Record<ConfigPanelRoute["action"], ConfigPage>> = {
   "model-provider-select": "switch",
   "model-modal-submit": "switch",
@@ -750,11 +698,8 @@ export const MODELS_PAGE_BY_ROUTE: Partial<Record<ConfigPanelRoute["action"], Co
   "voice-sample-remove-cancel": "voices",
 };
 
-/**
- * The authorization gate every route and modal submit re-runs. Rendering a control is never the
- * gate: a custom ID that was legitimately issued to a manager can be replayed by any member who can
- * read the message, so the answer must come from the actor resolved on this interaction.
- */
+// Every route and modal submit must re-check the current actor because any member who can read the message can replay
+// a manager-issued custom ID.
 export function isConfigRouteAuthorized(route: ConfigPanelRoute, actor: ConfigActor): boolean {
   if (actor.workspaceKind === "guild" && !actor.isManager) return false;
   if (route.action.startsWith("draft-")) {

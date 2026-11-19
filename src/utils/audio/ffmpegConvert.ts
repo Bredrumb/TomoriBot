@@ -52,11 +52,6 @@ async function spawnFfmpeg(
   });
 }
 
-/**
- * Converts an audio buffer with ffmpeg through temporary files.
- *
- * Tries the bundled ffmpeg-static binary first and retries system ffmpeg only when spawning fails.
- */
 export async function convertAudioWithFfmpeg(
   inputBuffer: Buffer,
   output: { args: readonly string[]; extension: string },
@@ -98,7 +93,7 @@ export async function convertAudioWithFfmpeg(
   }
 }
 
-/** Mono 16 kHz MP3: every hosted transcription model accepts it, and speech needs no more than 16 kHz. */
+// Mono 16 kHz MP3: every hosted transcription model accepts it, and speech needs no more than 16 kHz.
 export function convertAudioToTranscriptionMp3(
   inputBuffer: Buffer,
   options: { signal?: AbortSignal; maxBytes?: number } = {},

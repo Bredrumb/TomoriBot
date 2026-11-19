@@ -1,8 +1,5 @@
-/**
- * Astro's remark plugin shape. Declared here rather than imported from `@astrojs/markdown-remark`,
- * which `apps/docs` does not depend on: the type-only import was erased at build time, so it went
- * unnoticed until `tests/` joined the root type check and could not resolve it.
- */
+// Local type replaces `@astrojs/markdown-remark` because `apps/docs` has no dependency on it, so root type checks
+// fail to resolve that package.
 type RemarkPlugin = () => (tree: unknown) => void;
 
 const ANCHOR_COMMENT = /^\s*<!--\s*anchor:\s*([A-Za-z0-9_-]+)\s*-->\s*$/;
@@ -24,18 +21,8 @@ interface MdastNode {
   data?: { hProperties?: Record<string, unknown> };
 }
 
-/**
- * Assigns a stable id from an `anchor:` comment immediately after a heading, in either the Markdown
- * or the MDX comment form.
- *
- * A translated page's heading slug is its translated text, so an English anchor would only ever
- * resolve on the English page. The bot's docs buttons carry one locale-less fragment for every
- * reader, so the anchor has to be the same string in every tree: pinning it here is what lets
- * `/help` deep-link into a translated page instead of landing at its top.
- *
- * The comment keeps the id out of the visible heading in Markdown renderers. The id is set through
- * `hProperties` because Astro's slugger preserves an id that is already present.
- */
+// Bot `/help` buttons use one locale-less fragment across translations, so `hProperties` pins stable ids that Astro's
+// slugger preserves over translated slugs.
 export const remarkHeadingIds: RemarkPlugin = () => (tree: unknown) => {
   const visit = (node: MdastNode): void => {
     if (!node.children) return;

@@ -166,14 +166,6 @@ interface PersonaMemoryScopeRow extends PersonaLabelProjectionRow {
   persona_id: DatabaseId;
 }
 
-/**
- * ExportRepository: owns all data export operations.
- *
- * Handles personal and server data export, per-domain slice exports
- * (memories, settings, config, personality), JSON sanitization, and
- * schema validation. Export operations are read-only; no cache
- * invalidation is performed here.
- */
 export class ExportRepository {
   private readonly database: typeof sql;
 
@@ -181,11 +173,6 @@ export class ExportRepository {
     this.database = database;
   }
 
-  /**
-   * Sanitizes a string for safe JSON serialization.
-   * Removes control characters (except newlines and tabs) that could break JSON.
-   * @returns Object with sanitized content and flag indicating if sanitization occurred
-   */
   private sanitizeForJson(content: string): { sanitized: string; wasSanitized: boolean } {
     // Remove null bytes and control characters except \n (0x0A) and \t (0x09)
     // biome-ignore lint/suspicious/noControlCharactersInRegex: Intentionally matching control characters for sanitization
@@ -224,13 +211,6 @@ export class ExportRepository {
     );
   }
 
-  /**
-   * Exports personal user data (nickname, language preference, impersonation prompt, memories).
-   * @param userDiscId - Discord user ID to export data for
-   * @param personaLineageId - Persona lineage namespace to export memories from
-   * @param includeGlobalMemories - Include lineage-0 memories when exporting a non-zero lineage
-   * @returns ExportResult containing the exported data or error
-   */
   async exportPersonalData(
     userDiscId: string,
     personaLineageId = 0,
@@ -310,12 +290,6 @@ export class ExportRepository {
     }
   }
 
-  /**
-   * Exports server data (configuration and server memories).
-   * @param serverDiscId - Discord server ID to export data for
-   * @param personaId - Optional persona ID to export persona-scoped server memories from
-   * @returns ExportResult containing the exported data or error
-   */
   async exportServerData(serverDiscId: string, personaId?: number): Promise<ExportResult> {
     try {
       const serverRows = await sql`
@@ -654,10 +628,6 @@ export class ExportRepository {
     }
   }
 
-  /**
-   * Exports personal settings only (nickname, language, impersonation prompt, image appearance data).
-   * @param userDiscId - Discord user ID to export data for
-   */
   async exportPersonalSettings(userDiscId: string): Promise<ExportResult> {
     try {
       const rows = await sql`
@@ -751,10 +721,6 @@ export class ExportRepository {
     }
   }
 
-  /**
-   * Exports the portable workspace configuration in the v2 sectioned format.
-   * The read is scoped to configuration tables so memory rows are never loaded.
-   */
   async exportWorkspaceConfig(serverDiscId: string): Promise<ExportResult> {
     try {
       const configRows = await this.database<Array<WorkspaceConfigProjectionRow>>`
@@ -1042,10 +1008,7 @@ export class ExportRepository {
     };
   }
 
-  /**
-   * Exports the portable personal configuration in the v2 sectioned format.
-   * The query omits naming lineage data because it cannot be rebound safely.
-   */
+  // Naming lineage data is intentionally omitted because it cannot be rebound safely on import.
   async exportPersonalConfig(userDiscId: string): Promise<ExportResult> {
     try {
       const rows = await this.database<Array<PersonalConfigProjectionRow>>`
@@ -1408,12 +1371,6 @@ export class ExportRepository {
     }
   }
 
-  /**
-   * Exports personality data as a human-readable text file.
-   * @param serverDiscId - Discord server ID to export personality for
-   * @param personaId - Optional persona ID to export personality for
-   * @returns PersonalityExportResult containing formatted text or error
-   */
   async exportPersonalityData(serverDiscId: string, personaId?: number): Promise<PersonalityExportResult> {
     try {
       const rows =
@@ -1503,16 +1460,10 @@ export class ExportRepository {
     }
   }
 
-  /**
-   * Exports a user's full personal data bundle (IRepository contract).
-   * The ownerId is the Discord snowflake of the user.
-   * @param ownerId - Discord user snowflake
-   */
   async toExportShape(ownerId: string | number): Promise<ExportResult | null> {
     const result = await this.exportPersonalData(String(ownerId));
     return result.success ? result : null;
   }
 }
 
-/** Singleton instance: import this in callers. */
 export const exportRepository = new ExportRepository();

@@ -43,13 +43,11 @@ export interface NaiGenerationCharacterPayload {
   referenceInfoExtracted?: number[];
 }
 
-/** Whether a model uses NovelAI's V4+ structured prompt schema. */
 export function usesNaiStructuredPromptFormat(model: string): boolean {
   // V5 retains the V4 structured prompt schema (v4_prompt/v4_negative_prompt).
   return /nai-diffusion-[45]/.test(model);
 }
 
-/** Precise Reference is available on NovelAI V4.5 models only. */
 export function supportsNaiPreciseReference(model: string): boolean {
   return /^nai-diffusion-4-5-(?:full|curated)$/.test(model);
 }
@@ -101,23 +99,18 @@ const MAX_NAI_ERROR_BODY_BYTES = 4096;
 // than holding the tool, its sockets and its buffers until the outer tool timeout gives up on it.
 const NAI_IMAGE_REQUEST_TIMEOUT_MS = 180_000;
 
-/** The caller's cancellation joined with a deadline that also covers reading the response body. */
 export function naiImageRequestSignal(abortSignal?: AbortSignal): AbortSignal {
   const deadline = AbortSignal.timeout(NAI_IMAGE_REQUEST_TIMEOUT_MS);
   return abortSignal ? AbortSignal.any([abortSignal, deadline]) : deadline;
 }
 
-/** A bounded slice of an error body for the thrown message and its operator log. */
 export async function readNaiErrorSnippet(response: Response): Promise<string> {
   const body = await readBoundedResponse(response, MAX_NAI_ERROR_BODY_BYTES).catch(() => null);
   return body ? body.toString("utf8").slice(0, 500) : "";
 }
 
-/**
- * Extracts the generated PNG from NovelAI's ZIP reply. The archive is read with a byte cap, and
- * the entry's declared size is checked before it is inflated, because a small archive can declare
- * and deliver gigabytes.
- */
+// NovelAI's ZIP reply is capped before and during inflation because a small compressed archive can declare and
+// deliver gigabytes.
 export async function extractPngFromZipResponse(response: Response): Promise<Buffer> {
   const zip = await JSZip.loadAsync(await readBoundedResponse(response, MAX_NAI_ZIP_BYTES));
   const entries = Object.values(zip.files).filter((entry) => !entry.dir);

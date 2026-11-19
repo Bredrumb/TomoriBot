@@ -6,10 +6,6 @@ import { ApplicationCommandOptionType } from "discord.js";
 
 beforeAll(async () => initializeLocalizer());
 
-/**
- * The raw payload the command builders serialize onto the wire: snake_case at the root, and an
- * option tree that nests one level deeper than the builder-facing union exposes.
- */
 type CommandPayload = {
   contexts?: number[];
   default_member_permissions?: string;

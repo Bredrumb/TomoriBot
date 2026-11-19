@@ -28,15 +28,8 @@ const PANEL_ACCENT_BY_TONE = {
 
 export type PanelAccentTone = keyof typeof PANEL_ACCENT_BY_TONE;
 
-/** An accent color in any of the shapes callers already hold: a decimal, a hex string, or RGB. */
 export type AccentColorInput = string | number | readonly [red: number, green: number, blue: number];
 
-/**
- * Normalizes an accent color to the decimal form Discord's payloads carry.
- *
- * Unparseable input falls back to the info accent rather than throwing, so a caller passing a
- * named color or a malformed hex still renders a card.
- */
 export function resolveAccentColor(color?: AccentColorInput): number {
   if (typeof color === "number") {
     return color;
@@ -61,12 +54,6 @@ export interface PaginationRouteSegments {
   page: (rangeIndex: number) => string[];
 }
 
-/**
- * Applies a Discord line marker to every line of `text`.
- *
- * The runtime formatter repeats markers on visual continuation lines. This helper remains useful
- * when callers assemble several semantic rows before the component tree reaches that boundary.
- */
 export function withLinePrefix(prefix: string, text: string): string {
   return text
     .split("\n")
@@ -74,7 +61,6 @@ export function withLinePrefix(prefix: string, text: string): string {
     .join("\n");
 }
 
-/** Subtext naming the channels an item is limited to, or null when it applies everywhere. */
 export function buildChannelScopeLine(
   locale: string,
   scope: { channel_disc_ids: readonly string[]; channel_scope_pending: boolean },
@@ -86,11 +72,6 @@ export function buildChannelScopeLine(
 }
 
 export interface BuildPanelContainerOptions {
-  /**
-   * Whether to apply panel layout wrapping across TextDisplay components.
-   * Defaults to true. Notice cards disable this because they act as embed
-   * replacements rather than interactive grid panels.
-   */
   formatProse?: boolean;
 }
 
@@ -137,10 +118,8 @@ export function buildPanelReceiptMessage(receipt: PanelReceipt) {
   return { components: [buildPanelReceiptContainer(receipt)], flags: MessageFlags.IsComponentsV2 } as const;
 }
 
-/**
- * Answers a refused panel press with its receipt in a new private message, never an edit, because
- * after `deferUpdate()` an edit would replace the panel the user pressed.
- */
+// After deferUpdate(), editReply replaces the pressed panel, so refused presses must reply with a new ephemeral
+// message.
 export async function replyPanelReceipt(interaction: RepliableInteraction, receipt: PanelReceipt): Promise<void> {
   const payload = {
     components: [buildPanelReceiptContainer(receipt)],
@@ -196,24 +175,14 @@ export function buildStateControlRow<TValue>(
 }
 
 export interface RangeSelectOptionsInput {
-  /** Total entries the modal has to cover across all of its pages. */
   totalCount: number;
-  /** Entries one modal page holds, after any fixed entry the modal reserves for itself. */
   pageSize: number;
-  /** Entry index whose range should open marked as current, or null when nothing is stored. */
   selectedIndex?: number | null;
-  /** Renders one range's option text from the half-open entry range it covers. */
   describe(startIndex: number, endIndexExclusive: number): { label: string; description?: string };
 }
 
-/**
- * Builds one select option per page of a collection a modal has to present in slices.
- *
- * A modal carries no pagination row of its own, and {@link buildPaginationRow} disables the
- * position it is parked on, so a row driving a modal directly can never reopen its own page and
- * those entries stay unreachable. Naming each range as its own option is what keeps every entry
- * selectable. Each option's value is the entry index its page starts at.
- */
+// Modals lack pagination rows and buildPaginationRow disables the active page, so slices must be exposed as
+// selectable range options to stay reachable.
 export function buildRangeSelectOptions(input: RangeSelectOptionsInput): SelectMenuComponentOptionData[] {
   const pageCount = Math.max(1, Math.ceil(input.totalCount / input.pageSize));
   return Array.from({ length: pageCount }, (_unused, pageIndex) => {

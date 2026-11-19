@@ -12,11 +12,8 @@ export function supportsSpeechMode(endpoint: VoiceSourceTarget, mode: VoiceSourc
 }
 
 export interface VoiceSourceCapabilities {
-  /** Endpoint accepts clone-shaped bodies (`ref_audio` + `ref_text`). */
   acceptsCloneShape: boolean;
-  /** Endpoint accepts design-shaped bodies (`instruct`). */
   acceptsDesignShape: boolean;
-  /** Clone-shaped bodies may carry a one-off delivery instruction in `instruct`. */
   cloneInstructionsAvailable: boolean;
 }
 

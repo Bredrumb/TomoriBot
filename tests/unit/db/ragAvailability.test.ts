@@ -8,11 +8,8 @@ import {
   resetRagAvailabilityCache,
 } from "@/utils/db/ragAvailability";
 
-/**
- * Minimal stand-in for the tagged-template call the probe makes. Passing a client other
- * than the module's own `sql` also keeps the process-wide cache untouched, so these cases
- * cannot bleed into one another.
- */
+// Passing a custom client rather than the module's default sql keeps the process-wide availability cache untouched so
+// test cases do not bleed into each other.
 function stubClient(behavior: () => Promise<unknown[]>): SQL {
   return (() => behavior()) as unknown as SQL;
 }

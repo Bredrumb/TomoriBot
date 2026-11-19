@@ -1,43 +1,14 @@
 import { afterAll, spyOn } from "bun:test";
 import { log } from "@/utils/misc/logger";
 
-/**
- * Helper for writing leak-safe `mock.module` factories.
- *
- * Bun's `mock.module()` is process-global for the whole test run and is NOT
- * undone by `mock.restore()`. A factory that returns only the exports one file
- * cares about therefore corrupts every test file loaded later in a monolithic
- * `bun test`: missing named exports fail ESM link-time validation (reported
- * against the innocent victim file), and simplified stubs silently replace real
- * behavior that other files assert on.
- *
- * The fix is to always spread a hoisted `import * as real` namespace and
- * override only what the file controls. Object spread alone is not enough when
- * an export is a CLASS INSTANCE or a class used for its statics, because those
- * members live on the prototype and are not own enumerable properties, so a
- * spread would silently reproduce the same partial-mock bug one level down.
- * {@link overrideMembers} covers those cases.
- */
-
 type LogSurface = typeof log;
 
-/**
- * Member names are checked against the real surface, but signatures are not: existing stubs narrow
- * parameters the real members declare as optional or `unknown`, which strict contravariance would
- * reject for no safety gain in a test double.
- */
+// Parameter types use never[] instead of LogSurface[K] because test doubles narrow optional or unknown params that
+// strict contravariance would reject.
 type LogMemberStubs = { [K in keyof LogSurface]?: (...args: never[]) => unknown };
 
-/**
- * Replaces members of the live `log` singleton for the calling file, restoring them in `afterAll`.
- *
- * Use this instead of a module mock over `@/utils/misc/logger`, which
- * `scripts/checks/checkMockModuleSurface.ts` rejects. `log` is a process-wide singleton whose
- * members production resolves at call time, so a module mock leaves the module record replaced for
- * the rest of the run. A LATER file's `spyOn(log, ...)` then installs nothing at all: no throw, no
- * missing export, the spy records zero calls, and the assertions quietly observe the real
- * implementation instead. Mutating the singleton avoids that entirely and is order-independent.
- */
+// Live log singleton is mutated instead of mocking logger because Bun module mocks silently break spyOn on log in
+// later test files.
 export function stubLogMembers(overrides: LogMemberStubs): void {
   const spies = Object.entries(overrides).map(([member, implementation]) =>
     spyOn(log, member as keyof LogSurface).mockImplementation(implementation as never),
@@ -54,30 +25,11 @@ interface ModuleMockRegistrar {
 
 interface MockScope {
   isActive(): boolean;
-  /** Registers an undo run in the declaring file's `afterAll`, before the scope closes. */
   onClose(restore: () => void): void;
 }
 
-/**
- * Registers module mocks whose controlled behavior is active only for the test
- * file that declared them.
- *
- * Bun keeps the mocked exports in its process-wide registry after the file
- * finishes, so each export is neutralised in this file's `afterAll` hook rather
- * than unregistered. A function export becomes a proxy that switches back to the
- * hoisted-real function; an object export keeps its genuine identity and has the
- * overridden members restored on it ({@link scopeObjectExport} explains why the
- * two differ). Either way the file's behavioral stubs survive while the leaked
- * module stays harmless to files that run later in the same `bun test` process.
- *
- * Every registered module must have a matching hoisted namespace in
- * `realModules`. Factories should still spread that namespace so newly-added
- * exports remain present and the source-level guard can verify the pattern.
- *
- * @param registrar - Bun's `mock` function, which exposes `mock.module`
- * @param realModules - Hoisted real namespaces keyed by mocked specifier
- * @returns A registrar with the same `module(specifier, factory)` shape
- */
+// Bun keeps `mock.module` exports process-wide after a file finishes, so `afterAll` neutralizes them while factories
+// spread `realModules` for newly added exports.
 export function createScopedModuleMocker(
   registrar: ModuleMockRegistrar,
   realModules: Readonly<Record<string, object>>,
@@ -158,23 +110,12 @@ function isObject(value: unknown): value is object {
   return typeof value === "object" && value !== null;
 }
 
-/**
- * Pristine descriptors captured the first time a member is overridden, so a
- * second scope overriding the same member still restores the genuine one rather
- * than a previous file's stub.
- */
+// Only the first override captures descriptors here, so a second scope overriding the same member restores the
+// genuine descriptor instead of an earlier file's stub.
 const pristineMembers = new WeakMap<object, Map<PropertyKey, PropertyDescriptor | undefined>>();
 
-/**
- * Installs a factory's overrides directly onto the genuine export and returns
- * that same object, undoing them when the declaring file's scope closes.
- *
- * A Proxy stand-in cannot be used for object exports. Bun's `spyOn` installs
- * nothing at all on a Proxy: no throw, no missing export, the spy records zero
- * calls, and a later file's assertions quietly observe the unspied
- * implementation. Keeping the export identity genuine is what lets that spy
- * land, which is the same reason `stubLogMembers` mutates the `log` singleton.
- */
+// Object exports must be mutated in place rather than wrapped in a Proxy because Bun's `spyOn` silently records zero
+// calls on a Proxy.
 function scopeObjectExport(scope: MockScope, realValue: object, mockedValue: object): object {
   const pristine = pristineMembers.get(realValue) ?? new Map<PropertyKey, PropertyDescriptor | undefined>();
   pristineMembers.set(realValue, pristine);
@@ -199,33 +140,8 @@ function scopeObjectExport(scope: MockScope, realValue: object, mockedValue: obj
   return realValue;
 }
 
-/**
- * Overrides selected members of an object, class instance, or class without
- * discarding the rest of its surface.
- *
- * Strategy is chosen at runtime because a hoisted `import * as real` capture is
- * only guaranteed real relative to files linked BEFORE the capturing file: in a
- * monolithic run an earlier test file may already have replaced a class with a
- * plain object. Branching on the received value keeps this helper correct in
- * both situations instead of throwing `Class extends value ... is not a
- * constructor`.
- *
- * @param real - Genuine member captured from a hoisted `import * as real`
- * @param overrides - Members this test file needs to control
- * @returns A stand-in that answers `overrides` first and delegates everything else
- *
- * @example
- * ```ts
- * import * as realRepositories from "@/utils/db/repositories";
- *
- * mock.module("@/utils/db/repositories", () => ({
- *   ...realRepositories,
- *   userRepository: overrideMembers(realRepositories.userRepository, {
- *     loadByDiscordId: async () => fakeUser,
- *   }),
- * }));
- * ```
- */
+// Strategy is chosen at runtime because an earlier test file in a monolithic run may already have replaced a class
+// export with a plain object before `import` runs.
 export function overrideMembers<TReal extends object, TOverrides extends object>(
   real: TReal,
   overrides: TOverrides,

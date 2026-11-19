@@ -6,13 +6,6 @@ import { findProviderRequestDeniedError } from "@/utils/provider/providerUsage";
 import { readOpenRouterLimitError } from "@/providers/openrouter/openrouterLimit";
 import { callOpenRouterDecisions } from "@/providers/openrouter/openrouterDecisions";
 import type { ProviderDecisionRequest, DecisionResult, SupportsDecisions } from "@/types/provider/featureInterfaces";
-/**
- * OpenRouter provider implementation
- * Implements the LLMProvider interface for OpenRouter's multi-provider API
- *
- * Uses the modular streaming architecture with StreamOrchestrator
- * and OpenrouterStreamAdapter for better code organization and maintainability.
- */
 
 import { OpenRouter } from "@openrouter/sdk";
 import type {
@@ -80,14 +73,6 @@ import { buildActiveSamplingParams, getActiveTemperature } from "@/utils/provide
 import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
 import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
 
-/**
- * Gets the default OpenRouter model with a robust fallback chain:
- * 1. First checks the cached is_default LLM from the database
- * 2. Falls back to database query for is_default model if cache is not ready
- * 3. Falls back to first non-deprecated model from database
- * 4. Throws error if no models are available
- * @returns Promise<string> - The default model codename
- */
 async function getDefaultOpenrouterModel(): Promise<string> {
   const providerName = "openrouter";
 
@@ -166,11 +151,6 @@ export class OpenrouterProvider
     return openrouterProviderInfo;
   }
 
-  /**
-   * Validate an OpenRouter API key using the dedicated auth endpoint
-   * This method doesn't require a specific model and is more reliable than making a test chat request
-   * @returns Promise<ApiKeyValidationResult> - Validation result with detailed error info if failed
-   */
   async validateApiKey(apiKey: string): Promise<ApiKeyValidationResult> {
     if (!apiKey || apiKey.trim().length < 10) {
       log.warn("API key is too short or empty");
@@ -459,11 +439,6 @@ export class OpenrouterProvider
     return await generateRoleplaySummaryOpenrouter(request);
   }
 
-  /**
-   * Get available tools/functions based on Tomori's configuration
-   * Uses the enhanced tool adapter that handles both built-in and MCP tools
-   * @param streamingContext - Optional streaming context for context-aware tool availability
-   */
   async getTools(
     tomoriState: TomoriState,
     streamingContext?: StreamingContext,
@@ -556,17 +531,10 @@ export class OpenrouterProvider
     }
   }
 
-  /**
-   * Uses the robust fallback chain: cache > database > first available
-   * @returns Promise<string> - The default model codename
-   */
   async getDefaultModel(): Promise<string> {
     return await getDefaultOpenrouterModel();
   }
 
-  /**
-   * Convert provider-specific configuration from TomoriState
-   */
   async createConfig(tomoriState: TomoriState, apiKey: string): Promise<OpenrouterProviderConfig> {
     // Override capabilities with OpenRouter API data
     // This prevents routing errors caused by incorrect database flags
@@ -708,10 +676,6 @@ export class OpenrouterProvider
     return config;
   }
 
-  /**
-   * Stream LLM response directly to a Discord channel
-   * Uses the modular streaming architecture with StreamOrchestrator and OpenrouterStreamAdapter
-   */
   async streamToDiscord(
     channel: BaseGuildTextChannel | BaseGuildVoiceChannel | DMChannel | AnyThreadChannel,
     client: Client,

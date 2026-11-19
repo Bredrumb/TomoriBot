@@ -238,30 +238,20 @@ async function buildHistoryNamingProjection(params: {
   return { userLabels, personaMentionLabels };
 }
 
-/**
- * The stop response answers its trigger natively but carries its own stop tail directive, so the
- * generic reply directive would compete with it.
- */
+// Stop responses answer their trigger natively but carry a dedicated stop tail directive, so the generic reply
+// directive must be suppressed here.
 function isQueuedReplyTurn(incoming: LockedChatTurn["admission"]["incoming"]): boolean {
   return answersQueuedTriggerMessage(incoming) && !incoming.isStopResponse;
 }
 
-/**
- * Builds the LLM-visible context and per-turn streaming metadata for one persona turn.
- */
-/**
- * The stable proxied identity speaking this turn, or null for an ordinary message.
- * Admission resolves a proxied turn to its host account for settings and
- * quotas, while speaker-facing context recovers the service identity. The synthetic id is
- * what `resolveReunionNote` clocks against, so a member meets and revisits Tomori on its
- * own timeline rather than on its host account's.
- */
+// Speaker-facing context uses the synthetic proxy identity instead of the host account, because resolveReunionNote
+// clocks each member's timeline on it.
 function resolveProxiedIdentity(message: Message): { name: string | null; userDiscId: string | null } {
   const identity = resolveCachedMessageProxyIdentity(message);
   return { name: identity?.displayName ?? null, userDiscId: identity?.userDiscId ?? null };
 }
 
-/** A borrowed trigger's author is a bystander, so their personal override does not steer the turn. */
+// A borrowed trigger's author is a bystander, so their personal override must not steer the turn.
 export function resolveTurnDeliberateToolMode(turn: ChatTurn): boolean {
   const personalMode = turn.lockedTurn.admission.incoming.borrowsTriggerMessage
     ? "follow"
@@ -269,11 +259,8 @@ export function resolveTurnDeliberateToolMode(turn: ChatTurn): boolean {
   return resolveDeliberateToolMode(turn.persona.config.deliberate_tool_mode, personalMode);
 }
 
-/**
- * The persona state that context assembly gates tool-dependent text on: the planned route's model,
- * narrowed by the server Tool Use switch and this turn's kill switch, because a channel or persona
- * model row never passes through the persona cache that narrows `has_tools`.
- */
+// Prompt state must re-narrow has_tools against server and turn switches, because channel or persona model rows
+// bypass the narrowing persona cache.
 async function resolvePromptPersona(
   turn: ChatTurn,
   effectivePersona: TomoriState,
@@ -1637,10 +1624,6 @@ function getBlockComparableAuthorId(
   return msg.author.id;
 }
 
-/**
- * The member a message speaks for when checking the server blacklist, or null when it speaks for
- * no member: the bot itself, other bots, and persona or relay webhooks.
- */
 function getBlacklistCandidateAuthorId(msg: Message): string | null {
   if (msg.webhookId) {
     return (isManagedWebhookMessage(msg) ? getCachedImpersonatedUserIdForWebhook(msg.webhookId) : null) ?? null;
@@ -1648,15 +1631,6 @@ function getBlacklistCandidateAuthorId(msg: Message): string | null {
   return msg.author.bot ? null : msg.author.id;
 }
 
-/**
- * Resolves the name a persona knows a blocked user by, for use in the block
- * notice. Prefers the cached bot-facing nickname, then Discord display/global/
- * username; when the message speaks for someone other than its author (a webhook
- * impersonation or a slash-command reply), falls back to a mention of that user.
- *
- * @param msg - The original (blocked) Discord message.
- * @param comparableId - The block-comparable author ID from getBlockComparableAuthorId.
- */
 async function resolveBlockedAuthorLabel(msg: Message, comparableId: string): Promise<string> {
   const row = await getCachedUserRow(comparableId);
   if (row?.user_nickname) {
@@ -1674,10 +1648,8 @@ function withReactionContext(msg: Message, content: string): string {
   return content ? `${content}\n${annotation}` : annotation;
 }
 
-/**
- * Identity and mention macros resolve once per turn. The triggerer's real name is passed (the
- * system prompt passes "User") because the prefill sits at the tail of this specific exchange.
- */
+// Prefill receives turn.triggererName instead of "User" (unlike the system prompt) because it sits at the tail of
+// this specific exchange.
 async function resolveTurnAssistantPrefill(turn: ChatTurn, persona: TomoriState): Promise<TurnPrefill | null> {
   const selected = selectTurnPrefillText(turn.lockedTurn.admission.incoming, persona.config.response_prefill);
   if (!selected) return null;
@@ -1705,7 +1677,6 @@ function appendTailDirectives(args: {
   memoryInjectionItems?: ChatTurnContext["contextItems"];
   memoryInjectionDepth?: number;
   messageIdMap?: MessageIdMap;
-  /** True when this turn also carries the persona-sprite prompt (see buildPersonaSpriteContextItem). */
   allowSpriteLabel?: boolean;
   proxiedSpeakerName?: string | null;
 }): ChatTurnContext["contextItems"] {

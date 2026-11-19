@@ -24,12 +24,6 @@ describe("stream buffer think-block fallback", () => {
   });
 });
 
-/**
- * Holding the buffer suppresses newline splitting, which is what breaks a multi-message reply into
- * separate sends and lets each `Persona (sprite):` label open its own segment. An orphan ")" used to
- * count as "unbalanced", so a single emoticon deferred the whole response to the final flush: the
- * messages merged and every label after the first shipped as visible text.
- */
 describe("stream buffer parenthesis balance", () => {
   it("does not hold for an emoticon's orphan closing paren", () => {
     expect(hasIncompleteSemanticMarkers("we won B)")).toBe(false);
@@ -45,10 +39,6 @@ describe("stream buffer parenthesis balance", () => {
     expect(hasIncompleteSemanticMarkers("we won (barely)")).toBe(false);
   });
 
-  /**
-   * The counter clamps at zero rather than banking orphan closers, so an earlier emoticon cannot
-   * offset a later opener back to a balanced-looking total.
-   */
   it("still holds when an emoticon precedes a genuinely unclosed parenthetical", () => {
     expect(hasIncompleteSemanticMarkers("we won :) (barely")).toBe(true);
   });
@@ -64,12 +54,6 @@ describe("stream buffer parenthesis balance", () => {
   });
 });
 
-/**
- * An unclosed emphasis run is the same hazard as an unclosed quote: the newline and period breaks
- * would cut inside `*...and more*`, and chunkMessage() can only protect a span it receives whole.
- * The hold must also stay off for the stray markers prose is full of, because a false hold defers
- * every remaining flush in the response to the final flush, which costs the reply its pacing.
- */
 describe("stream buffer emphasis markers", () => {
   it("holds while an emphasis run is open", () => {
     const unclosed = ["*...but if you're asking the answer's more than zero", "**still bold", "~~struck through"];
@@ -103,11 +87,6 @@ describe("stream buffer emphasis markers", () => {
     expect(failures).toEqual([]);
   });
 
-  /**
-   * "_" is left out of the hold on purpose, and inline code and URLs are blanked before the scan,
-   * because each of these is common in casual and technical replies and would otherwise stop
-   * streaming for the rest of the response.
-   */
   it("does not hold for underscores, kaomoji, inline code, or URLs", () => {
     const ignored = [
       "_emphasis aside",
@@ -127,11 +106,6 @@ describe("stream buffer emphasis markers", () => {
     expect(failures).toEqual([]);
   });
 
-  /**
-   * Han, kana, and Hangul write without spaces, so a marker sits directly against letters there.
-   * Counting those letters as word characters left the ja and zh-TW locales with the same mid-span
-   * cut the classifier exists to prevent.
-   */
   it("holds for a marker embedded in a spaceless script", () => {
     const unclosed = ["えっと*ため息をつきながら", "日本語*強調", "他說*重點", "안녕*강조"];
     const failures = unclosed.filter((buffer) => !hasIncompleteSemanticMarkers(buffer));
@@ -153,11 +127,6 @@ describe("stream buffer emphasis markers", () => {
   });
 });
 
-/**
- * A spoiler line used to read as a markdown table header still waiting for its separator row, so the
- * buffer never split at its newline and the next `Persona:` label shipped inside the spoiler's segment,
- * where the cleaner then dropped the spoiler as a leaked preamble.
- */
 describe("stream buffer mention handles", () => {
   it("holds while an @{handle} is open so a period inside the name cannot split it", () => {
     expect(hasIncompleteSemanticMarkers("yo @{Mirri J. ")).toBe(true);

@@ -41,9 +41,7 @@ export interface DeepSeekThinkingRequest extends ThinkingModeRequest {
 }
 
 export interface CustomThinkingRequest {
-  /** Ollama-native boolean thinking toggle (on/off only). */
   think?: boolean;
-  /** OpenAI-convention effort level (vLLM, other compatible servers). */
   reasoning_effort?: "none" | "low" | "medium" | "high" | "xhigh";
 }
 
@@ -109,9 +107,9 @@ function supportsGeminiMinimalThinking(model: string): boolean {
 }
 
 interface AnthropicThinkingProfile {
-  /** How `none` turns thinking off; `null` where the model always thinks and `none` falls to low effort. */
+  // Null sentinel means the model always thinks, so "none" falls back to low effort instead of disabling thinking.
   off: "disabled" | "between_tools" | null;
-  /** The API rejects `top_p` and any `temperature` other than 1 with a 400 even when thinking is off. */
+  // API rejects top_p or non-1 temperature with 400 even when thinking is off, so sampling must stay omitted.
   samplingLocked: boolean;
   extraHighEffort: "xhigh" | "max";
 }
@@ -379,17 +377,8 @@ export function buildCustomThinkingRequest(
   return { reasoning_effort: toProviderReasoningEffortLevel(effectiveLevel) };
 }
 
-/**
- * Maps `thinking_level` onto NVIDIA NIM, which serves many model families behind one endpoint and
- * each family reads a different switch, so every level other than `auto` sends all of them:
- * `enable_thinking` (Nemotron) and `thinking` (DeepSeek) are chat-template kwargs that other
- * templates ignore, and `reasoning_effort` is the only control GLM and gpt-oss honor.
- *
- * `none` still sends effort `"low"`: NIM validates `reasoning_effort` against low/medium/high on
- * gpt-oss and Llama and returns 400 for `"none"`, and GLM ignores both template switches, so low
- * effort is the closest it gets to off. Levels map to effort rather than a token budget because
- * NIM's V2 model runner rejects `reasoning_budget`.
- */
+// NIM serves multiple families on one endpoint, so all switches are sent together, "none" maps to "low" to avoid
+// 400s, and rejected reasoning_budget is omitted.
 export function buildNvidiaThinkingRequest(
   configuredLevel: string | null | undefined,
   forceReason?: boolean,

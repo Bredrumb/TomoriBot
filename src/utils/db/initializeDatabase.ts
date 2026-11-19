@@ -174,17 +174,8 @@ async function runPreSchemaServerwideQuotaRenameBridge(client: SQL, migrationPat
   log.success("Pre-schema legacy image quota rename bridge applied");
 }
 
-/**
- * Count rows in a table that is already known to exist.
- *
- * Used by the pre-schema rename bridge to tell an empty rollback artifact
- * (safe to drop) apart from a populated legacy table (must not be touched).
- * `tableName` is always a hardcoded constant from this module: never user
- * input so interpolating it into the query is safe.
- *
- * @param client - Active SQL connection.
- * @param tableName - Fully-trusted, hardcoded `public`-schema table identifier.
- */
+// Interpolating tableName into client.unsafe is safe only because callers pass hardcoded module constants rather than
+// user input.
 async function countTableRows(client: SQL, tableName: string): Promise<number> {
   const [row] = (await client.unsafe(`SELECT COUNT(*)::INT AS count FROM public.${tableName}`)) as Array<{
     count: number;
@@ -192,21 +183,8 @@ async function countTableRows(client: SQL, tableName: string): Promise<number> {
   return row?.count ?? 0;
 }
 
-/**
- * Resolve a single legacy/renamed table collision before schema init.
- *
- * When pre-rename code is run against an already-migrated database, its
- * `CREATE TABLE IF NOT EXISTS` schema re-materializes the legacy table as an
- * empty shell beside the populated renamed table. That empty shell is an
- * unambiguous rollback artifact and is safe to drop. A *non-empty* legacy table
- * coexisting with the renamed table is a genuine data fork that no automated
- * step can reconcile, so we refuse and require human review.
- *
- * No-ops when the pair does not collide (e.g. a legitimate pre-rename database
- * where only the legacy table exists (migration 016 renames it normally).
- *
- * @param client - Active SQL connection.
- */
+// Pre-rename code recreates empty legacy tables via CREATE TABLE IF NOT EXISTS on migrated DBs, so empty shells are
+// safe to drop while populated ones fail.
 async function resolveLegacyRenameCollision(
   client: SQL,
   legacyTable: string,
@@ -293,12 +271,8 @@ async function runPreSchemaPersonaRenameBridge(client: SQL, migrationPath: strin
   log.success("Pre-schema legacy persona rename bridge applied");
 }
 
-/**
- * Initialize all startup-managed database schemas and seed data.
- *
- * This is shared by the bot entry point and lifecycle validation so CI checks
- * the same bootstrap path a fresh install uses at runtime.
- */
+// Both the bot entry point and CI lifecycle validation share this bootstrapper so CI exercises the exact schema path
+// a fresh install uses.
 export async function initializeDatabase(options: InitializeDatabaseOptions = {}): Promise<InitializeDatabaseResult> {
   const client = options.client ?? defaultSql;
   const maxRetries = options.maxRetries ?? 3;

@@ -1,13 +1,3 @@
-/**
- * `/memories` absorbed roots that formerly had opposite registration shapes, and the resulting
- * permission is the one thing an implementation summary can describe correctly while being wrong.
- * Shared memory teaching must remain reachable to non-managers under `server_memteaching_enabled`,
- * while the Short-Term category remains manager-gated in the route layer.
- * The sibling `/providers` panel exports `managerOnly = true`, so copying it would
- * silently remove teaching from every non-manager in every guild with nothing failing. The manager
- * check for the Short-Term category belongs in the route layer, not in the command's registration,
- * and memoriesRoutes.test.ts proves it for both the clear modal and the clear submit.
- */
 import { beforeAll, describe, expect, it } from "bun:test";
 import { loadCommandData, ROOT_COMMAND_EXECUTION_KEY } from "@/utils/discord/commandLoader";
 import { initializeLocalizer } from "@/utils/text/localizer";

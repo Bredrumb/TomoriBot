@@ -2,21 +2,17 @@ import { ApiError, GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 import { log } from "@/utils/misc/logger";
 
-/** Token limits a provider's models API reports; a field the response lacks stays null. */
 export interface LiveModelLimits {
   contextWindow: number | null;
   maxOutputTokens: number | null;
 }
 
-/** Providers whose models API reports per-model token limits with the server's own API key. */
 export type LiveLimitsProvider = "anthropic" | "google";
 
-/** A model's limits only change when the vendor revises it, so a success is reused for a day. */
+// Vendor model limits only change on revision, so successful lookups stay cached for a full day.
 const SUCCESS_REFRESH_MS = 24 * 60 * 60 * 1000;
-/**
- * A failed lookup is retried after this pause rather than cached until restart, so a transient
- * outage or a rotated key cannot leave a model on catalog limits for the rest of the process.
- */
+// Failed lookups retry after this delay rather than sticking until restart so a transient outage or rotated key will
+// not pin catalog limits.
 const FAILURE_RETRY_MS = 10 * 60 * 1000;
 const LOOKUP_TIMEOUT_MS = 5_000;
 const HTTP_NOT_FOUND = 404;
@@ -63,15 +59,11 @@ async function fetchGoogleLimits(codename: string, apiKey: string): Promise<Live
   };
 }
 
-/**
- * The last limits the provider reported for this model, or undefined when no lookup has succeeded.
- * A stale success is still returned while a refresh is due, because limits rarely change.
- */
+// Stale cached limits are intentionally returned when a refresh is due because vendor model limits rarely change.
 export function getLiveModelLimits(provider: LiveLimitsProvider, codename: string): LiveModelLimits | undefined {
   return entries.get(cacheKey(provider, codename))?.limits ?? undefined;
 }
 
-/** Whether a lookup should start now: none has run, the refresh time passed, and none is running. */
 export function isLiveModelLimitsRefreshDue(provider: LiveLimitsProvider, codename: string): boolean {
   const key = cacheKey(provider, codename);
   if (inFlight.has(key)) return false;
@@ -79,10 +71,6 @@ export function isLiveModelLimitsRefreshDue(provider: LiveLimitsProvider, codena
   return !entry || Date.now() >= entry.refreshAt;
 }
 
-/**
- * Asks the provider's models API for one model's limits and caches the answer. Never throws: a
- * failure keeps any earlier success and schedules a retry.
- */
 export async function refreshLiveModelLimits(
   provider: LiveLimitsProvider,
   codename: string,

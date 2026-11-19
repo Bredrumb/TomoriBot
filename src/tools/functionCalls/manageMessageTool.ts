@@ -1,9 +1,3 @@
-/**
- * Discord Message Management Tool
- * Allows the bot to pin any recent message and edit/delete recent messages it sent directly
- * or through its managed character webhooks.
- */
-
 import type { BaseGuildTextChannel, Message, Webhook } from "discord.js";
 import { BaseTool, type ToolContext, type ToolParameterSchema, type ToolResult } from "@/types/tool/interfaces";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
@@ -89,11 +83,8 @@ function resolveWebhookThreadId(channel: ToolContext["channel"]): string | undef
   return "isThread" in channel && typeof channel.isThread === "function" && channel.isThread() ? channel.id : undefined;
 }
 
-/**
- * Sprite delivery renames persona webhooks: a lookalike-letter group-break name ("Tomorі"), a
- * decorated fallback ("ともり (mad)"), or an identity sprite ("The Voice (Locke)"). Any of those
- * still belongs to a persona, so each spelling is checked against the lowercased persona names.
- */
+// Sprite delivery renames persona webhooks with group-breaks, mood tags, or identity sprites, so raw, sourceName, and
+// modifier spellings are all checked.
 export function isPersonaWebhookName(username: string, personaNameSet: ReadonlySet<string>): boolean {
   const webhookName = revealGroupBreakName(stripBridgePrefix(username));
   const decorated = parseRenderModifierWebhookName(webhookName);

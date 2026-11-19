@@ -58,7 +58,6 @@ import {
   shouldInjectVerbatimToolCallingNudge,
 } from "@/utils/tools/verbatimToolCalling";
 
-/** The channel shape quota notices are sent through, matching the admission path's own alias. */
 type SendableChannel = Parameters<typeof sendStandardEmbed>[0];
 
 type TextCredentialSource = ChatTurnContext["textCredentialSource"];
@@ -71,28 +70,16 @@ interface GenerationAttempt {
   provider: LLMProvider;
   providerConfig: ProviderConfig;
   successModel: LlmRow;
-  /** Rotation key ID used for this attempt; null when rotation pool is inactive. */
   rotationKeyId: number | null;
 }
 
-/** The route a turn was planned on, plus the server route it may still reach. */
 interface GenerationPlan {
   attempts: GenerationAttempt[];
-  /**
-   * Materializes the server route's attempts, or null when this turn owns no server fallback.
-   *
-   * Resolution is deferred until every attempt so far has failed, because building the pool eagerly
-   * prepares server provider config and spends the server's text quota admission on turns that
-   * never leave their planned route.
-   */
+  // Deferred until all planned attempts fail because eager resolution prepares server config and spends server text
+  // quota on turns that never fall back.
   extendWithServerRoute: ((startIndex: number) => Promise<GenerationAttempt[]>) | null;
 }
 
-/**
- * How many of the oldest history exchange pairs each retry drops when OpenRouter stopped a
- * reply on `length` with no content. Scaling by `retryCount` widens the trim on every retry,
- * so a reply that overflowed once keeps losing context until it fits.
- */
 const OPENROUTER_LENGTH_EMPTY_RETRY_DROP_PAIRS = 2;
 
 export async function runGenerationTurn(
@@ -399,14 +386,6 @@ async function buildGenerationPlan(context: ChatTurnContext): Promise<Generation
   };
 }
 
-/**
- * The server route a personal text turn can still reach, or null when this turn owns none.
- *
- * A personal route spends the user's own credentials, so a server model is a separate phase with
- * its own admission rather than another member of the personal pool. Two policies withhold it
- * outright: a server that requires members to bring their own provider never lends its models to a
- * member-triggered turn, and the account-wide setting below is the user's own refusal.
- */
 async function resolveServerRouteExtension(
   context: ChatTurnContext,
 ): Promise<((startIndex: number) => Promise<GenerationAttempt[]>) | null> {
@@ -487,14 +466,6 @@ async function buildPlannedRouteAttempts(context: ChatTurnContext): Promise<Gene
   return attempts;
 }
 
-/**
- * Builds the server's own text route, reached only after every personal attempt has failed.
- *
- * The pool comes from the unmodified server state rather than from the personal overlay, so each
- * attempt carries the server's credentials and draws on the server's own randomizer setting even
- * when the two routes name models from one provider. A refused quota admission yields no attempts,
- * which leaves the personal failure as the turn's outcome.
- */
 async function buildServerRouteAttempts(context: ChatTurnContext, startIndex: number): Promise<GenerationAttempt[]> {
   const disableAllTools = !!context.streamingContext.disableAllTools;
   if (!(await admitServerRoute(context))) {
@@ -528,11 +499,6 @@ function resolveFallbackEntries(state: TomoriState): FallbackEntry[] {
   return state.fallback_chain ?? state.fallback_llms?.map((model) => ({ kind: "llm" as const, model })) ?? [];
 }
 
-/**
- * Splices a random pool member to the front so a different model leads each turn. The remainder
- * keeps its relative order as the failover tail, and because the reorder is a splice rather than a
- * replacement, every model stays in the chain, so failover semantics are preserved.
- */
 function applyModelRandomizer(pool: FallbackEntry[], enabled: boolean): void {
   if (!enabled || pool.length <= 1) {
     return;
@@ -541,13 +507,8 @@ function applyModelRandomizer(pool: FallbackEntry[], enabled: boolean): void {
   pool.unshift(...pool.splice(leadIdx, 1));
 }
 
-/**
- * Applies the server's own admissions to the route a personal turn is about to borrow.
- *
- * Planning skipped both of them because the personal route was paying: the message-trigger
- * cooldown and the text quota. The server's model is exempt from neither, and a refusal here
- * contributes no attempts, so the personal failure stays the outcome.
- */
+// Server cooldown and text quota were skipped during planning because the personal route paid, so borrowing a server
+// fallback requires passing both here.
 async function admitServerRoute(context: ChatTurnContext): Promise<boolean> {
   if (!(await admitServerRouteCooldown(context))) {
     return false;
@@ -555,12 +516,6 @@ async function admitServerRoute(context: ChatTurnContext): Promise<boolean> {
   return await admitServerRouteTextQuota(context);
 }
 
-/**
- * Applies the server's message-trigger cooldown, which planning only runs for server-sourced turns.
- *
- * Without it a broken personal provider would buy a server reply on every message within reach of
- * the server's quota, and a server that leaves quota off would never stop at all.
- */
 async function admitServerRouteCooldown(context: ChatTurnContext): Promise<boolean> {
   const incoming = context.turn.lockedTurn.admission.incoming;
   // The exemptions planning applies: a stop response, a persona job that shares its group's
@@ -585,13 +540,6 @@ async function admitServerRouteCooldown(context: ChatTurnContext): Promise<boole
   return allowed;
 }
 
-/**
- * Admits the server route against the server's text quota and arms the post-turn consumption.
- *
- * Planning exempts a personal turn from server text quota because it spends the user's own
- * credentials, so this turn arrives unadmitted. The server's model is not exempt: without this the
- * fallback would answer on quota nobody checked and nobody paid.
- */
 async function admitServerRouteTextQuota(context: ChatTurnContext): Promise<boolean> {
   const incoming = context.turn.lockedTurn.admission.incoming;
   if (!shouldApplyServerTextQuota(incoming, context.isDMChannel)) {
@@ -644,20 +592,8 @@ function getRetryExcludedKeyIds(excludedKeyIds: Set<number>, rotationKeyId: numb
   return [...ids];
 }
 
-/**
- * A destination the bot cannot post into fails for every key and every model alike, whether the
- * channel was deleted or access to it was revoked.
- *
- * Retrying would burn a full generation per fallback arm and then discard it at the same send.
- * The classifier is shared with the send path so the "retrying cannot help" set has one
- * definition. A refused send after a permission change or a timeout is deliberately excluded: it
- * can clear on its own, so it keeps its fallback arms.
- *
- * The reason arrives as a stop more often than as an error, because the send path raises the stop
- * itself, so both routes are read here rather than depending on the status alone. An error-level
- * result keeps its fallback arms unless this says otherwise, and a 50001 that reached the turn as
- * data would otherwise be retried across every arm.
- */
+// Both data and stopReason are checked because destination failures arrive via either route, while transient errors
+// keep fallback arms.
 function isUnreachableDestinationResult(result: GenerationTurnResult): boolean {
   return result.streamResults.some((streamResult) => {
     const classified = classifySendFailure(streamResult.data);
@@ -670,10 +606,6 @@ function isUnreachableDestinationResult(result: GenerationTurnResult): boolean {
   });
 }
 
-/**
- * Whether an empty continuation is a failure the turn-level retry repairs (output-token cap,
- * speaker-guard discard, held NovelAI fragment) rather than the model having nothing to add.
- */
 function isRetryableEmptyResponse(result: GenerationTurnResult): boolean {
   const streamResult = result.streamResults.at(-1);
   const data = streamResult?.data as { finishReason?: unknown; emptyResponseReason?: unknown } | undefined;
@@ -719,12 +651,6 @@ async function sendFallbackNoticeIfNeeded(
   });
 }
 
-/**
- * Sends the timeout notice an attempt deferred while a model fallback was still pending.
- *
- * Only reaches the caller when nothing followed that attempt, which is exactly the case where the
- * user would otherwise see no reason for the silence.
- */
 async function sendDeferredTimeoutNoticeIfPending(context: ChatTurnContext): Promise<void> {
   const notice = context.streamingContext.deferredTimeoutNotice;
   if (!notice) {
@@ -926,15 +852,8 @@ async function resolveApiKey(tomoriState: TomoriState): Promise<string> {
   return await decryptApiKey(encryptedKey, tomoriState.config.key_version || 1);
 }
 
-/**
- * Re-credentials a fallback attempt whose model belongs to a different provider
- * than the primary's.
- *
- * A personal-routed turn resolves against the user's own saved providers and
- * never falls through to the server's, so a chain the user configured cannot
- * silently spend the server owner's key. Returns null when no key exists in the
- * applicable scope, which drops the entry from the pool.
- */
+// Personal-routed turns check only the user's saved providers and return null when absent, so fallback chains cannot
+// silently spend the server key.
 async function applyCrossProviderConfig(
   tomoriState: TomoriState,
   providerName: string,
@@ -948,10 +867,6 @@ async function applyCrossProviderConfig(
   return savedConfig?.api_key ? withSavedProviderConfig(tomoriState, savedConfig) : null;
 }
 
-/**
- * Server-scoped variant for the primary attempt, which cannot be skipped the way a
- * fallback entry can and so raises instead of returning null.
- */
 async function applySavedProviderConfig(tomoriState: TomoriState, providerName: string): Promise<TomoriState> {
   const state = await applyCrossProviderConfig(tomoriState, providerName, null);
   if (!state) {
@@ -973,12 +888,8 @@ function extractErrorCode(streamResult: StreamResult | undefined): string {
   return String(record.code ?? record.type ?? record.message ?? streamResult?.status ?? "unknown");
 }
 
-/**
- * Classified failure reason for the public "Fallback Model Used" notice. Context assembly reads
- * the notice back for the model, and an endpoint can echo request headers in its message, so the
- * upstream text stays in the operator log the error path already wrote.
- * @param streamResult - The last stream result recorded for the failed attempt.
- */
+// Public fallback notices carry only classified codes because upstream error text can echo request headers and is
+// read back into model context.
 function extractErrorDetail(streamResult: StreamResult | undefined): string {
   const data = streamResult?.data;
   if (data && typeof data === "object" && !(data instanceof Error) && "type" in data) {
@@ -994,7 +905,8 @@ async function prepareProviderContextItems(args: {
   isUserImpersonation: boolean;
   tomoriState: TomoriState;
   deliberateToolAllowedNames: string[] | undefined;
-  /** Read from the built provider config, because a provider's live capability catalog can withdraw tools the state still allows. */
+  // Must come from the built provider config rather than tomoriState because a provider's live capability catalog can
+  // withdraw tools the state still allows.
   sendsTools: boolean;
 }): Promise<StructuredContextItem[]> {
   let contextItems = await resolveMediaForModel(args.contextItems, args.tomoriState, args.deliberateToolAllowedNames);
@@ -1038,11 +950,8 @@ async function prepareProviderContextItems(args: {
   return contextItems;
 }
 
-/**
- * Trims history to the attempt's budget with the prefill's tokens reserved. The prefill is left out
- * of the list itself because an instruction-mode directive is a dialogue user turn, which the
- * truncator would protect as the newest request in place of the real trigger.
- */
+// Prefill items stay in reservedTailItems rather than contextItems because instruction-mode directives are user turns
+// that would displace the real trigger.
 async function fitProviderContextBudget(args: {
   contextItems: StructuredContextItem[];
   reservedTailItems: StructuredContextItem[];
@@ -1066,12 +975,8 @@ async function fitProviderContextBudget(args: {
   return contextItems;
 }
 
-/**
- * The exact text the verbatim nudge is rendered as inside a context-note item
- * (see `appendDialogueHistoryContext`). Matching on the text rather than the tag
- * is required because the user's global context note shares
- * `ContextItemTag.CONTEXT_NOTE_INJECTION`.
- */
+// Matched by exact text from appendDialogueHistoryContext because ContextItemTag.CONTEXT_NOTE_INJECTION is shared
+// with the user's global context note.
 const VERBATIM_NUDGE_CONTEXT_TEXT = `[System: ${VERBATIM_TOOL_CALLING_NUDGE}]`;
 
 function isVerbatimNudgeItem(item: StructuredContextItem): boolean {
@@ -1082,21 +987,16 @@ function isVerbatimNudgeItem(item: StructuredContextItem): boolean {
   return text === VERBATIM_NUDGE_CONTEXT_TEXT;
 }
 
-/** Either half of the verbatim scaffolding, which are toggled together across the fallback chain. */
 function isAnyVerbatimItem(item: StructuredContextItem): boolean {
   return item.metadataTag === ContextItemTag.KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS || isVerbatimNudgeItem(item);
 }
 
-/** Returns a new array with both verbatim halves removed: the schema dump and the nudge note. */
 function stripAllVerbatimItems(items: StructuredContextItem[]): StructuredContextItem[] {
   return items.filter((item) => !isAnyVerbatimItem(item));
 }
 
-/**
- * Inserts the schema dump ahead of the first dialogue item, the same side of the dialogue boundary
- * that stage 07b occupies in a natively-built context. It lands later than that stage's own slot
- * (which sits ahead of server documents) because the pre-dialogue region cannot be re-derived here.
- */
+// Placed ahead of the first dialogue item rather than stage 07b's earlier pre-document slot because the pre-dialogue
+// region cannot be re-derived here.
 function injectVerbatimToolDefinitionsItem(
   items: StructuredContextItem[],
   toolItem: StructuredContextItem,
@@ -1106,15 +1006,8 @@ function injectVerbatimToolDefinitionsItem(
   return [...items.slice(0, insertionIndex), toolItem, ...items.slice(insertionIndex)];
 }
 
-/**
- * Inserts the nudge note near the dialogue tail, `VERBATIM_TOOL_CALLING_CONTEXT_DEPTH` dialogue items
- * from the end.
- *
- * This counts `DIALOGUE_HISTORY` items, not messages, so date spacers and detached system parts
- * inflate the count and pull the note slightly earlier than the message-indexed placement stage 11
- * uses. The note only has to sit near the tail to steer the next call; exact index parity is not
- * load-bearing, and the count is the only one recoverable from an already-assembled context.
- */
+// DIALOGUE_HISTORY items are counted rather than messages (unlike stage 11) because only tags remain recoverable here
+// and approximate tail placement suffices.
 function injectVerbatimNudgeItem(items: StructuredContextItem[]): StructuredContextItem[] {
   const nudgeItem: StructuredContextItem = {
     role: "user",

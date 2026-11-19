@@ -14,7 +14,6 @@ afterEach(() => {
   for (const spy of spies.splice(0)) spy.mockRestore();
 });
 
-/** Every model but the one without structured output resolves on the server's key. */
 function stubModels(): Array<[number, string]> {
   const resolved: Array<[number, string]> = [];
   spies.push(

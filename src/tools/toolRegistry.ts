@@ -1,8 +1,3 @@
-/**
- * Central tool registry for managing all available tools
- * Provides registration, discovery, and execution of tools
- */
-
 import { log } from "../utils/misc/logger";
 import type {
   Tool,
@@ -87,18 +82,11 @@ function resolveOpaqueIds(args: Record<string, unknown>, messageIdMap?: MessageI
 export type { ToolContext } from "../types/tool/interfaces";
 export type { ToolStateForContext } from "@/tools/availability";
 
-/**
- * Central registry for all tools
- * Implements singleton pattern to ensure single source of truth
- */
 class ToolRegistryImpl implements ToolRegistryInterface {
   private tools = new Map<string, Tool>();
   private executionHistory: ToolExecutionEvent[] = [];
   private readonly maxHistorySize = 1000;
 
-  /**
-   * @throws Error if tool with same name already exists
-   */
   registerTool(tool: Tool): void {
     if (this.tools.has(tool.name)) {
       throw new Error(`Tool with name '${tool.name}' is already registered`);
@@ -110,37 +98,19 @@ class ToolRegistryImpl implements ToolRegistryInterface {
     log.info(`Registered tool: ${tool.name} (category: ${tool.category})`);
   }
 
-  /**
-   * @param name - Tool name to lookup
-   * @returns Tool instance or undefined if not found
-   */
   getTool(name: string): Tool | undefined {
     const resolvedName = resolveBuiltInToolAlias(name);
     return this.tools.get(resolvedName);
   }
 
-  /**
-   * @param provider - Provider name (e.g., "google", "openai")
-   * @param context - Tool context for checking feature flags and permissions
-   */
   getAvailableTools(provider: string, context: ToolContext): Tool[] {
     return getAvailableToolsForProvider(this.tools.values(), provider, context);
   }
 
-  /**
-   * Get tools available for context building (only checks feature flags, no Discord permissions)
-   * Used when building context instructions where we don't have full Discord context
-   * @param provider - Provider name (e.g., "google", "openai")
-   */
   getAvailableToolsForContext(provider: string, stateForContext: ToolStateForContext): Tool[] {
     return getAvailableToolsForContextFromRegistry(this.tools.values(), provider, stateForContext);
   }
 
-  /**
-   * Get all available tools (built-in + MCP) with feature flag filtering
-   * This is the new centralized method that replaces provider-specific filtering
-   * @param provider - Provider name (e.g., "google", "openai")
-   */
   async getAvailableToolsWithMCP(
     provider: string,
     stateForContext: ToolStateForContext,
@@ -148,9 +118,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
     return getAvailableToolsWithMCPFromRegistry(this.tools.values(), provider, stateForContext);
   }
 
-  /**
-   * Get all registered tools
-   */
   getAllTools(): Tool[] {
     return Array.from(this.tools.values());
   }
@@ -159,13 +126,7 @@ class ToolRegistryImpl implements ToolRegistryInterface {
     return new Set([...this.tools.keys(), ...Object.keys(BUILTIN_TOOL_ALIASES)]);
   }
 
-  /**
-   * Check if a tool requires a follow-up generation after execution
-   * Built-in tools check the `requiresFollowUp` property; guild MCP tools always return true
-   * because the model has to present a remote tool's result
-   * @param serverId - Optional internal server_id for guild MCP check
-   * @returns Promise<boolean> - True if the tool needs a follow-up generation
-   */
+  // Guild MCP tools always require follow-up generation because the model must present the remote tool's result.
   async requiresFollowUp(functionName: string, serverId?: number): Promise<boolean> {
     const resolvedFunctionName = resolveBuiltInToolAlias(functionName);
 
@@ -180,10 +141,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
     return tool?.requiresFollowUp ?? false;
   }
 
-  /**
-   * Execute a tool by name with given arguments and context
-   * Supports built-in tools and guild MCP functions
-   */
   async executeTool(toolName: string, args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     const startTime = Date.now();
     const resolvedToolName = resolveBuiltInToolAlias(toolName);
@@ -269,7 +226,8 @@ class ToolRegistryImpl implements ToolRegistryInterface {
     return this.executeBuiltInTool(resolvedToolName, resolvedArgs, context, startTime);
   }
 
-  /** Alias and opaque targets must be fixed before reviewing effects. */
+  // Aliases and opaque targets must be resolved before reviewing effects, so effect checks see the canonical tool
+  // name and real IDs.
   async prepareToolRequest(toolName: string, args: Record<string, unknown>, context: ToolContext) {
     return {
       name: resolveBuiltInToolAlias(toolName),
@@ -277,10 +235,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
     };
   }
 
-  /**
-   * @param args - Tool arguments
-   * @param startTime - Execution start time for metrics
-   */
   private async executeBuiltInTool(
     toolName: string,
     args: Record<string, unknown>,
@@ -371,18 +325,12 @@ class ToolRegistryImpl implements ToolRegistryInterface {
     return this.executionHistory.slice(-limit).reverse(); // Most recent first
   }
 
-  /**
-   * Clear the tool registry (useful for testing)
-   */
   clearRegistry(): void {
     this.tools.clear();
     this.executionHistory = [];
     log.info("Tool registry cleared");
   }
 
-  /**
-   * Get registry statistics
-   */
   getStats(): {
     totalTools: number;
     toolsByCategory: Record<string, number>;
@@ -407,11 +355,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
     };
   }
 
-  /**
-   * Validate tool structure and required properties
-   * @param tool - Tool to validate
-   * @throws Error if tool is invalid
-   */
   private validateTool(tool: Tool): void {
     if (!tool.name || tool.name.trim().length === 0) {
       throw new Error("Tool must have a non-empty name");
@@ -438,10 +381,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
     }
   }
 
-  /**
-   * Record a tool execution event in history
-   * @param event - Execution event to record
-   */
   private recordExecution(event: ToolExecutionEvent): void {
     this.executionHistory.push(event);
 

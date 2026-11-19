@@ -22,7 +22,6 @@ function vectorLiteral(vector: number[]): string {
 }
 
 class MemoryDecayRepository {
-  /** Scores only supplied candidates in one family, returning at most three above the cosine floor without querying when RAG is unavailable. */
   async scoreCandidates(
     queryVector: number[],
     family: string,
@@ -43,7 +42,6 @@ class MemoryDecayRepository {
     `;
   }
 
-  /** Returns live content only for supplied memories lacking this family, without querying when RAG is unavailable. */
   async findMissingVectors(candidates: MemoryCandidateIds, family: string): Promise<MissingMemoryVector[]> {
     if (!isRagAvailable() || (!candidates.serverMemoryIds.length && !candidates.personalMemoryIds.length)) return [];
     return await sql<MissingMemoryVector[]>`
@@ -57,7 +55,8 @@ class MemoryDecayRepository {
     `;
   }
 
-  /** Inserts one family once under the memory row lock, refusing deleted or changed content so an edit cannot receive a stale vector. */
+  // The memory row is locked with FOR UPDATE and verified against content so concurrent edits cannot receive a stale
+  // vector.
   async upsertVector(
     memory: MemoryRef,
     family: string,
@@ -82,7 +81,6 @@ class MemoryDecayRepository {
     });
   }
 
-  /** Deletes every vector family inside an editor's transaction only if content changed and the optional table exists. */
   async deleteVectorsForEdit(
     tx: TransactionSQL,
     memory: MemoryRef,
@@ -96,7 +94,6 @@ class MemoryDecayRepository {
     else await tx`DELETE FROM memory_embeddings WHERE personal_memory_id = ${memory.id}`;
   }
 
-  /** Counts supplied scored rows at most once per UTC day, lets reinforcement win concurrent turns, and returns threshold crossings after invalidating changed server snapshots. */
   async recordRecallDay(scored: MemoryCandidateIds, reinforced: MemoryCandidateIds): Promise<MemoryStageChange[]> {
     const result = await sql.transaction(async (tx) => {
       const changes: MemoryStageChange[] = [];

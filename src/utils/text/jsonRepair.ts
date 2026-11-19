@@ -1,78 +1,34 @@
-/**
- * Structural repair for JSON that a streaming provider truncated mid-payload.
- *
- * OpenAI-compatible endpoints deliver tool arguments as a token stream, so a proxy
- * timeout, a socket reset, or one missing delta leaves an argument string that never
- * closes its last string, object, or array. Plain `JSON.parse` rejects that payload
- * whole, which discards every key the model already emitted in full.
- *
- * The repair is structural: it drops the incomplete trailing fragment and closes the
- * containers still open. It never invents content and never edits a complete token, so the
- * result stays faithful to what the model generated. A value that was cut mid-token is
- * dropped rather than closed, because a fabricated ending hands the caller a value it cannot
- * tell apart from a real one. That applies to numbers as much as to strings: `12345` cut out
- * of `123456` is a different number, not a prefix a caller can recognise as damaged.
- *
- * A payload the scan cannot balance exactly returns `null`, so the caller keeps its
- * existing failure path.
- */
+// Incomplete trailing strings and numbers are dropped rather than closed, because OpenAI-compatible stream truncation
+// would otherwise invent values.
 
-/** Runaway-input ceiling; a larger argument blob is a caller bug, not a truncation. */
+// One-megabyte ceiling (1048576 chars) guards against runaway input, because larger argument blobs indicate a caller
+// bug rather than stream truncation.
 const MAX_REPAIR_INPUT_CHARS = 1048576;
-/** Bounds the retry loop so a pathological payload can never spin. */
+// Retry depth is capped at 64 passes so a pathological payload can never cause an unbounded loop.
 const MAX_REPAIR_PASSES = 64;
 
-/** Leading JSON number grammar, including the sign and exponent forms. */
 const NUMBER_PATTERN = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/;
 
-/**
- * What a frame accepts next. An array reuses `value` for both its first element and every
- * element after a separator, since an element needs no key in between.
- */
 type FrameState = "key" | "colon" | "value" | "separator";
 
 interface RepairFrame {
-  /** Index of the opening `{` or `[`. */
   start: number;
-  /** Object frames reject bare values, since every entry needs a key. */
   isObject: boolean;
   state: FrameState;
-  /** End offset of the last value that finished inside this frame. */
   completeEnd: number;
-  /**
-   * End offset of the last entry that finished, or the frame's opening delimiter when that
-   * entry is the frame's first. An entry ends where its value does, so this is the boundary
-   * a pending entry is dropped at: everything after it belongs to the entry that never
-   * arrived.
-   */
   lastEntryEnd: number;
-  /** End offset of the value being read, once that value is the one completing its entry. */
   entryCompletedEnd: number;
-  /** Whether any entry or key was read here, which is what separates `{}` from `{`. */
   hasAnyEntry: boolean;
-  /** Whether any value finished here, which is what makes the frame safe to close. */
   hasCompleteEntry: boolean;
 }
 
 interface RepairScan {
   frames: RepairFrame[];
-  /**
-   * Offset worth resuming from, which is either the offending token or, when the payload
-   * stopped partway through a value, the quote or keyword that value started at.
-   */
   breakOffset: number;
-  /**
-   * True when the break landed inside a value rather than on a token that cannot follow.
-   * Such a fragment is removable and everything before it is still structurally sound.
-   */
   stoppedInValue: boolean;
-  /**
-   * Offset just past a number that may have been the last token the stream delivered. A
-   * number cut at a delta boundary is indistinguishable from a complete one, so it is kept
-   * only when something follows it that proves it ended.
-   */
+  // End offset of a number at input end, since a stream-cut number looks syntactically complete and is kept only when
+  // a following token proves it finished.
   trailingNumberEnd: number | null;
-  /** True when the whole input was consumed, so the break is exhaustion, not malformation. */
   scanComplete: boolean;
 }
 
@@ -84,7 +40,6 @@ function closerMatchesOpening(opening: string, closer: string): boolean {
   return opening === "{" ? closer === "}" : closer === "]";
 }
 
-/** Literal keyword a character starts, or `null` when it starts no keyword. */
 function literalFor(char: string): string | null {
   if (char === "t") return "true";
   if (char === "f") return "false";
@@ -92,11 +47,6 @@ function literalFor(char: string): string | null {
   return null;
 }
 
-/**
- * Walks the payload once, recording for each frame the offset at which its last value
- * finished. Truncation repair is then a matter of re-emitting the input up to the
- * innermost such offset and closing whatever is still open.
- */
 function scanTruncatedJson(input: string): RepairScan {
   const frames: RepairFrame[] = [];
   let topLevelValueComplete = false;
@@ -123,10 +73,6 @@ function scanTruncatedJson(input: string): RepairScan {
     frame.state = "separator";
   };
 
-  /**
-   * Records where the entry that just finished closed. An array element is always an entry
-   * of its own; an object entry only counts once its value is in.
-   */
   const settleEntry = (frame: RepairFrame): void => {
     if (frame.state === "separator" || (!frame.isObject && frame.state === "value")) {
       frame.lastEntryEnd = Math.max(frame.lastEntryEnd, frame.entryCompletedEnd);
@@ -146,16 +92,11 @@ function scanTruncatedJson(input: string): RepairScan {
     scanComplete: false,
   });
 
-  /** Reports a value that never finished, whose fragment is removable from the input. */
   const stopInValue = (offset: number): RepairScan => {
     sawBreak = true;
     return { frames, breakOffset: offset, stoppedInValue: true, trailingNumberEnd: null, scanComplete: false };
   };
 
-  /**
-   * Any structural character after a number proves the number ended where its digits say,
-   * so only another value or the end of the input may follow one for it to stay ambiguous.
-   */
   const observesStructuralCharacter = (): void => {
     lastNumberEnd = null;
   };
@@ -349,22 +290,18 @@ function scanTruncatedJson(input: string): RepairScan {
   };
 }
 
-/** An object takes a value only after its colon; an array takes one between separators. */
 function isValuePositionAllowed(frame: RepairFrame): boolean {
   return frame.isObject ? frame.state === "value" : frame.state === "value" || frame.state === "separator";
 }
 
-/** True when the frame holds a finished value and nothing after it is still waiting. */
 function isFrameClean(frame: RepairFrame): boolean {
   return frame.hasCompleteEntry && !isEntryPending(frame);
 }
 
-/** True when the frame started an entry, or a key, and never received its value. */
 function isEntryPending(frame: RepairFrame): boolean {
   return frame.hasAnyEntry && frame.state === "value";
 }
 
-/** Re-emits everything before `end`, then appends the delimiters still open. */
 function assemblePrefix(input: string, end: number, delimiters: string[]): string {
   let prefix = input.slice(0, end);
   const lastChar = prefix[prefix.length - 1];
@@ -376,17 +313,6 @@ function assemblePrefix(input: string, end: number, delimiters: string[]): strin
   return `${prefix}${delimiters.join("")}`;
 }
 
-/**
- * Closes the containers the truncation left open, dropping the incomplete trailing
- * fragment.
- *
- * Closing starts at the deepest frame that can be closed without inventing anything, so a
- * frame holding a finished value survives even when the entry after it was cut off. Each
- * retry resumes from an earlier offset than the last, which is what makes the recursion
- * finite.
- *
- * @returns A balanced payload, or `null` when no frame holds a value to close around.
- */
 function closeOpenContainers(input: string, scan: RepairScan, passes: number): string | null {
   if (passes >= MAX_REPAIR_PASSES || scan.frames.length === 0) {
     return null;
@@ -453,7 +379,6 @@ function closeOpenContainers(input: string, scan: RepairScan, passes: number): s
   return finishRepair(input, scan, closingFrom, resumeOffset, passes);
 }
 
-/** Where a frame closes when the entry it is waiting on has to be dropped. */
 function emptyFrameResumeOffset(frame: RepairFrame): number {
   if (!frame.hasCompleteEntry) {
     return frame.start + 1;
@@ -461,10 +386,6 @@ function emptyFrameResumeOffset(frame: RepairFrame): number {
   return isEntryPending(frame) ? frame.lastEntryEnd : frame.completeEnd;
 }
 
-/**
- * Emits the payload up to `resumeOffset`, closes every frame below `closingFrom`, and
- * retries with the fragment dropped when the result still will not parse.
- */
 function finishRepair(
   input: string,
   scan: RepairScan,
@@ -490,7 +411,6 @@ function finishRepair(
   return closeOpenContainers(input, { ...scan, breakOffset: end, stoppedInValue: false }, passes + 1);
 }
 
-/** Parse probe for a repair candidate, so only a balanced payload is ever returned. */
 function tryParseCandidate(candidate: string): boolean {
   try {
     JSON.parse(candidate);
@@ -500,12 +420,7 @@ function tryParseCandidate(candidate: string): boolean {
   }
 }
 
-/**
- * Repairs a truncated JSON object so the keys that arrived complete survive.
- *
- * @returns The repaired object, or `null` when the payload is not repairable or was never
- *          truncated. Callers keep their existing failure path on `null`.
- */
+// Untruncated inputs also return `null` rather than parsing, so callers fall back to their existing failure path.
 export function tryRepairIncompleteJson(raw: string): Record<string, unknown> | null {
   if (!raw || raw.length > MAX_REPAIR_INPUT_CHARS) {
     return null;
@@ -533,13 +448,8 @@ export function tryRepairIncompleteJson(raw: string): Record<string, unknown> | 
   }
 }
 
-/**
- * Parses a complete JSON value that a model wrapped in reasoning tags, a code fence, or a sentence
- * of prose. Unlike `tryRepairIncompleteJson` it never closes a cut-off payload, so a caller that
- * acts on the value (a review verdict) cannot receive a fabricated ending.
- *
- * @returns The parsed value, or `undefined` when no candidate parses.
- */
+// Cut-off payloads are never repaired like `tryRepairIncompleteJson` does, so callers acting on parsed verdicts
+// cannot receive a fabricated ending.
 export function parseEmbeddedJson(text: string): unknown {
   const cleaned = text
     .replace(/<think>[\s\S]*?<\/think>/gi, "")

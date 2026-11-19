@@ -23,11 +23,6 @@ export async function stopBridges(): Promise<void> {
   await bridge?.close();
 }
 
-/**
- * Initializes optional integration bridges (currently: Matrix Appservice).
- * Silent no-op if credentials are not configured.
- *
- */
 export async function initBridges(client: Client): Promise<void> {
   assertBridgeTopology();
   log.section("Initializing Matrix Bridge...");

@@ -3,21 +3,6 @@ import { sql, withTransientDbRetry } from "../db/client";
 import { log } from "../misc/logger";
 import { serverRepository } from "@/utils/db/repositories/ServerRepository";
 
-/**
- * Lazy sync emojis for a guild - only fetches from Discord if needed
- *
- * This function implements lazy loading for emojis:
- * 1. Checks if emojis exist in DB for this server
- * 2. Checks if they were synced recently (within CACHE_DURATION)
- * 3. If stale or missing, fetches from Discord API and syncs to DB
- *
- * This avoids expensive startup fetches while ensuring fresh data.
- *
- * @param guild - Discord guild to sync emojis for
- * @param serverId - Internal database server ID
- * @param forceFetch - Force fetch even if cache is fresh (default: false)
- * @returns True if sync was performed, false if cache was fresh
- */
 export async function lazySyncGuildEmojis(guild: Guild, serverId: number, forceFetch = false): Promise<boolean> {
   try {
     const lastSync = await serverRepository.getEmojiSyncStatus(serverId);

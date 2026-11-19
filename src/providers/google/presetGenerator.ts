@@ -1,10 +1,3 @@
-/**
- * AI-Powered Preset Generation for TomoriBot
- * Uses a dual-agent approach: the provider's configured default handles Google
- * Search Grounding when web search is requested, then the user's configured model
- * generates the structured persona JSON.
- */
-
 import { GoogleGenAI, type Content, type GenerateContentConfig } from "@google/genai";
 import { GoogleStreamAdapter } from "@/providers/google/googleStreamAdapter";
 import { isOperatorActionableProviderError } from "@/utils/provider/providerErrorClassification";
@@ -61,9 +54,6 @@ interface CharacterSearchResult {
     | "UNKNOWN";
 }
 
-/**
- * Helper function to safely extract error message from unknown error types
- */
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
@@ -84,13 +74,8 @@ function isGoogleModelUnavailableError(errorMessage: string): boolean {
   );
 }
 
-/**
- * Localized `/persona generate` failure text for a Google error. The raw message only selects the
- * billing variant: the reply is public, and an endpoint can echo the request key in its error body,
- * so callers log the upstream text instead.
- * @param errorCode - The Google API error code (e.g., "400", "429")
- * @param rawMessage - Raw error message from Google API, used for classification only
- */
+// Public reply text omits rawMessage because an endpoint can echo the request key in error bodies, so rawMessage only
+// selects the billing variant.
 function createGoogleErrorMessage(
   errorType: string,
   errorCode: string | number | undefined,
@@ -142,13 +127,6 @@ function createGoogleErrorMessage(
   return `Error Code ${displayCode}: ${localizer(locale, `genai.google.${messageKey}`)}`;
 }
 
-/**
- * Search for character information using Google Search
- * Uses configured Gemini model with Google Search tool enabled
- *
- * @param locale - User's locale for error messages
- * @param context - Optional additional context for search
- */
 async function searchCharacterInfo(
   apiKey: string,
   characterName: string,
@@ -330,14 +308,6 @@ IMPORTANT: In any dialogue examples, use "{user}" ONLY where you would write the
   }
 }
 
-/**
- * Generate preset data from user prompts using Gemini with structured output
- * Uses single-agent approach for Gemini 3 models (with web search tools)
- * Uses dual-agent approach for other models (separate search + generation)
- *
- * @param locale - User's locale for error messages
- * @returns Promise<PresetGenerationResult> - Generated preset or error
- */
 export async function generatePresetFromPrompt(
   apiKey: string,
   params: GeneratePresetParams,

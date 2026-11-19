@@ -505,13 +505,13 @@ export interface EditEndpointModalContext {
   endpointUrl: string;
   apiStyles: string[];
   isPreset: boolean;
-  /** Undefined when the group has no text connection, which is the only kind the option affects. */
+  // Undefined signals that the group has no text connection, since VRAM handoff only affects text connections and the
+  // control is hidden otherwise.
   vramHandoffEnabled?: boolean;
 }
 
 export type EditEndpointModalField = "label" | "url" | "auth-token" | "behavior";
 
-/** The single Endpoint Behavior option value; the group is a checkbox list so later options can join it. */
 export const UNLOAD_DURING_COMFYUI_BEHAVIOR = "unload-during-comfyui";
 
 export function buildEditEndpointModalFieldId(field: EditEndpointModalField, nonce: string): string {
@@ -646,21 +646,8 @@ const MODEL_SELECTION_CAPABILITIES: readonly ProviderPanelCapability[] = [
 const TEXT_CAPABILITY_FLAGS = ["tools", "images", "structured"] as const;
 const CHAT_COMPAT_FLAGS = ["strict-roles", "prefix", "prefill", "verbatim-tools"] as const;
 
-/**
- * Strict role alternation and prefix completion describe the backend's parser, not the model. A flag
- * the request path either ignores or force-overrides is a control that cannot change anything, so it
- * is not offered.
- * Re-derive this at submit time too: a panel may outlive the answer.
- *
- * Verbatim tool calling is different in kind: the request path always honors it, but only
- * `CustomStreamAdapter` runs the parser that executes what the model writes, so offering it to a
- * curated provider would produce tool calls nothing consumes.
- *
- * Assistant prefill describes whether the model continues a trailing assistant turn, which the
- * prefill resolver reads for every provider. It is offered wherever the user can register a model
- * the seed does not cover (including OpenRouter codenames), and hidden where prefix completion
- * already makes the prefill native or where the seed is authoritative (Anthropic, Google, NovelAI).
- */
+// Flags are filtered because only CustomStreamAdapter parses verbatim tools, curated seeds lock alternation/prefill,
+// and submit must re-derive against stale panels.
 export function offeredChatCompatFlags(
   entryKind: "provider" | "endpoint",
   entryKey: string,
@@ -1087,10 +1074,8 @@ function buildModelLine(locale: string, model: ProviderPanelModel, routeNamespac
 
 const PROVIDER_NAME_PREVIEW_BUDGET = 600;
 
-/**
- * Each refit shrinks the body by the measured post-wrap overflow, so the fit converges; the bound
- * only stops a future formatter that wraps differently at each length from looping forever.
- */
+// Capped at 3 because each refit shrinks by measured post-wrap overflow and converges, guarding only against
+// non-monotonic future formatters.
 const ENTRY_FIT_ATTEMPTS = 3;
 
 function entryDisplayName(locale: string, entry: ProviderPanelEntry): string {
@@ -1167,12 +1152,8 @@ function buildEntryBody(
   return capEntryBody(locale, body, bodyLimit);
 }
 
-/**
- * Discord rejects a TextDisplay over 4000 characters, and the model list under each capability is
- * unbounded, so a catalog-sized provider made the whole panel fail with BASE_TYPE_BAD_LENGTH rather
- * than render. Trimming at a line boundary and stating the omitted count keeps the panel usable
- * without hiding models silently.
- */
+// Discord rejects TextDisplay over 4000 chars (BASE_TYPE_BAD_LENGTH) on unbounded model lists, so this trims at line
+// boundaries with an omitted count.
 function capEntryBody(locale: string, body: string, bodyLimit: number): string {
   const preview = buildTextPreview(body, bodyLimit);
   const footerKey = textPreviewFooterKey(preview);
@@ -1180,12 +1161,8 @@ function capEntryBody(locale: string, body: string, bodyLimit: number): string {
   return `${preview.text}\n-# ${localizer(locale, footerKey, textPreviewFooterVars(preview, locale))}`;
 }
 
-/**
- * Fits the entry body and its trailing guidance into what the rest of the panel leaves of Discord's
- * message-wide text-display total. A fixed body cap overflowed that total once a long locale's
- * guidance and a receipt shared the message. The fit is measured after the panel boundary wraps the
- * text, because each wrapped line gains a prefix the raw length does not count.
- */
+// Budget fits dynamically and measures after panel wrapping because long locale guidance plus receipts overflow fixed
+// caps and wrapped lines gain prefixes.
 function buildEntryContent(
   locale: string,
   entry: ProviderPanelEntry,

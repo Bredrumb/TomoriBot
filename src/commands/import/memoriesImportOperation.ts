@@ -22,13 +22,11 @@ import { readImportFile } from "@/utils/discord/importFileIntake";
 
 export type MemoryImportScope = "workspace" | "personal";
 
-/** Keeps this helper out of slash-command registration; the loader scans every file in a command directory. */
+// Excludes memories import helper from commandLoader discovery (scanned as command otherwise).
 export const isCommandEnabled = () => false;
 
-/**
- * Which ownership each portable memory `sourceType` belongs to. One table rather than a per-leaf list, because the
- * same source type has to be recognised as either the leaf's own format or the other ownership's.
- */
+// Unified ownership lookup rather than per-leaf lists so each import leaf can detect both its own memory format and
+// cross-ownership files.
 const MEMORY_IMPORT_SOURCE_OWNERSHIP: Record<string, MemoryTransferKind> = {
   workspace_memories: "workspace_memories",
   server_memories: "workspace_memories",
@@ -38,14 +36,8 @@ const MEMORY_IMPORT_SOURCE_OWNERSHIP: Record<string, MemoryTransferKind> = {
 
 export type MemoryImportSourceClassification = "same-ownership" | "cross-ownership" | "unsupported";
 
-/**
- * Classifies a file against the leaf that is reading it.
- *
- * A memory file carries no destination of its own, so a file from the other ownership is importable here once the
- * reader has been told that its memories change ownership. A v1 combined `server` or `personal` export is not: it
- * carries configuration beside its memories, and a partial apply would be worse than a refusal, exactly as the
- * config leaves refuse the mirror case.
- */
+// Combined v1 server/personal files are refused because partial applies are unsafe, whereas cross-ownership memory
+// files only require ownership notice.
 export function classifyMemoryImportSource(
   kind: MemoryTransferKind,
   sourceType: string,
@@ -85,11 +77,8 @@ const defaultDependencies: MemoryImportDependencies = {
   replyInfoEmbed,
 };
 
-/**
- * The upload operation shared by `/import memories` and `/import personal memories`. It validates the file and
- * stores the parsed result behind an actor-bound nonce. The routed actions read that snapshot, and only
- * `memory-confirm` writes, so nothing here resolves a destination or a strategy.
- */
+// Validated snapshots stay behind an actor-bound nonce without resolving destination or strategy, because only
+// memory-confirm writes.
 export async function startMemoryImport(
   interaction: ChatInputCommandInteraction,
   locale: string,

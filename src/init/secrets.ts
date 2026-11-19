@@ -5,12 +5,8 @@ import { keyManager } from "@/utils/security/keyManager";
 import type { AppEnvironment } from "@/types/config";
 import { readApiKeyInactivityDays } from "@/utils/security/apiKeyRetention";
 
-/**
- * Loads the selected secret source before consumers initialize database connections or keys.
- *
- * Must be called before any module that reads credentials from process.env.
- *
- */
+// Secret loading must run before any module reads credentials from process.env because it assigns secrets into
+// process.env.
 export async function loadSecrets(environment: AppEnvironment): Promise<void> {
   log.section("Loading Application Secrets...");
   const secrets = await getAppSecrets();

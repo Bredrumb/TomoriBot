@@ -116,12 +116,8 @@ describe("handleCommands", () => {
   });
 });
 
-/**
- * Routes a real registered command through the dispatcher rather than calling the handler
- * directly. This is the seam a direct-call test cannot see: the loader type accepts a handler
- * that declares fewer parameters, so a one-argument handler assigns cleanly and then receives
- * the client where it expects the interaction.
- */
+// Must dispatch through the router instead of calling the handler directly because TypeScript lets a one-arg handler
+// compile while receiving client first.
 describe("autocomplete dispatch reaches its handler with the interaction", () => {
   it("passes the interaction, not the client, to a registered autocomplete handler", async () => {
     const persona = {

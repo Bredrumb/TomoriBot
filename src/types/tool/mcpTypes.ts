@@ -1,19 +1,8 @@
-/**
- * MCP (Model Context Protocol) Type Definitions
- * Comprehensive TypeScript interfaces for MCP server integration
- * Replaces 'any' declarations with proper type safety
- */
-
 import type { ToolResult } from "@/types/tool/interfaces";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
-/** Guild results use the SDK envelope validated at receipt. */
 export type MCPServerResponse = CallToolResult;
 
-/**
- * MCP tool result with enhanced typing
- * Specific result format for MCP function executions
- */
 export interface TypedMCPToolResult extends ToolResult {
   data?: {
     source: "mcp";
@@ -39,19 +28,6 @@ export interface TypedMCPToolResult extends ToolResult {
   };
 }
 
-/**
- * Guild MCP connection state : represents an active remote MCP connection
- * for a specific guild. Managed by GuildMcpManager's connection pool.
- *
- * @property guildMcpId - Database row PK (guild_mcp_servers.guild_mcp_id)
- * @property serverId - TomoriBot internal server_id (FK to servers table)
- * @property name - Human-readable server name (unique per guild)
- * @property client - MCP SDK Client instance for this connection
- * @property callableTool - Google GenAI CallableTool from mcpToTool()
- * @property functionNames - Discovered tool names after listTools()
- * @property connectedAt - Epoch ms when the connection was established
- * @property lastUsedAt - Epoch ms of last tool execution (for TTL eviction)
- */
 export interface GuildMCPConnection {
   guildMcpId: number;
   serverId: number;
@@ -63,11 +39,6 @@ export interface GuildMCPConnection {
   lastUsedAt: number;
 }
 
-/**
- * Result from GuildMcpManager.testConnection() : used by MCP registration surfaces
- * to validate a remote MCP server before persisting the registration.
- */
-/** The `WWW-Authenticate` parameters of a 401 that MCP sign-in discovery starts from. */
 export interface McpAuthorizationChallenge {
   resourceMetadataUrl?: string;
   scope?: string;
@@ -78,6 +49,5 @@ export interface GuildMCPTestResult {
   toolCount: number;
   functionNames: string[];
   error?: string;
-  /** Present when the server answered 401, which may be a request to sign in. */
   unauthorized?: McpAuthorizationChallenge;
 }

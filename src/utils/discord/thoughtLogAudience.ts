@@ -4,7 +4,6 @@ import { getChannelPrivacyReason } from "@/utils/discord/channelPrivacy";
 
 interface MirrorRefusal {
   reason: string;
-  /** The audience could not be read, which points at a cache gap rather than a configured choice. */
   undetermined?: boolean;
 }
 

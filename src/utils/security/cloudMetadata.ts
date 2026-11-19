@@ -1,24 +1,8 @@
 import { isIP } from "node:net";
 import { getEmbeddedIpv4 } from "@/utils/security/embeddedIpv4";
 
-/**
- * Cloud instance-metadata and link-local addresses that must NEVER be
- * reachable through any user-driven fetch, regardless of runtime environment
- * (`RUN_ENV`) or either private-network opt-in (`ALLOW_PRIVATE_NETWORK`, `FETCH_URL_ALLOW_PRIVATE_NETWORK`).
- *
- * These endpoints are the primary SSRF credential-theft target: the cloud
- * Instance Metadata Service (AWS/Azure/GCP all expose it at `169.254.169.254`)
- * hands out short-lived cloud credentials to anything that can reach it. There
- * is no legitimate `fetch_url`/custom-endpoint use case for them, so this
- * denylist is always enforced as a floor beneath every other network guard;
- * it cannot be relaxed by the development auto-relax or the operator opt-in.
- *
- * @param address - An already DNS-resolved IP address (IPv4 or IPv6 literal).
- *   Hostnames must be resolved by the caller first; this returns false for any
- *   non-IP input.
- * @returns True when the address is a cloud-metadata/link-local endpoint that
- *   must be blocked unconditionally.
- */
+// Unconditional SSRF floor never relaxed by private network opt-ins; caller must DNS-resolve first because any non-IP
+// hostname returns false.
 export function isCloudMetadataAddress(address: string): boolean {
   const normalized = address.trim().toLowerCase();
   const family = isIP(normalized);

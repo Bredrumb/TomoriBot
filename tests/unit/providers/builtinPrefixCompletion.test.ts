@@ -9,7 +9,6 @@ import { applyAssistantPrefixCompletion, providerRequiresPrefixCompletion } from
 // the safety net even with the column unread), byte-identical to their previous inline blocks,
 // while a non-prefix provider with the column OFF emits no prefix.
 
-/** Reproduce the adapter seam: build a representative body and apply the resolved prefix flag. */
 function buildBody(
   provider: string,
   llmFlag: boolean,

@@ -5,12 +5,6 @@ import { encryptApiKey } from "@/utils/security/crypto";
 import { saveSpeechVoiceBinding, loadSpeechVoiceBinding } from "@/utils/db/repositories/SpeechRepository";
 import { importAlterPreset } from "@/utils/persona/importAlterPreset";
 import { embedMetadataInPNG, extractMetadataFromPNG } from "@/utils/image/pngMetadata";
-/**
- * Regression harness - persona preset imports.
- *
- * Covers compatibility with Tomori preset exports created before the schema
- * normalization branch moved trigger_words out of server config tables.
- */
 import { afterAll, beforeAll, describe, expect, it, spyOn } from "bun:test";
 import { UNPAIRED_SAMPLE_DIALOGUE_SENTINEL, type PresetExportData } from "@/types/preset/presetExport";
 import { presetRepository, personaRepository, personaSpriteRepository } from "@/utils/db/repositories";

@@ -4,19 +4,16 @@ import type { TomoriState } from "@/types/db/schema";
 import { findLastActivePersona } from "@/utils/discord/personaTurnDetection";
 
 export interface FallbackPersonaResolutionOptions {
-  /** Personas the actor may currently trigger, already filtered by whitelist and personal spotlight. */
   availablePersonas: TomoriState[];
-  /** Every persona in the workspace, needed to attribute a turn that the actor may no longer trigger. */
+  // Unfiltered workspace personas stay separate from availablePersonas so turn detection does not skip past an
+  // ineligible speaker to an older turn.
   allPersonas: TomoriState[];
   tomoriState: TomoriState;
-  /** Thread parent when the command ran in a thread, otherwise the channel itself. */
   effectiveChannelId: string;
   personalAutoTriggerPersonaId?: number | null;
   clientUserId?: string;
-  /**
-   * Invoked only when more than one persona is eligible. Reading recent history costs a Discord
-   * REST call, and with a single eligible persona all three tiers resolve to it anyway.
-   */
+  // Lazy callback skips the Discord REST history fetch when fewer than two personas are eligible, because all tiers
+  // resolve identically.
   fetchRecentMessages: () => Promise<Message[]>;
 }
 
@@ -49,11 +46,6 @@ function getChannelAutoTriggerPersona(
     : resolveById(serverAutoTriggerPersonaId);
 }
 
-/**
- * Resolves which persona an unqualified command should act as, in the order most recent speaker,
- * then the channel's auto-trigger persona, then the main persona. A last speaker the actor may not
- * currently trigger falls through rather than being returned, so eligibility is never widened here.
- */
 export async function resolveFallbackPersona(options: FallbackPersonaResolutionOptions): Promise<TomoriState | null> {
   const {
     availablePersonas,

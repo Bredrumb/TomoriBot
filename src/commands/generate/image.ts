@@ -15,13 +15,6 @@ import { redactProviderDetail, reportProviderFailure } from "@/utils/provider/pr
 import { buildRestrictedErrorDetail } from "@/utils/discord/stream/errorUi";
 import { createProviderToolFailure } from "@/utils/provider/providerToolFailure";
 import { providerContentRejectionSchema } from "@/utils/provider/providerErrorClassification";
-/**
- * Image Generation Command
- * Allows users to generate AI images using the configured provider
- * Supports manual prompting and automatic scene visualization
- * Supports text-to-image and image-to-image generation with up to 3 reference images
- * (Discord modal limit: 5 components total)
- */
 
 import {
   MessageFlags,
@@ -102,9 +95,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 
 export const autocomplete = createGenerationModelAutocomplete("image");
 
-/**
- * @param diffusionModelId - Database ID of the diffusion model
- */
 async function getDiffusionModelCodename(diffusionModelId: number): Promise<string> {
   const model = await llmModelRepo.loadDiffusionModelById(diffusionModelId);
 
@@ -115,10 +105,6 @@ async function getDiffusionModelCodename(diffusionModelId: number): Promise<stri
   return model.codename;
 }
 
-/**
- * Convert a Discord attachment to base64 format for image generation API
- * @returns Object with mimeType and base64 data
- */
 async function convertAttachmentToBase64(attachment: APIAttachment): Promise<{ mimeType: string; data: string }> {
   if (!attachment.content_type?.startsWith("image/")) {
     throw new Error(`Invalid image type: ${attachment.content_type}`);
@@ -201,12 +187,8 @@ type StandardImageRoute =
   | { kind: "native"; provider: NonNullable<Awaited<ReturnType<typeof resolveNativeImageGenerationCapability>>> }
   | { kind: "openrouter" | "google" | "zai" | "nvidia" };
 
-/**
- * Picks the transport that runs a standard image request, or null when the provider has none.
- *
- * The pre-modal refusal and the modal-submit dispatcher both switch on this one value, so a
- * provider cannot pass the check and then reach a dispatcher branch that does not exist.
- */
+// Pre-modal validation and modal-submit dispatch both switch on this single route so providers cannot pass validation
+// and miss dispatch.
 async function resolveStandardImageRoute(creds: ImageCredentials): Promise<StandardImageRoute | null> {
   if (creds.customEndpoint) {
     return { kind: "custom", endpoint: creds.customEndpoint };
@@ -229,9 +211,6 @@ async function resolveStandardImageRoute(creds: ImageCredentials): Promise<Stand
   }
 }
 
-/**
- * Execute the image generation command
- */
 export async function execute(
   client: Client,
   interaction: ChatInputCommandInteraction,

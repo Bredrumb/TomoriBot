@@ -134,7 +134,7 @@ async function patchGuildMemberSelf(
   }
 }
 
-/** A null data URI removes the avatar. */
+// Sentinel value: passing null for avatarDataUri removes the guild bot avatar rather than leaving it unchanged.
 export function setGuildBotAvatar(
   guildId: string,
   avatarDataUri: string | null,

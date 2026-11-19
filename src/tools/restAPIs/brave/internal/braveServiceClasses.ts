@@ -1,17 +1,5 @@
-/**
- * Internal Brave Search service classes.
- *
- * These are NOT exposed to the LLM directly. They are consumed by
- * `webSearch/braveEngine.ts` which routes the unified `web_search(query, category)`
- * tool call to the appropriate per-category implementation.
- *
- * Placed under `internal/` so the auto-discovery glob in `toolInitializer.ts`
- * (which only scans files matching `braveTools.ts` at the top of `restAPIs/brave/`)
- * does NOT pick these up as LLM-visible tools.
- *
- * Class names are prefixed with `Internal` to make their non-LLM-visible status
- * explicit at every call site.
- */
+// Classes live under internal/ so toolInitializer auto-discovery does not expose them to the LLM; only
+// webSearch/braveEngine routes to them.
 
 import { BaseTool, type ToolContext, type ToolResult } from "../../../../types/tool/interfaces";
 import { log } from "../../../../utils/misc/logger";
@@ -19,10 +7,6 @@ import { sendToolNotice } from "../../../../utils/discord/toolProgressNotice";
 import { brave_web_search, brave_image_search, brave_video_search, brave_news_search } from "../toolImplementations";
 import { getSearchNoticeTitleVars } from "@/tools/webSearch/categoryMetadata";
 
-/**
- * Abstract base for internal Brave search adapters.
- * Provides common availability/serverId/result-conversion helpers.
- */
 abstract class BaseInternalBraveSearchTool extends BaseTool {
   category = "search" as const;
   requiresFeatureFlag = "web_search";
@@ -32,23 +16,14 @@ abstract class BaseInternalBraveSearchTool extends BaseTool {
     return true;
   }
 
-  /**
-   * Check if web search functionality is enabled in Tomori config.
-   */
   protected isEnabled(context: ToolContext): boolean {
     return context.tomoriState.config.web_search_enabled;
   }
 
-  /**
-   * Helper to extract server ID from tool context.
-   */
   protected getServerId(context: ToolContext): number | undefined {
     return context.tomoriState?.server_id;
   }
 
-  /**
-   * Pass-through conversion (kept for parity with the previous public-facing class).
-   */
   protected convertToToolResult(result: ToolResult): ToolResult {
     return result;
   }

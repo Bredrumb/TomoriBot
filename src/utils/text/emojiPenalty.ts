@@ -1,11 +1,3 @@
-/**
- * Emoji repetition penalty system to prevent excessive custom emoji usage
- * Analyzes bot's recent messages and injects guidance when threshold is exceeded
- * NOTE: Only counts custom server emojis (:name:), NOT Unicode emojis (😊, 👍)
- *
- * EMOJI_PENALTY_ENABLED and EMOJI_UNIQUE_ENABLED switch each behavior off (default: on).
- */
-
 import type { StructuredContextItem } from "../../types/misc/context";
 import { ContextItemTag } from "../../types/misc/context";
 import { extractCustomEmojis, filterCustomEmojis } from "./emojiHelper";
@@ -17,17 +9,11 @@ const EMOJI_PENALTY_MAX_EMOJIS = 1;
 const EMOJI_UNIQUE_LOOKBACK_MESSAGES = 5;
 
 interface EmojiPenaltyConfig {
-  /** Whether the emoji penalty system is enabled */
   readonly enabled: boolean;
-  /** Number of recent bot messages to analyze */
   readonly lookbackCount: number;
-  /** Maximum total emojis allowed across the lookback window */
   readonly maxEmojis: number;
 }
 
-/**
- * @returns The penalty thresholds, with the on/off switch read from EMOJI_PENALTY_ENABLED
- */
 function loadEmojiPenaltyConfig(): EmojiPenaltyConfig {
   return {
     enabled: process.env.EMOJI_PENALTY_ENABLED !== "false",
@@ -36,20 +22,12 @@ function loadEmojiPenaltyConfig(): EmojiPenaltyConfig {
   };
 }
 
-/**
- * Extract text content from a StructuredContextItem's parts
- */
 function extractTextFromContextItem(item: StructuredContextItem): string {
   const textParts = item.parts.filter((part) => part.type === "text");
 
   return textParts.map((part) => part.text).join(" ");
 }
 
-/**
- * Analyze recent bot messages for excessive emoji usage
- * @param config - Optional threshold configuration (loads from env if not provided)
- * @returns True if emoji usage exceeds threshold, false otherwise
- */
 function shouldApplyEmojiPenalty(contextItems: StructuredContextItem[], config?: EmojiPenaltyConfig): boolean {
   const penaltyConfig = config ?? loadEmojiPenaltyConfig();
 
@@ -88,11 +66,6 @@ function shouldApplyEmojiPenalty(contextItems: StructuredContextItem[], config?:
   return shouldTrigger;
 }
 
-/**
- * Generate an emoji penalty message to inject into context
- * This message appears as natural user guidance to reduce emoji usage
- * @param speakerLabel - Optional speaker label for the directive subject
- */
 function buildEmojiPenaltyText(speakerLabel?: string | null): string {
   const normalizedLabel = speakerLabel?.trim();
   return normalizedLabel
@@ -112,15 +85,10 @@ export function getEmojiPenaltyDirective(
 }
 
 interface UniqueEmojiConfig {
-  /** Whether unique emoji enforcement is enabled */
   readonly enabled: boolean;
-  /** Number of recent bot messages to track for unique emojis */
   readonly lookbackCount: number;
 }
 
-/**
- * @returns The unique-emoji lookback, with the on/off switch read from EMOJI_UNIQUE_ENABLED
- */
 function loadUniqueEmojiConfig(): UniqueEmojiConfig {
   return {
     enabled: process.env.EMOJI_UNIQUE_ENABLED !== "false",
@@ -128,11 +96,6 @@ function loadUniqueEmojiConfig(): UniqueEmojiConfig {
   };
 }
 
-/**
- * Get set of custom emojis used in recent bot messages
- * @param config - Optional configuration (loads from env if not provided)
- * @returns Set of custom emoji strings used in recent messages (e.g., ":tomori:", ":pepehands:")
- */
 function getRecentlyUsedCustomEmojis(contextItems: StructuredContextItem[], config?: UniqueEmojiConfig): Set<string> {
   const uniqueConfig = config ?? loadUniqueEmojiConfig();
 
@@ -167,10 +130,6 @@ function getRecentlyUsedCustomEmojis(contextItems: StructuredContextItem[], conf
   return usedEmojis;
 }
 
-/**
- * Removes any custom emojis that were already used in recent bot messages
- * @returns Filtered text with duplicate custom emojis removed
- */
 export function filterDuplicateCustomEmojis(generatedText: string, contextItems: StructuredContextItem[]): string {
   const recentlyUsed = getRecentlyUsedCustomEmojis(contextItems);
 

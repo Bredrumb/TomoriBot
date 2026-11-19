@@ -1,18 +1,3 @@
-/**
- * Selector-style tests for promptWithPaginatedModal (Phase 2 of the
- * paginated-modal-selector-consistency plan).
- *
- * Confirms two things at the `>25`-option boundary:
- *   - The DEFAULT (legacy) style is unchanged: a numbered page-button embed.
- *   - selectorStyle:"componentsV2" renders the shared range-selector container
- *      (range/previous/cancel/next buttons), carries IsComponentsV2, never emits
- *      legacy embeds, and marks the interaction for the Phase 1 collision guard.
- *
- * Mock-free (real interactionCore), so the official runner batches this into the
- * shared unit lane where interactionCore is never mocked. Each case ends the await
- * loop by rejecting awaitMessageComponent, so no modal is ever shown.
- */
-
 import { beforeAll, describe, expect, it } from "bun:test";
 import { MessageFlags } from "discord.js";
 import type { ChatInputCommandInteraction } from "discord.js";
@@ -28,7 +13,6 @@ interface RecordedCall {
   payload: Record<string, unknown>;
 }
 
-/** Builds a modal with `count` select options so the paginated path triggers. */
 function makeOptions(count: number, selectorStyle?: "legacy" | "componentsV2"): ModalOptions {
   return {
     modalCustomId: "test_modal",
@@ -47,11 +31,6 @@ function makeOptions(count: number, selectorStyle?: "legacy" | "componentsV2"): 
   };
 }
 
-/**
- * Fake unacknowledged interaction. reply() records its payload; fetchReply()
- * returns a message whose awaitMessageComponent rejects, ending the selector loop
- * with a timeout before any modal opens.
- */
 function makeInteraction(): { interaction: ChatInputCommandInteraction; calls: RecordedCall[] } {
   const calls: RecordedCall[] = [];
   const message = {
@@ -83,10 +62,6 @@ function makeInteraction(): { interaction: ChatInputCommandInteraction; calls: R
   return { interaction, calls };
 }
 
-/**
- * Recursively collects every custom id from a component tree. Handles both plain
- * Components V2 data (`customId`) and discord.js builder JSON (`custom_id`).
- */
 function collectCustomIds(node: unknown): string[] {
   if (Array.isArray(node)) return node.flatMap(collectCustomIds);
   if (node && typeof node === "object") {

@@ -1,8 +1,3 @@
-/**
- * Command loader utility for Tomori Bot
- * Loads command modules from the commands directory structure
- * Supports root commands, flat subcommands, and subcommand groups via folder structure
- */
 import path from "node:path";
 import { log } from "../misc/logger";
 import {
@@ -28,9 +23,6 @@ import {
 export const ROOT_COMMAND_EXECUTION_KEY = "__root__";
 type RootCommandBuilder = SlashCommandBuilder | SlashCommandOptionsOnlyBuilder;
 
-/**
- * Type for the command execution function
- */
 export type CommandExecuteFunction = (
   client: Client,
   interaction: ChatInputCommandInteraction,
@@ -38,40 +30,21 @@ export type CommandExecuteFunction = (
   locale: string,
 ) => Promise<void>;
 
-/**
- * Map structure for the command execution functions
- * First level: category name (e.g., 'config')
- * Second level: subcommand path
- *   - For root commands: ROOT_COMMAND_EXECUTION_KEY
- *   - For flat subcommands: 'subcommand' (e.g., 'model')
- *   - For grouped subcommands: 'group.subcommand' (e.g., 'apikey.set')
- */
+// Outer keys are categories and inner keys use `ROOT_COMMAND_EXECUTION_KEY`, `subcommand`, or `group.subcommand`
+// because callers look up handlers by path.
 export type CommandExecutionMap = Map<string, Map<string, CommandExecuteFunction>>;
 export type CommandAutocompleteFunction = (client: Client, interaction: AutocompleteInteraction) => Promise<void>;
 export type CommandAutocompleteMap = Map<string, Map<string, CommandAutocompleteFunction>>;
 
-/**
- * One row of the command catalog (the full universe of registered commands).
- * `commandName` is the space-joined full path: identical to what
- * `handleCommands.ts` records as `stat_counters.metric_key` for `command_used`,
- * so the catalog JOINs directly against the stat table with no remapping.
- */
+// Space-joined `commandName` must match `stat_counters.metric_key` recorded by `handleCommands` so the catalog JOINs
+// directly with `command_used` stats.
 export interface CommandCatalogEntry {
-  /** Space-joined full path, e.g. "update", "config humanizer", "server welcome-channel set". */
   commandName: string;
-  /** Top-level command/category name (first path segment). */
   category: string;
 }
 
-/**
- * Map for command cooldowns (category -> duration)
- */
 export type CommandCooldownMap = Map<string, number>;
 
-/**
- * Result shape produced by {@link loadCommandData}: the Discord registration
- * payload plus the runtime execution/cooldown lookup maps.
- */
 export type LoadCommandDataResult = {
   registrationData: ApplicationCommandData[];
   executionMap: CommandExecutionMap;
@@ -271,11 +244,6 @@ async function getCommandFiles(directory: string): Promise<string[]> {
 // Note: Individual subcommand restrictions are no longer needed.
 // Guild-only commands are now in the "server" category which is entirely guild-restricted.
 
-/**
- * Helper function to apply localizations to a command/subcommand and its options/choices
- * @param subcommandPath - Optional subcommand path (flat: 'name', grouped: 'group.name')
- * @param availableLocales - Array of available locale codes
- */
 function applyCommandLocalizations(
   configuredCommand: RootCommandBuilder | SlashCommandSubcommandBuilder,
   categoryName: string,
@@ -378,22 +346,8 @@ function applyRootCommandRestrictions(command: RootCommandBuilder, commandModule
   }
 }
 
-/**
- * Resolves the description key for a directory-backed root, or an empty string to keep the
- * conventional `commands.<root>.description`.
- *
- * `/legal` is the only root whose leaf set depends on the environment, and its wording names the
- * documents those leaves link to. Advertising terms and a privacy policy on a self-hosted bot that
- * registers neither would promise two commands the client cannot resolve, so its wording follows
- * the leaf set rather than re-deriving the environment decision.
- *
- * Scoped by name rather than derived from "some leaves were gated out", because other roots narrow
- * for unrelated reasons: `/reset` lists two direct leaf files while only one of them is a
- * registered leaf, the other being a gate-disabled operation module.
- *
- * @param leafFileNames - Direct subcommand files found in the root's directory
- * @param enabledLeafFileNames - The subset whose gate returned true
- */
+// Only `legal` swaps its root description when leaves are gated because other roots (such as `reset`) gate leaves for
+// unrelated reasons.
 function resolveRootDescriptionKey(
   categoryName: string,
   leafFileNames: readonly string[],
@@ -423,37 +377,10 @@ export async function isCommandModuleEnabledForRegistration(
   }
 }
 
-/**
- * Loads all command modules, builds registration data and command maps
- * @returns Object containing command data for registration and execution maps
- */
-/**
- * Single-flight cache for the in-progress (or completed) command load.
- *
- * Both the startup registration path (`clientReady/01_registercommands.ts`)
- * and the lazy first-interaction path (`interactionCreate/handleCommands.ts`)
- * call `loadCommandData()`. Without this guard those two callers could run
- * `loadCommandDataUncached()` concurrently, each independently `await import()`-ing
- * the same command modules. Because ES module evaluation interleaves across
- * `await` points, the second loader could observe a command module that the
- * first had begun but not finished evaluating, reading an export binding while
- * it was still in its Temporal Dead Zone: surfacing as
- * "Cannot access 'configureSubcommand' before initialization" and silently
- * skipping that command. Memoizing the promise makes every caller await one
- * shared evaluation, eliminating the race.
- */
+// Single-flight promise is needed because concurrent `import()` calls from startup and first interaction can read
+// half-evaluated ES modules in TDZ.
 let cachedCommandDataPromise: Promise<LoadCommandDataResult> | null = null;
 
-/**
- * Loads and caches all command data behind a single shared promise.
- *
- * Concurrent callers receive the same in-flight promise; later callers receive
- * the already-resolved result. A catastrophic load (empty execution map) or a
- * rejection is NOT cached, so a subsequent call can retry instead of locking the
- * bot into a permanently "dead" command state.
- *
- * @returns The registration payload and runtime execution/cooldown maps.
- */
 export function loadCommandData(): Promise<LoadCommandDataResult> {
   if (!cachedCommandDataPromise) {
     cachedCommandDataPromise = loadCommandDataUncached()
@@ -475,32 +402,12 @@ export function loadCommandData(): Promise<LoadCommandDataResult> {
   return cachedCommandDataPromise;
 }
 
-/**
- * Drops the memoized load so the next caller re-imports and re-gates every command module.
- *
- * A module-level `isCommandEnabled` gate reads the environment, so a test that has to observe
- * both environments would otherwise read whichever one happened to run first. Nothing in the
- * running bot calls this: production loads the graph exactly once.
- */
+// Test-only cache reset so tests switching environments can re-run module-level `isCommandEnabled` gates, since
+// production loads commands once.
 export function resetCommandDataCache(): void {
   cachedCommandDataPromise = null;
 }
 
-/**
- * Flattens the execution map into the full list of registered command paths.
- *
- * Produces exactly the space-joined format `handleCommands.ts` records for the
- * `command_used` metric, so the resulting catalog JOINs 1:1 against
- * `stat_counters.metric_key`:
- *   - root command      → `category`                     (e.g. "update")
- *   - flat subcommand   → `category subcommand`          (e.g. "config humanizer")
- *   - grouped subcommand→ `category group subcommand`    (e.g. "server welcome-channel set")
- *
- * This is the single source of truth for "which commands exist", derived from the
- * loaded modules (never a hardcoded list), so the persisted catalog cannot drift.
- *
- * @returns One {@link CommandCatalogEntry} per registered (sub)command.
- */
 export function getCommandCatalogEntries(executionMap: CommandExecutionMap): CommandCatalogEntry[] {
   const entries: CommandCatalogEntry[] = [];
 
@@ -546,14 +453,8 @@ async function loadCommandDataUncached(): Promise<LoadCommandDataResult> {
       // Get all items (files and directories) in this category
       const items = await readVisibleDirectory(categoryDir);
 
-      /**
-       * Direct subcommand files that passed their own gate, keyed by absolute path.
-       *
-       * Collected before the category builder exists because the root's description depends on
-       * which leaves survive, and a builder's description cannot be changed once applied. Each
-       * file is gated exactly once here; the loop below reuses these modules rather than
-       * re-importing and re-gating them.
-       */
+      // Leaves are collected before building the root because its description depends on which leaves survive and
+      // cannot change once applied.
       const enabledLeafModules = new Map<string, LoadedCommandModule>();
       const leafFileNames: string[] = [];
 

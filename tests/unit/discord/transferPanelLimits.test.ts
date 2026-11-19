@@ -59,7 +59,7 @@ function buttonIds(value: unknown): string[] {
   return ids;
 }
 
-/** Stricter than the shared check, which only inspects a markdown fence body. */
+// Not redundant with expectSafePanelPayload because the shared helper only inspects markdown fence bodies.
 function expectNoAdjacentBacktickRun(payload: unknown, label: string): void {
   for (const content of collectTextDisplays(payload)) {
     expect(content, `${label} leaves an adjacent backtick run`).not.toMatch(/`{2,}/u);

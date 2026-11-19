@@ -94,10 +94,8 @@ import type {
 } from "@/modules/natural-nudges/discord/operations";
 
 export interface ConfigScope {
-  /** Guild snowflake in a guild, DM recipient snowflake otherwise: the workspace key every absorbed command already uses. */
   serverDiscId: string;
   guildId: string | null;
-  /** `servers` primary key, needed by telemetry and never the snowflake. */
   internalServerId: number | null;
   userId: number;
   actor: ConfigActor;
@@ -118,7 +116,6 @@ export interface ConfigPersonaMemoryView {
 export interface ConfigBehaviorGeneralView {
   systemPrompt: string | null;
   responsePrefill: string | null;
-  /** Resolved against the server's current text model and thinking level, for the status line. */
   prefillBlocker: PrefillBlocker | null;
   prefillModelName: string;
   contextNote: string | null;
@@ -126,7 +123,6 @@ export interface ConfigBehaviorGeneralView {
   humanizer: HumanizerSettings;
   messageFetchLimit: number;
   timezoneOffset: number;
-  /** Name of the active SillyTavern preset, which takes over the system prompt; absent when none. */
   activeStPresetName?: string | null;
 }
 
@@ -230,11 +226,8 @@ export interface ConfigRouteDependencies {
     interaction: GlobalRoutableInteraction | ChatInputCommandInteraction,
     forceRefresh?: boolean,
   ): Promise<ConfigScope | null>;
-  /**
-   * Most recent workspace read failure, which is what separates a transient scope miss from a setup
-   * gap. The cache reader behind it also reports the post-restart grace window, so an empty read
-   * taken while connections are still settling is never presented as "not set up".
-   */
+  // Also reports the post-restart grace window behind empty cache reads, so settling connections are not misreported
+  // as an unconfigured workspace.
   getLastDbError?(serverDiscId: string): { message: string; timestamp: number } | null;
   getPersonaAvatarData(
     interaction: GlobalRoutableInteraction | ChatInputCommandInteraction,
@@ -392,22 +385,13 @@ export type ConfigMissingScopeKey =
   | "commands.config.panel.not_setup_dm"
   | "commands.config.panel.unavailable";
 
-/** The command a panel that has fallen behind the workspace is re-run with. */
 const CONFIG_PANEL_COMMAND = "/config";
 
-/** The interaction fields this copy depends on, so component and command callers share one helper. */
 interface ConfigScopeInteraction {
   guildId: string | null;
   user: { id: string };
 }
 
-/**
- * Chooses the copy for a `/config` interaction whose workspace scope could not be resolved.
- *
- * An empty workspace read has two causes that need opposite answers. A workspace that never ran
- * `/setup` needs the setup instruction, while a failed read leaves the setup state unknown, so
- * sending an admin to `/setup` there would be a false diagnosis of a transient fault.
- */
 export function missingScopeMessageKey(
   interaction: ConfigScopeInteraction,
   dependencies: Pick<ConfigRouteDependencies, "getLastDbError"> = {},
@@ -419,10 +403,6 @@ export function missingScopeMessageKey(
   return interaction.guildId ? "commands.config.panel.not_setup" : "commands.config.panel.not_setup_dm";
 }
 
-/**
- * Copy for a route that outlived the persona row it names. A write must never fall back to another
- * persona, so the panel is re-run rather than silently applied somewhere else.
- */
 function outdatedConfigPanelMessage(locale: string): string {
   return localizer(locale, "commands.config.panel.outdated_panel", { command: CONFIG_PANEL_COMMAND });
 }
@@ -454,7 +434,6 @@ export function outdatedConfigPanelReceipt(locale: string): PanelReceipt {
   };
 }
 
-/** The stale-panel copy as a terminal container, for routes that answer with components. */
 export function outdatedConfigPanelPayload(locale: string): InteractionEditReplyOptions {
   return terminalPayload(locale, "commands.config.panel.outdated_panel", { command: CONFIG_PANEL_COMMAND });
 }
@@ -475,12 +454,6 @@ export function staleReceipt(locale: string): PanelReceipt {
   };
 }
 
-/**
- * Resolves the persona a route names against the workspace as it stands right now.
- *
- * A route ID outlives the row it points at, so a persona deleted or moved between servers must fall
- * back to the current main persona rather than reaching a persona in another workspace.
- */
 export function resolveSelectedPersona(
   personas: readonly TomoriState[],
   requestedId: number | null,

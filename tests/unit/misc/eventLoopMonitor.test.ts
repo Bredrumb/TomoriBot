@@ -1,12 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { EventLoopMonitor, eventLoopMonitor } from "@/utils/misc/eventLoopMonitor";
 
-/**
- * Every assertion here is a ratio of the sample interval, so the monitor runs the same lag and
- * staleness shapes at a cadence small enough for a unit test. The floor is Bun's timer
- * granularity: below a few milliseconds the callback itself is the load being measured, and the
- * lag readings become noise rather than signal.
- */
+// Floor set by Bun's timer granularity because below a few milliseconds the callback itself dominates and lag
+// readings become noise.
 const FAST_INTERVAL_MS = 20;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -17,7 +13,6 @@ function startFastMonitor(): EventLoopMonitor {
   return monitor;
 }
 
-/** A synchronous spin, which is the shape of the failure being detected. */
 function blockFor(ms: number): void {
   const blockUntil = Date.now() + ms;
   while (Date.now() < blockUntil) {

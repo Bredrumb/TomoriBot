@@ -1,12 +1,3 @@
-/**
- * Manager-only moderation controls moved out of `/server` into `/moderation`. This gate lives outside
- * the implementation slice so command restrictions cannot be weakened with their assertion. The preset
- * tree's own restrictions are verified in `stPresetsRoutes.test.ts`.
- *
- * The former "/server still survives" and "seven absorbed keys are gone from /server" checks here
- * are gone: /server is listed in configRegistration.test.ts's DISSOLVED_ROOTS, which asserts it is
- * absent from both the execution map and the registration data.
- */
 import { beforeAll, describe, expect, it } from "bun:test";
 import { PermissionsBitField } from "discord.js";
 import { loadCommandData, ROOT_COMMAND_EXECUTION_KEY } from "@/utils/discord/commandLoader";

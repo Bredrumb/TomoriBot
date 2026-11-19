@@ -23,18 +23,12 @@ export interface TextQuotaClaim extends TextQuotaCheckResult {
   reservation: QuotaReservation | null;
 }
 
-/**
- * Get or create server's text quota configuration
- * Creates default config if not exists (unlimited by default)
- */
 export async function getTextQuotaConfig(serverId: number): Promise<TextQuotaConfigRow> {
   return getOrCreateTextConfig(serverId);
 }
 
-/**
- * Claim one text generation on both counters or neither.
- * A database failure throws, so the caller refuses instead of spending an uncounted generation.
- */
+// Atomic reservation across both counters throws QuotaUnavailableError on DB failure, so callers fail closed instead
+// of spending uncounted text quota.
 export async function reserveTextQuota(serverId: number, userDiscId: string): Promise<TextQuotaClaim> {
   const read = await getTextConfigResult(serverId);
   if (read.status === "unavailable") throw new QuotaUnavailableError();

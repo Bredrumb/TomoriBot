@@ -31,9 +31,6 @@ export interface LinkValidationSummary {
   findings: LinkFinding[];
 }
 
-/**
- * Slugs a markdown heading to match Starlight / GitHub anchor generation.
- */
 export function slugifyHeading(heading: string): string {
   const clean = heading
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // markdown links [text](url) -> text
@@ -50,10 +47,6 @@ export function slugifyHeading(heading: string): string {
     .replace(/[^\p{L}\p{N}\p{M}\-_]/gu, "");
 }
 
-/**
- * Extracts all valid anchors from a markdown document:
- * explicit `<a id="...">` or `<a name="...">`, `anchor:` comments, and slugified headings.
- */
 export function extractDocAnchors(content: string): Set<string> {
   const anchors = new Set<string>();
 
@@ -83,18 +76,14 @@ export function extractDocAnchors(content: string): Set<string> {
   return anchors;
 }
 
-/**
- * Strips a published locale root from a docs URL pathname, so the file lookup sees the route the
- * locale trees share. Without this, `/ja/features/command-reference/` reads as a file named
- * `ja/features/...` and every prefixed link reports as broken.
- */
+// Published locale prefixes are stripped so `resolveDocPath` tests shared routes under each `localeRoot` instead of
+// `locale/locale/path`.
 export function stripLocaleRoot(urlPath: string): string {
   const [first, ...rest] = urlPath.replace(/^\//, "").split("/");
   if (!(PUBLISHED_DOCS_LOCALES as readonly string[]).includes(first)) return urlPath;
   return rest.length > 0 ? `/${rest.join("/")}` : "/";
 }
 
-/** Locale directory a source file documents, which decides which tree a route must resolve in. */
 export function sourceLocaleOf(sourceFile: string): string | undefined {
   const normalized = sourceFile.replaceAll("\\", "/");
   const readmeMatch = normalized.match(/(?:^|\/)README_([A-Za-z-]+)\.md$/);
@@ -106,13 +95,8 @@ export function sourceLocaleOf(sourceFile: string): string | undefined {
   return undefined;
 }
 
-/**
- * Resolves a doc URL pathname to a markdown file path under docs/.
- *
- * A route resolves in the source file's own locale tree first and then in the default locale,
- * because the site serves the default locale's content at a URL whose translation does not exist
- * yet. A route with no page in either tree is genuinely broken.
- */
+// Routes check the source locale tree before falling back to `en` because the site serves default-locale content for
+// untranslated pages.
 export function resolveDocPath(
   urlPath: string,
   docFiles: Set<string>,
@@ -156,10 +140,6 @@ export function resolveDocPath(
   return null;
 }
 
-/**
- * Extracts project-owned documentation URLs from file content.
- * Matches `https://docs.tomoribot.app/{path}`. Third-party URLs are untouched and ignored.
- */
 export function extractProjectDocLinks(
   content: string,
   sourceFile: string,
@@ -201,9 +181,6 @@ export function extractProjectDocLinks(
   return links;
 }
 
-/**
- * Scans documentation files, locale files, and READMEs for broken project-owned doc routes and fragments.
- */
 export async function validateLocaleLinks(options?: {
   locale?: string;
   rootDir?: string;
@@ -406,7 +383,6 @@ export async function validateLocaleLinks(options?: {
   };
 }
 
-/** Prints the link section of `check-locales` and returns whether every link resolved. */
 export async function reportLocaleLinks(): Promise<boolean> {
   log.info("Validating project-owned documentation links…");
   const summary = await validateLocaleLinks();

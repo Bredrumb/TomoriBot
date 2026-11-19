@@ -1,8 +1,3 @@
-/**
- * Memory/Learning Tool
- * Allows the AI to learn and remember new information for future interactions
- */
-
 import { log } from "../../utils/misc/logger";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
 import { invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
@@ -12,9 +7,6 @@ import { getMessageProxyHostProtection } from "@/utils/messageProxy/hostProtecti
 import { renderMemorySaveNoticeContent, memoryServerDiscId } from "@/tools/functionCalls/memoryNoticeContent";
 import { metricSampleRepository } from "@/utils/db/repositories/MetricSampleRepository";
 
-/**
- * Tool for remembering and learning new information during conversations
- */
 export class MemoryTool extends BaseTool {
   name = "create_long_term_memory";
   description =
@@ -45,26 +37,14 @@ export class MemoryTool extends BaseTool {
     required: ["memory_content", "memory_scope"],
   };
 
-  /**
-   * Check if memory tool is available for the given provider
-   * @returns True if provider supports memory functionality
-   */
   isAvailableFor(_provider: string): boolean {
     return true;
   }
 
-  /**
-   * Check if self-teaching functionality is enabled in Tomori config
-   * @returns True if self-teaching is enabled
-   */
   protected isEnabled(context: ToolContext): boolean {
     return context.tomoriState.config.self_teaching_enabled;
   }
 
-  /**
-   * Execute memory storage
-   * @param args - Arguments containing memory details
-   */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     const validation = this.validateParameters(args);
     if (!validation.isValid) {

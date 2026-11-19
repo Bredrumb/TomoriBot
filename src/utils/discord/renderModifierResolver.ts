@@ -40,19 +40,12 @@ type CopiedRenderCandidate =
 export type CopiedRenderTarget = {
   displayName: string;
   identity: ResolvedWebhookIdentity;
-  /**
-   * Decorated "Name (modifier)" label recorded in accumulated text so the model
-   * sees its own modifier usage. For sprites this differs from the webhook
-   * username, which stays the clean persona name.
-   */
+  // Recorded as "Name (modifier)" in accumulated text so the model sees its modifier usage even when the sprite
+  // webhook uses the clean persona name.
   contextLabel: string;
-  /** Present for sprite targets: persisted after send for context label recovery. */
   spriteRecord?: SpriteMessageRecordInfo;
-  /**
-   * True only for identity sprites. Identity sprites already use a distinct
-   * decorated "Sprite (Persona)" webhook name, so they skip the group-break
-   * alternation applied to clean-named non-identity sprites.
-   */
+  // Identity sprites skip group-break alternation because their "Sprite (Persona)" webhook name is already distinct
+  // in Discord.
   isIdentitySprite?: boolean;
 };
 
@@ -241,18 +234,8 @@ async function collectCopiedRenderCandidates(context: StreamContext): Promise<Co
   return [...candidatesByKey.values()];
 }
 
-/**
- * Collects every speaker name the model could plausibly leak as a turn label: other personas in
- * the guild (nickname) and users referenced in the conversation (display label + aliases). The
- * active persona is excluded (collectCopiedRenderCandidates skips it), since its labels are
- * handled by the render-modifier parse and own-name stripping.
- *
- * Used by the stream segment processor's opening-label leak guard to decide whether a plain
- * "Name:" opening is a known participant (a leak) or ordinary prose ("Note:", "TL;DR:").
- *
- * @param context - Active stream context (provides guild + conversation user references)
- * @returns Known speaker names, un-normalized (callers compare via matchesRenderModifierName)
- */
+// The active persona is excluded because own-name labels go through render-modifier parsing and stripping; callers
+// compare via matchesRenderModifierName.
 export async function collectKnownSpeakerNames(context: StreamContext): Promise<string[]> {
   const names: string[] = [];
   for (const candidate of await collectCopiedRenderCandidates(context)) {

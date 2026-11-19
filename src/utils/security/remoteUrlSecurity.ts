@@ -1,7 +1,5 @@
-/**
- * The single SSRF gate for user-supplied URLs, so add new entry points here; `fetch_url` keeps its own
- * guard in `src/tools/fetchUrl/urlSafety.ts` only because the Crawl4AI engine fetches out of process.
- */
+// Single SSRF gate for user URLs; fetch_url keeps its own guard in src/tools/fetchUrl/urlSafety.ts only because
+// Crawl4AI fetches out of process.
 
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
@@ -31,10 +29,8 @@ export interface RemoteUrlValidationResult {
   resolvedAddresses?: string[];
   failureCode?: RemoteUrlValidationFailureCode;
   blockedAddress?: string;
-  /** Diagnostic text for logs and thrown errors only. This gate backs MCP config,
-   *  custom endpoints, `fetch_url`, and every `safeDownload`, so it cannot know what
-   *  the caller was doing: keep this caller-neutral and put user-facing remediation
-   *  in the caller, keyed off `failureCode`. */
+  // Diagnostic text for logs and thrown errors only: keep caller-neutral because multiple callers share this gate and
+  // key user remediation off failureCode.
   details?: string;
 }
 
@@ -65,7 +61,6 @@ function parsePrivateOrigin(entry: string): string | null {
   return host ? toPrivateOriginKey(host, String(port)) : null;
 }
 
-/** Null for a missing value or anything besides `true`, `false`, or `host:port` entries, which startup refuses outside production. */
 export function parsePrivateNetworkSetting(raw: string | undefined): PrivateNetworkSetting | null {
   const normalized = raw?.trim().toLowerCase();
   if (!normalized) return null;
@@ -82,12 +77,8 @@ export function parsePrivateNetworkSetting(raw: string | undefined): PrivateNetw
   return origins.size > 0 ? { mode: "listed", origins } : null;
 }
 
-/**
- * Startup refuses to guess this setting outside production, because no default suits both a host
- * running local models and a community host with untrusted members.
- *
- * @returns The reason to refuse startup, or null when the setting is valid or production ignores it.
- */
+// Startup refuses to guess this setting outside production because no default suits both a host running local models
+// and a community host with untrusted members.
 export function getPrivateNetworkStartupError(): string | null {
   const raw = process.env[PRIVATE_NETWORK_ENV]?.trim();
   if (isProductionRuntime() || parsePrivateNetworkSetting(raw) !== null) return null;
@@ -106,7 +97,7 @@ export function getPrivateNetworkStartupError(): string | null {
   ].join("\n\n");
 }
 
-/** For registered endpoints only, because any member can post a link that reaches a media download. */
+// Intended for operator-registered endpoints only, because any member can post a link that reaches a media download.
 export function getEndpointRemotePolicy(): ValidateRemoteUrlOptions {
   const setting = isProductionRuntime() ? null : parsePrivateNetworkSetting(process.env[PRIVATE_NETWORK_ENV]);
   if (setting?.mode === "all") return { allowPrivateNetwork: true };
@@ -352,14 +343,12 @@ function getHttpProtocolFailure(
 }
 
 export interface ValidateRemoteUrlOptions {
-  /** Enforce the private/link-local/loopback blocklist even when `allowPrivateNetwork` is set. */
   strict?: boolean;
-  /**
-   * Permit private targets (plain HTTP too when every resolved address is private) but never cloud metadata, so
-   * only `getEndpointRemotePolicy()` and `getFetchUrlRemotePolicy()` set it and member-supplied media never does.
-   */
+  // Permits private targets (including plain HTTP) except cloud metadata, so only endpoint or fetch_url policies set
+  // it and never member media.
   allowPrivateNetwork?: boolean;
-  /** `host:port` keys that `allowPrivateNetwork` admits on their own, from an `ALLOW_PRIVATE_NETWORK` list. */
+  // Requires host:port keys without a scheme (not URL origins), because validateRemoteUrl matches normalized
+  // host:port pairs.
   privateOrigins?: ReadonlySet<string>;
 }
 

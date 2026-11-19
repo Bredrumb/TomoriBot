@@ -17,17 +17,9 @@ import { personaSections } from "./personas";
 import { resolveSharedPresetAssetReference } from "./presetAssetReference";
 import type { PersonaInput } from "./types";
 
-/** Length of the content hash embedded in shared avatar filenames + version token. */
 const CONTENT_HASH_LENGTH = 12;
 
-/**
- * Seeds every catalog persona's avatar into shared storage, uploading each image
- * once and stamping `preset_avatar_shared_url` + `preset_avatar_hash` on the
- * matching `persona_presets` row. Never throws, because a failed image is logged and
- * skipped so a single bad asset cannot abort startup.
- *
- * @param client - Active DB client/transaction
- */
+// Failed uploads are logged and skipped instead of throwing because one bad preset avatar must not abort startup.
 export async function seedPersonaAvatarsFromCatalog(
   client: SQL,
 ): Promise<{ declarations: number; seeded: number; failed: number }> {
@@ -40,11 +32,6 @@ export async function seedPersonaAvatarsFromCatalog(
   return { declarations: personas.length, seeded, failed: personas.length - seeded };
 }
 
-/**
- * Seeds a single preset avatar: reads + normalizes the image, uploads it only
- * when its content changed (content-addressed filename), and stamps the shared
- * URL + hash onto the preset row.
- */
 async function seedOneAvatar(
   client: SQL,
   persona: PersonaInput,

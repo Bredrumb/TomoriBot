@@ -70,11 +70,6 @@ export interface ZaicodingProviderConfig extends ProviderConfig {
   seesVideos?: boolean;
 }
 
-/**
- * Z.ai (Coding) LLM Provider.
- * Provides chat, reasoning, structured output, and native image generation
- * via the Z.ai Coding API.
- */
 export class ZaicodingProvider
   extends BaseLLMProvider
   implements
@@ -368,7 +363,6 @@ export class ZaicodingProvider
     }
   }
 
-  /** Resolve web-search tools for preset generation, or undefined if not needed. */
   private async getPresetGenerationTools(
     request: ProviderPresetGenerationRequest,
   ): Promise<Array<Record<string, unknown>> | undefined> {

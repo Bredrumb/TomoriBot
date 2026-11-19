@@ -160,7 +160,8 @@ export function sourceOf(incoming: ChatIncoming): DiagnosticEvent & { kind: "inv
   return { kind: "invocation_started", source, retryCount: incoming.retryCount };
 }
 
-/** A report captures one process. A durable store becomes necessary if chat runs on multiple replicas or reports must survive restarts. */
+// Diagnostic reports stay in process memory only, so a durable store is needed if chat scales across replicas or
+// reports must survive restarts.
 export function runWithChatDiagnostic<T>(incoming: ChatIncoming, callback: () => Promise<T>): Promise<T> {
   const ownerId =
     incoming.manualTriggerInvoker?.userDiscId ??

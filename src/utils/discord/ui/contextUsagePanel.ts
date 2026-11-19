@@ -50,10 +50,6 @@ export interface ContextUsagePanelPayload {
   flags: MessageFlags.IsComponentsV2;
 }
 
-/**
- * The button route carries the persona ID rather than the built prompt, so a click rebuilds the
- * snapshot from current state like every other panel route.
- */
 function buildContextSnapshotRouteId(personaId: number, format: PromptSnapshotFormat): string {
   return buildInteractionRouteId(CONTEXT_ROUTE_NAMESPACE, CONTEXT_ROUTE_VERSION, "snapshot", String(personaId), format);
 }
@@ -105,7 +101,6 @@ function buildUsageLine(locale: string, inspection: PromptInspection, usage: Con
   });
 }
 
-/** The grid's key as one quote block: what a cell stands for, then each part with its figures. */
 function buildLegend(locale: string, grid: ContextGrid): string {
   const legendLines: string[] = [
     localizer(locale, "commands.context.scale_line", { tokens: formatTokens(locale, grid.tokensPerCell) }),
@@ -129,10 +124,6 @@ function buildLegend(locale: string, grid: ContextGrid): string {
     .join("\n");
 }
 
-/**
- * The estimated input cost of one reply, and the provider-reported size of the last real one. Each
- * line is left out when its figure is unknown: no catalog price, or no reply from this model yet.
- */
 function buildMeasurementLines(
   locale: string,
   inspection: PromptInspection,
@@ -164,13 +155,8 @@ function buildMeasurementLines(
   return lines;
 }
 
-/**
- * Renders the context window as an emoji grid with a legend, followed by the snapshot buttons.
- * Members without full-prompt access see the buttons disabled, so they learn the view exists.
- *
- * Prose formatting is off: its hard wrap breaks legend lines at a fixed width, while Discord's own
- * soft wrap fits each client.
- */
+// Prose formatting is disabled because its hard wrap breaks legend lines at a fixed width instead of letting Discord
+// soft-wrap them per client.
 export function buildContextUsagePayload(
   locale: string,
   inspection: PromptInspection,

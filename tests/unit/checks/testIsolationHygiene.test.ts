@@ -6,35 +6,13 @@ import {
   usesModuleMocks,
 } from "../../../scripts/checks/lib/testIsolation";
 
-/**
- * Enforces the invariants that let `bun run test` batch files into shared
- * processes. The runner (scripts/checks/runTests.ts) groups most files into one
- * `bun test` process per lane and runs the lanes concurrently, which is only
- * safe while two rules hold:
- *
- *   - Nothing under `tests/unit/` touches the fixture database, because the
- *      unit lanes run CONCURRENTLY with the serial DB lane.
- *   - No file that shares a process mutates process-wide state without undoing
- *      it, because Bun does not reset such state between files.
- *
- * Both rules used to hold for free: the old runner gave every file its own
- * process, so nothing could leak and nothing could race. Batching traded that
- * blanket guarantee for speed, and this test is what replaces it: a contributor
- * (or agent) who has never read the lane docs gets a red gate with instructions
- * instead of corrupting an unrelated file's results.
- *
- * The detectors are shared with the runner via scripts/checks/lib/testIsolation.ts
- * so the gate and the harness can never disagree about what counts as isolated.
- */
+// Detectors are shared via testIsolation.ts because runTests.ts batches files into shared Bun processes and runs unit
+// lanes concurrently with the DB lane.
 
-/**
- * Meta-tests live here and quote the very markers the detectors search for, so
- * scanning them would flag this tooling rather than real tests. Excluded by path
- * for the same reason the locale scanner needs its examples written in split form.
- */
+// Checks tests under this path quote the forbidden markers they test, so the directory is excluded to prevent
+// self-flagging.
 const SCAN_EXEMPT_DIRECTORY = "tests/unit/checks/";
 
-/** Normalized to forward slashes for stable matching. */
 async function discoverTestFiles(): Promise<string[]> {
   const glob = new Bun.Glob("**/*.test.ts");
   const files: string[] = [];
@@ -44,7 +22,6 @@ async function discoverTestFiles(): Promise<string[]> {
   return files.sort();
 }
 
-/** Reads every scannable test file as `[path, source]` pairs. */
 async function readScannableFiles(): Promise<Array<[string, string]>> {
   const files = (await discoverTestFiles()).filter((file) => !file.startsWith(SCAN_EXEMPT_DIRECTORY));
   return Promise.all(files.map(async (file) => [file, await Bun.file(file).text()] as [string, string]));

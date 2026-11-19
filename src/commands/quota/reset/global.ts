@@ -7,9 +7,6 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 
-/**
- * Configure /quota reset global subcommand.
- */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("global")
@@ -35,9 +32,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
         ),
     );
 
-/**
- * Execute /quota reset global.
- */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,

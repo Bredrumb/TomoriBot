@@ -11,10 +11,9 @@ const GOOGLE_INTERACTIONS_URL = "https://generativelanguage.googleapis.com/v1bet
 
 const POLL_INTERVAL_MS = 10_000;
 
-/** Maximum poll attempts before timeout (~5 minutes at 10s intervals) */
 const MAX_POLL_ATTEMPTS = 30;
 
-/** Aspect ratios Gemini Omni accepts; anything else is rejected with a 400. */
+// Gemini Omni rejects aspect ratios outside this set with HTTP 400, so unsupported ratios are omitted.
 const GOOGLE_SUPPORTED_ASPECT_RATIOS = new Set(["16:9", "9:16"]);
 
 const interactionSchema = z.object({
@@ -59,7 +58,7 @@ async function callInteractions(
   return interactionSchema.parse(await response.json());
 }
 
-/** Generates a Gemini Omni video, ignoring `durationSeconds`, `fps`, and audio fields because Omni has no such controls. */
+// Gemini Omni has no duration, fps, or audio controls, so those fields on the request are ignored.
 export async function generateGoogleNativeVideo(
   request: ProviderNativeVideoGenerationRequest,
 ): Promise<ProviderNativeVideoGenerationResult> {

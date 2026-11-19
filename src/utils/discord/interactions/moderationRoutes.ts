@@ -2396,7 +2396,6 @@ export type ModerationPanelPayloadOrTerminal =
   | ReturnType<typeof buildModerationPanelPayload>
   | InteractionEditReplyOptions;
 
-/** Destinations for `/moderation page:`; the command is manager-only, so every one is open to its invoker. */
 export function listModerationPageDestinations(
   locale: string,
 ): PanelPageDestination<ModerationCategory, WhitelistPage | null>[] {

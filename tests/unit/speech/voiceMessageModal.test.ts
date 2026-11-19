@@ -1,10 +1,3 @@
-/**
- * Discord rejects a modal with more than five components at the interaction-response layer, so
- * the builder's own assertion is the only thing standing between a sixth field and a runtime
- * failure. These tests pin the worst case at exactly five and, more importantly, pin the fields
- * that must be *absent*: a control that renders where it does nothing teaches the user it is
- * broken, which is why the Expressiveness radio is gated on the Chatterbox label sniff.
- */
 import { beforeAll, describe, expect, it } from "bun:test";
 import type { CustomEndpointRow } from "@/types/db/schema";
 import { isModalRadioGroupField } from "@/types/discord/modal";
@@ -76,7 +69,6 @@ const PERSONA_WITH_BOTH = {
   speech_voice_design_prompt: "Warm, wholesome and very dark-toned",
 };
 
-/** Mirrors the command's own input assembly, so the builder is tested against real candidates. */
 function buildInput(options: {
   endpoint: CustomEndpointRow;
   persona: { speech_voice_sample_id?: number | null; speech_voice_design_prompt?: string | null };

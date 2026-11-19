@@ -166,11 +166,8 @@ function buildNavigationRow(
   };
 }
 
-/**
- * Two pickers share this screen, and a Components V2 message may not repeat a custom ID. The
- * trailing segment names the picker rather than its contents, so the mounted guide set can change
- * without orphaning a message that is still on screen.
- */
+// Custom IDs suffix the picker ID instead of guide contents because Components V2 forbids duplicate IDs and changing
+// guides would orphan live messages.
 function buildProviderSelectRow(
   locale: string,
   pickerId: string,

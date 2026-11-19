@@ -8,10 +8,6 @@ import { toZaiApiModelName, ZAI_GENERAL_IMAGES_GENERATIONS_URL } from "@/provide
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
 
-/**
- * Aspect ratio to pixel size mapping for Z.ai image generation.
- * These sizes are tuned for the Z.ai GLM image model.
- */
 const ASPECT_RATIO_TO_SIZE: Record<string, string> = {
   "1:1": "1280x1280",
   "2:3": "1056x1568",
@@ -27,13 +23,6 @@ const ASPECT_RATIO_TO_SIZE: Record<string, string> = {
 
 const DEFAULT_SIZE = "1280x1280";
 
-/**
- * Generate an image using Z.ai's native image generation API.
- * Converts the aspect ratio to pixel dimensions and fetches the resulting image URL.
- *
- * @param request - Image generation request containing apiKey, model, prompt, and aspectRatio
- * @returns Generated image as base64 data with its MIME type, or null values on failure
- */
 export async function generateZaiNativeImage(
   request: ProviderNativeImageGenerationRequest,
 ): Promise<ProviderNativeImageGenerationResult> {

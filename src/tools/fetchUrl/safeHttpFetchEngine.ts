@@ -37,11 +37,7 @@ export function convertFetchedContent(body: string, contentType: string, raw = f
   return turndown.turndown(body);
 }
 
-/**
- * In-process fallback for the built-in fetch_url tool.
- *
- * Keeping the request in process lets fetchUserRemoteUrl validate and DNS-pin every redirect hop.
- */
+// In-process fetch engine kept local so fetchUserRemoteUrl can validate and DNS-pin every redirect hop.
 export class SafeHttpFetchEngine implements FetchEngine {
   readonly name = "safe_http" as const;
 

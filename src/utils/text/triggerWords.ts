@@ -74,22 +74,6 @@ export function parseTriggerWordListInput(input: string, options: NormalizeTrigg
   return dedupeTriggerWords(input.split(TRIGGER_WORD_SEPARATOR_PATTERN), options);
 }
 
-/**
- * Returns the subset of `candidateTriggers` whose words are not already claimed
- * by another owner, comparing case-insensitively. Candidates are also de-duped
- * against each other, so the result never repeats a word.
- *
- * Used to keep trigger words single-owner across a server's personas: pass the
- * triggers already owned by higher-priority personas (plus reserved base words)
- * as `claimedTriggers`, and the candidate persona's desired triggers as
- * `candidateTriggers`.
- *
- * @param candidateTriggers - Triggers a persona wants to claim.
- * @param claimedTriggers   - Triggers already owned elsewhere (any iterable).
- * @param options           - Normalization options; `lowercase: false` preserves
- *                            the original casing of kept words in the output.
- * @returns The kept triggers, in input order, with claimed/duplicate words removed.
- */
 export function selectUnclaimedTriggerWords(
   candidateTriggers: readonly string[],
   claimedTriggers: Iterable<string>,

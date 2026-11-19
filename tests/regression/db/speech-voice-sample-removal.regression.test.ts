@@ -1,10 +1,3 @@
-/**
- * Regression harness: retiring a voice sample clears every persona column that referenced it.
- *
- * Covers: clearPersonaVoiceSampleRefs, removeVoiceSample.
- *
- * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md)
- */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { removeVoiceSample } from "@/utils/db/repositories/SpeechRepository";
 import { cleanupFixtures, insertFixtures, type FixtureRefs } from "./setup/fixtures";

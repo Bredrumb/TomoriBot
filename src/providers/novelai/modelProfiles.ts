@@ -151,7 +151,8 @@ const profiles: Readonly<Record<string, NovelAIModelProfile>> = {
   },
 };
 
-/** `Object.hasOwn` because codenames are user input, and `constructor` or `__proto__` would match an inherited key. */
+// `Object.hasOwn` is required because codenames are user input, so `constructor` or `__proto__` would match an
+// inherited key.
 export function isNovelAITextModel(codename: string): boolean {
   return Object.hasOwn(profiles, codename);
 }

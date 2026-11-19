@@ -1,21 +1,6 @@
 import { GetSecretValueCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
 import { log } from "@/utils/misc/logger";
 
-/**
- * Interface defining all secrets required for TomoriBot production deployment.
- *
- * Core Secrets:
- * - Discord bot authentication token
- * - PostgreSQL database connection parameters
- * - Encryption key for database-stored API keys
- *
- * Optional Secrets:
- * - CRYPTO_SECRET_V1, V2, etc. for key rotation support
- * - DISCORD_WEBHOOK_URL for logging webhooks
- * - AVATAR_GCS_BUCKET / VOICE_SAMPLE_GCS_* for GCP Cloud Storage (GCP deployments)
- * - AVATAR_S3_* / VOICE_SAMPLE_S3_* / CHARREF_S3_* for S3-compatible object storage
- * - S3_ENDPOINT and AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY for R2 or other S3-compatible backends
- */
 export interface TomoriSecrets {
   DISCORD_TOKEN: string;
   POSTGRES_HOST: string;
@@ -109,44 +94,6 @@ function optionalSecretFields(): string[] {
   return [...OPTIONAL_SECRET_FIELDS, ...registeredSecretNames];
 }
 
-/**
- * Fetches application secrets from the appropriate backend based on environment.
- *
- * Resolution order:
- * 1. Development / test-production → process.env (dotenv)
- * 2. Production + SECRET_FILE set → mounted JSON secret file
- * 3. Production + GCP_SECRET_FILE set → mounted GCP Secret Manager volume file (JSON, legacy fallback)
- * 4. Production (fallback) → AWS Secrets Manager API call
- *
- * Mounted secret file path:
- * - Azure compose mounts the JSON secret at /run/secrets/tomoribot.json and sets SECRET_FILE to that path
- * - Cloud Run mounts the secret at /run/secrets/<secret_id> and sets GCP_SECRET_FILE to that path
- * - File content is identical JSON shape to the AWS secret string
- * - No SDK call needed: plain fs.readFileSync
- *
- * AWS Configuration:
- * - AWS_REGION environment variable (defaults to "us-east-1")
- * - AWS credentials from environment, IAM role, or ~/.aws/credentials
- *
- * Key Version Auto-Detection:
- * - Scans for CRYPTO_SECRET_V1, CRYPTO_SECRET_V2, CRYPTO_SECRET_V3, etc.
- * - Dynamically includes all found versions
- * - Integrates seamlessly with existing CryptoKeyManager
- *
- * Error Handling:
- * - Missing required fields → throws error with missing key list
- * - File read / JSON parse errors → descriptive error message
- * - AWS network/permission errors → descriptive error message
- *
- * @returns {Promise<TomoriSecrets>} Object containing all application secrets
- * @throws {Error} If required secrets are missing or the secret backend fails
- *
- * @example
- * // In src/index.ts
- * const secrets = await getAppSecrets();
- * process.env.DISCORD_TOKEN = secrets.DISCORD_TOKEN;
- * process.env.POSTGRES_HOST = secrets.POSTGRES_HOST;
- */
 export async function getAppSecrets(): Promise<TomoriSecrets> {
   secretsLoaded = true;
 
@@ -331,21 +278,6 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
   }
 }
 
-/**
- * Validates that all required secrets are present and non-empty.
- *
- * Required Fields:
- * - DISCORD_TOKEN (Discord bot authentication)
- * - POSTGRES_HOST (Database connection)
- * - POSTGRES_PORT (Database port)
- * - POSTGRES_USER (Database user)
- * - POSTGRES_PASSWORD (Database password)
- * - POSTGRES_DB (Database name)
- * - CRYPTO_SECRET or a versioned field (encryption key for database-stored credentials)
- *
- * @param {TomoriSecrets} secrets - Secrets object to validate
- * @throws {Error} If any required secret is missing or empty
- */
 function validateRequiredSecrets(secrets: TomoriSecrets): void {
   const requiredFields: (keyof TomoriSecrets)[] = [
     "DISCORD_TOKEN",
@@ -376,7 +308,6 @@ function validateRequiredSecrets(secrets: TomoriSecrets): void {
   }
 }
 
-/** Scalar config values retain their environment form, but master keys must be strings. */
 function parseSecretObject(content: string): Record<string, string> {
   let parsed: unknown;
   try {

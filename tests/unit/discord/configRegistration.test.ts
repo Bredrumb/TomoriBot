@@ -1,12 +1,3 @@
-/**
- * `/config` registers as a bare executable root with no default member permission, so every
- * absorbed operation is authorized by its panel route alone. The loader skips a root file while a
- * same-named directory owns the definition, which is why the registration and the directory
- * dissolution had to land together.
- *
- * Dissolution is asserted per former root and key. A whole-tree command count would fail on every
- * unrelated wave and pressure a later slice into editing a gate it does not own.
- */
 import { beforeAll, describe, expect, it } from "bun:test";
 import { ApplicationCommandOptionType } from "discord.js";
 import { loadCommandData, ROOT_COMMAND_EXECUTION_KEY } from "@/utils/discord/commandLoader";
@@ -21,7 +12,6 @@ type RegistrationPayload = {
   options?: unknown[];
 };
 
-/** Executable keys absorbed into the panel, grouped by the root that used to expose them. */
 const ABSORBED_KEYS_BY_ROOT: Record<string, readonly string[]> = {
   persona: [
     "avatar",
@@ -92,10 +82,8 @@ const ABSORBED_KEYS_BY_ROOT: Record<string, readonly string[]> = {
   tool: ["status"],
 };
 
-/** Roots the cutover removed outright, rather than reducing to a retained remainder. */
 const DISSOLVED_ROOTS = ["capabilities", "speech", "mcps", "st-presets", "memory", "server"];
 
-/** Explicitly retained leaves, including the aggregate views the panel deliberately does not absorb. */
 const RETAINED_KEYS_BY_ROOT: Record<string, readonly string[]> = {
   persona: ["create", "default", "export", "generate", "import", "remove"],
   model: ["override.remove"],

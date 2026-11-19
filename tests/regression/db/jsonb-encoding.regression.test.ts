@@ -1,12 +1,3 @@
-/**
- * Regression harness: JSONB columns must store objects, not JSON strings.
- *
- * `${JSON.stringify(value)}::jsonb` binds the JSON source as text and the cast then
- * parses it into a JSONB scalar string. Reads masked this because the Zod layer parses
- * a string back into an object, so only SQL-level access (`->`, `->>`, containment,
- * equality against an object literal) saw the wrong shape. Migration 064 repaired the
- * stored rows; these tests keep the writers from reintroducing it.
- */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { llmProviderRepo, userNamingRepository } from "@/utils/db/repositories";
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";

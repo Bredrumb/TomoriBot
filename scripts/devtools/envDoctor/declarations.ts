@@ -5,11 +5,8 @@ import type { DeclarationLayer, DeclarationSite } from "./types";
 const ENTRY_PATTERN = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$/;
 const COMMENT_DEFAULT_PATTERN = /\bdefaults?(?:\s+is|\s*:)\s*("[^"]*"|'[^']*'|[^\s,;)]+)/i;
 
-/**
- * Parses an `.env`-style example file into declarations. The comment block directly above an
- * entry (no blank line between) is the only one searched for a `default:` note, because a section
- * banner's prose describes the whole section rather than one value.
- */
+// Blank lines clear pending comments so only the block directly above an entry supplies default notes, preventing
+// section banners from matching.
 export function parseExampleFile(file: string, text: string, layer: DeclarationLayer): DeclarationSite[] {
   const declarations: DeclarationSite[] = [];
   const lines = text.split(/\r?\n/);
@@ -79,10 +76,8 @@ function findCommentDefault(comment: string[]): string | undefined {
   return undefined;
 }
 
-/**
- * Returns only the variable names in a live `.env`. Each value is discarded on the line it is
- * found, so no code path after this function can print, log, or serialize one.
- */
+// Values from the live .env are discarded immediately on each line, so no downstream code path can print, log, or
+// serialize a live secret.
 export function parseLiveEnvKeys(text: string): string[] {
   const names = new Set<string>();
   for (const rawLine of text.split(/\r?\n/)) {

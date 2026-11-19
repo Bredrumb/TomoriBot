@@ -152,10 +152,6 @@ export function resolveBackupsRoot(): string {
   return process.env.TOMORI_BACKUP_DIR ? resolve(process.env.TOMORI_BACKUP_DIR) : join(process.cwd(), "backups");
 }
 
-/**
- * Resolves a PostgreSQL connection URL from environment variables.
- * Prefers DATABASE_URL/POSTGRES_URL if set, otherwise constructs it from POSTGRES_* vars.
- */
 function resolveDatabaseUrl(): string {
   if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
   if (process.env.POSTGRES_URL) return process.env.POSTGRES_URL;
@@ -173,28 +169,21 @@ function resolveDatabaseUrl(): string {
   return `postgresql://${user}:${encodeURIComponent(password)}@${host}:${port}/${database}`;
 }
 
-/** Connection settings for one PostgreSQL client process, with the password kept out of argv. */
 export interface PostgresClientConnection {
   connectionUrl: string;
   env: Record<string, string | undefined>;
 }
 
-/** Environment variables that hold this bot's database password and that libpq never reads. */
+// Child pg_dump and psql processes never read these bot credential env vars, so stripping them prevents leaking
+// passwords into child environments.
 const BOT_DATABASE_CREDENTIAL_ENV = ["DATABASE_URL", "POSTGRES_URL", "POSTGRES_PASSWORD"] as const;
 
 function escapePassfileField(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/:/g, "\\:");
 }
 
-/**
- * Runs a PostgreSQL client with its password in a private, short-lived `PGPASSFILE`.
- *
- * Command-line arguments are readable by other local users through the process table, and
- * `PGPASSWORD` stays readable in the child's environment, so the password travels only through
- * a file in a fresh temp directory outside every backup bundle. The single wildcard entry matches
- * whatever host form the URL or its query options select. The URL keeps every other component,
- * including query options such as `sslmode`, so the target stays exactly the one the caller chose.
- */
+// Password uses a temp PGPASSFILE instead of argv or PGPASSWORD because process arguments and child environments are
+// readable by other local users.
 export async function withPostgresPassfile<T>(
   databaseUrl: string,
   run: (connection: PostgresClientConnection) => Promise<T>,
@@ -386,12 +375,8 @@ function pruneAutomaticBackups(maxAutomaticBackups: number): void {
   }
 }
 
-/**
- * Reminds the operator that the bundle excludes `.env` and names the master keys a restore needs.
- * Bundles deliberately omit `.env` so a copied bundle never carries the keys that decrypt its own
- * credentials. Manual runs warn because the operator is present and about to move the bundle;
- * automatic runs log at info level so routine startup output is not flagged as a problem.
- */
+// Bundles omit the .env file so copies never carry their own decryption keys, logging info on automatic runs and
+// warning on manual runs.
 function logMissingKeyReminder(backupType: DataBackupType, requiredKeyVersions: number[]): void {
   const reminder =
     requiredKeyVersions.length === 0

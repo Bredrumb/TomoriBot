@@ -1,24 +1,3 @@
-/**
- * Tracked media size check.
- *
- * Rejects committed image/video/audio assets that exceed a size budget, so large
- * uncompressed art never bloats the repo or ships oversized to runtime. The
- * primary target is Default Persona avatar/sprite art under the seed catalog
- * (these get uploaded to Discord on seed), plus bundled assets under assets/img.
- *
- * Historical marketing screenshots under .github/release/** are intentionally
- * NOT scanned because they are immutable release artifacts, not shipped or runtime art.
- *
- * The budget is the `DEFAULT_LIMIT_BYTES` constant in scripts/lib/media.ts. Run
- * `bun run compress-media` to losslessly shrink offenders in place; when legitimate art still
- * cannot fit after that, raise the constant there rather than committing an oversized file.
- *
- * Exits non-zero if any in-scope media file exceeds the budget.
- *
- * Usage:
- *   bun run check-media-size
- *   bun run scripts/checks/checkMediaSize.ts
- */
 import { config } from "dotenv";
 import { DEFAULT_LIMIT_BYTES, formatBytes, listInScopeMedia, SCOPE_PREFIXES } from "../lib/media";
 

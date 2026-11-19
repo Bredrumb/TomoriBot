@@ -1,19 +1,5 @@
 import { pickHumanizerSettings } from "@/constants/humanizer";
 import { getProviderContentRejectionCode } from "@/utils/provider/providerErrorClassification";
-/**
- * Vertex AI provider implementation
- *
- * Implements the LLMProvider interface for Google's Vertex AI platform.
- * Uses Application Default Credentials (ADC) instead of an API key.
- *
- * Feature parity with Google AI Studio since the API surface is identical:
- * - Structured output (via Google helpers with injected Vertex client)
- * - Preset generation (via Google helpers with injected Vertex client)
- * - Conversation compaction (via Google helpers with injected Vertex client)
- * - Embeddings (direct Vertex client call)
- * - Native image generation (via Vertex chat responses with IMAGE modality)
- * - Chat streaming + tool calling (via VertexStreamAdapter)
- */
 
 import { resolveRequestMaxOutputTokens } from "@/utils/provider/modelLimits";
 import type { ZodType } from "zod";
@@ -87,14 +73,6 @@ import { getActiveTemperature, isParamDisabled, omitGeminiSampling } from "@/uti
 import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
 import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
 
-/**
- * Gets the default Vertex model with a robust fallback chain:
- * 1. Cached is_default LLM from the database
- * 2. Database query for is_default model
- * 3. First non-deprecated model from database
- * 4. Throws error if no models are available
- * @returns Promise<string> - The default model codename
- */
 async function getDefaultVertexModel(): Promise<string> {
   const providerName = "vertex";
 
@@ -132,7 +110,6 @@ async function getDefaultVertexModel(): Promise<string> {
   throw new Error(`No default model found for provider: ${providerName}. Please configure models in the database.`);
 }
 
-/** Vertex-specific configuration extending the base ProviderConfig */
 export interface VertexProviderConfig extends ProviderConfig {
   safetySettings: Array<{
     category: string;
@@ -147,12 +124,6 @@ export interface VertexProviderConfig extends ProviderConfig {
   };
 }
 
-/**
- * Vertex AI provider implementation with full feature parity.
- *
- * All Google-family helpers accept an optional pre-built client, so
- * Vertex simply constructs its ADC client and passes it through.
- */
 export class VertexProvider
   extends BaseLLMProvider
   implements
@@ -163,9 +134,6 @@ export class VertexProvider
     SupportsConversationCompaction,
     SupportsNativeImageGeneration
 {
-  /**
-   * Get provider information and capabilities
-   */
   getInfo() {
     return vertexProviderInfo;
   }
@@ -181,9 +149,6 @@ export class VertexProvider
     return await checkVertexTextModel("vertex", client, codename, compositeKey);
   }
 
-  /**
-   * Build a Vertex GoogleGenAI client from the composite key.
-   */
   private buildClient(compositeKey: string): GoogleGenAI {
     const config = parseVertexCompositeKey(compositeKey);
     return createVertexClient(config);

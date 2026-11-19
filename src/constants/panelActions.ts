@@ -1,15 +1,5 @@
-/**
- * Action identifier registry for semantic panel-action telemetry.
- *
- * Each entry represents one successfully completed UI operation behind a panel.
- * Format follows the durable grammar:
- *
- *   <surface>.<scope>.<resource>.<verb>
- *
- * - <scope> is "workspace" (guild- or DM-backed workspace) or "personal" (account-owned).
- * - Identifiers describe the UI contract, not implementation details or resource IDs.
- * - Metric keys are strictly closed to this registry to guarantee bounded cardinality.
- */
+// Keys follow <surface>.<scope>.<resource>.<verb> (workspace or personal) and stay closed to this registry so
+// telemetry cardinality stays bounded.
 
 export const PANEL_ACTIONS = [
   "server-config.workspace.response-drafting.set",
@@ -233,7 +223,6 @@ export const PANEL_ACTIONS = [
   "personal-config.personal.character-reference.set",
 ] as const;
 
-/** Union of all valid panel action metric keys. */
 export type PanelAction = (typeof PANEL_ACTIONS)[number];
 
 export type ProviderPanelResourceAndVerb =
@@ -244,10 +233,6 @@ export type ProviderPanelResourceAndVerb =
   | "model.save"
   | "entry.remove";
 
-/**
- * Maps a provider panel scope kind to its canonical workspace or personal action identifier.
- * Treats anything other than "personal" as workspace scope.
- */
 export function resolveProviderPanelAction(
   scopeKind: "server" | "personal" | undefined,
   resourceAndVerb: ProviderPanelResourceAndVerb,

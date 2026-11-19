@@ -1,18 +1,3 @@
-/**
- * Text budgeting coverage for Config pages:
- * asserts message-wide Text Display budgets at stored maxima, boundary Unicode handling,
- * and fence breakout immunity.
- *
- * The NovelAI preset and Switch Models matrices run on {@link BUDGET_LOCALE} rather than every
- * locale, because they are the expensive sweeps and rendered length decides where the message-wide
- * budget binds. With practical preset strings `es-419` renders the longest total of any locale and
- * every locale stays far below the budget. With oversized strings, truncation fills a fixed budget,
- * so every locale renders the identical total; the equality case in the NovelAI block pins that, and
- * fails if a translation ever breaks it instead of silently narrowing the sweep.
- *
- * The stored-maxima sweep keeps every locale: its truncation-tightness check detects truncation by
- * matching English marker text, so it only runs in `en-US`, and the sweep is cheap.
- */
 import { DEFAULT_HUMANIZER_SETTINGS, humanizerSettingsFromDegree } from "@/constants/humanizer";
 import { beforeAll, describe, expect, it } from "bun:test";
 import { ChannelType, ComponentType, type ActionRowData, type ButtonComponentData } from "discord.js";
@@ -72,19 +57,16 @@ import { collectCaseFailures, RUNTIME_LOCALES, localizedCopy, localizedProse } f
 import { BACKTICK_RUNS } from "../../helpers/panelLimits";
 import { createLlmRow, createPersona } from "../../helpers/fixtures";
 
-/** The locale whose rendered text is longest; see the file header for why one locale suffices. */
+// es-419 renders the longest text of any locale, so sweeping it alone still binds the tightest budget without running
+// expensive matrices in every locale.
 const BUDGET_LOCALE = "es-419";
 
-/** As many tags as the tag modal accepts: MAX_TAGS entries whose comma-joined form fills TAGS_MODAL_MAX_LENGTH. */
 const MAX_MODAL_IMAGE_TAGS = Array.from({ length: MAX_TAGS }, (_, index) =>
   String(index).padStart(Math.floor((TAGS_MODAL_MAX_LENGTH + 2) / MAX_TAGS) - 2, "t"),
 );
 
-/**
- * Read statuses that render differently. `stale` sets the same `writesDisabled` flag as
- * `unavailable` for every panel here, and only `unavailable` adds the notice that changes the
- * rendered text, so sweeping it would rebuild identical payloads.
- */
+// "stale" is omitted because it shares writesDisabled with "unavailable" without adding notice text, so sweeping it
+// only rebuilds identical payloads.
 const RENDERING_READ_STATUSES: readonly PanelReadStatus[] = ["fresh", "unavailable"];
 
 beforeAll(async () => initializeLocalizer());
@@ -145,7 +127,6 @@ const MAX_NUDGE_SETTINGS: NaturalNudgesSettingsView = {
   },
 };
 
-/** Server 9 and the id-derived nickname are this suite's defaults, so both stay off the factory. */
 function makePersona(overrides: Partial<TomoriState> & { persona_id: number }): TomoriState {
   return createPersona({
     server_id: 9,
@@ -154,10 +135,6 @@ function makePersona(overrides: Partial<TomoriState> & { persona_id: number }): 
   });
 }
 
-/**
- * Trigger slice for behavior pages that never read it, carrying the loader's defaults so the view
- * matches what a server with no stored trigger config produces.
- */
 const BEHAVIOR_TRIGGER_VIEW: ConfigBehaviorTriggerView = {
   randomTriggers: [],
   cascadeLimit: 3,
@@ -168,10 +145,6 @@ const BEHAVIOR_TRIGGER_VIEW: ConfigBehaviorTriggerView = {
   cooldownLength: 5,
 };
 
-/**
- * A channels view whose every required slice is present and empty. A fixture spreads it and
- * overrides the slice its own page renders, so the page still receives the slices it never reads.
- */
 const EMPTY_CHANNELS_VIEW: ConfigChannelsView = {
   destinations: { thoughtLogChannelId: null, welcomeChannelId: null, welcomePersonaId: null, welcomePrompt: null },
   autoTrigger: { enabledChannels: [], personaOverrides: [], threshold: 0, maxThreshold: 0 },
@@ -426,7 +399,6 @@ function makeExplicitSlotView(
   };
 }
 
-/** Switched-off capabilities note in yellow; enabled ones with nothing usable behind them note in red. */
 function capabilityNoteLine(locale: string, key: string): string {
   const circle = key.endsWith("_disabled_direction") ? "🟡" : "🔴";
   return formatPanelProse(withLinePrefix("> ", `- ${circle} ${localizer(locale, key)}`));
@@ -2765,10 +2737,6 @@ describe("config pages for a workspace with nothing configured", () => {
     { workspaceKind: "dm", isManager: true },
   ];
 
-  /**
-   * Every page view as its loader returns it for a workspace with no catalogs, collections, or
-   * selections, which is the state a page-specific fixture tends to skip by supplying one entry.
-   */
   function buildEmptyViews(actor: ConfigActor) {
     const behaviorView: ConfigBehaviorView = {
       general: {

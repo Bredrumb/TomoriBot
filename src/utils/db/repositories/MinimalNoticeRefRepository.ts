@@ -7,7 +7,8 @@ import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 
 class MinimalNoticeRefRepository {
-  /** @returns false on error; a lost row only leaves that notice as a bare title in context. */
+  // DB failures return false rather than throwing because a lost row only leaves that notice as a bare title in
+  // context.
   async record(messageDiscId: string, ref: MinimalNoticeRef): Promise<boolean> {
     try {
       await sql`
@@ -26,11 +27,8 @@ class MinimalNoticeRefRepository {
     }
   }
 
-  /**
-   * Joins each referenced notice to its live memory or reminder row in one round trip.
-   *
-   * @returns an empty map on query failure, since a missing body only degrades context to the title
-   */
+  // Query failures return an empty map rather than throwing because missing bodies only degrade notices to bare
+  // titles.
   async resolveByMessageIds(messageDiscIds: string[]): Promise<Map<string, ResolvedMinimalNoticeRefRow>> {
     const result = new Map<string, ResolvedMinimalNoticeRefRow>();
     if (messageDiscIds.length === 0) {
@@ -71,7 +69,6 @@ class MinimalNoticeRefRepository {
     return result;
   }
 
-  /** @returns number of rows deleted, or 0 on error */
   async pruneOlderThanDays(retentionDays: number): Promise<number> {
     try {
       const rows = await sql<Array<{ message_disc_id: string }>>`

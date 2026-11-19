@@ -77,7 +77,8 @@ export function renderMcpOAuthResultPage(
   );
 }
 
-/** Names the destination before any code exchange, because that is where a phished admin can notice. */
+// The page displays the destination guild and host before any code exchange so a phished admin can spot a mismatched
+// link.
 export function renderMcpOAuthConfirmPage(options: {
   locale: string;
   guild: string;

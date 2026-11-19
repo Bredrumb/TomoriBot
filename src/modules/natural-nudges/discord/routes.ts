@@ -86,10 +86,8 @@ function parseIndex(value: string | undefined): number | null {
   return value && /^\d+$/.test(value) ? Number(value) : null;
 }
 
-/**
- * Routes that answer with a modal. `showModal()` must be the acknowledgement, so authorization and
- * the one fast read finish before it; returning false hands the click to the deferred path.
- */
+// Discord requires showModal() to be the first acknowledgement, so auth and fast reads run before it and returning
+// false falls back to the deferred path.
 export async function handleNudgeModalOpen(
   interaction: GlobalRoutableInteraction,
   route: ConfigPanelRoute,
@@ -303,7 +301,6 @@ export async function handleNudgeModalOpen(
   return false;
 }
 
-/** The provider group and page a model select value names, or null when it no longer exists. */
 function findModelPage<Group extends { provider: string; models: readonly unknown[] }>(
   groups: readonly Group[],
   value: string,
@@ -411,7 +408,6 @@ export interface NudgeRouteContext {
   dependencies: ConfigRouteDependencies;
 }
 
-/** Deferred Natural Nudges routes: navigation repaints and writes, each repainting its own page. */
 export async function handleNudgeRoutes(context: NudgeRouteContext): Promise<boolean> {
   const { interaction, route, dependencies } = context;
   if (!route.action.startsWith("nudge-")) return false;

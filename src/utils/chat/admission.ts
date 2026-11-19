@@ -60,23 +60,16 @@ import { isMessageProxyInstanceBotPresent } from "@/utils/messageProxy/guildPres
 import type { Message } from "discord.js";
 import { verifyMessageWebhook, isManagedWebhookMessage } from "@/utils/chat/webhookIdentity";
 
-/**
- * Whether a moderator has timed the bot out in this guild.
- *
- * Reads the cached member only. Fetching would turn a per-turn gate into a Discord round trip,
- * and a stale answer is self-correcting: the send path still classifies the resulting 50013.
- */
+// Cache-only lookup avoids a per-turn Discord round trip, and stale state self-corrects because the send path handles
+// 50013.
 function isBotTimedOut(guild: Guild, client: ChatIncoming["client"]): boolean {
   if (!client.user) return false;
   const botMember = guild.members.cache.get(client.user.id);
   return botMember?.isCommunicationDisabled() ?? false;
 }
 
-/**
- * Admission runs before the trigger user is loaded or registered, so their stored language
- * preference is unavailable; the invoker's client locale and then the guild locale are the best
- * signals at this depth.
- */
+// Admission runs before user registration or DB load, so stored user locale is unavailable and invoker or guild
+// locale is used.
 function resolveAdmissionNoticeLocale(incoming: ChatIncoming): string {
   return incoming.manualTriggerInvoker?.locale ?? incoming.message.guild?.preferredLocale ?? "en-US";
 }
@@ -528,7 +521,6 @@ async function resolveMessageProxyRecord(
   return record;
 }
 
-/** @internal Exported for focused admission regression tests. */
 export async function evaluateMessageProxyOriginalSpeedbump(args: {
   incoming: ChatIncoming;
   userDiscId: string;
@@ -871,12 +863,8 @@ async function loadEarlyTomoriState(
   }
 }
 
-/**
- * Downstream reply-target readers must use this instance rather than the channel cache, because the
- * capped cache can evict the target and webhook trust is recorded per message object.
- *
- * @internal Exported for focused admission regression tests.
- */
+// Downstream callers must reuse this returned Message instead of channel cache, because cache eviction drops it and
+// webhook trust lives per object.
 export async function resolveReferencedMessage(message: Message): Promise<Message | null> {
   const referenceId = message.reference?.messageId;
   if (!referenceId || !("messages" in message.channel)) {
@@ -892,7 +880,6 @@ export async function resolveReferencedMessage(message: Message): Promise<Messag
   return referencedMessage;
 }
 
-/** @internal Exported for focused admission regression tests. */
 export async function shouldBlockReplyToOtherBot(args: {
   incoming: ChatIncoming;
   earlyAllPersonas: TomoriState[];

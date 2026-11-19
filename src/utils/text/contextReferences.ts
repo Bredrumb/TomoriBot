@@ -82,10 +82,6 @@ export function buildPublicPersonaProfiles(
     .filter((profile) => profile.attributes.length > 0 || profile.imageAppearanceTags.length > 0);
 }
 
-/**
- * Resolves all context-only persona and user references for live chat and
- * prompt snapshots from the same sanitized history representation.
- */
 export async function resolveContextReferences(params: {
   client: Client;
   guildId: string;

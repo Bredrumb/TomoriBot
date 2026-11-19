@@ -7,7 +7,6 @@ type ImageGenerationInput =
   | { kind: "standard"; prompt: string; aspectRatio: string; referenceFilenames: string[] }
   | { kind: "novelai"; prompt: string; negativeTags: string; orientation: string; referenceFilenames: string[] };
 
-/** Save modal inputs so a failed generation does not force the user to retype them. */
 export function buildImageGenerationInputAttachment(locale: string, input: ImageGenerationInput): AttachmentBuilder {
   const isNovelAi = input.kind === "novelai";
   const lines = [

@@ -4,10 +4,6 @@ import type { PersonaSpriteRow } from "@/types/db/schema";
 import { answersQueuedTriggerMessage, buildQueuedReplyDirective } from "@/utils/chat/contextDirectives";
 import { buildPersonaSpritePromptText } from "@/utils/text/context/personaSprites";
 
-/**
- * Build a minimal queued message. Only the fields read by `buildQueuedReplyDirective`
- * are populated (id, content, attachments, stickers); the rest is cast away.
- */
 function makeQueuedMessage(content: string): Message {
   return {
     id: "1531509478955155539",
@@ -65,13 +61,8 @@ describe("buildQueuedReplyDirective", () => {
     expect(directive).toContain("i kinda like your smell tho");
   });
 
-  /**
-   * Drift guard. The queued-reply directive and the persona-sprite prompt are built in
-   * separate modules but land in the same system context and describe the same opening
-   * line. When they disagreed, the model obeyed the directive and silently dropped the
-   * sprite tag on every queued turn. Asserting both emit byte-identical label grammar
-   * makes any future reword of one side fail here instead of in production.
-   */
+  // Both builders land in the same system context for one opening line, so diverging grammar causes the model to
+  // silently drop sprite tags on queued turns.
   test("sprite label grammar matches the persona-sprite prompt exactly", () => {
     const botName = "Ellen";
     const spritePrompt = buildPersonaSpritePromptText(botName, [makeSprite("shy")]);
@@ -88,10 +79,6 @@ describe("answersQueuedTriggerMessage", () => {
     expect(answersQueuedTriggerMessage({ isFromQueue: true, textQuotaSource: "user" })).toBe(true);
   });
 
-  /**
-   * Regression: a welcome queued behind a busy channel replayed with the channel's latest message
-   * as its reply target, so the greeting pinged the newcomer while answering someone else.
-   */
   test("a queued system trigger does not answer its anchor message", () => {
     expect(answersQueuedTriggerMessage({ isFromQueue: true, textQuotaSource: "system" })).toBe(false);
   });

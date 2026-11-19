@@ -10,11 +10,6 @@ const DEEPSEEK_API_MODEL_ALIASES: Readonly<Record<string, string>> = {
   "deepseek-v4-flash-vision-exp": "deepseek-flash",
 };
 
-/**
- * Maps a DeepSeek catalog codename to the model name the DeepSeek API accepts.
- * @param model - The `llm_codename` stored on the llms row.
- * @returns The current API model name, or the trimmed codename when it has no alias.
- */
 export function toDeepseekApiModelName(model: string): string {
   const trimmed = model.trim();
   return DEEPSEEK_API_MODEL_ALIASES[trimmed] ?? trimmed;

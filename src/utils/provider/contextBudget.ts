@@ -7,19 +7,12 @@ import { resolveModelLimits } from "@/utils/provider/modelLimits";
 import { normalizeProviderName, providerUsesApiFamily } from "@/utils/provider/providerInfoRegistry";
 import { truncateDialogueHistory } from "@/utils/text/contextTruncator";
 
-/**
- * The context window history truncation works against, and the reply budget it reserves first.
- */
 export interface ContextBudget {
   exact?: boolean;
   contextLength: number;
   outputReserve: number;
 }
 
-/**
- * Resolves the budget the live pipeline truncates against, or null for a provider whose window
- * TomoriBot does not know (truncation is then skipped).
- */
 export async function resolveContextBudget(
   tomoriState: TomoriState,
   refreshLiveLimits = true,
@@ -44,9 +37,6 @@ export async function resolveContextBudget(
   };
 }
 
-/**
- * Drops the oldest history exchanges until the context fits the provider's budget.
- */
 export async function applyProviderContextTruncation(
   contextItems: StructuredContextItem[],
   tomoriState: TomoriState,

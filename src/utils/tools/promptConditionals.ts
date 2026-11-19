@@ -44,7 +44,8 @@ export interface PromptConditionalRenderOptions {
 
 export interface StConditionalRenderOptions {
   resolveCondition(expression: string): string;
-  /** Applied to each kept text run in source order, so a declaration is visible to every later condition. */
+  // Kept text runs are transformed immediately in source order so variable declarations are visible to later
+  // conditions.
   transformText?(text: string): string;
   warn(message: string): void;
 }

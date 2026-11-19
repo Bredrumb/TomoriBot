@@ -11,21 +11,17 @@ const REQUEST_TIMEOUT_MS = 10_000;
 const MAX_RESPONSE_BYTES = 512 * 1024;
 const MAX_FAILURE_DETAIL_CHARS = 500;
 
-/** Requests one tool call may have in flight at once, which keeps a 20-query lookup under Danbooru's rate limit. */
+// Concurrency stays at 4 per tool call so a 20-query lookup stays under Danbooru's rate limit.
 export const DANBOORU_REQUEST_CONCURRENCY = 4;
 
-/**
- * Emoticon tags whose underscore is part of the drawing, so the NovelAI form keeps it.
- * Ceiling: an emoticon missing here renders with a space; add it when a user reports one.
- */
+// Emoticon underscores form the drawing so NovelAI keeps them; ceiling is this hardcoded set until a user reports a
+// missing one.
 const EMOTICON_TAGS: ReadonlySet<string> = new Set(["^_^", ">_<", "o_o", "x_x", "u_u", "._.", "0_0"]);
 
-/** Converts a Danbooru tag to the spaced form NovelAI prompts use. */
 export function toNaiTag(tag: string): string {
   return EMOTICON_TAGS.has(tag) ? tag : tag.replaceAll("_", " ");
 }
 
-/** Converts a spaced or underscored tag to the lowercase, underscored form Danbooru requires. */
 export function toDanbooruTag(tag: string): string {
   const trimmed = tag.trim().toLowerCase();
   return EMOTICON_TAGS.has(trimmed) ? trimmed : trimmed.replace(/\s+/g, "_");
@@ -51,7 +47,7 @@ export interface DanbooruFailure {
 
 export type DanbooruResult<T> = { ok: true; data: T } | { ok: false; failure: DanbooruFailure };
 
-/** Model-facing tool errors; Danbooru's own response text stays in the logs. */
+// Model-facing error strings omit Danbooru's own response text because upstream provider bodies stay in logs.
 export const DANBOORU_FAILURE_MESSAGES: Record<DanbooruFailureKind, string> = {
   refused: "Danbooru refused the request. Tell the user Danbooru is unavailable right now.",
   rate_limited: "Danbooru rate-limited the request. Tell the user to try again in a minute.",
@@ -69,7 +65,8 @@ const EXPECTED_FAILURE_KINDS: ReadonlySet<DanbooruFailureKind> = new Set([
   "cancelled",
 ]);
 
-/** Danbooru's own outage or maintenance answers, which clear without any action from TomoriBot. */
+// HTTP 502, 503, and 504 count as expected failures because they reflect Danbooru outages that clear without
+// TomoriBot action.
 const TRANSIENT_UNAVAILABLE_STATUSES: ReadonlySet<number> = new Set([502, 503, 504]);
 
 const autocompleteEntrySchema = z.object({
@@ -88,10 +85,8 @@ const relatedTagResponseSchema = z.object({
 
 const wikiPageSchema = z.object({ body: z.string() });
 
-/**
- * One post as requested with an `only=` field list. Restricted posts omit their file URLs, and only the
- * single-post read asks for meta tags.
- */
+// Image URLs and meta tags stay optional because Danbooru omits file URLs on restricted posts and only single-post
+// reads request meta.
 export const danbooruPostSchema = z.object({
   id: z.number().int(),
   rating: z.enum(["g", "s", "q", "e"]),
@@ -184,7 +179,6 @@ async function danbooruGet<T>(
   }
 }
 
-/** Autocomplete over tag names, aliases, and typo corrections. */
 export function fetchTagAutocomplete(
   query: string,
   limit: number,
@@ -199,10 +193,7 @@ export function fetchTagAutocomplete(
   );
 }
 
-/**
- * General tags most associated with `tag`, in cosine order, over general and sensitive posts only.
- * The rating scope is fixed so a character's description never draws on explicit posts.
- */
+// The rating:g,s scope is fixed so character descriptions never draw associated tags from explicit posts.
 export async function fetchRelatedGeneralTags(
   tag: string,
   limit: number,
@@ -223,7 +214,6 @@ export async function fetchRelatedGeneralTags(
   return result.ok ? { ok: true, data: result.data.related_tags.map((entry) => entry.tag.name) } : result;
 }
 
-/** The DText body of a tag's wiki page; a tag with no wiki fails with `not_found`. */
 export async function fetchWikiBody(tag: string, signal?: AbortSignal): Promise<DanbooruResult<string>> {
   const result = await danbooruGet(
     "wiki_page",
@@ -240,12 +230,10 @@ const POST_READ_FIELDS =
 const POST_SEARCH_FIELDS =
   "id,rating,score,source,file_url,large_file_url,file_ext,is_banned,tag_string_character,tag_string_copyright,tag_string_artist,tag_string_general";
 
-/** One post's tags; a missing post fails with `not_found`. */
 export function fetchPost(id: number, signal?: AbortSignal): Promise<DanbooruResult<DanbooruPost>> {
   return danbooruGet("post", `/posts/${id}.json`, { only: POST_READ_FIELDS }, danbooruPostSchema, signal);
 }
 
-/** One page of posts matching a full Danbooru tag query, metatags included. */
 export function fetchPosts(
   query: string,
   limit: number,
@@ -260,12 +248,6 @@ export function fetchPosts(
   );
 }
 
-/**
- * Logs a Danbooru failure at the point a caller turns it into a tool error or reply.
- * Rate limits, the 2-tag limit, a missing post, cancellation, and a Danbooru outage status are expected.
- *
- * @param scope.expected - Logs every kind as expected, for callers whose only symptom is an empty result
- */
 export async function reportDanbooruFailure(
   failure: DanbooruFailure,
   scope: { operation: string; serverId?: number | null; userId?: number | null; expected?: boolean },
@@ -292,10 +274,8 @@ export async function reportDanbooruFailure(
   });
 }
 
-/**
- * Runs tasks with at most `limit` in flight. A finishing task hands its slot straight to the next
- * waiter, so a new caller cannot claim it in between and exceed the limit.
- */
+// Finishing tasks pass their slot directly to the next waiter without decrementing active so new callers cannot steal
+// it and exceed limit.
 export function createRequestLimiter(limit: number): <T>(task: () => Promise<T>) => Promise<T> {
   let active = 0;
   const waiting: Array<() => void> = [];

@@ -14,10 +14,8 @@ const DATABASE_SECRET_KEYS = [
   "POSTGRES_DB",
 ] as const;
 
-/**
- * Parse the database-only secret bundle used by privileged lifecycle jobs.
- * Application credentials are intentionally neither required nor returned.
- */
+// Application keys are excluded here because one-shot schema containers and lifecycle jobs must run without access to
+// app credentials.
 export function parseDatabaseSecrets(rawSecrets: unknown): DatabaseSecrets {
   if (typeof rawSecrets !== "object" || rawSecrets === null || Array.isArray(rawSecrets)) {
     throw new Error("Database secret file must contain a JSON object.");
@@ -44,10 +42,7 @@ export function parseDatabaseSecrets(rawSecrets: unknown): DatabaseSecrets {
   return parsed;
 }
 
-/**
- * Load only PostgreSQL connection fields from a mounted JSON secret.
- * This avoids granting a one-shot schema container access to application keys.
- */
+// Loads only PostgreSQL connection fields so one-shot schema containers never access application keys.
 export async function loadDatabaseSecretsFromFile(secretFile: string): Promise<void> {
   const fileContent = await Bun.file(secretFile).text();
   if (!fileContent) {

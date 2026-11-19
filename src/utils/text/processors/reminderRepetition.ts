@@ -4,12 +4,10 @@ import { addMonthsWithOffset, getDayOfMonthWithOffset } from "@/utils/text/timez
 
 const MILLISECONDS_PER_HOUR = 3_600_000;
 
-/** How a reminder repeats after it fires; null fires once. */
 export type ReminderRepetition = { unit: "hours" | "months"; interval: number } | null;
 
 export type ReminderOccurrence = {
   time: Date;
-  /** Monthly target day to store with the occurrence; null for hourly series. */
   anchorDay: number | null;
 };
 
@@ -48,10 +46,6 @@ function isRepetitionCount(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 
-/**
- * Validates the model's `repetition_interval_hours` and `repetition_interval_months` arguments,
- * where 0 means one-time and at most one unit may be positive.
- */
 export function parseRepetitionArgs(hoursArg: unknown, monthsArg: unknown): RepetitionArgsResult {
   if (!isProvided(hoursArg) && !isProvided(monthsArg)) {
     return { ok: true, provided: false };
@@ -77,11 +71,8 @@ export function parseRepetitionArgs(hoursArg: unknown, monthsArg: unknown): Repe
   return { ok: true, provided: true, repetition: null };
 }
 
-/**
- * Finds the first occurrence after `referenceTimeMs`, skipping occurrences missed while the bot was
- * down. Monthly series step in the server's calendar and aim for `anchorDay` (or the current
- * occurrence's day), so a series on the 31st clamps to Feb 28 and then returns to Mar 31.
- */
+// Monthly series carry anchorDay across occurrences because clamping a 31st reminder to Feb 28 would otherwise lose
+// the original day for Mar 31.
 export function getNextReminderOccurrence(
   reminderTime: Date,
   repetition: NonNullable<ReminderRepetition>,

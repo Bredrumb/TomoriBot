@@ -1,8 +1,3 @@
-/**
- * Tool Initialization System
- * Automatically discovers and registers all available tools with the central registry
- */
-
 import path from "node:path";
 import { log } from "../utils/misc/logger";
 import { ToolRegistry } from "./toolRegistry";
@@ -10,21 +5,6 @@ import getAllFiles from "../utils/misc/ioHelper";
 import { BaseTool } from "../types/tool/interfaces";
 import type { ErrorContext } from "../types/db/schema";
 
-/**
- * Initialize all tools by auto-discovering and registering them with the central registry
- * This should be called once during application startup
- *
- * Auto-discovers tools from:
- * - src/tools/functionCalls/ - Built-in function call tools
- * - src/tools/webSearch/      - Unified web_search tool (Brave, SearXNG, DuckDuckGo chain)
- * - src/tools/fetchUrl/       - Unified fetch_url tool (hidden engine chain)
- *
- * Note: the previously LLM-visible `BraveXxxSearchTool` classes are now demoted
- * to `restAPIs/brave/internal/` and consumed only by `webSearch/braveEngine.ts`.
- * They are intentionally excluded from auto-discovery.
- *
- * MCP tools are still handled by Google's official mcpToTool() - no manual registration needed
- */
 export async function initializeTools(): Promise<void> {
   try {
     log.info("Initializing tool registry with auto-discovery...");
@@ -85,11 +65,6 @@ export async function initializeTools(): Promise<void> {
   }
 }
 
-/**
- * Discover and register tools from a specific file
- * @param filePath - Absolute path to the tool file
- * @param source - Source identifier for logging (e.g., "functionCalls", "brave")
- */
 async function discoverAndRegisterTools(filePath: string, source: string): Promise<number> {
   let discoveredCount = 0;
 

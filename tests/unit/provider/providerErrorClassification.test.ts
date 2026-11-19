@@ -119,7 +119,6 @@ describe("Gemini free-tier quota window", () => {
   });
 });
 
-/** Runs a NIM HTTP failure through the same normalizer the stream path uses, so the tests pin the real shape. */
 function nimError(status: number, statusText: string, body: string): ProviderError {
   return normalizeOpenAICompatibleProviderError(createOpenAICompatibleHttpError(status, statusText, body), {
     errorMessagePrefix: "NVIDIA API error",
@@ -189,17 +188,16 @@ function makeOpenAICompatibleAdapter(): OpenAICompatibleStreamAdapter {
   });
 }
 
-/** Runs a network failure through a custom endpoint's adapter, the path a server's own endpoint takes. */
 function customEndpointError(message: string): ProviderError {
   return makeOpenAICompatibleAdapter().handleProviderError(new TypeError(message));
 }
 
-/** The exact error `@google/genai` throws when a stream body ends partway through an event. */
+// Verbatim error string thrown by @google/genai on a truncated stream, because the classifier matches this exact
+// wording.
 function genaiIncompleteStream(): Error {
   return new Error("Incomplete JSON segment at the end");
 }
 
-/** Runs a Google SDK failure through the adapter's own normalizer, which embeds the API body in the message. */
 function googleError(code: number, status: string, message: string): ProviderError {
   return new GoogleStreamAdapter().handleProviderError(
     new Error(`got status: ${code}. ${JSON.stringify({ error: { code, message, status } })}`),

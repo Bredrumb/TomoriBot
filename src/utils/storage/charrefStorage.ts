@@ -111,10 +111,8 @@ function resolveLocalCharRefPath(storedPath: string): string | null {
   return null;
 }
 
-/**
- * A local reference resolved only inside its owner's directory. Imports can store any path on a
- * user or persona, so the shared base-directory check alone would let one owner read another's file.
- */
+// Local char-ref paths are confined to the owner's directory because imports can store arbitrary paths that would
+// bypass a shared base-directory check.
 function resolveOwnedLocalCharRefPath(
   storedPath: string,
   entityType: CharRefEntityType,
@@ -292,11 +290,8 @@ export async function uploadCharRef(options: CharRefUploadOptions): Promise<stri
   }
 }
 
-/**
- * Deletes a stored reference only when it lives under the owner's own key prefix or directory.
- * Imports can set any reference string, so replacing an imported value must not delete a file or
- * object that belongs to another user or persona.
- */
+// Only references under the owner's prefix or directory are deleted because imports can set arbitrary paths pointing
+// to another owner's file or object.
 export async function deleteCharRef(
   urlOrPath: string,
   entityType: CharRefEntityType,
@@ -355,10 +350,6 @@ export async function deleteCharRef(
   }
 }
 
-/**
- * Loads a reference image for generation. Remote URLs go through the SSRF-gated downloader; a
- * local path must sit in the owner's own directory unless it is shared preset art.
- */
 export async function loadCharRefAsBase64(
   urlOrPath: string,
   entityType: CharRefEntityType,

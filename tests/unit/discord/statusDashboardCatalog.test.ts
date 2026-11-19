@@ -23,13 +23,11 @@ import { createPersona } from "../../helpers/fixtures";
 
 beforeAll(async () => initializeLocalizer());
 
-/** `dashboardPayload` always wraps its body in one container component, whatever its declared element type says. */
 function payloadContainerComponents(payload: ReturnType<typeof dashboardPayload>): readonly ComponentInContainerData[] {
   const container = payload.components[0] as ContainerComponentData<ComponentInContainerData>;
   return container.components;
 }
 
-/** Only the action-row member of the container union carries a child array. */
 function rowComponents(row: ComponentInContainerData | undefined): readonly unknown[] {
   return (row as ActionRowData<ActionRowComponentData> | undefined)?.components ?? [];
 }

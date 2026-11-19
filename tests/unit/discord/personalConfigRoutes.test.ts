@@ -97,21 +97,11 @@ import {
 
 beforeAll(async () => initializeLocalizer());
 
-/**
- * The single place this suite says which channels are text channels in the fake guild. Routes that
- * confirm a spotlight channel read `guild.channels.cache`, so a channel missing here is rejected as
- * not a text channel in this guild.
- */
 function makeChannelCache(channelIds: string[]): Map<string, RouteGuildChannel> {
   // ChannelType.GuildText is 0; the route guard rejects anything else.
   return new Map(channelIds.map((id) => [id, { type: 0, name: `channel-${id.slice(-4)}` }]));
 }
 
-/**
- * Every source file that compares `route.action`. The handler-parity gate unions their matches, so a
- * slice that moves handler branches into a new module adds its path here instead of editing the
- * assertion it would otherwise have to weaken.
- */
 const PERSONAL_CONFIG_HANDLER_SOURCES = [
   "src/utils/discord/interactions/personalConfigRoutes.ts",
   "src/utils/discord/interactions/personalConfigModalOpenRoutes.ts",
@@ -167,12 +157,6 @@ function collectComponents(value: unknown): ObservedComponent[] {
   return [...current, ...Object.values(record).flatMap(collectComponents)];
 }
 
-/**
- * The suite pins its actor's Discord snowflake because spotlight fingerprints bind the writable
- * scope to it, so the shared row arrives with this suite's actor and nothing else overridden. The
- * routes read the numeric id as required while the schema types it optional, so the row the suite
- * hands over carries the shared fixture's id explicitly.
- */
 function makeUser(overrides: Partial<UserRow> = {}): UserRow & { user_id: number } {
   const row = createUserRow({ user_disc_id: "user-123", ...overrides });
   return { ...row, user_id: row.user_id ?? 1 };
@@ -186,14 +170,8 @@ const SUITE_ACTOR: RouteInteraction["user"] = {
   displayAvatarURL: () => "https://cdn.example.invalid/tester.png",
 };
 
-/** The shared route fake, typed as the interaction the personal routes and global router accept. */
 type PersonalInteraction = RouteInteraction & GlobalRoutableInteraction;
 
-/**
- * A route interaction from this suite's actor in this suite's guild. `resolveScope` answers
- * `guild-123`/`user-123` whatever the interaction says, so a fake left on the shared factory's own
- * identity would dispatch as a different actor than the scope the route writes for.
- */
 function makePersonalInteraction(options: RouteInteractionOptions = {}): PersonalInteraction {
   return createRouteInteraction({
     guildId: "guild-123",
@@ -202,11 +180,6 @@ function makePersonalInteraction(options: RouteInteractionOptions = {}): Persona
   }) as PersonalInteraction;
 }
 
-/**
- * Positional wrapper over {@link createPersona}. The suite names personas by the lineage IDs it
- * asserts on, so the wrapper keeps those call sites reading as identity triples while the row shape
- * itself lives in the shared factory.
- */
 function makePersona(personaId: number, lineageId: number, name: string, isAlter = false): TomoriState {
   return createPersona({
     persona_id: personaId,
@@ -230,11 +203,6 @@ function makeParameterConfig(provider: string): UserSavedProviderConfigRow {
   } as unknown as UserSavedProviderConfigRow;
 }
 
-/**
- * A complete active-spotlight row. Production reads `channelDiscId`, `personaIds`,
- * `autoTriggerPersonaId`, and `expiresAt` from these rows, and the suite's own guild and actor fill
- * the three identity columns, so a call site states only the channel and the persona selection.
- */
 function makeSpotlight(
   channelDiscId: string,
   overrides: Partial<PersonalSpotlightStatus> = {},
@@ -252,7 +220,6 @@ function makeSpotlight(
   };
 }
 
-/** What the loaders report per capability when the account has no saved provider for it. */
 const EMPTY_ROUTING_ROWS: Record<PersonalConfigManagedCapability, PersonalConfigRoutingRow> = {
   speech_design: { capability: "speech_design", activeModelName: null, storedProvider: null, storedModelName: null },
   speech_clone: { capability: "speech_clone", activeModelName: null, storedProvider: null, storedModelName: null },
@@ -277,11 +244,6 @@ const EMPTY_CAPABILITY_PROVIDERS: Record<PersonalConfigManagedCapability, string
   video: [],
 };
 
-/**
- * Display info for an account with no saved providers. The loader always reports every capability
- * key, so a fixture that only varies the Fallbacks fields states those and inherits the rest rather
- * than omitting keys the rendered page does not read.
- */
 function makeModelDisplayInfo(
   overrides: Partial<Omit<PersonalConfigModelDisplayInfo, "routingRows" | "eligibleProvidersForCapability">> & {
     routingRows?: Partial<Record<PersonalConfigManagedCapability, PersonalConfigRoutingRow>>;
@@ -678,10 +640,6 @@ describe("personalConfigPanelCatalog", () => {
     expect(parsePersonalConfigPanelRoute(requireRoute(customId))).toEqual(route);
   });
 
-  /**
-   * Route objects whose every field must survive a build and parse. One row per route so a codec
-   * regression names the field it lost instead of failing one 543-line test.
-   */
   const MODAL_AND_CONTROL_ROUTES: ReadonlyArray<readonly [string, PersonalConfigPanelRoute]> = [
     ["language-open", { action: "language-open", locale: "en-US" }],
     ["language-submit", { action: "language-submit", locale: "en-US", nonce: "nonce123456" }],
@@ -1063,11 +1021,6 @@ describe("personalConfigPanelCatalog", () => {
     expect(declared.filter((action) => !pinned.has(action))).toEqual([]);
   });
 
-  /**
-   * The retry codec accepts a four-segment form (no lineage) and a five-segment form
-   * (lineage present). Each pair is one case: the round-trip proves the field survives, and the
-   * field-absence assertions prove the shorter form does not fabricate the longer form's fields.
-   */
   const RETRY_ROUTES: ReadonlyArray<
     readonly [string, PersonalConfigPanelRoute, PersonalConfigPanelRoute, readonly string[]]
   > = [
@@ -1334,10 +1287,6 @@ describe("personalConfigPanelCatalog", () => {
     }
   });
 
-  /**
-   * Custom IDs a client could construct but the parser must refuse. Each row names the rule it
-   * exercises so a loosened parse reports which grammar rule it broke.
-   */
   const MALFORMED_ROUTES: ReadonlyArray<readonly [string, string]> = [
     ["foreign namespace", "other:v2:category:en-US:profile:general"],
     ["retired v1 version", "personal-config:v1:category:en-US:profile:general"],
@@ -3751,7 +3700,6 @@ describe("Fallbacks submission re-resolution and invariants", () => {
   type AvailableModels =
     ReturnType<typeof llmModelRepo.loadAvailableModelsForProvider> extends Promise<infer T> ? T : never;
 
-  /** Stubs the reads `setFallbacks` makes and captures the user-level chain it writes. */
   function stubFallbackSubmission(options: {
     rows: UserSavedProviderConfigRow[];
     chain: FallbackModelRef[];
@@ -7082,7 +7030,6 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
     });
 
     describe("Server Model Fallback state control rendering and custom IDs", () => {
-      /** The section's own control row, told apart from the randomizer row that shares the page. */
       function findServerFallbackRow(
         payload: PersonalConfigPanelPayload,
       ): ActionRowData<InteractionButtonComponentData> {

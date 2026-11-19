@@ -10,13 +10,8 @@ import { userRepository } from "@/utils/db/repositories/UserRepository";
 
 const spotlightCache = new Map<string, { result: PersonalSpotlightStatus | null; expiresAt: number }>();
 
-/**
- * Per-server gate so a server that has never configured a spotlight never creates an entry in the
- * server/user/channel-keyed cache below.
- *
- * Any new write path must call {@link invalidatePersonalSpotlightCache}, or this keeps answering
- * "none" for up to the TTL.
- */
+// Per-server negative gate avoids populating the fine-grained cache, so any new write path must call
+// `invalidatePersonalSpotlightCache` to clear it.
 const serverHasSpotlights = new Map<number, { hasAny: boolean; expiresAt: number }>();
 
 let cacheHits = 0;
@@ -30,12 +25,8 @@ function getCacheKey(serverId: number, userId: number, channelDiscId: string): s
   return `${serverId}:${userId}:${channelDiscId}`;
 }
 
-/**
- * Bound the cache before inserting.
- *
- * The TTL above is consulted only on read, so nothing expires on its own. Expired entries go first,
- * then oldest-inserted, which relies on Map preserving insertion order.
- */
+// Because TTL is checked only on read, pre-insert eviction drops expired entries first and then oldest keys via Map
+// insertion order.
 function evictForInsert(now: number): void {
   if (spotlightCache.size < MAX_ENTRIES) return;
 

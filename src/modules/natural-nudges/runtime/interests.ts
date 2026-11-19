@@ -17,15 +17,15 @@ import { acceptGeneratedInterests } from "@/providers/utils/presetCommon";
 import { log } from "@/utils/misc/logger";
 import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 
-/** Matches what `/persona generate` asks for, so one press leaves room for a few hand-written interests. */
+// Value of 5 matches `/persona generate`, so one press leaves room for a few hand-written interests.
 export const GENERATED_INTEREST_BATCH = 5;
-/** The member is watching a deferred button, so a stuck model must give up well inside the interaction token. */
+// The member is watching a deferred button, so a stuck model must give up well inside the interaction token.
 const INTEREST_GENERATION_TIMEOUT_MS = 60_000;
 
 const responseSchema = z.object({
   interests: z.array(z.object({ label: z.string(), description: z.string() })),
 });
-/** Entries are validated one by one afterwards, so one bad entry does not discard the rest. */
+// Entries are validated individually afterward, so one bad entry does not discard the rest.
 const acceptedSchema = z.object({ interests: z.array(z.unknown()) });
 
 export type InterestGenerationOutcome =
@@ -37,7 +37,6 @@ function labelKey(interest: NaturalNudgeInterest): string {
   return interest.label.trim().toLowerCase();
 }
 
-/** Generated interests that are new to `existing` and to each other, cut to the room left under the limit. */
 export function mergeGeneratedInterests(
   existing: readonly NaturalNudgeInterest[],
   generated: readonly NaturalNudgeInterest[],
@@ -82,7 +81,6 @@ function buildUserPrompt(persona: TomoriState, existing: readonly NaturalNudgeIn
     .join("\n\n");
 }
 
-/** One structured call to the Idle Nudge Planner model; validity and duplicates are the caller's merge. */
 export async function generatePersonaInterests(
   persona: TomoriState,
   plannerModel: NudgeModelRef,

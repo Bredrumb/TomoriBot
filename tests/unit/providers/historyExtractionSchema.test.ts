@@ -4,14 +4,6 @@ import {
   HistoryExtractionResultSchema,
 } from "@/providers/utils/historyExtractionSchema";
 
-/**
- * Regression guard for collapsed history-extraction entries.
- *
- * `HistoryMemoryEntry` has exactly one required field, and models routinely emit the field's
- * value directly instead of wrapping it: Gemini via OpenRouter returned
- * `memories: ["fact", ...]`, which failed validation for every element and aborted the whole
- * import. The collapsed form is unambiguous, so the schema repairs it.
- */
 describe("history extraction schema", () => {
   const restatement = "Eri configured the embedding model to gemini-embedding-2 on this server.";
 

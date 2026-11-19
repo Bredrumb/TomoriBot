@@ -1,12 +1,3 @@
-/**
- * ToolRepository: manages guild MCP server configurations.
- *
- * Owns the `guild_mcp_servers` table. The Brave API key status read lives
- * here too since it gates tool availability.
- *
- * Export contract: toExportShape / fromExportShape are required by IRepository
- * and consumed by the Phase 6 (#16.7) export pipeline composition.
- */
 import type { GuildMcpFailureReason, GuildMcpServerRow } from "@/types/db/schema";
 import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
@@ -21,14 +12,14 @@ import { forgetMcpAccessToken } from "@/utils/mcp/oauth/accessToken";
 import type { ShardTopology } from "@/utils/discord/shardOwnership";
 import { ownedServersOnly } from "@/utils/db/repositories/shardFilter";
 
-/** Portable tool config export shape (expanded in Phase 6 #16.7). */
 type ToolExportShape = {
   server_disc_id: string;
   mcp_servers: Array<{ name: string; url: string; server_type: string }>;
 };
 
 type McpToolSnapshotUpdateResult = "updated" | "unchanged" | "not-found" | "failed";
-/** `not-found` also covers a registration that was disabled or removed while the connect was in flight. */
+// Status "not-found" also covers registrations disabled or removed mid-connect because the update requires is_enabled
+// = true.
 type McpConnectFailureRecordResult =
   | { status: "failing"; failingSince: Date }
   | { status: "auto-disabled"; failingSince: Date; serverDiscId: string }
@@ -43,25 +34,14 @@ class ToolRepository implements IRepository<ToolExportShape> {
     return this.sqlLoadGuildMcpServers(serverId);
   }
 
-  /**
-   * Loads all enabled MCP server configs across all guilds.
-   * Used during bot startup to register active MCP connections.
-   */
   async loadAllEnabledMcpServers(topology?: ShardTopology): Promise<GuildMcpServerRow[]> {
     return this.sqlLoadAllEnabledGuildMcpServers(topology);
   }
 
-  /**
-   * Returns true if a Brave Search API key is configured for the server.
-   *
-   */
   async getBraveApiKeyStatus(serverId: number): Promise<boolean> {
     return (await this.getBraveApiKeyStatusResult(serverId)).configured;
   }
 
-  /**
-   * Reads Brave configuration without collapsing a database failure into an unconfigured state.
-   */
   async getBraveApiKeyStatusResult(serverId: number): Promise<BraveApiKeyStatusReadResult> {
     try {
       const rows = await sql`
@@ -77,27 +57,12 @@ class ToolRepository implements IRepository<ToolExportShape> {
     }
   }
 
-  /**
-   * Decrypts the auth token for a guild MCP server row.
-   *
-   * @param row - GuildMcpServerRow with an encrypted auth token
-   * Internal private callers report a normalized failure at their orchestration owner.
-   * @returns Decrypted token or null when absent; private failures throw without SDK details.
-   */
+  // With privateFailure true, decryption errors throw a generic message without leaking details so orchestration
+  // callers can report safely.
   async decryptMcpAuthToken(row: GuildMcpServerRow, privateFailure = false): Promise<string | null> {
     return this.sqlDecryptGuildMcpAuthToken(row, privateFailure);
   }
 
-  /**
-   * Registers a new MCP server for a guild.
-   * Invalidates the guild MCP config cache and tomori state cache after write.
-   *
-   * @param authToken   - Optional auth token (stored encrypted)
-   * @param serverType  - MCP server type for tool deduplication
-   * @param serverDiscId - Discord server snowflake (required for cache invalidation)
-   * @param oauthGrant - Sign-in grant stored in the same transaction, for a registration without a bearer token
-   * @returns Inserted GuildMcpServerRow or null on failure
-   */
   async insertMcpServer(
     serverId: number,
     name: string,
@@ -124,11 +89,6 @@ class ToolRepository implements IRepository<ToolExportShape> {
     return row;
   }
 
-  /**
-   * Replaces a signed-in registration's grant after Reconnect, keeping its name, type, and slot.
-   *
-   * @returns The refreshed row, or null when the registration is gone or the write failed
-   */
   async replaceMcpOAuthGrant(
     serverId: number,
     guildMcpId: number,
@@ -169,7 +129,7 @@ class ToolRepository implements IRepository<ToolExportShape> {
     return row;
   }
 
-  /** Refreshes display-only discovery metadata without invalidating assembled Tomori state. */
+  // Tomori state cache is left valid because last_discovered_tool_names is display-only metadata.
   async updateMcpToolNameSnapshot(
     serverId: number,
     guildMcpId: number,
@@ -184,7 +144,6 @@ class ToolRepository implements IRepository<ToolExportShape> {
     return result;
   }
 
-  /** Deletes one MCP registration by its stable ID inside the current scope. */
   async deleteMcpServerById(serverId: number, guildMcpId: number, serverDiscId: string): Promise<boolean> {
     const ok = await this.sqlDeleteGuildMcpServerById(serverId, guildMcpId);
     if (ok) {
@@ -194,7 +153,6 @@ class ToolRepository implements IRepository<ToolExportShape> {
     return ok;
   }
 
-  /** Updates one MCP registration by its stable ID inside the current scope. */
   async updateMcpServerEnabledById(
     serverId: number,
     guildMcpId: number,
@@ -209,11 +167,8 @@ class ToolRepository implements IRepository<ToolExportShape> {
     return ok;
   }
 
-  /**
-   * Extends the registration's failure streak and disables it once the streak is at least
-   * `autoDisableAfterMs` old. The age check runs on the database clock so restarts and host clock
-   * drift cannot shorten or reset the window.
-   */
+  // Failure-streak age is evaluated on the database clock so restarts and host clock drift cannot shorten or reset
+  // the window.
   async recordMcpConnectFailure(
     serverId: number,
     guildMcpId: number,
@@ -226,7 +181,6 @@ class ToolRepository implements IRepository<ToolExportShape> {
     return result;
   }
 
-  /** Ends a failure streak after a successful connect. */
   async clearMcpConnectFailure(serverId: number, guildMcpId: number): Promise<void> {
     if (await this.sqlClearGuildMcpConnectFailure(serverId, guildMcpId)) invalidateGuildMcpConfigCache(serverId);
   }
@@ -517,24 +471,13 @@ class ToolRepository implements IRepository<ToolExportShape> {
     }
   }
 
-  /**
-   * Tool config export is handled by ImportExportRepository.
-   * Stub satisfies IRepository contract pending Phase 6 #16.7.
-   *
-   * @param ownerId - Discord server snowflake (unused until Phase 6)
-   */
   async toExportShape(ownerId: string | number): Promise<ToolExportShape | null> {
     return { server_disc_id: String(ownerId), mcp_servers: [] };
   }
 
-  /**
-   * Tool config import is handled by ImportExportRepository.
-   * Stub satisfies IRepository contract pending Phase 6 #16.7.
-   */
   async fromExportShape(_ownerId: string | number, _data: ToolExportShape): Promise<boolean> {
     return false;
   }
 }
 
-/** Singleton instance: import this in callers. */
 export const toolRepository = new ToolRepository();

@@ -22,7 +22,7 @@ export interface ElevenLabsVoiceCatalogResult {
   errorKind?: ElevenLabsVoiceCatalogErrorKind;
   statusCode?: number;
   details?: string;
-  /** ElevenLabs' status and response body, for the operator log. */
+  // Kept in operator logs so ElevenLabs catalog details never leak to replies.
   providerDetail?: string;
 }
 

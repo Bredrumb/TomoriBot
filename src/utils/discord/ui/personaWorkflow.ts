@@ -33,10 +33,6 @@ const PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS = 2 * 60_000;
 type PersonaWorkflowRootInteraction = ChatInputCommandInteraction | ButtonInteraction;
 type PersonaWorkflowMessageInteraction = ButtonInteraction | ModalMessageModalSubmitInteraction;
 
-/**
- * A Components V2 edit payload. Legacy content and embeds are impossible to
- * express through the command-facing workflow API.
- */
 export interface PersonaWorkflowComponentsV2Payload
   extends Pick<InteractionEditReplyOptions, "allowedMentions" | "attachments" | "files"> {
   components: NonNullable<InteractionEditReplyOptions["components"]>;
@@ -54,7 +50,6 @@ export type PersonaWorkflowUpdateErrorCode =
   | "non-message-backed-interaction"
   | "unsupported-replacement";
 
-/** Typed failure raised by anchor-message and acknowledgment operations. */
 export class PersonaWorkflowUpdateError extends Error {
   public readonly code: PersonaWorkflowUpdateErrorCode;
   public readonly cause?: unknown;
@@ -93,10 +88,8 @@ interface PersonaWorkflowModalPhase {
   readonly values: Readonly<Record<string, string>>;
   readonly multiValues: Readonly<Record<string, string[]>>;
   readonly attachments: Readonly<Record<string, APIAttachment>>;
-  /** Absolute offset of the first option in a paginated modal range. */
   readonly optionOffset: number;
   readonly message: PersonaWorkflowMessageController;
-  /** Uses the unacknowledged, message-backed modal submit to replace the anchor message directly. */
   replace(payload: PersonaWorkflowComponentsV2Payload): Promise<Message>;
   beginInPlaceWork(): Promise<PersonaWorkflowInPlacePhase>;
   unsafeInteraction(): ModalSubmitInteraction;
@@ -115,15 +108,12 @@ type PersonaWorkflowModalSource = ModalOptions | (() => Promise<ModalOptions>);
 interface PersonaWorkflowSelectionPhase<TPersona extends TomoriState> {
   readonly persona: TPersona;
   readonly absoluteIndex: number;
-  /** Stable id used to scope nested component custom ids. */
   readonly phaseId: string;
   readonly message: PersonaWorkflowMessageController;
   readonly deliveryPolicy: "replace-picker";
   beginInPlaceWork(): Promise<PersonaWorkflowInPlacePhase>;
   openModal(options: PersonaWorkflowModalSource): Promise<PersonaWorkflowModalResult>;
-  /** Binds a collector button to safe same-message operations. */
   useButton(button: ButtonInteraction): PersonaWorkflowNestedButtonPhase;
-  /** Explicit escape hatch for Discord APIs not modeled by the workflow. */
   unsafeInteractions(): {
     root: PersonaWorkflowRootInteraction;
     selectedButton: ButtonInteraction;
@@ -426,11 +416,6 @@ class AnchorMessageController implements PersonaWorkflowMessageController {
     return this.#editRootInner(payload, retainAttachments);
   }
 
-  /**
-   * Awaits any in-flight collapse-at-open edit so a later render deterministically
-   * lands last. The stored promise is already `.catch()`ed, so this never throws.
-   * Cleared once settled; safe to call repeatedly and when no collapse is pending.
-   */
   public async settlePendingCollapse(): Promise<void> {
     const pending = this.#pendingCollapse;
     if (!pending) return;
@@ -438,14 +423,8 @@ class AnchorMessageController implements PersonaWorkflowMessageController {
     await pending;
   }
 
-  /**
-   * Collapse-at-open: fire-and-forget replacement of the anchor message's live
-   * controls with an inert notice as a modal opens. Discord emits no modal-dismiss
-   * event, so without this a dismissed modal would strand clickable buttons for the
-   * full modal timeout. Not awaited here: the promise is stored (and swallowed at
-   * storage) so the modal's own await is never blocked, and {@link settlePendingCollapse}
-   * lets the terminal edit order itself after it.
-   */
+  // Discord emits no modal-dismiss event, so controls collapse unawaited at open (avoiding modal delay) and settle
+  // before later edits so buttons are not stranded.
   public collapseAtOpen(payload: PersonaWorkflowComponentsV2Payload): void {
     if (this.#pendingCollapse) return;
     this.#pendingCollapse = this.#editRootInner(payload, false).catch(() => undefined);
@@ -616,7 +595,6 @@ function noticePayload(
   };
 }
 
-/** Builds a localized, strict Components V2 notice for controller updates. */
 export function buildPersonaWorkflowNotice(options: NoticeContainerOptions): PersonaWorkflowComponentsV2Payload {
   return {
     components: buildNoticeContainer(options),
@@ -1036,12 +1014,6 @@ function normalizeSelectedPersona<TPersona extends TomoriState>(
   return { persona, absoluteIndex: selectedIndex };
 }
 
-/**
- * Runs the complete persona-picker lifecycle. The runner owns the picker retry
- * loop and avatar cache; only an explicit retry directive can reopen the picker.
- * A fatal picker result is returned before the callback runs and is therefore
- * mechanically impossible to retry.
- */
 export async function runPersonaPickerWorkflow<TPersona extends TomoriState, TValue = void>(
   interaction: PersonaWorkflowRootInteraction,
   locale: string,

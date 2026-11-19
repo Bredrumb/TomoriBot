@@ -1,14 +1,3 @@
-/**
- * Manual migration runner.
- *
- * Applies all pending migrations from src/db/migrations/ in version order.
- * The same logic runs automatically at bot startup via initializeDatabase.ts;
- * this script is provided for manual invocation (CI, deployment pipelines,
- * developer tooling).
- *
- * Usage:
- *   bun run scripts/db/migrate.ts
- */
 import { config } from "dotenv";
 import { runMigrations } from "@/db/migrationRunner";
 import { log } from "@/utils/misc/logger";

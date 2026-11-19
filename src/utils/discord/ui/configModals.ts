@@ -53,12 +53,8 @@ export function buildConfigModalFieldId(field: string, nonce: string): string {
 
 const CHECKBOX_GROUP = 22 as const;
 
-/**
- * Builds one Checkbox Group from a page of a longer option list.
- *
- * Discord requires options.length >= max_values, so a partial trailing group caps max_values to its
- * own size instead of the full group capacity.
- */
+// Discord requires options.length >= max_values, so max_values must be capped to groupOptions.length for partial
+// trailing groups.
 export function buildCheckboxGroupComponent<T>(
   customId: string,
   groupOptions: readonly T[],
@@ -382,10 +378,6 @@ export function buildPersonaCharacterReferenceModal(locale: string, personaId: n
   };
 }
 
-/**
- * @param override - The persona's own toggles, or null while it inherits the server
- * @param effective - What the persona runs with now, which pre-checks the boxes either way
- */
 export function buildPersonaHumanizerModal(
   locale: string,
   personaId: number,
@@ -464,10 +456,8 @@ export function buildPersonaTextOverrideModelModal(
   };
 }
 
-/**
- * The "Save as Identity" toggle, shaped like the attribute visibility group so an unchecked box and
- * a submit that carried no checkbox evidence stay distinguishable.
- */
+// This toggle uses a CheckboxGroup shape so submit handlers can distinguish an unchecked box from a payload carrying
+// no checkbox evidence.
 function buildSpriteIdentityCheckboxGroup(locale: string, nonce: string, isIdentity: boolean): RawDiscordComponent {
   return {
     type: 18,
@@ -1037,12 +1027,8 @@ export function buildPersonaDialogueEditModal(
   };
 }
 
-/**
- * Five checkbox groups of ten is the whole modal, so a persona whose configured limit exceeds that
- * presents only the first {@link CONFIG_TRIGGER_CHECKBOX_CAPACITY} words. Option values are absolute
- * indexes into the full list and the fingerprint covers the full list, so an unpresented word is
- * simply never in the derived removal set.
- */
+// Modals hold five 10-option checkbox groups, so entries past the cap are omitted while absolute indexes and
+// full-list fingerprints prevent accidental removal.
 export function buildTriggerRemoveModal(
   locale: string,
   personaId: number,

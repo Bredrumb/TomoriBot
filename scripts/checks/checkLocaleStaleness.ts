@@ -3,27 +3,6 @@ import { join, resolve } from "node:path";
 import * as ts from "typescript";
 import { isVerboseOutput, verboseOutputHint } from "./lib/gateOutput";
 
-/**
- * Branch-scoped translation follow-up analysis.
- *
- * Answers one review question: which English locale keys changed between a merge base and HEAD
- * without a matching edit in the locales this repository maintains by hand?
- *
- * This is an advisory, not a translation-quality oracle. A touched translation can still be
- * wrong, an untouched one can still be right after a punctuation-only English edit, and the
- * runtime `en-US` fallback keeps an untranslated key usable. `check-locales` and the
- * placeholder, marker, and Discord length gates keep their authority. `find-stale-translations`
- * exposes this analysis as its opt-in `unfollowed` reason, so it never becomes a de-facto merge gate.
- *
- * Both revisions are read with the TypeScript parser rather than imported, because one side has to
- * come from a git blob and the locale modules reach `@/` aliases and sibling imports that a
- * temporary checkout cannot resolve. Parsing also keeps keys readable when a commented-out or
- * quoted example key sits next to a real one.
- *
- * The executable contract lives in `findStaleTranslations.ts`; this module retains the parser and
- * Git seam so branch-diff behavior can be tested without a second contributor-facing command.
- */
-
 export const STALENESS_DOC_PATH = "docs/en/contributing/localization/new-locale.md";
 
 const DEFAULT_LOCALE = "en-US";
@@ -48,10 +27,6 @@ export class GitUnavailableError extends Error {}
 export class MissingBaseRefError extends Error {}
 export class LocaleParseError extends Error {}
 
-/**
- * Resolves `git` through Bun.spawn in the repository the command runs from, so a monotonic
- * checkout with an absent remote still reports the same base-resolution failure the CLI does.
- */
 export type GitRunner = (args: string[], cwd: string) => Promise<string>;
 
 function runGitSync(args: string[], cwd: string): string {
@@ -62,56 +37,24 @@ function runGitSync(args: string[], cwd: string): string {
   return new TextDecoder().decode(proc.stdout);
 }
 
-/**
- * The real runner. Exported so a test can exercise base resolution against a fixture repository
- * while production code keeps the injected-runner seam.
- */
 export const defaultGitRunner: GitRunner = async (args, cwd) => runGitSync(args, cwd);
 
-/**
- * Every key/value the locale tree defines, flattened to dot paths.
- *
- * Callers that pass the repository root read the working tree; callers that pass a git ref read
- * that revision. Same function for both so a formatting-only edit cannot masquerade as a value
- * change.
- */
 export interface LocaleSnapshot {
-  /** Dot-path key to raw source value, namespaced as `<locale>:<key>`. */
   values: Map<string, string>;
-  /** Authored locale codes, which is what `src/locales/` currently holds. */
   locales: string[];
-  /** Keys defined by more than one file with conflicting values; see {@link parseInto}. */
   conflicts: Set<string>;
 }
 
-/**
- * How one locale treats a key that this branch changed in `en-US`.
- *
- * `touched` compares parsed values rather than file text, so reformatting a translation file
- * without changing a value leaves the locale reported as untouched.
- */
 export interface LocaleKeyStatus {
   locale: string;
-  /** The key exists in this locale after the branch. */
   present: boolean;
-  /** The locale value after the branch, when the key exists. */
   value?: string;
-  /** This branch added, changed, or removed the locale's own value for the key. */
   touched: boolean;
 }
 
-/**
- * One `en-US` key this branch changed, with the locales that have not caught up.
- *
- * `review` and `missing` are the two kinds of follow-up the advisory distinguishes: an existing
- * translation whose English source moved underneath it, and a locale that has never defined the
- * key and is rendering the runtime fallback.
- */
 export interface ChangedKeyReport {
   key: string;
-  /** Current English value from the branch head. */
   english: string;
-  /** English value at the merge base, absent for a newly added key. */
   previousEnglish?: string;
   review: LocaleKeyStatus[];
   missing: LocaleKeyStatus[];
@@ -124,35 +67,21 @@ export interface KeyDetail {
 
 export interface StalenessReport {
   requestedBase: string;
-  /** Merge base commit the report actually compared against. */
   baseRevision: string;
   headRevision: string;
-  /**
-   * True when locale files in the working tree differ from `HEAD`. Whether those edits are included
-   * in the comparison depends on the caller's `source` option.
-   */
   includesUncommittedEdits: boolean;
-  /** Locale paths whose working tree content differs from `HEAD`, whether or not they were read. */
   uncommittedLocalePaths: string[];
-  /** Authored non-English locales this advisory checked for follow-up. */
   translationLocales: string[];
   added: ChangedKeyReport[];
   changed: ChangedKeyReport[];
   removed: KeyDetail[];
-  /** Changed values per locale across the whole branch, including non-`en-US` edits. */
   localeEditCounts: Map<string, number>;
-  /** Keys some locale defines twice with different values, so no single value is authoritative. */
   conflicts: Set<string>;
 }
 
 export interface CheckLocaleStalenessOptions {
   repoRoot: string;
-  /** Explicit ref or revision to diff against. Omitted means resolve from the environment. */
   base?: string;
-  /**
-   * Compare committed `HEAD` (the default) or the working tree. The working tree is for reading
-   * work in progress locally; a report meant to describe a branch uses the committed default.
-   */
   source?: "head" | "worktree";
   git?: GitRunner;
 }
@@ -186,13 +115,6 @@ export function parseArguments(argv: string[]): ParsedArguments {
   };
 }
 
-/**
- * Locale files tracked at a revision, as `<locale>/<path within the locale>`.
- *
- * Listing from the tree rather than the filesystem is what keeps the head side of the comparison on
- * committed content: a file deleted in the working tree still exists at the revision, and a brand
- * new untracked file does not exist in the branch under review.
- */
 async function listTrackedLocaleFiles(
   git: GitRunner,
   ref: string,
@@ -220,26 +142,16 @@ function splitLocalePath(relativePath: string): { locale: string; file: string }
   return { locale, file: rest.join("/") };
 }
 
-/** Reads every locale file from one revision's tree. No working tree content is consulted. */
 export async function readRefSnapshot(git: GitRunner, cwd: string, ref: string): Promise<LocaleSnapshot> {
   const relativePaths = await listTrackedLocaleFiles(git, ref, cwd);
   return readSnapshotFiles(git, cwd, ref, relativePaths, MissingBaseRefError);
 }
 
-/**
- * Reads the branch under review from the committed `HEAD` tree. The working tree is never
- * consulted, so uncommitted edits cannot make the report describe something other than the branch
- * it names; {@link listDirtyLocalePaths} is what discloses their existence.
- *
- * An unreadable HEAD tree is a broken checkout rather than a missing base, so it exits as a script
- * error instead of sending the reader after a ref that exists.
- */
 export async function readHeadSnapshot(git: GitRunner, cwd: string): Promise<LocaleSnapshot> {
   const relativePaths = await listTrackedLocaleFiles(git, "HEAD", cwd, LocaleParseError);
   return readSnapshotFiles(git, cwd, "HEAD", relativePaths, LocaleParseError);
 }
 
-/** Reads each path of one revision through `git show`, so no working tree content is consulted. */
 async function readSnapshotFiles(
   git: GitRunner,
   cwd: string,
@@ -261,15 +173,6 @@ async function readSnapshotFiles(
   );
 }
 
-/**
- * Reads the working tree for local use, over the files `HEAD` tracks plus any untracked locale file.
- * A deleted tracked file is compared as its absence rather than dropped from the report, and an
- * uncommitted addition is compared as an addition because `--worktree` exists to show work in
- * progress.
- *
- * @param dirtyPaths The caller's {@link listDirtyLocalePaths} result, when it already has one, so the
- *   working tree is not scanned twice.
- */
 export async function readWorkingTreeSnapshot(
   git: GitRunner,
   cwd: string,
@@ -281,10 +184,6 @@ export async function readWorkingTreeSnapshot(
   return collectSnapshot((relativePath) => readLocaleFile(cwd, relativePath), relativePaths);
 }
 
-/**
- * Reads a tracked locale file, treating a missing file as no content so the caller compares it as a
- * deletion. Any other read failure is a broken checkout and leaves as a script error.
- */
 function readLocaleFile(root: string, relativePath: string): string | undefined {
   const filePath = join(root, LOCALES_ROOT, relativePath);
   try {
@@ -297,12 +196,8 @@ function readLocaleFile(root: string, relativePath: string): string | undefined 
   }
 }
 
-/**
- * Splits `git status --porcelain` output for the locale tree into paths relative to the locale root,
- * which is the form `git ls-tree` yields and the form `splitLocalePath` reads. Reporting them
- * repository-relative from here is the one difference that silently dropped every untracked file
- * from a working-tree read, because `src/locales/en-US/x.ts` has no locale directory at its head.
- */
+// Paths must stay relative to `LOCALES_ROOT` because `splitLocalePath` expects a leading locale directory and
+// silently drops repo-relative paths.
 async function listDirtyLocalePaths(git: GitRunner, cwd: string): Promise<string[]> {
   // The pathspec limits status to this subtree, so the output stays proportional to locale churn
   // rather than to every touched file in the repository.
@@ -333,7 +228,6 @@ async function listDirtyLocalePaths(git: GitRunner, cwd: string): Promise<string
   return [...paths].sort();
 }
 
-/** Git quotes a path containing spaces or non-ASCII bytes; the quotes are not part of the name. */
 function unquoteGitPath(path: string): string {
   return path.replace(/^"|"$/g, "");
 }
@@ -360,15 +254,8 @@ async function collectSnapshot(
   return { values, locales: [...locales].sort(), conflicts };
 }
 
-/**
- * Merges one file's entries into the locale tree.
- *
- * Values are namespaced by locale so the same key in two languages is two independent entries. A
- * key one locale defines twice with the same value is harmless. A key it defines twice with
- * different values is recorded as a conflict and held out of `values` entirely, so no later
- * comparison can read its absence as a removal or a missing translation; `Object.assign` order
- * decides which string wins at runtime, and the advisory cannot claim either value is authoritative.
- */
+// Conflicting keys are removed from `target` instead of overwritten because runtime `Object.assign` order decides
+// which definition wins.
 function parseInto(
   target: Map<string, string>,
   conflicts: Set<string>,
@@ -402,18 +289,6 @@ function namespacedKey(locale: string, key: string): string {
   return `${locale}:${key}`;
 }
 
-/**
- * The string leaves of one locale file, plus any key the file itself defines twice with different
- * values.
- *
- * A duplicate is reported rather than resolved: `Object.assign` order decides which string the
- * runtime renders, so keeping the last one would let the advisory assert a value the branch does not
- * actually have. Duplicates that repeat the same text are one value and stay comparable.
- *
- * Arrays, spreads, computed keys, and non-literal values contribute no key: arrays are
- * locale-specific data (`base_trigger_words`) rather than text needing translation, and a template
- * with substitutions has no single translatable string to compare.
- */
 export function parseLocaleSource(
   source: string,
   file = "locale.ts",
@@ -503,11 +378,6 @@ function walkObject(
   }
 }
 
-/**
- * Normalizes only the whitespace a formatter can change: indentation, trailing spaces, and blank
- * lines around or inside a multi-line value. Word order, capitalization, and punctuation stay
- * significant, because those can change the meaning a translation has to follow.
- */
 export function normalizeLocaleValue(value: string): string {
   const result: string[] = [];
   let pendingBlank = false;
@@ -547,10 +417,6 @@ function translationLocales(locales: string[]): string[] {
   return locales.filter((locale) => locale !== DEFAULT_LOCALE);
 }
 
-/**
- * Counts changed values per locale across the whole tree, so the summary reports the branch rather
- * than only the keys that `en-US` happened to move.
- */
 function collectLocaleEditCounts(base: LocaleSnapshot, head: LocaleSnapshot, locales: string[]): Map<string, number> {
   const keys = new Set([...base.values.keys(), ...head.values.keys()]);
   const counts = new Map<string, number>();
@@ -639,13 +505,6 @@ export function buildStalenessReport(input: {
   };
 }
 
-/**
- * Bare key paths that some locale defines twice with different values in either revision.
- *
- * The bare form is the intersection the sections and the skipped list share: everything else in the
- * report is expressed as a bare path, so comparing namespaced keys would let a translation conflict
- * slip past the filter.
- */
 function collectConflictedKeys(base: LocaleSnapshot, head: LocaleSnapshot): Set<string> {
   const bare = new Set<string>();
 
@@ -657,12 +516,6 @@ function collectConflictedKeys(base: LocaleSnapshot, head: LocaleSnapshot): Set<
   return bare;
 }
 
-/**
- * Classifies every translation locale for one changed `en-US` key.
- *
- * A locale whose own value moved in this branch has already handled the change. Anything else is
- * follow-up work, split by whether a translation exists to revise or the key is still absent.
- */
 function splitStatuses(
   key: string,
   base: LocaleSnapshot,
@@ -682,7 +535,6 @@ function splitStatuses(
   return { review, missing };
 }
 
-/** Locale codes for one advisory follow-up list. */
 export function formatLocales(statuses: LocaleKeyStatus[]): string {
   if (statuses.length === 0) return NO_KEY;
   return statuses.map((status) => status.locale).join(", ");
@@ -799,14 +651,8 @@ export function renderStalenessReport(report: StalenessReport, options: { verbos
   return lines.join("\n");
 }
 
-/**
- * Resolves the comparison base the same way CI does: `GITHUB_BASE_REF` first on a pull request,
- * then the remote's default branch, then a local `main` or `master`.
- *
- * `HEAD` is deliberately not a candidate. Comparing `HEAD` with itself always reports an empty
- * branch, which in a shallow single-commit checkout would turn missing history into a false
- * all-clear instead of the actionable failure the docs promise.
- */
+// `HEAD` is omitted from `candidates` because comparing `HEAD` to itself in a shallow clone would return a false
+// all-clear instead of failing.
 export async function resolveBaseRef(git: GitRunner, repoRoot: string): Promise<string> {
   const candidates: string[] = [];
   const githubBase = process.env.GITHUB_BASE_REF?.trim();
@@ -831,11 +677,6 @@ export async function resolveBaseRef(git: GitRunner, repoRoot: string): Promise<
   );
 }
 
-/**
- * A shallow clone holds one commit per ref, so no merge base exists. Detected through the
- * repository's own `shallow` file rather than through a failed merge base, so the message names
- * the actual cause.
- */
 async function isShallowCheckout(git: GitRunner, repoRoot: string): Promise<boolean> {
   try {
     if ((await git(["rev-parse", "--is-shallow-repository"], repoRoot)).trim() === "true") return true;
@@ -865,10 +706,6 @@ async function assertGitCheckout(git: GitRunner, repoRoot: string): Promise<void
   }
 }
 
-/**
- * Verifies the base ref and returns the merge base, so the caller does not repeat the merge-base
- * lookup it needs anyway.
- */
 async function assertUsableBase(git: GitRunner, repoRoot: string, base: string): Promise<string> {
   try {
     await git(["rev-parse", "--verify", "--quiet", `${base}^{commit}`], repoRoot);

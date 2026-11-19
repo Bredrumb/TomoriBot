@@ -31,23 +31,14 @@ export function createOpenAICompatibleHttpError(statusCode: number, statusText: 
   return new Error(`HTTP ${statusCode}: ${message}`);
 }
 
-/** Normalized type/code/retryable triple derived from one upstream failure. */
 export interface OpenAICompatibleErrorClassification {
   type: ProviderError["type"];
   code: string;
   retryable: boolean;
 }
 
-/**
- * Map an HTTP-or-SSE status code plus its message onto a {@link ProviderError} type.
- *
- * Shared by `normalizeOpenAICompatibleProviderError` (thrown fetch failures) and the adapter's
- * `processChunk` (errors injected mid-SSE after a 200) so both paths agree. They previously
- * disagreed: the SSE path hardcoded a non-retryable `api_error`, which reported a transient
- * mid-stream 500 to the user as a permanent request error.
- *
- * @param statusCode - Upstream status, or null when the failure carried none.
- */
+// Thrown fetch failures and mid-SSE errors after HTTP 200 must share this classifier so transient mid-stream statuses
+// remain retryable.
 export function classifyOpenAICompatibleStatus(
   statusCode: number | null,
   message: string,
@@ -163,12 +154,8 @@ export function normalizeOpenAICompatibleProviderError(
   };
 }
 
-/**
- * Normalizes a failed API key check and reports it, so a rejected or unfunded key that a user typed
- * stays out of `error_logs`.
- *
- * @param summary - Stable log prefix, such as "DeepSeek API key validation failed".
- */
+// User-typed rejected or unfunded keys are reported through this validation path so expected key failures stay out of
+// error_logs.
 export async function reportOpenAICompatibleKeyValidationFailure(
   error: unknown,
   provider: string,
@@ -261,9 +248,6 @@ export function createOpenAICompatibleErrorDescription(
   return `Error Code ${errorCode}: ${message}`;
 }
 
-/**
- * Localizes a key, returning null instead of the key itself when no string is defined for it.
- */
 function resolveLocalizedOrNull(locale: string, key: string): string | null {
   const value = localizer(locale, key);
   return value === key ? null : value;

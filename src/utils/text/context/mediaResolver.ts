@@ -9,11 +9,8 @@ interface MediaCapabilities {
   seesVideos: boolean;
 }
 
-/**
- * Expanded per attempt so the `analyze_image` instruction appears only when this attempt's model and
- * the turn's Deliberate Tool Mode allowlist expose the tool. `{media_label}` and `{image_description}`
- * are filled afterwards because they carry user-controlled filenames.
- */
+// Tool macros expand per attempt before filling {media_label} and {image_description}, because those carry
+// user-controlled filenames.
 const BLIND_IMAGE_WITH_VISION_TOOL_TEMPLATE =
   "[System: This message ({media_label}) contains {image_description}. Do not guess the image contents.{{if tool:analyze_image}} Use the {image_analysis_tool} tool with this media ID only if the user explicitly asks about the image or if unseen visual details are necessary to answer correctly.{{/if}} The media ID can also be used with tools that accept media references.]";
 

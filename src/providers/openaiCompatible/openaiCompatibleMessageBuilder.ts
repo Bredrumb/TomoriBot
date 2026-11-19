@@ -22,19 +22,11 @@ interface BuildOpenAICompatibleMessagesOptions {
     preToolCallTextParts?: Array<Record<string, unknown>>;
   }>;
   seesImages?: boolean;
-  /**
-   * When `true`, every replayed assistant tool-call turn carries a `reasoning_content` key,
-   * falling back to an empty string when nothing was captured. Distinct from the adapter's
-   * capture-side flag: only DeepSeek has been shown to require the key's presence and to accept
-   * an empty value, so other reasoning-capable endpoints keep the capture-only behavior.
-   */
+  // Distinct from capture-side flags because only DeepSeek requires reasoning_content on replayed tool-call turns and
+  // accepts empty strings.
   requiresReasoningContentReplay?: boolean;
-  /**
-   * When `false`, the assembled system instruction is injected as the first
-   * `"user"` turn instead of a `"system"` role message.  Use this for
-   * endpoints (e.g. Chatmock → Codex CLI) that silently drop system turns.
-   * Defaults to `true`.
-   */
+  // When false, injects system instructions as the first user turn (default true) because endpoints such as Chatmock
+  // silently drop system turns.
   supportsSystemRole?: boolean;
 }
 
@@ -263,14 +255,8 @@ export async function buildOpenAICompatibleMessages(
   return messages;
 }
 
-/**
- * DeepSeek's thinking-mode backend treats every assistant message after the last user message as
- * part of the current turn and 400s when one omits `reasoning_content`, whether or not it carries
- * `tool_calls` or `prefix: true`. A trailing plain-text assistant turn (a continuation buffered in
- * `currentTurnModelParts`, or a history that ends on Tomori's own message) has no captured
- * reasoning, so the empty string is the only value available. Earlier turns are left alone
- * because the backend ignores their reasoning.
- */
+// DeepSeek 400s if any assistant message after the last user turn omits reasoning_content (so missing ones get ""),
+// while earlier turns are ignored.
 function stampCurrentTurnReasoningContent(messages: Array<Record<string, unknown>>): void {
   const lastUserIndex = messages.findLastIndex((message) => message.role === "user");
   for (let i = lastUserIndex + 1; i < messages.length; i++) {

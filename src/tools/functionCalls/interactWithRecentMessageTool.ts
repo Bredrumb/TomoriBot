@@ -1,8 +1,4 @@
 import { verifyMessageWebhook } from "@/utils/chat/webhookIdentity";
-/**
- * Recent Message Interaction Tool
- * Lets Tomori react to or reply to a recent message without needing message-management permissions.
- */
 
 import type { Message } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";

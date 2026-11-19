@@ -11,14 +11,10 @@ import { localizer } from "@/utils/text/localizer";
 import { withProviderOptionCopy, type ProviderOptionCopyContext } from "@/utils/provider/providerOptionRegistry";
 import { redactProviderDetail } from "@/utils/provider/providerErrorMetrics";
 
-/** Attributes an internal failure to TomoriBot so users do not debug their provider for it. */
 export const TOMORIBOT_ERROR_FOOTER_KEY = "genai.stream.error_footer_tomoribot";
 
-/**
- * Names the provider a failed request ran on, so an upstream refusal or outage is not read as a
- * TomoriBot bug. A personal route names the member's own provider ahead of the DM wording because
- * the member's key failed, not the bot owner's.
- */
+// Personal credential routes take precedence over DM wording because the member's own key failed rather than the bot
+// owner's.
 export function resolveProviderErrorFooter(args: {
   providerName: string;
   textCredentialSource?: StreamContext["textCredentialSource"];
@@ -45,7 +41,8 @@ async function sendInitialInteractionError(
   ).catch((error) => log.warn("Stream: Failed to send error to the initial interaction", error));
 }
 
-/** Guild channels carry their guild; a DM channel has none, and test doubles need not implement `isDMBased`. */
+// Guild absence is checked instead of isDMBased() because DM channels lack a guild and minimal test doubles need not
+// implement isDMBased.
 export function isDirectMessageChannel(channel: object): boolean {
   return !("guild" in channel && channel.guild);
 }
@@ -66,9 +63,7 @@ function providerCopyContext(context: StreamContext): ProviderOptionCopyContext 
   };
 }
 
-/**
- * Presents provider and generic stream errors in Discord; the orchestrator owns their operator reports.
- */
+// Discord-facing error UI only; operator reporting stays in the orchestrator so failures are not reported twice.
 export class StreamErrorUi {
   public async handleProviderError(
     error: unknown,
@@ -188,14 +183,8 @@ export class StreamErrorUi {
     }).catch((e) => log.warn("Stream: Failed to send generic error embed to channel", e));
   }
 
-  /**
-   * The provider's localized, classified headline. Upstream response text stays out of the embed:
-   * the embed is public, self-debug feeds it back into model context, and an endpoint can echo the
-   * bearer value it received in any encoding pattern redaction would miss. The raw text is offered
-   * only through {@link buildRestrictedErrorDetail}.
-   * @param isModelError - Whether the error classifies as a model-selection error (drives the headline fallback).
-   * @returns The headline, or null when no headline can be produced.
-   */
+  // Upstream error text stays out of the public embed because self-debug reads it and endpoints can echo bearer
+  // tokens in encodings redaction misses.
   private resolveProviderDescription(
     providerError: ProviderError,
     provider: StreamProvider,
@@ -207,20 +196,19 @@ export class StreamErrorUi {
   }
 }
 
-/** One 4000-char text display minus the code fence, so the fence never splits across displays. */
+// Sized below Discord's 4000-char TextDisplay limit to leave room for the code fence so the fence never splits across
+// displays.
 const ERROR_DETAIL_MODAL_CHARS = 3_900;
-/** Adapter prefixes are a short label; anything longer is upstream text that must leave room for the body. */
+// Caps adapter prefixes at 500 chars because anything longer is upstream text that would crowd out the formatted
+// error body.
 const ERROR_DETAIL_PREFIX_CHARS = 500;
-/** Placed between adjacent backticks so provider text cannot close the code fence early. */
+// Inserted between backticks so untrusted provider error text cannot close the modal's code fence early.
 const ZERO_WIDTH_SPACE = String.fromCharCode(0x200b);
 const CODE_FENCE = "```";
 const NESTED_JSON_DEPTH = 4;
 
-/**
- * Offers the raw provider error behind a gated modal. A modal reaches only the viewer and never
- * enters channel history, so neither the channel nor self-debug sees it; the remaining exposure
- * is limited to the people who could already replace the failing key.
- */
+// Raw provider errors stay inside a gated modal because modals never enter channel history or self-debug, limiting
+// exposure to key managers.
 export function buildRestrictedErrorDetail(
   detail: string,
   context: Pick<StreamContext, "textCredentialSource" | "triggererDiscId">,
@@ -242,17 +230,14 @@ export function buildRestrictedErrorDetail(
   };
 }
 
-/** Outside a guild the only person who can press the button is the DM's own user. */
+// Non-guild interactions are allowed because only the DM's own user can press the button outside a guild.
 function canManageServerCredentials(interaction: ButtonInteraction): boolean {
   if (!interaction.inGuild()) return true;
   return interaction.memberPermissions.has(PermissionFlagsBits.ManageGuild);
 }
 
-/**
- * Pretty-prints the JSON body an adapter wraps in its own prefix (Google nests a second JSON
- * document inside `error.message`), then redacts the rendered text so unwrapping cannot expose a
- * credential that was escaped in the original.
- */
+// Nested JSON (such as Google's error.message) is unwrapped before redacting so pretty-printing cannot unescape a
+// credential that escaped redaction.
 export function formatProviderErrorDetail(detail: string): string {
   const jsonStart = detail.indexOf("{");
   const parsed = jsonStart === -1 ? undefined : tryParseJson(detail.slice(jsonStart));
@@ -268,7 +253,8 @@ export function formatProviderErrorDetail(detail: string): string {
   return prefix ? `${prefix}\n${block}` : block;
 }
 
-/** Redact before bounding, so a cut never leaves half a credential the patterns can no longer match. */
+// Callers must redact before calling boundText, because truncating mid-secret leaves a fragment that redaction
+// patterns cannot match.
 function boundText(text: string, maxChars: number): string {
   return text.length > maxChars ? `${text.slice(0, maxChars)}...` : text;
 }

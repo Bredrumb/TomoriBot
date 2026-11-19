@@ -1,12 +1,3 @@
-/**
- * Regression harness: StatRepository (stat_counters) write/buffer + aggregation.
- *
- * Covers plan §11: buffered additive UPSERT, per-tuple collapsing, per-user grain,
- * persona-agnostic sentinel, token accumulation + cost read, shutdown drain, the
- * documented crash window, and the read/aggregation layer.
- *
- * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md)
- */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "bun:test";
 import { statRepository, userRepository } from "@/utils/db/repositories";
 import { parseInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
@@ -28,7 +19,6 @@ import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
 const TEST_MODEL = "_rt_stat_model";
 const REUNION_OTHER_SERVER_DISC_ID = "_rt_stat_reunion_other_server";
 
-/** YYYY-MM-DD for `n` days before today (UTC): matches StatRepository's bucket grain. */
 function dayOffset(n: number): string {
   return new Date(Date.now() - n * 86_400_000).toISOString().split("T")[0];
 }
@@ -74,7 +64,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
     await testSql`DELETE FROM servers WHERE server_disc_id = ${REUNION_OTHER_SERVER_DISC_ID}`;
   });
 
-  /** Reads a single counter row's count for the fixture server. */
   async function readCount(metric: string, metricKey: string, lineageId: number, userId: number): Promise<number> {
     const [row] = await testSql<{ count: number | string }[]>`
       SELECT count FROM stat_counters

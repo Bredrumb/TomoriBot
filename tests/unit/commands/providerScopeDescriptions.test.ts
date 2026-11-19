@@ -4,7 +4,6 @@ import { expectForEveryLocale } from "../../helpers/localeCases";
 
 const LOCALES = ["en-US", "ja"] as const;
 
-/** Discord rejects a registered command or subcommand description longer than this. */
 const DISCORD_DESCRIPTION_LIMIT = 100;
 
 const ROOT_KEYS = ["commands.providers.description", "commands.config.description"];

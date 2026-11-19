@@ -77,10 +77,6 @@ it("records the final Google request shape on rejection without retaining its co
   }
 });
 
-/**
- * Builds a RawStreamChunk wrapping a Google-shaped data object.
- * chunk.data is typed as unknown so no type assertion is needed in the fixture.
- */
 function makeGoogleChunk(data: Record<string, unknown>): RawStreamChunk {
   return { data, provider: "google", metadata: { timestamp: Date.now() } };
 }

@@ -1,23 +1,3 @@
-/**
- * Regression harness: Repository layer delegation.
- *
- * Proves that each repository singleton correctly delegates to the underlying
- * DB functions and fires cache invalidation as a side effect of writes
- * without any manual cache wrangling in the test itself.
- *
- * Contrast with cache-invalidation.regression.test.ts, which calls
- * invalidateUserCache() explicitly. Here we rely entirely on the repository
- * method to do it, so a missing invalidation call surfaces as a test failure.
- *
- * Covered:
- *   UserRepository : register, loadByDiscordId, setPrivacyLevel, update,
- *                     isBlacklisted, getBlacklistedMemberIds,
- *                     toExportShape, fromExportShape, cache side-effects
- *   LlmRepository  : loadAvailableLlms, loadLlmById, getLlmsByIds,
- *                     result parity with repository SQL reads
- *
- * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md)
- */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { PrivacyLevel } from "@/types/db/schema";
 import { clearUserCache, getCachedUserRow } from "@/utils/cache/userCache";

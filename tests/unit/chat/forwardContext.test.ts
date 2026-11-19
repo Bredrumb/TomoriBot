@@ -4,20 +4,13 @@ import { buildForwardContext } from "@/utils/chat/contextMedia";
 import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
 
-/**
- * Build a minimal forwarded (wrapper) message. Only the fields read by
- * `buildForwardContext` are populated; the rest is cast away.
- */
 function makeForwardMessage(overrides: {
   id: string;
   originalMessageId: string;
   snapshotContent?: string;
   snapshotAttachments?: Array<{ id: string; name: string; url: string; proxyURL: string; contentType: string }>;
-  /** Origin channel of the forward reference. Defaults to a readable stub channel. */
   sourceChannelId?: string;
-  /** Message returned when the forward reference is re-fetched (nested-forward walk). */
   originMessage?: Message;
-  /** When true, the origin channel cannot be fetched, so simulates a missing-permission origin. */
   originUnreachable?: boolean;
 }): Message {
   const attachments = new Collection<string, unknown>();

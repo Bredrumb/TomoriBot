@@ -11,23 +11,14 @@ import {
   normalizeLocaleValue,
 } from "../../../scripts/devtools/localeDrift";
 
-/**
- * Fixture history for the drift scan.
- *
- * The scan's correctness lives in the comparison between the current English and the English a
- * translation was written against, so these tests drive it through the injectable source rather
- * than a real checkout. A fixture states the history exactly, which a real repository cannot.
- */
 interface FixtureOptions {
-  /** Current file contents, as the committed tree would hold them. */
   head: Record<string, string>;
-  /** Per-file line provenance: one revision id per line, in file order. */
   lines: Record<string, Record<number, string>>;
-  /** Commit time in epoch seconds per revision id. Defaults to the id's position in `order`. */
+  // Timestamps use epoch seconds per revision id: omitted entries fall back to their position in order.
   committedAt?: Record<string, number>;
-  /** Revision ids oldest first, used to assign default commit times. */
+  // Revision ids are ordered oldest first because their position assigns default commit times when committedAt omits
+  // them.
   order?: string[];
-  /** Content of older revisions, keyed by revision id. */
   revisions?: Record<string, Record<string, string>>;
   shallow?: boolean;
 }
@@ -81,7 +72,6 @@ function localeFile(entries: Array<[string, string]>): string {
   return `export default {\n  general: {\n${body}\n  },\n};\n`;
 }
 
-/** Attributes every line of a file to one revision. */
 function uniformLines(content: string, revision: string): Record<number, string> {
   const lines: Record<number, string> = {};
   for (let line = 1; line <= content.split("\n").length; line++) lines[line] = revision;

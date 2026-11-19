@@ -116,10 +116,8 @@ async function buildAnthropicMessages(request: ProviderStructuredJsonRequest): P
   return { system: systemPrompt, messages, skippedImages };
 }
 
-/**
- * Rewrites standard JSON Schema into the subset `output_config.format` accepts: `oneOf` becomes
- * `anyOf` and every object is closed with `additionalProperties: false`, which the API requires.
- */
+// Anthropic's output_config.format rejects oneOf and open objects, so schemas must rewrite oneOf to anyOf and set
+// additionalProperties: false.
 function toAnthropicOutputSchema(schema: unknown): unknown {
   if (Array.isArray(schema)) return schema.map(toAnthropicOutputSchema);
   if (!schema || typeof schema !== "object") return schema;
@@ -180,10 +178,8 @@ function extractResponseText(response: Record<string, unknown>): string {
     .trim();
 }
 
-/**
- * Call Anthropic with native structured outputs (`output_config.format`). Forced tool use is not an
- * option: Sonnet 5.5, Opus 5.5 and Fable 5.1 reject a forced `tool_choice` with a 400.
- */
+// Sonnet 5.5, Opus 5.5, and Fable 5.1 reject forced tool_choice with 400, so structured outputs must use
+// output_config.format instead.
 export async function callAnthropicStructuredJSON<T>(
   request: ProviderStructuredJsonRequest,
   responseSchema: Record<string, unknown>,

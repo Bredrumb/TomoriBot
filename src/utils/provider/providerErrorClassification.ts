@@ -109,13 +109,8 @@ const ACCOUNT_BALANCE_EXHAUSTED_PATTERNS: RegExp[] = [
 const EXCEEDED_CURRENT_QUOTA_PATTERN = [/\bexceeded\s+your\s+current\s+quota\b/i];
 const GEMINI_QUOTA_MESSAGE_MARKER = [/\bgenerativelanguage\.googleapis\.com\b/i, /\bai\.google\.dev\b/i];
 
-/**
- * Detects an exhausted account balance (the provider will reject every request until a
- * human adds funds). Distinct from a credit-affordability ceiling: trimming the request
- * cannot help, so the only useful advice is to top up or switch providers.
- * @param error - The normalized provider error.
- * @returns True when any collected message signals a zero or negative balance.
- */
+// Distinct from a credit-affordability ceiling because trimming the request cannot help; callers must advise topping
+// up or switching providers.
 export function isAccountBalanceExhaustedError(error: ProviderError): boolean {
   return collectProviderErrorMessages(error).some(
     (message) =>
@@ -129,12 +124,8 @@ const FREE_TIER_PATTERN = [/\bfree[\s_-]?tier\b/i];
 const PER_DAY_PATTERN = [/\bper\s+day\b/i, /PerDay/];
 const PER_MINUTE_PATTERN = [/\bper\s+minute\b/i, /PerMinute/];
 
-/**
- * Detects a Gemini API free-tier quota 429 and the window it was hit in. The two windows need
- * opposite advice: a per-minute limit clears on a retry, a per-day limit does not until the daily reset.
- * @param error - The normalized provider error.
- * @returns "day" or "minute" for a free-tier limit, or undefined for anything else (including paid-tier limits).
- */
+// Paid-tier limits return undefined while free-tier 429s split into minute or day, because per-minute limits clear on
+// retry whereas per-day wait for reset.
 export function getGeminiFreeTierQuotaWindow(error: ProviderError): "day" | "minute" | undefined {
   for (const message of collectProviderErrorMessages(error)) {
     if (!matchesAnyPattern(message, GEMINI_QUOTA_MESSAGE_MARKER) || !matchesAnyPattern(message, FREE_TIER_PATTERN)) {
@@ -147,38 +138,21 @@ export function getGeminiFreeTierQuotaWindow(error: ProviderError): "day" | "min
   return undefined;
 }
 
-/**
- * Detects NVIDIA NIM refusing the credential itself.
- *
- * NIM answers a mistyped key, an expired key, and a key without inference access with the same
- * `403 {"detail":"Authorization failed"}`, so expiry can only be offered as a possibility. Scoped
- * to NVIDIA because expiry is not a known cause of the same status on other providers.
- */
+// Scoped to NVIDIA because NIM returns 403 {"detail":"Authorization failed"} for mistyped, expired, or unprivileged
+// keys alike.
 export function isNvidiaCredentialRejected(providerName: string, error: ProviderError): boolean {
   return providerName === "nvidia" && error.type === "api_error" && error.code === "403";
 }
 
-/**
- * Detects a hard context-window overflow (input + reserved output exceeds the
- * model's maximum context length). Distinct from a credit ceiling: here,
- * trimming the request (shorter message, less history, lower output tokens)
- * actually resolves it.
- * @param error - The normalized provider error.
- * @returns True when any collected message signals a context-length overflow.
- */
+// Distinct from a credit ceiling because shortening input, history, or output tokens resolves context overflows.
 export function isContextLengthError(error: ProviderError): boolean {
   return collectProviderErrorMessages(error).some((message) =>
     matchesAnyPattern(message, CONTEXT_LENGTH_ERROR_PATTERNS),
   );
 }
 
-/**
- * Detects a credit-affordability ceiling (the account cannot pay for the
- * requested max_tokens). Distinct from a context overflow: adding history back
- * does not help, so the fix is more credits or fewer output tokens.
- * @param error - The normalized provider error.
- * @returns True when any collected message signals a credit-affordability limit.
- */
+// Distinct from a context overflow because reducing history does not help; only more credits or lower max_tokens
+// resolves a credit ceiling.
 export function isCreditAffordabilityError(error: ProviderError): boolean {
   return collectProviderErrorMessages(error).some((message) =>
     matchesAnyPattern(message, CREDIT_AFFORDABILITY_ERROR_PATTERNS),
@@ -247,15 +221,8 @@ const NON_INCIDENT_MESSAGE_PATTERNS: RegExp[] = [
   /\bflagged\b/i,
 ];
 
-/**
- * Decides whether a provider failure belongs in `error_logs`, which production reads as the
- * operator's incident feed.
- *
- * Transient failures and anything the server can repair itself (its key, balance, model choice,
- * conversation length, or content) stay at warn level: on a public instance they arrive constantly
- * and only that server can act on them. What remains is mostly a request TomoriBot built wrong or a
- * failure no classifier recognized, and those need the raw provider text to diagnose.
- */
+// Production reads error_logs as the operator incident feed, so transient or user-fixable failures stay at warn level
+// to avoid flooding it.
 export function isOperatorActionableProviderError(error: ProviderError): boolean {
   if (error.retryable || (error.type !== "api_error" && error.type !== "unknown")) {
     return false;
@@ -276,40 +243,25 @@ export function isOperatorActionableProviderError(error: ProviderError): boolean
   );
 }
 
-/** Code for a stream the provider ended partway through an event, which a fresh request usually completes. */
 export const STREAM_INTERRUPTED_CODE = "stream_interrupted";
 
-/** Accepts `unknown` because a stream result carries its failure untyped. */
+// Parameter is typed unknown rather than ProviderError because stream results carry their failure untyped.
 export function isStreamInterruption(error: unknown): boolean {
   return typeof error === "object" && error !== null && "code" in error && error.code === STREAM_INTERRUPTED_CODE;
 }
 
-/**
- * Detects a provider refusing the key itself, which no retry fixes until the key's owner acts.
- * Accepts `unknown` because a stream result carries its failure untyped.
- */
 export function isCredentialRejection(error: unknown): boolean {
   if (!error || typeof error !== "object" || !("code" in error)) return false;
   if ("retryable" in error && error.retryable === true) return false;
   return CREDENTIAL_REJECTION_CODES.has(String(error.code));
 }
 
-/**
- * Detects a timeout from error text, for classifiers that have no status code to go on.
- *
- * Bun's fetch abandons a server that has sent nothing for 300 seconds with "The operation timed
- * out.", which has no "timeout" substring. A slow local backend processing a long prompt hits that
- * ceiling, and matching only "timeout" told the user to check their API key.
- */
+// Pattern includes "timed out" because Bun's fetch fails at 300s with "The operation timed out.", lacking "timeout"
+// for slow local backends.
 export function isProviderTimeoutMessage(message: string): boolean {
   return /timeout|timed\s+out/i.test(message);
 }
 
-/**
- * Tests a message against a set of patterns after collapsing whitespace.
- * @param message - Candidate message (nullable).
- * @returns True when the normalized message matches any pattern.
- */
 function matchesAnyPattern(message: string | null | undefined, patterns: RegExp[]): boolean {
   if (!message) {
     return false;
@@ -329,11 +281,8 @@ export function isProviderModelErrorMessage(message: string | null | undefined):
 
 const DISPLAYABLE_ERROR_CODE_PATTERNS = [/^\d{3}(?:_[a-z]+)*$/, /^[A-Z]+(?:_[A-Z]+)*$/, /^[a-z]+(?:_[a-z]+)*$/];
 
-/**
- * Error codes can come from a response body, so a hostile endpoint can return its received bearer
- * value as the code. Only HTTP statuses (including re-coded ones such as `429_balance`) and
- * single-case enum words are shown, which excludes the digits and mixed case keys carry.
- */
+// Only HTTP statuses and single-case enum words are shown because hostile endpoints can echo bearer tokens (digits
+// plus mixed case) as the error code.
 export function formatProviderErrorCodeForDisplay(code: string | number | null | undefined): string {
   const value = code === null || code === undefined ? "" : String(code);
   return value.length <= 40 && DISPLAYABLE_ERROR_CODE_PATTERNS.some((pattern) => pattern.test(value))
@@ -341,10 +290,8 @@ export function formatProviderErrorCodeForDisplay(code: string | number | null |
     : "unknown";
 }
 
-/**
- * Raw upstream text for restricted operator logs. Endpoints can echo request headers here, so it
- * never belongs in a channel, an interaction reply, or model context.
- */
+// Restricted to operator logs because upstream endpoints can echo request headers here, so never expose this in
+// channels, replies, or model context.
 export function getProviderErrorDetail(error: ProviderError): string | null {
   const messages = collectProviderErrorMessages(error);
   return messages.find((message) => message.trim().length > 0) ?? null;

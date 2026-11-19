@@ -1,20 +1,3 @@
-/**
- * Test database configuration for the DB regression harness.
- *
- * DB tests are enabled automatically when `bun run test` detects a reachable
- * local Postgres instance and provisions a disposable database. The wrapper
- * (scripts/checks/runTests.ts) sets TEST_DB_READY=1 and POSTGRES_DB to
- * the disposable database name before spawning bun test.
- *
- * To run only DB regression tests (assumes wrapper has provisioned the DB):
- *   bun run test
- *
- * To run one file with a disposable database, pass it to the wrapper:
- *   bun run test tests/regression/db/<file>.regression.test.ts
- *
- * Bypassing the wrapper (bare `bun test`) skips these suites unless you set the variables yourself:
- *   TEST_DB_READY=1 POSTGRES_DB=<name> POSTGRES_PASSWORD=<pw> bun test tests/regression/db/
- */
 import { SQL } from "bun";
 import { readFile } from "node:fs/promises";
 import { initializeDatabase } from "@/utils/db/initializeDatabase";
@@ -37,12 +20,8 @@ process.env.POSTGRES_USER = effectiveUser;
 process.env.POSTGRES_DB = effectiveDatabase;
 if (effectivePassword) process.env.POSTGRES_PASSWORD = effectivePassword;
 
-/**
- * True when the runTests.ts wrapper has provisioned a disposable database for
- * this run (TEST_DB_READY=1) and credentials are present. Prevents the harness
- * from writing fixture data into a development or production database when
- * tests are invoked directly without the wrapper.
- */
+// TEST_DB_READY=1 is required alongside credentials so bare test runs never write fixture rows into a development or
+// production database.
 export const DB_TESTS_AVAILABLE = Boolean(effectivePassword) && process.env.TEST_DB_READY === "1";
 
 function createFixtureClient(): SQL {
@@ -70,7 +49,6 @@ export const testSql = new Proxy(
   },
 );
 
-/** Executes a migration script on one reserved transaction connection. */
 export async function executeTestSqlFile(filePath: string): Promise<void> {
   const sqlText = await readFile(filePath, "utf-8");
   const statements = splitSqlStatements(sqlText);
@@ -90,20 +68,10 @@ export async function executeTestSqlFile(filePath: string): Promise<void> {
   });
 }
 
-/** Memoized bootstrap, shared by every `beforeAll` in the process. */
 let bootstrapPromise: Promise<void> | null = null;
 
-/**
- * Bootstraps the test database schema (idempotent).
- * Uses the same initializeDatabase() path as the bot, so schema drift
- * between tests and production is structurally impossible.
- *
- * initializeDatabase() is idempotent, but replaying the schema, migrations and
- * seed catalogs costs roughly two seconds per call. The runner now covers every
- * regression file with a single process, so the bootstrap is memoized for the
- * lifetime of that process instead of repeating once per `beforeAll`. The call
- * is argument-invariant, so no cache key is needed.
- */
+// Bootstrap is memoized across every beforeAll in the process because replaying schema, migrations, and catalogs
+// costs ~2s per call.
 export async function setupTestDb(): Promise<void> {
   bootstrapPromise ??= bootstrap();
   await bootstrapPromise;
@@ -114,13 +82,8 @@ export async function setupTestDb(): Promise<void> {
   fixtureClient = createFixtureClient();
 }
 
-/**
- * Repository writes that encrypt a credential read the key manager singleton, which the bot
- * populates during secret loading rather than lazily. Without this the harness leaves it at
- * version 0 and every such insert fails inside its own catch, surfacing as a null row instead
- * of an error. The fallback keeps the suite runnable on a machine that has Postgres but no
- * CRYPTO_SECRET; it is a disposable test value and never reaches a real database.
- */
+// Fallback CRYPTO_SECRET initializes keyManager before encrypted repository writes, because an uninitialized version
+// 0 singleton fails silently inside catches.
 async function bootstrap(): Promise<void> {
   process.env.CRYPTO_SECRET ??= "tomoribot_regression_harness_crypto_secret";
   keyManager.initialize();

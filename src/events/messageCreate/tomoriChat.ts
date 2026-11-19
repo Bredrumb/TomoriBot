@@ -34,13 +34,8 @@ export {
   suppressNextSelfReply,
 };
 
-/**
- * Readable messageCreate chat coordinator.
- *
- * Keep Discord event registration here. Put implementation modules under
- * `src/utils/chat/` so helper files are not auto-registered as messageCreate
- * handlers by the shallow event dispatcher.
- */
+// Only event registration belongs in this directory because the shallow event dispatcher auto-registers every file
+// here as a messageCreate handler.
 export async function tomoriChat(input: TomoriChatInput): Promise<ChatAdmissionDisposition> {
   const startedAt = performance.now();
   const receivedAt = Date.now();
@@ -221,7 +216,6 @@ async function runAdmittedChatTurn(
   return "run";
 }
 
-/** Thin event-dispatch adapter: satisfies EventFunction(client, ...args) called by the event loader. */
 export default async function messageCreateHandler(client: Client, message: Message): Promise<void> {
   // Discord emits pin notifications as ChannelPinnedMessage system messages with
   // a message reference to the pinned message. That reference is context metadata,

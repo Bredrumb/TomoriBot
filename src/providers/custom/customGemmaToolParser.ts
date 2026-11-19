@@ -1,36 +1,6 @@
-/**
- * Gemma 4 Embedded Tool Call Parser
- *
- * Gemma 4 running locally (e.g. via KoboldCPP at 4-bit quant) sometimes leaks its
- * internal tool-call vocabulary into `delta.content` instead of emitting a proper
- * `delta.tool_calls` structure. Two distinct leaked dialects have been observed:
- *
- * 1. Special-token form (matches the documented KoboldCPP jinja template):
- *      <|tool_call>call:update_short_term_memory{summary:<|"|>...<|"|>}<tool_call|>
- *
- * 2. Python-call form (Gemma's *trained* default the model drifts back to under
- *    heavy quantization, regardless of the configured template):
- *      <tool_code>update_short_term_memory(summary="...")</tool_code>
- *
- * This parser is a stateful chunk-by-chunk scanner that:
- * 1. Passes normal text through unchanged.
- * 2. Detects either dialect's start token and begins buffering (the matched
- *    dialect becomes "active" for the duration of the block).
- * 3. Parses the complete block once the active dialect's end token is found.
- * 4. Attempts a best-effort parse if the stream ends mid-block (truncation recovery).
- *
- * Each dialect is a self-contained `{ start, end, parse }` entry in `dialects`, so
- * a format can be removed by deleting one array element without touching the scanner.
- */
-
 import { log } from "@/utils/misc/logger";
 import type { FunctionCall } from "@/types/provider/interfaces";
 
-/**
- * A single leaked tool-call format the scanner can recognise.
- * `parse` receives the raw text between `start` and `end` (or end-of-stream on
- * truncation) and returns a structured call, or null if it cannot be parsed.
- */
 interface GemmaDialect {
   start: string;
   end: string;
@@ -38,42 +8,21 @@ interface GemmaDialect {
 }
 
 export interface GemmaFeedResult {
-  /** Visible text to emit (may be empty string). */
   visibleText: string;
-  /** Completed function call, if one was fully parsed from this chunk. */
   functionCall: FunctionCall | null;
 }
 
 export interface GemmaFlushResult {
-  /**
-   * Any text that was held back at the end of the last idle chunk waiting for
-   * a possible START_TOKEN continuation that never arrived. Must be emitted
-   * before the stream terminates.
-   */
   pendingText: string;
-  /** Parsed function call recovered from a truncated accumulation buffer. */
   functionCall: FunctionCall | null;
 }
 
 export class GemmaToolCallParser {
   private mode: "idle" | "accumulating" = "idle";
-  /**
-   * Tail held back during idle scanning for a partial start-token prefix.
-   * Only non-empty when the last chunk ended with a genuine prefix of some
-   * dialect's start token (e.g. `<`, `<|`, `<|t`...). In practice this is almost
-   * always empty because normal model output does not end with `<`.
-   */
   private scanHoldback = "";
-  /** Raw content accumulated between the active dialect's start and end tokens. */
   private toolBuffer = "";
-  /** The dialect whose start token opened the current accumulation block. */
   private activeDialect: GemmaDialect | null = null;
 
-  /**
-   * Recognised leaked formats, in priority order. The scanner picks whichever
-   * dialect's start token appears *earliest* in the stream, so ordering here only
-   * breaks exact-position ties (which cannot happen: the start tokens differ).
-   */
   private readonly dialects: GemmaDialect[] = [
     // Special-token form: <|tool_call>call:name{key:value}<tool_call|>
     {
@@ -89,15 +38,10 @@ export class GemmaToolCallParser {
     },
   ];
 
-  /** True while inside a tool call block (START seen, END not yet seen). */
   get isAccumulating(): boolean {
     return this.mode === "accumulating";
   }
 
-  /**
-   * Feed one text chunk from `delta.content`.
-   * Returns visible text to emit and any completed tool call.
-   */
   feed(text: string): GemmaFeedResult {
     if (this.mode === "idle") {
       return this.scanForStart(text);
@@ -105,10 +49,6 @@ export class GemmaToolCallParser {
     return this.accumulate(text);
   }
 
-  /**
-   * Called when the stream ends. Returns any held-back visible text and any
-   * function call recovered from a truncated accumulation buffer.
-   */
   flush(): GemmaFlushResult {
     if (this.mode !== "accumulating") {
       const pendingText = this.scanHoldback;
@@ -191,12 +131,6 @@ export class GemmaToolCallParser {
     return { visibleText: prependVisible, functionCall };
   }
 
-  /**
-   * Returns the longest suffix of `text` that is also a prefix of *any* dialect's
-   * start token, excluding a full start token itself (that case is handled by
-   * indexOf in scanForStart). This is how we safely hold back only the minimum
-   * necessary chars while a start token might still be completing on the next chunk.
-   */
   private longestSuffixPrefix(text: string): string {
     let longest = "";
     for (const { start } of this.dialects) {
@@ -210,12 +144,6 @@ export class GemmaToolCallParser {
     return longest;
   }
 
-  /**
-   * Parse the special-token dialect's block (between `<|tool_call>` and
-   * `<tool_call|>`, or end of stream).
-   *
-   * Expected format: call:{toolName}{key:<|"|>value<|"|>, ...}
-   */
   private parseSpecialTokenBlock(block: string): FunctionCall | null {
     const full = block.match(/^call:(\w+)\{([\s\S]*)\}$/);
     if (full) {
@@ -233,13 +161,6 @@ export class GemmaToolCallParser {
     return null;
   }
 
-  /**
-   * Build a FunctionCall from a parsed tool name and raw args string.
-   *
-   * Gemma 4 produces two string-value formats depending on quant level:
-   *   Format A (special token markers): key:<|"|>value<|"|>
-   *   Format B (standard JSON-style):   key: "value"  or  key:"value"
-   */
   private buildCall(name: string, argsStr: string): FunctionCall {
     const args: Record<string, unknown> = {};
     const matchedKeys = new Set<string>();
@@ -276,13 +197,6 @@ export class GemmaToolCallParser {
     return { name, args };
   }
 
-  /**
-   * Parse the Python-call dialect's block (between `<tool_code>` and
-   * `</tool_code>`, or end of stream).
-   *
-   * Expected format: name(key="value", count=3)
-   * Gemma sometimes wraps the call in `print(...)`, which we unwrap one layer.
-   */
   private parseToolCodeBlock(block: string): FunctionCall | null {
     let body = block.trim();
 
@@ -310,13 +224,6 @@ export class GemmaToolCallParser {
     return null;
   }
 
-  /**
-   * Build a FunctionCall from a Python-style keyword-argument list.
-   *
-   * Handles: key="value" / key='value' (strings), key=3 / key=true (scalars).
-   * Mirrors buildCall's three-pass approach: strings first (so a quoted value
-   * containing `=` or digits is never misread as a scalar), then bare scalars.
-   */
   private buildPythonCall(name: string, argsStr: string): FunctionCall {
     const args: Record<string, unknown> = {};
     const matchedKeys = new Set<string>();

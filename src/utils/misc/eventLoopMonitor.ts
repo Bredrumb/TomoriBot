@@ -1,17 +1,4 @@
-/**
- * Event-loop progress monitor.
- *
- * A ready Discord client and a healthy WebSocket ping both stay green while the main thread is
- * starved or spinning, so neither says the bot is still doing work. This records whether a timer
- * callback is actually getting scheduled, which is the difference between "the process is alive"
- * and "the process is making progress".
- *
- * Reports only. Nothing here changes the `/healthz` verdict or restarts anything, because the
- * thresholds that would justify acting cannot be set until a post-AMA baseline exists. See
- * `plans/pressure-aware-recovery.md`.
- */
-
-/** Floor for the configured cadence: below this the timer itself becomes the load being measured. */
+// Floor for the configured cadence: below this the timer itself becomes the load being measured.
 const MIN_SAMPLE_INTERVAL_MS = 100;
 
 const SAMPLE_INTERVAL_MS = Math.max(
@@ -19,10 +6,8 @@ const SAMPLE_INTERVAL_MS = Math.max(
   MIN_SAMPLE_INTERVAL_MS,
 );
 
-/**
- * Exported so a test can drive the cadence down to tens of milliseconds; production uses the
- * singleton below, which reads its interval from the deployment environment.
- */
+// Exported so tests can instantiate fast sampling cadences, while production uses the singleton configured from the
+// environment.
 export class EventLoopMonitor {
   private timer: ReturnType<typeof setInterval> | null = null;
   private lastTickAt = Date.now();
@@ -30,11 +15,6 @@ export class EventLoopMonitor {
   private peakLagSinceStartMs = 0;
   private peakLagSinceReadMs = 0;
 
-  /**
-   * Injectable so a test can prove the lag and staleness shapes without waiting out the production
-   * cadence. Every derived reading is relative to this value, so a short interval changes only how
-   * long the same assertions take.
-   */
   constructor(private readonly sampleIntervalMs: number = SAMPLE_INTERVAL_MS) {}
 
   start(): void {
@@ -64,10 +44,8 @@ export class EventLoopMonitor {
     this.timer = null;
   }
 
-  /**
-   * Point-in-time reading for `/healthz`. Does not reset the windowed peak, so probing the endpoint
-   * cannot blind the metrics series.
-   */
+  // Point-in-time /healthz snapshot that leaves the windowed peak untouched so health probes cannot blind the metrics
+  // series.
   getSnapshot(): EventLoopSnapshot {
     return {
       running: this.timer !== null,
@@ -78,13 +56,7 @@ export class EventLoopMonitor {
     };
   }
 
-  /**
-   * Peak lag observed since the previous call, then resets that window.
-   *
-   * Sampling `lastLagMs` on a 5-minute cadence would only ever describe the single tick before the
-   * sample, which is a poor estimator of a spike lasting seconds. Reading a windowed maximum makes
-   * each emitted point cover the whole interval. Intended for one caller only.
-   */
+  // Each read resets the peak window so 5-minute samples capture short spikes, assuming a single caller.
   takeIntervalPeakLagMs(): number {
     const peak = this.peakLagSinceReadMs;
     this.peakLagSinceReadMs = 0;
@@ -96,15 +68,8 @@ interface EventLoopSnapshot {
   running: boolean;
   sampleIntervalMs: number;
 
-  /**
-   * Milliseconds since the last recorded tick.
-   *
-   * Healthy readings sit between zero and one sample interval. A large value means callbacks are
-   * not being scheduled, which is the CPU-starvation signature: the endpoint still answers because
-   * a starved loop yields between chunks of work, while multi-step handlers behind it make no
-   * progress. A loop blocked outright serves no response at all, so that case shows up as a probe
-   * timeout rather than as a large number here.
-   */
+  // Large values indicate CPU starvation rather than an outright block, because a blocked loop stops answering probes
+  // before staleness can be read.
   stalenessMs: number;
 
   lastLagMs: number;

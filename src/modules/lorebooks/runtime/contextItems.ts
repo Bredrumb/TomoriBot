@@ -6,7 +6,6 @@ import type { TomoriState } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import type { MentionConverter } from "@/utils/text/context/templates";
 
-/** Builds the placement-tagged lorebook blocks from one runtime read of Serverwide and active-persona entries. */
 export async function buildLorebookContextItems(params: {
   tomoriState: TomoriState | null | undefined;
   recentMessages: readonly string[];

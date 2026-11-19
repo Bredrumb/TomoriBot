@@ -114,12 +114,7 @@ interface MockInteractionOptions {
   values?: string[];
   fields?: Record<string, string>;
   interactionId?: string;
-  /**
-   * A guild object for the flows that reach the post-commit effects. The wizard's own arms never
-   * read it, which is why the default stays absent.
-   */
   guild?: unknown;
-  /** The bot's resolved permissions in the interaction's channel, which can chat by default. */
   appPermissions?: bigint[];
 }
 
@@ -243,7 +238,6 @@ const SYSTEM_PROMPT_ROWS = [
   },
 ] as unknown as SystemPromptPresetRow[];
 
-/** Replaces both catalog reads for one test, and returns its own teardown. */
 function stubSettingsCatalogs(
   personaPresets: readonly TomoriPresetRow[] | null = PERSONA_PRESET_ROWS,
   promptPresets: readonly SystemPromptPresetRow[] | null = SYSTEM_PROMPT_ROWS,
@@ -274,10 +268,6 @@ function makeSettingsDraft(overrides: Partial<SetupDraftRecord> = {}): SetupDraf
   });
 }
 
-/**
- * Every wizard repaint re-resolves the stored settings, so a provider-mode switch stands in for any
- * repaint: it forces a fresh catalog read without touching the settings step.
- */
 async function dispatchUnrelatedRepaint(nonce: string): Promise<ReturnType<typeof makeMockInteraction>> {
   const customId = buildSetupProviderModeRouteId({ locale: "en-US", nonce });
   const interaction = makeMockInteraction({ customId, kind: "string", values: ["custom-endpoint"] });
@@ -285,13 +275,6 @@ async function dispatchUnrelatedRepaint(nonce: string): Promise<ReturnType<typeo
   return interaction;
 }
 
-/**
- * Repaints the wizard for one drifted catalog and asserts the step re-pends with the other
- * stored values intact.
- *
- * The step re-pends while the removed row reads as unavailable and every other stored value
- * keeps resolving, so which catalog drifted is visible in the panel itself.
- */
 async function expectRependAfterCatalogDrift(input: {
   nonce: string;
   removedField: string;
@@ -318,22 +301,12 @@ async function expectRependAfterCatalogDrift(input: {
   }
 }
 
-/**
- * One wizard step whose open route must hand back a modal carrying that step's submit route, so the
- * three submit IDs stay pinned per step instead of inside three separate flow tests.
- */
 interface SetupSubmitModalCase {
-  /** Submit action the opened modal's custom ID must parse to, which is also how the case reports. */
   label: SetupWizardAction;
   nonce: string;
-  /**
-   * Seeds the draft the open route reads, and stubs the catalogs a step resolves. A callback because
-   * the seeded record and the teardown both belong to the row rather than to the table.
-   */
   prepare: (nonce: string) => { restore: () => void };
   openRoute: (locale: string, nonce: string) => string;
   kind: "button" | "string";
-  /** Select values the open route reads, for the steps reached through a select. */
   values?: string[];
 }
 
@@ -1310,10 +1283,6 @@ describe("setupWizardRoutes", () => {
     expect(byokJson).not.toContain("endpoint-connection");
   });
 
-  /**
-   * The connection and Configure Text Model buttons for one custom-endpoint draft. The sub-row is
-   * found by the model route it carries, so a wizard-level action row cannot be mistaken for it.
-   */
   function endpointSubRowButtons(providerAccess: SetupDraftRecord["providerAccess"], nonce: string) {
     const payload = buildSetupWizardPayload({
       draft: makeDraft({ providerAccess }),
@@ -2453,11 +2422,6 @@ describe("setupWizardRoutes", () => {
     }
   });
 
-  /**
-   * Settings submissions the route must refuse. A row is
-   * [what is wrong, nonce key, persona choice, humanizer choice, prompt choice, typed timezone,
-   * expected notice key], so a loosened guard names the field it let through.
-   */
   const SETTINGS_REJECTIONS: ReadonlyArray<readonly [string, string, string, string, string, string, string]> = [
     ["an out-of-range timezone", "out-of-range", "1770", "1", "Tomori Default", "99", "settings_timezone_out_of_range"],
     ["a non-numeric timezone", "not-a-number", "1770", "1", "Tomori Default", "abc", "settings_timezone_invalid"],
@@ -2817,11 +2781,6 @@ describe("setupWizardRoutes", () => {
     }
   });
 
-  /**
-   * The submit route each open route hands back. A row is one step: the draft it reads and the
-   * component that selects it. A row asserts route identity only (action and nonce), because which
-   * fields each step writes is the flow tests' subject.
-   */
   const SETUP_SUBMIT_MODAL_ROUTES: SetupSubmitModalCase[] = [
     {
       label: "provider-byok-submit",
@@ -2886,13 +2845,6 @@ describe("setupWizardRoutes", () => {
   });
 });
 
-/**
- * The final commit path.
- *
- * These drive the real registry dispatch rather than the exported commit helper, so the assertions
- * cover the seam a button press actually travels: route parse, draft read, the routed guards, the
- * commit, and the receipt the actor ends up looking at.
- */
 describe("setupWizardFinish", () => {
   beforeAll(async () => {
     await initializeLocalizer();
@@ -2908,7 +2860,6 @@ describe("setupWizardFinish", () => {
     prompt: SYSTEM_PROMPT_ROWS[0],
   };
 
-  /** A guild object reached only by the post-commit expression sync, which is stubbed out. */
   const COMMIT_GUILD = {
     id: "guild-1",
     name: "Wizard Guild",
@@ -2936,10 +2887,6 @@ describe("setupWizardFinish", () => {
     });
   }
 
-  /**
-   * Every read the commit path makes outside the transaction, so a test only states the one it is
-   * varying. Returns the spies for assertions and a restore for the caller's finally block.
-   */
   function stubCommitDependencies() {
     // Named rather than reached through the array's index, because indexing a heterogeneous spy array
     // gives a union whose `mockRejectedValue` parameter collapses to `never`.

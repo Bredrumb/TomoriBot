@@ -12,7 +12,6 @@ import { initializeLocalizer } from "@/utils/text/localizer";
 import { localizedCopy, expectForEveryLocale } from "../../helpers/localeCases";
 import { collectTextDisplays } from "../../helpers/panelLimits";
 
-/** A key whose authored title states an outcome, used to observe the rendered marker. */
 const FAILED_TITLE_KEY = "commands.persona.import.failed_title";
 
 beforeAll(async () => {

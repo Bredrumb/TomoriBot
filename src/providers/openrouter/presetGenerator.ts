@@ -1,8 +1,3 @@
-/**
- * AI-Powered Preset Generation for TomoriBot
- * Uses OpenRouter structured output with optional tool-assisted web search.
- */
-
 import { log } from "@/utils/misc/logger";
 import { normalizeProviderUsage } from "@/utils/text/tokenEstimate";
 import { readOpenRouterLimitError } from "@/providers/openrouter/openrouterLimit";
@@ -41,12 +36,6 @@ interface OpenrouterPresetGenerationOptions {
   onUsage?: (usage: import("@/utils/text/tokenEstimate").TokenUsage) => void;
 }
 
-/**
- * Generate preset data from user prompts using OpenRouter structured output
- *
- * @param _locale - User's locale for error messages
- * @returns Promise<PresetGenerationResult> - Generated preset or error
- */
 export async function generatePresetFromPromptOpenrouter(
   apiKey: string,
   params: GeneratePresetParams,

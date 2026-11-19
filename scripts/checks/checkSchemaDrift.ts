@@ -1164,20 +1164,8 @@ function checkRuntimeStateExportExclusions(schemaSql: string): void {
   }
 }
 
-/**
- * Soft-warning (console.warn only, no CI failure) that fires when any
- * `*_configs` table created in a migration file exceeds the 15-column
- * fission threshold.  Tables on the exemption list are structural exceptions
- * where column growth is justified by their access pattern.
- *
- * Exemptions:
- *   server_capabilities_configs: uniform boolean cluster iterated by
- *     PERMISSION_DEFINITIONS array; growth is structurally uniform.
- *   saved_provider_configs: atomic snapshot table; all columns are written
- *     together as a unit by /server save-provider.
- *   server_chat_configs: aggregate /config + /model parameter surface;
- *     each column maps to exactly one command option knob.
- */
+// EXEMPT_TABLES stays limited to tables justified by access pattern (uniform flags, atomic snapshots, or 1:1 command
+// knobs) because others should split.
 async function checkConfigsColumnThreshold(migrationsDir: string): Promise<void> {
   const EXEMPT_TABLES = new Set(["server_capabilities_configs", "saved_provider_configs", "server_chat_configs"]);
   const COLUMN_THRESHOLD = 15;

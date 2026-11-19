@@ -1,10 +1,6 @@
 import type { Client, Guild, TextChannel } from "discord.js";
 import { log } from "../misc/logger";
 
-/**
- * Analyzes recent messages in a channel to determine activity level
- * @returns Promise<number> Number of non-bot messages in last 24h
- */
 async function getChannelActivity(channel: TextChannel): Promise<number> {
   try {
     const messages = await channel.messages.fetch({ limit: 50 });
@@ -17,9 +13,6 @@ async function getChannelActivity(channel: TextChannel): Promise<number> {
   }
 }
 
-/**
- * Finds the most active text channel that's accessible to the bot
- */
 export async function findBestChannel(guild: Guild, client: Client): Promise<TextChannel | null> {
   try {
     const textChannels = guild.channels.cache

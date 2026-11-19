@@ -15,10 +15,6 @@ import { supportsSpeechMode, type VoiceSourceMode } from "@/utils/speech/voiceSo
 import type {} from "./IRepository";
 import { createHash } from "node:crypto";
 
-/**
- * Raw credential row returned by loadEndpointCredentials.
- * Callers decrypt api_key using decryptApiKey(api_key, key_version).
- */
 export type EndpointCredentialRow = {
   api_key: Buffer;
   key_version: number;
@@ -216,7 +212,6 @@ function parseTranscriptionSelection(
   };
 }
 
-/** The user's enabled personal transcription model and the server's hosted one, each with its saved key. */
 export async function loadHostedTranscriptionSelections(
   serverId: number,
   userId?: number,
@@ -244,12 +239,8 @@ export async function loadHostedTranscriptionSelections(
   };
 }
 
-/**
- * Points one owner's transcription slot at a hosted model, or clears it with `null`.
- *
- * A server holds either a hosted model or a default custom endpoint, so every server write clears the
- * endpoint default in the same transaction; with `null` that leaves the server with no transcription.
- */
+// A server holds either a hosted model or a default custom endpoint, so every server write (including null) clears
+// the endpoint default in the same transaction.
 export async function setHostedTranscriptionSelection(
   scope: OpenRouterModelScope,
   modelId: number | null,
@@ -330,7 +321,6 @@ export async function setHostedTranscriptionSelection(
   }
 }
 
-/** Whether the owner already transcribes through a hosted model or, for a server, a default endpoint. */
 export async function hasTranscriptionSelection(scope: OpenRouterModelScope): Promise<boolean> {
   const rows =
     scope.kind === "server"
@@ -626,13 +616,6 @@ export async function setSpeechEndpointSelection(
   }
 }
 
-/**
- * Load encrypted credentials for a provider (keyed by internal provider name).
- * Returns null when no credentials are stored.
- *
- * @param providerName - Internal provider name (for example, "custom:123")
- * @returns Raw encrypted credential row or null
- */
 export async function loadEndpointCredentials(
   serverId: number,
   providerName: string,
@@ -652,7 +635,6 @@ export async function loadEndpointCredentials(
   }
 }
 
-/** Ordered by name. */
 export async function loadVoiceSamples(serverId: number): Promise<VoiceSampleRow[]> {
   try {
     const rows = await sql`
@@ -668,10 +650,6 @@ export async function loadVoiceSamples(serverId: number): Promise<VoiceSampleRow
   }
 }
 
-/**
- *
- * @returns Parsed VoiceSampleRow or null if not found
- */
 export async function loadVoiceSampleById(sampleId: number): Promise<VoiceSampleRow | null> {
   try {
     const rows = await sql`
@@ -686,14 +664,8 @@ export async function loadVoiceSampleById(sampleId: number): Promise<VoiceSample
   }
 }
 
-/**
- * Insert a placeholder voice sample row to reserve a sample_id before storage.
- * Callers must follow up with updateVoiceSamplePath once the file is stored.
- *
- * @param refText    - Optional reference transcript text
- * @param durationMs - Audio duration in milliseconds (0 if unknown)
- * @returns Inserted sample_id or null on failure
- */
+// Placeholder rows reserve a sample_id before storage with an empty file_path, so callers must follow up with
+// updateVoiceSamplePath.
 export async function insertVoiceSample(
   serverId: number,
   name: string,
@@ -713,11 +685,6 @@ export async function insertVoiceSample(
   }
 }
 
-/**
- * Update the file_path on a voice sample row after successful storage.
- *
- * @param filePath - Storage reference (S3 URL or local path)
- */
 export async function updateVoiceSamplePath(sampleId: number, filePath: string): Promise<void> {
   await sql`UPDATE voice_samples SET file_path = ${filePath} WHERE sample_id = ${sampleId}`;
 }
@@ -726,12 +693,6 @@ export async function deleteVoiceSample(sampleId: number): Promise<void> {
   await sql`DELETE FROM voice_samples WHERE sample_id = ${sampleId}`;
 }
 
-/**
- * Count how many persona rows currently reference a voice sample.
- * Used to display a warning before deletion.
- *
- * @returns Reference count (0 when not referenced)
- */
 export async function countPersonaVoiceSampleRefs(serverId: number, sampleId: number): Promise<number> {
   try {
     const [row] = await sql<[{ count: string }]>`
@@ -748,11 +709,6 @@ export async function countPersonaVoiceSampleRefs(serverId: number, sampleId: nu
   }
 }
 
-/**
- * Clear the voice sample assignment from all persona rows that reference the given sample.
- * Called before deletion so no persona is left pointing to a deleted sample.
- *
- */
 async function clearPersonaVoiceSampleRefs(serverId: number, sampleId: number): Promise<void> {
   // speech_voice_name must clear with the sample id: every provider reads it as the active voice
   // name, so leaving it set makes a persona report a voice that no longer exists. The surviving
@@ -774,10 +730,9 @@ async function clearPersonaVoiceSampleRefs(serverId: number, sampleId: number): 
   `;
 }
 
-/** Identifies the sample to retire and the workspace whose cached state references it. */
 export interface VoiceSampleRemovalInput {
   serverId: number;
-  /** Guild id, or the invoking user's id for a DM-backed workspace: the tomoriStateCache key. */
+  // Guild id or the invoking user's id for a DM workspace, because tomoriStateCache is keyed by that id.
   serverDiscId: string;
   sampleId: number;
   filePath: string;
@@ -787,11 +742,8 @@ export interface VoiceSampleRemovalResult {
   storedFileRemoved: boolean;
 }
 
-/**
- * Collaborators of removeVoiceSample, injectable so a test can observe call ordering.
- * Bun cannot unregister `mock.module`, so mocking the sql client or the cache store would leak
- * into every other test sharing the lane process.
- */
+// Test-injectable collaborators exist because Bun cannot unregister mock.module, so mocking SQL or cache would leak
+// across tests.
 export interface VoiceSampleRemovalDeps {
   clearRefs: typeof clearPersonaVoiceSampleRefs;
   deleteRow: typeof deleteVoiceSample;
@@ -806,14 +758,8 @@ const DEFAULT_REMOVAL_DEPS: VoiceSampleRemovalDeps = {
   deleteStoredFile: deleteStoredVoiceSample,
 };
 
-/**
- * Retires a voice sample completely: clears every persona reference, deletes the row, invalidates
- * cached state, then removes the stored audio file.
- *
- * Cache invalidation runs after the row delete commits and before stored-file cleanup, so a cleanup
- * failure can never leave the deleted assignment being served from cache. Cleanup failure is
- * reported rather than thrown, because the row is already gone and a retry would find nothing.
- */
+// Cache invalidates after row deletion and before file cleanup so stale refs cannot be served, and cleanup errors
+// only log because the row is already gone.
 export async function removeVoiceSample(
   { serverId, serverDiscId, sampleId, filePath }: VoiceSampleRemovalInput,
   deps: VoiceSampleRemovalDeps = DEFAULT_REMOVAL_DEPS,

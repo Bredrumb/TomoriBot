@@ -1,11 +1,3 @@
-/**
- * Discord Components V2 limit constants, Unicode-safe text truncation, and payload validators.
- *
- * Discord rejects oversized or grammatically invalid component trees with a 400 Bad Request
- * at the REST boundary. These pure validators verify message and modal payloads against Discord's
- * documented constraints before transmission, preventing silent client interaction failures.
- */
-
 import { ComponentType, MessageFlags } from "discord.js";
 import type { TopLevelComponentData } from "discord.js";
 import type { RawDiscordComponent } from "@/types/discord/rawApiTypes";
@@ -16,24 +8,14 @@ import type { RawModalPayload } from "./configModals";
 // Reference: https://discord.com/developers/docs/interactions/message-components
 // Components V2 guide: docs/en/architecture/integrations/discord/message-components-v2.md
 
-/**
- * Maximum total components across the entire serialized message tree.
- * Discord counts top-level layout components, nested children, and Section accessories.
- */
+// Discord's 40-component cap applies to the whole tree because Discord counts top-level layouts, nested children, and
+// Section accessories together.
 export const DISCORD_MESSAGE_TOTAL_COMPONENTS_MAX = 40;
 
-/**
- * Maximum total characters across all Text Display components in a single message.
- * Measured in Unicode codepoints matching Discord's backend length calculation.
- */
+// This 4000 limit is measured in Unicode codepoints rather than UTF-16 length because Discord's backend counts
+// codepoints.
 export const DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX = 4000;
 
-/**
- * Recursively measures total Text Display characters across a component, container, or list.
- *
- * Walks nested components, containers, and sections, summing codepoints measured via
- * {@link getDiscordTextLength}.
- */
 export function measureComponentTextLength(component: unknown): number {
   if (!component) return 0;
   if (Array.isArray(component)) {
@@ -60,91 +42,62 @@ export function measureComponentTextLength(component: unknown): number {
   return total;
 }
 
-/** Maximum buttons allowed in a single Action Row. */
 export const DISCORD_ACTION_ROW_BUTTONS_MAX = 5;
 
-/** Maximum select menus allowed in a single Action Row. */
 export const DISCORD_ACTION_ROW_SELECTS_MAX = 1;
 
-/** Minimum Text Displays required inside a Section component. */
 export const DISCORD_SECTION_TEXT_DISPLAYS_MIN = 1;
 
-/** Maximum Text Displays allowed inside a Section component. */
 export const DISCORD_SECTION_TEXT_DISPLAYS_MAX = 3;
 
-/** Minimum options in a String Select menu. */
 export const DISCORD_SELECT_OPTIONS_MIN = 1;
 
-/** Maximum options in a String Select menu. */
 export const DISCORD_SELECT_OPTIONS_MAX = 25;
 
-/** Maximum `max_values` on any select menu, including channel selects. */
 export const DISCORD_SELECT_VALUES_MAX = 25;
 
-/** Maximum characters for a select option label. */
 export const DISCORD_SELECT_OPTION_LABEL_MAX = 100;
 
-/** Maximum characters for a select option value. */
 export const DISCORD_SELECT_OPTION_VALUE_MAX = 100;
 
-/** Maximum characters for a select option description. */
 export const DISCORD_SELECT_OPTION_DESCRIPTION_MAX = 100;
 
-/** Maximum characters for a select menu placeholder. */
 export const DISCORD_SELECT_PLACEHOLDER_MAX = 150;
 
-/** Maximum characters for a button label. */
 export const DISCORD_BUTTON_LABEL_MAX = 80;
 
-/** Minimum characters for an interactive component custom ID. */
 export const DISCORD_CUSTOM_ID_MIN = 1;
 
-/** Maximum characters for an interactive component custom ID. */
 export const DISCORD_CUSTOM_ID_MAX = 100;
 
-/** Maximum characters for a link button URL. */
 export const DISCORD_BUTTON_URL_MAX = 512;
 
-/** Maximum characters for Thumbnail or Media Gallery item alt text. */
 export const DISCORD_MEDIA_DESCRIPTION_MAX = 1024;
 
-/** Minimum items in a Media Gallery component. */
 export const DISCORD_MEDIA_GALLERY_ITEMS_MIN = 1;
 
-/** Maximum items in a Media Gallery component. */
 export const DISCORD_MEDIA_GALLERY_ITEMS_MAX = 10;
 
-/** Maximum characters for a modal dialog title. */
 export const DISCORD_MODAL_TITLE_MAX = 45;
 
-/** Minimum top-level components in a modal dialog. */
 export const DISCORD_MODAL_COMPONENTS_MIN = 1;
 
-/** Maximum top-level components in a modal dialog. */
 export const DISCORD_MODAL_COMPONENTS_MAX = 5;
 
-/** Maximum characters for a modal component label (Component Type 18 wrapper). */
 export const DISCORD_MODAL_FIELD_LABEL_MAX = 45;
 
-/** Maximum characters for a modal component description. */
 export const DISCORD_MODAL_FIELD_DESCRIPTION_MAX = 100;
 
-/** Minimum options in a modal Checkbox Group. */
 export const DISCORD_CHECKBOX_GROUP_OPTIONS_MIN = 1;
 
-/** Maximum options in a modal Checkbox Group. */
 export const DISCORD_CHECKBOX_GROUP_OPTIONS_MAX = 10;
 
-/** Minimum options in a modal Radio Group. */
 export const DISCORD_RADIO_GROUP_OPTIONS_MIN = 2;
 
-/** Maximum options in a modal Radio Group. */
 export const DISCORD_RADIO_GROUP_OPTIONS_MAX = 10;
 
-/** Maximum characters for a modal text input value or max_length. */
 export const DISCORD_TEXT_INPUT_MAX = 4000;
 
-/** Maximum characters for a modal text input placeholder. */
 export const DISCORD_TEXT_INPUT_PLACEHOLDER_MAX = 100;
 
 export { getDiscordTextLength, truncateDiscordText } from "@/utils/text/discordTextLimits";
@@ -236,10 +189,7 @@ function isSelectComponentType(type: number): boolean {
   );
 }
 
-/**
- * Validates a Components V2 message payload against Discord's structural and length limits.
- * Pure and non-mutating. Returns structured violations with no sensitive prompt or user text.
- */
+// Violations must omit prompt and user text from observed fields so structural reports never leak sensitive content.
 export function validateComponentsV2MessageLimits(
   payload: ComponentsV2MessagePayload,
 ): DiscordComponentValidationResult {
@@ -803,10 +753,6 @@ export function validateComponentsV2MessageLimits(
   };
 }
 
-/**
- * Validates a raw modal wire payload against Discord limits.
- * Pure and non-mutating. Returns structured path-aware violations.
- */
 export function validateRawModalLimits(payload: RawModalPayload): DiscordComponentValidationResult {
   const violations: DiscordComponentLimitViolation[] = [];
 
@@ -1139,12 +1085,8 @@ export function validateRawModalLimits(payload: RawModalPayload): DiscordCompone
 
 const MODAL_OPTION_COMPONENT_TYPES = new Set([3, 21, 22]);
 
-/**
- * Truncates every length-capped display string in a raw modal to its Discord limit.
- *
- * Values and custom IDs are left alone because submit handlers match on them, so truncating
- * either would silently break the round trip instead of the display.
- */
+// Option values and custom IDs are left untruncated because submit handlers match on them and clamping would silently
+// break round trips.
 export function clampRawModalText(payload: RawModalPayload): { payload: RawModalPayload; truncatedPaths: string[] } {
   const truncatedPaths: string[] = [];
   const clamp = (text: string, limit: number, path: string): string => {

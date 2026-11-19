@@ -38,11 +38,8 @@ import { statRepository } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 import { notifyProviderToolFailure } from "@/utils/provider/providerUsage";
 
-/**
- * Per-endpoint description variants for the voice message tool.
- * The registry proxies the tool with the matching variant based on the server's active
- * speech endpoint's script_markup setting. Defaults to bracket-tags (ElevenLabs / no endpoint).
- */
+// Keys match the speech endpoint's script_markup setting so the tool registry can proxy variants, defaulting to
+// "bracket-tags" for ElevenLabs or unset endpoints.
 export const VOICE_TOOL_VARIANTS = {
   "bracket-tags": {
     toolDescription:

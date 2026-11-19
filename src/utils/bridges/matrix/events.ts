@@ -101,11 +101,8 @@ export async function handleMatrixEvent(
   });
 }
 
-/**
- * An encryption state event is authorized by the room's power levels, so it forces a fresh check.
- * Any member can send an encrypted-message event, so that one only reuses the cached confirmation
- * and catches a state change the bridge missed while offline.
- */
+// Encryption state events force a cache refresh because power levels authorize them, whereas encrypted messages reuse
+// cache since any member can send one.
 async function recheckLinkedRoomEncryption(event: WeakEvent, discordClient: Client): Promise<void> {
   if (!(await getDiscordChannelForRoom(event.room_id))) return;
   await ensureRoomRelayable(event.room_id, discordClient, { refresh: event.type === MATRIX_ENCRYPTION_STATE_TYPE });

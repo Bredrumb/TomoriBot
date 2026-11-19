@@ -2,12 +2,8 @@ import { formatDateWithOffset, getCalendarDayWithOffset, isValidUtcOffset } from
 
 const TIME_AWARENESS_REUNION_DAYS = 7;
 
-/**
- * How many messages deep the reunion note is injected. Depth 1 (the original
- * value) put it directly above the newest message, where it competed with the
- * user's actual prompt for the model's attention; depth 3 matches the verbatim
- * tool-calling nudge and keeps it advisory rather than imperative.
- */
+// Depth 3 matches the verbatim tool-calling nudge so the note stays advisory, whereas depth 1 sits above the newest
+// message and competes with the prompt.
 export const TIME_AWARENESS_NOTE_DEPTH = 3;
 
 export const SPACER_TEMPLATE =
@@ -21,25 +17,12 @@ export interface BuildReunionNoteArgs {
   displayName: string;
   nowMs?: number;
   reunionDays?: number;
-  /**
-   * Set when `displayName` is a proxied identity whose clock is its own. Talk about the
-   * identity, never about the host account it shares: siblings speak from that account
-   * between this one's turns, so any claim about the account's absence would be false.
-   */
+  // Proxied identities share a host account where other members speak between turns, so absence wording must refer
+  // only to displayName and never the account.
   isSharedAccount?: boolean;
 }
 
-/**
- * Builds the one-shot persona-reunion note as raw text. The dialogue-history
- * consumer wraps it in `[System: ...]`.
- *
- * The caller supplies the clock of whoever is speaking: the host account for an ordinary
- * message, the proxied identity for a verified repost. Every branch therefore describes
- * `displayName` and nothing wider, which stays true when a shared account has other people
- * speaking from it between this speaker's turns.
- *
- * @returns The note body, or null when no reunion applies to this person.
- */
+// Raw note text omits [System: ...] wrapping because the dialogue-history consumer adds that wrapper.
 export function buildReunionNote(args: BuildReunionNoteArgs): string | null {
   const reunionDays = args.reunionDays ?? TIME_AWARENESS_REUNION_DAYS;
   if (args.seenToday) return null;
@@ -66,10 +49,6 @@ export function buildReunionNote(args: BuildReunionNoteArgs): string | null {
   return `${args.displayName} hasn't interacted with you specifically since ${lastDate} (${dayGap} days ago), though they may have been around the server. Acknowledge them interacting with you again.`;
 }
 
-/**
- * Builds a separator for a server-calendar-day boundary. The tool macro must
- * already be expanded by the caller; this function only fills date fields.
- */
 export function buildDateSpacer(
   prevCreatedAt: number,
   nextCreatedAt: number,

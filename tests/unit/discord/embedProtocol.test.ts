@@ -24,7 +24,6 @@ function message(embed?: EmbedBuilder): Pick<Message, "embeds"> {
   return { embeds: embed ? [embed.toJSON() as unknown as Embed] : [] };
 }
 
-/** Recreates an embed posted while the bot still wrote the footer token. */
 function withLegacyToken(embed: EmbedBuilder, kind: string): EmbedBuilder {
   return embed.setFooter({ text: `[tomori:v1:${kind}]` });
 }

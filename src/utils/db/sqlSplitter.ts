@@ -1,21 +1,3 @@
-/**
- * Splits a multi-statement PostgreSQL SQL string into individual executable statements.
- *
- * Correctly handles all PostgreSQL quoting and comment contexts so that semicolons
- * inside function bodies, string literals, or comments are never treated as statement
- * terminators:
- *
- *   - Dollar-quoted blocks:  $$ ... $$ and $tag$ ... $tag$
- *   - Single-quoted strings: '...' with '' as the escape sequence for a literal quote
- *   - Line comments:         -- ...
- *   - Block comments:        slash-star ... star-slash
- *
- * Entries that contain only whitespace or comments after stripping are dropped so
- * nothing empty is sent to the database.
- *
- * @param sql - Full SQL file contents, potentially containing many statements
- * @returns Ordered array of individual SQL statements, each retaining its trailing semicolon
- */
 export function splitSqlStatements(sql: string): string[] {
   const statements: string[] = [];
   let current = "";
@@ -114,10 +96,6 @@ export function splitSqlStatements(sql: string): string[] {
   return statements;
 }
 
-/**
- * Returns true when a SQL fragment contains actual executable content rather than
- * only whitespace and comments.  Used to drop header-comment-only leading blocks.
- */
 function isExecutable(sql: string): boolean {
   const noLineComments = sql.replace(/--[^\n]*/g, "");
   const noComments = noLineComments.replace(/\/\*[\s\S]*?\*\//g, "");

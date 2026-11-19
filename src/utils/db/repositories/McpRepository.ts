@@ -1,13 +1,5 @@
-/**
- * McpRepository: manages the `guild_mcp_servers` table.
- *
- * MCP guild config is a distinct integration domain (guild-registered MCP tool servers).
- * Currently one SQL operation (SELECT); isolated here so MCP config management
- * can grow without blurring server-identity concerns in ServerRepository.
- *
- * Export contract: toExportShape returns null: MCP server registrations contain
- * server-specific auth tokens and are not portably exportable.
- */
+// toExportShape returns null because MCP registrations hold server-specific auth tokens and are not portably
+// exportable.
 import type { GuildMcpServerRow } from "@/types/db/schema";
 import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
@@ -18,22 +10,11 @@ export type McpConfigRepositoryReadResult =
   | { status: "unavailable"; configs: [] };
 
 class McpRepository implements IRepository<null> {
-  /**
-   * Load all MCP server configs registered for a guild (enabled and disabled).
-   * Callers that need only enabled entries should filter in-memory.
-   *
-   * @param serverId - Internal server DB ID (FK to servers table)
-   * @returns Array of GuildMcpServerRow ordered by creation date; empty on error
-   */
   async loadGuildMcpConfigs(serverId: number): Promise<GuildMcpServerRow[]> {
     const result = await this.loadGuildMcpConfigsResult(serverId);
     return result.configs;
   }
 
-  /**
-   * Loads MCP registrations without collapsing a database failure into an
-   * authoritative empty collection.
-   */
   async loadGuildMcpConfigsResult(serverId: number): Promise<McpConfigRepositoryReadResult> {
     try {
       const rows = await sql`
@@ -66,5 +47,4 @@ class McpRepository implements IRepository<null> {
   }
 }
 
-/** Singleton instance: import this in callers. */
 export const mcpRepository = new McpRepository();

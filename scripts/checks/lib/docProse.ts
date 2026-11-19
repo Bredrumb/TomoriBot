@@ -8,11 +8,8 @@ const SLOP_GUARD_CONFIG_PATH = ".agents/skills/lint-prose/slop-guard.jsonl";
 // what the calibrated rule set reports without any file in this repository changing.
 const SLOP_GUARD_PACKAGE = "slop-guard==0.5.0";
 
-/**
- * The `lint-prose` rule each kept slop-guard rule enforces. The config file keeps only these;
- * the structural and density rules were dropped in calibration because they penalize the
- * checklists and tables the contributor guides are meant to use.
- */
+// Only calibrated lint-prose rules are kept here because structural and density rules penalize the checklists and
+// tables contributor guides use.
 const ENGINE_RULE_IDS: Record<string, number | undefined> = {
   slop_word: 5,
   slop_phrase: 20,
@@ -30,7 +27,8 @@ const ENGINE_RULE_IDS: Record<string, number | undefined> = {
 // literal, and every calibration hit on them was literal ("the DB test harness").
 const ALLOWED_ENGINE_WORDS = new Set(["harness"]);
 
-/** Plain-word and filler patterns from `lint-prose` rules 6, 11, and 20 that the engine lacks. */
+// Local patterns enforce lint-prose rules 6, 11, and 20 because the external engine omits these plain-word and filler
+// checks.
 const REPO_PATTERNS: Array<{ ruleId: number; pattern: RegExp; advice: string }> = [
   { ruleId: 20, pattern: /\bin order to\b/gi, advice: 'Write "to".' },
   { ruleId: 20, pattern: /\bdue to the fact that\b/gi, advice: 'Write "because".' },
@@ -43,7 +41,7 @@ const REPO_PATTERNS: Array<{ ruleId: number; pattern: RegExp; advice: string }> 
 
 export interface DocProseFinding {
   file: string;
-  /** Absent for a whole-page finding such as a copula chain. */
+  // Optional because whole-page findings such as copula chains have no single line number.
   line?: number;
   rule: string;
   ruleId?: number;
@@ -54,7 +52,7 @@ export interface DocProseFinding {
 export interface DocProseResult {
   filesChecked: number;
   findings: DocProseFinding[];
-  /** False when `uvx` is missing, so only the repository patterns ran. */
+  // False when uvx is missing, so callers know only repository patterns ran.
   engineRan: boolean;
 }
 
@@ -72,12 +70,6 @@ interface EngineResult {
   advice: string[];
 }
 
-/**
- * Audits Markdown prose against the calibrated `lint-prose` rule set.
- *
- * @param repoRoot - Repository root that `paths` and the engine config resolve against.
- * @param paths - Markdown files or directories to scan.
- */
 export async function auditDocProse(repoRoot: string, paths: string[]): Promise<DocProseResult> {
   const files = await collectMarkdownFiles(repoRoot, paths);
   const sources = new Map<string, string>();
@@ -99,9 +91,6 @@ export async function auditDocProse(repoRoot: string, paths: string[]): Promise<
   return { filesChecked: files.length, findings, engineRan: Boolean(uvx) };
 }
 
-/**
- * Scans one Markdown source for the repository patterns, skipping code.
- */
 export function collectRepoPatternFindings(file: string, source: string): DocProseFinding[] {
   const prose = maskMarkdownCode(source);
   const findings: DocProseFinding[] = [];
@@ -120,9 +109,7 @@ export function collectRepoPatternFindings(file: string, source: string): DocPro
   return findings;
 }
 
-/**
- * Blanks fenced blocks and inline code spans while keeping every offset and line number intact.
- */
+// Code spans are replaced with spaces instead of deleted so match offsets keep exact line numbers.
 export function maskMarkdownCode(source: string): string {
   const blank = (text: string) => text.replace(/[^\n]/g, " ");
   return source.replace(/^(```|~~~)[^\n]*\n[\s\S]*?^\1[^\n]*$/gm, blank).replace(/`[^`\n]+`/g, blank);

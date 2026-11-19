@@ -578,7 +578,6 @@ export function createExpressionsInteractionRoute(
 
 export const expressionsInteractionRoute = createExpressionsInteractionRoute();
 
-/** Destinations for `/expressions manage page:`; the command is manager-only, so none is filtered. */
 export function listExpressionsPageDestinations(locale: string): PanelPageDestination<ExpressionCategory, null>[] {
   return EXPRESSION_CATEGORIES.map((category) => ({
     category,

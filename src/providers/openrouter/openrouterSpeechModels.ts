@@ -1,11 +1,7 @@
 import { normalizeOpenRouterCodename } from "@/utils/cache/openrouterCatalog";
 
-/**
- * Request shape and limits for one admitted OpenRouter speech model.
- *
- * OpenRouter publishes no field for direction, markup, or prompt length, so this table is kept by
- * hand from each provider's documentation.
- */
+// Maintained by hand from each provider's docs because OpenRouter publishes no model metadata field for direction,
+// markup, or prompt length.
 export type OpenRouterSpeechModelSpec =
   | { shape: "clone" }
   | { shape: "design"; promptCharacters: number; scriptCharacters: number };

@@ -12,7 +12,7 @@ const MAX_RULE_OUTPUT_BYTES = 32768;
 const MAX_RULE_TEXT_PARTS = 8;
 const RULE_TIMEOUT_MS = 30000;
 
-/** Any linter's own output, passed to the reviewer as untrusted advisory evidence. */
+// Kept unknown because any MCP linter's output is passed to the reviewer as untrusted advisory evidence.
 export type RuleReport = unknown;
 export interface RuleCheckState {
   calls: number;
@@ -22,7 +22,6 @@ export type RuleCheckOutcome =
   | { status: "disabled" | "exhausted" | "failed" | "cancelled" | "clean" }
   | { status: "report"; evidence: RuleReport };
 
-/** Linters differ in output shape, so a report is structured content, JSON text, or plain text. */
 export function parseRuleReport(raw: unknown): RuleReport | null {
   const envelope = z
     .object({

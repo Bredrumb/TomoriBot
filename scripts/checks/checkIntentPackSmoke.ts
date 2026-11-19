@@ -8,19 +8,6 @@ import {
   getToolNamesForDeliberateTriggerTarget,
 } from "@/utils/tools/deliberateToolMode";
 
-/**
- * Smoke-tests one locale's intent packs against natural requests a native speaker would type.
- *
- * Pack validation at startup only proves entries are well formed; it cannot tell whether real
- * phrasing reaches a tool. A translated pack in the pilot locale passed validation yet missed 20 of
- * 42 natural requests, so every locale lane runs this with its own request file.
- *
- * Usage: bun run check-intent-packs --locale=<code> --requests=<path.json>
- *
- * The request file maps each deliberate target and `explicit_memory` to natural requests:
- * `{ "deliberate": { "image": ["...", "...", "..."], ... }, "explicit_memory": ["..."] }`
- */
-
 const MIN_REQUESTS_PER_TARGET = 3;
 
 interface SmokeRequests {

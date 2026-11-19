@@ -57,13 +57,6 @@ function createScopeData(overrides: Partial<ModerationScopeData> = {}): Moderati
   };
 }
 
-/**
- * Drives a real route rather than calling `deliverGuardedPanel` directly.
- *
- * The chokepoint contract is only meaningful end to end: a route that both emits its own metric and
- * then repaints with a receipt would double-count, and that is invisible to a test that starts at
- * the delivery layer.
- */
 async function submitQuotaEdit(
   route: ReturnType<typeof createModerationInteractionRoute>,
   nonce: string,
@@ -149,14 +142,6 @@ describe("panel failure emission is exactly once per failure", () => {
 });
 
 describe("panel_failure has exactly one emitter", () => {
-  /**
-   * The chokepoint is only a chokepoint while nothing else emits the same metric.
-   *
-   * A route that emits its own `panel_failure` and then repaints with a receipt counts one failure
-   * twice, under two different reason keys, and no unit test over `deliverGuardedPanel` can see it.
-   * Guarding the invariant by source means a future call site cannot quietly revoke it. Counts a
-   * receipt cannot carry belong under `panel_failure_detail`, and free-text cause detail in `log.warn`.
-   */
   it('declares log.metric("panel_failure") in interactionCore.ts only', () => {
     const root = join(import.meta.dir, "..", "..", "..", "src");
     const emitters: string[] = [];

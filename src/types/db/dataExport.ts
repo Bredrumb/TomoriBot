@@ -27,16 +27,9 @@ import { PrivacyLevel, deliberateToolTriggerEntrySchema } from "@/types/db/schem
 import { addressingStyleSchema } from "@/types/personaNaming";
 import { renameLegacyCharRefKey } from "@/types/preset/presetExport";
 
-/**
- * Version identifier for export/import format
- * Increment when breaking changes are made to the export format
- */
 export const EXPORT_VERSION = "1.0";
 export const EXPORT_V2_VERSION = "2.0";
 
-/**
- * Explicit file type identifiers for /export and /import.
- */
 const DATA_EXPORT_TYPES = {
   personal_memories: "personal_memories",
   server_memories: "server_memories",
@@ -46,10 +39,6 @@ const DATA_EXPORT_TYPES = {
   legacy_personal: "personal",
   legacy_server: "server",
 } as const;
-/**
- * A single memory entry. Accepts plain strings (legacy exports) or tagged objects;
- * both forms normalise to { content, tags } on parse.
- */
 const memoryItemObjectSchema = z.object({
   content: z.string(),
   tags: z.preprocess(
@@ -83,7 +72,6 @@ function normalizeMemoryWhitespace(value: string): string {
   return value.trim().replace(/\s+/gu, " ");
 }
 
-/** Canonicalizes memory values so merge can compare content and unordered tags. */
 export function normalizeMemoryItem(memory: MemoryItem): MemoryItem {
   const tags = new Set(memory.tags.map((tag) => normalizeMemoryWhitespace(tag.replace(/^["']+|["']+$/g, ""))));
 
@@ -93,10 +81,6 @@ export function normalizeMemoryItem(memory: MemoryItem): MemoryItem {
   };
 }
 
-/**
- * Get personal data export schema with dynamic memory limits from environment
- * Validates the structure of exported personal user data
- */
 function getPersonalExportDataSchema() {
   const limits = getMemoryLimits();
   return z.object({
@@ -109,10 +93,6 @@ function getPersonalExportDataSchema() {
 
 export type PersonalExportData = z.infer<ReturnType<typeof getPersonalExportDataSchema>>;
 
-/**
- * Personal settings-only export schema.
- * Includes user-specific physical appearance image tags and character reference image URL.
- */
 export const personalSettingsExportDataSchema = z.object({
   user_nickname: z.string().min(1).max(100).nullable(),
   language_pref: z.string().min(2).max(10),
@@ -146,9 +126,6 @@ export const personalSettingsExportDataSchema = z.object({
 
 export type PersonalSettingsExportData = z.infer<typeof personalSettingsExportDataSchema>;
 
-/**
- * Persona-scoped personal memories-only export schema.
- */
 function getPersonalMemoriesExportDataSchema() {
   const limits = getMemoryLimits();
   return z.object({
@@ -158,9 +135,6 @@ function getPersonalMemoriesExportDataSchema() {
 
 export type PersonalMemoriesExportData = z.infer<ReturnType<typeof getPersonalMemoriesExportDataSchema>>;
 
-/**
- * Get complete personal export file schema with dynamic limits
- */
 export function getPersonalExportSchema() {
   return z.object({
     version: z.literal(EXPORT_VERSION),
@@ -172,12 +146,8 @@ export function getPersonalExportSchema() {
 
 export type PersonalExport = z.infer<ReturnType<typeof getPersonalExportSchema>>;
 
-/**
- * A jsonb column can hold a JSON string rather than the value it describes, because an older writer handed the
- * driver a value it encoded a second time. Both DB row schemas in `schema.ts` normalize their jsonb fields for that
- * reason, so the portable schemas must too: a workspace whose stored value is string-typed otherwise fails its own
- * export with "expected record, received string" while the bot reads that same row without complaint.
- */
+// Older writers stored double-encoded jsonb columns as strings, so export schemas parse strings to match DB row
+// normalization.
 function normalizeJsonColumn(value: unknown): unknown {
   if (typeof value !== "string") return value;
   try {
@@ -188,20 +158,14 @@ function normalizeJsonColumn(value: unknown): unknown {
   }
 }
 
-/**
- * Portable server_model_configs export fields.
- * Excludes model-selection FKs and encrypted credential mirrors.
- */
+// Encrypted credential mirrors and model-selection FKs stay excluded because credentials are secret and FKs are
+// server-specific.
 const serverModelConfigExportSchema = z.object({
   llm_temperature: z.number().min(0.0).max(2.0),
   thinking_level: z.enum(THINKING_LEVEL_VALUES).default(DEFAULT_THINKING_LEVEL),
   llm_disabled_params: z.array(z.enum(SUPPORTED_PARAM_VALUES)).default([]),
 });
 
-/**
- * Portable server_chat_configs export fields.
- * Excludes provider/model fallback refs because they are server-specific model pointers.
- */
 const serverChatConfigExportSchema = z.object({
   response_reviewer_llm_id: z.number().int().positive().nullable().optional(),
   response_reviewer_prompt: responseReviewerPromptSchema.nullable().optional(),
@@ -236,7 +200,6 @@ const serverChatConfigExportSchema = z.object({
   model_randomizer_enabled: z.boolean().default(false),
 });
 
-/** Portable server_member_permissions_configs export fields. */
 const serverMemberPermissionsConfigExportSchema = z.object({
   server_memteaching_enabled: z.boolean().default(false),
   self_teaching_enabled: z.boolean().default(true),
@@ -245,7 +208,6 @@ const serverMemberPermissionsConfigExportSchema = z.object({
   persona_export_enabled: z.boolean().optional(),
 });
 
-/** Portable server_capabilities_configs export fields. */
 const serverCapabilitiesConfigExportSchema = z.object({
   response_drafting_enabled: z.boolean().optional(),
   web_search_enabled: z.boolean().default(true),
@@ -266,7 +228,6 @@ const serverCapabilitiesConfigExportSchema = z.object({
   user_info_updates_enabled: z.boolean().default(true),
 });
 
-/** Portable server_notice_embeds_configs export fields. */
 const serverNoticeEmbedsConfigExportSchema = z.object({
   tool_notice_hidden_keys: z.array(z.string()).default([]),
   // Optional, so an export from a server that never chose stays unset on import and keeps following
@@ -274,7 +235,6 @@ const serverNoticeEmbedsConfigExportSchema = z.object({
   tool_notice_verbosity: z.enum(NOTICE_VERBOSITY_LEVELS).optional(),
 });
 
-/** Portable server_nsfw_configs export fields. */
 const serverNsfwConfigExportSchema = z.object({
   uncensor_injection_enabled: z.boolean().optional(),
   uncensor_unicode_space_enabled: z.boolean().optional(),
@@ -293,21 +253,14 @@ const serverSpeechConfigExportSchema = z.object({
   chatterbox_exaggeration: z.number().min(0.0).optional(),
 });
 
-/**
- * Portable server_channel_scope_configs export fields.
- * Discord channel IDs remain excluded because they are not portable.
- */
 const serverChannelScopeConfigExportSchema = z.object({
   stm_privacy_bypass: z.boolean().optional(),
 });
 
-/**
- * server_auto_trigger_configs currently has no portable export fields.
- * Channel IDs, persona overrides, and channel-coupled thresholds are server-specific.
- */
+// Empty export schema because server_auto_trigger_configs fields are channel-coupled or persona overrides and
+// non-portable.
 const serverAutoTriggerConfigExportSchema = z.object({});
 
-/** Portable server_trigger_behavior_configs export fields. */
 const serverTriggerBehaviorConfigExportSchema = z.object({
   always_reply_enabled: z.boolean().optional(),
   deliberate_trigger_mode: z.boolean().optional(),
@@ -320,10 +273,6 @@ const serverTriggerBehaviorConfigExportSchema = z.object({
   cooldown_length: z.number().int().min(1).max(86400).optional(),
 });
 
-/**
- * Portable server_novelai_imagegen_configs export fields.
- * Excludes model-selection FKs.
- */
 const serverNovelaiImagegenConfigExportSchema = z.object({
   image_default_positive_tags: z.array(z.string()).optional(),
   image_default_negative_tags: z.array(z.string()).optional(),
@@ -335,32 +284,21 @@ const serverNovelaiImagegenConfigExportSchema = z.object({
   nai_preset_name: z.string().nullable().optional(),
 });
 
-/** Portable server_byok_configs export fields. */
 const serverByokConfigExportSchema = z.object({
   user_byok_mode: z.boolean().optional(),
 });
 
-/** Portable server_memory_configs export fields. */
 const serverMemoryConfigExportSchema = z.object({
   memory_tagging_enabled: z.boolean().optional(),
   channel_memory_enabled: z.boolean().optional(),
 });
 
-/**
- * Portable server_welcome_configs export fields.
- * Discord channel/persona references remain excluded.
- */
 const serverWelcomeConfigExportSchema = z.object({
   welcome_prompt: z.string().nullable().optional(),
 });
 
-/**
- * Portable STM customization export fields (server_stm_configs + stm_categories).
- * Unlike the flat split-config tables, STM travels as a nested config object plus an
- * ordered categories array: these mirror ShortTermMemoryRepository's export shape.
- * Both keys are optional so exports predating STM customization still validate.
- * Per-channel durable STM *state* is intentionally NOT exported (design decision 8).
- */
+// STM export mirrors ShortTermMemoryRepository and keeps both keys optional so pre-STM exports still validate, while
+// omitting channel state.
 const serverStmConfigExportSchema = z.object({
   stm_config: z
     .object({
@@ -385,11 +323,8 @@ const serverStmConfigExportSchema = z.object({
     .optional(),
 });
 
-/**
- * The humanizer toggles an imported chat config sets: undefined when the file carries none, null when a
- * partial set or a broken toggle dependency makes them unusable, and the degree's toggles for an export
- * written before the toggles existed.
- */
+// Distinguishes omitted humanizer fields (undefined) from partial or dependency-invalid toggles (null) so importers
+// leave absent configs alone.
 export function resolveImportedHumanizer(
   config: Partial<Record<(typeof HUMANIZER_TOGGLES)[number], boolean>> & { humanizer_degree?: number },
 ): HumanizerSettings | null | undefined {
@@ -402,11 +337,7 @@ export function resolveImportedHumanizer(
   return findHumanizerDependencyViolation(settings) ? null : settings;
 }
 
-/**
- * Server configuration export schema.
- * Flat JSON shape is preserved for existing export/import file compatibility,
- * but the schema is now composed by split config-table ownership.
- */
+// Flattens split config schemas instead of nesting by table because legacy v1 export files expect top-level keys.
 export const serverConfigExportSchema = serverModelConfigExportSchema
   .merge(serverChatConfigExportSchema)
   .merge(serverMemberPermissionsConfigExportSchema)
@@ -425,11 +356,8 @@ export const serverConfigExportSchema = serverModelConfigExportSchema
 
 export type ServerConfigExport = z.infer<typeof serverConfigExportSchema>;
 
-/**
- * Chat omits both fields it would otherwise inherit from `server_chat_configs`. `self_debug_enabled` is a
- * capability-class toggle and is claimed by `capabilities`; `model_randomizer_enabled` travels nowhere because
- * its fallback model pool is excluded, so carrying the flag alone would enable a randomizer over nothing.
- */
+// Omits self_debug_enabled because capabilities claims it, and omits model_randomizer_enabled because its fallback
+// pool is excluded.
 const workspaceChatConfigSectionSchema = serverModelConfigExportSchema
   .merge(serverChatConfigExportSchema.omit({ self_debug_enabled: true, model_randomizer_enabled: true }))
   .merge(serverWelcomeConfigExportSchema)
@@ -457,10 +385,8 @@ const workspaceSpeechConfigSectionSchema = serverSpeechConfigExportSchema.strict
 
 const workspaceAccessConfigSectionSchema = serverByokConfigExportSchema.strict();
 
-/**
- * Natural Nudges settings and custom idle nudges. Allowed channels are server-specific and stay
- * behind; the planner and checker models travel by ID and are checked against the target workspace on import.
- */
+// Retains planner and checker model IDs because import validates them against the target workspace, while omitting
+// server channel IDs.
 const workspaceNudgesConfigSectionSchema = serverNaturalNudgeConfigSchema
   .omit({ server_id: true, channel_disc_ids: true })
   .partial()
@@ -502,7 +428,7 @@ const personalResponseModesConfigSectionSchema = personalSettingsExportDataSchem
   .pick({ impersonation_prompt: true, personal_dtm: true, personal_deliberate_tool_mode: true })
   .strict();
 
-/** Section objects have no defaults because an absent section means that import leaves it untouched. */
+// Section fields omit defaults because an absent section signals that import must leave that section untouched.
 export const workspaceConfigExportDataSchema = z
   .object({
     chat: workspaceChatConfigSectionSchema.optional(),
@@ -659,7 +585,7 @@ export const V2_CONFIG_SECTION_SCHEMAS = {
 const EXPORT_BUCKET_NAME_MAX_LENGTH = 100;
 export const EXPORT_BUCKET_LABEL_MAX_LENGTH = 100;
 
-/** Strict bucket entries prevent internal identifiers from crossing the portability boundary. */
+// Bucket entries use .strict() so internal database identifiers cannot leak across the portability boundary.
 const memoryBucketSchema = z
   .object({
     name: z.string().trim().min(1).max(EXPORT_BUCKET_NAME_MAX_LENGTH),
@@ -982,7 +908,8 @@ function addEnvelopeMetadata<TPayload extends ParsedExportPayload>(
   };
 }
 
-/** Sections are strict, so fields removed from the schema are stripped from older v2 files before validation. */
+// Retired fields must be stripped before validation because v2 section schemas use .strict() and would reject older
+// v2 exports.
 const RETIRED_WORKSPACE_CONFIG_FIELDS = { chat: ["response_decision_model_id"] } as const;
 
 function stripRetiredWorkspaceConfigFields(input: Record<string, unknown>): {
@@ -1133,9 +1060,6 @@ export function parseExportFile(input: unknown): ExportParseResult {
   }
 }
 
-/**
- * Persona-scoped server memories-only export schema.
- */
 function getServerMemoriesExportDataSchema() {
   const limits = getMemoryLimits();
   return z.object({
@@ -1147,17 +1071,10 @@ function getServerMemoriesExportDataSchema() {
 
 export type ServerMemoriesExportData = z.infer<ReturnType<typeof getServerMemoriesExportDataSchema>>;
 
-/**
- * Server config-only export schema.
- */
 const serverConfigOnlyExportDataSchema = z.object({
   config: serverConfigExportSchema,
 });
 
-/**
- * Get server data export schema with dynamic memory limits from environment
- * Includes configuration and server memories
- */
 function getServerExportDataSchema() {
   const limits = getMemoryLimits();
   return z.object({
@@ -1170,9 +1087,6 @@ function getServerExportDataSchema() {
 
 export type ServerExportData = z.infer<ReturnType<typeof getServerExportDataSchema>>;
 
-/**
- * Get complete server export file schema with dynamic limits
- */
 export function getServerExportSchema() {
   return z.object({
     version: z.literal(EXPORT_VERSION),
@@ -1184,9 +1098,6 @@ export function getServerExportSchema() {
 
 export type ServerExport = z.infer<ReturnType<typeof getServerExportSchema>>;
 
-/**
- * New explicit export formats used by /data command.
- */
 export const personalMemoriesExportSchema = z.object({
   version: z.literal(EXPORT_VERSION),
   type: z.literal(DATA_EXPORT_TYPES.personal_memories),
@@ -1232,9 +1143,6 @@ export const serverConfigOnlyExportSchema = z.object({
 
 type ServerConfigOnlyExport = z.infer<typeof serverConfigOnlyExportSchema>;
 
-/**
- * Union type for all export formats
- */
 type DataExport =
   | PersonalMemoriesExport
   | ServerMemoriesExport

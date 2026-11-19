@@ -1,31 +1,14 @@
-/**
- * PNG Metadata Utilities
- * Handles embedding and extracting JSON metadata in PNG tEXt chunks
- * Based on PNG specification: http://www.libpng.org/pub/png/spec/1.2/PNG-Chunks.html
- */
-
 import type { PresetExport } from "../../types/preset/presetExport";
 import { inflateSync } from "node:zlib";
 import { log } from "../misc/logger";
 
-/**
- * PNG file signature (magic bytes)
- * Every PNG file must start with these 8 bytes
- */
 const PNG_SIGNATURE = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
 
-/**
- * PNG chunk types used in this implementation
- */
 const TEXT_CHUNK_TYPE = "tEXt"; // Uncompressed text chunk
 const COMPRESSED_TEXT_CHUNK_TYPE = "zTXt"; // Compressed text chunk
 const INTERNATIONAL_TEXT_CHUNK_TYPE = "iTXt"; // International text chunk
 const IEND_CHUNK_TYPE = "IEND"; // End of PNG datastream marker
 
-/**
- * Metadata key identifier for TomoriBot preset data
- * This key is used in the tEXt chunk to identify our JSON data
- */
 const METADATA_KEY = "TomoriPreset";
 const SILLY_TAVERN_METADATA_KEYS = new Set(["chara", "char"]);
 
@@ -35,16 +18,10 @@ type PngTextChunk = {
   type: typeof TEXT_CHUNK_TYPE | typeof COMPRESSED_TEXT_CHUNK_TYPE | typeof INTERNATIONAL_TEXT_CHUNK_TYPE;
 };
 
-/**
- * Reads a 4-byte big-endian unsigned integer from a byte array
- */
 function readUint32(data: Uint8Array, offset: number): number {
   return (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
 }
 
-/**
- * Writes a 4-byte big-endian unsigned integer to a byte array
- */
 function writeUint32(data: Uint8Array, offset: number, value: number): void {
   data[offset] = (value >>> 24) & 0xff;
   data[offset + 1] = (value >>> 16) & 0xff;
@@ -52,21 +29,11 @@ function writeUint32(data: Uint8Array, offset: number, value: number): void {
   data[offset + 3] = value & 0xff;
 }
 
-/**
- * Converts a string to a UTF-8 byte array
- * @returns Uint8Array containing UTF-8 encoded bytes
- */
 function stringToBytes(str: string): Uint8Array {
   const encoder = new TextEncoder();
   return encoder.encode(str);
 }
 
-/**
- * Calculates CRC32 checksum for PNG chunk data
- * CRC32 is used to detect data corruption in PNG chunks
- * @param data - Byte array containing chunk type and chunk data
- * @param length - Number of bytes to include in CRC calculation
- */
 function calculateCRC(data: Uint8Array, offset: number, length: number): number {
   const crcTable: number[] = [];
   for (let i = 0; i < 256; i++) {
@@ -85,9 +52,6 @@ function calculateCRC(data: Uint8Array, offset: number, length: number): number 
   return crc ^ 0xffffffff;
 }
 
-/**
- * Verifies that a buffer starts with a valid PNG signature
- */
 function verifyPNGSignature(data: Uint8Array): boolean {
   if (data.length < PNG_SIGNATURE.length) {
     return false;
@@ -277,10 +241,6 @@ export interface SillyTavernCardMetadata {
   parsedJson: unknown;
 }
 
-/**
- * Extracts SillyTavern character card metadata from PNG metadata chunks.
- * Supports `tEXt`, `zTXt`, and `iTXt` chunks.
- */
 export function extractSillyTavernMetadataFromPNG(pngBuffer: Buffer): SillyTavernCardMetadata | null {
   try {
     const data = new Uint8Array(pngBuffer);
@@ -332,10 +292,6 @@ export function extractSillyTavernMetadataFromPNG(pngBuffer: Buffer): SillyTaver
   }
 }
 
-/**
- * Extracts TomoriBot preset metadata from a PNG file
- * @returns PresetExport object if found, null otherwise
- */
 export function extractMetadataFromPNG(pngBuffer: Buffer): PresetExport | null {
   try {
     const data = new Uint8Array(pngBuffer);
@@ -459,7 +415,7 @@ function appendTextChunkToPNG(pngBuffer: Buffer, key: string, value: string, typ
   }
 }
 
-/** Keep the persona card format in a tEXt chunk for existing imports. */
+// Preset card metadata stays in a tEXt chunk rather than iTXt so existing persona card imports remain compatible.
 export function embedMetadataInPNG(pngBuffer: Buffer, metadata: PresetExport): Buffer {
   return appendTextChunkToPNG(pngBuffer, METADATA_KEY, JSON.stringify(metadata), TEXT_CHUNK_TYPE);
 }
@@ -469,7 +425,6 @@ export function embedSillyTavernMetadataInPNG(pngBuffer: Buffer, metadata: Recor
   return appendTextChunkToPNG(pngBuffer, "chara", value, TEXT_CHUNK_TYPE);
 }
 
-/** Store the full generation prompt as UTF-8 without altering existing PNG chunks. */
 export function embedImagePromptInPNG(pngBuffer: Buffer, prompt: string, negativePrompt?: string): Buffer {
   const withPrompt = appendTextChunkToPNG(pngBuffer, "TomoriPrompt", prompt, INTERNATIONAL_TEXT_CHUNK_TYPE);
   return negativePrompt

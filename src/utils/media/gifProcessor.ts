@@ -1,65 +1,35 @@
-/**
- * GIF Processing Utility
- * Extracts keyframes from animated GIFs and converts them to compressed JPEG images
- * for use with LLM providers that don't support GIF format
- */
-
 import { parseGIF, decompressFrames } from "gifuct-js";
 import sharp from "sharp";
 import { log } from "../misc/logger";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
 
-/** Maximum width for resized keyframe images (pixels). Images maintain aspect ratio and won't be upscaled. */
 const MAX_KEYFRAME_WIDTH = 800;
 
-/** JPEG compression quality (0-100) for extracted GIF keyframes. Higher = better quality, larger payload. */
 const GIF_JPEG_QUALITY = 80;
 
-/** Maximum number of keyframes to extract from a GIF. Prevents extremely long GIFs from overwhelming context. */
 const GIF_MAX_KEYFRAMES = 10;
 
-/**
- * Extract every Nth frame as a keyframe.
- * E.g., 10 means extract frames 0, 10, 20, 30, etc. (plus first and last)
- */
 const FRAME_INTERVAL = 10;
 
-/** Processing timeout in milliseconds. Prevents hanging on corrupted or extremely large GIFs. */
 const PROCESSING_TIMEOUT_MS = (() => {
   const parsed = Number.parseInt(process.env.GIF_PROCESSING_TIMEOUT_MS || "30000", 10);
   return Number.isFinite(parsed) ? Math.max(1000, parsed) : 30000;
 })();
 
-/**
- * Represents a processed GIF keyframe
- */
 export interface ProcessedGifFrame {
-  /** Base64-encoded JPEG image data */
   data: string;
-  /** MIME type (always 'image/jpeg' for processed frames) */
   mimeType: string;
-  /** Frame number (0-indexed) */
   frameNumber: number;
-  /** Total number of frames in the original GIF */
   totalFrames: number;
-  /** Original frame index in the GIF */
   originalFrameIndex: number;
 }
 
-/**
- * Configuration for GIF keyframe extraction
- */
 export interface GifProcessorConfig {
-  /** Maximum width for resized images (maintains aspect ratio) */
   maxWidth?: number;
-  /** JPEG quality (0-100) */
   jpegQuality?: number;
-  /** Maximum number of keyframes to extract */
   maxKeyframes?: number;
-  /** Extract every Nth frame */
   frameInterval?: number;
-  /** Processing timeout in milliseconds */
   timeoutMs?: number;
 }
 
@@ -71,19 +41,6 @@ const DEFAULT_CONFIG: Required<GifProcessorConfig> = {
   timeoutMs: PROCESSING_TIMEOUT_MS,
 };
 
-/**
- *
- * Algorithm:
- * 1. Always includes first frame (index 0)
- * 2. Always includes last frame
- * 3. Includes every Nth frame in between (default N=10)
- * 4. Caps total frames at maxKeyframes
- *
- * @param gifSource - URL or Buffer containing the GIF data
- * @param config - Optional configuration for processing
- * @returns Array of processed keyframes with metadata
- * @throws Error if GIF processing fails
- */
 export async function extractGifKeyframes(
   gifSource: string | Buffer,
   config: GifProcessorConfig = {},
@@ -117,10 +74,6 @@ export async function extractGifKeyframes(
   }
 }
 
-/**
- * Internal function to extract and process GIF frames
- * Separated for cleaner timeout handling
- */
 async function extractFramesInternal(
   gifSource: string | Buffer,
   config: Required<GifProcessorConfig>,
@@ -170,14 +123,6 @@ async function extractFramesInternal(
   return processedFrames;
 }
 
-/**
- * Calculate which frame indices to extract as keyframes
- * Always includes first and last frame, plus every Nth frame in between
- *
- * @param totalFrames - Total number of frames in the GIF
- * @param maxFrames - Maximum number of keyframes to return
- * @returns Array of frame indices to extract (sorted)
- */
 function calculateKeyframeIndices(totalFrames: number, interval: number, maxFrames: number): number[] {
   const indices = new Set<number>();
 
@@ -209,13 +154,6 @@ function calculateKeyframeIndices(totalFrames: number, interval: number, maxFram
   return sortedIndices;
 }
 
-/**
- * Process a single GIF frame: convert to JPEG and compress
- *
- * @param totalOutputFrames - Total number of frames in the output (keyframes)
- * @param originalFrameIndex - Original frame index in the source GIF
- * @param totalSourceFrames - Total number of frames in the original source GIF
- */
 async function processFrame(
   frameData: {
     patch: Uint8ClampedArray;

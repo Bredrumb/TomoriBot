@@ -4,10 +4,6 @@ import type { EventArg, EventFunction } from "../../types/discord/global";
 import { serverRepository } from "@/utils/db/repositories/ServerRepository";
 import { createGuildExpressionRefresh } from "../shared/guildExpressionRefresh";
 
-/**
- * Refreshes the guild's sticker rows for sticker create, delete, and update events.
- * @param args - Event arguments (expected: Sticker or [Sticker, Sticker])
- */
 const handleGuildStickersUpdate: EventFunction = createGuildExpressionRefresh({
   resolvePayload: (args: EventArg[]) => {
     const sticker = args[0];

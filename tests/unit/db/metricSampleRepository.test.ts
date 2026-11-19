@@ -8,12 +8,7 @@ const queries: string[] = [];
 const insertValues: unknown[][] = [];
 let insertRejection: Error | null = null;
 
-/**
- * Injected in place of the real `sql`, recording the normalized statement text so a test can
- * assert which statements ran. Injection rather than `mock.module`: Bun registers module mocks
- * process-wide for the whole run and never undoes them, so a mocked `sql` would answer queries
- * in every later test file too.
- */
+// Injected SQL client avoids `mock.module` because Bun registers module mocks permanently across test files.
 function fakeSql(strings: TemplateStringsArray, ...values: unknown[]): Promise<unknown[]> {
   const text = strings.join(" ? ").replace(/\s+/g, " ").trim();
   queries.push(text);

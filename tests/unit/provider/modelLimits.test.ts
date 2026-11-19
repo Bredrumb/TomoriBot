@@ -31,7 +31,6 @@ function catalogPersona(provider: string, configuredOutput: number | null) {
   });
 }
 
-/** A custom endpoint whose fallback hop pinned the URL mirror, so no endpoint row is loaded. */
 function customPersona(numCtx: number | null, configuredOutput: number | null = null) {
   return createPersona({
     llm: createLlmRow({ llm_provider: "custom:42", llm_codename: "local-model" }),

@@ -16,7 +16,6 @@ type CommandOption = {
   options?: CommandOption[];
 };
 
-/** The raw snake_case fields the registration payload carries onto the wire. */
 type RegistrationRestrictions = {
   contexts?: number[];
   default_member_permissions?: string;
@@ -30,7 +29,6 @@ const STRING_TYPE = 3;
 const ATTACHMENT_TYPE = 11;
 const BOT_DM_CONTEXT = 1;
 
-/** The eight leaves the portable-transfer product boundary names. */
 const EXPECTED_PATHS = [
   "export config",
   "export memories",

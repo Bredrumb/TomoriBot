@@ -398,10 +398,6 @@ function getStmCategories(value: unknown): Array<{ position: number; label: stri
   });
 }
 
-/**
- * The planner and checker models must be offered to this workspace, at most one checker may be set, and
- * every custom idle nudge must name known checks.
- */
 async function validateNudgesImport(
   serverId: number,
   nudges: NonNullable<WorkspaceConfigExportData["nudges"]>,
@@ -447,16 +443,8 @@ async function importNudgesSection(
     await naturalNudgeRepository.replaceCustomIdleNudges(serverId, customIdleNudges, tx);
 }
 
-/**
- * ImportRepository: owns all data import operations.
- *
- * Handles personal and server data import, per-domain slice imports
- * (memories, settings, config), import file validation, and cache
- * invalidation after successful writes. Private SQL methods hold raw
- * database logic; public methods add cache invalidation on top.
- * Composite methods (importPersonalData, importServerData) call private
- * SQL sub-methods directly to avoid double cache invalidation.
- */
+// Private sql* methods skip cache invalidation so composite public methods can combine them without double
+// invalidation.
 class ImportRepository {
   private prepareWorkspaceConfig(
     input: unknown,
@@ -649,10 +637,6 @@ class ImportRepository {
     }
   }
 
-  /**
-   * Imports selected workspace config sections as one database operation.
-   * Validation and target-row checks happen before the transaction so a failed patch cannot follow a committed patch.
-   */
   async importWorkspaceConfig(
     serverDiscId: string,
     input: WorkspaceConfigExportData | WorkspaceConfigExport,
@@ -700,10 +684,6 @@ class ImportRepository {
     }
   }
 
-  /**
-   * Imports selected personal config sections as one database operation.
-   * Validation and target-row checks happen before the transaction so a failed patch cannot follow a committed patch.
-   */
   async importPersonalConfig(
     userDiscId: string,
     input: PersonalConfigExportData | PersonalConfigExport,
@@ -733,7 +713,6 @@ class ImportRepository {
     }
   }
 
-  /** Upserts a user row by Discord ID and returns the internal user_id. */
   private async ensureUserId(userDiscId: string): Promise<number | null> {
     const upserted = await sql.begin(async (tx) => {
       const rows = await tx<Array<{ user_id: number }>>`
@@ -774,7 +753,6 @@ class ImportRepository {
     return serverRows[0]?.server_id ?? null;
   }
 
-  /** Normalizes bigint/string/number persona_lineage_id values to a plain number. */
   private coerceLineageId(value: number | string | bigint | null | undefined): number | null {
     if (typeof value === "bigint") return Number(value);
     if (typeof value === "string" && value.trim() !== "") return Number(value);
@@ -782,7 +760,6 @@ class ImportRepository {
     return null;
   }
 
-  /** Returns the main persona persona_id and persona_lineage_id for a server. */
   private async resolveMainTomoriScope(
     serverId: number,
   ): Promise<{ personaId: number; personaLineageId: number } | null> {
@@ -1380,11 +1357,6 @@ class ImportRepository {
     }
   }
 
-  /**
-   * Raw composite personal import; no cache invalidation.
-   * Used internally by importPersonalData (which adds cache) and
-   * fromExportShape (which intentionally skips cache for pipeline use).
-   */
   private async sqlImportPersonalData(
     userDiscId: string,
     importData: PersonalExportData,
@@ -1416,10 +1388,6 @@ class ImportRepository {
     };
   }
 
-  /**
-   * Raw composite server import; no cache invalidation.
-   * Used internally by importServerData (which adds cache).
-   */
   private async sqlImportServerData(
     serverDiscId: string,
     importData: ServerExportData,
@@ -1742,23 +1710,12 @@ class ImportRepository {
     }
   }
 
-  /**
-   * Imports personal settings for a user from an export payload.
-   * @param userDiscId - Discord user snowflake
-   * @param importData - PersonalSettingsExportData payload
-   */
   async importPersonalSettings(userDiscId: string, importData: PersonalSettingsExportData): Promise<ImportResult> {
     const result = await this.sqlImportPersonalSettings(userDiscId, importData);
     if (result.success) invalidateUserCache(userDiscId);
     return result;
   }
 
-  /**
-   * Imports the full personal data bundle (settings + memories).
-   * @param userDiscId - Discord user snowflake
-   * @param importData - PersonalExportData payload
-   * @param personaLineageId - Persona lineage namespace to import memories into (default 0)
-   */
   async importPersonalData(
     userDiscId: string,
     importData: PersonalExportData,
@@ -1769,12 +1726,6 @@ class ImportRepository {
     return result;
   }
 
-  /**
-   * Imports the full server data bundle (config + memories).
-   * @param serverDiscId - Discord server snowflake
-   * @param importData - ServerExportData payload
-   * @param personaId - Optional specific tomori ID to scope memories
-   */
   async importServerData(
     serverDiscId: string,
     importData: ServerExportData,
@@ -1785,10 +1736,6 @@ class ImportRepository {
     return result;
   }
 
-  /**
-   * Validates a raw JSON import payload and returns the detected type + data.
-   * @param jsonData - Raw JSON object from the uploaded import file
-   */
   validateImportFile(jsonData: unknown): ImportValidationResult {
     if (typeof jsonData !== "object" || jsonData === null) {
       return { valid: false, error: "commands.data.import.error_not_json" };
@@ -1870,14 +1817,8 @@ class ImportRepository {
     return { valid: false, error: `commands.data.import.error_unknown_type|${type}` };
   }
 
-  /**
-   * Imports a previously exported personal data bundle (IRepository contract).
-   * Intentionally bypasses cache invalidation: this is a pipeline/batch entry
-   * point where the caller controls cache lifecycle.
-   *
-   * @param ownerId - Discord user snowflake
-   * @param data    - Previously exported ExportResult from ExportRepository.toExportShape
-   */
+  // Cache invalidation is intentionally skipped because callers invoke this batch entry point in a pipeline and
+  // control cache lifecycle.
   async fromExportShape(ownerId: string | number, data: ExportResult): Promise<boolean> {
     if (!data.success || !data.data) return false;
     const envelope = data.data as { type?: string; data?: PersonalExportData };
@@ -1887,5 +1828,4 @@ class ImportRepository {
   }
 }
 
-/** Singleton instance: import this in callers. */
 export const importRepository = new ImportRepository();

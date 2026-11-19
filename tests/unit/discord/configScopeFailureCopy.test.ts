@@ -23,11 +23,6 @@ function outdatedPanelCopy(): string {
 const GUILD_ID = "guild-1";
 const USER_ID = "user-1";
 
-/**
- * The two workspace reads a `/config` miss can come from. No entry is a workspace that really has no
- * personas, which is the setup gap; a recorded failure is the transient read that must not be
- * reported as one.
- */
 const NO_RECORDED_FAILURE = () => null;
 const RECORDED_FAILURE = () => ({ message: "connection retired", timestamp: Date.now() });
 
@@ -62,7 +57,6 @@ function makeScope(): ConfigScope {
 }
 
 interface Harness {
-  /** The single interaction this harness drives; it also owns the recording arrays read below. */
   interaction: RouteInteraction;
   dependencies: Partial<ConfigRouteDependencies>;
   readonly replies: unknown[];

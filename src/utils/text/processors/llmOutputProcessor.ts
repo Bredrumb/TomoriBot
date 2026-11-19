@@ -26,11 +26,6 @@ function shouldPreserveUnresolvedEmojiShortcodes(): boolean {
   return parseBooleanEnvFlag(process.env[PRESERVE_UNRESOLVED_EMOJI_SHORTCODES_ENV], false);
 }
 
-/**
- * Returns all code-span and code-block ranges in `text` as [{start, end}] pairs.
- * Used to skip over code regions when scanning for speaker-stop labels.
- * @param text - Text to scan for markdown code ranges
- */
 export function findMarkdownCodeRanges(text: string): Array<{ start: number; end: number }> {
   if (!text.includes("`")) return [];
 
@@ -63,11 +58,6 @@ function isIndexInsideRanges(index: number, ranges: ReadonlyArray<{ start: numbe
   return ranges.some((range) => index >= range.start && index < range.end);
 }
 
-/**
- * Returns true if `rawLabel` looks like a generic speaker turn label (e.g. "User:", "Assistant:").
- * Used by `truncateBeforeGenericSpeakerLine` to detect roleplay-style script turns.
- * @param rawLabel - The candidate label text (without the trailing colon)
- */
 export function isGenericSpeakerStopLabel(rawLabel: string): boolean {
   const label = rawLabel.trim();
   if (!label) return false;
@@ -76,12 +66,6 @@ export function isGenericSpeakerStopLabel(rawLabel: string): boolean {
   return /[\p{L}\p{N}_]/u.test(label);
 }
 
-/**
- * Truncates text at the first generic speaker-turn line (e.g. "User:\n..."), optionally
- * including the very first line if it matches.
- * @param options.includeStart - Also check the very first line for a speaker label
- * @returns Object with `text` (possibly truncated), `stopTriggered`, and `matchedSpeaker`
- */
 export function truncateBeforeGenericSpeakerLine(
   text: string,
   options: { includeStart?: boolean; isAllowedSpeakerLabel?: (label: string) => boolean } = {},
@@ -114,12 +98,8 @@ export function truncateBeforeGenericSpeakerLine(
   return { text, stopTriggered: false };
 }
 
-/**
- * Builds a regex alternation that matches a `Name:` turn label in its plain, "**Name:**", or
- * "**Name**:" bold forms, for any of the supplied names. Names are escaped, de-duplicated, and
- * ordered longest-first so a longer name ("Shy Tomori") is preferred over a shorter one it
- * contains ("Tomori"). Blank names are dropped.
- */
+// Names sort longest-first because regex alternation matches leftmost-first, so a shorter substring name would
+// otherwise shadow a longer one.
 function buildNameLabelAlternation(names: string[]): string | null {
   const escapedForms: string[] = [];
   const seen = new Set<string>();
@@ -156,52 +136,14 @@ function buildDecoratedNameLabelAlternation(names: string[]): string | null {
   return escapedForms.length > 0 ? `(?:${escapedForms.join("|")})` : null;
 }
 
-/** Matches a bare identity macro in its single- or double-brace form (`{bot}`, `{{char}}`, `{user}`). */
 const IDENTITY_MACRO_SOURCE = "(?:\\{\\{\\s*(?:bot|char|user)\\s*\\}\\}|\\{\\s*(?:bot|char|user)\\s*\\})";
 
-/**
- * Identity-macro turn labels ("{bot}:", "{{char}}:", "**{user}:**") in the same plain/bold forms
- * as {@link buildNameLabelAlternation}.
- *
- * Only ever applied at the START of a response. A macro there means the model mistook its raw
- * Discord turn for a transcript line and labelled itself with the template syntax, so the label is
- * a leak like any other self-label. Mid-text macros are deliberately left alone, so they are
- * legitimate content whenever a user asks the persona to draft a preset or system prompt, which is
- * exactly the text that is *supposed* to contain "{{char}}: ..." sample dialogue. Fenced drafts are
- * safe either way: a response opening with a code fence never matches the leading pattern.
- */
+// Applied only at response start because mid-text macros are legitimate content when the persona drafts presets or
+// system-prompt sample dialogue.
 const IDENTITY_MACRO_LABEL_ALTERNATION = `(?:\\*\\*${IDENTITY_MACRO_SOURCE}:\\*\\*|\\*\\*${IDENTITY_MACRO_SOURCE}\\*\\*:|${IDENTITY_MACRO_SOURCE}:)`;
 
-/**
- * Removes leaked uses of the bot's *own* name as a turn label (e.g. "Tomori:"). Conversation
- * history is fed to the model in "Name: text" form, so the model both opens its turn with its own
- * label and sometimes re-emits it. The handling branches on whether the output *opened* with the
- * persona label: the signal for "this is a real turn" vs "a thought leaked before the turn":
- *
- *   A. Opened with the label ("Tomori: ..."): a real turn. The starter label is removed and any
- *      *further* self-labels are cleaned by stripBoundaryOwnNameLabels, which preserves the
- *      preceding text (collapsing to a newline). So "Tomori: a.Tomori: b" → "a.\nb".
- *   B. Did NOT open with the label: content before the first own-label is treated as a leaked
- *      "thought"/scratchpad and dropped by stripLeakedPreamble. So "the answer is 30Tomori: 30!"
- *      → "30!". A trailing-only label ("...chew toy!Tomori:") is the exception: the preceding text
- *      is the response, so only the bare label is dropped (by stripBoundaryOwnNameLabels).
- *
- * `aliasNames` covers personas that answer to more than one name: e.g. a bundled persona whose
- * webhook nickname is "Lilya" but whose lore/default name is "Tomori". The model then opens with a
- * *chain* of labels ("Tomori: Lilya: <reply>"); the leading-chain loop consumes every self/alias
- * label so none leaks. Plain aliases only widen the *opening-chain* match, so the leaked-preamble
- * and later-boundary passes stay scoped to the active name to avoid over-stripping mid-text prose.
- * Decorated alias labels also match at turn boundaries because their parenthetical grammar is
- * unambiguous enough to remove without treating preceding text as leaked thought.
- *
- * Legitimate "Name: value" list items and inline prose are preserved throughout: see
- * stripBoundaryOwnNameLabels for the turn-boundary rules and list-marker guards.
- *
- * This function owns the leading-label strip, so it must run on text where that label is
- * still present, since callers that pre-strip it make the branch-A/B decision wrong.
- *
- * @param aliasNames - Additional names the active persona answers to (e.g. lore/default name)
- */
+// Callers must not pre-strip leading labels because branch-A/B leak detection relies on them; plain aliases widen
+// only the opening chain to prevent over-stripping.
 export function stripLeakedOwnNameLabels(text: string, botName: string, aliasNames: string[] = []): string {
   if (!text || !botName.trim()) return text;
 
@@ -245,27 +187,10 @@ export function stripLeakedOwnNameLabels(text: string, botName: string, aliasNam
   return stripBoundaryOwnNameLabels(deleaked, boundaryLabelAlternation);
 }
 
-/**
- * Matches a fully-resolved Discord custom emoji tag (`<:name:id>` / `<a:name:id>`). The shortcode→tag
- * conversion in `cleanLLMOutput` wraps emojis in surrounding spaces, so a leaked self-label that the
- * model glued onto an emoji ("…<:Emoji:id>Tomori:") arrives here as "<:Emoji:id> Tomori:". The space
- * would otherwise disguise it as legitimate prose, so an emoji tag is treated as a leak-preceding
- * context (the tag itself is kept; the trailing label is dropped).
- */
+// Shortcode conversion in cleanLLMOutput wraps emoji tags in spaces, so emoji tags must count as leak-preceding
+// boundaries to catch glued self-labels.
 const CUSTOM_EMOJI_TAG_SOURCE = "<a?:[^\\s:>]+:\\d+>";
 
-/**
- * Drops a leaked "thought"/scratchpad preamble emitted before the real response, used when the
- * output did NOT open with the persona label. Everything up to and including the first own-name
- * label is removed, keeping only the real response that follows
- * ("the answer is 30Tomori: 30!" → "30!"; "reasoning...\nTomori: hi" → "hi").
- *
- * Exception: a trailing label with no real content after it ("...chew toy!Tomori:") is left
- * untouched here, the preceding text is the response, and the bare label is dropped later by
- * stripBoundaryOwnNameLabels. Labels inside markdown code spans/blocks are ignored.
- *
- * @param text - LLM text that does not open with the persona label
- */
 function stripLeakedPreamble(text: string, labelAlternation: string): string {
   const codeRanges = findMarkdownCodeRanges(text);
   // A "leak-shaped" re-introduction label is glued directly onto the preamble, follows a custom
@@ -292,20 +217,6 @@ function stripLeakedPreamble(text: string, labelAlternation: string): string {
   return text;
 }
 
-/**
- * Collapses or removes the bot's own name used as a turn label at a leaked position: the start of
- * text, a newline, sentence-ending punctuation (`. ! ? 。 ！ ？`), immediately after a custom emoji
- * tag, or glued onto a non-whitespace char. This distinguishes a leaked turn from legitimate uses,
- * which are preserved:
- *   - List items: "- Tomori: 100" / "1. Tomori: 100" (name follows a marker, not a boundary)
- *   - Inline prose: ", Tomori: never quit" (comma is not a turn boundary)
- * The numbered-list guard rejects a punctuation boundary only when the preceding digits run back
- * to line start. Matches inside markdown code spans/blocks are skipped.
- *
- * Mid-text labels collapse to a newline (so the following clause splits onto its own line);
- * a leading/trailing label is removed (any inserted newline is trimmed by the caller).
- *
- */
 function stripBoundaryOwnNameLabels(text: string, labelAlternation: string): string {
   const codeRanges = findMarkdownCodeRanges(text);
   // Each group keeps its preceding char or tag, drops only the label, and inserts a newline so
@@ -342,20 +253,6 @@ function stripBoundaryOwnNameLabels(text: string, labelAlternation: string): str
   return result;
 }
 
-/**
- * Cleans raw LLM output for Discord display: removes leaked system blocks, normalises
- * whitespace, resolves known Discord emoji shortcodes, strips bot-name prefixes, and resolves
- * @mention handles.
- * @param text - Raw text from LLM
- * @param botName - Optional bot name to remove from response prefix
- * @param emojiStrings - Array of valid Discord emoji strings for the server
- * @param emojiUsageEnabled - When false, strips all emoji from the output
- * @param mentionIdSet - Set of known user IDs for disambiguation
- * @param uncensorOptions - Optional uncensor cleanup flags (output side)
- * @param botNameAliases - Additional names the active persona answers to (e.g. lore/default name),
- *   used to strip a leaked multi-name opening label chain ("Tomori: Lilya: ...")
- * @param personaMentionMap - Map of known persona handles to canonical trigger words
- */
 export function cleanLLMOutput(
   text: string,
   botName?: string,

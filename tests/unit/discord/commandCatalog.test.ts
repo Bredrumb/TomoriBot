@@ -6,7 +6,6 @@ import {
   type CommandExecutionMap,
 } from "@/utils/discord/commandLoader";
 
-/** No-op execute stub: getCommandCatalogEntries only reads the map keys, never calls these. */
 const noopExecute: CommandExecuteFunction = async () => {};
 
 describe("getCommandCatalogEntries", () => {

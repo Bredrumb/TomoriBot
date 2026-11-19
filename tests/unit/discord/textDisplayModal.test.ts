@@ -74,7 +74,6 @@ describe("text display modal", () => {
   });
 });
 
-/** Attaches a collector whose modal title is the locale it was rendered in, and returns its click handler. */
 function attachCollector(
   access?: Parameters<typeof attachTextDisplayModalCollector>[0]["access"],
 ): (interaction: ButtonInteraction) => Promise<void> {

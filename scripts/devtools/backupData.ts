@@ -36,10 +36,6 @@ async function runExternalCommand(
   }
 }
 
-/**
- * Resolves a PostgreSQL connection URL from environment variables.
- * Prefers DATABASE_URL if set, otherwise constructs it from POSTGRES_* vars.
- */
 function resolveDatabaseUrl(): string {
   if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
   if (process.env.POSTGRES_URL) return process.env.POSTGRES_URL;
@@ -63,7 +59,6 @@ async function runBackup(): Promise<void> {
   await runDataBackup({ backupType: "manual" });
 }
 
-/** Restores a trusted SQL dump after recovery checks and destructive-action confirmation. */
 async function runRestore(bundlePath: string): Promise<void> {
   log.section("♻️ TRANSFER RESTORE");
 
@@ -223,13 +218,8 @@ async function runRestore(bundlePath: string): Promise<void> {
   );
 }
 
-/**
- * Scans the backups/ directory and returns the path of the most recently
- * created bundle. Bundle folders are named backup_YYYY-MM-DD_HH-MM-SS so
- * a descending lexicographic sort reliably picks the newest one.
- *
- * @returns Absolute path to the latest bundle directory.
- */
+// Bundle folders use backup_YYYY-MM-DD_HH-MM-SS names, so descending lexicographic sort selects the newest bundle
+// without stat calls.
 function resolveLatestBundle(): string {
   const backupsRoot = resolveBackupsRoot();
 

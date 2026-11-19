@@ -283,10 +283,6 @@ function postgresError(code: string): Error & { code: string } {
   return Object.assign(new Error("Failed to read data"), { code });
 }
 
-/**
- * Builds a thunk that fails once with `code`, then succeeds, so a passing assertion on
- * the returned value proves a retry happened rather than the error propagating.
- */
 function failOnceThen<T>(code: string, value: T): { run: () => Promise<T>; calls: () => number } {
   let calls = 0;
   return {

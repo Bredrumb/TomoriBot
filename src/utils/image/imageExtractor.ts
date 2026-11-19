@@ -1,12 +1,3 @@
-/**
- * Shared image extraction utilities for Discord messages.
- * Provides a unified pipeline for extracting images from attachments, embeds,
- * stickers, and custom emojis, then converting them to base64 format.
- *
- * Used by both `generate_image` (Gemini Imagen) and `generate_image_nai` (NovelAI)
- * tools to avoid duplicating extraction logic.
- */
-
 import type { Message } from "discord.js";
 import { log } from "../misc/logger";
 import type { ToolContext } from "../../types/tool/interfaces";
@@ -17,35 +8,25 @@ import { appendComponentMediaFromMessage } from "@/utils/chat/contextMedia";
 import { resolveForwardChain } from "@/utils/discord/forwardChain";
 import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
 
-/** Intermediate representation of a discovered image URL before base64 conversion */
 export interface ImageUrlInfo {
   url: string;
   mimeType: string;
-  /** Human-readable source label for logging (e.g. "attachment: photo.png") */
   source: string;
-  /** Discord proxy URL when known. Dedupes the same media discovered via multiple
-   *  paths (e.g. a Components V2 attachment also listed as a candidate), and acts
-   *  as the HTTPS fallback source in {@link downloadDiscoveredImage}. */
   proxyUrl?: string;
 }
 
-/** Base64-encoded image data ready for API consumption */
 export interface ExtractedImage {
   mimeType: string;
-  /** Raw base64-encoded image data (no data-URI prefix) */
   data: string;
 }
 
-/** Image URLs resolved from either the requested message or its direct reply target. */
 export interface ResolvedMessageImageUrls {
   imageUrls: ImageUrlInfo[];
-  /** The message that actually owns the returned images. */
   sourceMessageId: string;
 }
 
-/**
- * Always uses PNG so animated emojis fall back to their first frame.
- */
+// Discord's emoji CDN returns the first static frame when .png is requested, so PNG is forced here for animated
+// emojis too.
 function buildEmojiCdnUrl(emojiId: string): string {
   return `https://cdn.discordapp.com/emojis/${emojiId}.png`;
 }
@@ -72,11 +53,6 @@ function isLikelyImageAttachment(attachment: {
   return inferImageMimeType(attachment.name || attachment.url || "", "").startsWith("image/");
 }
 
-/**
- * Extract custom emoji image URLs from message text content.
- * Deduplicates by emoji ID so the same emoji used twice only produces one image.
- * @param content - Raw message text
- */
 function extractCustomEmojis(content: string): ImageUrlInfo[] {
   const emojiUrls: ImageUrlInfo[] = [];
   if (!content) return emojiUrls;
@@ -104,15 +80,8 @@ function extractCustomEmojis(content: string): ImageUrlInfo[] {
   return emojiUrls;
 }
 
-/**
- * Order the sources to try when downloading one discovered image.
- *
- * Discord mirrors embed and attachment media at an HTTPS `proxyURL`. That mirror is
- * the only reachable source when the origin is plain HTTP, because the SSRF gate
- * refuses `http://` remote hosts outright, and third-party bot CDNs still serve
- * embeds over HTTP. An HTTPS origin is tried first: the proxy re-encodes and can
- * serve a stale or absent copy.
- */
+// HTTPS origins go before Discord's proxyUrl because the proxy can re-encode or serve stale copies, while proxyUrl
+// saves HTTP origins blocked by the SSRF gate.
 function buildImageDownloadCandidates(info: ImageUrlInfo): string[] {
   if (!info.proxyUrl || info.proxyUrl === info.url) {
     return [info.url];
@@ -121,11 +90,6 @@ function buildImageDownloadCandidates(info: ImageUrlInfo): string[] {
   return info.url.startsWith("http://") ? [info.proxyUrl, info.url] : [info.url, info.proxyUrl];
 }
 
-/**
- * @param info - Discovered image, whose `proxyUrl` supplies the fallback source
- * @param options - Forwarded to {@link safeDownload} for every attempt
- * @returns The first successful download, else the last failure encountered
- */
 export async function downloadDiscoveredImage(
   info: ImageUrlInfo,
   options: SafeDownloadOptions,
@@ -155,17 +119,8 @@ export async function downloadDiscoveredImage(
   return lastResult;
 }
 
-/** The subset of Message fields an image can live in: satisfied by both a full
- *  Message and a forwarded MessageSnapshot. */
 type MessageImageSource = Pick<Message, "attachments" | "embeds" | "stickers" | "content" | "components">;
 
-/**
- * Walk one message-like source (a full message or a forwarded snapshot) and feed
- * every discovered image URL to the collector.
- *
- * @param addImageUrl - Deduplicating collector provided by the caller
- * @param labelPrefix - Prepended to `source` labels for logging (e.g. "forwarded ")
- */
 function collectImageUrlsFromSource(
   source: MessageImageSource,
   addImageUrl: (info: ImageUrlInfo) => void,
@@ -238,28 +193,6 @@ function collectImageUrlsFromSource(
   }
 }
 
-/**
- * Discover every image URL in a Discord message, without downloading anything.
- *
- * Extraction sources (checked in order):
- * 1. Direct file attachments with image/* MIME type
- * 2. Embed images (e.g. Twitter/X previews, direct image links)
- * 3. Embed thumbnails (fallback for embeds that use thumbnail instead of image)
- * 4. Discord stickers (served as PNG)
- * 5. Custom emojis parsed from message text
- * 6. Components V2 media (Media Gallery / Thumbnail / File items): required for
- *    bot-generated images, whose attachment is referenced only inside a component
- *    and therefore never appears in the top-level attachment/embed sources above.
- * 7. Forwarded message snapshots: a forward wrapper has EMPTY top-level
- *    content/attachments/embeds; all its media lives inside `messageSnapshots`,
- *    which is re-scanned with sources 1-6. Nested forwards flatten to an empty
- *    snapshot, so the chain is resolved first (see {@link resolveForwardChain}).
- *
- * This is the single source of truth for "where can an image live in a message",
- * shared by every tool that needs to re-fetch image bytes by message/media ID.
- *
- * @returns Array of discovered image URL descriptors (may be empty)
- */
 export async function collectImageUrlsFromMessage(message: Message): Promise<ImageUrlInfo[]> {
   const imageUrls: ImageUrlInfo[] = [];
   // Track URLs already added so the same media discovered via two paths
@@ -287,20 +220,8 @@ export async function collectImageUrlsFromMessage(message: Message): Promise<Ima
   return imageUrls;
 }
 
-/**
- * Resolve image URLs from a Discord message, falling back to the message it replies to.
- *
- * Reply messages often contain only text while using the referenced message's image as
- * their visual context. The vision tool can receive the reply's media ID in that case,
- * so this fallback makes the referenced image available without requiring the model to
- * know the underlying Discord message ID.
- *
- * The fallback is intentionally one level deep: Discord replies directly identify the
- * message whose media they are discussing, and a bounded lookup avoids surprising walks
- * through long reply chains.
- *
- * @throws Error if the requested message cannot be fetched or neither message has images
- */
+// Reply fallback checks only the direct parent because models pass the reply's ID for referenced images and deeper
+// walks risk unrelated history.
 export async function resolveMessageImageUrls(
   messageId: string,
   context: ToolContext,
@@ -348,19 +269,6 @@ export async function resolveMessageImageUrls(
   return { imageUrls: repliedToImageUrls, sourceMessageId: repliedToMessageId };
 }
 
-/**
- * Extract all images from a Discord message and convert them to base64.
- *
- * Delegates discovery to {@link resolveMessageImageUrls}, so a text-only reply
- * can use the images from the message it directly references. The resolver
- * covers attachments, embeds, stickers, custom emojis, Components V2 media,
- * and forwarded-message snapshots.
- *
- * Each source is fetched independently, so individual failures are logged and skipped
- * so that other images in the same message can still be processed.
- *
- * @throws Error if the message is not found or no images could be processed
- */
 export async function extractImagesFromMessage(messageId: string, context: ToolContext): Promise<ExtractedImage[]> {
   const { imageUrls, sourceMessageId } = await resolveMessageImageUrls(messageId, context);
   log.info(

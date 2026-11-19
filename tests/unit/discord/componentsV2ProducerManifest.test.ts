@@ -18,12 +18,6 @@ export interface DeclaredProducerManifestEntry {
 
 export type ProducerManifestEntry = FixturedProducerManifestEntry | DeclaredProducerManifestEntry;
 
-/**
- * Manifest of all modules producing Discord Components V2 payloads.
- *
- * Tier 1: Fixtured tier (the composed payload builders).
- * Tier 2: Declared tier (all other producers with explicit architectural reasons).
- */
 export const COMPONENTS_V2_PRODUCER_MANIFEST: readonly ProducerManifestEntry[] = [
   {
     modulePath: "src/utils/discord/ui/expressionsPanel.ts",
@@ -260,11 +254,8 @@ export const COMPONENTS_V2_PRODUCER_MANIFEST: readonly ProducerManifestEntry[] =
   },
 ];
 
-/**
- * Excluded from the producer manifest:
- * `src/utils/discord/ui/componentsV2Limits.ts` is the protocol validator asserting limits on
- * Components V2 payloads, not a producer of messages.
- */
+// VALIDATOR_MODULE_PATH is excluded because componentsV2Limits.ts validates MessageFlags.IsComponentsV2 payloads
+// rather than producing them.
 const VALIDATOR_MODULE_PATH = "src/utils/discord/ui/componentsV2Limits.ts";
 
 function scanComponentsV2Producers(dir: string): string[] {

@@ -7,7 +7,8 @@ import { getCachedManagedWebhookForChannel } from "@/utils/discord/webhook/webho
 
 let managedMessageTrust = new WeakMap<Message, boolean>();
 
-/** Threads inherit their parent's managed webhook; a name or avatar never proves provenance. */
+// Threads inherit their parent's managed webhook, and name or avatar never proves provenance, so checks must verify
+// the parent webhook ID.
 export async function verifyMessageWebhook(message: Message): Promise<boolean> {
   if (!message.webhookId || !message.guildId) return false;
   const cached = managedMessageTrust.get(message);
@@ -39,7 +40,8 @@ export async function verifyMessageWebhook(message: Message): Promise<boolean> {
   }
 }
 
-/** Synchronous trigger planning consumes only identity already verified during admission. */
+// Synchronous trigger planning relies on admission having already verified webhook trust in managedMessageTrust,
+// because it cannot await lookups.
 export function isManagedWebhookMessage(message: Message): boolean {
   return Boolean(message.webhookId && managedMessageTrust.get(message));
 }
@@ -78,12 +80,8 @@ function cacheWebhookRelay(
   });
 }
 
-/**
- * Registers a temporary impersonation webhook as ours. It is deleted right after the response and
- * never persisted as a managed webhook, so this cache is the only record that later replies to its
- * messages came from TomoriBot. The guild and channel binding keeps a foreign webhook that reuses
- * the id from being trusted elsewhere.
- */
+// Temporary impersonation webhooks are deleted and never persisted, so this cache tracks provenance with guild and
+// channel binding to block foreign reuse.
 export function cacheUserImpersonationWebhook(
   webhookId: string,
   userId: string,
@@ -269,10 +267,8 @@ export async function resolveImpersonatedIdentity(
   };
 }
 
-/**
- * Creates a single-use webhook named and pictured as a member, registered so history, reply
- * targeting, and block checks credit its messages to that member; the caller deletes it.
- */
+// Single-use member webhook registered here so history, reply targeting, and block checks credit that member; callers
+// must delete it after use.
 export async function createUserImpersonationWebhook(
   client: Client,
   webhookTargetChannel: TextChannel | BaseGuildTextChannel,

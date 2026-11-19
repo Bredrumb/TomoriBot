@@ -5,20 +5,13 @@ import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilena
 import { log } from "@/utils/misc/logger";
 import { getDeclaredUncompressedSize, resolveZipEntryFile } from "@/utils/zip/zipEntryGuards";
 
-/** Current archive format version. Bump when the manifest shape changes. */
 const SPRITE_ARCHIVE_VERSION = 1;
-/** Discriminator stored in the manifest so unrelated zips are rejected early. */
 const SPRITE_ARCHIVE_EXPORT_TYPE = "persona_sprites";
-/** Canonical manifest filename inside the archive. */
 const SPRITE_ARCHIVE_MANIFEST_NAME = "manifest.json";
-/** Folder (inside the zip) that holds the sprite images. */
 const SPRITE_ARCHIVE_IMAGE_DIR = "sprites";
 
-/**
- * A single sprite entry as stored in `manifest.json`. Mirrors the importable
- * subset of `PersonaSpriteRow` (storage references and DB ids are intentionally
- * excluded because they are meaningless on another server).
- */
+// DB ids and storage references are intentionally excluded from exported sprite entries because they are meaningless
+// on another server.
 const spriteArchiveEntrySchema = z.object({
   sprite_name: z.string().min(1).max(64),
   sprite_key: z.string().min(1).max(64),
@@ -29,7 +22,6 @@ const spriteArchiveEntrySchema = z.object({
 
 type SpriteArchiveEntry = z.infer<typeof spriteArchiveEntrySchema>;
 
-/** Full `manifest.json` schema. */
 const spriteArchiveManifestSchema = z.object({
   export_type: z.literal(SPRITE_ARCHIVE_EXPORT_TYPE),
   version: z.number().int().positive(),
@@ -47,29 +39,22 @@ const spriteArchiveManifestSchema = z.object({
 
 type SpriteArchiveManifest = z.infer<typeof spriteArchiveManifestSchema>;
 
-/** A built archive's bytes plus the metadata callers need for the reply. */
 export type BuiltSpriteArchive = {
   buffer: Buffer;
   spriteCount: number;
 };
 
-/** One sprite to bundle: its DB row plus its already-loaded PNG bytes. */
 export type SpriteArchiveBuildEntry = {
   sprite: PersonaSpriteRow;
   pngBuffer: Buffer;
 };
 
-/** Limits enforced while parsing an untrusted archive (ZIP-bomb defense). */
 export type SpriteArchiveReadLimits = {
-  /** Reject archives whose manifest lists more than this many sprites. */
   maxEntries: number;
-  /** Reject any single image larger than this (decompressed). */
   maxFileBytes: number;
-  /** Reject when the running total of decompressed images exceeds this. */
   maxTotalBytes: number;
 };
 
-/** A validated, parsed archive ready for import. */
 type SpriteArchiveReadEntry = {
   meta: SpriteArchiveEntry;
   pngBuffer: Buffer;
@@ -95,18 +80,6 @@ export type SpriteArchiveReadResult =
         | "total_too_large";
     };
 
-/**
- * Builds a sprite archive (.zip) buffer from a persona's sprites.
- *
- * Image filenames are generated deterministically (`sprites/NN-{key}.png`) so
- * the archive layout is stable and human-browsable; the manifest is the source
- * of truth for which image maps to which sprite.
- *
- * @param options.personaNickname - Source persona name (display + filename hint)
- * @param options.personaId - Source persona id (informational only)
- * @param options.entries - Sprites to bundle, each with its loaded PNG bytes
- * @returns The zip bytes and the count actually written
- */
 export async function buildSpriteArchive(options: {
   personaNickname: string;
   personaId: number;
@@ -159,18 +132,6 @@ export async function buildSpriteArchive(options: {
   };
 }
 
-/**
- * Parses and validates an untrusted sprite archive buffer.
- *
- * Performs layered validation: zip integrity -> manifest presence/shape ->
- * version compatibility -> per-entry image presence and size guards. No image
- * bytes are returned until every guard has passed for that entry, and the
- * running decompressed total is checked so a malicious archive cannot exhaust
- * memory even within the (already capped) compressed download size.
- *
- * @param zipBuffer - Raw archive bytes (already size-capped by the downloader)
- * @returns A discriminated result: validated entries, or a typed failure reason
- */
 export async function readSpriteArchive(
   zipBuffer: Buffer,
   limits: SpriteArchiveReadLimits,
@@ -261,10 +222,6 @@ export async function readSpriteArchive(
   };
 }
 
-/**
- * Builds a stable, collision-free image filename for a sprite.
- * Pattern: `NN-{sanitized-key}.png` (1-based, zero-padded index).
- */
 function buildUniqueImageFilename(sprite: PersonaSpriteRow, index: number, used: Set<string>): string {
   const prefix = String(index + 1).padStart(2, "0");
   const safeKey = sanitizeAttachmentFilenamePart(sprite.sprite_key, {
@@ -284,7 +241,6 @@ function buildUniqueImageFilename(sprite: PersonaSpriteRow, index: number, used:
   return filename;
 }
 
-/** Finds the manifest file regardless of casing or a wrapping folder. */
 function findManifestFile(zip: JSZip): JSZip.JSZipObject | null {
   return resolveZipEntryFile(zip, SPRITE_ARCHIVE_MANIFEST_NAME);
 }

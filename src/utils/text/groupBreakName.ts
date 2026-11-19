@@ -1,17 +1,5 @@
-/**
- * Visually identical webhook usernames that Discord still treats as distinct authors.
- *
- * Discord groups consecutive webhook messages by webhook + username, ignores the per-message
- * avatar, and strips zero-width characters from usernames, so an invisible marker cannot break
- * a group. Swapping one letter for its lookalike in the other alphabet (Latin `o` for Cyrillic
- * `о`) survives Unicode normalization because the two are different scripts, not compatibility
- * variants.
- *
- * Every reader recovers the clean name through {@link revealGroupBreakName}, which
- * `normalizeParticipantAlias` applies, so the swap must stay detectable: it only ever lands in a
- * word that is otherwise pure Latin or pure Cyrillic and long enough that the swapped letter is a
- * strict minority.
- */
+// Cross-script lookalikes split Discord webhook message groups, because Discord groups by username, ignores avatars,
+// and strips zero-width chars.
 
 // Restricted to pairs that render identically in Discord's UI font; looser pairs such as
 // `y`/`у` or `K`/`К` differ in tail or stroke and would make the swap noticeable.
@@ -69,16 +57,8 @@ function swapTableForSingleAlphabetWord(word: string): Readonly<Record<string, s
   return null;
 }
 
-/**
- * Returns `name` with one letter replaced by its lookalike from the other alphabet, or null when
- * no word qualifies (for example a kana or hanzi name, or one with only short words).
- *
- * Scans from the end of the name so the leading letters stay byte-identical: models read and
- * echo names left to right, and an untouched prefix keeps the name's opening tokens stable.
- *
- * @param name - The clean webhook username.
- * @returns The group-break variant, or null when the caller must use a visible fallback.
- */
+// Reverse scan preserves leading letters as byte-identical, because models read left to right and rely on stable
+// opening tokens.
 export function toGroupBreakName(name: string): string | null {
   const words = [...name.matchAll(WORD_PATTERN)];
   for (let wordIndex = words.length - 1; wordIndex >= 0; wordIndex -= 1) {
@@ -98,14 +78,8 @@ export function toGroupBreakName(name: string): string | null {
   return null;
 }
 
-/**
- * Restores a name produced by {@link toGroupBreakName}. Within each word that mixes Latin and
- * Cyrillic letters, lookalikes from the minority alphabet are mapped to the majority one; a tie is
- * left untouched because neither side can be identified as the original.
- *
- * @param value - Any name, swapped or not.
- * @returns The name with group-break lookalikes folded back.
- */
+// Tied Latin and Cyrillic counts in a word are left untouched rather than defaulting to either script, because
+// neither side can be identified as the original.
 export function revealGroupBreakName(value: string): string {
   if (!CYRILLIC_LETTER.test(value)) return value;
 

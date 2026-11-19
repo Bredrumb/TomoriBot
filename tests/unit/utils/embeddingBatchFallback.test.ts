@@ -1,16 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { embedWithBatchFallback } from "@/utils/embeddings/embeddingProvider";
 
-/**
- * Regression guard for embedding models that ignore batching.
- *
- * Some models (observed with the Gemini embedding family) accept only one content per
- * request and return a single embedding for a multi-input batch instead of erroring. That
- * surfaced to users as `Embedding count mismatch: expected 7, got 1` and aborted
- * `/memory history import` outright, even though the extraction itself had succeeded.
- */
 describe("embedWithBatchFallback", () => {
-  /** Builds a fake embedder that only ever honours the first input of a batch. */
   function singleInputEmbedder(calls: string[][]) {
     return async (batch: string[]): Promise<number[][]> => {
       calls.push(batch);

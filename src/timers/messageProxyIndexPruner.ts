@@ -9,7 +9,7 @@ const MS_PER_HOUR = 3_600_000;
 
 let pruneInterval: ReturnType<typeof setInterval> | null = null;
 
-/** The repository logs failures and returns 0, so a failed pass never disturbs the interval. */
+// The repository logs failures and returns 0, so a failed pass never disturbs the interval.
 async function runPrunePass(retentionDays: number): Promise<void> {
   if (!isPrimaryProcess()) return;
   const deleted = await messageProxyRepository.pruneMessageIndexOlderThanDays(retentionDays);
@@ -18,7 +18,6 @@ async function runPrunePass(retentionDays: number): Promise<void> {
   }
 }
 
-/** The index only needs rows as far back as context building can read. */
 export function initializeMessageProxyIndexPruner(): void {
   if (pruneInterval) {
     log.warn("Message proxy index pruner is already running");

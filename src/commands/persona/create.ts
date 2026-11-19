@@ -1,9 +1,5 @@
 import { getDiscordTextLength } from "@/utils/text/discordTextLimits";
 import { PERSONA_NICKNAME_MAX_LENGTH } from "@/types/personaNaming";
-/**
- * Preset Create Command
- * Manual personality creation with simple form fields
- */
 
 import type {
   ChatInputCommandInteraction,
@@ -72,11 +68,6 @@ function buildCreateResultPayload(
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("create").setDescription(localizer("en-US", "commands.persona.create.description"));
 
-/**
- * Executes the 'create' command
- * Manual personality creation with simple form input
- *
- */
 export async function execute(
   client: Client,
   interaction: ChatInputCommandInteraction,

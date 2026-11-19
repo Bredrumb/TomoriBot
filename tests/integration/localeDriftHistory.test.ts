@@ -5,16 +5,6 @@ import { join } from "node:path";
 import { DriftHistoryError, createGitDriftSource } from "../../scripts/devtools/localeDrift";
 import { findDriftedTranslations } from "../../scripts/devtools/findStaleTranslations";
 
-/**
- * History behaviour that only a real repository can prove.
- *
- * The unit tests drive the scan through an injected source, which cannot show what `git blame`
- * actually reports when the history is truncated. A shallow clone is exactly that case, and it fails
- * in the direction that matters: blame attributes every line to the grafted root, whose English file
- * is the newest the clone holds, so the scan finds nothing and reports the tree as clean.
- *
- * These tests build a real repository with a real commit graph, then clone it at depth 1.
- */
 const REPO_TIMEOUT_MS = 120_000;
 const GIT_ENV = {
   GIT_AUTHOR_NAME: "Fixture",

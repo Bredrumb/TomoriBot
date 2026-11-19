@@ -1,14 +1,3 @@
-/**
- * Regression harness: LlmRepository domain.
- *
- * Covers: loadAvailableLlms, loadLlmById, loadLlmByProviderAndCodename,
- * getLlmsByIds, loadSmartestModel, loadUniqueProviders.
- *
- * LLM rows come from the typed catalog (src/db/seed/catalog/models.ts), seeded by
- * initializeDatabase: no fixture insertion needed.
- *
- * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md)
- */
 import { beforeAll, describe, expect, it } from "bun:test";
 import { llmModelRepo } from "@/utils/db/repositories";
 import { DB_TESTS_AVAILABLE, setupTestDb } from "./setup/testDb";

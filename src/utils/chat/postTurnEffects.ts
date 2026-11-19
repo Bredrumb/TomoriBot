@@ -37,19 +37,12 @@ import { recordReunionPresence } from "@/utils/chat/reunionPresence";
 import { invalidateInactiveNaturalNudgeGates } from "@/modules/natural-nudges/runtime/configCache";
 import { discordPresenceRetention } from "@/utils/cache/discordPresenceRetention";
 
-/**
- * Matches a fully-resolved Discord custom emoji tag (`<:name:id>` / `<a:name:id>`).
- * Only resolved tags survive into delivered text (cleanLLMOutput converts a successful
- * `:name:` shortcode into this form and drops the ones it cannot resolve), so counting
- * these is exactly the "successful server-emoji resolve" signal. Capture 1 = name.
- */
+// Server-emoji resolves are counted here (capture 1 = name) because cleanLLMOutput converts valid :name: shortcodes
+// to Discord tags and drops unresolved ones.
 const RESOLVED_CUSTOM_EMOJI_RE = /<a?:([A-Za-z0-9_~]+):\d+>/g;
 
 const EMPTY_RESPONSE_RETRY_DELAY_MS = 1000;
 
-/**
- * Runs side effects that must happen after a generation attempt finishes.
- */
 export async function runPostTurnEffects(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
   if (context.memoryRecall) void persistMemoryRecall(context.memoryRecall);
   // Empty-response retries rebuild context recursively, so release or commit the
@@ -70,10 +63,8 @@ export async function runPostTurnEffects(context: ChatTurnContext, result: Gener
   void recordUsageStats(context, result);
 }
 
-/**
- * Keeps the first request's reported input tokens for `/context`. Later tool-loop requests also
- * carry the tool results, so only the first one matches the prompt `/context` rebuilds.
- */
+// Only the first request's input tokens are saved for /context because later tool-loop calls include tool results
+// that /context does not rebuild.
 function rememberLastReplyUsage(context: ChatTurnContext, result: GenerationTurnResult): void {
   if (result.personaResponses.length === 0 || context.isDMChannel) return;
   const personaId = context.currentPersona.persona_id;
@@ -85,7 +76,6 @@ function rememberLastReplyUsage(context: ChatTurnContext, result: GenerationTurn
   });
 }
 
-/** Records turn usage in both metric sinks and guild counters, with dialogue counters gated on delivery. */
 async function recordUsageStats(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
   const accountedUsage = sumTurnUsage(result.usageEntries ?? result.streamResults);
   const turnUsage = accountedUsage ?? {
@@ -500,7 +490,6 @@ export function shouldRetryEmptyResponse(incoming: ChatIncoming, result: Generat
   return result.status === "empty_response" && incoming.retryCount < MAX_EMPTY_RESPONSE_RETRIES;
 }
 
-/** A tool can post the reply on its own, so a turn with no persona response may still have spoken. */
 export function isDeliveredTurnResult(result: GenerationTurnResult): boolean {
   return result.status === "completed" && (result.personaResponses.length > 0 || result.toolResponseDelivered === true);
 }

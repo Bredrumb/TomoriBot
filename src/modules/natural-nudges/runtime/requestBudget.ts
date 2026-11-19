@@ -1,4 +1,4 @@
-/** Counts stay in memory, so persist them if restarts ever become frequent enough to matter for a key's daily quota. */
+// Counts stay in memory, so persist them if restarts ever become frequent enough to matter for a key's daily quota.
 export class NudgeRequestBudget {
   private readonly days = new Map<number, { dayStart: number; used: number }>();
 

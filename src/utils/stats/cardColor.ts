@@ -1,18 +1,3 @@
-/**
- * cardColor.ts: shared color + image helpers for the `/stats generate`
- * infographic gatherers.
- *
- * This module is part of the GATHER layer (it uses `sharp` and reads asset
- * files). Renderers in `statsInfographic.tsx` stay pure and never import this.
- *
- * It centralises:
- * - RGB/HSL math used to derive accessible light-mode palettes.
- * - `extractCardPalette`: samples the selected avatar/icon into a palette for
- *   Personal Wrapped, Persona Affinity, or the Server Leaderboard.
- * - `extractAvatarAccentColor`: distils a single vivid bar-fill color from an
- *   avatar, used to tint each persona/member bar on the Server Leaderboard.
- * - `loadTomoriconDataUri`: shared monochrome-stamp tinting used by every card.
- */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import sharp from "sharp";
@@ -45,13 +30,6 @@ function parseHexColor(color: string): { red: number; green: number; blue: numbe
   };
 }
 
-/**
- * Returns the monochrome Tomoricon stamp tinted to `color`, as a PNG data URI.
- * Results are memoized per color so repeated card renders re-use the buffer.
- *
- * @param color - Hex tint applied to the stamp (usually `palette.ink`).
- * @returns A `data:image/png;base64,...` URI, or null if the asset can't load.
- */
 export async function loadTomoriconDataUri(color: string): Promise<string | null> {
   const cached = tomoriconDataUriByColor.get(color);
   if (cached !== undefined) return cached;
@@ -126,7 +104,6 @@ function hueDistance(first: number, second: number): number {
   return Math.min(difference, 360 - difference);
 }
 
-/** One quantized, saturated color bucket sampled from an image, with HSL fields. */
 interface ColorBucket {
   red: number;
   green: number;
@@ -137,14 +114,6 @@ interface ColorBucket {
   lightness: number;
 }
 
-/**
- * Samples a base64 image data URI down to 64×64 and returns its saturated,
- * non-extreme color buckets (alpha-filtered, quantized to 32-step channels).
- * Shared by both palette and single-accent extraction so they sample identically.
- *
- * @param avatarDataUri - A `data:...;base64,...` image URI, or null.
- * @returns Ranked-agnostic buckets, or null when the image yields no usable color.
- */
 async function sampleColorBuckets(avatarDataUri: string | null): Promise<ColorBucket[] | null> {
   if (!avatarDataUri) return null;
   const payload = avatarDataUri.slice(avatarDataUri.indexOf(",") + 1);
@@ -173,13 +142,6 @@ async function sampleColorBuckets(avatarDataUri: string | null): Promise<ColorBu
   return [...buckets.values()].map((bucket) => ({ ...bucket, ...rgbToHsl(bucket.red, bucket.green, bucket.blue) }));
 }
 
-/**
- * Samples a hero image into an accessible, light-mode card palette with two
- * roles: a base hue (pale surfaces + dark ink) and a distinct saturated accent.
- * Falls back to the neutral default palette if the image is missing/undecodable.
- *
- * @param avatarDataUri - Persona avatar (Personal or Persona Affinity) or server icon URI.
- */
 export async function extractCardPalette(avatarDataUri: string | null): Promise<PersonalCardPalette> {
   if (!avatarDataUri) return DEFAULT_PERSONAL_CARD_PALETTE;
 
@@ -220,14 +182,6 @@ export async function extractCardPalette(avatarDataUri: string | null): Promise<
   }
 }
 
-/**
- * Distils a single vivid bar-fill color from an avatar: the dominant saturated
- * hue, normalised to a mid lightness so white or dark in-bar text stays legible.
- * Returns `fallback` when the avatar is missing or has no usable saturated color.
- *
- * @param avatarDataUri - The avatar image data URI, or null.
- * @param fallback - Hex color to use when no accent can be derived.
- */
 export async function extractAvatarAccentColor(avatarDataUri: string | null, fallback: string): Promise<string> {
   if (!avatarDataUri) return fallback;
   try {

@@ -1,7 +1,3 @@
-/**
- * GuildMcpOAuthRepository: owns `guild_mcp_oauth` (the grant behind a signed-in guild MCP
- * registration) and `mcp_oauth_clients` (Dynamic Client Registration results per issuer).
- */
 import type { SQL } from "bun";
 import { sql as defaultSql } from "@/utils/db/client";
 
@@ -32,7 +28,6 @@ interface GuildMcpOAuthRefreshRow {
 class GuildMcpOAuthRepository {
   constructor(private readonly client: SQL = defaultSql) {}
 
-  /** Runs inside the caller's transaction so the grant commits with its registration row. */
   async insertGrant(
     tx: SQL,
     guildMcpId: number,
@@ -126,7 +121,6 @@ class GuildMcpOAuthRepository {
     `;
   }
 
-  /** Makes the next token read refresh instead of returning the access token the server just rejected. */
   async expireAccessToken(tx: SQL, guildMcpId: number): Promise<void> {
     await tx`UPDATE guild_mcp_oauth SET expires_at = NOW() - INTERVAL '1 second' WHERE guild_mcp_id = ${guildMcpId}`;
   }
@@ -139,7 +133,6 @@ class GuildMcpOAuthRepository {
     `;
   }
 
-  /** Runs inside the caller's transaction so a reconnected grant commits with its refreshed registration. */
   async replaceGrant(
     tx: SQL,
     guildMcpId: number,
@@ -171,7 +164,8 @@ class GuildMcpOAuthRepository {
     return row?.client_id ?? null;
   }
 
-  /** Two concurrent registrations for one issuer both succeed upstream; the first stored one is kept. */
+  // No-op DO UPDATE keeps the first stored client_id while returning it because concurrent upstream registrations
+  // both succeed.
   async saveRegisteredClient(issuer: string, redirectUri: string, clientId: string): Promise<string> {
     const [row] = await this.client<{ client_id: string }[]>`
       INSERT INTO mcp_oauth_clients (issuer, redirect_uri, client_id)

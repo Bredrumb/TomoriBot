@@ -27,7 +27,6 @@ export interface NudgeChannel {
   quietSinceMs: number | null;
 }
 
-/** The admin's list when it has any channel, otherwise the automatic set from recent turns. */
 export async function resolveEffectiveChannelIds(
   serverId: number,
   config: Pick<ServerNaturalNudgeConfig, "channel_disc_ids">,
@@ -37,10 +36,8 @@ export async function resolveEffectiveChannelIds(
   return naturalNudgeRepository.loadAutomaticChannelIds(serverId, automaticChannelWindowStart(now));
 }
 
-/**
- * Phase A re-reads its channel list every minute, so a deleted or inaccessible channel that stays in the
- * automatic window (or the pinned list) would otherwise cost a REST fetch each tick.
- */
+// Skips blocked channels before fetching because Phase A re-reads every minute and deleted or inaccessible channels
+// would otherwise cost a REST fetch per tick.
 async function fetchUncachedChannel(client: Client, channelId: string) {
   if (getBlockedSendReason(channelId)) return null;
   try {
@@ -52,7 +49,6 @@ async function fetchUncachedChannel(client: Client, channelId: string) {
   }
 }
 
-/** Listed guild text channels the bot can still see, with their last activity from the gateway cache. */
 export async function resolveAllowedChannels(client: Client, channelIds: readonly string[]): Promise<NudgeChannel[]> {
   const channels: NudgeChannel[] = [];
   for (const channelId of channelIds) {
@@ -81,15 +77,12 @@ export async function fetchRecentMessages(channel: GuildTextBasedChannel, limit:
   }
 }
 
-/** PluralKit-style proxied messages arrive as webhooks, so they read as non-human here; accepted. */
+// PluralKit-style proxied messages arrive as webhooks and read as non-human because webhooks are intentionally
+// excluded.
 export function isHumanMessage(message: Message): boolean {
   return !message.author.bot && !message.webhookId && !message.system;
 }
 
-/**
- * A recent conversation with real participants that ended on a human or a persona, never on another
- * bot, so announcement and log traffic is not mistaken for a conversation.
- */
 export function isHangingConversation(
   messages: readonly Message[],
   allPersonas: TomoriState[],
@@ -104,7 +97,6 @@ export function isHangingConversation(
   return block.blockMessages.includes(newest);
 }
 
-/** Any human message after the opener answers it. */
 export async function hasHumanReplyAfter(channel: GuildTextBasedChannel, openerMessageId: string): Promise<boolean> {
   if (!channel.lastMessageId || BigInt(channel.lastMessageId) <= BigInt(openerMessageId)) return false;
   try {
@@ -116,7 +108,8 @@ export async function hasHumanReplyAfter(channel: GuildTextBasedChannel, openerM
   }
 }
 
-/** Member-written text must not close the data block it sits in or open a tag of its own. */
+// Escapes XML delimiters on member-written text so user input cannot close its enclosing data block or inject new
+// tags.
 export function escapeDataText(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -152,10 +145,8 @@ interface TranscriptEntry {
   text: string;
 }
 
-/**
- * Messages a model outside the turn may read. Fully private and server-blacklisted authors are
- * dropped, as the main context does, so it never reads what the persona could not.
- */
+// Drops PrivacyLevel.FULL and server-blacklisted authors to match main context privacy so background models never
+// read hidden messages.
 async function readableEntries(messages: readonly Message[], guildId: string): Promise<TranscriptEntry[]> {
   const entries: TranscriptEntry[] = [];
   for (const message of messages) {
@@ -207,7 +198,7 @@ export async function buildPlannerTranscript(
   return lines.reverse().join("\n");
 }
 
-/** `Name: text` lines, the shape the Active Nudge matcher was evaluated on. */
+// Uses plain "Name: text" lines because that is the exact format the Active Nudge matcher was evaluated on.
 export async function buildMatcherEvidence(messages: readonly Message[], guildId: string): Promise<string> {
   return (await readableEntries(messages, guildId)).map((entry) => `${entry.author}: ${entry.text}`).join("\n");
 }

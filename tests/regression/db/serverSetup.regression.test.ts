@@ -1,18 +1,5 @@
 import { type HumanizerSettings, humanizerSettingsFromDegree } from "@/constants/humanizer";
 import { SETUP_FEATURES, type SetupFeature } from "@/types/db/schema";
-/**
- * Regression harness: atomic server setup transactions across provider modes.
- *
- * Covers:
- * - All three provider modes: catalog, user-byok, custom-endpoint
- * - Refusal of custom endpoint API styles without text capability
- * - Built-in null versus preset string system prompts
- * - Late-transaction failure rollback preserving pre-existing configs and undoing orphan cleanup
- * - Orphan recovery preserving alter personas and duplicate name suffixing
- * - Absence of cache invalidation during repository setup writes
- *
- * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md)
- */
 import { afterAll, beforeAll, describe, expect, it, spyOn } from "bun:test";
 import type { Guild } from "discord.js";
 import { serverRepository } from "@/utils/db/repositories/ServerRepository";

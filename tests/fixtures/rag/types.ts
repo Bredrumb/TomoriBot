@@ -7,7 +7,7 @@ const RAG_DOCUMENT_SCOPES = ["persona", "serverwide"] as const;
 type RagDocumentScope = (typeof RAG_DOCUMENT_SCOPES)[number];
 
 interface RagPassage {
-  /** Globally unique across the corpus, so a query can label passages in any document. */
+  // Must be globally unique across the entire corpus because queries reference passages by key across documents.
   key: string;
   text: string;
 }
@@ -17,7 +17,7 @@ export interface RagDocument {
   documentName: string;
   language: RagLanguage;
   scope: RagDocumentScope;
-  /** Every passage text appears here verbatim, so a chunker test can map output back to labels. */
+  // Every passage text in passages must appear verbatim in sourceText so chunker tests can map chunks back to labels.
   sourceText: string;
   passages: readonly RagPassage[];
 }

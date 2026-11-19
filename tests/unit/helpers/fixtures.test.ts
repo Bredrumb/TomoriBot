@@ -1,9 +1,3 @@
-/**
- * Guards the shared fixture factories. These tests assert the factory contract rather than app
- * behavior, so a change to {@link BASE_CONFIG} or a schema default surfaces here instead of as an
- * unexplained failure in an unrelated suite.
- */
-
 import { describe, expect, it } from "bun:test";
 import {
   PrivacyLevel,
@@ -21,7 +15,6 @@ import {
   createNaiPreset,
 } from "../../helpers/fixtures";
 
-/** As `loadServerState` reads them after setup with nothing changed. */
 function schemaConfigDefaults() {
   return assembledServerConfigSchema.parse({
     llm_id: 1,

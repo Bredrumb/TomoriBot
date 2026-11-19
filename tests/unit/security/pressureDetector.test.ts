@@ -9,10 +9,8 @@ import {
   type PressureVerdict,
 } from "@/utils/security/pressureDetector";
 
-/**
- * Stated in full rather than spread over the shipped defaults: those are tuned against production
- * history and will move again, and a behavioural test must not silently change meaning when they do.
- */
+// Thresholds are stated in full instead of spreading shipped defaults because defaults change over time, which would
+// silently alter these tests.
 const T: PressureThresholds = {
   elevatedIoFull: 10,
   criticalIoFull: 20,
@@ -27,7 +25,6 @@ const T: PressureThresholds = {
 
 const MINUTE = 60 * 1000;
 
-/** Feeds a sequence one minute apart and returns every verdict, so dwell behaviour is visible. */
 function run(
   samples: Array<Partial<PressureSample>>,
   options: { startOffsetMin?: number; thresholds?: PressureThresholds } = {},

@@ -25,7 +25,6 @@ function heldLock(ageMs: number): ChannelLockEntry {
   return entry;
 }
 
-/** Starts a watchdog phase that stays in flight until the returned `finish` is called. */
 function startPhase(): { finish: () => void; settled: Promise<void> } {
   let finish = () => {};
   const settled = runUnderWatchdog(

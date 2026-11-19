@@ -14,10 +14,8 @@ const { getCachedActiveBlocksForUser, invalidatePersonaUserBlockCache } = await 
   "@/utils/cache/personaUserBlockCache"
 );
 
-/**
- * Bun rejects in-flight queries from `#onClose` when a pool timer fires, so this is what a
- * healthy query against a healthy server looks like during a retirement cascade.
- */
+// Bun rejects in-flight queries from #onClose with ERR_POSTGRES_LIFETIME_TIMEOUT on pool timer expiry, so this
+// simulates healthy failure during retirement.
 function retiredConnectionError(): DatabaseUnavailableError {
   return Object.assign(new DatabaseUnavailableError("Failed to read data"), {
     code: "ERR_POSTGRES_LIFETIME_TIMEOUT",

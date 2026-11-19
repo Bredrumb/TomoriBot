@@ -6,11 +6,8 @@ export interface StickerImage {
   filename: string;
 }
 
-/**
- * The image a vision model can read for a sticker, or null for a Lottie sticker, which is a JSON
- * animation with no raster form. The URL comes from discord.js because GIF stickers exist only on
- * the media proxy, and the CDN answers 404 for them under any extension.
- */
+// Lottie stickers are JSON (non-raster) and GIF stickers only exist on Discord's media proxy (CDN 404s), so
+// discord.js's URL builder is required.
 export function stickerImage(
   rest: Client["rest"],
   sticker: Pick<Sticker, "id" | "name" | "format">,

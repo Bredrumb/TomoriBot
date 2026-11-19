@@ -5,16 +5,6 @@ import {
 } from "@/providers/utils/providerFeatureExecutors";
 import { resolveStructuredOutputCapability } from "@/utils/provider/providerCapabilityResolver";
 
-/**
- * Regression guard for the history-extraction failure channel.
- *
- * `extractHistoryWindowForProvider` used to return a bare `HistoryMemoryEntry[]`, so a
- * provider error and a genuinely empty window were both reported as `[]`. `/memory history
- * import` then rendered its "No Facts Extracted" terminal for real provider failures,
- * hiding the actual cause (typically a model that cannot emit structured output).
- *
- * These tests pin the discriminated outcome that keeps the two cases distinguishable.
- */
 describe("history extraction outcome", () => {
   test("reports a provider with no structured-output capability as an explicit failure", async () => {
     // NovelAI genuinely exposes no `callStructuredJSON`, so this exercises the real

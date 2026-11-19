@@ -136,7 +136,6 @@ function makePersona(id: number, lineageId: number, name: string, isAlter = fals
   });
 }
 
-/** Every String Select in the payload, flattened, so a test can pick one out by custom ID. */
 function collectSelects(
   value: unknown,
 ): Array<{ customId?: string; options?: Array<{ value?: string; label?: string; description?: string }> }> {

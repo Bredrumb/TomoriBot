@@ -1,15 +1,3 @@
-/**
- * The synthesis dispatcher is the artifact the extraction claim rests on: the ladder's branch
- * conditions are part of the contract being moved, not incidental details of where they used to
- * sit. The bug this file exists to prevent was a predicate substitution during extraction: the old
- * design branch selected on `shouldUseVoiceDesignForPersona` (voice-design mode, or `auto` with the
- * `VoiceDesign` sentinel) and the new dispatcher re-derived the same guard from
- * `isVoiceDesignEndpoint` (voice-design mode only). One mode apart, and voice design was silently
- * dead on every `auto` deployment.
- *
- * The adapters are network clients, so they are stubbed: what is under test is which backend a
- * given (endpoint, source shape) pair selects, and what it refuses without reaching a backend.
- */
 import { describe, expect, it, mock } from "bun:test";
 import type { CustomEndpointRow } from "@/types/db/schema";
 import type { TtsCloneResult } from "@/providers/custom/styles/ttsCloningAdapter";
@@ -22,13 +10,9 @@ import { synthesizeVoiceMessage, type ResolvedVoiceSource } from "@/utils/speech
 
 type VoiceMode = "clone" | "voice-design" | "auto";
 
-/** Backends the dispatcher reached, in call order. */
 const backendCalls: string[] = [];
-/** Request bodies the clone adapters received, for asserting what shape was posted. */
 const cloneRequests: Array<Record<string, unknown>> = [];
-/** Request bodies the design adapter received. */
 const designRequests: Array<Record<string, unknown>> = [];
-/** ElevenLabs `voiceSettings` values seen, including `undefined` when the field was omitted. */
 const elevenLabsSettings: Array<Record<string, unknown> | undefined> = [];
 
 const OK_RESULT: TtsCloneResult = {
@@ -103,7 +87,6 @@ function makeEndpoint(options: {
   } as unknown as CustomEndpointRow;
 }
 
-/** Runs one dispatch with a fresh call record. */
 async function dispatch(
   endpoint: CustomEndpointRow | null,
   source: ResolvedVoiceSource,

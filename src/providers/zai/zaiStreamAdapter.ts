@@ -7,10 +7,6 @@ export interface ZaiStreamConfig extends OpenAICompatibleStreamConfig {
   endpointUrl: string;
 }
 
-/**
- * Stream adapter for the Z.ai API.
- * Handles reasoning content preservation, tool_stream flag, and output prefill.
- */
 export class ZaiStreamAdapter extends OpenAICompatibleStreamAdapter {
   constructor() {
     super({

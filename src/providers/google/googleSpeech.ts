@@ -33,7 +33,7 @@ export interface GoogleSpeechTransport {
     operations: SpeechOperation[],
   ): Promise<Buffer>;
   delete(voiceId: string, signal: AbortSignal, operations: SpeechOperation[]): Promise<void>;
-  /** Accepts MP3 only, so callers transcode first. */
+  // Callers must transcode to MP3 beforehand because this endpoint accepts MP3 bytes only.
   transcribe(audio: Buffer, model: string, signal: AbortSignal, operations: SpeechOperation[]): Promise<string>;
 }
 

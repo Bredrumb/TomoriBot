@@ -42,7 +42,6 @@ import {
 import { buildConditioningInteractionEvent } from "@/utils/conditioning/conditioningInteractionContext";
 
 interface ConditioningCommandOptions {
-  /** Returns extra interpolation context for the embed description localizer. */
   getExtraContext?: (interaction: ChatInputCommandInteraction) => Record<string, string>;
 }
 

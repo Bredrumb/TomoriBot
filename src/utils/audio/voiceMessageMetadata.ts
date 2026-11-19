@@ -1,44 +1,21 @@
-/**
- * Generates Discord voice message metadata (waveform + duration) from an audio buffer.
- *
- * Discord's native voice message UI requires two extra fields on the attachment:
- *   - `waveform`      : base64-encoded uint8 array of ~100 amplitude samples
- *   - `duration_secs` : audio duration in seconds
- *
- * Duration is parsed from the audio header via music-metadata (pure JS, <5ms).
- * Waveform is computed by decoding the audio to raw PCM via ffmpeg-static
- * (bundled binary, no system install required) and downsampling the amplitude.
- *
- * Returns null on any failure , so callers should fall back to a plain attachment.
- */
-
 import ffmpegPath from "ffmpeg-static";
 import { parseBuffer } from "music-metadata";
 import { log } from "@/utils/misc/logger";
 
-/** Number of amplitude samples in the Discord waveform visualization. */
+// Constant is 100 because Discord's native voice message UI expects about 100 amplitude samples.
 const WAVEFORM_SAMPLES = 100;
 
-/** Maximum time to wait for the ffmpeg subprocess to finish. */
 const FFMPEG_TIMEOUT_MS =
   Number.parseInt(process.env.VOICE_WAVEFORM_TIMEOUT_MS ?? "", 10) > 0
     ? Number.parseInt(process.env.VOICE_WAVEFORM_TIMEOUT_MS ?? "", 10)
     : 5_000;
 
 export interface VoiceMessageMetadata {
-  /** Base64-encoded uint8 array of amplitude samples (100 values, 0-255). */
+  // Waveform uses a base64-encoded uint8 array (0-255) because Discord's voice message attachment API requires it.
   waveform: string;
-  /** Audio duration in seconds. */
   durationSecs: number;
 }
 
-/**
- * Generates Discord voice message metadata from a raw audio buffer.
- *
- * @param audioBuffer - Raw audio bytes (MP3, OGG, etc.)
- * @param mimeType - MIME type hint for the decoder (e.g. "audio/mpeg")
- * @returns Waveform + duration metadata, or null if generation failed
- */
 export async function generateVoiceMessageMetadata(
   audioBuffer: Buffer,
   mimeType: string,

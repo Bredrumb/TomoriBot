@@ -1,12 +1,3 @@
-/**
- * Regression harness: ConfigRepository domain.
- *
- * Covers: loadTomoriState (config portion), updateTomoriConfig.
- * The config row is read as part of TomoriState; updateTomoriConfig is the
- * primary write path.
- *
- * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md)
- */
 import { humanizerSettingsFromDegree, pickHumanizerSettings } from "@/constants/humanizer";
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import {

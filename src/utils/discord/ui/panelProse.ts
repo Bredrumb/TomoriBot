@@ -1,5 +1,5 @@
 import { ComponentType, type ComponentInContainerData } from "discord.js";
-import { getDiscordTextLength, neutralizeFenceRuns } from "@/utils/text/discordTextLimits";
+import { getDiscordTextLength } from "@/utils/text/discordTextLimits";
 import { localizer } from "@/utils/text/localizer";
 import { buildTextPreview, textPreviewFooterKey, textPreviewFooterVars } from "@/utils/text/textPreview";
 
@@ -286,19 +286,10 @@ function wrapLine(line: string, width: number, newline: string): string {
   return lines.join(newline);
 }
 
-/** Measures the grapheme width Discord renders after removing inline Markdown syntax. */
 export function measurePanelProseWidth(markdown: string): number {
   return tokenizeInlineMarkdown(markdown).reduce((total, token) => total + token.width, 0);
 }
 
-/**
- * Renders stored content as a fenced block so it reads as content rather than panel prose.
- *
- * Stored content is guarded via {@link neutralizeFenceRuns} so runs of backticks cannot close the
- * markdown fence early. Rendered text is bounded to `availableBudget` (including fence syntax overhead
- * and the footer line) using {@link buildTextPreview}, appending an honest hidden-character notice
- * when truncation occurs. The footer reserve is measured dynamically from the preview.
- */
 export function renderPanelContentBlock(locale: string, content: string, availableBudget: number): string {
   const fenceOverhead = getDiscordTextLength("```markdown\n\n```");
   const rawBudget = Math.max(0, availableBudget - fenceOverhead);
@@ -320,10 +311,8 @@ export function renderPanelContentBlock(locale: string, content: string, availab
   return ["```markdown", preview.text, "```"].join("\n") + finalFooter;
 }
 
-/** Width for one line. Kana renders at roughly twice the advance of a Latin glyph, so a line
- * carrying it wraps against the Japanese profile. Choosing per line rather than per TextDisplay
- * keeps a stored Japanese name from narrowing the English prose that shares its component.
- */
+// Profile selection runs per line rather than per TextDisplay because Kana glyphs render roughly twice as wide as
+// Latin and would narrow sibling English lines.
 function layoutWidthForLine(line: string, besideThumbnail: boolean): number {
   const profile = JAPANESE_SCRIPT_PATTERN.test(line)
     ? PANEL_PROSE_LAYOUT_POLICY.japanese
@@ -331,16 +320,8 @@ function layoutWidthForLine(line: string, besideThumbnail: boolean): number {
   return besideThumbnail ? profile.besideThumbnail : profile.body;
 }
 
-/**
- * Wraps panel prose while preserving fenced blocks and explicit line structure.
- *
- * Each line picks its own layout profile, so mixed-script content keeps the Latin width on its
- * English lines. Fenced and indented code lines bypass wrapping, so Kana inside stored code never
- * selects a width.
- *
- * A token wider than the selected layout remains intact on its own line because splitting it
- * could corrupt a URL, inline-code span, custom emoji, or grapheme cluster.
- */
+// Oversized tokens stay intact on their own line rather than force-splitting because mid-token breaks corrupt URLs,
+// inline code, custom emojis, and graphemes.
 export function formatPanelProse(markdown: string, besideThumbnail = false): string {
   const parts = markdown.split(/(\r?\n)/u);
   const fallbackNewline = markdown.includes("\r\n") ? "\r\n" : "\n";
@@ -394,7 +375,6 @@ function formatComponentNode(value: unknown, besideThumbnail: boolean): unknown 
   return clone;
 }
 
-/** Returns a formatted clone whose layout profile follows each TextDisplay's component context. */
 export function formatPanelComponentTree<T extends readonly ComponentInContainerData[]>(components: T): T {
   return formatComponentNode(components, false) as T;
 }
@@ -411,7 +391,6 @@ function measureTextDisplays(value: unknown): number {
   return ownLength + Object.values(record).reduce<number>((total, child) => total + measureTextDisplays(child), 0);
 }
 
-/** Measures a component tree after applying the wrapping that the shared panel boundary will add. */
 export function measureFormattedPanelTextLength(components: unknown): number {
   return measureTextDisplays(formatComponentNode(components, false));
 }

@@ -1,44 +1,20 @@
-/**
- * Schema definitions for channel history extraction (SimpleMem-style atomic fact extraction).
- * Provides both Zod validation schemas and JSON schema objects for Google/OpenRouter providers.
- */
-
 import { z } from "zod";
 
-/**
- * Zod schema for a single extracted memory entry (atomic fact).
- * Each entry represents one self-contained piece of information with resolved references.
- *
- * Accepts a bare string as well as the object form. The entry has exactly one required
- * field, and models routinely collapse such a single-field object down to the field's value
- * : observed with Gemini via OpenRouter returning `memories: ["fact", ...]`. The collapsed
- * form is unambiguous, so it is repaired here rather than failing the whole window.
- */
+// Bare strings are normalized to objects because models such as Gemini via OpenRouter collapse single-field objects
+// into string arrays.
 const HistoryMemoryEntrySchema = z.preprocess(
   (value) => (typeof value === "string" ? { lossless_restatement: value } : value),
   z.object({
-    /**
-     * The self-contained restatement with all pronouns resolved.
-     *
-     * Only emptiness is rejected. A short fact ("I like Kim") is still a valid extraction,
-     * so there is no lower bound beyond "not blank"; whitespace-only entries are trimmed
-     * away and dropped.
-     */
+    // Minimum length stays 1 after trimming because short facts such as 'I like Kim' are valid extractions and only
+    // blank entries should fail.
     lossless_restatement: z.string().trim().min(1).max(1000),
   }),
 );
 
-/** Type for a single extracted memory entry */
 export type HistoryMemoryEntry = z.infer<typeof HistoryMemoryEntrySchema>;
 
-/**
- * Zod schema for the complete extraction result containing all memories from a window.
- *
- * Validates entries individually and keeps the good ones, reporting how many were
- * discarded. A single malformed entry used to fail the whole window through
- * `z.array(HistoryMemoryEntrySchema)`, throwing away every valid fact alongside it, so the
- * count is surfaced instead of the loss being silent.
- */
+// Entries are validated individually via safeParse because z.array(HistoryMemoryEntrySchema) would reject the whole
+// window on one bad item.
 export const HistoryExtractionResultSchema = z
   .object({
     memories: z.array(z.unknown()),
@@ -59,12 +35,6 @@ export const HistoryExtractionResultSchema = z
     return { memories, discarded };
   });
 
-/**
- * Builds the JSON schema object for structured output providers.
- * Used by Google's responseSchema and OpenRouter's json_schema.schema.
- *
- * @returns JSON schema describing the extraction result format
- */
 export function buildHistoryExtractionResponseSchema(): Record<string, unknown> {
   return {
     type: "object" as const,

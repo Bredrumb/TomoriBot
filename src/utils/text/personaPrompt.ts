@@ -25,10 +25,6 @@ export function resolvePrefillPrompt(persona: TomoriState): string | null {
   return extractedDescription.length > 0 ? extractedDescription : null;
 }
 
-/**
- * Prefers the Persona Prompt, then the Personality attribute, then the first attribute, so every
- * persona that has displayed text gets a select menu description.
- */
 export function resolvePersonaSnippet(
   persona: Pick<TomoriState, "persona_nickname" | "persona_prompt" | "attribute_list">,
   maxLength: number,

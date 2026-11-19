@@ -1,8 +1,3 @@
-/**
- * Uncensor utilities for prompt preprocessing and output cleanup.
- * Scoped to dialogue/sample text only (not system prompts).
- */
-
 import profaneWords from "profane-words";
 
 const UNICODE_SPACE = "⠀"; // U+2800 braille pattern blank

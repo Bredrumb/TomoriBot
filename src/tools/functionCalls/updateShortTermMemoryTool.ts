@@ -1,20 +1,3 @@
-/**
- * Update Short Term Memory Tool
- *
- * Allows the bot to update its short-term working memory for the current conversation.
- * This tool is used to remember key topics, user preferences, or important context from
- * ongoing conversations that don't need to be stored permanently.
- *
- * Features:
- * - Silent operation (no user-facing message)
- * - Available for all tool-calling models (no feature flag required)
- * - 500 character limit to prevent token bloat
- * - Replaces crude conversation with summary for efficient context usage
- * - Category mode: dynamic parameter schema built from server-configured categories
- *
- * Phase 3: Tool-Based Summarization
- */
-
 import {
   BaseTool,
   type Tool,
@@ -39,7 +22,6 @@ import {
   resolvePromptCapabilityValuesFromToolState,
 } from "@/utils/tools/toolPromptMacros";
 
-/** Single-summary fallback parameters: byte-identical to the pre-category schema. */
 const SUMMARY_PARAMETERS: ToolParameterSchema = {
   type: "object",
   properties: {
@@ -52,7 +34,6 @@ const SUMMARY_PARAMETERS: ToolParameterSchema = {
   required: ["summary"],
 };
 
-/** Default tool description used both at runtime and as the modal prefill fallback. */
 export const DEFAULT_STM_TOOL_DESCRIPTION =
   "Update your short-term working memory for the current story or conversation. Use this to remember important context from this ongoing conversation that you might need later, but don't need to store permanently. Do NOT use this when a user explicitly asks you to remember/save/store something for future conversations; use update_long_term_memory or create_long_term_memory for that.";
 
@@ -63,12 +44,6 @@ export class UpdateShortTermMemoryTool extends BaseTool {
 
   parameters: ToolParameterSchema = SUMMARY_PARAMETERS;
 
-  /**
-   * Enhanced availability check that also considers per-turn disable flags.
-   * Once STM has been updated once in a turn, the flag is set to prevent
-   * the LLM from calling this tool again in the same turn.
-   * @returns True if tool should be offered to the LLM
-   */
   isAvailableForContext(provider: string, context?: ToolContext): boolean {
     if (!this.isAvailableFor(provider)) return false;
 
@@ -93,20 +68,6 @@ export class UpdateShortTermMemoryTool extends BaseTool {
     return true;
   }
 
-  /**
-   * Assembles a context-specific variant of this tool.
-   *
-   * When the server has multiple categories (or a single non-"summary" category),
-   * the tool's parameters schema is built dynamically: one optional `string` property
-   * per category (property name = slug derived from the label, description = category
-   * description). The assembled variant's `execute` method writes the provided values
-   * to the category map and resets the turn counter.
-   *
-   * When the server has only the default `summary` category, this method returns the
-   * base tool unchanged so behavior is byte-identical to the pre-category era.
-   *
-   * @param context - Assembly context carrying the internal numeric server_id
-   */
   async assembleForContext(context: ToolAssemblyContext): Promise<Tool | null> {
     const serverId = Number.parseInt(context.state.server_id, 10);
     if (!Number.isFinite(serverId)) return this;
@@ -167,14 +128,8 @@ export class UpdateShortTermMemoryTool extends BaseTool {
     }) as this;
   }
 
-  /**
-   * Execute the tool, routing to category mode if the server has custom categories.
-   *
-   * The registry always executes the base tool by name: the assembled variant's
-   * execute override is only used for schema building, never for dispatch. So we
-   * detect category mode here at execution time and self-route to _executeCategoryMode
-   * when the server is not in single-summary (fallback) mode.
-   */
+  // Registry dispatch always calls the base tool by name rather than the assembled variant, so execute must detect
+  // category mode and self-route here.
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     // Defense-in-depth: the registry dispatches by name regardless of availability, so
     // re-check the per-server master switch here (migration 054).
@@ -317,15 +272,6 @@ export class UpdateShortTermMemoryTool extends BaseTool {
     }
   }
 
-  /**
-   * Execute the tool in category mode (multiple/custom categories).
-   * Reads one string arg per slug, writes the populated map to both cache scopes,
-   * then resets the cadence counter.
-   *
-   * @param args - LLM-provided arguments (slug → value)
-   * @param context - Tool execution context
-   * @param slugMap - slug → label mapping built during assembly
-   */
   private async _executeCategoryMode(
     args: Record<string, unknown>,
     context: ToolContext,

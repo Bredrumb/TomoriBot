@@ -21,10 +21,8 @@ const MIN_MEDIA_TIMEOUT_MS = 1_000;
 const MAX_MEDIA_TIMEOUT_MS = 120_000;
 const BIND_HOSTNAME_PATTERN = /^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*$/;
 
-/**
- * Deployment settings the bridge validates once at startup, so a malformed value disables the
- * bridge instead of turning a limit comparison into `NaN`.
- */
+// Deployment settings are validated once at startup so a malformed value disables the bridge instead of turning limit
+// checks into NaN.
 export interface MatrixSettings {
   port: number;
   bindHost: string;
@@ -59,10 +57,7 @@ export function setMatrixBridge(bridge: MatrixAppserviceBridge.Bridge | null): v
   matrixBridge = bridge;
 }
 
-/**
- * @throws {MatrixConfigError} Before startup has validated the settings. Every caller runs behind
- * the configured-bridge check, so reaching this means a new caller skipped that check.
- */
+// Callers must run behind the configured-bridge check, so hitting this throw means a new caller skipped that guard.
 export function getMatrixSettings(): MatrixSettings {
   if (!matrixSettings) {
     throw new MatrixConfigError("Matrix settings are read before the bridge validated them");
@@ -98,9 +93,6 @@ function readBindHost(): string {
   return raw;
 }
 
-/**
- * @throws {MatrixConfigError} Naming the first malformed, non-positive, or out-of-range variable.
- */
 export function parseMatrixSettings(): MatrixSettings {
   const port = readNumberSetting(
     "MATRIX_APPSERVICE_PORT",

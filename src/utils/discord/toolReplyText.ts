@@ -1,15 +1,3 @@
-/**
- * Shared text-cleaning for tool-authored replies.
- *
- * Built-in tools that send Discord text on Tomori's behalf (e.g. the reply action of
- * `interact_with_recent_message`) bypass the streaming segment pipeline, where
- * `cleanLLMOutput` + guild mention resolution normally run. Without this helper, emoji
- * shortcodes (`:name:` / malformed `<:name:>`) and `@handle` mentions reach Discord as raw
- * text instead of resolved tags. This helper applies the *same* transform chain the stream
- * path uses (`segmentProcessor.sendBufferSegment`) so tool replies and normal replies render
- * identically: making it the single source of truth for both code paths.
- */
-
 import type { ToolContext } from "@/types/tool/interfaces";
 import { getKnownPersonaSpeakerNames, stripLeadingKnownSpeakerPrefixes } from "@/utils/discord/modelAuthoredText";
 import { buildMentionLookup, collectPersonaNameAliases } from "@/utils/discord/stream/textConfig";
@@ -17,15 +5,8 @@ import { resolveGuildMentions } from "@/utils/discord/stream/mentionResolver";
 import { filterDuplicateCustomEmojis } from "@/utils/text/emojiPenalty";
 import { cleanLLMOutput } from "@/utils/text/processors/llmOutputProcessor";
 
-/**
- * Cleans raw tool-authored reply text for Discord delivery, mirroring the streaming pipeline.
- *
- * The step order matches `StreamSegmentProcessor.sendBufferSegment`, with one tool-specific
- * addition (step 4): foreign persona speaker labels are stripped after the shared cleaner,
- * because `cleanLLMOutput` only strips the *active* persona's own-name label.
- *
- * @param content - Raw reply text supplied by the model in the tool's `content` argument
- */
+// Step order mirrors StreamSegmentProcessor.sendBufferSegment so tool replies match streamed formatting before
+// foreign speaker labels are stripped.
 export async function cleanToolReplyText(content: string, context: ToolContext): Promise<string> {
   const contextItems = context.contextItems ?? [];
 

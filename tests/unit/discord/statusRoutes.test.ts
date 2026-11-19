@@ -27,7 +27,6 @@ beforeAll(async () => initializeLocalizer());
 const state = { server_id: 9, config: {} } as TomoriState;
 const user = { user_id: 7, user_disc_id: "viewer" } as UserRow;
 
-/** The viewer the user row above describes, in the guild the persona state belongs to. */
 function makeStatusInteraction(options: RouteInteractionOptions): RouteInteraction {
   return createRouteInteraction({
     guildId: "guild-9",

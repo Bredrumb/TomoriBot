@@ -117,7 +117,6 @@ const WRITE_ACTIONS: Partial<Record<NudgeStudioRoute["action"], PanelAction>> = 
   "remove-submit": "nudge-studio.workspace.idle-nudge.remove",
 };
 
-/** The page a route was on, so every repaint keeps the admin where they were. */
 function routePage(route: NudgeStudioRoute): number {
   return ("page" in route ? route.page : undefined) ?? 0;
 }
@@ -157,10 +156,8 @@ function writeReceipt(locale: string, action: NudgeStudioRoute["action"], result
   };
 }
 
-/**
- * Null when no checkbox group reached this submit. Unchecked means off or removed, so reading that
- * absence as "every box cleared" would disable or delete every presented idle nudge.
- */
+// Null when no checkbox group arrived so a missing payload is not treated as all boxes cleared, which would disable
+// or delete every item.
 function checklistValues(
   deps: NudgeStudioRouteDependencies,
   interactionId: string,
@@ -190,10 +187,8 @@ function limitReceipt(locale: string): PanelReceipt {
   };
 }
 
-/**
- * Routes that answer with a modal. `showModal()` must be the acknowledgement, so authorization and
- * the database read finish first, and the read skips tool resolution.
- */
+// Authorization and the DB read (skipping tool resolution) must finish before showModal() because showModal()
+// acknowledges the interaction.
 async function openModal(
   interaction: GlobalRoutableInteraction,
   route: NudgeStudioRoute,
@@ -496,7 +491,7 @@ export function createNudgeStudioInteractionRoute(
 
 export const nudgeStudioInteractionRoute = createNudgeStudioInteractionRoute();
 
-/** Destinations for `/nudge-studio page:`; the command is manager-only, so none is filtered. */
+// All category destinations are returned unfiltered because /nudge-studio is manager-only.
 export function listNudgeStudioPageDestinations(locale: string): PanelPageDestination<NaturalNudgeCategory, null>[] {
   return NATURAL_NUDGE_CATEGORIES.map((category) => ({
     category,

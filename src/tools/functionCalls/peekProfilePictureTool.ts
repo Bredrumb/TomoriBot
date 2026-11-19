@@ -5,11 +5,6 @@ import {
   notifyProviderToolFailure,
   type ProviderUsageContext,
 } from "@/utils/provider/providerUsage";
-/**
- * Peek Profile Picture Tool
- * Allows the AI to selectively process Discord user profile pictures on-demand
- * This prevents automatic processing and enables targeted avatar analysis
- */
 
 import { GoogleGenAI } from "@google/genai";
 import type { Part } from "@google/genai";
@@ -35,7 +30,6 @@ import { fetchWithProviderRequest } from "@/utils/provider/providerRequestHook";
 import { normalizeProviderUsage, type TokenUsage } from "@/utils/text/tokenEstimate";
 import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 
-/** Default prompt sent to the vision model when analyzing a profile picture */
 const DEFAULT_AVATAR_ANALYSIS_PROMPT =
   "Describe this user's profile picture in detail. Include their appearance, style, and any notable elements visible in the avatar. If a profile banner is also provided, incorporate any useful supporting visual details from it.";
 
@@ -45,10 +39,6 @@ type PreparedProfileImage = {
   base64Data: string;
 };
 
-/**
- * Tool for processing Discord user profile pictures on-demand
- * Available for providers with image processing capabilities
- */
 export class PeekProfilePictureTool extends BaseTool {
   name = "peek_profile_picture";
   description =
@@ -73,19 +63,10 @@ export class PeekProfilePictureTool extends BaseTool {
     required: [],
   };
 
-  /**
-   * Check if profile picture tool is available for the given provider.
-   * Availability is provider-agnostic; model vision support is handled by `isAvailableForContext()`.
-   * @returns True (availability gated by isAvailableForContext)
-   */
   isAvailableFor(_provider: string): boolean {
     return true;
   }
 
-  /**
-   * Enhanced availability check that considers context flags and model vision capabilities
-   * @returns True if tool should be available
-   */
   isAvailableForContext(provider: string, context?: ToolContext): boolean {
     // Base provider check
     if (!this.isAvailableFor(provider)) {
@@ -117,11 +98,6 @@ export class PeekProfilePictureTool extends BaseTool {
     return true;
   }
 
-  /**
-   * Execute profile picture processing
-   * @param args - Arguments containing target_identity and optional reason
-   * @returns Promise resolving to tool result with processed image data
-   */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     if (context.streamContext?.disableProfilePictureProcessing) {
       log.info(
@@ -336,13 +312,6 @@ export class PeekProfilePictureTool extends BaseTool {
     }
   }
 
-  /**
-   * Redirect profile picture analysis to the configured vision model.
-   * Used when the primary chat model cannot see images but a vision_llm is configured.
-   * Calls the vision model's API directly with the resolved profile images and returns a text description.
-   * @param images - Base64-encoded profile image inputs
-   * @param userDisplayText - Display name (with optional nickname)
-   */
   private async redirectToVisionModel(
     images: PreparedProfileImage[],
     targetTypeLabel: string,
@@ -441,11 +410,6 @@ export class PeekProfilePictureTool extends BaseTool {
     };
   }
 
-  /**
-   * Call the Google GenAI vision API with one or more profile images.
-   * @param model - Model name (e.g., "gemini-2.0-flash")
-   * @param images - Base64-encoded profile image inputs
-   */
   private async callGoogleVisionWithBase64(
     apiKey: string,
     model: string,
@@ -479,11 +443,6 @@ export class PeekProfilePictureTool extends BaseTool {
     return text;
   }
 
-  /**
-   * Call an OpenAI-compatible vision API with one or more profile images.
-   * @param endpointUrl - Chat completions endpoint URL
-   * @param images - Base64-encoded profile image inputs
-   */
   private async callOpenAICompatibleVisionWithBase64(
     apiKey: string,
     model: string,
@@ -561,11 +520,6 @@ export class PeekProfilePictureTool extends BaseTool {
     return responseContent;
   }
 
-  /**
-   * Fetch avatar image from Discord CDN and convert to base64
-   * @param avatarUrl - Discord avatar URL to fetch
-   * @returns Promise resolving to base64 encoded image data
-   */
   private async fetchAndConvertImageToBase64(avatarUrl: string): Promise<string> {
     try {
       // Data URIs (e.g. local preset avatars) are already base64-encoded, so decode directly.

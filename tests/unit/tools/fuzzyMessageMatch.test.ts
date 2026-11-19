@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import type { Collection, Message } from "discord.js";
 import { DISCORD_ID_PATTERN, findFuzzyMessageMatch, MAX_FUZZY_DISTANCE } from "@/utils/text/fuzzyMessageMatch";
 
-/** The fuzzy search only reads `id`, so the entries are never real discord.js messages. */
 function makeMessages(ids: string[]): Collection<string, Message> {
   return new Map(ids.map((id) => [id, { id } as unknown as Message])) as unknown as Collection<string, Message>;
 }

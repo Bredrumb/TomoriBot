@@ -31,11 +31,8 @@ function resolvePersonaVariant(values: Partial<Record<AddressingStyle, string>>,
   return values[style] ?? values.neutral ?? "";
 }
 
-/**
- * Presence, not truthiness, stops the chain: an empty string is a deliberate
- * suppression written by `update_user_info`, so it must outrank the layers below
- * it rather than falling through to the persona's own affix.
- */
+// Empty string is a deliberate suppression written by update_user_info, so presence rather than truthiness must stop
+// fallback to lower layers.
 function resolveAffix(
   personaOverride: string | null | undefined,
   globalOverride: string | null,

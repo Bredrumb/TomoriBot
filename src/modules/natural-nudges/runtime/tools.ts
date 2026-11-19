@@ -6,7 +6,6 @@ import { normalizeProviderName } from "@/utils/provider/providerInfoRegistry";
 import { resolveServerTextModel } from "@/utils/provider/textModelSelection";
 import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
 
-/** Built-in tools this persona's turn would be offered, which is what tool prerequisites test. */
 export async function loadAvailableToolNames(persona: TomoriState): Promise<Set<string>> {
   if (!resolveToolsEnabled(persona, persona.llm.has_tools)) return new Set();
   const state: ToolStateForContext = {
@@ -55,7 +54,8 @@ export async function loadAvailableToolNames(persona: TomoriState): Promise<Set<
   }
 }
 
-/** The nudge turn runs on the channel's text model, so its tool prerequisites follow that model rather than the server default. */
+// Nudge turns run on the channel's text model, so tool prerequisites must be checked against that resolved model
+// rather than the server default.
 export async function loadChannelAvailableToolNames(
   persona: TomoriState,
   channel: GuildTextBasedChannel,

@@ -29,7 +29,6 @@ import {
 import { UTC_OFFSET_MAX, UTC_OFFSET_MIN, UTC_OFFSET_STEP_HOURS } from "@/constants/utcOffset";
 import type { HumanizerSettings } from "@/constants/humanizer";
 
-/** A UTC offset in hours on a quarter-hour mark, such as 5.5 for UTC+5:30. */
 export const utcOffsetSchema = z.number().min(UTC_OFFSET_MIN).max(UTC_OFFSET_MAX).multipleOf(UTC_OFFSET_STEP_HOURS);
 
 export enum PrivacyLevel {
@@ -171,11 +170,8 @@ export const personaSpriteSchema = z.object({
 });
 export type PersonaSpriteRow = z.infer<typeof personaSpriteSchema>;
 
-/**
- * Maps a webhook-delivered sprite message to the sprite label it rendered with.
- * Sprite messages display a clean persona name in Discord; context rebuilding
- * uses these rows to recover the decorated "Name (sprite):" label for the model.
- */
+// Discord webhooks display a clean persona name, so context rebuilding uses these rows to recover the "Name
+// (sprite):" label for the model.
 export const personaSpriteMessageSchema = z.object({
   message_disc_id: z.string().min(1),
   persona_id: z.number().int(),
@@ -212,11 +208,8 @@ export const resolvedMinimalNoticeRefSchema = z.discriminatedUnion("ref_kind", [
 ]);
 export type ResolvedMinimalNoticeRefRow = z.infer<typeof resolvedMinimalNoticeRefSchema>;
 
-/**
- * Runtime autochat counters for a persona.
- * Separated from personas so identity rows are not mutated on every message tick.
- * FK column is persona_id → personas(persona_id); ON DELETE CASCADE keeps cleanup atomic.
- */
+// Kept separate from personas so identity rows are not mutated on every message tick, with cascade delete via
+// persona_id.
 export const personaAutochRuntimeStateSchema = z.object({
   persona_id: z.number().int(),
   autoch_counter: z.number().int().default(0),
@@ -250,10 +243,8 @@ export const messageProxyIdentitySchema = z.object({
 });
 export type MessageProxyIdentityRow = z.infer<typeof messageProxyIdentitySchema>;
 
-/**
- * Reference audio clips for local TTS voice cloning.
- * file_path stores either a production S3/CloudFront URL or a local data/voice-samples path.
- */
+// Supports both S3/CloudFront URLs in production and local data/voice-samples paths, so callers must handle either
+// location format.
 export const voiceSampleSchema = z.object({
   sample_id: z.number().optional(),
   server_id: z.number(),
@@ -445,11 +436,8 @@ export type CustomEndpointApiStyle = z.infer<typeof customEndpointApiStyleSchema
 const vramHandoffBackendSchema = z.enum(["koboldcpp", "ollama"]);
 export type VramHandoffBackend = z.infer<typeof vramHandoffBackendSchema>;
 
-/**
- * Settings that describe the backend server behind a connection rather than any model it hosts.
- * `vram_handoff` records the backend detected when the option was enabled, so the runtime runs a
- * known unload strategy instead of guessing.
- */
+// vram_handoff stores the backend detected at enable-time rather than a boolean, so runtime runs a known unload
+// strategy without guessing.
 const endpointBehaviorSchema = z.object({
   vram_handoff: vramHandoffBackendSchema.optional(),
 });
@@ -554,11 +542,8 @@ export const decisionModelRegistrationSchema = z.object({
 });
 export type DecisionModelRegistrationRow = z.infer<typeof decisionModelRegistrationSchema>;
 
-/**
- * Normalizes a JSONB array value from the database driver.
- * Handles the case where Bun SQL returns JSONB columns as strings
- * instead of parsed objects; parses the string before returning.
- */
+// Bun SQL can return JSONB columns as unparsed strings instead of arrays, so string values are JSON-parsed before
+// validation.
 function normalizeJsonbArray(value: unknown): unknown[] {
   if (Array.isArray(value)) return value;
   if (typeof value === "string") {
@@ -600,7 +585,6 @@ const fallbackModelRefSchema = z.object({
 });
 export type FallbackModelRef = z.infer<typeof fallbackModelRefSchema>;
 
-/** Resolved fallback entry: either a known LLM row or a custom endpoint row. */
 export type FallbackEntry =
   | { kind: "llm"; model: z.infer<typeof llmSchema> }
   | { kind: "custom_endpoint"; endpoint: z.infer<typeof customEndpointSchema> };
@@ -777,7 +761,6 @@ const userPersonalizationConfigsSchema = z.object({
 });
 export type UserPersonalizationConfigsRow = z.infer<typeof userPersonalizationConfigsSchema>;
 
-/** The personal text fallback chain and its randomizer, shared by every saved personal provider. */
 export const personalFallbackSettingsSchema = userPersonalizationConfigsSchema.pick({
   fallback_model_refs: true,
   model_randomizer_enabled: true,
@@ -1111,21 +1094,8 @@ const shortTermMemoryRowSchema = z.object({
 });
 export type ShortTermMemoryRow = z.infer<typeof shortTermMemoryRowSchema>;
 
-/**
- * Assembled view over the 13 split server config tables.
- * Replaces the previous monolithic `tomori_configs` row shape.
- * Callers read this as a flat object.
- *
- * Composition order: serverModelConfigSchema anchors the merge chain (13 tables total).
- * Shared identity columns (server_id, created_at, updated_at) are omitted from every
- * split schema before merging, then re-extended once to prevent silent field shadowing.
- *
- * The .extend() block also:
- *   - Preserves exact nullable types for llm_id and api_key (non-optional in the legacy shape)
- *   - Overrides other_model_capabilities with the typed object shape callers access
- *   - Adds welcome_* fields (live in server_welcome_configs, not a schema in this composition)
- *   - Drops trigger_words (verified zero config.trigger_words callers; canonical store is persona_configs)
- */
+// Shared identity columns are omitted from every split schema before merging and re-extended once so Zod merges
+// cannot silently shadow them.
 const _sharedOmit = { server_id: true, created_at: true, updated_at: true } as const;
 export const assembledServerConfigSchema = serverModelConfigSchema
   .omit(_sharedOmit)
@@ -1170,11 +1140,8 @@ export const assembledServerConfigSchema = serverModelConfigSchema
   });
 export type AssembledServerConfig = z.infer<typeof assembledServerConfigSchema>;
 
-/**
- * Stores the full parameter JSON alongside human-readable descriptions for NovelAI sampling presets.
- * Schema-compatible fields (temperature, top_k, top_p, min_p) are written
- * to the split server config tables; NAI-specific fields are merged at generation time.
- */
+// Only standard sampling fields write to split server config tables because NAI-specific preset fields are merged
+// dynamically at generation time.
 export const naiPresetSchema = z.object({
   nai_preset_id: z.number(),
   preset_name: z.string(),
@@ -1205,7 +1172,6 @@ export const personaConfigSchema = z.object({
   updated_at: z.date().optional(),
 });
 export type PersonaConfigRow = z.infer<typeof personaConfigSchema>;
-/** Prompt-mode values for a per-channel system prompt override. */
 const CHANNEL_PROMPT_MODES = ["append", "replace"] as const;
 export type ChannelPromptMode = (typeof CHANNEL_PROMPT_MODES)[number];
 const tomoriPresetSchema = z.object({
@@ -1382,9 +1348,9 @@ export const serverMemorySchema = z.object({
   manually_written: z.boolean().default(false),
   content: z.string(),
   tags: z.preprocess((v) => (Array.isArray(v) ? v : []), z.array(z.string().max(32)).max(5)),
-  /** Discord channel IDs the memory is limited to; empty means every channel. */
+  // Sentinel rule: an empty channel_disc_ids array means the memory applies to every channel rather than none.
   channel_disc_ids: z.preprocess((v) => (Array.isArray(v) ? v : []), z.array(z.string())),
-  /** True while the row's legacy `#name` scope from migration 111 is unresolved. */
+  // Sentinel flag: true while the row's legacy #name scope from migration 111 remains unresolved.
   channel_scope_pending: z.boolean().default(false),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
@@ -1453,10 +1419,7 @@ export const personaUserBlockSchema = z.object({
 });
 export type PersonaUserBlockRow = z.infer<typeof personaUserBlockSchema>;
 
-/**
- * Defines channel allowlist entries with optional per-channel cooldown overrides.
- * When ANY channel is whitelisted, ONLY whitelisted channels can trigger the bot.
- */
+// Empty channel whitelist allows all channels because restriction activates only once at least one channel is added.
 const channelWhitelistSchema = z.object({
   server_id: z.number(),
   channel_disc_id: z.string(),
@@ -1467,10 +1430,7 @@ const channelWhitelistSchema = z.object({
 });
 export type ChannelWhitelistRow = z.infer<typeof channelWhitelistSchema>;
 
-/**
- * Defines role-based trigger access for server-wide whitelist restrictions.
- * When ANY role is whitelisted, only members with whitelisted roles can trigger the bot.
- */
+// Empty role whitelist allows all members because restriction activates only once at least one role is added.
 const roleWhitelistSchema = z.object({
   server_id: z.number(),
   role_disc_id: z.string(),
@@ -1479,10 +1439,7 @@ const roleWhitelistSchema = z.object({
 });
 export type RoleWhitelistRow = z.infer<typeof roleWhitelistSchema>;
 
-/**
- * Defines persona-specific channel allowlists for automatic message triggers.
- * If a channel has no entries, all personas remain eligible in that channel.
- */
+// Channels with no entries allow all personas because per-channel filtering activates only once a persona is added.
 const channelPersonaWhitelistSchema = z.object({
   server_id: z.number(),
   channel_disc_id: z.string(),
@@ -1525,11 +1482,8 @@ export const reminderSchema = z.object({
 });
 export type ReminderRow = z.infer<typeof reminderSchema>;
 
-/**
- * API Key Rotation error types for cooldown logic:
- * - rate_limit: 429 errors, 60-second cooldown
- * - api_error: Other API errors (401, 403, etc.), 5-minute cooldown
- */
+// Separates 429 rate_limit errors (60-second cooldown) from auth/API errors (5-minute cooldown) so rotation recovers
+// differently per failure class.
 export const ApiKeyRotationErrorType = z.enum(["rate_limit", "api_error"]);
 export type ApiKeyRotationErrorType = z.infer<typeof ApiKeyRotationErrorType>;
 
@@ -1553,10 +1507,6 @@ const coerceIntNumber = z.preprocess((value) => {
   return value;
 }, z.number().int());
 
-/**
- * Schema for api_key_rotation table (config/security columns only).
- * Runtime telemetry lives in api_key_rotation_runtime_state.
- */
 const apiKeyRotationConfigSchema = z.object({
   credential_activity_epoch: z.uuid().optional(),
   credential_created_at: z.date().optional(),
@@ -1572,7 +1522,8 @@ const apiKeyRotationConfigSchema = z.object({
   updated_at: z.date().optional(),
 });
 
-/** Excluded from export; reset independently of config/credentials. */
+// Separated from rotation config so runtime counters are excluded from exports and can reset independently of
+// credentials.
 const apiKeyRotationRuntimeStateSchema = z.object({
   rotation_key_id: z.number(), // FK to api_key_rotation(rotation_key_id) with cascade delete
   usage_count: coerceNumber.default(0),
@@ -1583,16 +1534,11 @@ const apiKeyRotationRuntimeStateSchema = z.object({
   last_error_message: z.string().nullable().optional(),
   updated_at: z.date().optional(),
 });
-/**
- * Schema for the joined api_key_rotation + api_key_rotation_runtime_state row.
- * All key selection queries JOIN both tables; this is the shape returned to callers.
- */
 export const apiKeyRotationSchema = apiKeyRotationConfigSchema.merge(
   apiKeyRotationRuntimeStateSchema.omit({ rotation_key_id: true }),
 );
 export type ApiKeyRotationRow = z.infer<typeof apiKeyRotationSchema>;
 
-/** Per-server image quota configuration controlling daily user quotas and server-wide quota pools. */
 export const imageQuotaConfigSchema = z.object({
   server_id: z.number(),
   daily_user_quota: z.number().int().min(0).max(100).default(0), // 0 = unlimited
@@ -1604,7 +1550,6 @@ export const imageQuotaConfigSchema = z.object({
 });
 export type ImageQuotaConfigRow = z.infer<typeof imageQuotaConfigSchema>;
 
-/** Per-user daily image quota tracking, reset daily at midnight in the server's timezone. */
 export const imageQuotaSchema = z.object({
   quota_id: z.number().optional(),
   server_id: z.number(),
@@ -1615,7 +1560,6 @@ export const imageQuotaSchema = z.object({
 });
 export type ImageQuotaRow = z.infer<typeof imageQuotaSchema>;
 
-/** Server-wide image quota tracking. */
 export const serverwideQuotaSchema = z.object({
   server_id: z.number(),
   usage_count: z.number().int().min(0).default(0),
@@ -1625,7 +1569,6 @@ export const serverwideQuotaSchema = z.object({
 });
 export type ServerwideQuotaRow = z.infer<typeof serverwideQuotaSchema>;
 
-/** Per-server text quota configuration controlling daily user quotas and server-wide quota pools. */
 export const textQuotaConfigSchema = z.object({
   server_id: z.number(),
   daily_user_quota: z.number().int().min(0).max(100).default(0), // 0 = unlimited
@@ -1637,7 +1580,6 @@ export const textQuotaConfigSchema = z.object({
 });
 export type TextQuotaConfigRow = z.infer<typeof textQuotaConfigSchema>;
 
-/** Per-server video quota configuration controlling daily user quotas and server-wide quota pools. */
 export const videoQuotaConfigSchema = z.object({
   server_id: z.number(),
   daily_user_quota: z.number().int().min(0).max(100).default(0), // 0 = unlimited
@@ -1649,7 +1591,6 @@ export const videoQuotaConfigSchema = z.object({
 });
 export type VideoQuotaConfigRow = z.infer<typeof videoQuotaConfigSchema>;
 
-/** Per-user daily video quota tracking, reset daily at midnight in the server's timezone. */
 export const videoQuotaSchema = z.object({
   quota_id: z.number().optional(),
   server_id: z.number(),
@@ -1660,7 +1601,6 @@ export const videoQuotaSchema = z.object({
 });
 export type VideoQuotaRow = z.infer<typeof videoQuotaSchema>;
 
-/** Server-wide video quota tracking. */
 export const videoServerwideQuotaSchema = z.object({
   server_id: z.number(),
   usage_count: z.number().int().min(0).default(0),
@@ -1688,9 +1628,6 @@ export const randomTriggerSchema = z.object({
 });
 export type RandomTriggerRow = z.infer<typeof randomTriggerSchema>;
 
-/**
- * Tomori's combined state (base config + LLM settings + LLM info).
- */
 export type TomoriState = TomoriRow &
   PersonaScopedConfigState & {
     config: AssembledServerConfig;
@@ -1741,9 +1678,6 @@ export const tomoriStateSchema = tomoriSchema.merge(personaScopedConfigStateSche
   autoch_next_target: z.number().int().default(0),
 });
 
-/**
- * Discriminated provider access input for server setup.
- */
 const setupProviderAccessCatalogSchema = z
   .object({
     mode: z.literal("catalog"),
@@ -1752,13 +1686,8 @@ const setupProviderAccessCatalogSchema = z
     keyVersion: z.number().int().default(1),
   })
   .strict();
-/**
- * Capability tokens the setup transaction maps onto `llms` capability columns.
- *
- * Enumerated rather than free strings because the mapping is by exact token: an unrecognized spelling would
- * otherwise validate, insert, and register the model with that capability silently switched off, surfacing much
- * later as the endpoint ignoring images or tools.
- */
+// Enumerated tokens rather than free strings because the setup transaction maps exact names onto llms columns, so a
+// typo silently disables that capability.
 export const setupCustomEndpointCapabilitySchema = z.enum([
   "tools",
   "vision",
@@ -1830,9 +1759,6 @@ export const setupFeaturesSchema = z
   .refine((features) => new Set(features).size === features.length);
 export type SetupFeature = (typeof SETUP_FEATURES)[number];
 
-/**
- * Configuration data needed for server setup
- */
 export const setupConfigSchema = z
   .object({
     serverId: z.string(),
@@ -1853,9 +1779,6 @@ export const setupConfigSchema = z
   .strict();
 export type SetupConfig = z.infer<typeof setupConfigSchema>;
 
-/**
- * Result of the setup operation, containing all created database rows
- */
 export const setupResultSchema = z.object({
   server: serverSchema,
   tomori: tomoriSchema,
@@ -1864,11 +1787,8 @@ export const setupResultSchema = z.object({
 });
 export type SetupResult = z.infer<typeof setupResultSchema>;
 
-/**
- * Per-guild remote MCP server registration.
- * Stored in guild_mcp_servers table; auth_token is PGP-encrypted BYTEA and
- * last_discovered_tool_names is display-only metadata, never an invocation source.
- */
+// In guild_mcp_servers: auth_token is PGP-encrypted BYTEA, and last_discovered_tool_names is display-only so it is
+// never used as an invocation source.
 const guildMcpServerSchema = z.object({
   guild_mcp_id: z.number().optional(),
   server_id: z.number(),
@@ -1881,7 +1801,7 @@ const guildMcpServerSchema = z.object({
   last_discovered_tool_names: z.array(z.string()).nullable().optional(),
   failing_since: z.date().nullable().optional(),
   failure_reason: z.enum(["unauthorized", "unreachable"]).nullable().optional(),
-  /** Null for a bearer-token or open registration; read from `guild_mcp_oauth`. */
+  // Sourced from guild_mcp_oauth: null indicates a bearer-token or open registration rather than an OAuth connection.
   oauth_status: z.enum(["active", "needs_reauthorization"]).nullable().optional(),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
@@ -1889,10 +1809,6 @@ const guildMcpServerSchema = z.object({
 export type GuildMcpServerRow = z.infer<typeof guildMcpServerSchema>;
 export type GuildMcpFailureReason = NonNullable<GuildMcpServerRow["failure_reason"]>;
 
-/**
- * Snapshot of provider-specific settings stored in saved_provider_configs.
- * One row per provider per server; UPSERT on save.
- */
 export const savedProviderConfigSchema = z.object({
   credential_created_at: z.date().optional(),
   credential_last_attempt_at: z.date().nullable().optional(),
@@ -1934,10 +1850,6 @@ export const savedProviderConfigSchema = z.object({
 });
 export type SavedProviderConfigRow = z.infer<typeof savedProviderConfigSchema>;
 
-/**
- * Input type for upserting a saved provider config.
- * Omits auto-generated fields (saved_config_id, saved_at, updated_at).
- */
 export type SavedProviderConfigUpsert = Omit<
   SavedProviderConfigRow,
   "saved_config_id" | "saved_at" | "updated_at" | "credential_revision"
@@ -1956,10 +1868,6 @@ export const personalProviderCapabilitySchema = z.enum([
 ]);
 export type PersonalProviderCapability = z.infer<typeof personalProviderCapabilitySchema>;
 
-/**
- * Personal provider snapshot stored in user_saved_provider_configs.
- * One row per provider per user; UPSERT on save.
- */
 export const userSavedProviderConfigSchema = z.object({
   credential_created_at: z.date().optional(),
   credential_last_attempt_at: z.date().nullable().optional(),
@@ -2012,20 +1920,11 @@ export const userSavedProviderConfigSchema = z.object({
 });
 export type UserSavedProviderConfigRow = z.infer<typeof userSavedProviderConfigSchema>;
 
-/**
- * Input type for upserting a user saved provider config.
- * Omits auto-generated fields (user_saved_config_id, saved_at, updated_at).
- */
 export type UserSavedProviderConfigUpsert = Omit<
   UserSavedProviderConfigRow,
   "user_saved_config_id" | "saved_at" | "updated_at" | "credential_revision"
 >;
 
-/**
- * Imported SillyTavern preset metadata and raw JSON blob.
- * Stored in st_presets table; scoped per server_id.
- * Multiple presets may exist per server; only one is active at a time.
- */
 const stPresetSchema = z.object({
   preset_id: z.number().optional(),
   server_id: z.number(),
@@ -2038,10 +1937,6 @@ const stPresetSchema = z.object({
 });
 export type StPresetRow = z.infer<typeof stPresetSchema>;
 
-/**
- * Individual toggleable prompt node parsed from a SillyTavern preset's prompts array.
- * Nodes are ordered by node_order (matching the preset's prompt_order).
- */
 const stPresetNodeSchema = z.object({
   node_id: z.number().optional(),
   preset_id: z.number(),

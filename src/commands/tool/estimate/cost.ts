@@ -81,28 +81,22 @@ import { fetchWithProviderRequest } from "@/utils/provider/providerRequestHook";
 // higher-level, cost-specific helpers below stay here because only this command
 // needs them.
 
-/**
- * Rough per-message overhead for chat-format wrappers (role markers, separators, etc.).
- * This is provider/model dependent, but it matters when you have ~80 messages of history.
- */
+// Per-message wrapper overhead is included because chat-format role markers and separators add up across ~80 history
+// messages.
 const TOKENS_PER_CHAT_MESSAGE_OVERHEAD = 4;
 
-/**
- * Conversation history is formatted as "{authorName}: {message}" in contextBuilder.ts.
- * Approximate average speaker prefix length (name + ": ").
- */
+// Speaker prefix length is approximated because contextBuilder.ts formats history entries as "{authorName}:
+// {message}".
 const AVG_SPEAKER_PREFIX_CHARS = 12;
 
-/**
- * Approximate fixed-length instruction blocks included in contextBuilder.ts.
- * These are intentionally rounded; exact lengths vary with server/bot/user names.
- */
+// Rounded estimates of contextBuilder.ts instruction blocks are used because exact lengths vary with server, bot, and
+// user names.
 const DEFAULT_SYSTEM_PROMPT_CHARS_EST = DEFAULT_SYSTEM_PROMPT.length;
 const MENTION_PING_RULE_CHARS_EST = 300;
 const EMOJI_USAGE_RULES_CHARS_EST = 340;
 const STICKER_USAGE_RULES_CHARS_EST = 270; // header + footer, excluding per-sticker lines
 
-/** Assumed reply lengths the cost estimate reports side by side, in tokens. */
+// Measured in tokens rather than characters because these constants define the output bands reported side by side.
 const EST_OUTPUT_SHORT = 80;
 const EST_OUTPUT_TYPICAL = 220;
 const EST_OUTPUT_LONG = 500;
@@ -143,10 +137,6 @@ interface ZaiFamilyProviderConfig {
   tools?: Array<Record<string, unknown>>;
 }
 
-/**
- * Scenario definitions for cost estimation
- * These represent minimum, average, and maximum usage patterns
- */
 interface ScenarioEstimate {
   name: string;
   components: {
@@ -226,25 +216,11 @@ interface DeepseekProbeResponse {
   usage?: DeepseekProbeUsage;
 }
 
-/**
- * Estimate tokens for a chat history made of many short messages.
- * Includes a small fixed per-message overhead for chat wrappers plus speaker prefixes.
- * @param avgMessageChars - Average characters per message (excluding speaker prefix)
- */
 function estimateChatHistoryTokens(messageCount: number, avgMessageChars: number): number {
   const totalChars = messageCount * (avgMessageChars + AVG_SPEAKER_PREFIX_CHARS);
   return charsToTokensText(totalChars) + messageCount * TOKENS_PER_CHAT_MESSAGE_OVERHEAD;
 }
 
-/**
- * Compute the "persona average" output-token band shared by the live and character-estimate
- * paths: merge the persona's seeded sample-dialogue replies with its recent turns from channel
- * history and average their character length. Returns null when neither source exists (the
- * caller then falls back to the typical output band).
- * @param tomoriState - Active server/persona state (carries sample_dialogues_out)
- * @param personaReplyCharLengths - Character lengths of recent persona turns in this channel
- * @returns Estimated output token count, or null when no persona reply samples are available
- */
 function resolveSampleOutputTokens(tomoriState: TomoriState, personaReplyCharLengths: number[]): number | null {
   const sampleDialogueCharLengths = (tomoriState.sample_dialogues_out ?? []).map((s) => s.length);
   const allPersonaReplyLengths = [...sampleDialogueCharLengths, ...personaReplyCharLengths];
@@ -257,10 +233,6 @@ function resolveSampleOutputTokens(tomoriState: TomoriState, personaReplyCharLen
   return charsToTokensText(averageChars);
 }
 
-/**
- * Estimate tool schema token overhead based on currently registered tools.
- * Falls back to a conservative constant if tools are not initialized.
- */
 function estimateToolSchemaTokens(): number {
   try {
     const stateForContext = {
@@ -310,9 +282,6 @@ function estimateToolSchemaTokens(): number {
   }
 }
 
-/**
- * Build scenario estimates based on memory limits and usage patterns
- */
 function buildScenarioEstimates(): {
   minimum: ScenarioEstimate;
   average: ScenarioEstimate;
@@ -408,11 +377,6 @@ function calculateTotalInputTokens(scenario: ScenarioEstimate): number {
   return Object.values(scenario.components).reduce((sum, val) => sum + val, 0);
 }
 
-/**
- * Calculate cost for a scenario based on provider pricing
- * @param inputPricePerMillion - Input token price per million
- * @param outputPricePerMillion - Output token price per million
- */
 function calculateCost(
   inputTokens: number,
   outputTokens: number,
@@ -424,15 +388,8 @@ function calculateCost(
   return inputCost + outputCost;
 }
 
-/**
- * Illustrative example pricing for the legacy (no-server / no-key) estimate embed.
- *
- * Reads the Google default model's catalog price so the static example stays in lockstep with the
- * seeded source of truth (src/db/seed/catalog/models.ts) instead of a duplicated env/hardcoded value.
- * The `?? ` literals are a defensive backstop only, because the Google default row always carries a price.
- *
- * @returns Representative input/output price per million tokens
- */
+// Catalog pricing drives the legacy example so it stays synced with models.ts, leaving the fallback literals as
+// defensive backstops only.
 function getLegacyExampleGooglePricing(): { input: number; output: number } {
   for (const section of llmSections) {
     for (const row of section.rows) {
@@ -874,15 +831,8 @@ async function measureGoogleInputTokens(
   };
 }
 
-/**
- * Mirrors {@link measureGoogleInputTokens} because Vertex shares the Gemini wire
- * format and tokenizer. The only differences:
- *   - The client is built from the stored composite key ("{project}::{location}")
- *      via ADC (createVertexClient) instead of a plain GoogleGenAI API key.
- *   - System instruction + tool schemas are injected in-band before countTokens,
- *      matching the Google path so the measured prompt includes their token cost.
- * @param tomoriState - Active server/persona state (carries model + catalog pricing)
- */
+// Vertex mirrors measureGoogleInputTokens because it shares Gemini's wire format and tokenizer, differing only in
+// composite ADC keys and in-band countTokens setup.
 async function measureVertexInputTokens(
   tomoriState: TomoriState,
   apiKey: string,
@@ -1135,13 +1085,10 @@ async function measureDeepseekInputTokens(
   };
 }
 
-/** Z.ai reasoning models where temperature must be omitted from probe requests */
+// Z.ai reasoning models require omitting temperature from probe requests, so listed models skip the temperature
+// parameter.
 const ZAI_REASONING_MODELS = ["glm-5.1", "glm-5", "glm-4.7"];
 
-/**
- * Send a minimal probe request to Z.ai to measure actual input token count.
- * Uses the same OpenAI-compatible usage response pattern as DeepSeek.
- */
 async function measureZaiInputTokens(
   providerName: "zai" | "zaicoding",
   tomoriState: TomoriState,
@@ -1211,10 +1158,6 @@ const ANTHROPIC_COUNT_TOKENS_URL = "https://api.anthropic.com/v1/messages/count_
 const ANTHROPIC_API_VERSION = "2023-06-01";
 const ANTHROPIC_TOKEN_COUNTING_BETA = "token-counting-2024-11-01";
 
-/**
- * Use Anthropic's dedicated /v1/messages/count_tokens endpoint to measure exact
- * input token usage for the current context without generating any output.
- */
 async function measureAnthropicInputTokens(
   tomoriState: TomoriState,
   apiKey: string,
@@ -1527,18 +1470,6 @@ async function sendLiveEstimateUnavailableEmbed(
   );
 }
 
-/**
- * Track A fallback: render a character-based cost estimate for providers that have no live
- * token-counting API, using the same runtime-parity context the live path would assemble.
- *
- * This is a graceful degradation from the old "unavailable" message: it still shows a real,
- * context-aware number (flagged as a character estimate) and the model's catalog pricing.
- * Falls back to {@link sendLiveEstimateUnavailableEmbed} only when the model has no catalog
- * price (nothing to multiply tokens against) or the context build fails.
- * @param client - Discord client (for channel history fetch)
- * @param tomoriState - Active server/persona state (model, pricing, config)
- * @param errorContext - Structured logging context for failures
- */
 async function sendCharacterEstimateFallbackEmbed(
   client: Client,
   interaction: ChatInputCommandInteraction,
@@ -1588,17 +1519,9 @@ async function sendCharacterEstimateFallbackEmbed(
   );
 }
 
-/**
- * Configure the /tool estimate cost subcommand
- * Shows users estimated API costs for paid providers
- */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("cost").setDescription(localizer("en-US", "commands.tool.estimate.cost.description"));
 
-/**
- * Execute the /tool estimate cost command
- * Displays estimated API costs for different usage scenarios
- */
 export async function execute(
   client: Client,
   interaction: ChatInputCommandInteraction,

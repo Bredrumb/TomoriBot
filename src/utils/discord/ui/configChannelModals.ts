@@ -21,32 +21,19 @@ const CHANNEL_SELECT = 8 as const;
 const STRING_SELECT = 3 as const;
 const TEXT_INPUT = 4 as const;
 
-/**
- * Discord rejects a String Select carrying fewer than 1 or more than 25 options, and a modal has
- * no pagination row to spend the overflow on, so a workspace with many personas has to be trimmed
- * before the payload is built.
- */
+// Discord caps String Selects at 25 options and modals lack pagination rows, so oversized persona lists must be
+// trimmed or paged beforehand.
 export const SELECT_OPTION_LIMIT = 25;
 
-/**
- * Personas one Welcome modal page carries. Its Random entry is repeated on every page, so it
- * spends one of the 25 slots and the roster gets the rest.
- */
+// One of the 25 select slots is reserved because the Random entry is repeated on every Welcome modal page.
 export const WELCOME_PERSONA_PAGE_SIZE = SELECT_OPTION_LIMIT - 1;
 
-/** Personas that can back a select option at all, in the order every page slices them. */
 export function selectablePersonas(personas: readonly TomoriState[]): readonly TomoriState[] {
   return personas.filter((persona) => persona.persona_id !== undefined);
 }
 
-/**
- * Maps one page of personas onto select options.
- *
- * Callers page the roster rather than trimming it, because a persona left out of every page could
- * never be assigned. Only the page holding the stored persona marks a `default`: the panel prints
- * the stored value beside the control, so an unmarked page reads as "not on this page" rather than
- * as "nothing is set".
- */
+// Only the page holding selectedPersonaId marks default because the panel prints the stored value beside the control,
+// and paging avoids unassignable personas.
 function buildPersonaSelectOptions(
   personas: readonly TomoriState[],
   selectedPersonaId: number | null,
